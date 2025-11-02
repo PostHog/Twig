@@ -1,12 +1,7 @@
 import posthog from "posthog-js/dist/module.full.no-external";
-import {
-  ANALYTICS_EVENTS,
-  type RepositorySelectProperties,
-  type TaskCreateProperties,
-  type TaskListViewProperties,
-  type TaskRunProperties,
-  type TaskViewProperties,
-  type UserIdentifyProperties,
+import type {
+  EventPropertyMap,
+  UserIdentifyProperties,
 } from "../../types/analytics";
 
 let isInitialized = false;
@@ -47,44 +42,14 @@ export function resetUser() {
   posthog.reset();
 }
 
-export function trackTaskListView(properties?: TaskListViewProperties) {
+export function track<K extends keyof EventPropertyMap>(
+  eventName: K,
+  ...args: EventPropertyMap[K] extends never
+    ? []
+    : EventPropertyMap[K] extends undefined
+      ? [properties?: EventPropertyMap[K]]
+      : [properties: EventPropertyMap[K]]
+) {
   if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.TASK_LIST_VIEWED, properties);
-}
-
-export function trackTaskCreate(properties: TaskCreateProperties) {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.TASK_CREATED, properties);
-}
-
-export function trackTaskView(properties: TaskViewProperties) {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.TASK_VIEWED, properties);
-}
-
-export function trackTaskRun(properties: TaskRunProperties) {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.TASK_RUN, properties);
-}
-
-export function trackRepositorySelect(properties: RepositorySelectProperties) {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.REPOSITORY_SELECTED, properties);
-}
-
-export function trackUserLoggedIn(properties?: UserIdentifyProperties) {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.USER_LOGGED_IN, properties);
-}
-
-export function trackUserLoggedOut() {
-  if (!isInitialized) return;
-
-  posthog.capture(ANALYTICS_EVENTS.USER_LOGGED_OUT);
+  posthog.capture(eventName, args[0]);
 }

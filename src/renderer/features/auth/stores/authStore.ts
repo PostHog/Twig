@@ -1,10 +1,5 @@
 import { PostHogAPIClient } from "@api/posthogClient";
-import {
-  identifyUser,
-  resetUser,
-  trackUserLoggedIn,
-  trackUserLoggedOut,
-} from "@renderer/lib/analytics";
+import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { queryClient } from "@renderer/lib/queryClient";
 import { useTabStore } from "@renderer/stores/tabStore";
 import type { CloudRegion } from "@shared/types/oauth";
@@ -14,6 +9,7 @@ import {
   getCloudUrlFromRegion,
   TOKEN_REFRESH_BUFFER_MS,
 } from "@/constants/oauth";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const RECALL_API_URL = "https://us-west-2.recall.ai";
 
@@ -137,7 +133,7 @@ export const useAuthStore = create<AuthState>()(
             project_id: projectId.toString(),
             region,
           });
-          trackUserLoggedIn({
+          track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
             project_id: projectId.toString(),
             region,
           });
@@ -389,7 +385,7 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => {
         // Track logout before clearing state
-        trackUserLoggedOut();
+        track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
         resetUser();
 
         if (refreshTimeoutId) {

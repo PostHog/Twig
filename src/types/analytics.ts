@@ -65,3 +65,14 @@ export const ANALYTICS_EVENTS = {
 
 export type AnalyticsEvent =
   (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
+
+// Event property mapping
+export type EventPropertyMap = {
+  [ANALYTICS_EVENTS.TASK_LIST_VIEWED]: TaskListViewProperties | undefined;
+  [ANALYTICS_EVENTS.TASK_CREATED]: TaskCreateProperties;
+  [ANALYTICS_EVENTS.TASK_VIEWED]: TaskViewProperties;
+  [ANALYTICS_EVENTS.TASK_RUN]: TaskRunProperties;
+  [ANALYTICS_EVENTS.REPOSITORY_SELECTED]: RepositorySelectProperties;
+  [ANALYTICS_EVENTS.USER_LOGGED_IN]: UserIdentifyProperties | undefined;
+  [ANALYTICS_EVENTS.USER_LOGGED_OUT]: never;
+};

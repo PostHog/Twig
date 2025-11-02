@@ -1,9 +1,10 @@
 import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
-import { trackTaskCreate } from "@renderer/lib/analytics";
+import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const taskKeys = {
   all: ["tasks"] as const,
@@ -53,7 +54,7 @@ export function useCreateTask() {
         queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
 
         // Track task creation
-        trackTaskCreate({
+        track(ANALYTICS_EVENTS.TASK_CREATED, {
           has_repository: !!variables.repositoryConfig,
           auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
