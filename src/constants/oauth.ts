@@ -11,6 +11,7 @@ export const OAUTH_SCOPES = [
   "project:read",
   "task:write",
   "integration:read",
+  "desktop_recording:write",
 ];
 
 // Token refresh settings
