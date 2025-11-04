@@ -173,15 +173,16 @@ async function uploadPendingSegments(recordingId: string): Promise<void> {
       throw new Error("PostHog client not initialized");
     }
 
-    await client.updateDesktopRecordingTranscript(recordingId, {
-      segments: pendingSegments.map((seg) => ({
-        timestamp_ms: seg.timestamp,
+    await client.appendSegments(
+      recordingId,
+      pendingSegments.map((seg) => ({
+        timestamp: seg.timestamp,
         speaker: seg.speaker,
         text: seg.text,
         confidence: seg.confidence,
         is_final: seg.is_final,
       })),
-    });
+    );
 
     const newIndex =
       recording.lastUploadedSegmentIndex + pendingSegments.length;
