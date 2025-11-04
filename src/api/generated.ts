@@ -521,6 +521,17 @@ export namespace Schemas {
     disableHoverOffset: boolean | null;
     hideAggregation: boolean | null;
   }>;
+  export type ActiveBreakpoint = {
+    id: string;
+    repository?: (string | null) | undefined;
+    filename: string;
+    line_number: number;
+    enabled: boolean;
+    condition?: (string | null) | undefined;
+  };
+  export type ActiveBreakpointsResponse = {
+    breakpoints: Array<ActiveBreakpoint>;
+  };
   export type ActivityLog = {
     id: string;
     user: UserBasic;
@@ -2281,6 +2292,21 @@ export namespace Schemas {
     batch_export: string;
   };
   export type BreakdownItem = { label: string; value: string | number };
+  export type BreakpointHit = {
+    id: string;
+    lineNumber: number;
+    functionName: string;
+    timestamp: string;
+    variables: Record<string, unknown>;
+    stackTrace: Array<unknown>;
+    breakpoint_id: string;
+    filename: string;
+  };
+  export type BreakpointHitsResponse = {
+    results: Array<BreakpointHit>;
+    count: number;
+    has_more: boolean;
+  };
   export type ByweekdayEnum =
     | "monday"
     | "tuesday"
@@ -2508,6 +2534,7 @@ export namespace Schemas {
     | "static"
     | "person_property"
     | "behavioral"
+    | "realtime"
     | "analytical";
   export type Cohort = {
     id: number;
@@ -3268,6 +3295,7 @@ export namespace Schemas {
     id: string | number;
     type: ErrorTrackingIssueAssigneeType;
   };
+  export type ErrorTrackingIssueCohort = { id: number; name: string };
   export type IntegrationKind =
     | "slack"
     | "salesforce"
@@ -3318,6 +3346,7 @@ export namespace Schemas {
   export type ErrorTrackingIssue = {
     aggregations?: ErrorTrackingIssueAggregations | undefined;
     assignee?: ErrorTrackingIssueAssignee | undefined;
+    cohort?: ErrorTrackingIssueCohort | undefined;
     description?: (string | null) | undefined;
     external_issues?:
       | (Array<ErrorTrackingExternalReference> | null)
@@ -3353,6 +3382,7 @@ export namespace Schemas {
   };
   export type ErrorTrackingCorrelatedIssue = {
     assignee?: ErrorTrackingIssueAssignee | undefined;
+    cohort?: ErrorTrackingIssueCohort | undefined;
     description?: (string | null) | undefined;
     event: string;
     external_issues?:
@@ -3437,6 +3467,7 @@ export namespace Schemas {
   export type LLMTrace = {
     aiSessionId?: (string | null) | undefined;
     createdAt: string;
+    errorCount?: (number | null) | undefined;
     events: Array<LLMTraceEvent>;
     id: string;
     inputCost?: (number | null) | undefined;
@@ -3502,6 +3533,7 @@ export namespace Schemas {
     | "revenue_analytics_properties"
     | "resources"
     | "error_tracking_properties"
+    | "activity_log_properties"
     | "max_ai_context";
   export type EventsQueryResponse = {
     columns: Array<unknown>;
@@ -4265,6 +4297,8 @@ export namespace Schemas {
     dateRange: DateRange;
     filterGroup?: PropertyGroupFilter | undefined;
     filterTestAccounts?: (boolean | null) | undefined;
+    groupKey?: (string | null) | undefined;
+    groupTypeIndex?: (number | null) | undefined;
     issueId?: (string | null) | undefined;
     kind?: "ErrorTrackingQuery" | undefined;
     limit?: (number | null) | undefined;
@@ -4372,6 +4406,8 @@ export namespace Schemas {
   export type TracesQuery = Partial<{
     dateRange: DateRange;
     filterTestAccounts: boolean | null;
+    groupKey: string | null;
+    groupTypeIndex: number | null;
     kind: "TracesQuery";
     limit: number | null;
     modifiers: HogQLQueryModifiers;
@@ -5353,6 +5389,7 @@ export namespace Schemas {
     event_uuid: string;
     person_id: string;
     session_id: string;
+    timestamp: string;
   };
   export type ExperimentStatsValidationFailure =
     | "not-enough-exposures"
@@ -5952,7 +5989,7 @@ export namespace Schemas {
     | "activity_score"
     | "recording_ttl";
   export type RecordingOrderDirection = "ASC" | "DESC";
-  export type MatchedRecordingEvent = { uuid: string };
+  export type MatchedRecordingEvent = { timestamp: string; uuid: string };
   export type MatchedRecording = {
     events: Array<MatchedRecordingEvent>;
     session_id?: (string | null) | undefined;
@@ -6343,6 +6380,16 @@ export namespace Schemas {
     errors: string;
     display_name: string;
   };
+  export type LiveDebuggerBreakpoint = {
+    id: string;
+    repository?: (string | null) | undefined;
+    filename: string;
+    line_number: number;
+    enabled?: boolean | undefined;
+    condition?: (string | null) | undefined;
+    created_at: string;
+    updated_at: string;
+  };
   export type MembershipLevelEnum = 1 | 8 | 15;
   export type MinimalPerson = {
     id: number;
@@ -6444,6 +6491,10 @@ export namespace Schemas {
     saml_entity_id?: (string | null) | undefined;
     saml_acs_url?: (string | null) | undefined;
     saml_x509_cert?: (string | null) | undefined;
+    has_scim: boolean;
+    scim_enabled?: boolean | undefined;
+    scim_base_url: string | null;
+    scim_bearer_token: string | null;
   };
   export type OrganizationMembershipLevel = 1 | 8 | 15;
   export type OrganizationInvite = {
@@ -6682,6 +6733,12 @@ export namespace Schemas {
     next?: (string | null) | undefined;
     previous?: (string | null) | undefined;
     results: Array<Integration>;
+  };
+  export type PaginatedLiveDebuggerBreakpointList = {
+    count: number;
+    next?: (string | null) | undefined;
+    previous?: (string | null) | undefined;
+    results: Array<LiveDebuggerBreakpoint>;
   };
   export type PaginatedNotebookMinimalList = {
     count: number;
@@ -7585,6 +7642,7 @@ export namespace Schemas {
     | "Delta"
     | "DeltaS3Wrapper";
   export type SourceTypeEnum =
+    | "Github"
     | "Stripe"
     | "Hubspot"
     | "Postgres"
@@ -8219,6 +8277,16 @@ export namespace Schemas {
     alerts: string;
     last_viewed_at: string;
   }>;
+  export type PatchedLiveDebuggerBreakpoint = Partial<{
+    id: string;
+    repository: string | null;
+    filename: string;
+    line_number: number;
+    enabled: boolean;
+    condition: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
   export type PatchedNotebook = Partial<{
     id: string;
     short_id: string;
@@ -8272,6 +8340,10 @@ export namespace Schemas {
     saml_entity_id: string | null;
     saml_acs_url: string | null;
     saml_x509_cert: string | null;
+    has_scim: boolean;
+    scim_enabled: boolean;
+    scim_base_url: string | null;
+    scim_bearer_token: string | null;
   }>;
   export type PatchedOrganizationMember = Partial<{
     id: string;
@@ -8360,6 +8432,7 @@ export namespace Schemas {
     flags_persistence_default: boolean | null;
     secret_api_token: string | null;
     secret_api_token_backup: string | null;
+    receive_org_level_activity_logs: boolean | null;
   }>;
   export type PatchedPropertyDefinition = Partial<{
     id: string;
@@ -8623,6 +8696,7 @@ export namespace Schemas {
     base_currency: BaseCurrencyEnum & unknown;
     web_analytics_pre_aggregated_tables_enabled: boolean | null;
     experiment_recalculation_time: string | null;
+    receive_org_level_activity_logs: boolean | null;
     effective_membership_level:
       | (EffectiveMembershipLevelEnum & (unknown | null))
       | null;
@@ -8747,6 +8821,7 @@ export namespace Schemas {
     flags_persistence_default?: (boolean | null) | undefined;
     secret_api_token: string | null;
     secret_api_token_backup: string | null;
+    receive_org_level_activity_logs?: (boolean | null) | undefined;
   };
   export type PropertyItemTypeEnum =
     | "event"
@@ -10032,6 +10107,7 @@ export namespace Schemas {
     base_currency?: (BaseCurrencyEnum & unknown) | undefined;
     web_analytics_pre_aggregated_tables_enabled?: (boolean | null) | undefined;
     experiment_recalculation_time?: (string | null) | undefined;
+    receive_org_level_activity_logs?: (boolean | null) | undefined;
     effective_membership_level:
       | (EffectiveMembershipLevelEnum & (unknown | null))
       | null;
@@ -14635,6 +14711,15 @@ export namespace Endpoints {
     };
     responses: { 200: unknown };
   };
+  export type get_Event_definitions_typescript_retrieve = {
+    method: "GET";
+    path: "/api/projects/{project_id}/event_definitions/typescript/";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+    };
+    responses: { 200: unknown };
+  };
   export type get_Events_list = {
     method: "GET";
     path: "/api/projects/{project_id}/events/";
@@ -16053,6 +16138,100 @@ export namespace Endpoints {
       path: { project_id: string };
     };
     responses: { 200: unknown };
+  };
+  export type get_Live_debugger_breakpoints_list = {
+    method: "GET";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        filename: string;
+        limit: number;
+        offset: number;
+        repository: string;
+      }>;
+      path: { project_id: string };
+    };
+    responses: { 200: Schemas.PaginatedLiveDebuggerBreakpointList };
+  };
+  export type post_Live_debugger_breakpoints_create = {
+    method: "POST";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+
+      body: Schemas.LiveDebuggerBreakpoint;
+    };
+    responses: { 201: Schemas.LiveDebuggerBreakpoint };
+  };
+  export type get_Live_debugger_breakpoints_retrieve = {
+    method: "GET";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/{id}/";
+    requestFormat: "json";
+    parameters: {
+      path: { id: string; project_id: string };
+    };
+    responses: { 200: Schemas.LiveDebuggerBreakpoint };
+  };
+  export type put_Live_debugger_breakpoints_update = {
+    method: "PUT";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/{id}/";
+    requestFormat: "json";
+    parameters: {
+      path: { id: string; project_id: string };
+
+      body: Schemas.LiveDebuggerBreakpoint;
+    };
+    responses: { 200: Schemas.LiveDebuggerBreakpoint };
+  };
+  export type patch_Live_debugger_breakpoints_partial_update = {
+    method: "PATCH";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/{id}/";
+    requestFormat: "json";
+    parameters: {
+      path: { id: string; project_id: string };
+
+      body: Schemas.PatchedLiveDebuggerBreakpoint;
+    };
+    responses: { 200: Schemas.LiveDebuggerBreakpoint };
+  };
+  export type delete_Live_debugger_breakpoints_destroy = {
+    method: "DELETE";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/{id}/";
+    requestFormat: "json";
+    parameters: {
+      path: { id: string; project_id: string };
+    };
+    responses: { 204: unknown };
+  };
+  export type get_Live_debugger_breakpoints_active_retrieve = {
+    method: "GET";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/active/";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        enabled: boolean;
+        filename: string;
+        repository: string;
+      }>;
+      path: { project_id: string };
+    };
+    responses: {
+      200: Schemas.ActiveBreakpointsResponse;
+      400: unknown;
+      401: unknown;
+    };
+  };
+  export type get_Live_debugger_breakpoints_breakpoint_hits_retrieve = {
+    method: "GET";
+    path: "/api/projects/{project_id}/live_debugger_breakpoints/breakpoint_hits/";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ breakpoint_ids: string; limit: number; offset: number }>;
+      path: { project_id: string };
+    };
+    responses: { 200: Schemas.BreakpointHitsResponse; 400: unknown };
   };
   export type post_Llm_gateway_v1_chat_completions_create = {
     method: "POST";
@@ -17958,6 +18137,7 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/event_definitions/": Endpoints.get_Event_definitions_retrieve;
     "/api/projects/{project_id}/event_definitions/{id}/": Endpoints.get_Event_definitions_retrieve_2;
     "/api/projects/{project_id}/event_definitions/{id}/metrics/": Endpoints.get_Event_definitions_metrics_retrieve;
+    "/api/projects/{project_id}/event_definitions/typescript/": Endpoints.get_Event_definitions_typescript_retrieve;
     "/api/projects/{project_id}/events/": Endpoints.get_Events_list;
     "/api/projects/{project_id}/events/{id}/": Endpoints.get_Events_retrieve;
     "/api/projects/{project_id}/events/values/": Endpoints.get_Events_values_retrieve;
@@ -18025,6 +18205,10 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/integrations/{id}/linkedin_ads_conversion_rules/": Endpoints.get_Integrations_linkedin_ads_conversion_rules_retrieve;
     "/api/projects/{project_id}/integrations/{id}/twilio_phone_numbers/": Endpoints.get_Integrations_twilio_phone_numbers_retrieve;
     "/api/projects/{project_id}/integrations/authorize/": Endpoints.get_Integrations_authorize_retrieve;
+    "/api/projects/{project_id}/live_debugger_breakpoints/": Endpoints.get_Live_debugger_breakpoints_list;
+    "/api/projects/{project_id}/live_debugger_breakpoints/{id}/": Endpoints.get_Live_debugger_breakpoints_retrieve;
+    "/api/projects/{project_id}/live_debugger_breakpoints/active/": Endpoints.get_Live_debugger_breakpoints_active_retrieve;
+    "/api/projects/{project_id}/live_debugger_breakpoints/breakpoint_hits/": Endpoints.get_Live_debugger_breakpoints_breakpoint_hits_retrieve;
     "/api/projects/{project_id}/logs/attributes/": Endpoints.get_Logs_attributes_retrieve;
     "/api/projects/{project_id}/logs/values/": Endpoints.get_Logs_values_retrieve;
     "/api/projects/{project_id}/notebooks/": Endpoints.get_Notebooks_list;
@@ -18241,6 +18425,7 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/insights/viewed/": Endpoints.post_Insights_viewed_create;
     "/api/projects/{project_id}/integrations/": Endpoints.post_Integrations_create;
     "/api/projects/{project_id}/integrations/{id}/email/verify/": Endpoints.post_Integrations_email_verify_create;
+    "/api/projects/{project_id}/live_debugger_breakpoints/": Endpoints.post_Live_debugger_breakpoints_create;
     "/api/projects/{project_id}/llm_gateway/v1/chat/completions/": Endpoints.post_Llm_gateway_v1_chat_completions_create;
     "/api/projects/{project_id}/llm_gateway/v1/messages/": Endpoints.post_Llm_gateway_v1_messages_create;
     "/api/projects/{project_id}/logs/query/": Endpoints.post_Logs_query_create;
@@ -18341,6 +18526,7 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/groups_types/set_default_columns/": Endpoints.put_Groups_types_set_default_columns_update;
     "/api/projects/{project_id}/hog_functions/{id}/": Endpoints.put_Hog_functions_update;
     "/api/projects/{project_id}/insights/{id}/": Endpoints.put_Insights_update;
+    "/api/projects/{project_id}/live_debugger_breakpoints/{id}/": Endpoints.put_Live_debugger_breakpoints_update;
     "/api/projects/{project_id}/notebooks/{short_id}/": Endpoints.put_Notebooks_update;
     "/api/projects/{project_id}/persisted_folder/{id}/": Endpoints.put_Persisted_folder_update;
     "/api/projects/{project_id}/persons/{id}/": Endpoints.put_Persons_update;
@@ -18418,6 +18604,7 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/hog_functions/{id}/": Endpoints.patch_Hog_functions_partial_update;
     "/api/projects/{project_id}/hog_functions/rearrange/": Endpoints.patch_Hog_functions_rearrange_partial_update;
     "/api/projects/{project_id}/insights/{id}/": Endpoints.patch_Insights_partial_update;
+    "/api/projects/{project_id}/live_debugger_breakpoints/{id}/": Endpoints.patch_Live_debugger_breakpoints_partial_update;
     "/api/projects/{project_id}/notebooks/{short_id}/": Endpoints.patch_Notebooks_partial_update;
     "/api/projects/{project_id}/persisted_folder/{id}/": Endpoints.patch_Persisted_folder_partial_update;
     "/api/projects/{project_id}/persons/{id}/": Endpoints.patch_Persons_partial_update;
@@ -18499,6 +18686,7 @@ export type EndpointByMethod = {
     "/api/projects/{project_id}/insights/{insight_id}/sharing/passwords/{password_id}/": Endpoints.delete_Insights_sharing_passwords_destroy;
     "/api/projects/{project_id}/insights/{id}/": Endpoints.delete_Insights_destroy;
     "/api/projects/{project_id}/integrations/{id}/": Endpoints.delete_Integrations_destroy;
+    "/api/projects/{project_id}/live_debugger_breakpoints/{id}/": Endpoints.delete_Live_debugger_breakpoints_destroy;
     "/api/projects/{project_id}/notebooks/{short_id}/": Endpoints.delete_Notebooks_destroy;
     "/api/projects/{project_id}/persisted_folder/{id}/": Endpoints.delete_Persisted_folder_destroy;
     "/api/projects/{project_id}/persons/{id}/": Endpoints.delete_Persons_destroy;
