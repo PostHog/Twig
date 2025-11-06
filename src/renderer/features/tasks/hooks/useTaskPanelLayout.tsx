@@ -53,12 +53,12 @@ export const useTaskPanelLayout = ({
   const panelId = `task-detail-${task.id}`;
 
   // Track the last values to prevent unnecessary updates
-  const lastValuesRef = useRef({
-    taskId: task.id,
-    repoPath,
-    openArtifactsStr: JSON.stringify(openArtifacts),
-    activeArtifactId,
-  });
+  const lastValuesRef = useRef<{
+    taskId: string;
+    repoPath: string | null;
+    openArtifactsStr: string;
+    activeArtifactId: string | null;
+  } | null>(null);
 
   const logsContent = useMemo(
     () => (
@@ -137,6 +137,7 @@ export const useTaskPanelLayout = ({
     };
 
     const hasChanged =
+      !lastValuesRef.current ||
       lastValuesRef.current.taskId !== currentValues.taskId ||
       lastValuesRef.current.repoPath !== currentValues.repoPath ||
       lastValuesRef.current.openArtifactsStr !==
