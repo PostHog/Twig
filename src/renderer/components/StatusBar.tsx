@@ -1,10 +1,5 @@
 import { StatusBarMenu } from "@components/StatusBarMenu";
-import {
-  Badge,
-  Box,
-  Code,
-  Flex, Kbd
-} from "@radix-ui/themes";
+import { Badge, Box, Code, Flex, Kbd } from "@radix-ui/themes";
 import { useStatusBarStore } from "@stores/statusBarStore";
 
 import { IS_DEV } from "@/constants/environment";
@@ -13,10 +8,7 @@ interface StatusBarProps {
   showKeyHints?: boolean;
 }
 
-export function StatusBar({
-  showKeyHints = true,
-
-}: StatusBarProps) {
+export function StatusBar({ showKeyHints = true }: StatusBarProps) {
   const { statusText, keyHints } = useStatusBarStore();
 
   return (
