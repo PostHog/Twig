@@ -307,41 +307,50 @@ export function registerFsIpc(): void {
       }>,
     ): Promise<void> => {
       try {
-        const questionsPath = path.join(
+        const researchPath = path.join(
           repoPath,
           ".posthog",
           taskId,
-          "questions.json",
+          "research.json",
         );
 
-        // Read existing questions.json
-        let questionsData: {
-          answered: boolean;
-          answers: Array<{
+        // Read existing research.json
+        let researchData: {
+          actionabilityScore: number;
+          context: string;
+          keyFiles: string[];
+          blockers?: string[];
+          questions?: Array<{
+            id: string;
+            question: string;
+            options: string[];
+          }>;
+          answered?: boolean;
+          answers?: Array<{
             questionId: string;
             selectedOption: string;
             customInput?: string;
           }>;
         };
         try {
-          const content = await fsPromises.readFile(questionsPath, "utf-8");
-          questionsData = JSON.parse(content);
+          const content = await fsPromises.readFile(researchPath, "utf-8");
+          researchData = JSON.parse(content);
         } catch {
-          throw new Error(`questions.json not found for task ${taskId}`);
+          throw new Error(`research.json not found for task ${taskId}`);
         }
 
         // Update with answers
-        questionsData.answered = true;
-        questionsData.answers = answers;
+        researchData.answered = true;
+        researchData.answers = answers;
 
         // Write back to file
         await fsPromises.writeFile(
-          questionsPath,
-          JSON.stringify(questionsData, null, 2),
+          researchPath,
+          JSON.stringify(researchData, null, 2),
           "utf-8",
         );
 
-        console.log(`Saved answers to questions.json for task ${taskId}`);
+        console.log(`Saved answers to research.json for task ${taskId}`);
 
         // Commit the answers (local mode - no push)
         try {
