@@ -94,6 +94,12 @@ export function initializeRecallSDK(
   posthogKey: string,
   posthogHost: string,
 ) {
+  console.log("[Recall SDK] initializeRecallSDK called with:", {
+    recallApiUrl,
+    posthogHost,
+    hasKey: !!posthogKey,
+  });
+
   if (sdkInitialized) {
     console.warn("[Recall SDK] Already initialized, skipping");
     return;
@@ -106,28 +112,17 @@ export function initializeRecallSDK(
     return;
   }
 
-  console.log("[Recall SDK] Initializing...");
+  console.log("[Recall SDK] Setting up event listeners...");
 
-  sdkInitialized = true;
-  posthogClient = new PostHogAPIClient(posthogKey, posthogHost);
-
-  RecallAiSdk.init({
-    apiUrl: recallApiUrl,
-    acquirePermissionsOnStartup: [
-      "accessibility",
-      "screen-capture",
-      "microphone",
-    ],
-    restartOnError: true,
-  });
-
-  console.log("[Recall SDK] Ready. Listening for meetings...");
+  // IMPORTANT: Register ALL event listeners BEFORE calling init()
+  // This is required by Recall SDK
 
   RecallAiSdk.addEventListener("permissions-granted", async () => {
     console.log("[Recall SDK] Permissions granted");
   });
 
   RecallAiSdk.addEventListener("permission-status", async (evt) => {
+    console.log("[Recall SDK] Permission status:", evt.permission, evt.status);
     if (evt.status === "denied" || evt.status === "error") {
       console.warn(`[Recall SDK] Permission ${evt.permission}: ${evt.status}`);
     }
@@ -385,6 +380,34 @@ export function initializeRecallSDK(
       );
     }
   });
+
+  console.log("[Recall SDK] All event listeners registered");
+
+  // NOW initialize the SDK (after all event listeners are set up)
+  console.log("[Recall SDK] Initializing SDK...");
+  sdkInitialized = true;
+  posthogClient = new PostHogAPIClient(posthogKey, posthogHost);
+  console.log("[Recall SDK] PostHog client created");
+
+  try {
+    RecallAiSdk.init({
+      apiUrl: recallApiUrl,
+      acquirePermissionsOnStartup: [
+        "accessibility",
+        "screen-capture",
+        "microphone",
+      ],
+      restartOnError: true,
+    });
+    console.log("[Recall SDK] RecallAiSdk.init() completed successfully");
+  } catch (error) {
+    console.error("[Recall SDK] Failed to initialize SDK:", error);
+    sdkInitialized = false;
+    posthogClient = null;
+    throw error;
+  }
+
+  console.log("[Recall SDK] ✓ Ready. Listening for meetings...");
 }
 
 export function requestRecallPermission(
@@ -398,18 +421,37 @@ export function shutdownRecallSDK() {
 }
 
 export function registerRecallIPCHandlers() {
+  console.log("[Recall SDK] Registering IPC handlers...");
+
   ipcMain.handle(
     "recall:initialize",
     async (_event, recallApiUrl, posthogKey, posthogHost) => {
-      initializeRecallSDK(recallApiUrl, posthogKey, posthogHost);
+      console.log("[Recall SDK] IPC handler 'recall:initialize' called");
+      try {
+        initializeRecallSDK(recallApiUrl, posthogKey, posthogHost);
+        console.log("[Recall SDK] IPC handler 'recall:initialize' completed");
+      } catch (error) {
+        console.error(
+          "[Recall SDK] IPC handler 'recall:initialize' error:",
+          error,
+        );
+        throw error;
+      }
     },
   );
 
   ipcMain.handle("recall:request-permission", async (_event, permission) => {
+    console.log(
+      "[Recall SDK] IPC handler 'recall:request-permission' called:",
+      permission,
+    );
     requestRecallPermission(permission);
   });
 
   ipcMain.handle("recall:shutdown", async () => {
+    console.log("[Recall SDK] IPC handler 'recall:shutdown' called");
     shutdownRecallSDK();
   });
+
+  console.log("[Recall SDK] IPC handlers registered successfully");
 }

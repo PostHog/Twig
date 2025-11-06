@@ -71,7 +71,7 @@ export function TaskFilterBadges({
   };
 
   return (
-    <Flex gap="1" wrap="wrap" align="center" style={{ maxWidth: "60%" }}>
+    <Flex gap="1" wrap="wrap" align="center">
       {badges.map((badge) => {
         const categoryConfig = filterCategories.find(
           (c) => c.category === badge.category,

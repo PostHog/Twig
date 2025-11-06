@@ -13,6 +13,29 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const RECALL_API_URL = "https://us-west-2.recall.ai";
 
+// Helper function to initialize Recall SDK
+async function initializeRecallSDK(
+  accessToken: string,
+  apiHost: string,
+): Promise<void> {
+  try {
+    console.log("[Auth] Calling recallInitialize with:", {
+      url: RECALL_API_URL,
+      host: apiHost,
+      hasToken: !!accessToken,
+    });
+    await window.electronAPI.recallInitialize(
+      RECALL_API_URL,
+      accessToken,
+      apiHost,
+    );
+    console.log("[Auth] recallInitialize completed successfully");
+  } catch (error) {
+    console.error("[Auth] Failed to initialize Recall SDK:", error);
+    // Don't throw - Recall SDK failure shouldn't block authentication
+  }
+}
+
 interface AuthState {
   // OAuth state
   oauthAccessToken: string | null;
@@ -149,19 +172,8 @@ export const useAuthStore = create<AuthState>()(
           throw new Error("Failed to authenticate with PostHog");
         }
 
-        try {
-          window.electronAPI
-            .recallInitialize(
-              RECALL_API_URL,
-              tokenResponse.access_token,
-              apiHost,
-            )
-            .catch((error) => {
-              console.error("[Auth] Failed to initialize Recall SDK:", error);
-            });
-        } catch (_error) {
-          throw new Error("Invalid API key or host");
-        }
+        // Initialize Recall SDK for meeting detection
+        await initializeRecallSDK(tokenResponse.access_token, apiHost);
       },
 
       refreshAccessToken: async () => {
@@ -349,6 +361,9 @@ export const useAuthStore = create<AuthState>()(
                   set({ openaiApiKey: decryptedOpenaiKey });
                 }
               }
+
+              // Initialize Recall SDK for meeting detection (session restore)
+              await initializeRecallSDK(tokens.accessToken, apiHost);
 
               return true;
             } catch (error) {

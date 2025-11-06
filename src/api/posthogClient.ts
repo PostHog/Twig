@@ -321,25 +321,6 @@ export class PostHogAPIClient {
     return await response.json();
   }
 
-  async getDesktopRecordingTranscript(recordingId: string) {
-    this.validateRecordingId(recordingId);
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/environments/${teamId}/desktop_recordings/${recordingId}/transcript/`,
-    );
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/environments/${teamId}/desktop_recordings/${recordingId}/transcript/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch transcript: ${response.statusText}`);
-    }
-
-    return await response.json();
-  }
-
   async listDesktopRecordings(filters?: {
     platform?: string;
     status?: string;
@@ -405,28 +386,18 @@ export class PostHogAPIClient {
     return data;
   }
 
-  async updateDesktopRecordingTranscript(
+  async appendSegments(
     recordingId: string,
-    updates: {
-      segments?: Array<{
-        timestamp_ms: number;
-        speaker: string | null;
-        text: string;
-        confidence: number | null;
-        is_final: boolean;
-      }>;
-      full_text?: string;
-    },
-  ) {
+    segments: Array<Schemas.TranscriptSegment>,
+  ): Promise<Schemas.DesktopRecording> {
     this.validateRecordingId(recordingId);
     const teamId = await this.getTeamId();
 
     const data = await this.api.post(
-      //@ts-expect-error not in the generated client
-      "/api/environments/{project_id}/desktop_recordings/{id}/transcript/",
+      "/api/environments/{project_id}/desktop_recordings/{id}/append_segments/",
       {
         path: { project_id: teamId.toString(), id: recordingId },
-        body: updates as any,
+        body: { segments } as Schemas.AppendSegments,
       },
     );
 

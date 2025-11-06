@@ -14,20 +14,12 @@ export function RecordingView({ recordingItem }: RecordingViewProps) {
   const segments: TranscriptSegment[] =
     recordingItem.type === "active"
       ? recordingItem.recording.segments || []
-      : (
-          recordingItem.recording.transcript_segments as Array<{
-            timestamp_ms: number;
-            speaker: string | null;
-            text: string;
-            confidence: number | null;
-            is_final: boolean;
-          }>
-        )?.map((seg) => ({
-          timestamp: seg.timestamp_ms,
-          speaker: seg.speaker,
+      : recordingItem.recording.transcript_segments?.map((seg) => ({
+          timestamp: seg.timestamp ?? 0,
+          speaker: seg.speaker ?? null,
           text: seg.text,
-          confidence: seg.confidence,
-          is_final: seg.is_final,
+          confidence: seg.confidence ?? null,
+          is_final: seg.is_final ?? false,
         })) || [];
 
   useEffect(() => {
