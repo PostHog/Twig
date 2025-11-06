@@ -71,7 +71,6 @@ export interface TaskState {
   filterMatchMode: FilterMatchMode;
   filterSearchQuery: string;
   filterMenuSelectedIndex: number;
-  isSearchExpanded: boolean;
   isFilterDropdownOpen: boolean;
   editingFilterBadgeKey: string | null;
 
@@ -118,7 +117,6 @@ export interface TaskState {
   setFilterMatchMode: (mode: FilterMatchMode) => void;
   setFilterSearchQuery: (query: string) => void;
   setFilterMenuSelectedIndex: (index: number) => void;
-  setIsSearchExpanded: (expanded: boolean) => void;
   setIsFilterDropdownOpen: (open: boolean) => void;
   setEditingFilterBadgeKey: (key: string | null) => void;
 }
