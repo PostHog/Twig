@@ -153,7 +153,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         setPlanModePhase(task.id, "planning");
         runTask(task.id, task);
       } catch (error) {
-        console.error("Failed to save answers to questions.json:", error);
+        console.error("Failed to save answers to research.json:", error);
       }
     }
   };

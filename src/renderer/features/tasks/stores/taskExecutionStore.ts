@@ -672,11 +672,17 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         if (taskState.clarifyingQuestions.length > 0) return;
 
-        const artifactEvent = taskState.logs.find(isArtifactEvent);
+        // Look specifically for research_questions artifact
+        const artifactEvent = taskState.logs.find(
+          (log): log is AgentEvent & ArtifactEvent =>
+            isArtifactEvent(log) &&
+            (log as ArtifactEvent).kind === "research_questions",
+        );
+
         if (!artifactEvent) return;
 
         const event = artifactEvent as ArtifactEvent;
-        if (event.kind === "research_questions" && event.content) {
+        if (event.content) {
           const questions = toClarifyingQuestions(event.content);
           store.setClarifyingQuestions(taskId, questions);
           store.setPlanModePhase(taskId, "questions");

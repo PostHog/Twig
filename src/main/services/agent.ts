@@ -306,35 +306,4 @@ export function registerAgentIpc(
       }
     },
   );
-
-  ipcMain.handle(
-    "agent-extract-questions",
-    async (
-      _event: IpcMainInvokeEvent,
-      {
-        taskId,
-        repoPath,
-        apiKey,
-        apiHost,
-        projectId,
-      }: {
-        taskId: string;
-        repoPath: string;
-        apiKey: string;
-        apiHost: string;
-        projectId: number;
-      },
-    ): Promise<Array<{ id: string; question: string; options: string[] }>> => {
-      const agent = new Agent({
-        workingDirectory: repoPath,
-        posthogApiKey: apiKey,
-        posthogApiUrl: apiHost,
-        posthogProjectId: projectId,
-        debug: true,
-      });
-
-      const questions = await agent.extractQuestionsFromResearch(taskId, false);
-      return questions;
-    },
-  );
 }
