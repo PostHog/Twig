@@ -4,6 +4,9 @@ export type Tab = {
   id: string;
   label: string;
   component?: React.ReactNode;
+  closeable?: boolean;
+  onClose?: () => void;
+  icon?: React.ReactNode;
 };
 
 export type PanelContent = {
@@ -11,6 +14,7 @@ export type PanelContent = {
   tabs: Tab[];
   activeTabId: string;
   showTabs?: boolean;
+  droppable?: boolean;
 };
 
 export type PanelNode =
@@ -66,6 +70,11 @@ interface PanelStore {
   closeTab: (panelId: string, tabId: string) => void;
   cleanupTree: () => void;
   updateSizes: (groupId: string, sizes: number[]) => void;
+  reorderTabs: (
+    panelId: string,
+    sourceIndex: number,
+    targetIndex: number,
+  ) => void;
 }
 
 const removeTabFromPanel = (node: PanelNode, tabId: string): PanelNode => {
@@ -328,6 +337,29 @@ export const usePanelStore = create<PanelStore>((set, get) => {
         root: updateTreeNode(root, groupId, (node) => {
           if (!isGroupNode(node)) return node;
           return { ...node, sizes };
+        }),
+      });
+    },
+
+    reorderTabs: (panelId, sourceIndex, targetIndex) => {
+      const { root } = get();
+      if (!root) return;
+
+      set({
+        root: updateTreeNode(root, panelId, (node) => {
+          if (!isLeafNode(node)) return node;
+
+          const newTabs = [...node.content.tabs];
+          const [movedTab] = newTabs.splice(sourceIndex, 1);
+          newTabs.splice(targetIndex, 0, movedTab);
+
+          return {
+            ...node,
+            content: {
+              ...node.content,
+              tabs: newTabs,
+            },
+          };
         }),
       });
     },

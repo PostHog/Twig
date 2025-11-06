@@ -101,7 +101,8 @@ interface TaskExecutionState {
   clarifyingQuestions: ClarifyingQuestion[];
   questionAnswers: QuestionAnswer[];
   planContent: string | null;
-  selectedArtifact: string | null; // Currently viewing artifact filename
+  openArtifacts: string[]; // Array of open artifact filenames
+  activeArtifactId: string | null; // Currently active artifact tab
 }
 
 interface TaskExecutionStore {
@@ -143,7 +144,9 @@ interface TaskExecutionStore {
   setQuestionAnswers: (taskId: string, answers: QuestionAnswer[]) => void;
   addQuestionAnswer: (taskId: string, answer: QuestionAnswer) => void;
   setPlanContent: (taskId: string, content: string | null) => void;
-  setSelectedArtifact: (taskId: string, fileName: string | null) => void;
+  openArtifact: (taskId: string, fileName: string) => void;
+  closeArtifact: (taskId: string, fileName: string) => void;
+  setActiveArtifact: (taskId: string, fileName: string | null) => void;
 
   // Auto-initialization and artifact processing
   initializeRepoPath: (taskId: string, task: Task) => void;
@@ -167,7 +170,8 @@ const defaultTaskState: TaskExecutionState = {
   clarifyingQuestions: [],
   questionAnswers: [],
   planContent: null,
-  selectedArtifact: null,
+  openArtifacts: [],
+  activeArtifactId: null,
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -180,7 +184,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (task) {
           state.initializeRepoPath(taskId, task);
         }
-        return state.taskStates[taskId] || { ...defaultTaskState };
+        return {
+          ...defaultTaskState,
+          ...state.taskStates[taskId],
+        };
       },
 
       updateTaskState: (
@@ -588,8 +595,32 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         get().updateTaskState(taskId, { planContent: content });
       },
 
-      setSelectedArtifact: (taskId: string, fileName: string | null) => {
-        get().updateTaskState(taskId, { selectedArtifact: fileName });
+      openArtifact: (taskId: string, fileName: string) => {
+        const state = get().getTaskState(taskId);
+        if (!state.openArtifacts.includes(fileName)) {
+          get().updateTaskState(taskId, {
+            openArtifacts: [...state.openArtifacts, fileName],
+            activeArtifactId: fileName,
+          });
+        } else {
+          get().updateTaskState(taskId, { activeArtifactId: fileName });
+        }
+      },
+
+      closeArtifact: (taskId: string, fileName: string) => {
+        const state = get().getTaskState(taskId);
+        const newOpenArtifacts = state.openArtifacts.filter(
+          (name) => name !== fileName,
+        );
+        get().updateTaskState(taskId, {
+          openArtifacts: newOpenArtifacts,
+          activeArtifactId:
+            state.activeArtifactId === fileName ? null : state.activeArtifactId,
+        });
+      },
+
+      setActiveArtifact: (taskId: string, fileName: string | null) => {
+        get().updateTaskState(taskId, { activeArtifactId: fileName });
       },
 
       // Auto-initialization and artifact processing

@@ -48,7 +48,7 @@ export function PlanView({
   selectedArtifact,
   onAnswersComplete,
   onClearLogs,
-  onClosePlan,
+  onClosePlan: _onClosePlan,
   onSavePlan,
 }: PlanViewProps) {
   // Show interactive questions when in questions phase
@@ -73,7 +73,6 @@ export function PlanView({
           repoPath={repoPath}
           fileName="plan.md"
           initialContent={planContent || undefined}
-          onClose={onClosePlan}
           onSave={onSavePlan}
         />
       </Box>
