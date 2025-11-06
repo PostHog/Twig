@@ -176,7 +176,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
       addQuestionAnswer(task.id, answer);
     }
 
-    // Save answers to questions.json
+    // Save answers to research.json
     if (repoPath) {
       try {
         await window.electronAPI?.saveQuestionAnswers(
@@ -184,7 +184,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           task.id,
           answers,
         );
-        console.log("Answers saved to questions.json");
+        console.log("Answers saved to research.json");
 
         // Set phase to planning and trigger next run
         setPlanModePhase(task.id, "planning");
@@ -192,7 +192,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         // Trigger the next phase (planning) by running the task again
         runTask(task.id, task);
       } catch (error) {
-        console.error("Failed to save answers to questions.json:", error);
+        console.error("Failed to save answers to research.json:", error);
       }
     }
   };
