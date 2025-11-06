@@ -9,6 +9,7 @@ import { TaskDetail } from "@features/tasks/components/TaskDetail";
 import { TaskList } from "@features/tasks/components/TaskList";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
+import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
 import { useTabStore } from "@stores/tabStore";
@@ -16,6 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
 import { NotetakerView } from "@/renderer/features/notetaker/components/NotetakerView";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 export function MainLayout() {
   const { activeTabId, tabs, createTab, setActiveTab, closeTab } =
@@ -94,6 +96,12 @@ export function MainLayout() {
         type: "task-detail",
         title: task.title,
         data: task,
+      });
+
+      // Track task view
+      track(ANALYTICS_EVENTS.TASK_VIEWED, {
+        task_id: task.id,
+        has_repository: !!task.repository_config,
       });
     }
   };

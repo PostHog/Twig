@@ -1,6 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
+import { track } from "@renderer/lib/analytics";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
@@ -14,6 +15,11 @@ import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import type {
+  ExecutionMode as AnalyticsExecutionMode,
+  ExecutionType,
+} from "@/types/analytics";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 interface ArtifactEvent {
   type: string;
@@ -367,6 +373,19 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         const currentTaskState = store.getTaskState(taskId);
+
+        // Track task run event
+        const executionType: ExecutionType = currentTaskState.runMode;
+        const executionMode: AnalyticsExecutionMode =
+          currentTaskState.executionMode;
+        const hasRepository = !!task.repository_config;
+
+        track(ANALYTICS_EVENTS.TASK_RUN, {
+          task_id: taskId,
+          execution_type: executionType,
+          execution_mode: executionMode,
+          has_repository: hasRepository,
+        });
 
         // Handle cloud mode - run task via API
         if (currentTaskState.runMode === "cloud") {
