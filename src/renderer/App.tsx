@@ -1,8 +1,10 @@
 import { MainLayout } from "@components/MainLayout";
+import { DragDropProvider } from "@dnd-kit/react";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
+import { useDragDropHandlers } from "@/renderer/hooks/useDragDropHandlers";
 import { useRecordingQuerySync } from "@/renderer/hooks/useRecordingQuerySync";
 import {
   initializeRecordingService,
@@ -12,6 +14,7 @@ import {
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
+  const dragDropHandlers = useDragDropHandlers();
 
   useRecordingQuerySync();
 
@@ -46,7 +49,9 @@ function App() {
     );
   }
 
-  return isAuthenticated ? <MainLayout /> : <AuthScreen />;
+  const content = isAuthenticated ? <MainLayout /> : <AuthScreen />;
+
+  return <DragDropProvider {...dragDropHandlers}>{content}</DragDropProvider>;
 }
 
 export default App;
