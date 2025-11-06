@@ -11,7 +11,6 @@ import {
   GearIcon,
   ListNumbersIcon,
   PlusIcon,
-  VideoIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
 import type { TabState, Task } from "@shared/types";

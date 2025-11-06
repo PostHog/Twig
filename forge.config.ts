@@ -96,9 +96,6 @@ function copyNativeDependency(
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: {
-      unpack: "{**/*.node,node_modules/@recallai/**}",
-    },
     prune: false,
     name: "Array",
     executableName: "Array",
@@ -167,7 +164,6 @@ const config: ForgeConfig = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyNativeDependency("node-pty", buildPath);
       copyNativeDependency("node-addon-api", buildPath);
-      copyNativeDependency("@recallai/desktop-sdk", buildPath);
     },
   },
   publishers: [
