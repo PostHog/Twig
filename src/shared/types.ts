@@ -64,11 +64,7 @@ export interface LogEntry {
 
 export interface TabState {
   id: string;
-  type:
-    | "task-list"
-    | "task-detail"
-    | "backlog"
-    | "settings"
+  type: "task-list" | "task-detail" | "backlog" | "settings";
   title: string;
   data?: Task | unknown;
 }

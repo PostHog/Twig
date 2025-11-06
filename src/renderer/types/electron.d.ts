@@ -1,4 +1,3 @@
-import type { Schemas } from "@api/generated";
 import type { AgentEvent } from "@posthog/agent";
 import type { TaskArtifact } from "@shared/types";
 import type {

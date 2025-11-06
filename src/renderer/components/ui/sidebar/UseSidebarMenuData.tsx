@@ -28,10 +28,7 @@ interface UseSidebarMenuDataProps {
   activeFilters: ActiveFilters;
   currentUser: Schemas.User | undefined;
   setActiveFilters: (filters: ActiveFilters) => void;
-  onNavigate: (
-    type: "task-list" | "settings",
-    title: string,
-  ) => void;
+  onNavigate: (type: "task-list" | "settings", title: string) => void;
   onTaskClick: (task: Task) => void;
   onCreateTask: () => void;
   onProjectClick: (repository: string) => void;

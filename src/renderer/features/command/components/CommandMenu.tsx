@@ -1,7 +1,6 @@
 import { Command } from "@features/command/components/Command";
 import { CommandKeyHints } from "@features/command/components/CommandKeyHints";
 import { useTasks } from "@features/tasks/hooks/useTasks";
-import { MicrophoneIcon } from "@phosphor-icons/react";
 import { FileTextIcon, ListBulletIcon } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";

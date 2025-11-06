@@ -29,10 +29,7 @@ export const SidebarContent: React.FC = () => {
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
   const userName = currentUser?.first_name || currentUser?.email || "Account";
 
-  const handleNavigate = (
-    type: "task-list" | "settings",
-    title: string,
-  ) => {
+  const handleNavigate = (type: "task-list" | "settings", title: string) => {
     const existingTab = tabs.find((tab) => tab.type === type);
     if (existingTab) {
       setActiveTab(existingTab.id);

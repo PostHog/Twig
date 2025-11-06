@@ -92,9 +92,7 @@ export function SidebarTreeItem({
               borderRadius: "2px",
               transition: "background-color 0.1s",
             }}
-            className={
-              "tree-item-action-hover"
-            }
+            className={"tree-item-action-hover"}
             onClick={(e) => {
               e.stopPropagation();
               line.hoverAction?.();

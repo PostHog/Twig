@@ -10,9 +10,7 @@
     "vite.renderer.config.mts"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
-  "ignore": [
-    "src/api/generated.ts"
-  ],
+  "ignore": ["src/api/generated.ts"],
   "ignoreDependencies": [
     "@tiptap/core",
     "@radix-ui/react-collapsible",
