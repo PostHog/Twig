@@ -23,7 +23,6 @@ interface UseTaskPanelLayoutParams {
   planContent: string | null;
   onAnswersComplete: (answers: any[]) => void;
   onClearLogs: () => void;
-  onClosePlan: () => void;
   onCloseArtifact: (fileName: string) => void;
   onSavePlan: (content: string) => void;
   onArtifactSelect: (fileName: string) => void;
@@ -44,7 +43,6 @@ export const useTaskPanelLayout = ({
   planContent,
   onAnswersComplete,
   onClearLogs,
-  onClosePlan,
   onCloseArtifact,
   onSavePlan,
   onArtifactSelect,
@@ -75,7 +73,6 @@ export const useTaskPanelLayout = ({
           selectedArtifact={null}
           onAnswersComplete={onAnswersComplete}
           onClearLogs={onClearLogs}
-          onClosePlan={onClosePlan}
           onSavePlan={onSavePlan}
         />
       </BackgroundWrapper>
@@ -91,7 +88,6 @@ export const useTaskPanelLayout = ({
       planContent,
       onAnswersComplete,
       onClearLogs,
-      onClosePlan,
       onSavePlan,
     ],
   );

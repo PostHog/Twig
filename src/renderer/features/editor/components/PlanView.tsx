@@ -32,7 +32,6 @@ interface PlanViewProps {
     }>,
   ) => void;
   onClearLogs?: () => void;
-  onClosePlan?: () => void;
   onSavePlan?: (content: string) => void;
 }
 
@@ -48,7 +47,6 @@ export function PlanView({
   selectedArtifact,
   onAnswersComplete,
   onClearLogs,
-  onClosePlan: _onClosePlan,
   onSavePlan,
 }: PlanViewProps) {
   // Show interactive questions when in questions phase

@@ -158,10 +158,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     }
   };
 
-  const handleClosePlan = () => {
-    setPlanModePhase(task.id, "idle");
-  };
-
   const handleCloseArtifact = (fileName: string) => {
     closeArtifact(task.id, fileName);
   };
@@ -256,7 +252,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     planContent,
     onAnswersComplete: handleAnswersComplete,
     onClearLogs: handleClearLogs,
-    onClosePlan: handleClosePlan,
     onCloseArtifact: handleCloseArtifact,
     onSavePlan: handleSavePlan,
     onArtifactSelect: handleArtifactSelect,

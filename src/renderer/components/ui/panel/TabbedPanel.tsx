@@ -28,7 +28,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
     closeTab(panelId, tabId);
   };
 
-  // Make the tab bar a droppable area for tab reordering
   const { ref: tabBarRef } = useDroppable({
     id: `tab-bar-${panelId}`,
     data: { panelId, type: "tab-bar" },
@@ -36,7 +35,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
 
   return (
     <Box position="relative" height="100%" className="flex flex-col">
-      {/* Tab bar */}
       {content.showTabs !== false && (
         <Flex
           ref={tabBarRef}
@@ -68,7 +66,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         </Flex>
       )}
 
-      {/* Active tab content - this is where drop zones should be */}
       <Box flexGrow="1" className="overflow-hidden" position="relative">
         {activeTab?.component || (
           <Flex
@@ -83,8 +80,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
           </Flex>
         )}
 
-        {/* Drop zones for splitting */}
-        {content.droppable !== false && (
+        {content.droppable && (
           <PanelDropZones panelId={panelId} isDragging={!!draggingTabId} />
         )}
       </Box>
