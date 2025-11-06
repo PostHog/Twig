@@ -1,6 +1,6 @@
 import type { Schemas } from "@api/generated";
 import type { AgentEvent } from "@posthog/agent";
-import type { Recording, TaskArtifact } from "@shared/types";
+import type { TaskArtifact } from "@shared/types";
 import type {
   CloudRegion,
   OAuthTokenResponse,
@@ -128,69 +128,6 @@ export interface IElectronAPI {
   getAppVersion: () => Promise<string>;
   onUpdateReady: (listener: () => void) => () => void;
   installUpdate: () => Promise<{ installed: boolean }>;
-  // Recording API
-  recordingStart: () => Promise<{ recordingId: string; startTime: string }>;
-  recordingStop: (
-    recordingId: string,
-    audioData: Uint8Array,
-    duration: number,
-  ) => Promise<Recording>;
-  recordingList: () => Promise<Recording[]>;
-  recordingDelete: (recordingId: string) => Promise<boolean>;
-  recordingGetFile: (recordingId: string) => Promise<ArrayBuffer>;
-  recordingTranscribe: (
-    recordingId: string,
-    openaiApiKey: string,
-  ) => Promise<{
-    status: string;
-    text: string;
-    summary?: string | null;
-    extracted_tasks?: Array<{ title: string; description: string }>;
-  }>;
-  // Desktop capturer for system audio
-  getDesktopSources: (options: { types: string[] }) => Promise<
-    Array<{
-      id: string;
-      name: string;
-    }>
-  >;
-  // Recall SDK API
-  recallInitialize: (
-    recallApiUrl: string,
-    posthogKey: string,
-    posthogHost: string,
-  ) => Promise<void>;
-  recallGetActiveSessions: () => Promise<
-    Array<{
-      windowId: string;
-      recordingId: string;
-      platform: string;
-    }>
-  >;
-  recallRequestPermission: (
-    permission: "accessibility" | "screen-capture" | "microphone",
-  ) => Promise<void>;
-  recallShutdown: () => Promise<void>;
-  // Recall SDK event listeners
-  onRecallRecordingStarted: (
-    listener: (recording: Schemas.DesktopRecording) => void,
-  ) => () => void;
-  onRecallTranscriptSegment: (
-    listener: (data: {
-      posthog_recording_id: string;
-      timestamp: number;
-      speaker: string | null;
-      text: string;
-      confidence: number | null;
-      is_final: boolean;
-    }) => void,
-  ) => () => void;
-  onRecallMeetingEnded: (
-    listener: (data: { posthog_recording_id: string }) => void,
-  ) => () => void;
-  onRecallRecordingReady: (
-    listener: (data: { posthog_recording_id: string }) => void,
-  ) => () => void;
   // Shell API
   shellCreate: (sessionId: string, cwd?: string) => Promise<void>;
   shellWrite: (sessionId: string, data: string) => Promise<void>;

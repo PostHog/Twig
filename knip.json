@@ -11,9 +11,7 @@
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
   "ignore": [
-    "src/api/generated.ts",
-    "src/renderer/features/recordings/**",
-    "src/main/services/recording-*.ts"
+    "src/api/generated.ts"
   ],
   "ignoreDependencies": [
     "@tiptap/core",

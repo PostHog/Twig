@@ -93,10 +93,7 @@ export function SidebarTreeItem({
               transition: "background-color 0.1s",
             }}
             className={
-              line.label === "Recordings" ||
-              line.label?.startsWith("Recordings")
-                ? "tree-item-action-hover-red"
-                : "tree-item-action-hover"
+              "tree-item-action-hover"
             }
             onClick={(e) => {
               e.stopPropagation();

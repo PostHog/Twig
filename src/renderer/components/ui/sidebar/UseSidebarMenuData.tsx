@@ -29,13 +29,11 @@ interface UseSidebarMenuDataProps {
   currentUser: Schemas.User | undefined;
   setActiveFilters: (filters: ActiveFilters) => void;
   onNavigate: (
-    type: "task-list" | "recordings" | "notetaker" | "settings",
+    type: "task-list" | "settings",
     title: string,
   ) => void;
   onTaskClick: (task: Task) => void;
   onCreateTask: () => void;
-  onStartRecording: () => void;
-  onStopRecording: () => void;
   onProjectClick: (repository: string) => void;
 }
 
@@ -138,17 +136,6 @@ export function useSidebarMenuData({
           hoverIcon: <PlusIcon size={12} />,
         };
       }),
-      {
-        label: "Notetaker",
-        icon: (
-          <VideoIcon
-            size={12}
-            weight={activeTab?.type === "notetaker" ? "fill" : "regular"}
-          />
-        ),
-        action: () => onNavigate("notetaker", "Notetaker"),
-        isActive: activeTab?.type === "notetaker",
-      },
       {
         label: "Settings",
         icon: (

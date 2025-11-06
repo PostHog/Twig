@@ -1,8 +1,7 @@
 import { SidebarTreeItem } from "@components/ui/sidebar/SidebarTreeItem";
 import { useSidebarMenuData } from "@components/ui/sidebar/UseSidebarMenuData";
 import { buildTreeLines, getAllNodeIds } from "@components/ui/sidebar/Utils";
-import { useAudioRecorder } from "@features/recordings/hooks/useAudioRecorder";
-import { useRecordings } from "@features/recordings/hooks/useRecordings";
+
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
@@ -20,8 +19,6 @@ export const SidebarContent: React.FC = () => {
   const expandedNodesArray = useSidebarStore((state) => state.expandedNodes);
   const { toggleNode, expandAll, collapseAll } = useSidebarStore();
   const { setCliMode } = useLayoutStore();
-  const { saveRecording } = useRecordings();
-  const { startRecording, stopRecording } = useAudioRecorder(saveRecording);
   const { isLoading } = useTasks();
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const setActiveFilters = useTaskStore((state) => state.setActiveFilters);
@@ -33,7 +30,7 @@ export const SidebarContent: React.FC = () => {
   const userName = currentUser?.first_name || currentUser?.email || "Account";
 
   const handleNavigate = (
-    type: "task-list" | "recordings" | "notetaker" | "settings",
+    type: "task-list" | "settings",
     title: string,
   ) => {
     const existingTab = tabs.find((tab) => tab.type === type);
@@ -65,15 +62,6 @@ export const SidebarContent: React.FC = () => {
     }
   };
 
-  const handleStartRecording = () => {
-    handleNavigate("recordings", "Recordings");
-    startRecording();
-  };
-
-  const handleStopRecording = () => {
-    stopRecording();
-  };
-
   const handleCreateTask = () => {
     handleNavigate("task-list", "Tasks");
     setCliMode("task");
@@ -96,8 +84,6 @@ export const SidebarContent: React.FC = () => {
     onNavigate: handleNavigate,
     onTaskClick: handleTaskClick,
     onCreateTask: handleCreateTask,
-    onStartRecording: handleStartRecording,
-    onStopRecording: handleStopRecording,
     onProjectClick: handleProjectClick,
   });
 

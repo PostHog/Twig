@@ -79,19 +79,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     onOpenChange(false);
   };
 
-  const handleNavigateToRecordings = () => {
-    const recordingsTab = tabs.find((tab) => tab.type === "recordings");
-    if (recordingsTab) {
-      setActiveTab(recordingsTab.id);
-    } else {
-      createTab({
-        type: "recordings",
-        title: "Recordings",
-      });
-    }
-    onOpenChange(false);
-  };
-
   const handleCreateTask = () => {
     // Find the Tasks tab or use the first task-list tab
     const tasksTab = tabs.find((tab) => tab.type === "task-list");
@@ -171,14 +158,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               >
                 <ListBulletIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Go to tasks</Text>
-              </Command.Item>
-
-              <Command.Item
-                value="Go to recordings"
-                onSelect={handleNavigateToRecordings}
-              >
-                <MicrophoneIcon className="mr-3 h-3 w-3 text-gray-11" />
-                <Text size="1">Go to recordings</Text>
               </Command.Item>
             </Command.Group>
 

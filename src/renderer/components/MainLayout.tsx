@@ -3,7 +3,6 @@ import { StatusBar } from "@components/StatusBar";
 import { TabBar } from "@components/TabBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
-import { RecordingsView } from "@features/recordings/components/RecordingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { TaskDetail } from "@features/tasks/components/TaskDetail";
 import { TaskList } from "@features/tasks/components/TaskList";
@@ -15,7 +14,6 @@ import { useTabStore } from "@stores/tabStore";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
-import { NotetakerView } from "@/renderer/features/notetaker/components/NotetakerView";
 
 export function MainLayout() {
   const { activeTabId, tabs, createTab, setActiveTab, closeTab } =
@@ -117,10 +115,6 @@ export function MainLayout() {
           ) : null}
 
           {activeTab?.type === "settings" && <SettingsView />}
-
-          {activeTab?.type === "recordings" && <RecordingsView />}
-
-          {activeTab?.type === "notetaker" && <NotetakerView />}
         </Box>
       </Flex>
 

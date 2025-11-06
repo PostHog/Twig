@@ -16,11 +16,6 @@ import { registerGitIpc } from "./services/git.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
 import { registerOsIpc } from "./services/os.js";
 import { registerPosthogIpc } from "./services/posthog.js";
-import {
-  registerRecallIPCHandlers,
-  setMainWindow,
-} from "./services/recallRecording.js";
-import { registerRecordingIpc } from "./services/recording.js";
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 
@@ -88,27 +83,6 @@ function createWindow(): void {
   });
 
   setupExternalLinkHandlers(mainWindow);
-
-  // Enable screen/audio capture for recordings
-  mainWindow.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      if (permission === "media" || permission === "mediaKeySystem") {
-        callback(true);
-      } else {
-        callback(false);
-      }
-    },
-  );
-
-  // Handle display media requests (screen/window sharing)
-  mainWindow.webContents.session.setPermissionCheckHandler(
-    (_webContents, permission) => {
-      if (permission === "media") {
-        return true;
-      }
-      return false;
-    },
-  );
 
   // Set up menu for keyboard shortcuts
   const template: MenuItemConstructorOptions[] = [
@@ -199,6 +173,4 @@ registerOsIpc(() => mainWindow);
 registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
-registerRecordingIpc();
-registerRecallIPCHandlers();
 registerShellIpc();
