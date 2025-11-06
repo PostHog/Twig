@@ -132,7 +132,7 @@ export function MainLayout() {
         </Box>
       </Flex>
 
-      <StatusBar onOpenSettings={handleOpenSettings} />
+      <StatusBar />
 
       <CommandMenu open={commandMenuOpen} onOpenChange={setCommandMenuOpen} />
       <UpdatePrompt />
