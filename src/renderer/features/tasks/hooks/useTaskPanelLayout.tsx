@@ -7,7 +7,7 @@ import { ListIcon, NotePencilIcon, TerminalIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import type { PanelNode, Tab } from "@stores/panelStore";
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 interface UseTaskPanelLayoutParams {
   task: Task;
@@ -127,7 +127,7 @@ export const useTaskPanelLayout = ({
     [task.id, repoPath, activeArtifactId, onArtifactSelect],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Check if any meaningful values have changed
     const currentValues = {
       taskId: task.id,
@@ -280,18 +280,5 @@ export const useTaskPanelLayout = ({
     };
 
     setRoot(panelStructure);
-  }, [
-    task.id,
-    repoPath,
-    openArtifacts,
-    activeArtifactId,
-    logsContent,
-    shellContent,
-    artifactsContent,
-    taskDetailContent,
-    onCloseArtifact,
-    onSavePlan,
-    panelId,
-    setRoot,
-  ]);
+  });
 };

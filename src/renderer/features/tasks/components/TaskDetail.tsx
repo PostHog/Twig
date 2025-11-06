@@ -4,7 +4,6 @@ import { RichTextEditor } from "@features/editor/components/RichTextEditor";
 import { TaskActions } from "@features/tasks/components/TaskActions";
 import { TaskHeader } from "@features/tasks/components/TaskHeader";
 import { TaskMetadata } from "@features/tasks/components/TaskMetadata";
-import { useTaskPanelLayout } from "@features/tasks/components/useTaskPanelLayout";
 import { useTasks, useUpdateTask } from "@features/tasks/hooks/useTasks";
 import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
@@ -18,6 +17,7 @@ import { useTabStore } from "@stores/tabStore";
 import { expandTildePath } from "@utils/path";
 import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { useTaskPanelLayout } from "@/renderer/features/tasks/hooks/useTaskPanelLayout";
 
 interface TaskDetailProps {
   task: Task;
