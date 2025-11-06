@@ -72,7 +72,6 @@ export const useTaskStore = create<TaskState>()(
       filterMatchMode: "all",
       filterSearchQuery: "",
       filterMenuSelectedIndex: -1,
-      isSearchExpanded: false,
       isFilterDropdownOpen: false,
       editingFilterBadgeKey: null,
 
@@ -209,7 +208,6 @@ export const useTaskStore = create<TaskState>()(
       setFilterSearchQuery: (query) => set({ filterSearchQuery: query }),
       setFilterMenuSelectedIndex: (index) =>
         set({ filterMenuSelectedIndex: index }),
-      setIsSearchExpanded: (expanded) => set({ isSearchExpanded: expanded }),
       setIsFilterDropdownOpen: (open) => set({ isFilterDropdownOpen: open }),
       setEditingFilterBadgeKey: (key) => set({ editingFilterBadgeKey: key }),
     }),
