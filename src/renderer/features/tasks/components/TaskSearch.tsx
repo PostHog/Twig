@@ -15,8 +15,6 @@ export function TaskSearch({ value, onChange }: TaskSearchProps) {
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "f" && (e.metaKey || e.ctrlKey)) {
@@ -45,34 +43,34 @@ export function TaskSearch({ value, onChange }: TaskSearchProps) {
         width: "250px",
       }}
     >
-        <TextField.Root
-          ref={inputRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Search tasks..."
-          size="1"
-        >
+      <TextField.Root
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search tasks..."
+        size="1"
+      >
+        <TextField.Slot>
+          <MagnifyingGlassIcon height="12" width="12" />
+        </TextField.Slot>
+        {value ? (
           <TextField.Slot>
-            <MagnifyingGlassIcon height="12" width="12" />
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={handleClear}
+              type="button"
+            >
+              <Cross2Icon width="12" height="12" />
+            </IconButton>
           </TextField.Slot>
-          {value ? (
-            <TextField.Slot>
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="gray"
-                onClick={handleClear}
-                type="button"
-              >
-                <Cross2Icon width="12" height="12" />
-              </IconButton>
-            </TextField.Slot>
-          ) : (
-            <TextField.Slot>
-              <Kbd>⌘F</Kbd>
-            </TextField.Slot>
-          )}
-        </TextField.Root>
+        ) : (
+          <TextField.Slot>
+            <Kbd>⌘F</Kbd>
+          </TextField.Slot>
+        )}
+      </TextField.Root>
     </div>
   );
 }
