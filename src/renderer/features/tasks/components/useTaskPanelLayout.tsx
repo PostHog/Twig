@@ -7,7 +7,7 @@ import { ListIcon, NotePencilIcon, TerminalIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import type { PanelNode, Tab } from "@stores/panelStore";
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 interface UseTaskPanelLayoutParams {
   task: Task;
@@ -52,52 +52,103 @@ export const useTaskPanelLayout = ({
 }: UseTaskPanelLayoutParams) => {
   const panelId = `task-detail-${task.id}`;
 
-  const logsContent = (
-    <BackgroundWrapper>
-      <PlanView
-        task={task}
-        repoPath={repoPath}
-        phase={planModePhase as any}
-        questions={clarifyingQuestions}
-        answers={questionAnswers}
-        logs={logs}
-        isRunning={isRunning}
-        planContent={planContent}
-        selectedArtifact={null}
-        onAnswersComplete={onAnswersComplete}
-        onClearLogs={onClearLogs}
-        onClosePlan={onClosePlan}
-        onSavePlan={onSavePlan}
-      />
-    </BackgroundWrapper>
-  );
+  // Track the last values to prevent unnecessary updates
+  const lastValuesRef = useRef({
+    taskId: task.id,
+    repoPath,
+    openArtifactsStr: JSON.stringify(openArtifacts),
+    activeArtifactId,
+  });
 
-  const shellContent = (
-    <Box height="100%">
-      <ShellTerminal cwd={repoPath || undefined} />
-    </Box>
-  );
-
-  const artifactsContent = (
-    <Box height="100%" overflowY="auto" p="4">
-      {repoPath ? (
-        <TaskArtifacts
-          taskId={task.id}
+  const logsContent = useMemo(
+    () => (
+      <BackgroundWrapper>
+        <PlanView
+          task={task}
           repoPath={repoPath}
-          selectedArtifact={activeArtifactId}
-          onArtifactSelect={onArtifactSelect}
+          phase={planModePhase as any}
+          questions={clarifyingQuestions}
+          answers={questionAnswers}
+          logs={logs}
+          isRunning={isRunning}
+          planContent={planContent}
+          selectedArtifact={null}
+          onAnswersComplete={onAnswersComplete}
+          onClearLogs={onClearLogs}
+          onClosePlan={onClosePlan}
+          onSavePlan={onSavePlan}
         />
-      ) : (
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            No repository path available
-          </Text>
-        </Flex>
-      )}
-    </Box>
+      </BackgroundWrapper>
+    ),
+    [
+      task,
+      repoPath,
+      planModePhase,
+      clarifyingQuestions,
+      questionAnswers,
+      logs,
+      isRunning,
+      planContent,
+      onAnswersComplete,
+      onClearLogs,
+      onClosePlan,
+      onSavePlan,
+    ],
+  );
+
+  const shellContent = useMemo(
+    () => (
+      <Box height="100%">
+        <ShellTerminal cwd={repoPath || undefined} />
+      </Box>
+    ),
+    [repoPath],
+  );
+
+  const artifactsContent = useMemo(
+    () => (
+      <Box height="100%" overflowY="auto" p="4">
+        {repoPath ? (
+          <TaskArtifacts
+            taskId={task.id}
+            repoPath={repoPath}
+            selectedArtifact={activeArtifactId}
+            onArtifactSelect={onArtifactSelect}
+          />
+        ) : (
+          <Flex align="center" justify="center" height="100%">
+            <Text size="2" color="gray">
+              No repository path available
+            </Text>
+          </Flex>
+        )}
+      </Box>
+    ),
+    [task.id, repoPath, activeArtifactId, onArtifactSelect],
   );
 
   useEffect(() => {
+    // Check if any meaningful values have changed
+    const currentValues = {
+      taskId: task.id,
+      repoPath,
+      openArtifactsStr: JSON.stringify(openArtifacts),
+      activeArtifactId,
+    };
+
+    const hasChanged =
+      lastValuesRef.current.taskId !== currentValues.taskId ||
+      lastValuesRef.current.repoPath !== currentValues.repoPath ||
+      lastValuesRef.current.openArtifactsStr !==
+        currentValues.openArtifactsStr ||
+      lastValuesRef.current.activeArtifactId !== currentValues.activeArtifactId;
+
+    if (!hasChanged) {
+      return;
+    }
+
+    lastValuesRef.current = currentValues;
+
     const logsTabs: Tab[] = [
       {
         id: "logs",
@@ -229,19 +280,18 @@ export const useTaskPanelLayout = ({
     };
 
     setRoot(panelStructure);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     task.id,
     repoPath,
     openArtifacts,
     activeArtifactId,
-    artifactsContent,
     logsContent,
+    shellContent,
+    artifactsContent,
+    taskDetailContent,
     onCloseArtifact,
     onSavePlan,
     panelId,
     setRoot,
-    shellContent,
-    taskDetailContent,
   ]);
 };
