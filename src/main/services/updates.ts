@@ -7,6 +7,7 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const DISABLE_FLAG = "ELECTRON_DISABLE_AUTO_UPDATE";
 const UPDATE_READY_CHANNEL = "updates:ready";
 const INSTALL_UPDATE_CHANNEL = "updates:install";
+const CHECK_FOR_UPDATES_CHANNEL = "updates:check";
 
 let updateReady = false;
 let pendingNotification = false;
@@ -49,6 +50,16 @@ export function registerAutoUpdater(
 
     autoUpdater.quitAndInstall();
     return { installed: true };
+  });
+
+  ipcMain.removeHandler(CHECK_FOR_UPDATES_CHANNEL);
+  ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, () => {
+    if (!isAutoUpdateSupported()) {
+      return { checked: false, error: "Updates not supported on this platform" };
+    }
+
+    checkForUpdates();
+    return { checked: true };
   });
 
   if (process.env[DISABLE_FLAG]) {

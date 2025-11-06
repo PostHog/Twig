@@ -6,6 +6,7 @@ import {
 } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import {
   Badge,
   Box,
@@ -18,7 +19,8 @@ import {
   Text,
 } from "@radix-ui/themes";
 import type { CloudRegion } from "@shared/types/oauth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const REGION_LABELS: Record<CloudRegion, string> = {
@@ -34,6 +36,8 @@ const REGION_URLS: Record<CloudRegion, string> = {
 };
 
 export function SettingsView() {
+  const [updateReady, setUpdateReady] = useState(false);
+
   const {
     isAuthenticated,
     defaultWorkspace,
@@ -56,9 +60,39 @@ export function SettingsView() {
   const { data: currentUser } = useMeQuery();
   const { data: project } = useProjectQuery();
 
+  const { data: appVersion } = useQuery({
+    queryKey: ["app-version"],
+    queryFn: async () => {
+      return await window.electronAPI.getAppVersion();
+    },
+  });
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onUpdateReady(() => {
+      setUpdateReady(true);
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
   const reauthMutation = useMutation({
     mutationFn: async (region: CloudRegion) => {
       await loginWithOAuth(region);
+    },
+  });
+
+  const checkUpdatesMutation = useMutation({
+    mutationFn: async () => {
+      const [result] = await Promise.all([
+        window.electronAPI.checkForUpdates(),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+      if (!result.checked) {
+        throw new Error(result.error || "Failed to check for updates");
+      }
+      return result;
     },
   });
 
@@ -73,8 +107,10 @@ export function SettingsView() {
   };
 
   return (
-    <Box height="100%" overflowY="auto">
-      <Box p="6" style={{ maxWidth: "600px", margin: "0 auto" }}>
+    <>
+      <UpdatePrompt />
+      <Box height="100%" overflowY="auto">
+        <Box p="6" style={{ maxWidth: "600px", margin: "0 auto" }}>
         <Flex direction="column" gap="6">
           <Flex direction="column" gap="2">
             <Heading size="4">Settings</Heading>
@@ -291,8 +327,37 @@ export function SettingsView() {
               </Flex>
             </Card>
           </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          {/* Application Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Application</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Text size="1" weight="medium">
+                  Check for updates
+                </Text>
+                <Button
+                  variant="soft"
+                  color="gray"
+                  size="1"
+                  onClick={() => checkUpdatesMutation.mutate()}
+                  disabled={checkUpdatesMutation.isPending}
+                >
+                  <ArrowsClockwiseIcon
+                    size={16}
+                    className={
+                      checkUpdatesMutation.isPending ? "animate-spin" : ""
+                    }
+                  />
+                </Button>
+              </Flex>
+            </Card>
+          </Flex>
         </Flex>
       </Box>
     </Box>
+    </>
   );
 }

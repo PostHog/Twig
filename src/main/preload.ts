@@ -216,6 +216,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   installUpdate: (): Promise<{ installed: boolean }> =>
     ipcRenderer.invoke("updates:install"),
+  checkForUpdates: (): Promise<{ checked: boolean; error?: string }> =>
+    ipcRenderer.invoke("updates:check"),
   // Recording API
   recordingStart: (): Promise<{ recordingId: string; startTime: string }> =>
     ipcRenderer.invoke("recording:start"),

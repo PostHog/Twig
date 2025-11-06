@@ -128,6 +128,7 @@ export interface IElectronAPI {
   getAppVersion: () => Promise<string>;
   onUpdateReady: (listener: () => void) => () => void;
   installUpdate: () => Promise<{ installed: boolean }>;
+  checkForUpdates: () => Promise<{ checked: boolean; error?: string }>;
   // Recording API
   recordingStart: () => Promise<{ recordingId: string; startTime: string }>;
   recordingStop: (
