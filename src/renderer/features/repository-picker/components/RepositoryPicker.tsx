@@ -3,10 +3,12 @@ import { GitBranch as GitBranchIcon } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Box, Button, Flex, Popover, Text, TextField } from "@radix-ui/themes";
 import { useRepositoryIntegration } from "@renderer/hooks/useIntegrations";
+import { track } from "@renderer/lib/analytics";
 import type { RepositoryConfig } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 interface RepositoryPickerProps {
   value: RepositoryConfig | null;
@@ -90,6 +92,12 @@ export function RepositoryPicker({
     onChange(repo);
     setSearchValue("");
     setOpen(false);
+
+    // Track repository selection
+    track(ANALYTICS_EVENTS.REPOSITORY_SELECTED, {
+      repository_provider: "github", // Currently only GitHub is supported
+      source: "task-creation",
+    });
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -289,7 +289,7 @@ export async function performOAuthFlow(
     const code = await Promise.race([
       waitForCallback(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Authorization timed out")), 30_000),
+        setTimeout(() => reject(new Error("Authorization timed out")), 180_000),
       ),
     ]);
 

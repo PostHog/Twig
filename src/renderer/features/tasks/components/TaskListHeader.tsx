@@ -24,8 +24,8 @@ export function TaskListHeader({
   return (
     <Box pl="2" py="4" className="border-gray-6 border-b">
       <Flex gap="2" align="start" justify="between">
-        <TaskListFilter />
         <Flex align="center" justify="center" gap="2">
+          <TaskListFilter />
           {totalActiveFilterCount > 0 && (
             <Flex gap="2" className="flex-shrink-0">
               <TaskFilterMatchToggle />
@@ -35,6 +35,8 @@ export function TaskListHeader({
               <TaskFilterClearButton />
             </Flex>
           )}
+        </Flex>
+        <Flex align="center" justify="center" gap="2">
           <TaskListDisplayOptions />
           <TaskSearch value={filter} onChange={onFilterChange} />
         </Flex>
