@@ -1,5 +1,6 @@
 import type { PanelNode } from "@stores/panelStore";
-import React, { useMemo, useState } from "react";
+import { usePanelStore } from "@stores/panelStore";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Panel } from "./Panel";
 import { PanelGroup } from "./PanelGroup";
 import { PanelResizeHandle } from "./PanelResizeHandle";
@@ -12,6 +13,7 @@ interface PanelLayoutProps {
 
 const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
+  const updateSizes = usePanelStore((state) => state.updateSizes);
 
   const handleSetActiveTab = (panelId: string, tabId: string) => {
     setActiveTabs((prev) => ({ ...prev, [panelId]: tabId }));
@@ -37,7 +39,10 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
 
     if (currentNode.type === "group") {
       return (
-        <PanelGroup direction={currentNode.direction}>
+        <PanelGroup
+          direction={currentNode.direction}
+          onLayout={(sizes) => updateSizes(currentNode.id, sizes)}
+        >
           {currentNode.children.map((child, index) => (
             <React.Fragment key={child.id}>
               <Panel
@@ -64,6 +69,16 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
 
 export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
   const compiledNode = useMemo(() => compilePanelTree(tree), [tree]);
+  const setRoot = usePanelStore((state) => state.setRoot);
+  const root = usePanelStore((state) => state.root);
+  const initializedRef = useRef(false);
 
-  return <PanelLayoutRenderer node={compiledNode} />;
+  useEffect(() => {
+    if (!initializedRef.current) {
+      setRoot(compiledNode);
+      initializedRef.current = true;
+    }
+  }, [compiledNode, setRoot]);
+
+  return root ? <PanelLayoutRenderer node={root} /> : null;
 };
