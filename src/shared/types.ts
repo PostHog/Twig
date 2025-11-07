@@ -64,13 +64,7 @@ export interface LogEntry {
 
 export interface TabState {
   id: string;
-  type:
-    | "task-list"
-    | "task-detail"
-    | "backlog"
-    | "settings"
-    | "recordings"
-    | "notetaker";
+  type: "task-list" | "task-detail" | "backlog" | "settings";
   title: string;
   data?: Task | unknown;
 }
@@ -124,22 +118,4 @@ export interface TaskArtifact {
   path: string;
   size: number;
   modifiedAt: string;
-}
-// Recording types for audio transcription feature
-export interface Recording {
-  id: string; // Filename
-  filename: string;
-  duration: number; // Seconds
-  created_at: string; // ISO 8601
-  file_path: string; // Absolute path
-  transcription?: {
-    status: "processing" | "completed" | "error";
-    text: string;
-    summary?: string;
-    extracted_tasks?: Array<{
-      title: string;
-      description: string;
-    }>;
-    error?: string;
-  };
 }
