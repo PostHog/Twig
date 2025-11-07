@@ -1,6 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
+import { track } from "@renderer/lib/analytics";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
@@ -14,6 +15,11 @@ import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import type {
+  ExecutionMode as AnalyticsExecutionMode,
+  ExecutionType,
+} from "@/types/analytics";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 interface ArtifactEvent {
   type: string;
@@ -95,7 +101,6 @@ interface TaskExecutionState {
   clarifyingQuestions: ClarifyingQuestion[];
   questionAnswers: QuestionAnswer[];
   planContent: string | null;
-  selectedArtifact: string | null; // Currently viewing artifact filename
 }
 
 interface TaskExecutionStore {
@@ -137,7 +142,6 @@ interface TaskExecutionStore {
   setQuestionAnswers: (taskId: string, answers: QuestionAnswer[]) => void;
   addQuestionAnswer: (taskId: string, answer: QuestionAnswer) => void;
   setPlanContent: (taskId: string, content: string | null) => void;
-  setSelectedArtifact: (taskId: string, fileName: string | null) => void;
 
   // Auto-initialization and artifact processing
   initializeRepoPath: (taskId: string, task: Task) => void;
@@ -161,7 +165,6 @@ const defaultTaskState: TaskExecutionState = {
   clarifyingQuestions: [],
   questionAnswers: [],
   planContent: null,
-  selectedArtifact: null,
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -174,7 +177,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (task) {
           state.initializeRepoPath(taskId, task);
         }
-        return state.taskStates[taskId] || { ...defaultTaskState };
+        return {
+          ...defaultTaskState,
+          ...state.taskStates[taskId],
+        };
       },
 
       updateTaskState: (
@@ -367,6 +373,19 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         const currentTaskState = store.getTaskState(taskId);
+
+        // Track task run event
+        const executionType: ExecutionType = currentTaskState.runMode;
+        const executionMode: AnalyticsExecutionMode =
+          currentTaskState.executionMode;
+        const hasRepository = !!task.repository_config;
+
+        track(ANALYTICS_EVENTS.TASK_RUN, {
+          task_id: taskId,
+          execution_type: executionType,
+          execution_mode: executionMode,
+          has_repository: hasRepository,
+        });
 
         // Handle cloud mode - run task via API
         if (currentTaskState.runMode === "cloud") {
@@ -569,10 +588,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         get().updateTaskState(taskId, { planContent: content });
       },
 
-      setSelectedArtifact: (taskId: string, fileName: string | null) => {
-        get().updateTaskState(taskId, { selectedArtifact: fileName });
-      },
-
       // Auto-initialization and artifact processing
       initializeRepoPath: (taskId: string, task: Task) => {
         const store = get();
@@ -622,11 +637,17 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         if (taskState.clarifyingQuestions.length > 0) return;
 
-        const artifactEvent = taskState.logs.find(isArtifactEvent);
+        // Look specifically for research_questions artifact
+        const artifactEvent = taskState.logs.find(
+          (log): log is AgentEvent & ArtifactEvent =>
+            isArtifactEvent(log) &&
+            (log as ArtifactEvent).kind === "research_questions",
+        );
+
         if (!artifactEvent) return;
 
         const event = artifactEvent as ArtifactEvent;
-        if (event.kind === "research_questions" && event.content) {
+        if (event.content) {
           const questions = toClarifyingQuestions(event.content);
           store.setClarifyingQuestions(taskId, questions);
           store.setPlanModePhase(taskId, "questions");
