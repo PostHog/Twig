@@ -184,7 +184,28 @@ export class PostHogAPIClient {
   async getTaskLogs(taskId: string): Promise<LogEntry[]> {
     try {
       const task = (await this.getTask(taskId)) as unknown as Task;
-      return task?.latest_run?.log ?? [];
+      const logUrl = task?.latest_run?.log_url;
+      
+      if (!logUrl) {
+        return [];
+      }
+
+      const response = await fetch(logUrl);
+      
+      if (!response.ok) {
+        console.warn(`Failed to fetch logs: ${response.status} ${response.statusText}`);
+        return [];
+      }
+
+      const content = await response.text();
+      
+      if (!content.trim()) {
+        return [];
+      }
+      return content
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line) as LogEntry);
     } catch (err) {
       console.warn("Failed to fetch task logs from latest run", err);
       return [];

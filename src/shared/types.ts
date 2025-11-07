@@ -45,21 +45,13 @@ export interface TaskRun {
   team: number;
   branch: string | null;
   status: "started" | "in_progress" | "completed" | "failed";
-  log: LogEntry[]; // Array of log entry objects
+  log_url?: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)
   created_at: string;
   updated_at: string;
   completed_at: string | null;
-}
-
-export interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: "info" | "warning" | "error" | "success";
-  message: string;
-  data?: unknown;
 }
 
 export interface TabState {
