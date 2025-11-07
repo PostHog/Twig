@@ -31,12 +31,12 @@ export interface TaskController {
   currentRunId?: string;
 }
 
-function getClaudeCliPath(): string {
+function _getClaudeCliPath(): string {
   const appPath = app.getAppPath();
 
   return app.isPackaged
-  ? join(`${appPath}.unpacked`, ".vite/build/cli.js")
-  : join(appPath, ".vite/build/cli.js")
+    ? join(`${appPath}.unpacked`, ".vite/build/cli.js")
+    : join(appPath, ".vite/build/cli.js");
 }
 
 function getClaudeCliPath(): string {
