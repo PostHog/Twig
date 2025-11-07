@@ -7,6 +7,7 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
+import isDev from "electron-is-dev";
 
 interface AgentStartParams {
   taskId: string;
@@ -29,6 +30,14 @@ export interface TaskController {
   taskId: string;
   poller?: NodeJS.Timeout;
   currentRunId?: string;
+}
+
+function getClaudeCliPath(): string {
+  const appPath = app.getAppPath();
+
+  return app.isPackaged
+  ? join(`${appPath}.unpacked`, ".vite/build/cli.js")
+  : join(appPath, ".vite/build/cli.js")
 }
 
 function getClaudeCliPath(): string {
