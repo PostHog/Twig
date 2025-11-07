@@ -7,7 +7,6 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
-import isDev from "electron-is-dev";
 
 interface AgentStartParams {
   taskId: string;
