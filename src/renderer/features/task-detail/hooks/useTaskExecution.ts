@@ -1,4 +1,4 @@
-import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
 

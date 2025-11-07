@@ -4,10 +4,10 @@ import { FilePathHighlight } from "@features/editor/extensions/filePathHighlight
 import { useFileAutocomplete } from "@features/editor/hooks/useFileAutocomplete";
 import { RepositoryPicker } from "@features/repository-picker/components/RepositoryPicker";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { CliModeHeader } from "@features/tasks/components/CliModeHeader";
-import { CliStatusIndicator } from "@features/tasks/components/CliStatusIndicator";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { CliModeHeader } from "@features/task-list/components/CliModeHeader";
+import { CliStatusIndicator } from "@features/task-list/components/CliStatusIndicator";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
-import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
 import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { RepositoryConfig } from "@shared/types";

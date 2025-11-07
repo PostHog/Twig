@@ -1,5 +1,5 @@
+import { getTaskGrouping } from "@features/task-list/utils/taskGrouping";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
-import { getTaskGrouping } from "@features/tasks/utils/taskGrouping";
 import type { Task } from "@shared/types";
 
 export function useTaskGrouping(

@@ -1,4 +1,4 @@
-import { useTaskPanelLayoutStore } from "@features/tasks/stores/taskPanelLayoutStore";
+import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 
 export function useTaskArtifacts(taskId: string) {
   const layoutStore = useTaskPanelLayoutStore();

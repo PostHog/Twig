@@ -1,5 +1,5 @@
-import { TaskGroup } from "@features/tasks/components/TaskGroup";
-import { TaskListItems } from "@features/tasks/components/TaskListItems";
+import { TaskGroup } from "@features/task-list/components/TaskGroup";
+import { TaskListItems } from "@features/task-list/components/TaskListItems";
 import type { GroupByField } from "@features/tasks/stores/taskStore";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";

@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
-import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
 import type { Task } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { expandTildePath } from "@utils/path";

@@ -1,15 +1,15 @@
-import { TaskFilterBadges } from "@features/tasks/components/TaskFilterBadges";
-import { TaskFilterCategory } from "@features/tasks/components/TaskFilterCategory";
-import { TaskFilterSearch } from "@features/tasks/components/TaskFilterSearch";
+import { TaskFilterBadges } from "@features/task-list/components/TaskFilterBadges";
+import { TaskFilterCategory } from "@features/task-list/components/TaskFilterCategory";
+import { TaskFilterSearch } from "@features/task-list/components/TaskFilterSearch";
+import {
+  type FilterCategoryConfig,
+  getFilterCategories,
+} from "@features/task-list/utils/filterCategories";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import {
   type FilterCategory,
   useTaskStore,
 } from "@features/tasks/stores/taskStore";
-import {
-  type FilterCategoryConfig,
-  getFilterCategories,
-} from "@features/tasks/utils/filterCategories";
 import { FunnelIcon } from "@phosphor-icons/react";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
 import { useEffect } from "react";

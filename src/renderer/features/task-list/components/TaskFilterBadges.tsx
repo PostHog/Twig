@@ -1,11 +1,11 @@
-import { TaskFilterBadge } from "@features/tasks/components/TaskFilterBadge";
+import { TaskFilterBadge } from "@features/task-list/components/TaskFilterBadge";
+import type { FilterCategoryConfig } from "@features/task-list/utils/filterCategories";
 import type {
   ActiveFilters,
   FilterCategory,
   FilterOperator,
 } from "@features/tasks/stores/taskStore";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
-import type { FilterCategoryConfig } from "@features/tasks/utils/filterCategories";
 import { Flex } from "@radix-ui/themes";
 import type { ReactNode } from "react";
 

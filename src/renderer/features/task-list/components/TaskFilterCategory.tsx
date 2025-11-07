@@ -1,6 +1,6 @@
-import { TaskFilterOption } from "@features/tasks/components/TaskFilterOption";
+import { TaskFilterOption } from "@features/task-list/components/TaskFilterOption";
+import type { FilterCategoryConfig } from "@features/task-list/utils/filterCategories";
 import type { FilterCategory } from "@features/tasks/stores/taskStore";
-import type { FilterCategoryConfig } from "@features/tasks/utils/filterCategories";
 import { DropdownMenu, Text } from "@radix-ui/themes";
 
 interface TaskFilterCategoryProps {

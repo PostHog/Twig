@@ -1,4 +1,4 @@
-import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { track } from "@renderer/lib/analytics";

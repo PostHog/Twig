@@ -1,11 +1,11 @@
-import { FilterOperatorToggle } from "@features/tasks/components/FilterOperatorToggle";
-import { TaskFilterValueEditor } from "@features/tasks/components/TaskFilterValueEditor";
+import { FilterOperatorToggle } from "@features/task-list/components/FilterOperatorToggle";
+import { TaskFilterValueEditor } from "@features/task-list/components/TaskFilterValueEditor";
+import type { FilterCategoryConfig } from "@features/task-list/utils/filterCategories";
 import type {
   FilterCategory,
   FilterOperator,
 } from "@features/tasks/stores/taskStore";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
-import type { FilterCategoryConfig } from "@features/tasks/utils/filterCategories";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Badge, DropdownMenu, Flex, Separator } from "@radix-ui/themes";
 

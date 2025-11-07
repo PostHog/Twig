@@ -1,4 +1,4 @@
-import { TaskDragPreview } from "@features/tasks/components/TaskDragPreview";
+import { TaskDragPreview } from "@features/task-list/components/TaskDragPreview";
 import {
   useDeleteTask,
   useDuplicateTask,

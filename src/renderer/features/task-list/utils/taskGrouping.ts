@@ -1,10 +1,10 @@
-import { getUserDisplayName } from "@hooks/useUsers";
-import type { Task } from "@shared/types";
 import {
   type GroupByField,
   TASK_STATUS_ORDER,
   type TaskGroupingResult,
-} from "../stores/taskStore.types";
+} from "@features/tasks/stores/taskStore.types";
+import { getUserDisplayName } from "@hooks/useUsers";
+import type { Task } from "@shared/types";
 
 export function getTaskGrouping(
   filteredTasks: Task[],

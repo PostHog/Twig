@@ -1,4 +1,4 @@
-import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { RepositoryConfig } from "@shared/types";
 import { toast } from "@utils/toast";
 import { create } from "zustand";

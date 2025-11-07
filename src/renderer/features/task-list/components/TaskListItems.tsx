@@ -1,4 +1,4 @@
-import { TaskItem } from "@features/tasks/components/TaskItem";
+import { TaskItem } from "@features/task-list/components/TaskItem";
 import type { Task } from "@shared/types";
 import type React from "react";
 

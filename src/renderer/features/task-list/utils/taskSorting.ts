@@ -1,9 +1,9 @@
-import type { Task } from "@shared/types";
 import {
   type OrderByField,
   type OrderDirection,
   TASK_STATUS_ORDER,
-} from "../stores/taskStore.types";
+} from "@features/tasks/stores/taskStore.types";
+import type { Task } from "@shared/types";
 
 export function getTaskStatus(task: Task): string {
   const hasPR = task.latest_run?.output?.pr_url;

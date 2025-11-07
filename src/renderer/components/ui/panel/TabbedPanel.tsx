@@ -9,11 +9,13 @@ import { PanelDropZones } from "./PanelDropZones";
 interface TabbedPanelProps {
   panelId: string;
   content: PanelContent;
+  onActiveTabChange?: (panelId: string, tabId: string) => void;
 }
 
 export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   panelId,
   content,
+  onActiveTabChange,
 }) => {
   const { setActiveTab, closeTab } = usePanelStore();
 
@@ -55,7 +57,11 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               isActive={tab.id === content.activeTabId}
               index={index}
               onSelect={() => {
-                setActiveTab(panelId, tab.id);
+                if (onActiveTabChange) {
+                  onActiveTabChange(panelId, tab.id);
+                } else {
+                  setActiveTab(panelId, tab.id);
+                }
                 tab.onSelect?.();
               }}
               onClose={

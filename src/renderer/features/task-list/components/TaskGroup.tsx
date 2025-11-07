@@ -1,4 +1,4 @@
-import { TaskListItems } from "@features/tasks/components/TaskListItems";
+import { TaskListItems } from "@features/task-list/components/TaskListItems";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { Box, Code, Flex } from "@radix-ui/themes";

@@ -1,8 +1,8 @@
-import { TaskFilterClearButton } from "@features/tasks/components/TaskFilterClearButton";
-import { TaskFilterMatchToggle } from "@features/tasks/components/TaskFilterMatchToggle";
-import { TaskListDisplayOptions } from "@features/tasks/components/TaskListDisplayOptions";
-import { TaskListFilter } from "@features/tasks/components/TaskListFilter";
-import { TaskSearch } from "@features/tasks/components/TaskSearch";
+import { TaskFilterClearButton } from "@features/task-list/components/TaskFilterClearButton";
+import { TaskFilterMatchToggle } from "@features/task-list/components/TaskFilterMatchToggle";
+import { TaskListDisplayOptions } from "@features/task-list/components/TaskListDisplayOptions";
+import { TaskListFilter } from "@features/task-list/components/TaskListFilter";
+import { TaskSearch } from "@features/task-list/components/TaskSearch";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { Box, Flex, Separator } from "@radix-ui/themes";
 

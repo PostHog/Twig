@@ -1,11 +1,11 @@
-import { getUserDisplayName } from "@hooks/useUsers";
-import type { Task } from "@shared/types";
 import type {
   ActiveFilters,
   FilterCategory,
   FilterMatchMode,
   FilterValue,
-} from "../stores/taskStore.types";
+} from "@features/tasks/stores/taskStore.types";
+import { getUserDisplayName } from "@hooks/useUsers";
+import type { Task } from "@shared/types";
 import { getTaskStatus } from "./taskSorting";
 
 function applyOperator(
