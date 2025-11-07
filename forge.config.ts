@@ -97,7 +97,8 @@ function copyNativeDependency(
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: "{**/*.node,node_modules/@recallai/**}",
+      unpack:
+        "{**/*.node,node_modules/@recallai/**,**/.vite/build/cli.js,**/.vite/build/yoga.wasm}",
     },
     prune: false,
     name: "Array",

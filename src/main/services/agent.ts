@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { Agent, PermissionMode } from "@posthog/agent";
-import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
-import { getClaudeCliPath } from "../utils/paths";
+import {
+  app,
+  type BrowserWindow,
+  type IpcMainInvokeEvent,
+  ipcMain,
+} from "electron";
 
 interface AgentStartParams {
   taskId: string;
