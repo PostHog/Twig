@@ -33,9 +33,8 @@ export interface TaskController {
 
 function getClaudeCliPath(): string {
   const appPath = app.getAppPath();
-  const isProduction = !appPath.includes("node_modules");
 
-  return isProduction
+  return app.isPackaged
     ? join(`${appPath}.unpacked`, ".vite/build/cli.js")
     : join(appPath, ".vite/build/cli.js");
 }
