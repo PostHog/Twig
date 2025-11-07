@@ -1,281 +1,85 @@
-import { BackgroundWrapper } from "@components/BackgroundWrapper";
-import { PlanEditor } from "@features/editor/components/PlanEditor";
-import { PlanView } from "@features/editor/components/PlanView";
-import { TaskArtifacts } from "@features/tasks/components/TaskArtifacts";
-import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
-import { ListIcon, NotePencilIcon, TerminalIcon } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { useTaskExecutionStore } from "@features/tasks/stores/taskExecutionStore";
+import { useTaskPanelLayoutStore } from "@features/tasks/stores/taskPanelLayoutStore";
 import type { Task } from "@shared/types";
-import type { PanelNode, Tab } from "@stores/panelStore";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useTaskPanelContent } from "./useTaskPanelContent";
+import { useTaskPanelStructure } from "./useTaskPanelStructure";
 
 interface UseTaskPanelLayoutParams {
+  taskId: string;
   task: Task;
-  taskDetailContent: React.ReactNode;
   repoPath: string | null;
-  openArtifacts: string[];
-  activeArtifactId: string | null;
-  planModePhase: string;
-  clarifyingQuestions: any[];
-  questionAnswers: any[];
-  logs: any[];
-  isRunning: boolean;
-  planContent: string | null;
-  onAnswersComplete: (answers: any[]) => void;
-  onClearLogs: () => void;
-  onCloseArtifact: (fileName: string) => void;
-  onSavePlan: (content: string) => void;
-  onArtifactSelect: (fileName: string) => void;
-  setRoot: (root: PanelNode) => void;
+  taskDetailContent: React.ReactNode;
 }
 
-export const useTaskPanelLayout = ({
+export function useTaskPanelLayout({
+  taskId,
   task,
-  taskDetailContent,
   repoPath,
-  openArtifacts,
-  activeArtifactId,
-  planModePhase,
-  clarifyingQuestions,
-  questionAnswers,
-  logs,
-  isRunning,
-  planContent,
-  onAnswersComplete,
-  onClearLogs,
-  onCloseArtifact,
-  onSavePlan,
-  onArtifactSelect,
-  setRoot,
-}: UseTaskPanelLayoutParams) => {
-  const panelId = `task-detail-${task.id}`;
-
-  // Track the last values to prevent unnecessary updates
-  const lastValuesRef = useRef<{
-    taskId: string;
-    repoPath: string | null;
-    openArtifactsStr: string;
-    activeArtifactId: string | null;
-  } | null>(null);
-
-  const logsContent = useMemo(
-    () => (
-      <BackgroundWrapper>
-        <PlanView
-          task={task}
-          repoPath={repoPath}
-          phase={planModePhase as any}
-          questions={clarifyingQuestions}
-          answers={questionAnswers}
-          logs={logs}
-          isRunning={isRunning}
-          planContent={planContent}
-          selectedArtifact={null}
-          onAnswersComplete={onAnswersComplete}
-          onClearLogs={onClearLogs}
-          onSavePlan={onSavePlan}
-        />
-      </BackgroundWrapper>
-    ),
-    [
-      task,
-      repoPath,
-      planModePhase,
-      clarifyingQuestions,
-      questionAnswers,
-      logs,
-      isRunning,
-      planContent,
-      onAnswersComplete,
-      onClearLogs,
-      onSavePlan,
-    ],
+  taskDetailContent,
+}: UseTaskPanelLayoutParams) {
+  const taskState = useTaskExecutionStore((state) =>
+    state.getTaskState(taskId, task),
   );
+  const layoutStore = useTaskPanelLayoutStore();
+  const layout = layoutStore.getLayout(taskId);
 
-  const shellContent = useMemo(
-    () => (
-      <Box height="100%">
-        <ShellTerminal cwd={repoPath || undefined} />
-      </Box>
-    ),
-    [repoPath],
-  );
-
-  const artifactsContent = useMemo(
-    () => (
-      <Box height="100%" overflowY="auto" p="4">
-        {repoPath ? (
-          <TaskArtifacts
-            taskId={task.id}
-            repoPath={repoPath}
-            selectedArtifact={activeArtifactId}
-            onArtifactSelect={onArtifactSelect}
-          />
-        ) : (
-          <Flex align="center" justify="center" height="100%">
-            <Text size="2" color="gray">
-              No repository path available
-            </Text>
-          </Flex>
-        )}
-      </Box>
-    ),
-    [task.id, repoPath, activeArtifactId, onArtifactSelect],
-  );
-
-  useLayoutEffect(() => {
-    // Check if any meaningful values have changed
-    const currentValues = {
-      taskId: task.id,
-      repoPath,
-      openArtifactsStr: JSON.stringify(openArtifacts),
-      activeArtifactId,
-    };
-
-    const hasChanged =
-      !lastValuesRef.current ||
-      lastValuesRef.current.taskId !== currentValues.taskId ||
-      lastValuesRef.current.repoPath !== currentValues.repoPath ||
-      lastValuesRef.current.openArtifactsStr !==
-        currentValues.openArtifactsStr ||
-      lastValuesRef.current.activeArtifactId !== currentValues.activeArtifactId;
-
-    if (!hasChanged) {
-      return;
-    }
-
-    lastValuesRef.current = currentValues;
-
-    const logsTabs: Tab[] = [
-      {
-        id: "logs",
-        label: "Logs",
-        component: logsContent,
-        closeable: false,
-        icon: <ListIcon size={12} weight="bold" color="var(--gray-11)" />,
-      },
-    ];
-
-    // Add a tab for each open artifact
-    (openArtifacts || []).forEach((fileName) => {
-      const artifactContent = repoPath ? (
-        <BackgroundWrapper key={fileName}>
-          <PlanEditor
-            taskId={task.id}
-            repoPath={repoPath}
-            fileName={fileName}
-            onSave={onSavePlan}
-          />
-        </BackgroundWrapper>
-      ) : null;
-
-      if (artifactContent) {
-        logsTabs.push({
-          id: `artifact-${fileName}`,
-          label: fileName,
-          component: artifactContent,
-          closeable: true,
-          onClose: () => onCloseArtifact(fileName),
-          icon: (
-            <NotePencilIcon size={12} weight="bold" color="var(--gray-11)" />
-          ),
-        });
+  const content = useTaskPanelContent({
+    task,
+    repoPath,
+    activeArtifactId: layout?.activeArtifactId || null,
+    planModePhase: taskState.planModePhase,
+    clarifyingQuestions: taskState.clarifyingQuestions,
+    questionAnswers: taskState.questionAnswers,
+    logs: taskState.logs,
+    isRunning: taskState.isRunning,
+    planContent: taskState.planContent,
+    taskDetailContent,
+    onAnswersComplete: (answers) => {
+      for (const answer of answers) {
+        useTaskExecutionStore.getState().addQuestionAnswer(taskId, answer);
       }
-    });
-
-    const panelStructure: PanelNode = {
-      type: "group",
-      id: `${panelId}-root`,
-      direction: "horizontal",
-      children: [
-        {
-          type: "group",
-          id: `${panelId}-left-group`,
-          direction: "vertical",
-          children: [
-            {
-              type: "leaf",
-              id: `${panelId}-left-top`,
-              content: {
-                id: `${panelId}-left-top`,
-                tabs: logsTabs,
-                activeTabId: activeArtifactId
-                  ? `artifact-${activeArtifactId}`
-                  : "logs",
-              },
-            },
-            {
-              type: "leaf",
-              id: `${panelId}-left-bottom`,
-              content: {
-                id: `${panelId}-left-bottom`,
-                tabs: [
-                  {
-                    id: "shell",
-                    label: "Shell",
-                    component: shellContent,
-                    icon: (
-                      <TerminalIcon
-                        size={12}
-                        weight="bold"
-                        color="var(--gray-11)"
-                      />
-                    ),
-                  },
-                ],
-                activeTabId: "shell",
-                showTabs: false,
-              },
-            },
-          ],
-          sizes: [70, 30],
-        },
-        {
-          type: "group",
-          id: `${panelId}-right-group`,
-          direction: "vertical",
-          children: [
-            {
-              type: "leaf",
-              id: `${panelId}-right-top`,
-              content: {
-                id: `${panelId}-right-top`,
-                tabs: [
-                  {
-                    id: "task-detail",
-                    label: "Task detail",
-                    component: taskDetailContent,
-                  },
-                ],
-                activeTabId: "task-detail",
-                showTabs: false,
-                droppable: false,
-              },
-            },
-            {
-              type: "leaf",
-              id: `${panelId}-right-bottom`,
-              content: {
-                id: `${panelId}-right-bottom`,
-                tabs: [
-                  {
-                    id: "artifacts",
-                    label: "Artifacts",
-                    component: artifactsContent,
-                  },
-                ],
-                activeTabId: "artifacts",
-                showTabs: false,
-                droppable: false,
-              },
-            },
-          ],
-          sizes: [50, 50],
-        },
-      ],
-      sizes: [75, 25],
-    };
-
-    setRoot(panelStructure);
+      if (repoPath) {
+        window.electronAPI
+          ?.saveQuestionAnswers(repoPath, taskId, answers)
+          .then(() => {
+            useTaskExecutionStore
+              .getState()
+              .setPlanModePhase(taskId, "planning");
+            useTaskExecutionStore.getState().runTask(taskId, task);
+          })
+          .catch((error) => {
+            console.error("Failed to save answers to research.json:", error);
+          });
+      }
+    },
+    onClearLogs: () => {
+      useTaskExecutionStore.getState().clearTaskLogs(taskId);
+    },
+    onSavePlan: (content) => {
+      useTaskExecutionStore.getState().setPlanContent(taskId, content);
+    },
+    onArtifactSelect: (fileName) => {
+      layoutStore.openArtifact(taskId, fileName);
+    },
   });
-};
+
+  const panelStructure = useTaskPanelStructure({
+    taskId,
+    openArtifacts: layout?.openArtifacts || [],
+    activeArtifactId: layout?.activeArtifactId || null,
+    onCloseArtifact: (fileName) => {
+      layoutStore.closeArtifact(taskId, fileName);
+    },
+    onTabSelect: (tabId) => {
+      if (tabId === "logs") {
+        layoutStore.setActiveArtifact(taskId, null);
+      } else if (tabId.startsWith("artifact-")) {
+        const fileName = tabId.replace("artifact-", "");
+        layoutStore.setActiveArtifact(taskId, fileName);
+      }
+    },
+    content,
+  });
+
+  return panelStructure;
+}

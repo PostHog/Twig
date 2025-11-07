@@ -54,7 +54,10 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               label={tab.label}
               isActive={tab.id === content.activeTabId}
               index={index}
-              onSelect={() => setActiveTab(panelId, tab.id)}
+              onSelect={() => {
+                setActiveTab(panelId, tab.id);
+                tab.onSelect?.();
+              }}
               onClose={
                 tab.closeable !== false
                   ? () => handleCloseTab(tab.id)

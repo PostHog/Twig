@@ -6,6 +6,7 @@ export type Tab = {
   component?: React.ReactNode;
   closeable?: boolean;
   onClose?: () => void;
+  onSelect?: () => void;
   icon?: React.ReactNode;
 };
 
