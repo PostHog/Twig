@@ -306,5 +306,4 @@ export function registerAgentIpc(
       }
     },
   );
-
 }

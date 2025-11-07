@@ -101,7 +101,6 @@ interface TaskExecutionState {
   clarifyingQuestions: ClarifyingQuestion[];
   questionAnswers: QuestionAnswer[];
   planContent: string | null;
-  selectedArtifact: string | null; // Currently viewing artifact filename
 }
 
 interface TaskExecutionStore {
@@ -143,7 +142,6 @@ interface TaskExecutionStore {
   setQuestionAnswers: (taskId: string, answers: QuestionAnswer[]) => void;
   addQuestionAnswer: (taskId: string, answer: QuestionAnswer) => void;
   setPlanContent: (taskId: string, content: string | null) => void;
-  setSelectedArtifact: (taskId: string, fileName: string | null) => void;
 
   // Auto-initialization and artifact processing
   initializeRepoPath: (taskId: string, task: Task) => void;
@@ -167,7 +165,6 @@ const defaultTaskState: TaskExecutionState = {
   clarifyingQuestions: [],
   questionAnswers: [],
   planContent: null,
-  selectedArtifact: null,
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -180,7 +177,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (task) {
           state.initializeRepoPath(taskId, task);
         }
-        return state.taskStates[taskId] || { ...defaultTaskState };
+        return {
+          ...defaultTaskState,
+          ...state.taskStates[taskId],
+        };
       },
 
       updateTaskState: (
@@ -588,10 +588,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         get().updateTaskState(taskId, { planContent: content });
       },
 
-      setSelectedArtifact: (taskId: string, fileName: string | null) => {
-        get().updateTaskState(taskId, { selectedArtifact: fileName });
-      },
-
       // Auto-initialization and artifact processing
       initializeRepoPath: (taskId: string, task: Task) => {
         const store = get();
@@ -644,10 +640,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         // Look specifically for research_questions artifact
         const artifactEvent = taskState.logs.find(
           (log): log is AgentEvent & ArtifactEvent =>
-            isArtifactEvent(log) && 
-            (log as ArtifactEvent).kind === "research_questions"
+            isArtifactEvent(log) &&
+            (log as ArtifactEvent).kind === "research_questions",
         );
-        
+
         if (!artifactEvent) return;
 
         const event = artifactEvent as ArtifactEvent;

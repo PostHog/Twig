@@ -32,7 +32,6 @@ interface PlanViewProps {
     }>,
   ) => void;
   onClearLogs?: () => void;
-  onClosePlan?: () => void;
   onSavePlan?: (content: string) => void;
 }
 
@@ -48,7 +47,6 @@ export function PlanView({
   selectedArtifact,
   onAnswersComplete,
   onClearLogs,
-  onClosePlan,
   onSavePlan,
 }: PlanViewProps) {
   // Show interactive questions when in questions phase
@@ -73,7 +71,6 @@ export function PlanView({
           repoPath={repoPath}
           fileName="plan.md"
           initialContent={planContent || undefined}
-          onClose={onClosePlan}
           onSave={onSavePlan}
         />
       </Box>

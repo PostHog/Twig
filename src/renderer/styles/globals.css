@@ -322,14 +322,14 @@ body {
 /* Panel resize handle styles */
 [data-panel-resize-handle-enabled] {
   @apply relative outline-none flex-shrink-0;
-  width: 6px;
+  width: 1px;
   height: 100%;
   cursor: col-resize;
 }
 
 [data-panel-group-direction="vertical"] > [data-panel-resize-handle-enabled] {
   width: 100%;
-  height: 6px;
+  height: 1px;
   cursor: row-resize;
 }
 
