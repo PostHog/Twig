@@ -11,7 +11,6 @@ import {
   GearIcon,
   ListNumbersIcon,
   PlusIcon,
-  VideoIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
 import type { TabState, Task } from "@shared/types";
@@ -28,14 +27,9 @@ interface UseSidebarMenuDataProps {
   activeFilters: ActiveFilters;
   currentUser: Schemas.User | undefined;
   setActiveFilters: (filters: ActiveFilters) => void;
-  onNavigate: (
-    type: "task-list" | "recordings" | "notetaker" | "settings",
-    title: string,
-  ) => void;
+  onNavigate: (type: "task-list" | "settings", title: string) => void;
   onTaskClick: (task: Task) => void;
   onCreateTask: () => void;
-  onStartRecording: () => void;
-  onStopRecording: () => void;
   onProjectClick: (repository: string) => void;
 }
 
@@ -138,17 +132,6 @@ export function useSidebarMenuData({
           hoverIcon: <PlusIcon size={12} />,
         };
       }),
-      {
-        label: "Notetaker",
-        icon: (
-          <VideoIcon
-            size={12}
-            weight={activeTab?.type === "notetaker" ? "fill" : "regular"}
-          />
-        ),
-        action: () => onNavigate("notetaker", "Notetaker"),
-        isActive: activeTab?.type === "notetaker",
-      },
       {
         label: "Settings",
         icon: (

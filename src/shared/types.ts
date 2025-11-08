@@ -45,7 +45,7 @@ export interface TaskRun {
   team: number;
   branch: string | null;
   status: "started" | "in_progress" | "completed" | "failed";
-  log: LogEntry[]; // Array of log entry objects
+  log_url?: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)
@@ -54,23 +54,9 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
-export interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: "info" | "warning" | "error" | "success";
-  message: string;
-  data?: unknown;
-}
-
 export interface TabState {
   id: string;
-  type:
-    | "task-list"
-    | "task-detail"
-    | "backlog"
-    | "settings"
-    | "recordings"
-    | "notetaker";
+  type: "task-list" | "task-detail" | "backlog" | "settings";
   title: string;
   data?: Task | unknown;
 }
@@ -124,22 +110,4 @@ export interface TaskArtifact {
   path: string;
   size: number;
   modifiedAt: string;
-}
-// Recording types for audio transcription feature
-export interface Recording {
-  id: string; // Filename
-  filename: string;
-  duration: number; // Seconds
-  created_at: string; // ISO 8601
-  file_path: string; // Absolute path
-  transcription?: {
-    status: "processing" | "completed" | "error";
-    text: string;
-    summary?: string;
-    extracted_tasks?: Array<{
-      title: string;
-      description: string;
-    }>;
-    error?: string;
-  };
 }

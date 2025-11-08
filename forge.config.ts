@@ -97,7 +97,7 @@ function copyNativeDependency(
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: "{**/*.node,node_modules/@recallai/**}",
+      unpack: "{**/*.node,**/.vite/build/cli.js,**/.vite/build/yoga.wasm}",
     },
     prune: false,
     name: "Array",
@@ -167,7 +167,6 @@ const config: ForgeConfig = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyNativeDependency("node-pty", buildPath);
       copyNativeDependency("node-addon-api", buildPath);
-      copyNativeDependency("@recallai/desktop-sdk", buildPath);
     },
   },
   publishers: [

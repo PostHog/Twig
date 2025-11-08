@@ -1,7 +1,6 @@
 import { Command } from "@features/command/components/Command";
 import { CommandKeyHints } from "@features/command/components/CommandKeyHints";
 import { useTasks } from "@features/tasks/hooks/useTasks";
-import { MicrophoneIcon } from "@phosphor-icons/react";
 import { FileTextIcon, ListBulletIcon } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -74,19 +73,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
       createTab({
         type: "task-list",
         title: "Tasks",
-      });
-    }
-    onOpenChange(false);
-  };
-
-  const handleNavigateToRecordings = () => {
-    const recordingsTab = tabs.find((tab) => tab.type === "recordings");
-    if (recordingsTab) {
-      setActiveTab(recordingsTab.id);
-    } else {
-      createTab({
-        type: "recordings",
-        title: "Recordings",
       });
     }
     onOpenChange(false);
@@ -171,14 +157,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               >
                 <ListBulletIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Go to tasks</Text>
-              </Command.Item>
-
-              <Command.Item
-                value="Go to recordings"
-                onSelect={handleNavigateToRecordings}
-              >
-                <MicrophoneIcon className="mr-3 h-3 w-3 text-gray-11" />
-                <Text size="1">Go to recordings</Text>
               </Command.Item>
             </Command.Group>
 

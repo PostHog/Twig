@@ -184,7 +184,28 @@ export class PostHogAPIClient {
   async getTaskLogs(taskId: string): Promise<LogEntry[]> {
     try {
       const task = (await this.getTask(taskId)) as unknown as Task;
-      return task?.latest_run?.log ?? [];
+      const logUrl = task?.latest_run?.log_url;
+      
+      if (!logUrl) {
+        return [];
+      }
+
+      const response = await fetch(logUrl);
+      
+      if (!response.ok) {
+        console.warn(`Failed to fetch logs: ${response.status} ${response.statusText}`);
+        return [];
+      }
+
+      const content = await response.text();
+      
+      if (!content.trim()) {
+        return [];
+      }
+      return content
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line) as LogEntry);
     } catch (err) {
       console.warn("Failed to fetch task logs from latest run", err);
       return [];
@@ -271,136 +292,5 @@ export class PostHogAPIClient {
       query: { limit: 1000 },
     });
     return data.results ?? [];
-  }
-
-  // Desktop Recordings API
-  private validateRecordingId(recordingId: string): void {
-    if (!recordingId || typeof recordingId !== "string") {
-      throw new Error("Recording ID is required");
-    }
-    // UUID format validation (PostHog uses UUIDs for recording IDs)
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        recordingId,
-      )
-    ) {
-      throw new Error("Invalid recording ID format");
-    }
-  }
-
-  async createDesktopRecording(
-    platform: string,
-  ): Promise<Schemas.CreateRecordingResponse> {
-    const teamId = await this.getTeamId();
-    const data = await this.api.post(
-      "/api/environments/{project_id}/desktop_recordings/",
-      {
-        path: { project_id: teamId.toString() },
-        body: { platform } as Schemas.CreateRecordingRequest,
-      },
-    );
-    return data;
-  }
-
-  async getDesktopRecording(recordingId: string) {
-    this.validateRecordingId(recordingId);
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/environments/${teamId}/desktop_recordings/${recordingId}/`,
-    );
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/environments/${teamId}/desktop_recordings/${recordingId}/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch recording: ${response.statusText}`);
-    }
-
-    return await response.json();
-  }
-
-  async listDesktopRecordings(filters?: {
-    platform?: string;
-    status?: string;
-    search?: string;
-  }) {
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/environments/${teamId}/desktop_recordings/`,
-    );
-
-    if (filters) {
-      for (const [key, value] of Object.entries(filters)) {
-        if (value) url.searchParams.set(key, value);
-      }
-    }
-
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/environments/${teamId}/desktop_recordings/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to list recordings: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.results ?? data ?? [];
-  }
-
-  async deleteDesktopRecording(recordingId: string) {
-    this.validateRecordingId(recordingId);
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/environments/${teamId}/desktop_recordings/${recordingId}/`,
-    );
-    const response = await this.api.fetcher.fetch({
-      method: "delete",
-      url,
-      path: `/api/environments/${teamId}/desktop_recordings/${recordingId}/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete recording: ${response.statusText}`);
-    }
-  }
-
-  async updateDesktopRecording(
-    recordingId: string,
-    updates: Partial<Schemas.PatchedDesktopRecording>,
-  ) {
-    this.validateRecordingId(recordingId);
-    const teamId = await this.getTeamId();
-
-    const data = await this.api.patch(
-      "/api/environments/{project_id}/desktop_recordings/{id}/",
-      {
-        path: { project_id: teamId.toString(), id: recordingId },
-        body: updates,
-      },
-    );
-
-    return data;
-  }
-
-  async appendSegments(
-    recordingId: string,
-    segments: Array<Schemas.TranscriptSegment>,
-  ): Promise<Schemas.DesktopRecording> {
-    this.validateRecordingId(recordingId);
-    const teamId = await this.getTeamId();
-
-    const data = await this.api.post(
-      "/api/environments/{project_id}/desktop_recordings/{id}/append_segments/",
-      {
-        path: { project_id: teamId.toString(), id: recordingId },
-        body: { segments } as Schemas.AppendSegments,
-      },
-    );
-
-    return data;
   }
 }

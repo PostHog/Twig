@@ -22,11 +22,6 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import {
-  registerRecallIPCHandlers,
-  setMainWindow,
-} from "./services/recallRecording.js";
-import { registerRecordingIpc } from "./services/recording.js";
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 
@@ -86,35 +81,12 @@ function createWindow(): void {
     },
   });
 
-  setMainWindow(mainWindow);
-
   mainWindow.once("ready-to-show", () => {
     mainWindow?.maximize();
     mainWindow?.show();
   });
 
   setupExternalLinkHandlers(mainWindow);
-
-  // Enable screen/audio capture for recordings
-  mainWindow.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      if (permission === "media" || permission === "mediaKeySystem") {
-        callback(true);
-      } else {
-        callback(false);
-      }
-    },
-  );
-
-  // Handle display media requests (screen/window sharing)
-  mainWindow.webContents.session.setPermissionCheckHandler(
-    (_webContents, permission) => {
-      if (permission === "media") {
-        return true;
-      }
-      return false;
-    },
-  );
 
   // Set up menu for keyboard shortcuts
   const template: MenuItemConstructorOptions[] = [
@@ -213,6 +185,4 @@ registerOsIpc(() => mainWindow);
 registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
-registerRecordingIpc();
-registerRecallIPCHandlers();
 registerShellIpc();

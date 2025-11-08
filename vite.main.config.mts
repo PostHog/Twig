@@ -58,8 +58,38 @@ function copyAgentTemplates(): Plugin {
   };
 }
 
+/**
+ * Copy Claude executable to the build directory
+ */
+function copyClaudeExecutable(): Plugin {
+  return {
+    name: "copy-claude-executable",
+    writeBundle() {
+      const sdkDir = join(
+        __dirname,
+        "node_modules/@posthog/agent/node_modules/@anthropic-ai/claude-agent-sdk",
+      );
+
+      const files = ["cli.js", "yoga.wasm"];
+
+      for (const file of files) {
+        const src = join(sdkDir, file);
+        const dest = join(__dirname, ".vite/build", file);
+        copyFileSync(src, dest);
+      }
+
+      console.log("Copied Claude CLI and dependencies to build directory");
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [tsconfigPaths(), fixFilenameCircularRef(), copyAgentTemplates()],
+  plugins: [
+    tsconfigPaths(),
+    fixFilenameCircularRef(),
+    copyAgentTemplates(),
+    copyClaudeExecutable(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -76,7 +106,7 @@ export default defineConfig({
       transformMixedEsModules: true,
     },
     rollupOptions: {
-      external: ["node-pty", "@recallai/desktop-sdk"],
+      external: ["node-pty"],
     },
   },
 });

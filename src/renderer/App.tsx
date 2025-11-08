@@ -6,18 +6,12 @@ import { useDragDropHandlers } from "@features/panels";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
 import { useEffect, useState } from "react";
-import { useRecordingQuerySync } from "@/renderer/hooks/useRecordingQuerySync";
-import {
-  initializeRecordingService,
-  shutdownRecordingService,
-} from "@/renderer/services/recordingService";
+import { useDragDropHandlers } from "@/renderer/hooks/useDragDropHandlers";
 
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const dragDropHandlers = useDragDropHandlers();
-
-  useRecordingQuerySync();
 
   // Initialize PostHog analytics
   useEffect(() => {
@@ -27,22 +21,6 @@ function App() {
   useEffect(() => {
     initializeOAuth().finally(() => setIsLoading(false));
   }, [initializeOAuth]);
-
-  // Initialize recording service when authenticated
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-
-    console.log("[App] Initializing recording service");
-    initializeRecordingService();
-
-    // Cleanup on unmount
-    return () => {
-      console.log("[App] Shutting down recording service");
-      shutdownRecordingService();
-    };
-  }, [isAuthenticated]);
 
   if (isLoading) {
     return (
