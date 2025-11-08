@@ -1,8 +1,11 @@
+import {
+  applyActiveFilters,
+  applyTextSearch,
+} from "@features/task-list/utils/taskFiltering";
+import { sortTasks } from "@features/task-list/utils/taskSorting";
 import type { Task } from "@shared/types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { applyActiveFilters, applyTextSearch } from "../utils/taskFiltering";
-import { sortTasks } from "../utils/taskSorting";
 import type {
   ActiveFilters,
   FilterCategory,
