@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/react";
 import { Box } from "@radix-ui/themes";
-import type { SplitDirection } from "@stores/panelStore";
 import type React from "react";
+import type { SplitDirection } from "../store/panelStore";
 
 type DropZoneType = SplitDirection | "center";
 

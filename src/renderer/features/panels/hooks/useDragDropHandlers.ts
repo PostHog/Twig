@@ -1,4 +1,4 @@
-import { type SplitDirection, usePanelStore } from "@stores/panelStore";
+import { type SplitDirection, usePanelStore } from "../store/panelStore";
 
 const isSplitDirection = (zone: string): zone is SplitDirection => {
   return (

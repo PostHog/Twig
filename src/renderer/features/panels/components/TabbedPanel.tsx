@@ -1,8 +1,8 @@
 import { useDroppable } from "@dnd-kit/react";
 import { Box, Flex } from "@radix-ui/themes";
-import type { PanelContent } from "@stores/panelStore";
-import { usePanelStore } from "@stores/panelStore";
 import type React from "react";
+import type { PanelContent } from "../store/panelStore";
+import { usePanelStore } from "../store/panelStore";
 import { DraggableTab } from "./DraggableTab";
 import { PanelDropZones } from "./PanelDropZones";
 
@@ -76,7 +76,9 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
       )}
 
       <Box flexGrow="1" className="overflow-hidden" position="relative">
-        {activeTab?.component || (
+        {activeTab ? (
+          activeTab.component
+        ) : (
           <Flex
             align="center"
             justify="center"
@@ -85,7 +87,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               backgroundColor: "var(--gray-2)",
             }}
           >
-            <Box>{activeTab?.label || "No content"}</Box>
+            <Box>No content</Box>
           </Flex>
         )}
 

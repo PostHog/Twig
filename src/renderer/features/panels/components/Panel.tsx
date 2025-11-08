@@ -6,6 +6,8 @@ import {
 
 type PanelProps = {
   children: React.ReactNode;
+  id?: string;
+  order?: number;
   className?: string;
   style?: React.CSSProperties;
   defaultSize?: number;
@@ -21,6 +23,8 @@ export const Panel = React.forwardRef<ImperativePanelHandle, PanelProps>(
   (
     {
       children,
+      id,
+      order,
       className,
       style,
       defaultSize,
@@ -36,6 +40,8 @@ export const Panel = React.forwardRef<ImperativePanelHandle, PanelProps>(
     return (
       <ResizablePanel
         ref={ref}
+        id={id}
+        order={order}
         className={className}
         style={style}
         defaultSize={defaultSize}

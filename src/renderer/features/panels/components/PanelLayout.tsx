@@ -1,6 +1,7 @@
-import type { PanelNode } from "@stores/panelStore";
-import { usePanelStore } from "@stores/panelStore";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import type { PanelNode } from "../store/panelStore";
+import { usePanelStore } from "../store/panelStore";
 import { Panel } from "./Panel";
 import { PanelGroup } from "./PanelGroup";
 import { PanelResizeHandle } from "./PanelResizeHandle";
@@ -14,9 +15,21 @@ interface PanelLayoutProps {
 const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
   const updateSizes = usePanelStore((state) => state.updateSizes);
+  const groupRefs = useRef<Map<string, ImperativePanelGroupHandle>>(new Map());
 
   const handleSetActiveTab = (panelId: string, tabId: string) => {
     setActiveTabs((prev) => ({ ...prev, [panelId]: tabId }));
+  };
+
+  const setGroupRef = (
+    groupId: string,
+    ref: ImperativePanelGroupHandle | null,
+  ) => {
+    if (ref) {
+      groupRefs.current.set(groupId, ref);
+    } else {
+      groupRefs.current.delete(groupId);
+    }
   };
 
   const renderNode = (currentNode: PanelNode): React.ReactNode => {
@@ -40,14 +53,21 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
     if (currentNode.type === "group") {
       return (
         <PanelGroup
+          ref={(ref) => setGroupRef(currentNode.id, ref)}
           direction={currentNode.direction}
-          onLayout={(sizes) => updateSizes(currentNode.id, sizes)}
+          onLayout={(sizes) => {
+            // Only update store, don't normalize here
+            // The library is the source of truth for sizes during user interaction
+            updateSizes(currentNode.id, sizes);
+          }}
         >
           {currentNode.children.map((child, index) => (
             <React.Fragment key={child.id}>
               <Panel
+                id={child.id}
+                order={index}
                 defaultSize={
-                  currentNode.sizes?.[index] ||
+                  currentNode.sizes?.[index] ??
                   100 / currentNode.children.length
                 }
                 minSize={15}
@@ -64,6 +84,36 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
     return null;
   };
 
+  // Sync store changes to library when sizes change from operations like split/cleanup
+  useEffect(() => {
+    const syncSizesToLibrary = (currentNode: PanelNode) => {
+      if (currentNode.type === "group" && currentNode.sizes) {
+        const groupRef = groupRefs.current.get(currentNode.id);
+        if (groupRef) {
+          // Get current layout from library
+          const currentLayout = groupRef.getLayout();
+
+          // Only update if sizes are significantly different (avoid feedback loops)
+          const isDifferent = currentLayout.some(
+            (size, i) => Math.abs(size - (currentNode.sizes?.[i] ?? 0)) > 0.1,
+          );
+
+          if (
+            isDifferent &&
+            currentNode.sizes.length === currentLayout.length
+          ) {
+            groupRef.setLayout(currentNode.sizes);
+          }
+        }
+
+        // Recursively sync child groups
+        currentNode.children.forEach(syncSizesToLibrary);
+      }
+    };
+
+    syncSizesToLibrary(node);
+  }, [node]);
+
   return <>{renderNode(node)}</>;
 };
 
@@ -71,14 +121,14 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
   const compiledNode = useMemo(() => compilePanelTree(tree), [tree]);
   const setRoot = usePanelStore((state) => state.setRoot);
   const root = usePanelStore((state) => state.root);
-  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!initializedRef.current) {
+    // Only initialize if root is null (store not yet initialized)
+    // Once initialized, store is the source of truth
+    if (root === null) {
       setRoot(compiledNode);
-      initializedRef.current = true;
     }
-  }, [compiledNode, setRoot]);
+  }, [compiledNode, setRoot, root]);
 
   return root ? <PanelLayoutRenderer node={root} /> : null;
 };

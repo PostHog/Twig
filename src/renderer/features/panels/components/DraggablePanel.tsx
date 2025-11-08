@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { usePanelStore } from "@stores/panelStore";
 import type React from "react";
+import { usePanelStore } from "../store/panelStore";
 
 interface DraggablePanelProps {
   id: string;

@@ -1,176 +1,73 @@
 import { create } from "zustand";
+import {
+  addTabToPanel,
+  cleanupNode,
+  findTabInPanel,
+  isLeaf,
+  removeTabFromPanel,
+  setActiveTabInPanel,
+  updateTreeNode,
+} from "./panelTree";
+import type {
+  GroupId,
+  PanelId,
+  PanelNode,
+  SplitDirection,
+  TabId,
+} from "./panelTypes";
+import { calculateSplitSizes } from "./panelUtils";
 
-export type Tab = {
-  id: string;
-  label: string;
-  component?: React.ReactNode;
-  closeable?: boolean;
-  onClose?: () => void;
-  onSelect?: () => void;
-  icon?: React.ReactNode;
-};
+interface DragState {
+  draggingTabId: TabId | null;
+  draggingTabPanelId: PanelId | null;
+}
 
-export type PanelContent = {
-  id: string;
-  tabs: Tab[];
-  activeTabId: string;
-  showTabs?: boolean;
-  droppable?: boolean;
-};
-
-export type PanelNode =
-  | {
-      type: "leaf";
-      id: string;
-      content: PanelContent;
-      size?: number;
-    }
-  | {
-      type: "group";
-      id: string;
-      direction: "horizontal" | "vertical";
-      children: PanelNode[];
-      sizes?: number[];
-    };
-
-export type SplitDirection = "top" | "bottom" | "left" | "right";
-
-const isLeafNode = (
-  node: PanelNode | null,
-): node is Extract<PanelNode, { type: "leaf" }> => {
-  return node?.type === "leaf";
-};
-
-const isGroupNode = (
-  node: PanelNode | null,
-): node is Extract<PanelNode, { type: "group" }> => {
-  return node?.type === "group";
-};
-
-interface PanelStore {
+interface TreeState {
   root: PanelNode | null;
-  draggingTabId: string | null;
-  draggingTabPanelId: string | null;
   idCounter: number;
+}
 
+interface TreeActions {
   setRoot: (root: PanelNode) => void;
-  setDraggingTab: (tabId: string | null, panelId: string | null) => void;
-  findPanel: (id: string, node?: PanelNode) => PanelNode | null;
-  moveTab: (
-    tabId: string,
-    sourcePanelId: string,
-    targetPanelId: string,
-  ) => void;
-  splitPanel: (
-    tabId: string,
-    sourcePanelId: string,
-    targetPanelId: string,
-    direction: SplitDirection,
-  ) => void;
-  setActiveTab: (panelId: string, tabId: string) => void;
-  closeTab: (panelId: string, tabId: string) => void;
+  findPanel: (id: PanelId, node?: PanelNode) => PanelNode | null;
   cleanupTree: () => void;
-  updateSizes: (groupId: string, sizes: number[]) => void;
+}
+
+interface TabActions {
+  setDraggingTab: (tabId: TabId | null, panelId: PanelId | null) => void;
+  moveTab: (
+    tabId: TabId,
+    sourcePanelId: PanelId,
+    targetPanelId: PanelId,
+  ) => void;
+  setActiveTab: (panelId: PanelId, tabId: TabId) => void;
+  closeTab: (panelId: PanelId, tabId: TabId) => void;
   reorderTabs: (
-    panelId: string,
+    panelId: PanelId,
     sourceIndex: number,
     targetIndex: number,
   ) => void;
 }
 
-const removeTabFromPanel = (node: PanelNode, tabId: string): PanelNode => {
-  if (!isLeafNode(node)) return node;
+interface PanelActions {
+  splitPanel: (
+    tabId: TabId,
+    sourcePanelId: PanelId,
+    targetPanelId: PanelId,
+    direction: SplitDirection,
+  ) => void;
+  updateSizes: (groupId: GroupId, sizes: number[]) => void;
+}
 
-  const newTabs = node.content.tabs.filter((t) => t.id !== tabId);
-  const newActiveTabId =
-    node.content.activeTabId === tabId
-      ? newTabs[0]?.id || ""
-      : node.content.activeTabId;
-
-  return {
-    ...node,
-    content: {
-      ...node.content,
-      tabs: newTabs,
-      activeTabId: newActiveTabId,
-    },
-  };
-};
-
-const addTabToPanel = (node: PanelNode, tab: Tab): PanelNode => {
-  if (!isLeafNode(node)) return node;
-
-  return {
-    ...node,
-    content: {
-      ...node.content,
-      tabs: [...node.content.tabs, tab],
-      activeTabId: tab.id,
-    },
-  };
-};
-
-const setActiveTabInPanel = (node: PanelNode, tabId: string): PanelNode => {
-  if (!isLeafNode(node)) return node;
-
-  return {
-    ...node,
-    content: {
-      ...node.content,
-      activeTabId: tabId,
-    },
-  };
-};
-
-const findTabInPanel = (
-  panel: Extract<PanelNode, { type: "leaf" }>,
-  tabId: string,
-): Tab | undefined => {
-  return panel.content.tabs.find((t) => t.id === tabId);
-};
-
-const updateTreeNode = (
-  node: PanelNode,
-  targetId: string,
-  updateFn: (node: PanelNode) => PanelNode,
-): PanelNode => {
-  if (node.id === targetId) {
-    return updateFn(node);
-  }
-
-  if (isGroupNode(node)) {
-    return {
-      ...node,
-      children: node.children.map((child) =>
-        updateTreeNode(child, targetId, updateFn),
-      ),
-    };
-  }
-
-  return node;
-};
-
-const cleanupNode = (node: PanelNode): PanelNode | null => {
-  if (isLeafNode(node)) {
-    return node.content.tabs.length === 0 ? null : node;
-  }
-
-  const cleanedChildren = node.children
-    .map(cleanupNode)
-    .filter((child): child is PanelNode => child !== null);
-
-  if (cleanedChildren.length === 0) return null;
-  if (cleanedChildren.length === 1) return cleanedChildren[0];
-
-  return {
-    ...node,
-    children: cleanedChildren,
-  };
-};
+type PanelStore = TreeState &
+  DragState &
+  TreeActions &
+  TabActions &
+  PanelActions;
 
 export const usePanelStore = create<PanelStore>((set, get) => {
   const generateId = (prefix: string): string => {
-    const id = `${prefix}-${get().idCounter}`;
+    const id = `${prefix}-gen-${get().idCounter}`;
     set((state) => ({ idCounter: state.idCounter + 1 }));
     return id;
   };
@@ -180,10 +77,10 @@ export const usePanelStore = create<PanelStore>((set, get) => {
   };
 
   const getLeafPanel = (
-    panelId: string,
+    panelId: PanelId,
   ): Extract<PanelNode, { type: "leaf" }> | null => {
     const panel = get().findPanel(panelId);
-    return isLeafNode(panel) ? panel : null;
+    return isLeaf(panel) ? panel : null;
   };
 
   return {
@@ -202,7 +99,7 @@ export const usePanelStore = create<PanelStore>((set, get) => {
       if (!searchNode) return null;
       if (searchNode.id === id) return searchNode;
 
-      if (isGroupNode(searchNode)) {
+      if (searchNode.type === "group") {
         for (const child of searchNode.children) {
           const found = get().findPanel(id, child);
           if (found) return found;
@@ -255,25 +152,24 @@ export const usePanelStore = create<PanelStore>((set, get) => {
       const tabToMove = findTabInPanel(sourcePanel, tabId);
       if (!tabToMove) return;
 
-      const newPanelId = generateId("panel");
       const isVerticalSplit = direction === "top" || direction === "bottom";
-      const groupDirection = isVerticalSplit ? "vertical" : "horizontal";
+      const newPanelFirst = direction === "top" || direction === "left";
+      const splitSizes = calculateSplitSizes();
 
       const newPanel: PanelNode = {
         type: "leaf",
-        id: newPanelId,
+        id: generateId("panel"),
         content: {
-          id: newPanelId,
+          id: generateId("panel"),
           tabs: [tabToMove],
           activeTabId: tabToMove.id,
           showTabs: true,
+          droppable: true,
         },
       };
 
-      const newPanelFirst = direction === "top" || direction === "left";
-
       const updateInNode = (node: PanelNode): PanelNode => {
-        if (node.id === targetPanelId && isLeafNode(node)) {
+        if (node.id === targetPanelId && isLeaf(node)) {
           const targetNode =
             sourcePanelId === targetPanelId
               ? removeTabFromPanel(node, tabId)
@@ -283,27 +179,29 @@ export const usePanelStore = create<PanelStore>((set, get) => {
             ? [newPanel, targetNode]
             : [targetNode, newPanel];
 
+          const sizes = newPanelFirst
+            ? splitSizes
+            : [splitSizes[1], splitSizes[0]];
+
           return {
             type: "group",
             id: generateId("group"),
-            direction: groupDirection,
+            direction: isVerticalSplit ? "vertical" : "horizontal",
             children,
+            sizes,
           };
         }
 
         if (
           node.id === sourcePanelId &&
-          isLeafNode(node) &&
+          isLeaf(node) &&
           sourcePanelId !== targetPanelId
         ) {
           return removeTabFromPanel(node, tabId);
         }
 
-        if (isGroupNode(node)) {
-          return {
-            ...node,
-            children: node.children.map(updateInNode),
-          };
+        if (node.type === "group") {
+          return { ...node, children: node.children.map(updateInNode) };
         }
 
         return node;
@@ -336,7 +234,7 @@ export const usePanelStore = create<PanelStore>((set, get) => {
 
       set({
         root: updateTreeNode(root, groupId, (node) => {
-          if (!isGroupNode(node)) return node;
+          if (node.type !== "group") return node;
           return { ...node, sizes };
         }),
       });
@@ -348,7 +246,7 @@ export const usePanelStore = create<PanelStore>((set, get) => {
 
       set({
         root: updateTreeNode(root, panelId, (node) => {
-          if (!isLeafNode(node)) return node;
+          if (!isLeaf(node)) return node;
 
           const newTabs = [...node.content.tabs];
           const [movedTab] = newTabs.splice(sourceIndex, 1);
@@ -356,13 +254,17 @@ export const usePanelStore = create<PanelStore>((set, get) => {
 
           return {
             ...node,
-            content: {
-              ...node.content,
-              tabs: newTabs,
-            },
+            content: { ...node.content, tabs: newTabs },
           };
         }),
       });
     },
   };
 });
+
+export type {
+  PanelContent,
+  PanelNode,
+  SplitDirection,
+  Tab,
+} from "./panelTypes";

@@ -2,10 +2,10 @@ import { MainLayout } from "@components/MainLayout";
 import { DragDropProvider } from "@dnd-kit/react";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useDragDropHandlers } from "@features/panels";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
 import { useEffect, useState } from "react";
-import { useDragDropHandlers } from "@/renderer/hooks/useDragDropHandlers";
 import { useRecordingQuerySync } from "@/renderer/hooks/useRecordingQuerySync";
 import {
   initializeRecordingService,

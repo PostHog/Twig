@@ -1,5 +1,5 @@
-import type { PanelNode, Tab } from "@stores/panelStore";
 import React from "react";
+import type { PanelNode, Tab } from "../store/panelStore";
 
 /**
  * JSX-based panel tree builder.

@@ -3,7 +3,7 @@ import {
   PanelLayout,
   PanelLeaf,
   PanelTab,
-} from "@components/ui/panel";
+} from "@features/panels";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
 import { TaskDetailPanel } from "@features/task-detail/components/TaskDetailPanel";
@@ -120,7 +120,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
                   </PanelTab>
                 ))}
               </PanelLeaf>
-              <PanelLeaf showTabs={false}>
+              <PanelLeaf>
                 <PanelTab
                   id="shell"
                   label="Shell"
