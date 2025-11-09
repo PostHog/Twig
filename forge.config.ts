@@ -97,7 +97,7 @@ function copyNativeDependency(
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: "{**/*.node,**/.vite/build/cli.js,**/.vite/build/yoga.wasm}",
+      unpack: "{**/*.node,**/.vite/build/claude-cli/**}",
     },
     prune: false,
     name: "Array",

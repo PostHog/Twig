@@ -6,7 +6,6 @@ import { useDragDropHandlers } from "@features/panels";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
 import { useEffect, useState } from "react";
-import { useDragDropHandlers } from "@/renderer/hooks/useDragDropHandlers";
 
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
