@@ -35,8 +35,8 @@ function getClaudeCliPath(): string {
   const appPath = app.getAppPath();
 
   return app.isPackaged
-    ? join(`${appPath}.unpacked`, ".vite/build/cli.js")
-    : join(appPath, ".vite/build/cli.js");
+    ? join(`${appPath}.unpacked`, ".vite/build/claude-cli/cli.js")
+    : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
 function resolvePermissionMode(

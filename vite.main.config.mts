@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -67,18 +67,35 @@ function copyClaudeExecutable(): Plugin {
     writeBundle() {
       const sdkDir = join(
         __dirname,
-        "node_modules/@posthog/agent/node_modules/@anthropic-ai/claude-agent-sdk",
+        "node_modules/@posthog/agent/dist/claude-cli/",
       );
 
-      const files = ["cli.js", "yoga.wasm"];
+      // IMPORTANT: Copy to claude-cli/ subdirectory to isolate the package.json
+      // If we put package.json in .vite/build/, it breaks Vite's CommonJS output
+      const destDir = join(__dirname, ".vite/build/claude-cli");
+      
+      if (!existsSync(destDir)) {
+        mkdirSync(destDir, { recursive: true });
+      }
+
+      const files = ["cli.js", "package.json", "yoga.wasm"];
 
       for (const file of files) {
         const src = join(sdkDir, file);
-        const dest = join(__dirname, ".vite/build", file);
+        const dest = join(destDir, file);
+        
+        if (!existsSync(src)) {
+          console.warn(
+            `[copy-claude-executable] ${file} not found. ` +
+            `Run 'pnpm build' in the agent directory first.`
+          );
+          continue;
+        }
+        
         copyFileSync(src, dest);
       }
 
-      console.log("Copied Claude CLI and dependencies to build directory");
+      console.log("Copied Claude CLI to claude-cli/ subdirectory");
     },
   };
 }
