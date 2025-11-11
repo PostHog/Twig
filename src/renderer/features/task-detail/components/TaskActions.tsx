@@ -1,5 +1,5 @@
 import { GearIcon, GlobeIcon } from "@radix-ui/react-icons";
-import { Button, Callout, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { Button, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import type React from "react";
 
 interface TaskActionsProps {
@@ -29,28 +29,15 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
     if (isRunning) return "Running...";
     if (isCloningRepo) return "Cloning...";
     if (runMode === "cloud") return "Run (Cloud)";
-    if (repoExists === false) return "Clone repository";
     return "Run (Local)";
   };
 
   const handleRunClick = () => {
-    if (runMode === "local" && repoExists === false) {
-      onCloneRepository();
-    } else {
-      onRunTask();
-    }
+    onRunTask();
   };
 
   return (
     <Flex direction="column" gap="3">
-      {repoExists === false && hasRepositoryConfig && runMode === "local" && (
-        <Callout.Root color="gray" size="2">
-          <Callout.Text size="1">
-            Repository not in workspace. Clone to run agent locally.
-          </Callout.Text>
-        </Callout.Root>
-      )}
-
       <Flex gap="2">
         <Button
           variant="classic"

@@ -15,7 +15,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = taskData.repoPath;
 
   const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId, task),
+    state.getTaskState(taskId),
   );
 
   const onAnswersComplete = useCallback(

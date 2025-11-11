@@ -5,7 +5,7 @@ import { FileTextIcon, ListBulletIcon } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
-import { useTabStore } from "@stores/tabStore";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -15,7 +15,7 @@ interface CommandMenuProps {
 }
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
-  const { tabs, setActiveTab, createTab } = useTabStore();
+  const { navigateToTaskList, navigateToTask } = useNavigationStore();
   const { setCliMode } = useLayoutStore();
   const { data: tasks = [] } = useTasks();
   const commandRef = useRef<HTMLDivElement>(null);
@@ -66,54 +66,18 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   }, [open, onOpenChange]);
 
   const handleNavigateToTasks = () => {
-    const tasksTab = tabs.find((tab) => tab.type === "task-list");
-    if (tasksTab) {
-      setActiveTab(tasksTab.id);
-    } else {
-      createTab({
-        type: "task-list",
-        title: "Tasks",
-      });
-    }
+    navigateToTaskList();
     onOpenChange(false);
   };
 
   const handleCreateTask = () => {
-    // Find the Tasks tab or use the first task-list tab
-    const tasksTab = tabs.find((tab) => tab.type === "task-list");
-
-    if (tasksTab) {
-      setActiveTab(tasksTab.id);
-    }
-
-    // Switch to task mode
+    navigateToTaskList();
     setCliMode("task");
-
-    // Close the command menu
     onOpenChange(false);
-
-    // Note: The auto-focus effect in CliTaskPanel will handle focusing the editor
   };
 
-  const handleNavigateToTask = (task: {
-    id: string;
-    title: string;
-    description?: string;
-  }) => {
-    // Check if task is already open in a tab
-    const existingTab = tabs.find(
-      (tab) => tab.type === "task-detail" && (tab.data as Task)?.id === task.id,
-    );
-
-    if (existingTab) {
-      setActiveTab(existingTab.id);
-    } else {
-      createTab({
-        type: "task-detail",
-        title: task.title,
-        data: task,
-      });
-    }
+  const handleNavigateToTaskClick = (task: Task) => {
+    navigateToTask(task);
     onOpenChange(false);
   };
 
@@ -166,7 +130,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                   <Command.Item
                     key={task.id}
                     value={`${task.id} ${task.title}`}
-                    onSelect={() => handleNavigateToTask(task)}
+                    onSelect={() => handleNavigateToTaskClick(task)}
                     className="items-start"
                   >
                     <FileTextIcon className="mt-0.5 mr-3 h-4 w-4 flex-shrink-0 text-gray-11" />

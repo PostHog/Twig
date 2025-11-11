@@ -2,6 +2,8 @@ import { Button, Code, DataList, Link, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { format, formatDistanceToNow } from "date-fns";
 import type React from "react";
+import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 
 interface TaskMetadataProps {
   task: Task;
@@ -16,6 +18,13 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
   derivedPath,
   defaultWorkspace,
 }) => {
+  const { setRepoPath, revalidateRepo } = useTaskExecutionStore();
+
+  const handleWorkingDirectoryChange = async (newPath: string) => {
+    setRepoPath(task.id, newPath);
+    await revalidateRepo(task.id);
+  };
+
   return (
     <>
       <DataList.Root>
@@ -64,17 +73,16 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
         <DataList.Item>
           <DataList.Label>Working directory</DataList.Label>
           <DataList.Value>
-            {derivedPath ? (
-              <Code size="2" color="gray">
-                {derivedPath.replace(/^\/Users\/[^/]+/, "~")}
-              </Code>
-            ) : (
-              <Text size="2" color="gray">
-                {!defaultWorkspace
+            <FolderPicker
+              value={derivedPath || ""}
+              onChange={handleWorkingDirectoryChange}
+              placeholder={
+                !defaultWorkspace
                   ? "No workspace configured"
-                  : "No repository selected"}
-              </Text>
-            )}
+                  : "Select working directory..."
+              }
+              size="2"
+            />
           </DataList.Value>
         </DataList.Item>
 

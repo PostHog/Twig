@@ -62,22 +62,7 @@ export function PlanView({
     );
   }
 
-  // Show plan editor when in review phase (artifacts handled at TaskDetail level)
-  if (phase === "review" && repoPath && !selectedArtifact) {
-    return (
-      <Box height="100%" width="100%">
-        <PlanEditor
-          taskId={task.id}
-          repoPath={repoPath}
-          fileName="plan.md"
-          initialContent={planContent || undefined}
-          onSave={onSavePlan}
-        />
-      </Box>
-    );
-  }
-
-  // Default: show logs
+  // Always show logs - plan is now shown in a separate tab
   return (
     <Box height="100%" width="100%">
       <LogView logs={logs} isRunning={isRunning} onClearLogs={onClearLogs} />

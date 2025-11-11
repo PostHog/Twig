@@ -15,7 +15,7 @@ export function useTaskExecution({
 }: UseTaskExecutionParams) {
   // Selector to only re-render when specific state changes
   const taskState = useTaskExecutionStore((state) => {
-    const fullState = state.getTaskState(taskId, task);
+    const fullState = state.getTaskState(taskId);
     return {
       isRunning: fullState.isRunning,
       logs: fullState.logs,

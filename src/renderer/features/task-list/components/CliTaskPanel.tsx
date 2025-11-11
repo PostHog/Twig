@@ -2,7 +2,7 @@ import { AsciiArt } from "@components/AsciiArt";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FilePathHighlight } from "@features/editor/extensions/filePathHighlight";
 import { useFileAutocomplete } from "@features/editor/hooks/useFileAutocomplete";
-import { RepositoryPicker } from "@features/repository-picker/components/RepositoryPicker";
+import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { CliModeHeader } from "@features/task-list/components/CliModeHeader";
@@ -11,10 +11,8 @@ import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { RepositoryConfig } from "@shared/types";
-import { cloneStore } from "@stores/cloneStore";
 import { useLayoutStore } from "@stores/layoutStore";
-import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
-import { useTabStore } from "@stores/tabStore";
+import { useNavigationStore } from "@stores/navigationStore";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -36,7 +34,7 @@ function EmptyStateMessage({ message }: { message: string }) {
 
 export function CliTaskPanel() {
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
-  const { createTab } = useTabStore();
+  const { navigateToTask } = useNavigationStore();
   const { client, isAuthenticated, defaultWorkspace } = useAuthStore();
   const {
     setRepoPath: saveRepoPath,
@@ -47,24 +45,10 @@ export function CliTaskPanel() {
   const cliMode = useLayoutStore((state) => state.cliMode);
   const setCliMode = useLayoutStore((state) => state.setCliMode);
 
-  // Repository workspace store
-  const {
-    selectedRepository,
-    derivedPath,
-    pathExists,
-    isInitiatingClone,
-    selectRepository,
-    validateAndUpdatePath,
-  } = repositoryWorkspaceStore();
-
-  const { isCloning } = cloneStore();
-  const repoIsCloning =
-    isInitiatingClone ||
-    (selectedRepository
-      ? isCloning(
-          `${selectedRepository.organization}/${selectedRepository.repository}`,
-        )
-      : false);
+  // Local directory state
+  const [selectedDirectory, setSelectedDirectory] = useState<string>("");
+  const [directoryExists, setDirectoryExists] = useState<boolean | null>(null);
+  const [detectedRepo, setDetectedRepo] = useState<RepositoryConfig | null>(null);
 
   const [isFocused, setIsFocused] = useState(false);
   const [isShellFocused, setIsShellFocused] = useState(false);
@@ -147,10 +131,44 @@ export function CliTaskPanel() {
     visibleStartIndex,
     handleKeyDown: handleFileAutocompleteKeyDown,
   } = useFileAutocomplete({
-    folderPath: derivedPath,
+    folderPath: selectedDirectory || null,
     editor,
     enabled: cliMode === "task",
   });
+
+  // Handle directory change - validate and detect git repo
+  const handleDirectoryChange = useCallback(async (newPath: string) => {
+    setSelectedDirectory(newPath);
+
+    // Check if directory exists
+    const canAccess = await window.electronAPI?.checkWriteAccess(newPath);
+    setDirectoryExists(canAccess || false);
+
+    // Try to detect git repo and extract org/repo
+    if (canAccess) {
+      try {
+        const isRepo = await window.electronAPI?.validateRepo(newPath);
+        if (isRepo) {
+          const remoteUrl = await window.electronAPI?.getGitRemoteUrl(newPath);
+          if (remoteUrl) {
+            const parsed = await window.electronAPI?.parseGitHubUrl(remoteUrl);
+            if (parsed) {
+              setDetectedRepo({
+                organization: parsed.organization,
+                repository: parsed.repository,
+              });
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error detecting git repo:", error);
+      }
+    }
+
+    // If we get here, it's not a git repo or couldn't detect
+    setDetectedRepo(null);
+  }, []);
 
   const updateCaretPosition = useCallback(() => {
     if (!editor || !caretRef.current) return;
@@ -207,27 +225,20 @@ export function CliTaskPanel() {
     }
   }, [cliMode, editor]);
 
-  // Update editor editable state based on clone status
+  // Update editor editable state
   useEffect(() => {
     if (editor) {
-      editor.setEditable(!repoIsCloning);
+      editor.setEditable(isCreatingTask === false);
     }
-  }, [editor, repoIsCloning]);
-
-  // Validate path on mount if repository is selected
-  useEffect(() => {
-    if (selectedRepository) {
-      validateAndUpdatePath();
-    }
-  }, [selectedRepository, validateAndUpdatePath]);
+  }, [editor, isCreatingTask]);
 
   const handleSubmit = useCallback(() => {
     if (
       !editor ||
       !isAuthenticated ||
       !client ||
-      !selectedRepository ||
-      repoIsCloning
+      !selectedDirectory ||
+      isCreatingTask
     ) {
       return;
     }
@@ -237,10 +248,8 @@ export function CliTaskPanel() {
       return;
     }
 
-    const repositoryConfig: RepositoryConfig = {
-      organization: selectedRepository.organization,
-      repository: selectedRepository.repository,
-    };
+    // Use detected repo config if available (git repo), otherwise undefined
+    const repositoryConfig = detectedRepo || undefined;
 
     createTask(
       {
@@ -251,15 +260,12 @@ export function CliTaskPanel() {
       },
       {
         onSuccess: (newTask) => {
-          if (derivedPath) {
-            saveRepoPath(newTask.id, derivedPath);
+          // Save the selected directory as the repo path
+          if (selectedDirectory) {
+            saveRepoPath(newTask.id, selectedDirectory);
           }
 
-          createTab({
-            type: "task-detail",
-            title: newTask.title,
-            data: newTask,
-          });
+          navigateToTask(newTask);
           editor.commands.clearContent();
 
           if (autoRunTasks) {
@@ -284,17 +290,17 @@ export function CliTaskPanel() {
     editor,
     isAuthenticated,
     client,
-    selectedRepository,
-    derivedPath,
+    selectedDirectory,
+    detectedRepo,
     createTask,
     saveRepoPath,
-    createTab,
+    navigateToTask,
     autoRunTasks,
     defaultRunMode,
     lastUsedRunMode,
     setRunMode,
     runTask,
-    repoIsCloning,
+    isCreatingTask,
   ]);
 
   return (
@@ -329,16 +335,12 @@ export function CliTaskPanel() {
           zIndex: 1,
         }}
       >
-        {/* Repository Picker */}
+        {/* Folder Picker */}
         <Box style={{ minWidth: 0 }}>
-          <RepositoryPicker
-            value={selectedRepository}
-            onChange={selectRepository}
-            placeholder={
-              defaultWorkspace
-                ? "Select repository..."
-                : "Configure workspace in settings first"
-            }
+          <FolderPicker
+            value={selectedDirectory}
+            onChange={handleDirectoryChange}
+            placeholder="Select working directory..."
             size="1"
           />
         </Box>
@@ -385,10 +387,10 @@ export function CliTaskPanel() {
                 minWidth: 0,
               }}
             >
-              {!selectedRepository ? (
-                <EmptyStateMessage message="Select a repository to start" />
-              ) : repoIsCloning ? (
-                <EmptyStateMessage message="Repository is being cloned..." />
+              {!selectedDirectory ? (
+                <EmptyStateMessage message="Select a working directory to start" />
+              ) : isCreatingTask ? (
+                <EmptyStateMessage message="Creating task..." />
               ) : (
                 <>
                   <Text
@@ -550,14 +552,14 @@ export function CliTaskPanel() {
                 transition: "opacity 0.2s",
               }}
             >
-              {pathExists ? (
-                <ShellTerminal cwd={derivedPath || undefined} />
+              {selectedDirectory && directoryExists ? (
+                <ShellTerminal cwd={selectedDirectory} />
               ) : (
                 <EmptyStateMessage
                   message={
-                    selectedRepository
-                      ? "Repository is being cloned..."
-                      : "Select a repository to start"
+                    selectedDirectory
+                      ? "Checking directory..."
+                      : "Select a working directory to start"
                   }
                 />
               )}

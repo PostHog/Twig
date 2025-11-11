@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import type {
@@ -62,24 +63,25 @@ async function validateRepositoryAccess(
   path: string,
   addLog: (log: AgentEvent) => void,
 ): Promise<boolean> {
-  const isRepo = await window.electronAPI?.validateRepo(path);
-  if (!isRepo) {
-    addLog({
-      type: "error",
-      ts: Date.now(),
-      message: `Selected folder is not a git repository: ${path}`,
-    });
-    return false;
-  }
-
+  // Check if directory exists by checking write access
   const canWrite = await window.electronAPI?.checkWriteAccess(path);
   if (!canWrite) {
     addLog({
       type: "error",
       ts: Date.now(),
-      message: `No write permission in selected folder: ${path}`,
+      message: `Cannot access or write to folder: ${path}`,
     });
     return false;
+  }
+
+  // Check if it's a git repository (optional - just for informational purposes)
+  const isRepo = await window.electronAPI?.validateRepo(path);
+  if (!isRepo) {
+    addLog({
+      type: "token",
+      ts: Date.now(),
+      content: `Note: Selected folder is not a git repository: ${path}`,
+    });
   }
 
   return true;
@@ -174,9 +176,8 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
       getTaskState: (taskId: string, task?: Task) => {
         const state = get();
-        if (task) {
-          state.initializeRepoPath(taskId, task);
-        }
+        // Note: initializeRepoPath should be called separately, not in a selector
+        // to avoid side effects during render
         return {
           ...defaultTaskState,
           ...state.taskStates[taskId],
@@ -674,6 +675,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           if (content) {
             store.setPlanContent(taskId, content);
             store.setPlanModePhase(taskId, "review");
+
+            // Auto-open plan.md as an artifact tab
+            useTaskPanelLayoutStore.getState().openArtifact(taskId, "plan.md");
           }
         } catch (error) {
           console.error("Failed to load plan:", error);
