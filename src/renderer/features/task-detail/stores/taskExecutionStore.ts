@@ -129,7 +129,7 @@ interface TaskExecutionStore {
   taskStates: Record<string, TaskExecutionState>;
 
   // Basic state accessors
-  getTaskState: (taskId: string, task?: Task) => TaskExecutionState;
+  getTaskState: (taskId: string) => TaskExecutionState;
   updateTaskState: (
     taskId: string,
     updates: Partial<TaskExecutionState>,
@@ -198,7 +198,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
     (set, get) => ({
       taskStates: {},
 
-      getTaskState: (taskId: string, task?: Task) => {
+      getTaskState: (taskId: string) => {
         const state = get();
         // Note: initializeRepoPath should be called separately, not in a selector
         // to avoid side effects during render
@@ -406,13 +406,11 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const executionType: ExecutionType = currentTaskState.runMode;
         const executionMode: AnalyticsExecutionMode =
           currentTaskState.executionMode;
-        const hasRepository = !!task.repository_config;
 
         track(ANALYTICS_EVENTS.TASK_RUN, {
           task_id: taskId,
           execution_type: executionType,
           execution_mode: executionMode,
-          has_repository: hasRepository,
         });
 
         // Handle cloud mode - run task via API

@@ -1,16 +1,14 @@
-import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
-import type { Task } from "@shared/types";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
 import { useEffect } from "react";
 
 interface TodoListPanelProps {
   taskId: string;
-  task: Task;
 }
 
-export function TodoListPanel({ taskId, task }: TodoListPanelProps) {
+export function TodoListPanel({ taskId }: TodoListPanelProps) {
   const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId, task),
+    state.getTaskState(taskId),
   );
   const checkTodosUpdate = useTaskExecutionStore(
     (state) => state.checkTodosUpdate,
@@ -44,7 +42,7 @@ export function TodoListPanel({ taskId, task }: TodoListPanelProps) {
             align="center"
             gap="2"
             p="1"
-            className="rounded-md hover:bg-gray-2 cursor-pointer"
+            className="cursor-pointer rounded-md hover:bg-gray-2"
           >
             <Checkbox
               checked={todo.status === "completed"}

@@ -55,7 +55,6 @@ export function useCreateTask() {
 
         // Track task creation
         track(ANALYTICS_EVENTS.TASK_CREATED, {
-          has_repository: !!variables.repositoryConfig,
           auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
           repository_provider: variables.repositoryConfig ? "github" : "none",

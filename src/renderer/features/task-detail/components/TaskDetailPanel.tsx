@@ -100,10 +100,7 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
             isRunning={execution.state.isRunning}
             isCloningRepo={repository.isCloning}
             runMode={execution.state.runMode}
-            repoExists={taskData.repoExists || false}
-            hasRepositoryConfig={repository.hasRepositoryConfig}
             onRunTask={execution.actions.run}
-            onCloneRepository={repository.clone}
             onCancel={execution.actions.cancel}
             onRunModeChange={execution.actions.onRunModeChange}
           />

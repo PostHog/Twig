@@ -4,19 +4,27 @@ import {
   PanelLeaf,
   PanelTab,
 } from "@features/panels";
+import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
 import { TaskDetailPanel } from "@features/task-detail/components/TaskDetailPanel";
 import { TaskLogsPanel } from "@features/task-detail/components/TaskLogsPanel";
 import { TaskShellPanel } from "@features/task-detail/components/TaskShellPanel";
 import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
-import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { CheckSquareIcon, FolderIcon, InfoIcon, ListIcon, NotePencilIcon, StackIcon, TerminalIcon } from "@phosphor-icons/react";
+import {
+  CheckSquareIcon,
+  FolderIcon,
+  InfoIcon,
+  ListIcon,
+  NotePencilIcon,
+  StackIcon,
+  TerminalIcon,
+} from "@phosphor-icons/react";
 import { Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
@@ -151,10 +159,14 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
                   id="todo-list"
                   label="Todo list"
                   icon={
-                    <CheckSquareIcon size={12} weight="bold" color="var(--gray-11)" />
+                    <CheckSquareIcon
+                      size={12}
+                      weight="bold"
+                      color="var(--gray-11)"
+                    />
                   }
                 >
-                  <TodoListPanel taskId={taskId} task={task} />
+                  <TodoListPanel taskId={taskId} />
                 </PanelTab>
               </PanelLeaf>
               <PanelLeaf droppable={false}>
@@ -162,7 +174,11 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
                   id="file-tree"
                   label="Files"
                   icon={
-                    <FolderIcon size={12} weight="bold" color="var(--gray-11)" />
+                    <FolderIcon
+                      size={12}
+                      weight="bold"
+                      color="var(--gray-11)"
+                    />
                   }
                 >
                   <FileTreePanel taskId={taskId} task={task} />

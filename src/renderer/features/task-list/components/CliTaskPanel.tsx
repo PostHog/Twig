@@ -35,7 +35,7 @@ function EmptyStateMessage({ message }: { message: string }) {
 export function CliTaskPanel() {
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
-  const { client, isAuthenticated, defaultWorkspace } = useAuthStore();
+  const { client, isAuthenticated } = useAuthStore();
   const {
     setRepoPath: saveRepoPath,
     setRunMode,
@@ -48,7 +48,9 @@ export function CliTaskPanel() {
   // Local directory state
   const [selectedDirectory, setSelectedDirectory] = useState<string>("");
   const [directoryExists, setDirectoryExists] = useState<boolean | null>(null);
-  const [detectedRepo, setDetectedRepo] = useState<RepositoryConfig | null>(null);
+  const [detectedRepo, setDetectedRepo] = useState<RepositoryConfig | null>(
+    null,
+  );
 
   const [isFocused, setIsFocused] = useState(false);
   const [isShellFocused, setIsShellFocused] = useState(false);
@@ -147,19 +149,13 @@ export function CliTaskPanel() {
     // Try to detect git repo and extract org/repo
     if (canAccess) {
       try {
-        const isRepo = await window.electronAPI?.validateRepo(newPath);
-        if (isRepo) {
-          const remoteUrl = await window.electronAPI?.getGitRemoteUrl(newPath);
-          if (remoteUrl) {
-            const parsed = await window.electronAPI?.parseGitHubUrl(remoteUrl);
-            if (parsed) {
-              setDetectedRepo({
-                organization: parsed.organization,
-                repository: parsed.repository,
-              });
-              return;
-            }
-          }
+        const detected = await window.electronAPI?.detectRepo(newPath);
+        if (detected) {
+          setDetectedRepo({
+            organization: detected.organization,
+            repository: detected.repository,
+          });
+          return;
         }
       } catch (error) {
         console.error("Error detecting git repo:", error);

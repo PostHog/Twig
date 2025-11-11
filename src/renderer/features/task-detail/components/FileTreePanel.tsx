@@ -1,9 +1,9 @@
+import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 
 interface FileTreePanelProps {
   taskId: string;
@@ -17,8 +17,17 @@ interface TreeNode {
   path: string;
 }
 
-function buildTreeFromPaths(files: Array<{ path: string; name: string }>): TreeNode[] {
-  const root: Record<string, TreeNode> = {};
+interface TreeNodeBuilder {
+  name: string;
+  type: "file" | "folder";
+  children?: Record<string, TreeNodeBuilder>;
+  path: string;
+}
+
+function buildTreeFromPaths(
+  files: Array<{ path: string; name: string }>,
+): TreeNode[] {
+  const root: Record<string, TreeNodeBuilder> = {};
 
   for (const file of files) {
     const parts = file.path.split("/").filter(Boolean);
@@ -39,13 +48,13 @@ function buildTreeFromPaths(files: Array<{ path: string; name: string }>): TreeN
       }
 
       if (!isLastPart && currentLevel[part].children) {
-        currentLevel = currentLevel[part].children as Record<string, TreeNode>;
+        currentLevel = currentLevel[part].children;
       }
     }
   }
 
   // Convert children objects to arrays and sort
-  const convertToArray = (node: TreeNode): TreeNode => {
+  const convertToArray = (node: TreeNodeBuilder): TreeNode => {
     if (node.children && typeof node.children === "object") {
       const childrenArray = Object.values(node.children)
         .map(convertToArray)
@@ -56,9 +65,19 @@ function buildTreeFromPaths(files: Array<{ path: string; name: string }>): TreeN
           }
           return a.name.localeCompare(b.name);
         });
-      return { ...node, children: childrenArray };
+      return {
+        name: node.name,
+        type: node.type,
+        path: node.path,
+        children: childrenArray,
+      };
     }
-    return node;
+    return {
+      name: node.name,
+      type: node.type,
+      path: node.path,
+      children: undefined,
+    };
   };
 
   return Object.values(root)
@@ -96,7 +115,7 @@ function TreeItem({ node, depth }: TreeItemProps) {
           paddingLeft: `${depth * 16 + 8}px`,
           cursor: node.type === "folder" ? "pointer" : "default",
         }}
-        className="hover:bg-gray-2 rounded"
+        className="rounded hover:bg-gray-2"
         onClick={handleToggle}
       >
         {node.type === "folder" ? (
@@ -115,7 +134,11 @@ function TreeItem({ node, depth }: TreeItemProps) {
       {node.type === "folder" && isExpanded && node.children && (
         <Box>
           {node.children.map((child, index) => (
-            <TreeItem key={`${child.name}-${index}`} node={child} depth={depth + 1} />
+            <TreeItem
+              key={`${child.name}-${index}`}
+              node={child}
+              depth={depth + 1}
+            />
           ))}
         </Box>
       )}
