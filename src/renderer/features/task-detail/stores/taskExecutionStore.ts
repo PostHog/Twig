@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import type {
@@ -62,27 +63,45 @@ async function validateRepositoryAccess(
   path: string,
   addLog: (log: AgentEvent) => void,
 ): Promise<boolean> {
-  const isRepo = await window.electronAPI?.validateRepo(path);
-  if (!isRepo) {
-    addLog({
-      type: "error",
-      ts: Date.now(),
-      message: `Selected folder is not a git repository: ${path}`,
-    });
-    return false;
-  }
-
+  // Check if directory exists by checking write access
   const canWrite = await window.electronAPI?.checkWriteAccess(path);
   if (!canWrite) {
     addLog({
       type: "error",
       ts: Date.now(),
-      message: `No write permission in selected folder: ${path}`,
+      message: `Cannot access or write to folder: ${path}`,
     });
     return false;
   }
 
+  // Check if it's a git repository (optional - just for informational purposes)
+  const isRepo = await window.electronAPI?.validateRepo(path);
+  if (!isRepo) {
+    addLog({
+      type: "token",
+      ts: Date.now(),
+      content: `Note: Selected folder is not a git repository: ${path}`,
+    });
+  }
+
   return true;
+}
+
+export interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm: string;
+}
+
+export interface TodoList {
+  items: TodoItem[];
+  metadata: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    last_updated: string;
+  };
 }
 
 interface TaskExecutionState {
@@ -101,6 +120,8 @@ interface TaskExecutionState {
   clarifyingQuestions: ClarifyingQuestion[];
   questionAnswers: QuestionAnswer[];
   planContent: string | null;
+  // Todos
+  todos: TodoList | null;
 }
 
 interface TaskExecutionStore {
@@ -108,7 +129,7 @@ interface TaskExecutionStore {
   taskStates: Record<string, TaskExecutionState>;
 
   // Basic state accessors
-  getTaskState: (taskId: string, task?: Task) => TaskExecutionState;
+  getTaskState: (taskId: string) => TaskExecutionState;
   updateTaskState: (
     taskId: string,
     updates: Partial<TaskExecutionState>,
@@ -143,11 +164,15 @@ interface TaskExecutionStore {
   addQuestionAnswer: (taskId: string, answer: QuestionAnswer) => void;
   setPlanContent: (taskId: string, content: string | null) => void;
 
+  // Todos actions
+  setTodos: (taskId: string, todos: TodoList | null) => void;
+
   // Auto-initialization and artifact processing
   initializeRepoPath: (taskId: string, task: Task) => void;
   revalidateRepo: (taskId: string) => Promise<void>;
   processLogsForArtifacts: (taskId: string) => void;
   checkPlanCompletion: (taskId: string) => Promise<void>;
+  checkTodosUpdate: (taskId: string) => Promise<void>;
 }
 
 const defaultTaskState: TaskExecutionState = {
@@ -165,6 +190,7 @@ const defaultTaskState: TaskExecutionState = {
   clarifyingQuestions: [],
   questionAnswers: [],
   planContent: null,
+  todos: null,
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -172,11 +198,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
     (set, get) => ({
       taskStates: {},
 
-      getTaskState: (taskId: string, task?: Task) => {
+      getTaskState: (taskId: string) => {
         const state = get();
-        if (task) {
-          state.initializeRepoPath(taskId, task);
-        }
+        // Note: initializeRepoPath should be called separately, not in a selector
+        // to avoid side effects during render
         return {
           ...defaultTaskState,
           ...state.taskStates[taskId],
@@ -213,7 +238,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       },
 
       setLogs: (taskId: string, logs: AgentEvent[]) => {
-        get().updateTaskState(taskId, { logs });
+        const store = get();
+        store.updateTaskState(taskId, { logs });
+        // Process logs for artifacts after setting
+        store.processLogsForArtifacts(taskId);
       },
 
       setRepoPath: (taskId: string, repoPath: string | null) => {
@@ -378,13 +406,11 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const executionType: ExecutionType = currentTaskState.runMode;
         const executionMode: AnalyticsExecutionMode =
           currentTaskState.executionMode;
-        const hasRepository = !!task.repository_config;
 
         track(ANALYTICS_EVENTS.TASK_RUN, {
           task_id: taskId,
           execution_type: executionType,
           execution_mode: executionMode,
-          has_repository: hasRepository,
         });
 
         // Handle cloud mode - run task via API
@@ -588,6 +614,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         get().updateTaskState(taskId, { planContent: content });
       },
 
+      setTodos: (taskId: string, todos: TodoList | null) => {
+        get().updateTaskState(taskId, { todos });
+      },
+
       // Auto-initialization and artifact processing
       initializeRepoPath: (taskId: string, task: Task) => {
         const store = get();
@@ -635,22 +665,32 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const store = get();
         const taskState = store.getTaskState(taskId);
 
-        if (taskState.clarifyingQuestions.length > 0) return;
+        // Look for research_questions artifact
+        if (taskState.clarifyingQuestions.length === 0) {
+          const researchArtifact = taskState.logs.find(
+            (log): log is AgentEvent & ArtifactEvent =>
+              isArtifactEvent(log) &&
+              (log as ArtifactEvent).kind === "research_questions",
+          );
 
-        // Look specifically for research_questions artifact
-        const artifactEvent = taskState.logs.find(
-          (log): log is AgentEvent & ArtifactEvent =>
-            isArtifactEvent(log) &&
-            (log as ArtifactEvent).kind === "research_questions",
+          if (researchArtifact) {
+            const event = researchArtifact as ArtifactEvent;
+            if (event.content) {
+              const questions = toClarifyingQuestions(event.content);
+              store.setClarifyingQuestions(taskId, questions);
+              store.setPlanModePhase(taskId, "questions");
+            }
+          }
+        }
+
+        // Look for todos artifact
+        const todosArtifact = taskState.logs.findLast(
+          (log): log is AgentEvent & { kind: string; content: TodoList } =>
+            isArtifactEvent(log) && (log as any).kind === "todos",
         );
 
-        if (!artifactEvent) return;
-
-        const event = artifactEvent as ArtifactEvent;
-        if (event.content) {
-          const questions = toClarifyingQuestions(event.content);
-          store.setClarifyingQuestions(taskId, questions);
-          store.setPlanModePhase(taskId, "questions");
+        if (todosArtifact) {
+          store.setTodos(taskId, (todosArtifact as any).content);
         }
       },
 
@@ -674,9 +714,35 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           if (content) {
             store.setPlanContent(taskId, content);
             store.setPlanModePhase(taskId, "review");
+
+            // Auto-open plan.md as an artifact tab
+            useTaskPanelLayoutStore.getState().openArtifact(taskId, "plan.md");
           }
         } catch (error) {
           console.error("Failed to load plan:", error);
+        }
+      },
+
+      checkTodosUpdate: async (taskId: string) => {
+        const store = get();
+        const taskState = store.getTaskState(taskId);
+
+        if (!taskState.repoPath) {
+          return;
+        }
+
+        try {
+          const content = await window.electronAPI?.readTaskArtifact(
+            taskState.repoPath,
+            taskId,
+            "todos.json",
+          );
+          if (content) {
+            const todos = JSON.parse(content) as TodoList;
+            store.setTodos(taskId, todos);
+          }
+        } catch (error) {
+          console.error("Failed to load todos:", error);
         }
       },
     }),

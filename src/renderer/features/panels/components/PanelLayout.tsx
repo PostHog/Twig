@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import { mergeTreeContent } from "../store/panelTree";
 import type { PanelNode } from "../store/panelStore";
 import { usePanelStore } from "../store/panelStore";
 import { Panel } from "./Panel";
@@ -33,6 +34,7 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   };
 
   const renderNode = (currentNode: PanelNode): React.ReactNode => {
+
     if (currentNode.type === "leaf") {
       const activeTabId =
         activeTabs[currentNode.id] || currentNode.content.activeTabId;
@@ -84,7 +86,6 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
     return null;
   };
 
-  // Sync store changes to library when sizes change from operations like split/cleanup
   useEffect(() => {
     const syncSizesToLibrary = (currentNode: PanelNode) => {
       if (currentNode.type === "group" && currentNode.sizes) {
@@ -117,18 +118,38 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   return <>{renderNode(node)}</>;
 };
 
+
 export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
   const compiledNode = useMemo(() => compilePanelTree(tree), [tree]);
-  const setRoot = usePanelStore((state) => state.setRoot);
   const root = usePanelStore((state) => state.root);
-
-  useEffect(() => {
-    // Only initialize if root is null (store not yet initialized)
-    // Once initialized, store is the source of truth
-    if (root === null) {
-      setRoot(compiledNode);
+  const compiledRef = useRef(compiledNode);
+  const isUpdatingRef = useRef(false);
+  
+  // Track if compiled node changed
+  const nodeChanged = compiledRef.current !== compiledNode;
+  if (nodeChanged) {
+    compiledRef.current = compiledNode;
+  }
+  
+  // Initialize or update store synchronously during render
+  if (nodeChanged && !isUpdatingRef.current) {
+    isUpdatingRef.current = true;
+    
+    const currentRoot = usePanelStore.getState().root;
+    if (currentRoot === null) {
+      // First time - initialize
+      usePanelStore.getState().setRoot(compiledNode);
+    } else {
+      // Update components while preserving layout
+      const merged = mergeTreeContent(currentRoot, compiledNode);
+      usePanelStore.getState().setRoot(merged);
     }
-  }, [compiledNode, setRoot, root]);
+    
+    // Reset flag after render completes
+    Promise.resolve().then(() => {
+      isUpdatingRef.current = false;
+    });
+  }
 
   return root ? <PanelLayoutRenderer node={root} /> : null;
 };

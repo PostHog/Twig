@@ -1,6 +1,7 @@
-import { Box, TextArea } from "@radix-ui/themes";
+import { RichTextEditor } from "@features/editor/components/RichTextEditor";
+import { Box, Button, Flex, TextArea } from "@radix-ui/themes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface PlanEditorProps {
   taskId: string;
@@ -18,7 +19,10 @@ export function PlanEditor({
   onSave,
 }: PlanEditorProps) {
   const [content, setContent] = useState(initialContent || "");
-  const saveTimeoutRef = useRef<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const isMarkdownFile = fileName.endsWith(".md");
 
   const queryClient = useQueryClient();
   const { data: fetchedContent } = useQuery({
@@ -41,7 +45,6 @@ export function PlanEditor({
     },
   });
 
-  // Seed editor once with fetched content if no initial content was provided
   useEffect(() => {
     if (!initialContent && fetchedContent && content === "") {
       setContent(fetchedContent);
@@ -52,6 +55,7 @@ export function PlanEditor({
     async (contentToSave: string) => {
       if (!repoPath || !taskId) return;
 
+      setIsSaving(true);
       try {
         if (fileName === "plan.md") {
           await window.electronAPI?.writePlanFile(
@@ -59,56 +63,89 @@ export function PlanEditor({
             taskId,
             contentToSave,
           );
-        } else {
-          console.warn(
-            `Saving ${fileName} - generic artifact writing not yet implemented`,
-          );
         }
         onSave?.(contentToSave);
         queryClient.setQueryData(
           ["task-file", repoPath, taskId, fileName],
           contentToSave,
         );
+        setHasUnsavedChanges(false);
       } catch (error) {
         console.error("Failed to save file:", error);
+      } finally {
+        setIsSaving(false);
       }
     },
     [repoPath, taskId, fileName, onSave, queryClient],
   );
 
-  // Auto-save with debounce
+  const handleManualSave = useCallback(() => {
+    handleSave(content);
+  }, [content, handleSave]);
+
+  // Track unsaved changes
   useEffect(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    if (content !== fetchedContent) {
+      setHasUnsavedChanges(true);
+    } else {
+      setHasUnsavedChanges(false);
     }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      if (content !== fetchedContent) {
-        handleSave(content);
-      }
-    }, 500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [content, fetchedContent, handleSave]);
+  }, [content, fetchedContent]);
 
   return (
-    <Box
+    <Flex
+      direction="column"
       height="100%"
       style={{
-        display: "flex",
         overflow: "hidden",
       }}
     >
-      <TextArea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Your implementation plan will appear here..."
-        className="min-h-full flex-1 resize-none rounded-none border-none bg-transparent font-mono text-sm shadow-none outline-none"
-      />
-    </Box>
+      {/* Save Button Bar */}
+      <Flex
+        p="2"
+        gap="2"
+        align="center"
+        justify="end"
+        style={{
+          borderBottom: "1px solid var(--gray-6)",
+          backgroundColor: "var(--gray-2)",
+        }}
+      >
+        <Button
+          size="1"
+          onClick={handleManualSave}
+          disabled={isSaving || !hasUnsavedChanges}
+          variant="soft"
+        >
+          {isSaving ? "Saving..." : hasUnsavedChanges ? "Save" : "Saved"}
+        </Button>
+      </Flex>
+
+      {/* Editor */}
+      <Box
+        flexGrow="1"
+        style={{
+          overflow: "hidden",
+        }}
+      >
+        {isMarkdownFile ? (
+          <RichTextEditor
+            value={content}
+            onChange={setContent}
+            repoPath={repoPath}
+            placeholder="Your implementation plan will appear here..."
+            showToolbar={true}
+            minHeight="100%"
+          />
+        ) : (
+          <TextArea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="File content will appear here..."
+            className="min-h-full flex-1 resize-none rounded-none border-none bg-transparent font-mono text-sm shadow-none outline-none"
+          />
+        )}
+      </Box>
+    </Flex>
   );
 }

@@ -9,13 +9,14 @@ import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useSidebarStore } from "@stores/sidebarStore";
-import { useTabStore } from "@stores/tabStore";
 import type React from "react";
 import { useState } from "react";
 
 export const SidebarContent: React.FC = () => {
-  const { tabs, createTab, setActiveTab, activeTabId } = useTabStore();
+  const { view, navigateToTaskList, navigateToTask, navigateToSettings } =
+    useNavigationStore();
   const expandedNodesArray = useSidebarStore((state) => state.expandedNodes);
   const { toggleNode, expandAll, collapseAll } = useSidebarStore();
   const { setCliMode } = useLayoutStore();
@@ -26,41 +27,22 @@ export const SidebarContent: React.FC = () => {
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
 
   const expandedNodes = new Set(expandedNodesArray);
-  const activeTab = tabs.find((tab) => tab.id === activeTabId);
   const userName = currentUser?.first_name || currentUser?.email || "Account";
 
-  const handleNavigate = (type: "task-list" | "settings", title: string) => {
-    const existingTab = tabs.find((tab) => tab.type === type);
-    if (existingTab) {
-      setActiveTab(existingTab.id);
+  const handleNavigate = (type: "task-list" | "settings", _title: string) => {
+    if (type === "task-list") {
+      navigateToTaskList();
     } else {
-      createTab({ type, title });
+      navigateToSettings();
     }
   };
 
   const handleTaskClick = (task: Task) => {
-    const existingTab = tabs.find(
-      (tab) =>
-        tab.type === "task-detail" &&
-        tab.data &&
-        typeof tab.data === "object" &&
-        "id" in tab.data &&
-        tab.data.id === task.id,
-    );
-
-    if (existingTab) {
-      setActiveTab(existingTab.id);
-    } else {
-      createTab({
-        type: "task-detail",
-        title: task.title,
-        data: task,
-      });
-    }
+    navigateToTask(task);
   };
 
   const handleCreateTask = () => {
-    handleNavigate("task-list", "Tasks");
+    navigateToTaskList();
     setCliMode("task");
   };
 
@@ -73,7 +55,7 @@ export const SidebarContent: React.FC = () => {
 
   const menuData = useSidebarMenuData({
     userName,
-    activeTab,
+    activeView: view,
     isLoading,
     activeFilters,
     currentUser,

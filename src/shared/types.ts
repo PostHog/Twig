@@ -54,13 +54,6 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
-export interface TabState {
-  id: string;
-  type: "task-list" | "task-detail" | "backlog" | "settings";
-  title: string;
-  data?: Task | unknown;
-}
-
 // URL mention types for RichTextEditor
 type MentionType =
   | "file"

@@ -43,9 +43,9 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
           align="center"
           className="flex-shrink-0 overflow-hidden border-b"
           style={{
-            backgroundColor: "var(--gray-2)",
             borderColor: "var(--gray-6)",
-            minHeight: "28px",
+            minHeight: "40px",
+            height: "40px",
           }}
         >
           {content.tabs.map((tab, index) => (

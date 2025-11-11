@@ -1,7 +1,9 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
-import { PlanView } from "@features/editor/components/PlanView";
+import { LogView } from "@features/logs/components/LogView";
+import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
 
@@ -15,7 +17,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = taskData.repoPath;
 
   const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId, task),
+    state.getTaskState(taskId),
   );
 
   const onAnswersComplete = useCallback(
@@ -44,29 +46,33 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     useTaskExecutionStore.getState().clearTaskLogs(taskId);
   }, [taskId]);
 
-  const onSavePlan = useCallback(
-    (content: string) => {
-      useTaskExecutionStore.getState().setPlanContent(taskId, content);
-    },
-    [taskId],
-  );
+  // Show interactive questions when in questions phase
+  if (
+    taskState.planModePhase === "questions" &&
+    taskState.clarifyingQuestions.length > 0
+  ) {
+    return (
+      <BackgroundWrapper>
+        <Box height="100%" width="100%">
+          <InteractiveTerminal
+            questions={taskState.clarifyingQuestions}
+            answers={taskState.questionAnswers}
+            onAnswersComplete={onAnswersComplete}
+          />
+        </Box>
+      </BackgroundWrapper>
+    );
+  }
 
   return (
     <BackgroundWrapper>
-      <PlanView
-        task={task}
-        repoPath={repoPath}
-        phase={taskState.planModePhase as any}
-        questions={taskState.clarifyingQuestions}
-        answers={taskState.questionAnswers}
-        logs={taskState.logs}
-        isRunning={taskState.isRunning}
-        planContent={taskState.planContent}
-        selectedArtifact={null}
-        onAnswersComplete={onAnswersComplete}
-        onClearLogs={onClearLogs}
-        onSavePlan={onSavePlan}
-      />
+      <Box height="100%" width="100%">
+        <LogView
+          logs={taskState.logs}
+          isRunning={taskState.isRunning}
+          onClearLogs={onClearLogs}
+        />
+      </Box>
     </BackgroundWrapper>
   );
 }

@@ -1,5 +1,5 @@
 import { useSortable } from "@dnd-kit/react/sortable";
-import { XIcon } from "@phosphor-icons/react";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import type React from "react";
 
@@ -35,22 +35,37 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       ref={ref}
       align="center"
       gap="2"
-      pl="3"
-      pr={onClose ? "1" : "3"}
-      py="1"
-      className="group cursor-grab select-none border-r transition-all duration-100 ease-in-out"
+      px="4"
+      className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
-        backgroundColor: isActive ? "var(--gray-4)" : "var(--gray-3)",
-        borderColor: "var(--gray-6)",
+        backgroundColor: isActive ? "var(--accent-3)" : "transparent",
+        borderRightColor: "var(--gray-6)",
+        borderBottomColor: isActive ? "var(--accent-8)" : "transparent",
+        color: isActive ? "var(--accent-12)" : "var(--gray-11)",
         opacity: isDragging ? 0.5 : 1,
-        minHeight: "28px",
+        minHeight: "40px",
       }}
       onClick={onSelect}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = "var(--gray-3)";
+          e.currentTarget.style.color = "var(--gray-12)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = "transparent";
+          e.currentTarget.style.color = "var(--gray-11)";
+        }
+      }}
     >
       {icon && (
         <Box style={{ display: "flex", alignItems: "center" }}>{icon}</Box>
       )}
-      <Text size="1" weight="medium">
+      <Text
+        size="1"
+        className="max-w-[200px] select-none overflow-hidden text-ellipsis whitespace-nowrap"
+      >
         {label}
       </Text>
 
@@ -58,14 +73,14 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
         <IconButton
           size="1"
           variant="ghost"
-          color="gray"
-          className="-m-1 cursor-pointer p-2 opacity-0 transition-opacity group-hover:opacity-100"
+          color={isActive ? undefined : "gray"}
+          className="opacity-0 transition-opacity group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
         >
-          <XIcon weight="bold" size={10} />
+          <Cross2Icon />
         </IconButton>
       )}
     </Flex>

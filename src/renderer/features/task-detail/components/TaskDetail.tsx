@@ -4,17 +4,27 @@ import {
   PanelLeaf,
   PanelTab,
 } from "@features/panels";
+import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
 import { TaskDetailPanel } from "@features/task-detail/components/TaskDetailPanel";
 import { TaskLogsPanel } from "@features/task-detail/components/TaskLogsPanel";
 import { TaskShellPanel } from "@features/task-detail/components/TaskShellPanel";
+import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { ListIcon, NotePencilIcon, TerminalIcon } from "@phosphor-icons/react";
+import {
+  CheckSquareIcon,
+  FolderIcon,
+  InfoIcon,
+  ListIcon,
+  NotePencilIcon,
+  StackIcon,
+  TerminalIcon,
+} from "@phosphor-icons/react";
 import { Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
@@ -82,67 +92,106 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   return (
     <Flex direction="column" height="100%">
       <PanelLayout
+        key={taskId}
         tree={
           <PanelGroupTree direction="horizontal" sizes={[75, 25]}>
-            <PanelGroupTree direction="vertical" sizes={[70, 30]}>
-              <PanelLeaf>
+            <PanelLeaf>
+              <PanelTab
+                id="logs"
+                label="Logs"
+                icon={
+                  <ListIcon size={12} weight="bold" color="var(--gray-11)" />
+                }
+                onSelect={() => handleTabSelect("logs")}
+              >
+                <TaskLogsPanel taskId={taskId} task={task} />
+              </PanelTab>
+              <PanelTab
+                id="shell"
+                label="Shell"
+                icon={
+                  <TerminalIcon
+                    size={12}
+                    weight="bold"
+                    color="var(--gray-11)"
+                  />
+                }
+              >
+                <TaskShellPanel taskId={taskId} task={task} />
+              </PanelTab>
+              {openArtifacts.map((fileName) => (
                 <PanelTab
-                  id="logs"
-                  label="Logs"
+                  key={fileName}
+                  id={`artifact-${fileName}`}
+                  label={fileName}
                   icon={
-                    <ListIcon size={12} weight="bold" color="var(--gray-11)" />
-                  }
-                  onSelect={() => handleTabSelect("logs")}
-                >
-                  <TaskLogsPanel taskId={taskId} task={task} />
-                </PanelTab>
-                {openArtifacts.map((fileName) => (
-                  <PanelTab
-                    key={fileName}
-                    id={`artifact-${fileName}`}
-                    label={fileName}
-                    icon={
-                      <NotePencilIcon
-                        size={12}
-                        weight="bold"
-                        color="var(--gray-11)"
-                      />
-                    }
-                    closeable
-                    onClose={() => handleCloseArtifact(fileName)}
-                    onSelect={() => handleTabSelect(`artifact-${fileName}`)}
-                  >
-                    <TaskArtifactEditorPanel
-                      taskId={taskId}
-                      task={task}
-                      fileName={fileName}
+                    <NotePencilIcon
+                      size={12}
+                      weight="bold"
+                      color="var(--gray-11)"
                     />
-                  </PanelTab>
-                ))}
-              </PanelLeaf>
-              <PanelLeaf>
+                  }
+                  closeable
+                  onClose={() => handleCloseArtifact(fileName)}
+                  onSelect={() => handleTabSelect(`artifact-${fileName}`)}
+                >
+                  <TaskArtifactEditorPanel
+                    taskId={taskId}
+                    task={task}
+                    fileName={fileName}
+                  />
+                </PanelTab>
+              ))}
+            </PanelLeaf>
+
+            <PanelGroupTree direction="vertical" sizes={[50, 50]}>
+              <PanelLeaf droppable={false}>
                 <PanelTab
-                  id="shell"
-                  label="Shell"
+                  id="task-detail"
+                  label="Details"
                   icon={
-                    <TerminalIcon
+                    <InfoIcon size={12} weight="bold" color="var(--gray-11)" />
+                  }
+                >
+                  <TaskDetailPanel taskId={taskId} task={task} />
+                </PanelTab>
+                <PanelTab
+                  id="todo-list"
+                  label="Todo list"
+                  icon={
+                    <CheckSquareIcon
                       size={12}
                       weight="bold"
                       color="var(--gray-11)"
                     />
                   }
                 >
-                  <TaskShellPanel taskId={taskId} task={task} />
+                  <TodoListPanel taskId={taskId} />
                 </PanelTab>
               </PanelLeaf>
-            </PanelGroupTree>
-
-            <PanelGroupTree direction="vertical" sizes={[50, 50]}>
-              <PanelLeaf showTabs={false} droppable={false}>
-                <TaskDetailPanel taskId={taskId} task={task} />
-              </PanelLeaf>
-              <PanelLeaf showTabs={false} droppable={false}>
-                <TaskArtifactsPanel taskId={taskId} task={task} />
+              <PanelLeaf droppable={false}>
+                <PanelTab
+                  id="file-tree"
+                  label="Files"
+                  icon={
+                    <FolderIcon
+                      size={12}
+                      weight="bold"
+                      color="var(--gray-11)"
+                    />
+                  }
+                >
+                  <FileTreePanel taskId={taskId} task={task} />
+                </PanelTab>
+                <PanelTab
+                  id="artifacts"
+                  label="Artifacts"
+                  icon={
+                    <StackIcon size={12} weight="bold" color="var(--gray-11)" />
+                  }
+                >
+                  <TaskArtifactsPanel taskId={taskId} task={task} />
+                </PanelTab>
               </PanelLeaf>
             </PanelGroupTree>
           </PanelGroupTree>

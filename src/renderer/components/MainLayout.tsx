@@ -1,6 +1,6 @@
 import { MainSidebar } from "@components/MainSidebar";
+import { TopBar } from "@components/ui/topnav/TopBar";
 import { StatusBar } from "@components/StatusBar";
-import { TabBar } from "@components/TabBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { SettingsView } from "@features/settings/components/SettingsView";
@@ -8,52 +8,28 @@ import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskList } from "@features/task-list/components/TaskList";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
-import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
-import { useTabStore } from "@stores/tabStore";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 export function MainLayout() {
-  const { activeTabId, tabs, createTab, setActiveTab, closeTab } =
-    useTabStore();
   const { setCliMode } = useLayoutStore();
+  const { view, toggleSettings, navigateToTaskList, navigateToTask, goBack, goForward } =
+    useNavigationStore();
   useIntegrations();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
 
   const handleOpenSettings = useCallback(() => {
-    const existingTab = tabs.find((tab) => tab.type === "settings");
-
-    if (existingTab) {
-      if (activeTabId === existingTab.id) {
-        closeTab(existingTab.id);
-      } else {
-        setActiveTab(existingTab.id);
-      }
-    } else {
-      createTab({
-        type: "settings",
-        title: "Settings",
-      });
-    }
-  }, [tabs, activeTabId, setActiveTab, createTab, closeTab]);
+    toggleSettings();
+  }, [toggleSettings]);
 
   const handleFocusTaskMode = useCallback(() => {
-    // Find the Tasks tab or use the first task-list tab
-    const tasksTab = tabs.find((tab) => tab.type === "task-list");
-
-    if (tasksTab) {
-      setActiveTab(tasksTab.id);
-    }
-
-    // Switch to task mode
+    navigateToTaskList();
     setCliMode("task");
-
-    // Note: The auto-focus effect in CliTaskPanel will handle focusing the editor
-  }, [tabs, setActiveTab, setCliMode]);
+  }, [setCliMode, navigateToTaskList]);
 
   useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
     enabled: !commandMenuOpen,
@@ -66,6 +42,8 @@ export function MainLayout() {
   });
   useHotkeys("mod+n", () => handleFocusTaskMode());
   useHotkeys("mod+,", () => handleOpenSettings());
+  useHotkeys("mod+[", () => goBack());
+  useHotkeys("mod+]", () => goForward());
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onOpenSettings(() => {
@@ -78,51 +56,25 @@ export function MainLayout() {
   }, [handleOpenSettings]);
 
   const handleSelectTask = (task: Task) => {
-    const existingTab = tabs.find(
-      (tab) =>
-        tab.type === "task-detail" &&
-        tab.data &&
-        typeof tab.data === "object" &&
-        "id" in tab.data &&
-        tab.data.id === task.id,
-    );
-
-    if (existingTab) {
-      setActiveTab(existingTab.id);
-    } else {
-      createTab({
-        type: "task-detail",
-        title: task.title,
-        data: task,
-      });
-
-      // Track task view
-      track(ANALYTICS_EVENTS.TASK_VIEWED, {
-        task_id: task.id,
-        has_repository: !!task.repository_config,
-      });
-    }
+    navigateToTask(task);
   };
-
-  const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
   return (
     <Flex direction="column" height="100vh">
-      <TabBar onOpenCommandMenu={() => setCommandMenuOpen(true)} />
-
+      <TopBar onSearchClick={() => setCommandMenuOpen(true)} />
       <Flex flexGrow="1" overflow="hidden">
         <MainSidebar />
 
         <Box flexGrow="1" overflow="hidden">
-          {activeTab?.type === "task-list" && (
+          {view.type === "task-list" && (
             <TaskList onSelectTask={handleSelectTask} />
           )}
 
-          {activeTab?.type === "task-detail" && activeTab.data ? (
-            <TaskDetail task={activeTab.data as Task} />
-          ) : null}
+          {view.type === "task-detail" && view.data && (
+            <TaskDetail key={view.data.id} task={view.data} />
+          )}
 
-          {activeTab?.type === "settings" && <SettingsView />}
+          {view.type === "settings" && <SettingsView />}
         </Box>
       </Flex>
 

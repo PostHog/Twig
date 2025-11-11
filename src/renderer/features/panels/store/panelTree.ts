@@ -127,5 +127,97 @@ export const cleanupNode = (node: PanelNode): PanelNode | null => {
   };
 };
 
+/**
+ * Merges new tree content (components) with existing tree layout (structure, sizes, active tabs).
+ * This allows updating component props while preserving user layout modifications.
+ * Returns the same reference if no changes were made to prevent unnecessary re-renders.
+ */
+export const mergeTreeContent = (
+  existingTree: PanelNode,
+  newTree: PanelNode,
+): PanelNode => {
+  // If types don't match, prefer the existing layout structure
+  if (existingTree.type !== newTree.type) {
+    return existingTree;
+  }
+
+  if (isLeafNode(existingTree) && isLeafNode(newTree)) {
+    // Create a map of new tabs by ID for quick lookup
+    const newTabsMap = new Map(newTree.content.tabs.map((tab) => [tab.id, tab]));
+    const existingTabIds = new Set(existingTree.content.tabs.map((t) => t.id));
+
+    // Update existing tabs with new components if they exist in new tree
+    const updatedTabs = existingTree.content.tabs
+      .map((existingTab) => {
+        const newTab = newTabsMap.get(existingTab.id);
+        if (newTab) {
+          // Always update component and callbacks (they contain new task data)
+          return {
+            ...existingTab,
+            component: newTab.component,
+            onClose: newTab.onClose,
+            onSelect: newTab.onSelect,
+            label: newTab.label,
+            icon: newTab.icon,
+          };
+        }
+        return existingTab;
+      })
+      .filter((tab) => newTabsMap.has(tab.id)); // Remove tabs not in new tree
+
+    // Add new tabs that don't exist in existing tree
+    const newTabsToAdd = newTree.content.tabs.filter(
+      (tab) => !existingTabIds.has(tab.id),
+    );
+
+    const finalTabs = [...updatedTabs, ...newTabsToAdd];
+
+    // Preserve the active tab if it still exists, otherwise use first tab
+    const activeTabId = finalTabs.some ((t) => t.id === existingTree.content.activeTabId)
+      ? existingTree.content.activeTabId
+      : finalTabs[0]?.id || "";
+
+    // Always return a new node because React components need to update
+    // (components contain new task data even if tab structure is the same)
+    return {
+      ...existingTree,
+      content: {
+        ...existingTree.content,
+        tabs: finalTabs,
+        activeTabId,
+      },
+    };
+  }
+
+  if (isGroupNode(existingTree) && isGroupNode(newTree)) {
+    // Recursively merge children
+    // Match children by index (assumes same structure)
+    const mergedChildren = existingTree.children.map((existingChild, index) => {
+      const newChild = newTree.children[index];
+      if (newChild) {
+        return mergeTreeContent(existingChild, newChild);
+      }
+      return existingChild;
+    });
+
+    // Check if any children actually changed
+    const childrenChanged = mergedChildren.some(
+      (child, index) => child !== existingTree.children[index],
+    );
+
+    if (!childrenChanged) {
+      return existingTree;
+    }
+
+    return {
+      ...existingTree,
+      children: mergedChildren,
+      // Preserve existing sizes and direction
+    };
+  }
+
+  return existingTree;
+};
+
 export const isLeaf = isLeafNode;
 export const isGroup = isGroupNode;

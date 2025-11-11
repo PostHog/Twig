@@ -14,7 +14,6 @@ export interface TaskListViewProperties {
 }
 
 export interface TaskCreateProperties {
-  has_repository: boolean;
   auto_run: boolean;
   created_from: TaskCreatedFrom;
   repository_provider?: RepositoryProvider;
@@ -22,14 +21,12 @@ export interface TaskCreateProperties {
 
 export interface TaskViewProperties {
   task_id: string;
-  has_repository: boolean;
 }
 
 export interface TaskRunProperties {
   task_id: string;
   execution_type: ExecutionType;
   execution_mode: ExecutionMode;
-  has_repository: boolean;
 }
 
 export interface RepositorySelectProperties {

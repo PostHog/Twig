@@ -13,16 +13,21 @@ import {
   PlusIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
-import type { TabState, Task } from "@shared/types";
+import type { Task } from "@shared/types";
 
 interface TaskView {
   label: string;
   filters: ActiveFilters;
 }
 
+interface ViewState {
+  type: "task-list" | "task-detail" | "settings";
+  data?: Task;
+}
+
 interface UseSidebarMenuDataProps {
   userName: string;
-  activeTab: TabState | undefined;
+  activeView: ViewState;
   isLoading: boolean;
   activeFilters: ActiveFilters;
   currentUser: Schemas.User | undefined;
@@ -58,7 +63,7 @@ function getStatusIcon(status?: string) {
 
 export function useSidebarMenuData({
   userName,
-  activeTab,
+  activeView,
   isLoading,
   activeFilters,
   currentUser,
@@ -116,7 +121,7 @@ export function useSidebarMenuData({
     children: [
       ...views.map((view): TreeNode => {
         const isActive =
-          activeTab?.type === "task-list" &&
+          activeView.type === "task-list" &&
           filtersMatch(activeFilters, view.filters);
         return {
           label: view.label,
@@ -137,12 +142,12 @@ export function useSidebarMenuData({
         icon: (
           <GearIcon
             size={12}
-            weight={activeTab?.type === "settings" ? "fill" : "regular"}
+            weight={activeView.type === "settings" ? "fill" : "regular"}
           />
         ),
         forceSeparator: true,
         action: () => onNavigate("settings", "Settings"),
-        isActive: activeTab?.type === "settings",
+        isActive: activeView.type === "settings",
       },
       ...(relevantTasks.length > 0
         ? [
@@ -153,11 +158,9 @@ export function useSidebarMenuData({
                 const status = task.latest_run?.status || "pending";
                 const statusLabel = status.replace("_", " ");
                 const isActiveTask = !!(
-                  activeTab?.type === "task-detail" &&
-                  activeTab.data &&
-                  typeof activeTab.data === "object" &&
-                  "id" in activeTab.data &&
-                  activeTab.data.id === task.id
+                  activeView.type === "task-detail" &&
+                  activeView.data &&
+                  activeView.data.id === task.id
                 );
                 return {
                   label: task.title,
