@@ -1,7 +1,7 @@
 import { RichTextEditor } from "@features/editor/components/RichTextEditor";
 import { Box, Button, Flex, TextArea } from "@radix-ui/themes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface PlanEditorProps {
   taskId: string;
@@ -21,7 +21,6 @@ export function PlanEditor({
   const [content, setContent] = useState(initialContent || "");
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const saveTimeoutRef = useRef<number | null>(null);
 
   const isMarkdownFile = fileName.endsWith(".md");
 
@@ -46,7 +45,6 @@ export function PlanEditor({
     },
   });
 
-  // Seed editor once with fetched content if no initial content was provided
   useEffect(() => {
     if (!initialContent && fetchedContent && content === "") {
       setContent(fetchedContent);
@@ -64,10 +62,6 @@ export function PlanEditor({
             repoPath,
             taskId,
             contentToSave,
-          );
-        } else {
-          console.warn(
-            `Saving ${fileName} - generic artifact writing not yet implemented`,
           );
         }
         onSave?.(contentToSave);
@@ -97,25 +91,6 @@ export function PlanEditor({
       setHasUnsavedChanges(false);
     }
   }, [content, fetchedContent]);
-
-  // Auto-save with debounce
-  useEffect(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      if (content !== fetchedContent) {
-        handleSave(content);
-      }
-    }, 500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [content, fetchedContent, handleSave]);
 
   return (
     <Flex

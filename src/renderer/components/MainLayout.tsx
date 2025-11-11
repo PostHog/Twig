@@ -8,14 +8,12 @@ import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskList } from "@features/task-list/components/TaskList";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
-import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 export function MainLayout() {
   const { setCliMode } = useLayoutStore();
@@ -59,12 +57,6 @@ export function MainLayout() {
 
   const handleSelectTask = (task: Task) => {
     navigateToTask(task);
-
-    // Track task view
-    track(ANALYTICS_EVENTS.TASK_VIEWED, {
-      task_id: task.id,
-      has_repository: !!task.repository_config,
-    });
   };
 
   return (

@@ -87,6 +87,23 @@ async function validateRepositoryAccess(
   return true;
 }
 
+export interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm: string;
+}
+
+export interface TodoList {
+  items: TodoItem[];
+  metadata: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    last_updated: string;
+  };
+}
+
 interface TaskExecutionState {
   isRunning: boolean;
   logs: AgentEvent[];
@@ -103,6 +120,8 @@ interface TaskExecutionState {
   clarifyingQuestions: ClarifyingQuestion[];
   questionAnswers: QuestionAnswer[];
   planContent: string | null;
+  // Todos
+  todos: TodoList | null;
 }
 
 interface TaskExecutionStore {
@@ -145,11 +164,15 @@ interface TaskExecutionStore {
   addQuestionAnswer: (taskId: string, answer: QuestionAnswer) => void;
   setPlanContent: (taskId: string, content: string | null) => void;
 
+  // Todos actions
+  setTodos: (taskId: string, todos: TodoList | null) => void;
+
   // Auto-initialization and artifact processing
   initializeRepoPath: (taskId: string, task: Task) => void;
   revalidateRepo: (taskId: string) => Promise<void>;
   processLogsForArtifacts: (taskId: string) => void;
   checkPlanCompletion: (taskId: string) => Promise<void>;
+  checkTodosUpdate: (taskId: string) => Promise<void>;
 }
 
 const defaultTaskState: TaskExecutionState = {
@@ -167,6 +190,7 @@ const defaultTaskState: TaskExecutionState = {
   clarifyingQuestions: [],
   questionAnswers: [],
   planContent: null,
+  todos: null,
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -214,7 +238,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       },
 
       setLogs: (taskId: string, logs: AgentEvent[]) => {
-        get().updateTaskState(taskId, { logs });
+        const store = get();
+        store.updateTaskState(taskId, { logs });
+        // Process logs for artifacts after setting
+        store.processLogsForArtifacts(taskId);
       },
 
       setRepoPath: (taskId: string, repoPath: string | null) => {
@@ -589,6 +616,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         get().updateTaskState(taskId, { planContent: content });
       },
 
+      setTodos: (taskId: string, todos: TodoList | null) => {
+        get().updateTaskState(taskId, { todos });
+      },
+
       // Auto-initialization and artifact processing
       initializeRepoPath: (taskId: string, task: Task) => {
         const store = get();
@@ -636,22 +667,32 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const store = get();
         const taskState = store.getTaskState(taskId);
 
-        if (taskState.clarifyingQuestions.length > 0) return;
+        // Look for research_questions artifact
+        if (taskState.clarifyingQuestions.length === 0) {
+          const researchArtifact = taskState.logs.find(
+            (log): log is AgentEvent & ArtifactEvent =>
+              isArtifactEvent(log) &&
+              (log as ArtifactEvent).kind === "research_questions",
+          );
 
-        // Look specifically for research_questions artifact
-        const artifactEvent = taskState.logs.find(
-          (log): log is AgentEvent & ArtifactEvent =>
-            isArtifactEvent(log) &&
-            (log as ArtifactEvent).kind === "research_questions",
+          if (researchArtifact) {
+            const event = researchArtifact as ArtifactEvent;
+            if (event.content) {
+              const questions = toClarifyingQuestions(event.content);
+              store.setClarifyingQuestions(taskId, questions);
+              store.setPlanModePhase(taskId, "questions");
+            }
+          }
+        }
+
+        // Look for todos artifact
+        const todosArtifact = taskState.logs.findLast(
+          (log): log is AgentEvent & { kind: string; content: TodoList } =>
+            isArtifactEvent(log) && (log as any).kind === "todos",
         );
 
-        if (!artifactEvent) return;
-
-        const event = artifactEvent as ArtifactEvent;
-        if (event.content) {
-          const questions = toClarifyingQuestions(event.content);
-          store.setClarifyingQuestions(taskId, questions);
-          store.setPlanModePhase(taskId, "questions");
+        if (todosArtifact) {
+          store.setTodos(taskId, (todosArtifact as any).content);
         }
       },
 
@@ -681,6 +722,29 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           }
         } catch (error) {
           console.error("Failed to load plan:", error);
+        }
+      },
+
+      checkTodosUpdate: async (taskId: string) => {
+        const store = get();
+        const taskState = store.getTaskState(taskId);
+
+        if (!taskState.repoPath) {
+          return;
+        }
+
+        try {
+          const content = await window.electronAPI?.readTaskArtifact(
+            taskState.repoPath,
+            taskId,
+            "todos.json",
+          );
+          if (content) {
+            const todos = JSON.parse(content) as TodoList;
+            store.setTodos(taskId, todos);
+          }
+        } catch (error) {
+          console.error("Failed to load todos:", error);
         }
       },
     }),

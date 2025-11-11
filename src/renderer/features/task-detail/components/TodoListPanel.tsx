@@ -1,35 +1,46 @@
-import { CheckIcon } from "@phosphor-icons/react";
 import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { useEffect } from "react";
 
 interface TodoListPanelProps {
   taskId: string;
   task: Task;
 }
 
-interface TodoItem {
-  id: string;
-  content: string;
-  status: "pending" | "in_progress" | "completed";
-}
-
-const DUMMY_TODOS: TodoItem[] = [
-  { id: "1", content: "Explore the project", status: "completed" },
-  { id: "2", content: "Find the relevant files and components", status: "in_progress" },
-  { id: "3", content: "Review existing patterns and constraints", status: "pending" },
-  { id: "4", content: "Create the plus button tab feature", status: "pending" },
-  { id: "5", content: "Add the plus button tab feature to the codebase", status: "pending" },
-  { id: "6", content: "Test the plus button tab feature", status: "pending" },
-  { id: "7", content: "Create a pull request for the plus button tab feature", status: "pending" },
-];
-
 export function TodoListPanel({ taskId, task }: TodoListPanelProps) {
+  const taskState = useTaskExecutionStore((state) =>
+    state.getTaskState(taskId, task),
+  );
+  const checkTodosUpdate = useTaskExecutionStore(
+    (state) => state.checkTodosUpdate,
+  );
+
+  // Load todos from file on mount and when task changes
+  useEffect(() => {
+    if (taskState.repoPath) {
+      checkTodosUpdate(taskId);
+    }
+  }, [taskId, taskState.repoPath, checkTodosUpdate]);
+
+  const todos = taskState.todos?.items || [];
+
+  if (todos.length === 0) {
+    return (
+      <Box height="100%" overflowY="auto" p="4">
+        <Text size="2" color="gray">
+          No todos yet
+        </Text>
+      </Box>
+    );
+  }
+
   return (
     <Box height="100%" overflowY="auto" p="4">
       <Flex direction="column" gap="3">
-        {DUMMY_TODOS.map((todo) => (
+        {todos.map((todo, index) => (
           <Flex
-            key={todo.id}
+            key={`${todo.content}-${index}`}
             align="center"
             gap="2"
             p="1"
@@ -42,8 +53,12 @@ export function TodoListPanel({ taskId, task }: TodoListPanelProps) {
             <Text
               size="1"
               style={{
-                textDecoration: todo.status === "completed" ? "line-through" : "none",
-                color: todo.status === "completed" ? "var(--gray-9)" : "var(--gray-12)",
+                textDecoration:
+                  todo.status === "completed" ? "line-through" : "none",
+                color:
+                  todo.status === "completed"
+                    ? "var(--gray-9)"
+                    : "var(--gray-12)",
               }}
             >
               {todo.content}

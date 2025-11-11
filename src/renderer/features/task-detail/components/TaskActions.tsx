@@ -6,10 +6,7 @@ interface TaskActionsProps {
   isRunning: boolean;
   isCloningRepo: boolean;
   runMode: "local" | "cloud";
-  repoExists: boolean | null;
-  hasRepositoryConfig: boolean;
   onRunTask: () => void;
-  onCloneRepository: () => void;
   onCancel: () => void;
   onRunModeChange: (mode: "local" | "cloud") => void;
 }
@@ -18,10 +15,7 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
   isRunning,
   isCloningRepo,
   runMode,
-  repoExists,
-  hasRepositoryConfig,
   onRunTask,
-  onCloneRepository,
   onCancel,
   onRunModeChange,
 }) => {

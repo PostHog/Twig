@@ -1,5 +1,7 @@
 import type { Task } from "@shared/types";
 import { create } from "zustand";
+import { track } from "@renderer/lib/analytics";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 type ViewType = "task-list" | "task-detail" | "settings";
 
@@ -55,6 +57,9 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
 
     navigateToTask: (task: Task) => {
       navigate({ type: "task-detail", data: task });
+      track(ANALYTICS_EVENTS.TASK_VIEWED, {
+        task_id: task.id,
+      });
     },
 
     navigateToSettings: () => {
