@@ -51,6 +51,7 @@ export interface IElectronAPI {
   cloneRepository: (
     repoUrl: string,
     targetPath: string,
+    cloneId: string,
   ) => Promise<{ cloneId: string }>;
   onCloneProgress: (
     cloneId: string,

@@ -74,14 +74,15 @@ async function validateRepositoryAccess(
     return false;
   }
 
-  // Check if it's a git repository (optional - just for informational purposes)
+  // Check if it's a valid git repository with actual content
   const isRepo = await window.electronAPI?.validateRepo(path);
   if (!isRepo) {
     addLog({
-      type: "token",
+      type: "error",
       ts: Date.now(),
-      content: `Note: Selected folder is not a git repository: ${path}`,
+      message: `Folder is not a valid git repository: ${path}`,
     });
+    return false;
   }
 
   return true;
@@ -484,7 +485,115 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           effectiveRepoPath,
           (log) => store.addLog(taskId, log),
         );
-        if (!isValid) {
+
+        if (!isValid && task.repository_config) {
+          const repoKey = getRepoKey(
+            task.repository_config.organization,
+            task.repository_config.repository,
+          );
+
+          store.addLog(taskId, {
+            type: "token",
+            ts: Date.now(),
+            content: `Repository not found at ${effectiveRepoPath}. Cloning ${repoKey}...`,
+          });
+
+          // Create clone state before selectRepository to avoid UI delay
+          const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          cloneStore
+            .getState()
+            .startClone(cloneId, task.repository_config, effectiveRepoPath);
+
+          const { repositoryWorkspaceStore } = await import(
+            "@stores/repositoryWorkspaceStore"
+          );
+
+          try {
+            await repositoryWorkspaceStore
+              .getState()
+              .selectRepository(task.repository_config, cloneId);
+
+            store.addLog(taskId, {
+              type: "token",
+              ts: Date.now(),
+              content: `Waiting for repository clone to complete...`,
+            });
+
+            const maxAttempts = 5;
+            let attempts = 0;
+            let repoCloned = false;
+            let lastProgressMessage = "";
+
+            while (attempts < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
+              // Check if clone operation completed
+              const { operations } = cloneStore.getState();
+              const cloneOp = Object.values(operations).find(
+                (op) =>
+                  getRepoKey(
+                    op.repository.organization,
+                    op.repository.repository,
+                  ) === repoKey,
+              );
+
+              if (cloneOp?.status === "complete") {
+                // Clone completed successfully
+                repoCloned = true;
+                break;
+              }
+
+              if (cloneOp?.status === "error") {
+                throw new Error(cloneOp.error || "Clone failed");
+              }
+
+              // Show progress updates every 5 seconds
+              if (cloneOp && attempts % 5 === 0 && cloneOp.latestMessage) {
+                const latestMessage = cloneOp.latestMessage;
+                if (latestMessage !== lastProgressMessage) {
+                  lastProgressMessage = latestMessage;
+                  store.addLog(taskId, {
+                    type: "token",
+                    ts: Date.now(),
+                    content: `Clone progress: ${latestMessage}`,
+                  });
+                }
+              }
+
+              // If no clone operation exists anymore, check if repo is valid
+              if (!cloneOp) {
+                const exists =
+                  await window.electronAPI?.validateRepo(effectiveRepoPath);
+                if (exists) {
+                  repoCloned = true;
+                  break;
+                }
+              }
+
+              attempts++;
+            }
+
+            if (!repoCloned) {
+              throw new Error("Repository clone timed out after 10 minutes");
+            }
+
+            store.addLog(taskId, {
+              type: "token",
+              ts: Date.now(),
+              content: `Repository cloned successfully! Starting task...`,
+            });
+
+            // Revalidate the repo
+            await store.revalidateRepo(taskId);
+          } catch (error) {
+            store.addLog(taskId, {
+              type: "error",
+              ts: Date.now(),
+              message: `Failed to clone repository: ${error instanceof Error ? error.message : "Unknown error"}. Please try running the task again after the clone completes.`,
+            });
+            return;
+          }
+        } else if (!isValid) {
           return;
         }
 

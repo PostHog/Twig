@@ -15,7 +15,9 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
   const { data: tasks = [] } = useTasks();
   const { defaultWorkspace } = useAuthStore();
   const getTaskState = useTaskExecutionStore((state) => state.getTaskState);
-  const initializeRepoPath = useTaskExecutionStore((state) => state.initializeRepoPath);
+  const initializeRepoPath = useTaskExecutionStore(
+    (state) => state.initializeRepoPath,
+  );
 
   const task = useMemo(
     () => tasks.find((t) => t.id === taskId) || initialTask,
@@ -50,12 +52,31 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
       : false,
   );
 
+  const cloneProgress = cloneStore(
+    (state) => {
+      if (!task.repository_config) return null;
+      const repoKey = `${task.repository_config.organization}/${task.repository_config.repository}`;
+      const cloneOp = state.getCloneForRepo(repoKey);
+      if (!cloneOp?.latestMessage) return null;
+
+      const percentMatch = cloneOp.latestMessage.match(/(\d+)%/);
+      const percent = percentMatch ? Number.parseInt(percentMatch[1], 10) : 0;
+
+      return {
+        message: cloneOp.latestMessage,
+        percent,
+      };
+    },
+    (a, b) => a?.message === b?.message && a?.percent === b?.percent,
+  );
+
   return {
     task,
     repoPath: taskState.repoPath,
     repoExists: taskState.repoExists,
     derivedPath,
     isCloning,
+    cloneProgress,
     defaultWorkspace,
   };
 }

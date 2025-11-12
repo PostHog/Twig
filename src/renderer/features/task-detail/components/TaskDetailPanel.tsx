@@ -99,6 +99,7 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
           <TaskActions
             isRunning={execution.state.isRunning}
             isCloningRepo={repository.isCloning}
+            cloneProgress={taskData.cloneProgress}
             runMode={execution.state.runMode}
             onRunTask={execution.actions.run}
             onCancel={execution.actions.cancel}

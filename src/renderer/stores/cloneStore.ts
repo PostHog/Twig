@@ -1,6 +1,5 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { RepositoryConfig } from "@shared/types";
-import { toast } from "@utils/toast";
 import { create } from "zustand";
 
 type CloneStatus = "cloning" | "complete" | "error";
@@ -10,9 +9,8 @@ interface CloneOperation {
   repository: RepositoryConfig;
   targetPath: string;
   status: CloneStatus;
-  messages: string[];
+  latestMessage?: string;
   error?: string;
-  toastId?: string | number;
   unsubscribe?: () => void;
 }
 
@@ -48,13 +46,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
     });
   };
 
-  const handleComplete = (
-    cloneId: string,
-    repoKey: string,
-    toastId: string | number,
-  ) => {
-    toast.success(`${repoKey} cloned successfully`, { id: toastId });
-
+  const handleComplete = (cloneId: string, _repoKey: string) => {
     const operation = get().operations[cloneId];
     if (operation) {
       updateTaskRepoExists(operation.targetPath, true);
@@ -66,17 +58,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
     );
   };
 
-  const handleError = (
-    cloneId: string,
-    repoKey: string,
-    message: string,
-    toastId: string | number,
-  ) => {
-    toast.error(`Failed to clone ${repoKey}`, {
-      id: toastId,
-      description: message,
-    });
-
+  const handleError = (cloneId: string, _repoKey: string, _message: string) => {
     const operation = get().operations[cloneId];
     if (operation) {
       updateTaskRepoExists(operation.targetPath, false);
@@ -90,7 +72,6 @@ export const cloneStore = create<CloneStore>((set, get) => {
 
     startClone: (cloneId, repository, targetPath) => {
       const repoKey = getRepoKey(repository);
-      const toastId = toast.loading(`Cloning ${repoKey}`);
 
       const unsubscribe = window.electronAPI.onCloneProgress(
         cloneId,
@@ -101,9 +82,9 @@ export const cloneStore = create<CloneStore>((set, get) => {
           if (!operation) return;
 
           if (event.status === "complete") {
-            handleComplete(cloneId, repoKey, operation.toastId!);
+            handleComplete(cloneId, repoKey);
           } else if (event.status === "error") {
-            handleError(cloneId, repoKey, event.message, operation.toastId!);
+            handleError(cloneId, repoKey, event.message);
           }
         },
       );
@@ -116,8 +97,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
             repository,
             targetPath,
             status: "cloning",
-            messages: [],
-            toastId,
+            latestMessage: `Cloning ${repoKey}...`,
             unsubscribe,
           },
         },
@@ -135,7 +115,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
             [cloneId]: {
               ...operation,
               status,
-              messages: [...operation.messages, message],
+              latestMessage: message,
               error: status === "error" ? message : operation.error,
             },
           },
