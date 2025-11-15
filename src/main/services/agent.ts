@@ -118,13 +118,6 @@ export function registerAgentIpc(
         posthogApiKey: apiKey,
         posthogApiUrl: apiHost,
         posthogProjectId: projectId,
-        onEvent: (event) => {
-          console.log("agent event", event);
-          if (!event || abortController.signal.aborted) return;
-          const payload =
-            event.type === "done" ? { ...event, success: true } : event;
-          emitToRenderer(payload);
-        },
         debug: true,
       });
 

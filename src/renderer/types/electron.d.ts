@@ -9,6 +9,7 @@ import type {
 export interface IElectronAPI {
   storeApiKey: (apiKey: string) => Promise<string>;
   retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
+  fetchS3Logs: (logUrl: string) => Promise<string>;
   // OAuth API
   oauthStartFlow: (
     region: CloudRegion,

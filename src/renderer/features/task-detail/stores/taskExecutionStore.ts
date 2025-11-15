@@ -34,6 +34,23 @@ interface ArtifactEvent {
   }>;
 }
 
+interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm: string;
+}
+
+interface TodoList {
+  items: TodoItem[];
+  metadata: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    last_updated: string;
+  };
+}
+
 const createProgressSignature = (progress: TaskRun): string =>
   [progress.status ?? "", progress.updated_at ?? ""].join("|");
 
@@ -59,22 +76,93 @@ const toClarifyingQuestions = (
     requiresInput: hasCustomOption(q.options),
   }));
 };
+/**
+ * Convert S3 LogEntry to AgentEvent
+ */
+function logEntryToAgentEvent(
+  entry: import("@shared/types").LogEntry,
+): AgentEvent | null {
+  try {
+    // Use a base timestamp - will be overridden by actual event timestamps if available
+    const baseTs = Date.now();
 
-export interface TodoItem {
-  content: string;
-  status: "pending" | "in_progress" | "completed";
-  activeForm: string;
+    // For token events (stored as plain text in message)
+    if (entry.type === "token") {
+      return {
+        type: "token",
+        ts: baseTs,
+        content: entry.message,
+      } as AgentEvent;
+    }
+
+    // For legacy info entries
+    if (entry.type === "info") {
+      return {
+        type: "token",
+        ts: baseTs,
+        content: entry.message,
+      } as AgentEvent;
+    }
+
+    // For all other events stored as JSON strings in the message field
+    if (entry.message) {
+      try {
+        const parsed = JSON.parse(entry.message);
+        // Preserve the original structure from S3, just add the type
+        return {
+          ...parsed,
+          type: entry.type as any,
+          ts: parsed.ts || baseTs, // Use parsed ts if available, otherwise base
+        } as AgentEvent;
+      } catch {
+        // If parsing fails, treat as a simple message event
+        return {
+          type: entry.type as any,
+          ts: baseTs,
+          message: entry.message,
+        } as AgentEvent;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("Failed to convert log entry to agent event", err, entry);
+    return null;
+  }
 }
 
-export interface TodoList {
-  items: TodoItem[];
-  metadata: {
-    total: number;
-    pending: number;
-    in_progress: number;
-    completed: number;
-    last_updated: string;
-  };
+/**
+ * Fetch logs from S3 log URL via main process to avoid CORS issues
+ * Always fetches and returns the entire log file
+ */
+async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
+  try {
+    // Fetch through main process to avoid CORS
+    const content = await window.electronAPI?.fetchS3Logs(logUrl);
+
+    if (!content || !content.trim()) {
+      return [];
+    }
+
+    const logEntries = content
+      .trim()
+      .split("\n")
+      .map(
+        (line: string) => JSON.parse(line) as import("@shared/types").LogEntry,
+      );
+
+    // Convert all log entries to AgentEvents
+    const events = logEntries
+      .map((entry: import("@shared/types").LogEntry) =>
+        logEntryToAgentEvent(entry),
+      )
+      .filter((event): event is AgentEvent => event !== null);
+
+    return events;
+  } catch (err) {
+    console.warn("Failed to fetch task logs from S3", err);
+    return [];
+  }
 }
 
 interface TaskExecutionState {
@@ -87,6 +175,8 @@ interface TaskExecutionState {
   unsubscribe: (() => void) | null;
   progress: TaskRun | null;
   progressSignature: string | null;
+  // S3 log polling fields
+  logPoller: ReturnType<typeof setInterval> | null;
   // Plan mode fields
   executionMode: ExecutionMode;
   planModePhase: PlanModePhase;
@@ -162,6 +252,7 @@ const defaultTaskState: TaskExecutionState = {
   unsubscribe: null,
   progress: null,
   progressSignature: null,
+  logPoller: null,
   executionMode: "plan",
   planModePhase: "idle",
   clarifyingQuestions: [],
@@ -258,6 +349,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (taskState?.unsubscribe) {
           taskState.unsubscribe();
         }
+        if (taskState?.logPoller) {
+          clearInterval(taskState.logPoller);
+        }
         set((state) => {
           const newTaskStates = { ...state.taskStates };
           delete newTaskStates[taskId];
@@ -268,13 +362,19 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       subscribeToAgentEvents: (taskId: string, channel: string) => {
         const store = get();
 
-        // Clean up existing subscription if any
+        // Clean up existing subscription and poller if any
         const existingState = store.taskStates[taskId];
         if (existingState?.unsubscribe) {
           existingState.unsubscribe();
         }
+        if (existingState?.logPoller) {
+          clearInterval(existingState.logPoller);
+        }
 
-        // Create new subscription that persists even when component unmounts
+        // Reset polling state
+        store.updateTaskState(taskId, { logPoller: null });
+
+        // Create new subscription that listens only to progress events
         const unsubscribeFn = window.electronAPI?.onAgentEvent(
           channel,
           (ev: AgentEvent | { type: "progress"; progress: TaskRun }) => {
@@ -300,23 +400,113 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                   progress: newProgress,
                 } as unknown as AgentEvent);
               }
-              return;
-            }
 
-            // Store AgentEvent directly (ev is now narrowed to AgentEvent)
-            if (ev?.type) {
-              // Handle state changes for special event types
-              if (ev.type === "error" || ev.type === "done") {
-                currentStore.setRunning(taskId, false);
-                if (ev.type === "done") {
-                  currentStore.setUnsubscribe(taskId, null);
+              // Start or continue log polling if we have a log_url
+              if (newProgress.log_url) {
+                const currentState = currentStore.getTaskState(taskId);
+
+                // Don't start polling if task is already complete
+                if (
+                  newProgress.status === "completed" ||
+                  newProgress.status === "failed"
+                ) {
+                  // Stop any existing poller
+                  if (currentState.logPoller) {
+                    clearInterval(currentState.logPoller);
+                    currentStore.updateTaskState(taskId, { logPoller: null });
+                  }
+
+                  // Do one final fetch to get all logs
+                  if (newProgress.log_url) {
+                    fetchLogsFromS3Url(newProgress.log_url)
+                      .then((allEvents) => {
+                        if (allEvents.length > 0) {
+                          const store = get();
+                          // Check if there's a "done" event
+                          const hasDone = allEvents.some(
+                            (event) => event.type === "done",
+                          );
+                          if (hasDone) {
+                            store.setRunning(taskId, false);
+                            store.checkPlanCompletion(taskId);
+                          }
+                          // Replace all logs with the full S3 content
+                          store.setLogs(taskId, allEvents);
+                        }
+                      })
+                      .catch((err) =>
+                        console.warn("Failed to fetch final logs", err),
+                      );
+                  }
+                  return;
                 }
-                // Check if plan needs to be loaded after run completes
-                currentStore.checkPlanCompletion(taskId);
+
+                // Start polling if not already started
+                if (!currentState.logPoller) {
+                  const pollLogs = async () => {
+                    const state = get().getTaskState(taskId);
+                    const progress = state.progress;
+
+                    // Stop polling if task is now complete
+                    if (
+                      !progress?.log_url ||
+                      progress.status === "completed" ||
+                      progress.status === "failed"
+                    ) {
+                      if (state.logPoller) {
+                        clearInterval(state.logPoller);
+                        get().updateTaskState(taskId, { logPoller: null });
+                      }
+                      return;
+                    }
+
+                    const allEvents = await fetchLogsFromS3Url(
+                      progress.log_url,
+                    );
+
+                    if (allEvents.length > 0) {
+                      const store = get();
+
+                      // Check for special event types
+                      const hasError = allEvents.some(
+                        (event) => event.type === "error",
+                      );
+                      const hasDone = allEvents.some(
+                        (event) => event.type === "done",
+                      );
+
+                      if (hasError || hasDone) {
+                        store.setRunning(taskId, false);
+                        if (hasDone) {
+                          // Stop polling when done event found
+                          const currentState = store.getTaskState(taskId);
+                          if (currentState.logPoller) {
+                            clearInterval(currentState.logPoller);
+                            store.updateTaskState(taskId, { logPoller: null });
+                          }
+                        }
+                        // Check if plan needs to be loaded after run completes
+                        store.checkPlanCompletion(taskId);
+                      }
+
+                      // Replace all logs with the full S3 content
+                      store.setLogs(taskId, allEvents);
+                    }
+                  };
+
+                  // Initial fetch
+                  void pollLogs();
+
+                  // Start polling every 2 seconds
+                  const poller = setInterval(() => {
+                    void pollLogs();
+                  }, 2000);
+
+                  currentStore.updateTaskState(taskId, { logPoller: poller });
+                }
               }
 
-              // Add event to logs
-              currentStore.addLog(taskId, ev);
+              return;
             }
           },
         );
@@ -331,6 +521,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (taskState?.unsubscribe) {
           taskState.unsubscribe();
           get().setUnsubscribe(taskId, null);
+        }
+        if (taskState?.logPoller) {
+          clearInterval(taskState.logPoller);
+          get().updateTaskState(taskId, { logPoller: null });
         }
       },
 
@@ -855,12 +1049,12 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
     }),
     {
       name: "task-execution-storage",
-      // Don't persist unsubscribe functions as they can't be serialized
+      // Don't persist unsubscribe functions and pollers as they can't be serialized
       partialize: (state) => ({
         taskStates: Object.fromEntries(
           Object.entries(state.taskStates).map(([taskId, taskState]) => [
             taskId,
-            { ...taskState, unsubscribe: null },
+            { ...taskState, unsubscribe: null, logPoller: null },
           ]),
         ),
       }),
