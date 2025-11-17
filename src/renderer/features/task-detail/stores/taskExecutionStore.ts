@@ -6,6 +6,7 @@ import { track } from "@renderer/lib/analytics";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
+  LogEntry,
   PlanModePhase,
   QuestionAnswer,
   Task,
@@ -79,14 +80,10 @@ const toClarifyingQuestions = (
 /**
  * Convert S3 LogEntry to AgentEvent
  */
-function logEntryToAgentEvent(
-  entry: import("@shared/types").LogEntry,
-): AgentEvent | null {
+function logEntryToAgentEvent(entry: LogEntry): AgentEvent | null {
   try {
-    // Use a base timestamp - will be overridden by actual event timestamps if available
     const baseTs = Date.now();
 
-    // For token events (stored as plain text in message)
     if (entry.type === "token") {
       return {
         type: "token",
@@ -95,7 +92,6 @@ function logEntryToAgentEvent(
       } as AgentEvent;
     }
 
-    // For legacy info entries
     if (entry.type === "info") {
       return {
         type: "token",
@@ -104,18 +100,15 @@ function logEntryToAgentEvent(
       } as AgentEvent;
     }
 
-    // For all other events stored as JSON strings in the message field
     if (entry.message) {
       try {
         const parsed = JSON.parse(entry.message);
-        // Preserve the original structure from S3, just add the type
         return {
           ...parsed,
           type: entry.type as any,
-          ts: parsed.ts || baseTs, // Use parsed ts if available, otherwise base
+          ts: parsed.ts || baseTs,
         } as AgentEvent;
       } catch {
-        // If parsing fails, treat as a simple message event
         return {
           type: entry.type as any,
           ts: baseTs,
@@ -137,7 +130,6 @@ function logEntryToAgentEvent(
  */
 async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
   try {
-    // Fetch through main process to avoid CORS
     const content = await window.electronAPI?.fetchS3Logs(logUrl);
 
     if (!content || !content.trim()) {
@@ -147,15 +139,10 @@ async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
     const logEntries = content
       .trim()
       .split("\n")
-      .map(
-        (line: string) => JSON.parse(line) as import("@shared/types").LogEntry,
-      );
+      .map((line: string) => JSON.parse(line) as LogEntry);
 
-    // Convert all log entries to AgentEvents
     const events = logEntries
-      .map((entry: import("@shared/types").LogEntry) =>
-        logEntryToAgentEvent(entry),
-      )
+      .map((entry: LogEntry) => logEntryToAgentEvent(entry))
       .filter((event): event is AgentEvent => event !== null);
 
     return events;
@@ -362,7 +349,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       subscribeToAgentEvents: (taskId: string, channel: string) => {
         const store = get();
 
-        // Clean up existing subscription and poller if any
         const existingState = store.taskStates[taskId];
         if (existingState?.unsubscribe) {
           existingState.unsubscribe();
@@ -371,7 +357,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           clearInterval(existingState.logPoller);
         }
 
-        // Reset polling state
         store.updateTaskState(taskId, { logPoller: null });
 
         // Create new subscription that listens only to progress events
@@ -380,7 +365,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           (ev: AgentEvent | { type: "progress"; progress: TaskRun }) => {
             const currentStore = get();
 
-            // Handle custom progress events from Array backend
             if (ev?.type === "progress" && "progress" in ev) {
               const newProgress = ev.progress;
               const oldProgress = currentStore.getTaskState(taskId).progress;
@@ -389,10 +373,8 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                 : null;
               const newSig = createProgressSignature(newProgress);
 
-              // Always update the stored progress state for UI (like TaskDetail)
               currentStore.setProgress(taskId, newProgress);
 
-              // Only add to logs if signature changed (to avoid duplicate log entries)
               if (oldSig !== newSig) {
                 currentStore.addLog(taskId, {
                   type: "progress",
@@ -401,7 +383,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                 } as unknown as AgentEvent);
               }
 
-              // Start or continue log polling if we have a log_url
               if (newProgress.log_url) {
                 const currentState = currentStore.getTaskState(taskId);
 
@@ -422,7 +403,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                       .then((allEvents) => {
                         if (allEvents.length > 0) {
                           const store = get();
-                          // Check if there's a "done" event
                           const hasDone = allEvents.some(
                             (event) => event.type === "done",
                           );
@@ -430,7 +410,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                             store.setRunning(taskId, false);
                             store.checkPlanCompletion(taskId);
                           }
-                          // Replace all logs with the full S3 content
                           store.setLogs(taskId, allEvents);
                         }
                       })
@@ -441,13 +420,11 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                   return;
                 }
 
-                // Start polling if not already started
                 if (!currentState.logPoller) {
                   const pollLogs = async () => {
                     const state = get().getTaskState(taskId);
                     const progress = state.progress;
 
-                    // Stop polling if task is now complete
                     if (
                       !progress?.log_url ||
                       progress.status === "completed" ||
@@ -467,7 +444,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                     if (allEvents.length > 0) {
                       const store = get();
 
-                      // Check for special event types
                       const hasError = allEvents.some(
                         (event) => event.type === "error",
                       );
@@ -478,26 +454,21 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                       if (hasError || hasDone) {
                         store.setRunning(taskId, false);
                         if (hasDone) {
-                          // Stop polling when done event found
                           const currentState = store.getTaskState(taskId);
                           if (currentState.logPoller) {
                             clearInterval(currentState.logPoller);
                             store.updateTaskState(taskId, { logPoller: null });
                           }
                         }
-                        // Check if plan needs to be loaded after run completes
                         store.checkPlanCompletion(taskId);
                       }
 
-                      // Replace all logs with the full S3 content
                       store.setLogs(taskId, allEvents);
                     }
                   };
 
-                  // Initial fetch
                   void pollLogs();
 
-                  // Start polling every 2 seconds
                   const poller = setInterval(() => {
                     void pollLogs();
                   }, 2000);
