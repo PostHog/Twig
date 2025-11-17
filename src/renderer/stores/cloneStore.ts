@@ -1,5 +1,6 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { RepositoryConfig } from "@shared/types";
+import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { create } from "zustand";
 
 type CloneStatus = "cloning" | "complete" | "error";
@@ -50,6 +51,12 @@ export const cloneStore = create<CloneStore>((set, get) => {
     const operation = get().operations[cloneId];
     if (operation) {
       updateTaskRepoExists(operation.targetPath, true);
+
+      // Save repo → directory mapping for future tasks
+      const repoKey = `${operation.repository.organization}/${operation.repository.repository}`;
+      useTaskDirectoryStore
+        .getState()
+        .setRepoDirectory(repoKey, operation.targetPath);
     }
 
     window.setTimeout(
