@@ -12,6 +12,7 @@ import type {
   TaskRun,
 } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
+import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -503,10 +504,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           cloneStore
             .getState()
             .startClone(cloneId, task.repository_config, effectiveRepoPath);
-
-          const { repositoryWorkspaceStore } = await import(
-            "@stores/repositoryWorkspaceStore"
-          );
 
           try {
             await repositoryWorkspaceStore
