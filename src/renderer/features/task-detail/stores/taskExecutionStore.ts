@@ -12,7 +12,6 @@ import type {
   TaskRun,
 } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
-import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
@@ -60,35 +59,6 @@ const toClarifyingQuestions = (
     requiresInput: hasCustomOption(q.options),
   }));
 };
-
-async function validateRepositoryAccess(
-  path: string,
-  addLog: (log: AgentEvent) => void,
-): Promise<boolean> {
-  // Check if directory exists by checking write access
-  const canWrite = await window.electronAPI?.checkWriteAccess(path);
-  if (!canWrite) {
-    addLog({
-      type: "error",
-      ts: Date.now(),
-      message: `Cannot access or write to folder: ${path}`,
-    });
-    return false;
-  }
-
-  // Check if it's a valid git repository with actual content
-  const isRepo = await window.electronAPI?.validateRepo(path);
-  if (!isRepo) {
-    addLog({
-      type: "error",
-      ts: Date.now(),
-      message: `Folder is not a valid git repository: ${path}`,
-    });
-    return false;
-  }
-
-  return true;
-}
 
 export interface TodoItem {
   content: string;
@@ -148,7 +118,11 @@ interface TaskExecutionStore {
   clearTaskState: (taskId: string) => void;
 
   // High-level task execution actions
-  runTask: (taskId: string, task: Task) => Promise<void>;
+  runTask: (
+    taskId: string,
+    task: Task,
+    skipInitialize?: boolean,
+  ) => Promise<void>;
   cancelTask: (taskId: string) => Promise<void>;
   clearTaskLogs: (taskId: string) => void;
 
@@ -361,11 +335,13 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       },
 
       // High-level task execution actions
-      runTask: async (taskId: string, task: Task) => {
+      runTask: async (taskId: string, task: Task, skipInitialize = false) => {
         const store = get();
 
-        // Initialize repo path if not set
-        store.initializeRepoPath(taskId, task);
+        // Initialize repo path if not set (unless we're retrying after validation failure)
+        if (!skipInitialize) {
+          store.initializeRepoPath(taskId, task);
+        }
 
         const taskState = store.getTaskState(taskId);
 
@@ -462,11 +438,100 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const effectiveRepoPath = taskState.repoPath;
 
         if (!effectiveRepoPath) {
-          store.addLog(taskId, {
-            type: "error",
-            ts: Date.now(),
-            message: "No repository folder selected.",
+          // Prompt user to select directory or clone
+          const hasRepo = !!task.repository_config;
+          const repoConfig = task.repository_config;
+
+          const result = await window.electronAPI.showMessageBox({
+            type: "question",
+            title: "Select working directory",
+            message:
+              hasRepo && repoConfig
+                ? `Do you have ${repoConfig.organization}/${repoConfig.repository} locally?`
+                : "Select a working directory for this task",
+            detail: hasRepo
+              ? "If you have the repository locally, we'll use that. Otherwise, we can clone it for you."
+              : "Choose a directory where the task will run.",
+            buttons: hasRepo
+              ? ["I have it locally", "Clone for me", "Cancel"]
+              : ["Select directory", "Cancel"],
+            defaultId: 0,
+            cancelId: hasRepo ? 2 : 1,
           });
+
+          if (result.response === (hasRepo ? 2 : 1)) {
+            // User cancelled
+            return;
+          }
+
+          if (result.response === 0) {
+            // User has repo locally or wants to select directory
+            const selectedPath = await window.electronAPI.selectDirectory();
+
+            if (!selectedPath) {
+              // User cancelled directory selection
+              return;
+            }
+
+            // Set the repo path and revalidate
+            store.setRepoPath(taskId, selectedPath);
+            await store.revalidateRepo(taskId);
+
+            // Retry running the task with the new path (skip initialization)
+            return store.runTask(taskId, task, true);
+          }
+
+          if (result.response === 1 && hasRepo && repoConfig) {
+            // User wants to clone - trigger clone and retry
+            const { repositoryWorkspaceStore } = await import(
+              "@stores/repositoryWorkspaceStore"
+            );
+
+            // Derive default path from workspace
+            const { defaultWorkspace } = useAuthStore.getState();
+            if (!defaultWorkspace) {
+              store.addLog(taskId, {
+                type: "error",
+                ts: Date.now(),
+                message:
+                  "No workspace configured. Please configure a workspace in settings.",
+              });
+              return;
+            }
+
+            const derivedPath = derivePath(
+              defaultWorkspace,
+              repoConfig.repository,
+            );
+            store.setRepoPath(taskId, derivedPath);
+
+            const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            cloneStore.getState().startClone(cloneId, repoConfig, derivedPath);
+
+            try {
+              await repositoryWorkspaceStore
+                .getState()
+                .selectRepository(repoConfig, cloneId);
+
+              // Wait for clone to complete, then retry run
+              // The clone progress will show in the UI via TaskActions
+              // We return here and let the user manually retry after clone completes
+              store.addLog(taskId, {
+                type: "token",
+                ts: Date.now(),
+                content: `Cloning ${repoConfig.organization}/${repoConfig.repository}... Click Run again after the clone completes.`,
+              });
+              return;
+            } catch (error) {
+              store.addLog(taskId, {
+                type: "error",
+                ts: Date.now(),
+                message: `Failed to clone repository: ${error instanceof Error ? error.message : "Unknown error"}`,
+              });
+              return;
+            }
+          }
+
           return;
         }
 
@@ -488,116 +553,20 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           }
         }
 
-        const isValid = await validateRepositoryAccess(
-          effectiveRepoPath,
-          (log) => store.addLog(taskId, log),
-        );
+        // Quick validation without logging errors (we'll handle it gracefully)
+        const canWrite =
+          await window.electronAPI?.checkWriteAccess(effectiveRepoPath);
+        const isRepo = canWrite
+          ? await window.electronAPI?.validateRepo(effectiveRepoPath)
+          : false;
 
-        if (!isValid && task.repository_config) {
-          const repoKey = getRepoKey(
-            task.repository_config.organization,
-            task.repository_config.repository,
-          );
+        if (!canWrite || !isRepo) {
+          // Repository path is invalid - clear it and show the prompt again
+          // Don't log errors, just gracefully re-prompt the user
+          store.setRepoPath(taskId, null);
 
-          store.addLog(taskId, {
-            type: "token",
-            ts: Date.now(),
-            content: `Repository not found at ${effectiveRepoPath}. Cloning ${repoKey}...`,
-          });
-
-          // Create clone state before selectRepository to avoid UI delay
-          const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-          cloneStore
-            .getState()
-            .startClone(cloneId, task.repository_config, effectiveRepoPath);
-
-          try {
-            await repositoryWorkspaceStore
-              .getState()
-              .selectRepository(task.repository_config, cloneId);
-
-            store.addLog(taskId, {
-              type: "token",
-              ts: Date.now(),
-              content: `Waiting for repository clone to complete...`,
-            });
-
-            const maxAttempts = 5;
-            let attempts = 0;
-            let repoCloned = false;
-            let lastProgressMessage = "";
-
-            while (attempts < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-
-              // Check if clone operation completed
-              const { operations } = cloneStore.getState();
-              const cloneOp = Object.values(operations).find(
-                (op) =>
-                  getRepoKey(
-                    op.repository.organization,
-                    op.repository.repository,
-                  ) === repoKey,
-              );
-
-              if (cloneOp?.status === "complete") {
-                // Clone completed successfully
-                repoCloned = true;
-                break;
-              }
-
-              if (cloneOp?.status === "error") {
-                throw new Error(cloneOp.error || "Clone failed");
-              }
-
-              // Show progress updates every 5 seconds
-              if (cloneOp && attempts % 5 === 0 && cloneOp.latestMessage) {
-                const latestMessage = cloneOp.latestMessage;
-                if (latestMessage !== lastProgressMessage) {
-                  lastProgressMessage = latestMessage;
-                  store.addLog(taskId, {
-                    type: "token",
-                    ts: Date.now(),
-                    content: `Clone progress: ${latestMessage}`,
-                  });
-                }
-              }
-
-              // If no clone operation exists anymore, check if repo is valid
-              if (!cloneOp) {
-                const exists =
-                  await window.electronAPI?.validateRepo(effectiveRepoPath);
-                if (exists) {
-                  repoCloned = true;
-                  break;
-                }
-              }
-
-              attempts++;
-            }
-
-            if (!repoCloned) {
-              throw new Error("Repository clone timed out after 10 minutes");
-            }
-
-            store.addLog(taskId, {
-              type: "token",
-              ts: Date.now(),
-              content: `Repository cloned successfully! Starting task...`,
-            });
-
-            // Revalidate the repo
-            await store.revalidateRepo(taskId);
-          } catch (error) {
-            store.addLog(taskId, {
-              type: "error",
-              ts: Date.now(),
-              message: `Failed to clone repository: ${error instanceof Error ? error.message : "Unknown error"}. Please try running the task again after the clone completes.`,
-            });
-            return;
-          }
-        } else if (!isValid) {
-          return;
+          // Recursively call runTask to trigger the prompt flow (skip initialization)
+          return store.runTask(taskId, task, true);
         }
 
         const permissionMode = "acceptEdits";

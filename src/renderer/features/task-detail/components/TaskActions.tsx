@@ -7,6 +7,7 @@ interface TaskActionsProps {
   isCloningRepo: boolean;
   cloneProgress: { message: string; percent: number } | null;
   runMode: "local" | "cloud";
+  hasRepositoryConfig: boolean;
   onRunTask: () => void;
   onCancel: () => void;
   onRunModeChange: (mode: "local" | "cloud") => void;
@@ -17,6 +18,7 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
   isCloningRepo,
   cloneProgress,
   runMode,
+  hasRepositoryConfig,
   onRunTask,
   onCancel,
   onRunModeChange,
@@ -58,12 +60,18 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
           >
             <span className="truncate">{getRunButtonLabel()}</span>
           </Button>
-          <Tooltip content="Toggle between Local or Cloud Agent">
+          <Tooltip
+            content={
+              !hasRepositoryConfig
+                ? "Cloud mode requires a connected repository"
+                : "Toggle between Local or Cloud Agent"
+            }
+          >
             <IconButton
               size="2"
               variant="classic"
               color={runMode === "cloud" ? "blue" : "gray"}
-              disabled={isRunning || isCloningRepo}
+              disabled={isRunning || isCloningRepo || !hasRepositoryConfig}
               onClick={() =>
                 onRunModeChange(runMode === "local" ? "cloud" : "local")
               }
