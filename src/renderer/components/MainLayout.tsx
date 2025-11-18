@@ -1,7 +1,7 @@
 import { MainSidebar } from "@components/MainSidebar";
-import { TopBar } from "@components/ui/topnav/TopBar";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
+import { TopBar } from "@components/ui/topnav/TopBar";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
@@ -17,8 +17,14 @@ import { Toaster } from "sonner";
 
 export function MainLayout() {
   const { setCliMode } = useLayoutStore();
-  const { view, toggleSettings, navigateToTaskList, navigateToTask, goBack, goForward } =
-    useNavigationStore();
+  const {
+    view,
+    toggleSettings,
+    navigateToTaskList,
+    navigateToTask,
+    goBack,
+    goForward,
+  } = useNavigationStore();
   useIntegrations();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
 
