@@ -5,7 +5,7 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "outDir": "./dist/renderer",
     "target": "ESNext",
-    "types": ["vite/client"]
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
   "exclude": ["src/main/**/*", "src/api/repoDetector.ts"],
   "extends": "./tsconfig.json",
@@ -13,6 +13,7 @@
     "src/renderer/**/*",
     "src/shared/**/*",
     "src/api/**/*",
+    "src/test/**/*",
     "src/vite-env.d.ts"
   ]
 }

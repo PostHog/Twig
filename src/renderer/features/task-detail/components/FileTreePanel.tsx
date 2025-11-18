@@ -1,5 +1,5 @@
+import { usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -99,13 +99,13 @@ interface TreeItemProps {
 
 function TreeItem({ node, depth, taskId }: TreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(depth === 0);
-  const layoutStore = useTaskPanelLayoutStore();
+  const openFile = usePanelLayoutStore((state) => state.openFile);
 
   const handleClick = () => {
     if (node.type === "folder") {
       setIsExpanded(!isExpanded);
     } else {
-      layoutStore.openFile(taskId, node.path);
+      openFile(taskId, node.path);
     }
   };
 

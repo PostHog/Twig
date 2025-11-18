@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import type {
@@ -823,7 +823,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             store.setPlanModePhase(taskId, "review");
 
             // Auto-open plan.md as an artifact tab
-            useTaskPanelLayoutStore.getState().openArtifact(taskId, "plan.md");
+            usePanelLayoutStore.getState().openArtifact(taskId, "plan.md");
           }
         } catch (error) {
           console.error("Failed to load plan:", error);

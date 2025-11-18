@@ -77,6 +77,7 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
           <Flex direction="column">
             <TextArea
               value={taskData.task.description || ""}
+              readOnly
               className="min-h-full flex-1 resize-none rounded-none border-none bg-transparent font-mono text-sm shadow-none outline-none"
               placeholder="No description provided. Use @ to mention files, or format text with markdown."
             />

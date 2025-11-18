@@ -1,6 +1,6 @@
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { TaskArtifacts } from "@features/task-detail/components/TaskArtifacts";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { useTaskPanelLayoutStore } from "@features/task-detail/stores/taskPanelLayoutStore";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
@@ -14,14 +14,34 @@ export function TaskArtifactsPanel({ taskId, task }: TaskArtifactsPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const repoPath = taskData.repoPath;
 
-  const layoutStore = useTaskPanelLayoutStore();
-  const layout = layoutStore.getLayout(taskId);
+  const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
+  const openArtifact = usePanelLayoutStore((state) => state.openArtifact);
+
+  // Get active artifact from main panel's active tab
+  const activeArtifactId = layout
+    ? (() => {
+        const findMainPanel = (node: typeof layout.panelTree): any => {
+          if (node.type === "leaf" && node.id === "main-panel") return node;
+          if (node.type === "group") {
+            for (const child of node.children) {
+              const found = findMainPanel(child);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const mainPanel = findMainPanel(layout.panelTree);
+        return mainPanel?.content.activeTabId.startsWith("artifact-")
+          ? mainPanel.content.activeTabId.replace("artifact-", "")
+          : null;
+      })()
+    : null;
 
   const onArtifactSelect = useCallback(
     (fileName: string) => {
-      layoutStore.openArtifact(taskId, fileName);
+      openArtifact(taskId, fileName);
     },
-    [layoutStore, taskId],
+    [openArtifact, taskId],
   );
 
   return (
@@ -30,7 +50,7 @@ export function TaskArtifactsPanel({ taskId, task }: TaskArtifactsPanelProps) {
         <TaskArtifacts
           taskId={taskId}
           repoPath={repoPath}
-          selectedArtifact={layout?.activeArtifactId || null}
+          selectedArtifact={activeArtifactId}
           onArtifactSelect={onArtifactSelect}
         />
       ) : (

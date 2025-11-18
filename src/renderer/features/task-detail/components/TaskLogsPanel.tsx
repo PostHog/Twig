@@ -1,8 +1,8 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { LogView } from "@features/logs/components/LogView";
-import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
