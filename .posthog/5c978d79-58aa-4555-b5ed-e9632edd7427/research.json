@@ -1,0 +1,29 @@
+{
+  "actionabilityScore": 0.92,
+  "context": "The task is to add numeric key (1, 2, 3, 4) selection support alongside the existing alphabetic key (a, b, c, d) selection in the InteractiveQuestion component. The current implementation uses a straightforward event listener that maps alphabetic keys to answer indices. Adding numeric key support requires a minimal, parallel modification to the same keyboard event handler in InteractiveQuestion.tsx and potentially updating the UI text that displays available keys.",
+  "keyFiles": [
+    "src/renderer/features/terminal/components/InteractiveQuestion.tsx"
+  ],
+  "blockers": [],
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Should numeric keys (1-4) and alphabetic keys (a-d) both work simultaneously, or replace alphabetic keys entirely?",
+      "options": [
+        "Support both: users can press either 'a' or '1' to select the first answer (additive approach)",
+        "Replace alphabetic keys: only numeric keys (1-4) work, remove 'a-d' support (breaking change)",
+        "Add as alternative: keep 'a-d' as primary, show '1-4' as secondary option in UI hints"
+      ]
+    },
+    {
+      "id": "q2",
+      "question": "Should the UI labels be updated to reflect numeric key support?",
+      "options": [
+        "Update answer display from 'a) Option text' to '1) Option text' for consistency",
+        "Keep 'a) Option text' in display but document that '1' also works (no UI changes needed)",
+        "Show both keys in UI like '1/a) Option text' to make both options visible"
+      ]
+    }
+  ],
+  "answered": false
+}
