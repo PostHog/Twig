@@ -94,8 +94,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloneRepository: (
     repoUrl: string,
     targetPath: string,
+    cloneId: string,
   ): Promise<{ cloneId: string }> =>
-    ipcRenderer.invoke("clone-repository", repoUrl, targetPath),
+    ipcRenderer.invoke("clone-repository", repoUrl, targetPath, cloneId),
   onCloneProgress: (
     cloneId: string,
     listener: (event: {

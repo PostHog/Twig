@@ -12,7 +12,10 @@ interface RepositoryWorkspaceState {
   isValidating: boolean;
   isInitiatingClone: boolean;
 
-  selectRepository: (repo: RepositoryConfig) => Promise<void>;
+  selectRepository: (
+    repo: RepositoryConfig,
+    existingCloneId?: string,
+  ) => Promise<void>;
   clearRepository: () => void;
   validateAndUpdatePath: () => Promise<void>;
 }
@@ -110,6 +113,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
       const initiateClone = async (
         repo: RepositoryConfig,
         targetPath: string,
+        existingCloneId?: string,
       ) => {
         const sshCheck = await window.electronAPI.checkSSHAccess();
 
@@ -122,12 +126,16 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
           return;
         }
 
+        const cloneId =
+          existingCloneId ||
+          `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+        if (!existingCloneId) {
+          cloneStore.getState().startClone(cloneId, repo, targetPath);
+        }
+
         const repoUrl = `git@github.com:${getRepoKey(repo)}.git`;
-        const { cloneId } = await window.electronAPI.cloneRepository(
-          repoUrl,
-          targetPath,
-        );
-        cloneStore.getState().startClone(cloneId, repo, targetPath);
+        await window.electronAPI.cloneRepository(repoUrl, targetPath, cloneId);
       };
 
       const handleMismatch = async (
@@ -187,11 +195,15 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
           }
         },
 
-        selectRepository: async (repo: RepositoryConfig) => {
+        selectRepository: async (
+          repo: RepositoryConfig,
+          existingCloneId?: string,
+        ) => {
           const repoKey = `${repo.organization}/${repo.repository}`;
           const { isCloning } = cloneStore.getState();
 
-          if (isCloning(repoKey)) {
+          // Skip check if cloneId provided (clone state already created by caller)
+          if (!existingCloneId && isCloning(repoKey)) {
             await window.electronAPI.showMessageBox({
               type: "warning",
               title: "Repository cloning",
@@ -237,7 +249,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
           });
 
           try {
-            await initiateClone(repo, targetPath);
+            await initiateClone(repo, targetPath, existingCloneId);
             startPolling();
           } finally {
             set({ isInitiatingClone: false });

@@ -26,9 +26,6 @@ interface ValidationResult {
   error?: string;
 }
 
-const generateCloneId = () =>
-  `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-
 const sendCloneProgress = (
   win: BrowserWindow,
   cloneId: string,
@@ -54,9 +51,16 @@ export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
   try {
+    // Check if it's a git work tree
     await execAsync("git rev-parse --is-inside-work-tree", {
       cwd: directoryPath,
     });
+
+    // Also check if there's at least one commit (not an empty/cloning repo)
+    await execAsync("git rev-parse HEAD", {
+      cwd: directoryPath,
+    });
+
     return true;
   } catch {
     return false;
@@ -274,20 +278,61 @@ export function registerGitIpc(
     targetPath: string,
     win: BrowserWindow,
   ): ChildProcess => {
-    const cloneProcess = exec(`git clone "${repoUrl}" "${targetPath}"`, {
-      maxBuffer: CLONE_MAX_BUFFER,
-    });
+    // Expand home directory for SSH config path
+    const homeDir = os.homedir();
+    const sshConfigPath = path.join(homeDir, ".ssh", "config");
+
+    // Use GIT_SSH_COMMAND to ensure SSH uses the config file
+    const env = {
+      ...process.env,
+      GIT_SSH_COMMAND: `ssh -F ${sshConfigPath}`,
+    };
+
+    const cloneProcess = exec(
+      `git clone --progress "${repoUrl}" "${targetPath}"`,
+      {
+        maxBuffer: CLONE_MAX_BUFFER,
+        env,
+      },
+    );
 
     sendCloneProgress(win, cloneId, {
       status: "cloning",
       message: `Cloning ${repoUrl}...`,
     });
 
-    cloneProcess.stderr?.on("data", (data: Buffer) => {
+    // Collect all output for debugging
+    let _stdoutData = "";
+    let stderrData = "";
+
+    cloneProcess.stdout?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      _stdoutData += text;
       if (activeClones.get(cloneId)) {
         sendCloneProgress(win, cloneId, {
           status: "cloning",
-          message: data.toString().trim(),
+          message: text.trim(),
+        });
+      }
+    });
+
+    cloneProcess.stderr?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stderrData += text;
+
+      if (activeClones.get(cloneId)) {
+        // Parse progress from git output (e.g., "Receiving objects: 45% (6234/13948)")
+        const progressMatch = text.match(/(\w+\s+\w+):\s+(\d+)%/);
+        let progressMessage = text.trim();
+
+        if (progressMatch) {
+          const [, stage, percent] = progressMatch;
+          progressMessage = `${stage}: ${percent}%`;
+        }
+
+        sendCloneProgress(win, cloneId, {
+          status: "cloning",
+          message: progressMessage,
         });
       }
     });
@@ -299,13 +344,14 @@ export function registerGitIpc(
       const message =
         code === 0
           ? "Repository cloned successfully"
-          : `Clone failed with exit code ${code}`;
+          : `Clone failed with exit code ${code}. stderr: ${stderrData}`;
 
       sendCloneProgress(win, cloneId, { status, message });
       activeClones.delete(cloneId);
     });
 
     cloneProcess.on("error", (error: Error) => {
+      console.error(`[git clone] Process error:`, error);
       if (activeClones.get(cloneId)) {
         sendCloneProgress(win, cloneId, {
           status: "error",
@@ -324,8 +370,8 @@ export function registerGitIpc(
       _event: IpcMainInvokeEvent,
       repoUrl: string,
       targetPath: string,
+      cloneId: string,
     ): Promise<{ cloneId: string }> => {
-      const cloneId = generateCloneId();
       const win = getMainWindow();
 
       if (!win) throw new Error("Main window not available");
