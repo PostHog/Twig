@@ -1,9 +1,9 @@
+import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { Button, Code, DataList, Link, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { format, formatDistanceToNow } from "date-fns";
 import type React from "react";
-import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 
 interface TaskMetadataProps {
   task: Task;

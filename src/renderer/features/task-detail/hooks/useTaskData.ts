@@ -15,7 +15,9 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
   const { data: tasks = [] } = useTasks();
   const { defaultWorkspace } = useAuthStore();
   const getTaskState = useTaskExecutionStore((state) => state.getTaskState);
-  const initializeRepoPath = useTaskExecutionStore((state) => state.initializeRepoPath);
+  const initializeRepoPath = useTaskExecutionStore(
+    (state) => state.initializeRepoPath,
+  );
 
   const task = useMemo(
     () => tasks.find((t) => t.id === taskId) || initialTask,

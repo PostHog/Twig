@@ -143,7 +143,9 @@ export const mergeTreeContent = (
 
   if (isLeafNode(existingTree) && isLeafNode(newTree)) {
     // Create a map of new tabs by ID for quick lookup
-    const newTabsMap = new Map(newTree.content.tabs.map((tab) => [tab.id, tab]));
+    const newTabsMap = new Map(
+      newTree.content.tabs.map((tab) => [tab.id, tab]),
+    );
     const existingTabIds = new Set(existingTree.content.tabs.map((t) => t.id));
 
     // Update existing tabs with new components if they exist in new tree
@@ -173,7 +175,9 @@ export const mergeTreeContent = (
     const finalTabs = [...updatedTabs, ...newTabsToAdd];
 
     // Preserve the active tab if it still exists, otherwise use first tab
-    const activeTabId = finalTabs.some ((t) => t.id === existingTree.content.activeTabId)
+    const activeTabId = finalTabs.some(
+      (t) => t.id === existingTree.content.activeTabId,
+    )
       ? existingTree.content.activeTabId
       : finalTabs[0]?.id || "";
 
