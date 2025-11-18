@@ -23,6 +23,7 @@ export interface PanelGroupTreeProps {
 export interface PanelLeafProps {
   showTabs?: boolean;
   droppable?: boolean;
+  activeTabId?: string;
   children: React.ReactNode;
 }
 
@@ -83,7 +84,12 @@ function compileNode(element: React.ReactElement, path: string): PanelNode {
   }
 
   if (isPanelLeaf(element)) {
-    const { showTabs = true, droppable = true, children } = element.props;
+    const {
+      showTabs = true,
+      droppable = true,
+      activeTabId,
+      children,
+    } = element.props;
     const childArray = React.Children.toArray(children);
 
     const tabs: Tab[] = [];
@@ -131,7 +137,7 @@ function compileNode(element: React.ReactElement, path: string): PanelNode {
       content: {
         id: path,
         tabs,
-        activeTabId: firstTabId || "",
+        activeTabId: activeTabId || firstTabId || "",
         showTabs,
         droppable,
       },

@@ -1,155 +1,104 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { mergeTreeContent } from "../store/panelTree";
-import type { PanelNode } from "../store/panelStore";
-import { usePanelStore } from "../store/panelStore";
-import { Panel } from "./Panel";
-import { PanelGroup } from "./PanelGroup";
-import { PanelResizeHandle } from "./PanelResizeHandle";
-import { compilePanelTree } from "./PanelTree";
-import { TabbedPanel } from "./TabbedPanel";
+import { DragDropProvider } from "@dnd-kit/react";
+import type { Task } from "@shared/types";
+import type React from "react";
+import { useCallback, useEffect } from "react";
+import { useDragDropHandlers } from "../hooks/useDragDropHandlers";
+import {
+  usePanelGroupRefs,
+  usePanelLayoutState,
+  usePanelSizeSync,
+} from "../hooks/usePanelLayoutHooks";
+import { usePanelLayoutStore } from "../store/panelLayoutStore";
+import type { PanelNode } from "../store/panelTypes";
+import { GroupNodeRenderer } from "./GroupNodeRenderer";
+import { LeafNodeRenderer } from "./LeafNodeRenderer";
 
 interface PanelLayoutProps {
-  tree: React.ReactElement;
+  taskId: string;
+  task: Task;
 }
 
-const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
-  const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
-  const updateSizes = usePanelStore((state) => state.updateSizes);
-  const groupRefs = useRef<Map<string, ImperativePanelGroupHandle>>(new Map());
+const PanelLayoutRenderer: React.FC<{
+  node: PanelNode;
+  taskId: string;
+  task: Task;
+}> = ({ node, taskId, task }) => {
+  const layoutState = usePanelLayoutState(taskId);
+  const { groupRefs, setGroupRef } = usePanelGroupRefs();
 
-  const handleSetActiveTab = (panelId: string, tabId: string) => {
-    setActiveTabs((prev) => ({ ...prev, [panelId]: tabId }));
-  };
+  usePanelSizeSync(node, groupRefs.current);
 
-  const setGroupRef = (
-    groupId: string,
-    ref: ImperativePanelGroupHandle | null,
-  ) => {
-    if (ref) {
-      groupRefs.current.set(groupId, ref);
-    } else {
-      groupRefs.current.delete(groupId);
-    }
-  };
+  const handleSetActiveTab = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.setActiveTab(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
 
-  const renderNode = (currentNode: PanelNode): React.ReactNode => {
+  const handleLayout = useCallback(
+    (groupId: string, sizes: number[]) => {
+      layoutState.updateSizes(taskId, groupId, sizes);
+    },
+    [layoutState, taskId],
+  );
 
-    if (currentNode.type === "leaf") {
-      const activeTabId =
-        activeTabs[currentNode.id] || currentNode.content.activeTabId;
-      const content = {
-        ...currentNode.content,
-        activeTabId,
-      };
-
-      return (
-        <TabbedPanel
-          panelId={currentNode.id}
-          content={content}
-          onActiveTabChange={handleSetActiveTab}
-        />
-      );
-    }
-
-    if (currentNode.type === "group") {
-      return (
-        <PanelGroup
-          ref={(ref) => setGroupRef(currentNode.id, ref)}
-          direction={currentNode.direction}
-          onLayout={(sizes) => {
-            // Only update store, don't normalize here
-            // The library is the source of truth for sizes during user interaction
-            updateSizes(currentNode.id, sizes);
-          }}
-        >
-          {currentNode.children.map((child, index) => (
-            <React.Fragment key={child.id}>
-              <Panel
-                id={child.id}
-                order={index}
-                defaultSize={
-                  currentNode.sizes?.[index] ??
-                  100 / currentNode.children.length
-                }
-                minSize={15}
-              >
-                {renderNode(child)}
-              </Panel>
-              {index < currentNode.children.length - 1 && <PanelResizeHandle />}
-            </React.Fragment>
-          ))}
-        </PanelGroup>
-      );
-    }
-
-    return null;
-  };
-
-  useEffect(() => {
-    const syncSizesToLibrary = (currentNode: PanelNode) => {
-      if (currentNode.type === "group" && currentNode.sizes) {
-        const groupRef = groupRefs.current.get(currentNode.id);
-        if (groupRef) {
-          // Get current layout from library
-          const currentLayout = groupRef.getLayout();
-
-          // Only update if sizes are significantly different (avoid feedback loops)
-          const isDifferent = currentLayout.some(
-            (size, i) => Math.abs(size - (currentNode.sizes?.[i] ?? 0)) > 0.1,
-          );
-
-          if (
-            isDifferent &&
-            currentNode.sizes.length === currentLayout.length
-          ) {
-            groupRef.setLayout(currentNode.sizes);
-          }
-        }
-
-        // Recursively sync child groups
-        currentNode.children.forEach(syncSizesToLibrary);
+  const renderNode = useCallback(
+    (currentNode: PanelNode): React.ReactNode => {
+      if (currentNode.type === "leaf") {
+        return (
+          <LeafNodeRenderer
+            node={currentNode}
+            taskId={taskId}
+            task={task}
+            closeTab={layoutState.closeTab}
+            draggingTabId={layoutState.draggingTabId}
+            draggingTabPanelId={layoutState.draggingTabPanelId}
+            onActiveTabChange={handleSetActiveTab}
+          />
+        );
       }
-    };
 
-    syncSizesToLibrary(node);
-  }, [node]);
+      if (currentNode.type === "group") {
+        return (
+          <GroupNodeRenderer
+            node={currentNode}
+            setGroupRef={setGroupRef}
+            onLayout={handleLayout}
+            renderNode={renderNode}
+          />
+        );
+      }
+
+      return null;
+    },
+    [taskId, task, layoutState, handleSetActiveTab, setGroupRef, handleLayout],
+  );
 
   return <>{renderNode(node)}</>;
 };
 
+export const PanelLayout: React.FC<PanelLayoutProps> = ({ taskId, task }) => {
+  const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
+  const initializeTask = usePanelLayoutStore((state) => state.initializeTask);
+  const dragDropHandlers = useDragDropHandlers(taskId);
 
-export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
-  const compiledNode = useMemo(() => compilePanelTree(tree), [tree]);
-  const root = usePanelStore((state) => state.root);
-  const compiledRef = useRef(compiledNode);
-  const isUpdatingRef = useRef(false);
-  
-  // Track if compiled node changed
-  const nodeChanged = compiledRef.current !== compiledNode;
-  if (nodeChanged) {
-    compiledRef.current = compiledNode;
-  }
-  
-  // Initialize or update store synchronously during render
-  if (nodeChanged && !isUpdatingRef.current) {
-    isUpdatingRef.current = true;
-    
-    const currentRoot = usePanelStore.getState().root;
-    if (currentRoot === null) {
-      // First time - initialize
-      usePanelStore.getState().setRoot(compiledNode);
-    } else {
-      // Update components while preserving layout
-      const merged = mergeTreeContent(currentRoot, compiledNode);
-      usePanelStore.getState().setRoot(merged);
+  useEffect(() => {
+    if (!layout) {
+      initializeTask(taskId);
     }
-    
-    // Reset flag after render completes
-    Promise.resolve().then(() => {
-      isUpdatingRef.current = false;
-    });
+  }, [taskId, layout, initializeTask]);
+
+  if (!layout) {
+    return null;
   }
 
-  return root ? <PanelLayoutRenderer node={root} /> : null;
+  return (
+    <DragDropProvider {...dragDropHandlers}>
+      <PanelLayoutRenderer
+        node={layout.panelTree}
+        taskId={taskId}
+        task={task}
+      />
+    </DragDropProvider>
+  );
 };
