@@ -1,28 +1,40 @@
-import { Button, Code, DataList, Link, Text, Tooltip } from "@radix-ui/themes";
+import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { Cross2Icon } from "@radix-ui/react-icons";
+import {
+  Box,
+  Button,
+  Code,
+  DataList,
+  Flex,
+  IconButton,
+  Link,
+  Text,
+  Tooltip,
+} from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { format, formatDistanceToNow } from "date-fns";
 import type React from "react";
-import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 
 interface TaskMetadataProps {
   task: Task;
   progress?: { status: string };
-  derivedPath: string | null;
-  defaultWorkspace: string | null;
 }
 
 export const TaskMetadata: React.FC<TaskMetadataProps> = ({
   task,
   progress,
-  derivedPath,
-  defaultWorkspace,
 }) => {
-  const { setRepoPath, revalidateRepo } = useTaskExecutionStore();
+  const { setRepoPath, revalidateRepo, getTaskState } = useTaskExecutionStore();
+  const taskState = getTaskState(task.id);
 
   const handleWorkingDirectoryChange = async (newPath: string) => {
     setRepoPath(task.id, newPath);
     await revalidateRepo(task.id);
+  };
+
+  const handleClearDirectory = () => {
+    setRepoPath(task.id, null);
   };
 
   return (
@@ -73,16 +85,28 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
         <DataList.Item>
           <DataList.Label>Working directory</DataList.Label>
           <DataList.Value>
-            <FolderPicker
-              value={derivedPath || ""}
-              onChange={handleWorkingDirectoryChange}
-              placeholder={
-                !defaultWorkspace
-                  ? "No workspace configured"
-                  : "Select working directory..."
-              }
-              size="2"
-            />
+            <Flex gap="2" align="center" width="100%">
+              <Box style={{ flex: 1, minWidth: 0 }}>
+                <FolderPicker
+                  value={taskState.repoPath || ""}
+                  onChange={handleWorkingDirectoryChange}
+                  placeholder="Not set - click Run to select"
+                  size="2"
+                />
+              </Box>
+              {taskState.repoPath && (
+                <Tooltip content="Clear directory selection">
+                  <IconButton
+                    size="2"
+                    variant="ghost"
+                    color="gray"
+                    onClick={handleClearDirectory}
+                  >
+                    <Cross2Icon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Flex>
           </DataList.Value>
         </DataList.Item>
 
