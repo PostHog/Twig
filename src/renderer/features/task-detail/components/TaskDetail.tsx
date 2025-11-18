@@ -1,3 +1,4 @@
+import { CodeEditorPanel } from "@features/code-editor/components/CodeEditorPanel";
 import {
   PanelGroupTree,
   PanelLayout,
@@ -18,6 +19,7 @@ import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useStatusBar } from "@hooks/useStatusBar";
 import {
   CheckSquareIcon,
+  FileCodeIcon,
   FolderIcon,
   InfoIcon,
   ListIcon,
@@ -69,14 +71,29 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   const layout = layoutStore.getLayout(taskId);
 
   const openArtifacts = layout?.openArtifacts || [];
+  const openFiles = layout?.openFiles || [];
+  const activeArtifactId = layout?.activeArtifactId;
+  const activeFileId = layout?.activeFileId;
+
+  const leftPanelActiveTabId = activeFileId
+    ? `file-${activeFileId}`
+    : activeArtifactId
+      ? `artifact-${activeArtifactId}`
+      : "logs";
 
   const handleTabSelect = useCallback(
     (tabId: string) => {
       if (tabId === "logs") {
         layoutStore.setActiveArtifact(taskId, null);
+        layoutStore.setActiveFile(taskId, null);
       } else if (tabId.startsWith("artifact-")) {
         const fileName = tabId.replace("artifact-", "");
         layoutStore.setActiveArtifact(taskId, fileName);
+        layoutStore.setActiveFile(taskId, null);
+      } else if (tabId.startsWith("file-")) {
+        const filePath = tabId.replace("file-", "");
+        layoutStore.setActiveFile(taskId, filePath);
+        layoutStore.setActiveArtifact(taskId, null);
       }
     },
     [layoutStore, taskId],
@@ -89,13 +106,20 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     [layoutStore, taskId],
   );
 
+  const handleCloseFile = useCallback(
+    (filePath: string) => {
+      layoutStore.closeFile(taskId, filePath);
+    },
+    [layoutStore, taskId],
+  );
+
   return (
     <Flex direction="column" height="100%">
       <PanelLayout
         key={taskId}
         tree={
           <PanelGroupTree direction="horizontal" sizes={[75, 25]}>
-            <PanelLeaf>
+            <PanelLeaf activeTabId={leftPanelActiveTabId}>
               <PanelTab
                 id="logs"
                 label="Logs"
@@ -139,6 +163,29 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
                     taskId={taskId}
                     task={task}
                     fileName={fileName}
+                  />
+                </PanelTab>
+              ))}
+              {openFiles.map((filePath) => (
+                <PanelTab
+                  key={filePath}
+                  id={`file-${filePath}`}
+                  label={filePath.split("/").pop() || filePath}
+                  icon={
+                    <FileCodeIcon
+                      size={12}
+                      weight="bold"
+                      color="var(--gray-11)"
+                    />
+                  }
+                  closeable
+                  onClose={() => handleCloseFile(filePath)}
+                  onSelect={() => handleTabSelect(`file-${filePath}`)}
+                >
+                  <CodeEditorPanel
+                    taskId={taskId}
+                    task={task}
+                    filePath={filePath}
                   />
                 </PanelTab>
               ))}

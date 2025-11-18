@@ -375,4 +375,31 @@ export function registerFsIpc(): void {
       }
     },
   );
+
+  ipcMain.handle(
+    "read-repo-file",
+    async (
+      _event: IpcMainInvokeEvent,
+      repoPath: string,
+      filePath: string,
+    ): Promise<string | null> => {
+      try {
+        const fullPath = path.join(repoPath, filePath);
+        const resolvedPath = path.resolve(fullPath);
+        const resolvedRepo = path.resolve(repoPath);
+        if (!resolvedPath.startsWith(resolvedRepo)) {
+          throw new Error("Access denied: path outside repository");
+        }
+
+        const content = await fsPromises.readFile(fullPath, "utf-8");
+        return content;
+      } catch (error) {
+        console.error(
+          `Failed to read file ${filePath} from ${repoPath}:`,
+          error,
+        );
+        return null;
+      }
+    },
+  );
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { mergeTreeContent } from "../store/panelTree";
 import type { PanelNode } from "../store/panelStore";
 import { usePanelStore } from "../store/panelStore";
+import { mergeTreeContent } from "../store/panelTree";
 import { Panel } from "./Panel";
 import { PanelGroup } from "./PanelGroup";
 import { PanelResizeHandle } from "./PanelResizeHandle";
@@ -17,6 +17,26 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
   const updateSizes = usePanelStore((state) => state.updateSizes);
   const groupRefs = useRef<Map<string, ImperativePanelGroupHandle>>(new Map());
+
+  useEffect(() => {
+    const syncActiveTabsFromTree = (currentNode: PanelNode) => {
+      if (currentNode.type === "leaf" && currentNode.content.activeTabId) {
+        setActiveTabs((prev) => {
+          if (prev[currentNode.id] !== currentNode.content.activeTabId) {
+            return {
+              ...prev,
+              [currentNode.id]: currentNode.content.activeTabId,
+            };
+          }
+          return prev;
+        });
+      } else if (currentNode.type === "group") {
+        currentNode.children.forEach(syncActiveTabsFromTree);
+      }
+    };
+
+    syncActiveTabsFromTree(node);
+  }, [node]);
 
   const handleSetActiveTab = (panelId: string, tabId: string) => {
     setActiveTabs((prev) => ({ ...prev, [panelId]: tabId }));
@@ -34,7 +54,6 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   };
 
   const renderNode = (currentNode: PanelNode): React.ReactNode => {
-
     if (currentNode.type === "leaf") {
       const activeTabId =
         activeTabs[currentNode.id] || currentNode.content.activeTabId;
@@ -118,23 +137,22 @@ const PanelLayoutRenderer: React.FC<{ node: PanelNode }> = ({ node }) => {
   return <>{renderNode(node)}</>;
 };
 
-
 export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
   const compiledNode = useMemo(() => compilePanelTree(tree), [tree]);
   const root = usePanelStore((state) => state.root);
   const compiledRef = useRef(compiledNode);
   const isUpdatingRef = useRef(false);
-  
+
   // Track if compiled node changed
   const nodeChanged = compiledRef.current !== compiledNode;
   if (nodeChanged) {
     compiledRef.current = compiledNode;
   }
-  
+
   // Initialize or update store synchronously during render
   if (nodeChanged && !isUpdatingRef.current) {
     isUpdatingRef.current = true;
-    
+
     const currentRoot = usePanelStore.getState().root;
     if (currentRoot === null) {
       // First time - initialize
@@ -144,7 +162,7 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({ tree }) => {
       const merged = mergeTreeContent(currentRoot, compiledNode);
       usePanelStore.getState().setRoot(merged);
     }
-    
+
     // Reset flag after render completes
     Promise.resolve().then(() => {
       isUpdatingRef.current = false;
