@@ -202,6 +202,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }>,
   ): Promise<void> =>
     ipcRenderer.invoke("save-question-answers", repoPath, taskId, answers),
+  readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
+    ipcRenderer.invoke("read-repo-file", repoPath, filePath),
   onOpenSettings: (listener: () => void): (() => void) => {
     const wrapped = () => listener();
     ipcRenderer.on("open-settings", wrapped);
