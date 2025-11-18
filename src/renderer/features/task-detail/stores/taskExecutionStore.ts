@@ -13,6 +13,7 @@ import type {
 } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
+import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -248,6 +249,11 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
       setRepoPath: (taskId: string, repoPath: string | null) => {
         get().updateTaskState(taskId, { repoPath });
+
+        // Persist to taskDirectoryStore
+        if (repoPath) {
+          useTaskDirectoryStore.getState().setTaskDirectory(taskId, repoPath);
+        }
       },
 
       setCurrentTaskId: (taskId: string, currentTaskId: string | null) => {
@@ -729,7 +735,33 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const store = get();
         const taskState = store.getTaskState(taskId);
 
-        if (taskState.repoPath || !task.repository_config) return;
+        if (taskState.repoPath) return;
+
+        // 1. Check taskDirectoryStore first
+        const repoKey = task.repository_config
+          ? `${task.repository_config.organization}/${task.repository_config.repository}`
+          : undefined;
+
+        const storedDirectory = useTaskDirectoryStore
+          .getState()
+          .getTaskDirectory(taskId, repoKey);
+        if (storedDirectory) {
+          store.setRepoPath(taskId, storedDirectory);
+
+          // Validate repo exists
+          window.electronAPI
+            ?.validateRepo(storedDirectory)
+            .then((exists) => {
+              store.updateTaskState(taskId, { repoExists: exists });
+            })
+            .catch(() => {
+              store.updateTaskState(taskId, { repoExists: false });
+            });
+          return;
+        }
+
+        // 2. Fallback to deriving from workspace (existing logic)
+        if (!task.repository_config) return;
 
         const { defaultWorkspace } = useAuthStore.getState();
         if (!defaultWorkspace) return;
