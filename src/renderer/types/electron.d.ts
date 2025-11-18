@@ -124,6 +124,7 @@ export interface IElectronAPI {
       customInput?: string;
     }>,
   ) => Promise<void>;
+  readRepoFile: (repoPath: string, filePath: string) => Promise<string | null>;
   onOpenSettings: (listener: () => void) => () => void;
   getAppVersion: () => Promise<string>;
   onUpdateReady: (listener: () => void) => () => void;
