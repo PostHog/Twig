@@ -5,6 +5,7 @@ export {
   PanelTab,
 } from "./components/PanelTree";
 export { useDragDropHandlers } from "./hooks/useDragDropHandlers";
+export { usePanelLayoutStore } from "./store/panelLayoutStore";
 export { usePanelStore } from "./store/panelStore";
 
 export type {
