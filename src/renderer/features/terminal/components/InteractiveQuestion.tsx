@@ -13,9 +13,9 @@ interface InteractiveQuestionProps {
   onClearAnswer?: () => void;
 }
 
-// Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
-const indexToLetter = (index: number): string => {
-  return String.fromCharCode(97 + index); // 97 is 'a' in ASCII
+// Convert index to number (0 -> '1', 1 -> '2', etc.)
+const indexToNumber = (index: number): string => {
+  return (index + 1).toString();
 };
 
 const SOMETHING_ELSE_OPTION = "Something else? (Please specify)";
@@ -97,9 +97,9 @@ export function InteractiveQuestion({
         return;
       }
 
-      if (e.key.length === 1 && e.key >= "a" && e.key <= "z") {
-        const index = e.key.charCodeAt(0) - 97;
-        if (index < state.allOptions.length) {
+      if (e.key.length === 1 && e.key >= "1" && e.key <= "9") {
+        const index = parseInt(e.key, 10) - 1;
+        if (index >= 0 && index < state.allOptions.length) {
           e.preventDefault();
           setSelectedIndex(index);
 
@@ -207,7 +207,7 @@ export function InteractiveQuestion({
             const isAnsweredOption =
               isAnswered && answer?.selectedOption === option;
             const isSomethingElse = index === somethingElseIndex;
-            const letter = indexToLetter(index);
+            const number = indexToNumber(index);
 
             return (
               <Flex
@@ -271,7 +271,7 @@ export function InteractiveQuestion({
                     minWidth: "20px",
                   }}
                 >
-                  {letter})
+                  {number})
                 </Text>
                 <Text
                   size="2"
@@ -338,7 +338,7 @@ export function InteractiveQuestion({
 
         {isActive && !isAnswered && !showInput && (
           <Text size="1" mt="2" style={{ color: "var(--gray-10)" }}>
-            Press letter key (a, b, c...) to select, or use ↑↓/j/k + Enter
+            Press number key (1, 2, 3...) to select, or use ↑↓/j/k + Enter
           </Text>
         )}
       </Flex>
