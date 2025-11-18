@@ -25,5 +25,15 @@
       ]
     }
   ],
-  "answered": false
+  "answered": true,
+  "answers": [
+    {
+      "questionId": "q1",
+      "selectedOption": "Replace alphabetic keys: only numeric keys (1-4) work, remove 'a-d' support (breaking change)"
+    },
+    {
+      "questionId": "q2",
+      "selectedOption": "Update answer display from 'a) Option text' to '1) Option text' for consistency"
+    }
+  ]
 }
