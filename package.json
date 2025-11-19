@@ -22,7 +22,8 @@
     "check:write": "pnpm run lint && pnpm run typecheck",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "prepare": "husky",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "vitest run"
   },
   "keywords": [
     "posthog",
@@ -40,14 +41,19 @@
     "@electron-forge/plugin-vite": "^7.10.2",
     "@electron-forge/publisher-github": "^7.10.2",
     "@electron-forge/shared-types": "^7.10.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20.19.21",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@types/uuid": "^9.0.7",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^4.0.10",
     "autoprefixer": "^10.4.17",
     "electron": "^28.2.0",
     "husky": "^9.1.7",
+    "jsdom": "^26.0.0",
     "knip": "^5.66.3",
     "lint-staged": "^15.5.2",
     "postcss": "^8.4.33",
@@ -57,10 +63,13 @@
     "typescript": "^5.9.3",
     "vite": "^5.0.12",
     "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.0.10",
     "yaml": "^2.8.1"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.52",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.8",
     "@dnd-kit/react": "^0.1.21",
     "@phosphor-icons/react": "^2.1.10",
     "@posthog/agent": "1.20.0",

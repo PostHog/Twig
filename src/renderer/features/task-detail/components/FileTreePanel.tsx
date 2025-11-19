@@ -1,3 +1,4 @@
+import { usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
@@ -93,14 +94,18 @@ function buildTreeFromPaths(
 interface TreeItemProps {
   node: TreeNode;
   depth: number;
+  taskId: string;
 }
 
-function TreeItem({ node, depth }: TreeItemProps) {
+function TreeItem({ node, depth, taskId }: TreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(depth === 0);
+  const openFile = usePanelLayoutStore((state) => state.openFile);
 
-  const handleToggle = () => {
+  const handleClick = () => {
     if (node.type === "folder") {
       setIsExpanded(!isExpanded);
+    } else {
+      openFile(taskId, node.path);
     }
   };
 
@@ -113,10 +118,10 @@ function TreeItem({ node, depth }: TreeItemProps) {
         px="2"
         style={{
           paddingLeft: `${depth * 16 + 8}px`,
-          cursor: node.type === "folder" ? "pointer" : "default",
+          cursor: "pointer",
         }}
         className="rounded hover:bg-gray-2"
-        onClick={handleToggle}
+        onClick={handleClick}
       >
         {node.type === "folder" ? (
           isExpanded ? (
@@ -138,6 +143,7 @@ function TreeItem({ node, depth }: TreeItemProps) {
               key={`${child.name}-${index}`}
               node={child}
               depth={depth + 1}
+              taskId={taskId}
             />
           ))}
         </Box>
@@ -205,7 +211,7 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
     <Box height="100%" overflowY="auto" p="4">
       <Flex direction="column" gap="1">
         {fileTree.map((node) => (
-          <TreeItem key={node.path} node={node} depth={0} />
+          <TreeItem key={node.path} node={node} depth={0} taskId={taskId} />
         ))}
       </Flex>
     </Box>

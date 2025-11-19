@@ -2,7 +2,6 @@ import { useDroppable } from "@dnd-kit/react";
 import { Box, Flex } from "@radix-ui/themes";
 import type React from "react";
 import type { PanelContent } from "../store/panelStore";
-import { usePanelStore } from "../store/panelStore";
 import { DraggableTab } from "./DraggableTab";
 import { PanelDropZones } from "./PanelDropZones";
 
@@ -10,24 +9,24 @@ interface TabbedPanelProps {
   panelId: string;
   content: PanelContent;
   onActiveTabChange?: (panelId: string, tabId: string) => void;
+  draggingTabId?: string | null;
+  draggingTabPanelId?: string | null;
 }
 
 export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   panelId,
   content,
   onActiveTabChange,
+  draggingTabId = null,
+  draggingTabPanelId = null,
 }) => {
-  const { setActiveTab, closeTab } = usePanelStore();
-
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
-  const draggingTabId = usePanelStore((state) => state.draggingTabId);
 
   const handleCloseTab = (tabId: string) => {
     const tab = content.tabs.find((t) => t.id === tabId);
     if (tab?.onClose) {
       tab.onClose();
     }
-    closeTab(panelId, tabId);
   };
 
   const { ref: tabBarRef } = useDroppable({
@@ -56,12 +55,9 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               label={tab.label}
               isActive={tab.id === content.activeTabId}
               index={index}
+              draggable={tab.draggable}
               onSelect={() => {
-                if (onActiveTabChange) {
-                  onActiveTabChange(panelId, tab.id);
-                } else {
-                  setActiveTab(panelId, tab.id);
-                }
+                onActiveTabChange?.(panelId, tab.id);
                 tab.onSelect?.();
               }}
               onClose={
@@ -92,7 +88,17 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         )}
 
         {content.droppable && (
-          <PanelDropZones panelId={panelId} isDragging={!!draggingTabId} />
+          <PanelDropZones
+            panelId={panelId}
+            isDragging={!!draggingTabId}
+            allowSplit={
+              // Allow split if:
+              // 1. Current panel has > 1 tab (same-panel split), OR
+              // 2. Dragging from a different panel (cross-panel split)
+              content.tabs.length > 1 ||
+              (draggingTabPanelId !== null && draggingTabPanelId !== panelId)
+            }
+          />
         )}
       </Box>
     </Box>

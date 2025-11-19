@@ -9,6 +9,7 @@ interface DraggableTabProps {
   label: string;
   isActive: boolean;
   index: number;
+  draggable?: boolean;
   onSelect: () => void;
   onClose?: () => void;
   icon?: React.ReactNode;
@@ -20,6 +21,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   label,
   isActive,
   index,
+  draggable = true,
   onSelect,
   onClose,
   icon,
@@ -28,15 +30,19 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     id: tabId,
     index,
     data: { tabId, panelId, type: "tab" },
+    disabled: !draggable,
   });
 
   return (
     <Flex
       ref={ref}
+      role="tab"
+      aria-label={label}
+      data-active={isActive}
       align="center"
       gap="2"
       px="4"
-      className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
+      className={`group relative select-none border-r border-b-2 transition-colors ${draggable ? "cursor-grab" : "cursor-default"}`}
       style={{
         backgroundColor: isActive ? "var(--accent-3)" : "transparent",
         borderRightColor: "var(--gray-6)",
@@ -75,6 +81,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
           variant="ghost"
           color={isActive ? undefined : "gray"}
           className="opacity-0 transition-opacity group-hover:opacity-100"
+          aria-label="Close tab"
           onClick={(e) => {
             e.stopPropagation();
             onClose();

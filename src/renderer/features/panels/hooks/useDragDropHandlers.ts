@@ -1,4 +1,8 @@
-import { type SplitDirection, usePanelStore } from "../store/panelStore";
+import {
+  type SplitDirection,
+  usePanelLayoutStore,
+} from "../store/panelLayoutStore";
+import { findPanelById } from "../store/panelStoreHelpers";
 
 const isSplitDirection = (zone: string): zone is SplitDirection => {
   return (
@@ -6,19 +10,19 @@ const isSplitDirection = (zone: string): zone is SplitDirection => {
   );
 };
 
-export const useDragDropHandlers = () => {
-  const { moveTab, splitPanel, setDraggingTab, reorderTabs, findPanel } =
-    usePanelStore();
+export const useDragDropHandlers = (taskId: string) => {
+  const { moveTab, splitPanel, setDraggingTab, reorderTabs, getLayout } =
+    usePanelLayoutStore();
 
   const handleDragStart = (event: any) => {
     const data = event.operation.source?.data;
     if (data?.type !== "tab" || !data.tabId || !data.panelId) return;
 
-    setDraggingTab(data.tabId, data.panelId);
+    setDraggingTab(taskId, data.tabId, data.panelId);
   };
 
   const handleDragEnd = (event: any) => {
-    setDraggingTab(null, null);
+    usePanelLayoutStore.getState().clearDraggingTab(taskId);
 
     if (event.canceled) return;
 
@@ -39,7 +43,7 @@ export const useDragDropHandlers = () => {
         targetIndex !== undefined &&
         sourceIndex !== targetIndex
       ) {
-        reorderTabs(sourceData.panelId, sourceIndex, targetIndex);
+        reorderTabs(taskId, sourceData.panelId, sourceIndex, targetIndex);
       }
       return;
     }
@@ -50,13 +54,16 @@ export const useDragDropHandlers = () => {
       targetData?.type === "tab-bar" &&
       sourceData.panelId === targetData.panelId
     ) {
-      const panel = findPanel(sourceData.panelId);
+      const layout = getLayout(taskId);
+      const panel = layout
+        ? findPanelById(layout.panelTree, sourceData.panelId)
+        : null;
       if (panel && panel.type === "leaf") {
         const sourceIndex = event.operation.source?.index;
         const targetIndex = panel.content.tabs.length - 1;
 
         if (sourceIndex !== undefined && sourceIndex !== targetIndex) {
-          reorderTabs(sourceData.panelId, sourceIndex, targetIndex);
+          reorderTabs(taskId, sourceData.panelId, sourceIndex, targetIndex);
         }
       }
       return;
@@ -78,9 +85,9 @@ export const useDragDropHandlers = () => {
     const { panelId: targetPanelId, zone } = targetData;
 
     if (zone === "center") {
-      moveTab(tabId, sourcePanelId, targetPanelId);
+      moveTab(taskId, tabId, sourcePanelId, targetPanelId);
     } else if (isSplitDirection(zone)) {
-      splitPanel(tabId, sourcePanelId, targetPanelId, zone);
+      splitPanel(taskId, tabId, sourcePanelId, targetPanelId, zone);
     }
   };
 

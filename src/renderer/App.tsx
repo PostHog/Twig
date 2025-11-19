@@ -1,8 +1,6 @@
 import { MainLayout } from "@components/MainLayout";
-import { DragDropProvider } from "@dnd-kit/react";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { useDragDropHandlers } from "@features/panels";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
 import { useEffect, useState } from "react";
@@ -10,7 +8,6 @@ import { useEffect, useState } from "react";
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
-  const dragDropHandlers = useDragDropHandlers();
 
   // Initialize PostHog analytics
   useEffect(() => {
@@ -32,9 +29,7 @@ function App() {
     );
   }
 
-  const content = isAuthenticated ? <MainLayout /> : <AuthScreen />;
-
-  return <DragDropProvider {...dragDropHandlers}>{content}</DragDropProvider>;
+  return isAuthenticated ? <MainLayout /> : <AuthScreen />;
 }
 
 export default App;

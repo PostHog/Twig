@@ -47,6 +47,7 @@ export function SidebarTreeItem({
           }
         }
       }}
+      onContextMenu={line.onContextMenu}
     >
       <span style={{ display: "flex", alignItems: "center", flex: 1 }}>
         <span>
@@ -55,16 +56,22 @@ export function SidebarTreeItem({
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {line.icon && (
-            <span style={{ display: "flex", alignItems: "center" }}>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                color: line.customColor,
+              }}
+            >
               {line.icon}
             </span>
           )}
           {line.tooltip ? (
             <Tooltip content={line.tooltip}>
-              <span>{line.label}</span>
+              <span style={{ color: line.customColor }}>{line.label}</span>
             </Tooltip>
           ) : (
-            <span>{line.label}</span>
+            <span style={{ color: line.customColor }}>{line.label}</span>
           )}
           {line.hasChildren && (
             <span style={{ display: "flex", alignItems: "center" }}>
