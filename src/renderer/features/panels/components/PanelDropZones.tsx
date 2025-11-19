@@ -8,6 +8,7 @@ type DropZoneType = SplitDirection | "center";
 interface PanelDropZonesProps {
   panelId: string;
   isDragging: boolean;
+  allowSplit?: boolean; // Whether to show edge drop zones for splitting
 }
 
 interface DropZoneProps {
@@ -25,13 +26,11 @@ const DropZone: React.FC<DropZoneProps> = ({ panelId, zone, style }) => {
   return (
     <Box
       ref={ref}
-      className={`drop-zone drop-zone-${zone} pointer-events-auto absolute z-[100] transition-all duration-150 ${
-        isDropTarget ? "border-2 opacity-50" : "border-0 opacity-10"
-      }`}
+      className={`drop-zone drop-zone-${zone} pointer-events-auto absolute z-[100] transition-all duration-150`}
       style={{
         ...style,
-        backgroundColor: isDropTarget ? "var(--accent-9)" : "var(--gray-5)",
-        borderColor: isDropTarget ? "var(--accent-9)" : "transparent",
+        backgroundColor: isDropTarget ? "var(--gray-8)" : "transparent",
+        opacity: isDropTarget ? 0.3 : 0,
       }}
     />
   );
@@ -71,8 +70,14 @@ const ZONE_CONFIGS: Array<{ zone: DropZoneType; style: React.CSSProperties }> =
 export const PanelDropZones: React.FC<PanelDropZonesProps> = ({
   panelId,
   isDragging,
+  allowSplit = true,
 }) => {
   if (!isDragging) return null;
+
+  // Filter zones based on allowSplit
+  const visibleZones = allowSplit
+    ? ZONE_CONFIGS
+    : ZONE_CONFIGS.filter((config) => config.zone === "center");
 
   return (
     <Box
@@ -83,7 +88,7 @@ export const PanelDropZones: React.FC<PanelDropZonesProps> = ({
         zIndex: 100,
       }}
     >
-      {ZONE_CONFIGS.map(({ zone, style }) => (
+      {visibleZones.map(({ zone, style }) => (
         <DropZone key={zone} panelId={panelId} zone={zone} style={style} />
       ))}
     </Box>
