@@ -1,12 +1,13 @@
+import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import { SidebarTreeItem } from "@components/ui/sidebar/SidebarTreeItem";
 import { useSidebarMenuData } from "@components/ui/sidebar/UseSidebarMenuData";
 import { buildTreeLines, getAllNodeIds } from "@components/ui/sidebar/Utils";
-
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
+import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
-import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { Box, Button, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useLayoutStore } from "@stores/layoutStore";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -25,6 +26,8 @@ export const SidebarContent: React.FC = () => {
   const setActiveFilters = useTaskStore((state) => state.setActiveFilters);
   const { data: currentUser } = useMeQuery();
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
+  const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
+    useTaskContextMenu();
 
   const expandedNodes = new Set(expandedNodesArray);
   const userName = currentUser?.first_name || currentUser?.email || "Account";
@@ -53,7 +56,7 @@ export const SidebarContent: React.FC = () => {
     handleNavigate("task-list", "Tasks");
   };
 
-  const menuData = useSidebarMenuData({
+  const menuNodes = useSidebarMenuData({
     userName,
     activeView: view,
     isLoading,
@@ -62,12 +65,12 @@ export const SidebarContent: React.FC = () => {
     setActiveFilters,
     onNavigate: handleNavigate,
     onTaskClick: handleTaskClick,
-    onCreateTask: handleCreateTask,
     onProjectClick: handleProjectClick,
+    onTaskContextMenu: showContextMenu,
   });
 
-  const treeLines = buildTreeLines([menuData], "", "", expandedNodes, 0);
-  const allNodeIds = getAllNodeIds([menuData], "", 0);
+  const treeLines = buildTreeLines(menuNodes, "", "", expandedNodes, 0);
+  const allNodeIds = getAllNodeIds(menuNodes, "", 0);
   const allExpanded =
     allNodeIds.length > 0 && allNodeIds.every((id) => expandedNodes.has(id));
 
@@ -80,55 +83,79 @@ export const SidebarContent: React.FC = () => {
   };
 
   return (
-    <Box
-      style={{
-        flexGrow: 1,
-        overflow: "auto",
-      }}
-    >
-      <Box p="2">
-        <div className="sidebar-tree">
-          {treeLines.map((line, index) => {
-            const isRoot = index === 0;
-            if (isRoot) {
-              return (
-                <Flex key={line.nodeId} align="center" justify="between" mb="1">
-                  <span style={{ fontWeight: 500 }}>{line.label}</span>
-                  <Tooltip
-                    content={allExpanded ? "Collapse all" : "Expand all"}
+    <>
+      <RenameTaskDialog
+        task={renameTask}
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+      />
+
+      <Box
+        style={{
+          flexGrow: 1,
+          overflow: "auto",
+        }}
+      >
+        <Flex direction="column" gap="4" p="2">
+          <Button
+            variant="outline"
+            size="1"
+            onClick={handleCreateTask}
+            style={{ width: "100%" }}
+          >
+            New task
+          </Button>
+          <div className="sidebar-tree">
+            {treeLines.map((line, index) => {
+              const isRoot = line.prefix === "" && line.connector === "";
+              if (isRoot) {
+                return (
+                  <Flex
+                    key={line.nodeId}
+                    align="center"
+                    justify="between"
+                    mb="1"
+                    mt={index === 0 ? "0" : "4"}
                   >
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      color="gray"
-                      onClick={handleToggleExpandAll}
-                      style={{ cursor: "pointer" }}
-                    >
-                      {allExpanded ? (
-                        <ArrowsInSimpleIcon size={12} />
-                      ) : (
-                        <ArrowsOutSimpleIcon size={12} />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                </Flex>
+                    <span style={{ fontWeight: 500 }}>{line.label}</span>
+                    {false && (
+                      <Tooltip
+                        content={allExpanded ? "Collapse all" : "Expand all"}
+                      >
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          color="gray"
+                          onClick={handleToggleExpandAll}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {allExpanded ? (
+                            <ArrowsInSimpleIcon size={12} />
+                          ) : (
+                            <ArrowsOutSimpleIcon size={12} />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Flex>
+                );
+              }
+              return (
+                <SidebarTreeItem
+                  key={line.nodeId}
+                  line={line}
+                  index={index}
+                  isHovered={hoveredLineIndex === index}
+                  expandedNodes={expandedNodes}
+                  onMouseEnter={() => setHoveredLineIndex(index)}
+                  onMouseLeave={() => setHoveredLineIndex(null)}
+                  onToggle={toggleNode}
+                />
               );
-            }
-            return (
-              <SidebarTreeItem
-                key={line.nodeId}
-                line={line}
-                index={index}
-                isHovered={hoveredLineIndex === index}
-                expandedNodes={expandedNodes}
-                onMouseEnter={() => setHoveredLineIndex(index)}
-                onMouseLeave={() => setHoveredLineIndex(null)}
-                onToggle={toggleNode}
-              />
-            );
-          })}
-        </div>
+            })}
+          </div>
+        </Flex>
       </Box>
-    </Box>
+    </>
   );
 };

@@ -12,6 +12,7 @@ import {
 } from "electron";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { registerAgentIpc, type TaskController } from "./services/agent.js";
+import "./services/index.js";
 import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
 import { registerOAuthHandlers } from "./services/oauth.js";

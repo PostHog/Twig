@@ -30,6 +30,8 @@ export function buildTreeLines(
       hoverIcon: node.hoverIcon,
       showHoverIconAlways: node.showHoverIconAlways,
       tooltip: node.tooltip,
+      customColor: node.customColor,
+      onContextMenu: node.onContextMenu,
     });
 
     if (

@@ -8,9 +8,7 @@ import {
   CheckCircleIcon,
   CircleIcon,
   FolderIcon,
-  GearIcon,
   ListNumbersIcon,
-  PlusIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
 import type { Task } from "@shared/types";
@@ -34,8 +32,8 @@ interface UseSidebarMenuDataProps {
   setActiveFilters: (filters: ActiveFilters) => void;
   onNavigate: (type: "task-list" | "settings", title: string) => void;
   onTaskClick: (task: Task) => void;
-  onCreateTask: () => void;
   onProjectClick: (repository: string) => void;
+  onTaskContextMenu: (task: Task, e: React.MouseEvent) => void;
 }
 
 function getStatusIcon(status?: string) {
@@ -70,9 +68,9 @@ export function useSidebarMenuData({
   setActiveFilters,
   onNavigate,
   onTaskClick,
-  onCreateTask,
   onProjectClick,
-}: UseSidebarMenuDataProps): TreeNode {
+  onTaskContextMenu,
+}: UseSidebarMenuDataProps): TreeNode[] {
   const { data: allTasks = [] } = useTasks();
   const relevantTasks = allTasks
     .sort(
@@ -116,7 +114,7 @@ export function useSidebarMenuData({
     filters: {},
   });
 
-  return {
+  const accountNode: TreeNode = {
     label: userName,
     children: [
       ...views.map((view): TreeNode => {
@@ -133,47 +131,8 @@ export function useSidebarMenuData({
             onNavigate("task-list", "Tasks");
           },
           isActive,
-          hoverAction: onCreateTask,
-          hoverIcon: <PlusIcon size={12} />,
         };
       }),
-      {
-        label: "Settings",
-        icon: (
-          <GearIcon
-            size={12}
-            weight={activeView.type === "settings" ? "fill" : "regular"}
-          />
-        ),
-        forceSeparator: true,
-        action: () => onNavigate("settings", "Settings"),
-        isActive: activeView.type === "settings",
-      },
-      ...(relevantTasks.length > 0
-        ? [
-            {
-              label: "Tasks",
-              icon: <ListNumbersIcon size={12} />,
-              children: relevantTasks.map((task): TreeNode => {
-                const status = task.latest_run?.status || "pending";
-                const statusLabel = status.replace("_", " ");
-                const isActiveTask = !!(
-                  activeView.type === "task-detail" &&
-                  activeView.data &&
-                  activeView.data.id === task.id
-                );
-                return {
-                  label: task.title,
-                  icon: getStatusIcon(status),
-                  action: () => onTaskClick(task),
-                  isActive: isActiveTask,
-                  tooltip: `${task.slug} | ${task.title} (${statusLabel})`,
-                };
-              }),
-              forceSeparator: true,
-            },
-          ]
-        : []),
       {
         label: "Projects",
         icon: <FolderIcon size={12} />,
@@ -191,4 +150,34 @@ export function useSidebarMenuData({
       },
     ],
   };
+
+  const nodes: TreeNode[] = [accountNode];
+
+  if (relevantTasks.length > 0) {
+    const tasksNode: TreeNode = {
+      label: "Tasks",
+      icon: <ListNumbersIcon size={12} />,
+      children: relevantTasks.map((task): TreeNode => {
+        const status = task.latest_run?.status || "pending";
+        const statusLabel = status.replace("_", " ");
+        const isActiveTask = !!(
+          activeView.type === "task-detail" &&
+          activeView.data &&
+          activeView.data.id === task.id
+        );
+        return {
+          label: task.title,
+          icon: getStatusIcon(status),
+          action: () => onTaskClick(task),
+          isActive: isActiveTask,
+          tooltip: `${task.slug} | ${task.title} (${statusLabel})`,
+          onContextMenu: (e) => onTaskContextMenu(task, e),
+        };
+      }),
+      forceSeparator: true,
+    };
+    nodes.push(tasksNode);
+  }
+
+  return nodes;
 }
