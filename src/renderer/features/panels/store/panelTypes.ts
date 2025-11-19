@@ -7,6 +7,7 @@ export type Tab = {
   label: string;
   component?: React.ReactNode;
   closeable?: boolean;
+  draggable?: boolean;
   onClose?: () => void;
   onSelect?: () => void;
   icon?: React.ReactNode;
