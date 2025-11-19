@@ -28,7 +28,8 @@
       "@stores/*": ["renderer/stores/*"],
       "@hooks/*": ["renderer/hooks/*"],
       "@utils/*": ["renderer/utils/*"],
-      "@lib/*": ["renderer/lib/*"]
+      "@lib/*": ["renderer/lib/*"],
+      "@test/*": ["test/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
