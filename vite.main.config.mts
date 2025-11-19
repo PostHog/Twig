@@ -73,7 +73,7 @@ function copyClaudeExecutable(): Plugin {
       // IMPORTANT: Copy to claude-cli/ subdirectory to isolate the package.json
       // If we put package.json in .vite/build/, it breaks Vite's CommonJS output
       const destDir = join(__dirname, ".vite/build/claude-cli");
-      
+
       if (!existsSync(destDir)) {
         mkdirSync(destDir, { recursive: true });
       }
@@ -83,15 +83,15 @@ function copyClaudeExecutable(): Plugin {
       for (const file of files) {
         const src = join(sdkDir, file);
         const dest = join(destDir, file);
-        
+
         if (!existsSync(src)) {
           console.warn(
             `[copy-claude-executable] ${file} not found. ` +
-            `Run 'pnpm build' in the agent directory first.`
+              `Run 'pnpm build' in the agent directory first.`,
           );
           continue;
         }
-        
+
         copyFileSync(src, dest);
       }
 
