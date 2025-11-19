@@ -12,9 +12,7 @@ declare global {
     storeApiKey: (apiKey: string) => Promise<string>;
     retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
     // OAuth API
-    oauthStartFlow: (
-      region: CloudRegion,
-    ) => Promise<{
+    oauthStartFlow: (region: CloudRegion) => Promise<{
       success: boolean;
       data?: OAuthTokenResponse;
       error?: string;
@@ -22,9 +20,7 @@ declare global {
     oauthEncryptTokens: (
       tokens: StoredOAuthTokens,
     ) => Promise<{ success: boolean; encrypted?: string; error?: string }>;
-    oauthRetrieveTokens: (
-      encrypted: string,
-    ) => Promise<{
+    oauthRetrieveTokens: (encrypted: string) => Promise<{
       success: boolean;
       data?: StoredOAuthTokens;
       error?: string;
