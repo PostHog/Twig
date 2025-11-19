@@ -85,11 +85,7 @@ export function PlanEditor({
 
   // Track unsaved changes
   useEffect(() => {
-    if (content !== fetchedContent) {
-      setHasUnsavedChanges(true);
-    } else {
-      setHasUnsavedChanges(false);
-    }
+    setHasUnsavedChanges(content !== fetchedContent);
   }, [content, fetchedContent]);
 
   return (
