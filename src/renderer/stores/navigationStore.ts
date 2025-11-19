@@ -1,6 +1,6 @@
+import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
 import { create } from "zustand";
-import { track } from "@renderer/lib/analytics";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 type ViewType = "task-list" | "task-detail" | "settings";

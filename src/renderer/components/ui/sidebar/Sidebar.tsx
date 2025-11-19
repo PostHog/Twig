@@ -3,7 +3,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import { useSidebarStore } from "@stores/sidebarStore";
 import React from "react";
 
-const MIN_WIDTH = 100;
+const MIN_WIDTH = 140;
 
 export const Sidebar: React.FC<{ children: React.ReactNode }> = ({
   children,

@@ -9,6 +9,8 @@ export interface TreeNode {
   hoverIcon?: React.ReactNode;
   showHoverIconAlways?: boolean;
   tooltip?: string;
+  customColor?: string;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 export interface TreeLine {
@@ -24,4 +26,6 @@ export interface TreeLine {
   hoverIcon?: React.ReactNode;
   showHoverIconAlways?: boolean;
   tooltip?: string;
+  customColor?: string;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }

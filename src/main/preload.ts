@@ -4,6 +4,7 @@ import type {
   OAuthTokenResponse,
   StoredOAuthTokens,
 } from "../shared/types/oauth";
+import type { ContextMenuResult } from "./services/contextMenu.types.js";
 
 interface MessageBoxOptions {
   type?: "info" | "error" | "warning" | "question";
@@ -242,4 +243,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, wrapped);
     return () => ipcRenderer.removeListener(channel, wrapped);
   },
+  // Context Menu API
+  showTaskContextMenu: (
+    taskId: string,
+    taskTitle: string,
+  ): Promise<ContextMenuResult> =>
+    ipcRenderer.invoke("show-task-context-menu", taskId, taskTitle),
 });
