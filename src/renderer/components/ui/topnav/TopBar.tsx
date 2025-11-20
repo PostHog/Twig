@@ -9,7 +9,7 @@ interface TopBarProps {
 export const TopBar = ({ onSearchClick }: TopBarProps) => {
   return (
     <Flex
-      className="drag h-10 w-full border-gray-6 border-b"
+      className="drag h-10 min-h-10 w-full border-gray-6 border-b"
       align="center"
       justify="center"
       px="2"

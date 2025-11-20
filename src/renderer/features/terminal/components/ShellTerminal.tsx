@@ -3,7 +3,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { useLayoutStore } from "@stores/layoutStore";
 import { useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -25,24 +24,12 @@ export function ShellTerminal({ cwd }: ShellTerminalProps) {
   const terminal = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const cliMode = useLayoutStore((state) => state.cliMode);
-  const setCliMode = useLayoutStore((state) => state.setCliMode);
 
   // Cmd+K to clear terminal
   useHotkeys("meta+k, ctrl+k", (event) => {
     event.preventDefault();
     terminal.current?.clear();
   });
-
-  // Auto-focus terminal when switching to shell mode
-  useEffect(() => {
-    if (cliMode === "shell" && terminal.current) {
-      // Use requestAnimationFrame to ensure the component is visible before focusing
-      requestAnimationFrame(() => {
-        terminal.current?.focus();
-      });
-    }
-  }, [cliMode]);
 
   useEffect(() => {
     if (!terminalRef.current) {
@@ -74,28 +61,6 @@ export function ShellTerminal({ cwd }: ShellTerminalProps) {
       cursorStyle: "block",
       cursorWidth: 8,
       allowProposedApi: true,
-    });
-
-    // Handle Shift+Tab directly to switch modes (xterm would otherwise consume it)
-    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      // Check for Shift+Tab (and only Shift+Tab, no other modifiers)
-      // Only respond to actual keydown, not repeat or release events
-      if (
-        event.type === "keydown" &&
-        !event.repeat &&
-        event.key === "Tab" &&
-        event.shiftKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey
-      ) {
-        // Manually trigger mode switch since event won't bubble to global handler
-        event.preventDefault();
-        setCliMode((current) => (current === "task" ? "shell" : "task"));
-        return false; // Don't let xterm handle this
-      }
-      // Let xterm handle everything else normally
-      return true;
     });
 
     // Load addons
@@ -180,7 +145,7 @@ export function ShellTerminal({ cwd }: ShellTerminalProps) {
       terminal.current = null;
       fitAddon.current = null;
     };
-  }, [cwd, setCliMode]);
+  }, [cwd]);
 
   return (
     <Box

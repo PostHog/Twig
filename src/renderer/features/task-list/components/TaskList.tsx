@@ -1,20 +1,16 @@
-import { ResizeHandle } from "@components/ui/ResizeHandle";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { CliTaskPanel } from "@features/task-list/components/CliTaskPanel";
 import { TaskListContent } from "@features/task-list/components/TaskListContent";
 import { TaskListHeader } from "@features/task-list/components/TaskListHeader";
 import { useTaskDragDrop } from "@features/task-list/hooks/useTaskDragDrop";
 import { useTaskGrouping } from "@features/task-list/hooks/useTaskGrouping";
 import { useTaskKeyboardNavigation } from "@features/task-list/hooks/useTaskKeyboardNavigation";
 import { useTaskScrolling } from "@features/task-list/hooks/useTaskScrolling";
-import { useCliPanelResize } from "@features/tasks/hooks/useCliPanelResize";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { filterTasks, useTaskStore } from "@features/tasks/stores/taskStore";
 import { useStatusBar } from "@hooks/useStatusBar";
 import { useUsers } from "@hooks/useUsers";
 import { Box, Button, Flex, Spinner, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useLayoutStore } from "@stores/layoutStore";
 import { useCallback, useRef } from "react";
 
 interface TaskListProps {
@@ -48,8 +44,6 @@ export function TaskList({ onSelectTask }: TaskListProps) {
   );
 
   const { logout } = useAuthStore();
-  const cliPanelWidth = useLayoutStore((state) => state.cliPanelWidth);
-  const setCliPanelWidth = useLayoutStore((state) => state.setCliPanelWidth);
   const listRef = useRef<HTMLDivElement>(null);
 
   const filteredTasks = filterTasks(
@@ -61,7 +55,6 @@ export function TaskList({ onSelectTask }: TaskListProps) {
     filterMatchMode,
   );
   const groupedTasks = useTaskGrouping(filteredTasks, groupBy, users);
-  const { isResizing, handleMouseDown } = useCliPanelResize(setCliPanelWidth);
 
   const handleMoveTask = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -159,50 +152,37 @@ export function TaskList({ onSelectTask }: TaskListProps) {
   }
 
   return (
-    <Flex height="100%" style={{ position: "relative" }}>
-      {/* Left side: Task list */}
-      <Flex
-        direction="column"
-        style={{ width: `calc(${100 - cliPanelWidth}% - 14px)` }}
-      >
-        <TaskListHeader
+    <Flex direction="column" height="100%">
+      <TaskListHeader
+        filter={filter}
+        onFilterChange={(newFilter) => {
+          setFilter(newFilter);
+          setSelectedIndex(null);
+        }}
+      />
+
+      <Box ref={listRef} flexGrow="1" overflowY="auto">
+        <TaskListContent
+          filteredTasks={filteredTasks}
+          groupedTasks={groupedTasks}
+          groupBy={groupBy}
+          expandedGroups={expandedGroups}
+          toggleGroupExpanded={toggleGroupExpanded}
+          draggedTaskId={draggedTaskId}
+          dragOverIndex={dragOverIndex}
+          dropPosition={dropPosition}
+          selectedIndex={selectedIndex}
+          hoveredIndex={hoveredIndex}
+          contextMenuIndex={contextMenuIndex}
+          onSelectTask={onSelectTask}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
+          onMoveTask={handleMoveTask}
           filter={filter}
-          onFilterChange={(newFilter) => {
-            setFilter(newFilter);
-            setSelectedIndex(null);
-          }}
         />
-
-        <Box ref={listRef} flexGrow="1" overflowY="auto">
-          <TaskListContent
-            filteredTasks={filteredTasks}
-            groupedTasks={groupedTasks}
-            groupBy={groupBy}
-            expandedGroups={expandedGroups}
-            toggleGroupExpanded={toggleGroupExpanded}
-            draggedTaskId={draggedTaskId}
-            dragOverIndex={dragOverIndex}
-            dropPosition={dropPosition}
-            selectedIndex={selectedIndex}
-            hoveredIndex={hoveredIndex}
-            contextMenuIndex={contextMenuIndex}
-            onSelectTask={onSelectTask}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-            onMoveTask={handleMoveTask}
-            filter={filter}
-          />
-        </Box>
-      </Flex>
-
-      <ResizeHandle isResizing={isResizing} onMouseDown={handleMouseDown} />
-
-      {/* Right side: CLI panel */}
-      <Box style={{ width: `calc(${cliPanelWidth}% - 14px)` }}>
-        <CliTaskPanel />
       </Box>
     </Flex>
   );

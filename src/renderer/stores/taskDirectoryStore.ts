@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 interface TaskDirectoryState {
   taskDirectories: Record<string, string>;
   repoDirectories: Record<string, string>;
+  lastUsedDirectory: string | null;
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
   setTaskDirectory: (taskId: string, directory: string) => void;
   setRepoDirectory: (repoKey: string, directory: string) => void;
@@ -17,6 +18,7 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
     (set, get) => ({
       taskDirectories: {},
       repoDirectories: {},
+      lastUsedDirectory: null,
 
       getTaskDirectory: (taskId: string, repoKey?: string) => {
         // 1. Check for direct task mapping
@@ -45,6 +47,7 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
             ...state.taskDirectories,
             [taskId]: directory,
           },
+          lastUsedDirectory: directory,
         }));
       },
 
@@ -76,6 +79,7 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
       partialize: (state) => ({
         taskDirectories: state.taskDirectories,
         repoDirectories: state.repoDirectories,
+        lastUsedDirectory: state.lastUsedDirectory,
       }),
     },
   ),
