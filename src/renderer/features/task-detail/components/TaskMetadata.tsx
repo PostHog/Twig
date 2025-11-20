@@ -69,10 +69,9 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
         <DataList.Item>
           <DataList.Label>Repository</DataList.Label>
           <DataList.Value>
-            {task.repository_config ? (
+            {task.repository ? (
               <Code size="2" color="gray">
-                {task.repository_config.organization}/
-                {task.repository_config.repository}
+                {task.repository}
               </Code>
             ) : (
               <Text size="2" color="gray">
@@ -110,20 +109,24 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
           </DataList.Value>
         </DataList.Item>
 
-        {task.github_branch && (
+        {task.latest_run?.branch && (
           <DataList.Item>
             <DataList.Label>Branch</DataList.Label>
             <DataList.Value>
               <Code size="2" color="gray">
-                {task.github_branch}
+                {task.latest_run?.branch}
               </Code>
             </DataList.Value>
           </DataList.Item>
         )}
       </DataList.Root>
 
-      {task.github_pr_url && (
-        <Link href={task.github_pr_url} target="_blank" size="2">
+      {task.latest_run?.output?.pr_url && (
+        <Link
+          href={task.latest_run?.output?.pr_url as string}
+          target="_blank"
+          size="2"
+        >
           View Pull Request
         </Link>
       )}

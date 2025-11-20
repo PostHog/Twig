@@ -90,6 +90,7 @@ declare global {
     ) => Promise<Array<{ path: string; name: string }>>;
     agentStart: (params: {
       taskId: string;
+      taskRunId: string;
       repoPath: string;
       apiKey: string;
       apiHost: string;

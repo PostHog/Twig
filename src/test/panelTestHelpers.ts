@@ -10,7 +10,6 @@ export function createMockTask(overrides: Partial<Task> = {}): Task {
     slug: "test-task",
     title: "Test Task",
     description: "",
-    status: "pending",
     origin_product: "test",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

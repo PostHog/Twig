@@ -9,23 +9,17 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 const taskKeys = {
   all: ["tasks"] as const,
   lists: () => [...taskKeys.all, "list"] as const,
-  list: (filters?: { repositoryOrg?: string; repositoryName?: string }) =>
+  list: (filters?: { repository?: string }) =>
     [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
 };
 
-export function useTasks(filters?: {
-  repositoryOrg?: string;
-  repositoryName?: string;
-}) {
+export function useTasks(filters?: { repository?: string }) {
   return useAuthenticatedQuery(
     taskKeys.list(filters),
     (client) =>
-      client.getTasks(
-        filters?.repositoryOrg,
-        filters?.repositoryName,
-      ) as unknown as Promise<Task[]>,
+      client.getTasks(filters?.repository) as unknown as Promise<Task[]>,
   );
 }
 
@@ -37,18 +31,18 @@ export function useCreateTask() {
       client,
       {
         description,
-        repositoryConfig,
+        repository,
       }: {
         description: string;
-        repositoryConfig?: { organization: string; repository: string };
+        repository?: string;
         autoRun?: boolean;
         createdFrom?: "cli" | "command-menu";
       },
     ) =>
-      client.createTask(
+      client.createTask({
         description,
-        repositoryConfig,
-      ) as unknown as Promise<Task>,
+        repository,
+      }) as unknown as Promise<Task>,
     {
       onSuccess: (_task, variables) => {
         queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
@@ -57,7 +51,7 @@ export function useCreateTask() {
         track(ANALYTICS_EVENTS.TASK_CREATED, {
           auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
-          repository_provider: variables.repositoryConfig ? "github" : "none",
+          repository_provider: variables.repository ? "github" : "none",
         });
       },
     },

@@ -11,6 +11,7 @@ import {
 
 interface AgentStartParams {
   taskId: string;
+  taskRunId: string;
   repoPath: string;
   apiKey: string;
   apiHost: string;
@@ -33,11 +34,19 @@ export interface TaskController {
 }
 
 function getClaudeCliPath(): string {
+  const { existsSync } = require("node:fs");
   const appPath = app.getAppPath();
 
-  return app.isPackaged
+  const claudeCliPath = app.isPackaged
     ? join(`${appPath}.unpacked`, ".vite/build/claude-cli/cli.js")
     : join(appPath, ".vite/build/claude-cli/cli.js");
+
+  console.log("[agent] Claude CLI path:", claudeCliPath);
+  console.log("[agent] Claude CLI exists:", existsSync(claudeCliPath));
+  console.log("[agent] App path:", appPath);
+  console.log("[agent] Is packaged:", app.isPackaged);
+
+  return claudeCliPath;
 }
 
 function resolvePermissionMode(
@@ -64,6 +73,7 @@ export function registerAgentIpc(
       _event: IpcMainInvokeEvent,
       {
         taskId: posthogTaskId,
+        taskRunId,
         repoPath,
         apiKey,
         apiHost,
@@ -202,8 +212,17 @@ export function registerAgentIpc(
           };
 
           const mcpOverrides = {};
+          const claudeCliPath = getClaudeCliPath();
 
-          await agent.runTask(posthogTaskId, {
+          console.log("[agent] Query overrides:", {
+            model,
+            pathToClaudeCodeExecutable: claudeCliPath,
+            hasAbortController: !!abortController,
+            hasStderr: !!forwardClaudeStderr,
+            hasEnv: !!envOverrides,
+          });
+
+          await agent.runTask(posthogTaskId, taskRunId, {
             repositoryPath: repoPath,
             permissionMode: resolvedPermission,
             isCloudMode: runMode === "cloud",
@@ -215,7 +234,7 @@ export function registerAgentIpc(
               stderr: forwardClaudeStderr,
               env: envOverrides,
               mcpServers: mcpOverrides,
-              pathToClaudeCodeExecutable: getClaudeCliPath(),
+              pathToClaudeCodeExecutable: claudeCliPath,
             },
           });
 

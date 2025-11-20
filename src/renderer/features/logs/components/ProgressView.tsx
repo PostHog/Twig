@@ -16,10 +16,12 @@ export function ProgressView({ event }: ProgressViewProps) {
 
   // Color based on status
   const statusColor = {
-    started: "blue",
+    not_started: "gray",
+    queued: "blue",
     in_progress: "blue",
     completed: "green",
     failed: "red",
+    cancelled: "red",
   }[progress.status] as "blue" | "green" | "red" | undefined;
 
   return (

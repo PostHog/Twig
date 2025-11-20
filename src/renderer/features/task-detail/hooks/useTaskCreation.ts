@@ -4,15 +4,15 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
-import type { RepositoryConfig, Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
 import { useCallback } from "react";
+import type { Task } from "@/shared/types";
 
 interface UseTaskCreationOptions {
   editor: Editor | null;
   selectedDirectory: string;
-  detectedRepo: RepositoryConfig | null;
+  detectedRepository: string | null;
 }
 
 interface UseTaskCreationReturn {
@@ -33,7 +33,7 @@ interface UseTaskCreationReturn {
 export function useTaskCreation({
   editor,
   selectedDirectory,
-  detectedRepo,
+  detectedRepository,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
@@ -64,12 +64,12 @@ export function useTaskCreation({
       return;
     }
 
-    const repositoryConfig = detectedRepo || undefined;
+    const repository = detectedRepository || undefined;
 
     createTask(
       {
         description: content,
-        repositoryConfig,
+        repository,
         autoRun: autoRunTasks,
         createdFrom: "cli",
       },
@@ -105,7 +105,7 @@ export function useTaskCreation({
     canSubmit,
     editor,
     selectedDirectory,
-    detectedRepo,
+    detectedRepository,
     createTask,
     saveRepoPath,
     navigateToTask,

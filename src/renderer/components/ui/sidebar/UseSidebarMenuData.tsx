@@ -81,10 +81,12 @@ export function useSidebarMenuData({
 
   const repositoryMap = new Map<string, { fullPath: string; name: string }>();
   for (const task of allTasks) {
-    const { organization, repository } = task.repository_config || {};
-    if (organization && repository) {
-      const fullPath = `${organization}/${repository}`;
-      repositoryMap.set(fullPath, { fullPath, name: repository });
+    if (task.repository) {
+      const repoName = task.repository.split("/")[1];
+      repositoryMap.set(repoName, {
+        fullPath: task.repository,
+        name: repoName,
+      });
     }
   }
 

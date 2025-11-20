@@ -55,8 +55,6 @@ interface TodoList {
 const createProgressSignature = (progress: TaskRun): string =>
   [progress.status ?? "", progress.updated_at ?? ""].join("|");
 
-const getRepoKey = (org: string, repo: string) => `${org}/${repo}`;
-
 const derivePath = (workspace: string, repo: string) =>
   `${expandTildePath(workspace)}/${repo}`;
 
@@ -580,8 +578,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             if (!client) {
               throw new Error("API client not available");
             }
-            await client.runTask(taskId);
-            store.addLog(taskId, {
+
+            const result = await client.runTaskInCloud(taskId);
+
+            store.addLog(result.id, {
               type: "token",
               ts: Date.now(),
               content: "Task started in cloud successfully",
@@ -604,16 +604,14 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         if (!effectiveRepoPath) {
           // Prompt user to select directory or clone
-          const hasRepo = !!task.repository_config;
-          const repoConfig = task.repository_config;
+          const hasRepo = !!task.repository;
 
           const result = await window.electronAPI.showMessageBox({
             type: "question",
             title: "Select working directory",
-            message:
-              hasRepo && repoConfig
-                ? `Do you have ${repoConfig.organization}/${repoConfig.repository} locally?`
-                : "Select a working directory for this task",
+            message: hasRepo
+              ? `Do you have ${task.repository} locally?`
+              : "Select a working directory for this task",
             detail: hasRepo
               ? "If you have the repository locally, we'll use that. Otherwise, we can clone it for you."
               : "Choose a directory where the task will run.",
@@ -646,7 +644,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             return store.runTask(taskId, task, true);
           }
 
-          if (result.response === 1 && hasRepo && repoConfig) {
+          if (result.response === 1 && hasRepo && task.repository) {
             // User wants to clone - trigger clone and retry
             const { repositoryWorkspaceStore } = await import(
               "@stores/repositoryWorkspaceStore"
@@ -666,17 +664,19 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
             const derivedPath = derivePath(
               defaultWorkspace,
-              repoConfig.repository,
+              task.repository.split("/")[1],
             );
             store.setRepoPath(taskId, derivedPath);
 
             const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-            cloneStore.getState().startClone(cloneId, repoConfig, derivedPath);
+            cloneStore
+              .getState()
+              .startClone(cloneId, task.repository, derivedPath);
 
             try {
               await repositoryWorkspaceStore
                 .getState()
-                .selectRepository(repoConfig, cloneId);
+                .selectRepository(task.repository, cloneId);
 
               // Wait for clone to complete, then retry run
               // The clone progress will show in the UI via TaskActions
@@ -684,7 +684,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
               store.addLog(taskId, {
                 type: "token",
                 ts: Date.now(),
-                content: `Cloning ${repoConfig.organization}/${repoConfig.repository}... Click Run again after the clone completes.`,
+                content: `Cloning ${task.repository}... Click Run again after the clone completes.`,
               });
               return;
             } catch (error) {
@@ -701,18 +701,14 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         // Check if repository is currently being cloned
-        if (task.repository_config) {
-          const repoKey = getRepoKey(
-            task.repository_config.organization,
-            task.repository_config.repository,
-          );
+        if (task.repository) {
           const { isCloning } = cloneStore.getState();
 
-          if (isCloning(repoKey)) {
+          if (isCloning(task.repository)) {
             store.addLog(taskId, {
               type: "error",
               ts: Date.now(),
-              message: `Repository ${repoKey} is currently being cloned. Please wait for the clone to complete before running this task.`,
+              message: `Repository ${task.repository} is currently being cloned. Please wait for the clone to complete before running this task.`,
             });
             return;
           }
@@ -758,9 +754,21 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         ]);
 
         try {
+          // Create the task run via API
+          const { client } = useAuthStore.getState();
+          if (!client) {
+            throw new Error("API client not available");
+          }
+
+          const taskRun = await client.createTaskRun(task.id);
+          if (!taskRun?.id) {
+            throw new Error("Failed to create task run");
+          }
+
           const { createPR } = useSettingsStore.getState();
           const result = await window.electronAPI?.agentStart({
             taskId: task.id,
+            taskRunId: taskRun.id,
             repoPath: effectiveRepoPath,
             apiKey,
             apiHost,
@@ -872,13 +880,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (taskState.repoPath) return;
 
         // 1. Check taskDirectoryStore first
-        const repoKey = task.repository_config
-          ? `${task.repository_config.organization}/${task.repository_config.repository}`
-          : undefined;
-
         const storedDirectory = useTaskDirectoryStore
           .getState()
-          .getTaskDirectory(taskId, repoKey);
+          .getTaskDirectory(taskId, task.repository ?? undefined);
         if (storedDirectory) {
           store.setRepoPath(taskId, storedDirectory);
 
@@ -895,14 +899,14 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         // 2. Fallback to deriving from workspace (existing logic)
-        if (!task.repository_config) return;
+        if (!task.repository) return;
 
         const { defaultWorkspace } = useAuthStore.getState();
         if (!defaultWorkspace) return;
 
         const path = derivePath(
           defaultWorkspace,
-          task.repository_config.repository,
+          task.repository.split("/")[1],
         );
         store.setRepoPath(taskId, path);
 

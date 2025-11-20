@@ -26,10 +26,7 @@ function getTaskValue(task: Task, category: FilterCategory): string {
         ? getUserDisplayName(task.created_by)
         : "No Creator";
     case "repository":
-      return task.repository_config?.organization &&
-        task.repository_config?.repository
-        ? `${task.repository_config.organization}/${task.repository_config.repository}`
-        : "No Repository Connected";
+      return task.repository ?? "No Repository Connected";
     case "created_at":
       return task.created_at;
   }

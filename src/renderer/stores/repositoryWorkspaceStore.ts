@@ -1,21 +1,17 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
-import type { RepositoryConfig } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface RepositoryWorkspaceState {
-  selectedRepository: RepositoryConfig | null;
+  selectedRepository: string | null;
   derivedPath: string;
   pathExists: boolean;
   isValidating: boolean;
   isInitiatingClone: boolean;
 
-  selectRepository: (
-    repo: RepositoryConfig,
-    existingCloneId?: string,
-  ) => Promise<void>;
+  selectRepository: (repo: string, existingCloneId?: string) => Promise<void>;
   clearRepository: () => void;
   validateAndUpdatePath: () => Promise<void>;
 }
@@ -23,37 +19,33 @@ interface RepositoryWorkspaceState {
 interface ValidationResult {
   valid: boolean;
   exists: boolean;
-  detected?: RepositoryConfig;
+  detected?: string;
 }
 
 const POLL_INTERVAL_MS = 1000;
 
-const getRepoKey = (repo: RepositoryConfig) =>
-  `${repo.organization}/${repo.repository}`;
-
-const getDerivedPath = (repo: RepositoryConfig): string | null => {
+const getDerivedPath = (repository: string): string | null => {
   const { defaultWorkspace } = useAuthStore.getState();
   if (!defaultWorkspace) return null;
-  return `${expandTildePath(defaultWorkspace)}/${repo.repository}`;
+  return `${expandTildePath(defaultWorkspace)}/${repository.split("/")[1]}`;
 };
 
 const validateRepository = async (
   path: string,
-  repo: RepositoryConfig,
+  repository: string,
 ): Promise<ValidationResult> => {
+  const [organization, repoName] = repository.split("/");
   const [exists, validation] = await Promise.all([
     window.electronAPI.validateRepo(path),
-    window.electronAPI.validateRepositoryMatch(
-      path,
-      repo.organization,
-      repo.repository,
-    ),
+    window.electronAPI.validateRepositoryMatch(path, organization, repoName),
   ]);
 
   return {
     valid: exists && validation.valid,
     exists,
-    detected: validation.detected || undefined,
+    detected: validation.detected
+      ? `${validation.detected.organization}/${validation.detected.repository}`
+      : undefined,
   };
 };
 
@@ -102,8 +94,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
 
           const { operations } = cloneStore.getState();
           const hasActiveClone = Object.values(operations).some(
-            (op) =>
-              getRepoKey(op.repository) === getRepoKey(selectedRepository),
+            (op) => op.repository === selectedRepository,
           );
 
           if (!hasActiveClone && pathExists) stopPolling();
@@ -111,7 +102,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
       };
 
       const initiateClone = async (
-        repo: RepositoryConfig,
+        repository: string,
         targetPath: string,
         existingCloneId?: string,
       ) => {
@@ -131,22 +122,23 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
           `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
         if (!existingCloneId) {
-          cloneStore.getState().startClone(cloneId, repo, targetPath);
+          cloneStore.getState().startClone(cloneId, repository, targetPath);
         }
 
-        const repoUrl = `git@github.com:${getRepoKey(repo)}.git`;
+        const repoUrl = `git@github.com:${repository}.git`;
         await window.electronAPI.cloneRepository(repoUrl, targetPath, cloneId);
       };
 
       const handleMismatch = async (
-        repo: RepositoryConfig,
-        detected: RepositoryConfig,
+        repository: string,
+        detected: string,
       ): Promise<boolean> => {
+        const [, repoName] = repository.split("/");
         const result = await window.electronAPI.showMessageBox({
           type: "error",
           title: "Repository mismatch",
-          message: `Folder '${repo.repository}' exists but contains a different repository`,
-          detail: `Expected: ${getRepoKey(repo)}\nFound: ${getRepoKey(detected)}`,
+          message: `Folder '${repoName}' exists but contains a different repository`,
+          detail: `Expected: ${repository}\nFound: ${detected}`,
           buttons: ["Cancel", "Delete and clone"],
           defaultId: 0,
           cancelId: 0,
@@ -196,18 +188,17 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
         },
 
         selectRepository: async (
-          repo: RepositoryConfig,
+          repository: string,
           existingCloneId?: string,
         ) => {
-          const repoKey = `${repo.organization}/${repo.repository}`;
           const { isCloning } = cloneStore.getState();
 
           // Skip check if cloneId provided (clone state already created by caller)
-          if (!existingCloneId && isCloning(repoKey)) {
+          if (!existingCloneId && isCloning(repository)) {
             await window.electronAPI.showMessageBox({
               type: "warning",
               title: "Repository cloning",
-              message: `${repoKey} is currently being cloned`,
+              message: `${repository} is currently being cloned`,
               detail:
                 "Please wait for the clone to complete before selecting this repository.",
               buttons: ["OK"],
@@ -215,7 +206,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
             return;
           }
 
-          const targetPath = getDerivedPath(repo);
+          const targetPath = getDerivedPath(repository);
 
           if (!targetPath) {
             await showError(
@@ -225,11 +216,11 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
             return;
           }
 
-          const validation = await validateRepository(targetPath, repo);
+          const validation = await validateRepository(targetPath, repository);
 
           if (validation.valid) {
             set({
-              selectedRepository: repo,
+              selectedRepository: repository,
               derivedPath: targetPath,
               pathExists: true,
             });
@@ -237,19 +228,22 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
           }
 
           if (validation.exists && validation.detected) {
-            const shouldClone = await handleMismatch(repo, validation.detected);
+            const shouldClone = await handleMismatch(
+              repository,
+              validation.detected,
+            );
             if (!shouldClone) return;
           }
 
           set({
-            selectedRepository: repo,
+            selectedRepository: repository,
             derivedPath: targetPath,
             pathExists: false,
             isInitiatingClone: true,
           });
 
           try {
-            await initiateClone(repo, targetPath, existingCloneId);
+            await initiateClone(repository, targetPath, existingCloneId);
             startPolling();
           } finally {
             set({ isInitiatingClone: false });

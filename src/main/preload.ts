@@ -18,6 +18,7 @@ interface MessageBoxOptions {
 
 interface AgentStartParams {
   taskId: string;
+  taskRunId: string;
   repoPath: string;
   apiKey: string;
   apiHost: string;
