@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { Agent, PermissionMode } from "@posthog/agent";
 import {
@@ -85,6 +86,22 @@ export function registerAgentIpc(
       // Provide credentials to the PostHog MCP server used inside the agent runtime.
       process.env.POSTHOG_API_KEY = apiKey;
       process.env.POSTHOG_API_HOST = apiHost;
+
+      // Workaround for claude-agent-sdk bug where cached tool definitions include input_examples
+      // Clear the statsig cache to force regeneration without input_examples
+      // See: https://github.com/anthropics/claude-code/issues/11678
+      try {
+        const claudeConfigDir =
+          process.env.CLAUDE_CONFIG_DIR || join(app.getPath("home"), ".claude");
+        const statsigPath = join(claudeConfigDir, "statsig");
+        rmSync(statsigPath, { recursive: true, force: true });
+        console.log(
+          "[agent] Cleared statsig cache to work around input_examples bug",
+        );
+      } catch (error) {
+        // Ignore errors if the folder doesn't exist
+        console.warn("[agent] Could not clear statsig cache:", error);
+      }
 
       const taskId = randomUUID();
       const channel = `agent-event:${taskId}`;
