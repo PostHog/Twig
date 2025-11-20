@@ -9,18 +9,21 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
 import { Box, Button, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useLayoutStore } from "@stores/layoutStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useSidebarStore } from "@stores/sidebarStore";
 import type React from "react";
 import { useState } from "react";
 
 export const SidebarContent: React.FC = () => {
-  const { view, navigateToTaskList, navigateToTask, navigateToSettings } =
-    useNavigationStore();
+  const {
+    view,
+    navigateToTaskList,
+    navigateToTask,
+    navigateToTaskInput,
+    navigateToSettings,
+  } = useNavigationStore();
   const expandedNodesArray = useSidebarStore((state) => state.expandedNodes);
   const { toggleNode, expandAll, collapseAll } = useSidebarStore();
-  const { setCliMode } = useLayoutStore();
   const { isLoading } = useTasks();
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const setActiveFilters = useTaskStore((state) => state.setActiveFilters);
@@ -45,8 +48,7 @@ export const SidebarContent: React.FC = () => {
   };
 
   const handleCreateTask = () => {
-    navigateToTaskList();
-    setCliMode("task");
+    navigateToTaskInput();
   };
 
   const handleProjectClick = (repository: string) => {
@@ -93,7 +95,8 @@ export const SidebarContent: React.FC = () => {
       <Box
         style={{
           flexGrow: 1,
-          overflow: "auto",
+          overflowY: "auto",
+          overflowX: "hidden",
         }}
       >
         <Flex direction="column" gap="4" p="2">

@@ -22,7 +22,7 @@ export function TaskListHeader({
   );
 
   return (
-    <Box pl="2" py="4" className="border-gray-6 border-b">
+    <Box pl="2" pb="4" pt="2" className="border-gray-6 border-b">
       <Flex gap="2" align="start" justify="between">
         <Flex align="center" justify="center" gap="2">
           <TaskListFilter />

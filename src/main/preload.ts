@@ -212,6 +212,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("open-settings", wrapped);
     return () => ipcRenderer.removeListener("open-settings", wrapped);
   },
+  onNewTask: (listener: () => void): (() => void) => {
+    const wrapped = () => listener();
+    ipcRenderer.on("new-task", wrapped);
+    return () => ipcRenderer.removeListener("new-task", wrapped);
+  },
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
   onUpdateReady: (listener: () => void): (() => void) => {
     const channel = "updates:ready";

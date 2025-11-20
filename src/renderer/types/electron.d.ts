@@ -143,6 +143,7 @@ declare global {
       filePath: string,
     ) => Promise<string | null>;
     onOpenSettings: (listener: () => void) => () => void;
+    onNewTask: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
