@@ -105,7 +105,7 @@ function copyNativeDependency(
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: "{**/*.node,**/.vite/build/claude-cli/**}",
+      unpack: "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**}",
     },
     prune: false,
     name: "Array",
