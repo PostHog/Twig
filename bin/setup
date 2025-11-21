@@ -13,7 +13,7 @@ fi
 # Start with base workspace config
 cp pnpm-workspace.base.yaml pnpm-workspace.yaml
 
-# If AGENT_PACKAGE_LOCATION is set, add the override
+# If AGENT_PACKAGE_LOCATION is set, add the override and build the agent
 if [ -n "$AGENT_PACKAGE_LOCATION" ]; then
   echo "✓ Using local @posthog/agent from: $AGENT_PACKAGE_LOCATION"
   cat >> pnpm-workspace.yaml <<EOF
@@ -21,10 +21,19 @@ if [ -n "$AGENT_PACKAGE_LOCATION" ]; then
 overrides:
   "@posthog/agent": $AGENT_PACKAGE_LOCATION
 EOF
+
+  # Extract the path from file:../agent format
+  AGENT_PATH="${AGENT_PACKAGE_LOCATION#file:}"
+
+  if [ -d "$AGENT_PATH" ]; then
+    echo "📦 Building @posthog/agent..."
+    (cd "$AGENT_PATH" && pnpm install && pnpm build)
+    echo "✓ @posthog/agent built successfully"
+  else
+    echo "⚠️  Warning: Agent path $AGENT_PATH does not exist"
+  fi
 else
   echo "✓ Using production @posthog/agent package"
 fi
 
 echo "✓ Workspace configured"
-echo ""
-echo "Now run: pnpm install"
