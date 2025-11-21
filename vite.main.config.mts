@@ -102,7 +102,7 @@ function copyClaudeExecutable(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [
+  plugins: [ 
     tsconfigPaths(),
     autoServicesPlugin(join(__dirname, "src/main/services")),
     fixFilenameCircularRef(),
