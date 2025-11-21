@@ -1,5 +1,5 @@
 {
-  "name": "array",
+  "name": "@poshog/array",
   "version": "0.3.0",
   "description": "Array - PostHog desktop task manager",
   "main": ".vite/build/index.js",
