@@ -25,7 +25,5 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build agent package
-        run: pnpm --filter agent --include-workspace-root build
-      - name: Build array app
-        run: pnpm --filter array package
+      - name: Build
+        run: pnpm run build
