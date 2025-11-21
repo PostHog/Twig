@@ -48,14 +48,23 @@ export function useTaskCreation({
 
   const canSubmit =
     !!editor &&
-    !!isAuthenticated &&
+    isAuthenticated &&
     !!client &&
     !!selectedDirectory &&
     !isCreatingTask &&
     !editor.isEmpty;
 
   const handleSubmit = useCallback(() => {
-    if (!canSubmit || !editor) {
+    // TRICKY: This needs to be redefined in the callback due to a weird issue where the callback uses a stale version of canSubmit, even if its a dependency
+    const canSubmit =
+      !!editor &&
+      isAuthenticated &&
+      !!client &&
+      !!selectedDirectory &&
+      !isCreatingTask &&
+      !editor.isEmpty;
+
+    if (!canSubmit) {
       return;
     }
 
@@ -102,7 +111,6 @@ export function useTaskCreation({
       },
     );
   }, [
-    canSubmit,
     editor,
     selectedDirectory,
     detectedRepo,
@@ -115,6 +123,9 @@ export function useTaskCreation({
     setRunMode,
     runTask,
     clearDraft,
+    isCreatingTask,
+    client,
+    isAuthenticated,
   ]);
 
   return {
