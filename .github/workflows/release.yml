@@ -93,6 +93,8 @@ jobs:
         with:
           node-version: 22
           cache: "pnpm"
+      - name: Setup workspace
+        run: bin/setup
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Import code signing certificate

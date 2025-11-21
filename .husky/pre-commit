@@ -1,1 +1,20 @@
+#!/bin/bash
+
+# Load .env file if it exists
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | grep -v '^[[:space:]]*$' | xargs 2>/dev/null)
+fi
+
+# Check if AGENT_PACKAGE_LOCATION is set and lockfile is being committed
+if [ -n "$AGENT_PACKAGE_LOCATION" ]; then
+  if git diff --cached --name-only | grep -q "pnpm-lock.yaml"; then
+    echo "❌ Error: Cannot commit pnpm-lock.yaml when AGENT_PACKAGE_LOCATION is set"
+    echo "   You have a local agent override active in .env"
+    echo "   Either:"
+    echo "   - Comment out AGENT_PACKAGE_LOCATION in .env and run bin/setup"
+    echo "   - Unstage pnpm-lock.yaml: git reset pnpm-lock.yaml"
+    exit 1
+  fi
+fi
+
 pnpm lint-staged

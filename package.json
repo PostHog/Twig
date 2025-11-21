@@ -10,6 +10,7 @@
   },
   "packageManager": "pnpm@10.14.0",
   "scripts": {
+    "setup": "bash bin/setup",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
