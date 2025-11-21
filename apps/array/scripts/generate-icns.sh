@@ -24,6 +24,12 @@ mkdir -p "$ICONSET_DIR"
 SCALE=0.8125
 
 # Generate all required icon sizes with padding
+# Check if sips exists (macOS only)
+if ! command -v sips &> /dev/null; then
+  echo "Warning: sips not found. Skipping ICNS generation (only supported on macOS)."
+  exit 0
+fi
+
 sips -z 16 16     "$SOURCE_PNG" --out "$ICONSET_DIR/icon_16x16.png" > /dev/null
 sips -Z $(echo "16 * $SCALE" | bc | cut -d. -f1) "$ICONSET_DIR/icon_16x16.png" --padToHeightWidth 16 16 > /dev/null
 
