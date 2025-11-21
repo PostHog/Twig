@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Setup script for Array development environment
+# Run this after cloning or when changing AGENT_PACKAGE_LOCATION in .env
+
+echo "🔧 Setting up Array development environment..."
+
+# Load .env file if it exists
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | grep -v '^[[:space:]]*$' | xargs)
+fi
+
+# Start with base workspace config
+cp pnpm-workspace.base.yaml pnpm-workspace.yaml
+
+# If AGENT_PACKAGE_LOCATION is set, add the override
+if [ -n "$AGENT_PACKAGE_LOCATION" ]; then
+  echo "✓ Using local @posthog/agent from: $AGENT_PACKAGE_LOCATION"
+  cat >> pnpm-workspace.yaml <<EOF
+
+overrides:
+  "@posthog/agent": $AGENT_PACKAGE_LOCATION
+EOF
+else
+  echo "✓ Using production @posthog/agent package"
+fi
+
+echo "✓ Workspace configured"
+echo ""
+echo "Now run: pnpm install"
