@@ -127,6 +127,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     query?: string,
   ): Promise<Array<{ path: string; name: string }>> =>
     ipcRenderer.invoke("list-repo-files", repoPath, query),
+  clearRepoFileCache: (repoPath: string): Promise<void> =>
+    ipcRenderer.invoke("clear-repo-file-cache", repoPath),
   agentStart: async (
     params: AgentStartParams,
   ): Promise<{ taskId: string; channel: string }> =>
@@ -216,6 +218,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const wrapped = () => listener();
     ipcRenderer.on("new-task", wrapped);
     return () => ipcRenderer.removeListener("new-task", wrapped);
+  },
+  onResetLayout: (listener: () => void): (() => void) => {
+    const wrapped = () => listener();
+    ipcRenderer.on("reset-layout", wrapped);
+    return () => ipcRenderer.removeListener("reset-layout", wrapped);
   },
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
   onUpdateReady: (listener: () => void): (() => void) => {

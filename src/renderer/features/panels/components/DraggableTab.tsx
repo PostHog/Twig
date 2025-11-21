@@ -13,6 +13,7 @@ interface DraggableTabProps {
   onSelect: () => void;
   onClose?: () => void;
   icon?: React.ReactNode;
+  hasUnsavedChanges?: boolean;
 }
 
 export const DraggableTab: React.FC<DraggableTabProps> = ({
@@ -25,6 +26,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   onSelect,
   onClose,
   icon,
+  hasUnsavedChanges,
 }) => {
   const { ref, isDragging } = useSortable({
     id: tabId,
@@ -74,6 +76,11 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       >
         {label}
       </Text>
+      {hasUnsavedChanges && (
+        <Text size="1" style={{ color: "var(--amber-9)", marginLeft: "2px" }}>
+          •
+        </Text>
+      )}
 
       {onClose && (
         <IconButton

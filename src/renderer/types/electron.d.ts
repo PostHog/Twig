@@ -88,6 +88,7 @@ declare global {
       repoPath: string,
       query?: string,
     ) => Promise<Array<{ path: string; name: string }>>;
+    clearRepoFileCache: (repoPath: string) => Promise<void>;
     agentStart: (params: {
       taskId: string;
       repoPath: string;
@@ -144,6 +145,7 @@ declare global {
     ) => Promise<string | null>;
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
+    onResetLayout: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;

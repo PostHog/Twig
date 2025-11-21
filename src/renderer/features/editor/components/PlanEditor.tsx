@@ -1,7 +1,10 @@
 import { RichTextEditor } from "@features/editor/components/RichTextEditor";
-import { Box, Button, Flex, TextArea } from "@radix-ui/themes";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
+import { FloppyDiskIcon } from "@phosphor-icons/react";
+import { Box, Button, TextArea } from "@radix-ui/themes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 interface PlanEditorProps {
   taskId: string;
@@ -9,6 +12,7 @@ interface PlanEditorProps {
   fileName?: string; // Defaults to "plan.md"
   initialContent?: string;
   onSave?: (content: string) => void;
+  tabId?: string; // For updating tab metadata
 }
 
 export function PlanEditor({
@@ -17,10 +21,14 @@ export function PlanEditor({
   fileName = "plan.md",
   initialContent,
   onSave,
+  tabId,
 }: PlanEditorProps) {
   const [content, setContent] = useState(initialContent || "");
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const updateTabMetadata = usePanelLayoutStore(
+    (state) => state.updateTabMetadata,
+  );
 
   const isMarkdownFile = fileName.endsWith(".md");
 
@@ -88,38 +96,37 @@ export function PlanEditor({
     setHasUnsavedChanges(content !== fetchedContent);
   }, [content, fetchedContent]);
 
+  // Update tab metadata when unsaved changes state changes
+  useEffect(() => {
+    if (tabId) {
+      updateTabMetadata(taskId, tabId, { hasUnsavedChanges });
+    }
+  }, [hasUnsavedChanges, tabId, taskId, updateTabMetadata]);
+
+  // Keyboard shortcut for save (Cmd+S / Ctrl+S)
+  useHotkeys(
+    "mod+s",
+    (event) => {
+      event.preventDefault();
+      if (hasUnsavedChanges && !isSaving) {
+        handleManualSave();
+      }
+    },
+    { enableOnFormTags: ["INPUT", "TEXTAREA"] },
+    [hasUnsavedChanges, isSaving, handleManualSave],
+  );
+
   return (
-    <Flex
-      direction="column"
+    <Box
       height="100%"
+      position="relative"
       style={{
         overflow: "hidden",
       }}
     >
-      {/* Save Button Bar */}
-      <Flex
-        p="2"
-        gap="2"
-        align="center"
-        justify="end"
-        style={{
-          borderBottom: "1px solid var(--gray-6)",
-          backgroundColor: "var(--gray-2)",
-        }}
-      >
-        <Button
-          size="1"
-          onClick={handleManualSave}
-          disabled={isSaving || !hasUnsavedChanges}
-          variant="soft"
-        >
-          {isSaving ? "Saving..." : hasUnsavedChanges ? "Save" : "Saved"}
-        </Button>
-      </Flex>
-
       {/* Editor */}
       <Box
-        flexGrow="1"
+        height="100%"
         style={{
           overflow: "hidden",
         }}
@@ -142,6 +149,32 @@ export function PlanEditor({
           />
         )}
       </Box>
-    </Flex>
+
+      {/* Floating Save Button */}
+      {hasUnsavedChanges && (
+        <Box
+          position="absolute"
+          style={{
+            bottom: "24px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+          }}
+        >
+          <Button
+            size="2"
+            onClick={handleManualSave}
+            disabled={isSaving}
+            variant="solid"
+            style={{
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            <FloppyDiskIcon size={16} weight="fill" />
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </Box>
+      )}
+    </Box>
   );
 }

@@ -11,6 +11,7 @@ export type Tab = {
   onClose?: () => void;
   onSelect?: () => void;
   icon?: React.ReactNode;
+  hasUnsavedChanges?: boolean;
 };
 
 export type PanelContent = {

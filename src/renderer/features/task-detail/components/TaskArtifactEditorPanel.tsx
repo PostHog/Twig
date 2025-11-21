@@ -1,9 +1,10 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { PlanEditor } from "@features/editor/components/PlanEditor";
+import { createArtifactTabId } from "@features/panels/store/panelStoreHelpers";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { Task } from "@shared/types";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 
 interface TaskArtifactEditorPanelProps {
   taskId: string;
@@ -18,6 +19,8 @@ export function TaskArtifactEditorPanel({
 }: TaskArtifactEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const repoPath = taskData.repoPath;
+
+  const tabId = useMemo(() => createArtifactTabId(fileName), [fileName]);
 
   const onSavePlan = useCallback(
     (content: string) => {
@@ -37,6 +40,7 @@ export function TaskArtifactEditorPanel({
         repoPath={repoPath}
         fileName={fileName}
         onSave={onSavePlan}
+        tabId={tabId}
       />
     </BackgroundWrapper>
   );

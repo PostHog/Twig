@@ -66,6 +66,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                   : undefined
               }
               icon={tab.icon}
+              hasUnsavedChanges={tab.hasUnsavedChanges}
             />
           ))}
         </Flex>

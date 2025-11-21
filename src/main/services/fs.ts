@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
+import { getChangedFilesForRepo } from "./git";
 
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
@@ -10,6 +11,7 @@ const fsPromises = fs.promises;
 interface FileEntry {
   path: string;
   name: string;
+  changed?: boolean;
 }
 
 // Cache for repository files to avoid rescanning
@@ -41,6 +43,7 @@ async function listFilesRecursive(
   dirPath: string,
   ignoredFiles: Set<string>,
   baseDir: string,
+  changedFiles: Set<string>,
 ): Promise<FileEntry[]> {
   const files: FileEntry[] = [];
 
@@ -51,9 +54,9 @@ async function listFilesRecursive(
       const fullPath = path.join(dirPath, entry.name);
       const relativePath = path.relative(baseDir, fullPath);
 
-      // Skip hidden files/directories, node_modules, and common build dirs
+      // Skip .git directory, node_modules, and common build dirs
       if (
-        entry.name.startsWith(".") ||
+        entry.name === ".git" ||
         entry.name === "node_modules" ||
         entry.name === "dist" ||
         entry.name === "build" ||
@@ -72,12 +75,14 @@ async function listFilesRecursive(
           fullPath,
           ignoredFiles,
           baseDir,
+          changedFiles,
         );
         files.push(...subFiles);
       } else if (entry.isFile()) {
         files.push({
           path: relativePath,
           name: entry.name,
+          changed: changedFiles.has(relativePath),
         });
       }
     }
@@ -112,8 +117,16 @@ export function registerFsIpc(): void {
           // Get git-ignored files
           const ignoredFiles = await getGitIgnoredFiles(repoPath);
 
+          // Get changed files from git
+          const changedFiles = await getChangedFilesForRepo(repoPath);
+
           // List all files
-          allFiles = await listFilesRecursive(repoPath, ignoredFiles, repoPath);
+          allFiles = await listFilesRecursive(
+            repoPath,
+            ignoredFiles,
+            repoPath,
+            changedFiles,
+          );
 
           // Update cache
           repoFileCache.set(repoPath, {
@@ -131,13 +144,22 @@ export function registerFsIpc(): void {
                 f.path.toLowerCase().includes(lowerQuery) ||
                 f.name.toLowerCase().includes(lowerQuery),
             )
-            .slice(0, 50); // Limit results
+            .slice(0, 50); // Limit search results
         }
 
-        return allFiles.slice(0, 100); // Limit initial results
+        return allFiles; // Return all files for full tree view
       } catch (error) {
         console.error("Error listing repo files:", error);
         return [];
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "clear-repo-file-cache",
+    async (_event: IpcMainInvokeEvent, repoPath: string): Promise<void> => {
+      if (repoPath) {
+        repoFileCache.delete(repoPath);
       }
     },
   );

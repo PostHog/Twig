@@ -6,6 +6,9 @@ import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+// Maximum depth to auto-expand in the file tree
+const MAX_AUTO_EXPAND_DEPTH = 2;
+
 interface FileTreePanelProps {
   taskId: string;
   task: Task;
@@ -16,6 +19,7 @@ interface TreeNode {
   type: "file" | "folder";
   children?: TreeNode[];
   path: string;
+  changed?: boolean;
 }
 
 interface TreeNodeBuilder {
@@ -23,10 +27,11 @@ interface TreeNodeBuilder {
   type: "file" | "folder";
   children?: Record<string, TreeNodeBuilder>;
   path: string;
+  changed?: boolean;
 }
 
 function buildTreeFromPaths(
-  files: Array<{ path: string; name: string }>,
+  files: Array<{ path: string; name: string; changed?: boolean }>,
 ): TreeNode[] {
   const root: Record<string, TreeNodeBuilder> = {};
 
@@ -45,6 +50,7 @@ function buildTreeFromPaths(
           type: isLastPart ? "file" : "folder",
           path: pathSoFar,
           children: isLastPart ? undefined : {},
+          changed: isLastPart ? file.changed : undefined,
         };
       }
 
@@ -71,6 +77,7 @@ function buildTreeFromPaths(
         type: node.type,
         path: node.path,
         children: childrenArray,
+        changed: node.changed,
       };
     }
     return {
@@ -78,6 +85,7 @@ function buildTreeFromPaths(
       type: node.type,
       path: node.path,
       children: undefined,
+      changed: node.changed,
     };
   };
 
@@ -98,7 +106,7 @@ interface TreeItemProps {
 }
 
 function TreeItem({ node, depth, taskId }: TreeItemProps) {
-  const [isExpanded, setIsExpanded] = useState(depth === 0);
+  const [isExpanded, setIsExpanded] = useState(depth < MAX_AUTO_EXPAND_DEPTH);
   const openFile = usePanelLayoutStore((state) => state.openFile);
 
   const handleClick = () => {
@@ -119,6 +127,7 @@ function TreeItem({ node, depth, taskId }: TreeItemProps) {
         style={{
           paddingLeft: `${depth * 16 + 8}px`,
           cursor: "pointer",
+          backgroundColor: node.changed ? "var(--amber-3)" : undefined,
         }}
         className="rounded hover:bg-gray-2"
         onClick={handleClick}

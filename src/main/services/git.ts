@@ -93,6 +93,75 @@ const getCurrentBranch = async (
   }
 };
 
+const getDefaultBranch = async (directoryPath: string): Promise<string> => {
+  try {
+    // Try to get the default branch from origin
+    const { stdout } = await execAsync(
+      "git symbolic-ref refs/remotes/origin/HEAD",
+      { cwd: directoryPath },
+    );
+    const branch = stdout.trim().replace("refs/remotes/origin/", "");
+    return branch;
+  } catch {
+    // Fallback: check if main or master exists
+    try {
+      await execAsync("git rev-parse --verify main", {
+        cwd: directoryPath,
+      });
+      return "main";
+    } catch {
+      return "master";
+    }
+  }
+};
+
+const getChangedFiles = async (directoryPath: string): Promise<Set<string>> => {
+  const changedFiles = new Set<string>();
+
+  try {
+    const defaultBranch = await getDefaultBranch(directoryPath);
+    const currentBranch = await getCurrentBranch(directoryPath);
+
+    // Don't show changes if we're on the default branch
+    if (currentBranch === defaultBranch) {
+      return changedFiles;
+    }
+
+    // Get files that differ from default branch
+    try {
+      const { stdout: diffFiles } = await execAsync(
+        `git diff --name-only ${defaultBranch}...HEAD`,
+        { cwd: directoryPath },
+      );
+      const files = diffFiles.trim().split("\n").filter(Boolean);
+      for (const file of files) {
+        changedFiles.add(file);
+      }
+    } catch {
+      // Branch might not exist or no common ancestor, skip
+    }
+
+    // Get modified files in working directory
+    const { stdout: statusFiles } = await execAsync("git status --porcelain", {
+      cwd: directoryPath,
+    });
+    const lines = statusFiles.trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      // Parse git status format: XY filename
+      const fileName = line.substring(3).trim();
+      if (fileName) {
+        changedFiles.add(fileName);
+      }
+    }
+  } catch (error) {
+    console.error("Error getting changed files:", error);
+  }
+
+  return changedFiles;
+};
+
+export const getChangedFilesForRepo = getChangedFiles;
+
 export const findReposDirectory = async (): Promise<string | null> => {
   const platform = os.platform();
 
