@@ -30,6 +30,7 @@
   "scripts": {
     "build": "rimraf dist && rollup -c && tsc --project tsconfig.build.json --emitDeclarationOnly",
     "dev": "rollup -c --watch",
+    "typecheck": "tsc --noEmit",
     "example": "pnpm run example-usage.ts",
     "prepublishOnly": "pnpm run build"
   },
