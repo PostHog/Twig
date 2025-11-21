@@ -1,10 +1,11 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { LogView } from "@features/logs/components/LogView";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { Box } from "@radix-ui/themes";
-import type { Task } from "@shared/types";
+import type { QuestionAnswer, Task } from "@shared/types";
 import { useCallback } from "react";
 
 interface TaskLogsPanelProps {
@@ -20,8 +21,14 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     state.getTaskState(taskId),
   );
 
+  const execution = useTaskExecution({
+    taskId,
+    task,
+    repoPath: taskData.repoPath ?? null,
+  });
+
   const onAnswersComplete = useCallback(
-    (answers: any[]) => {
+    (answers: QuestionAnswer[]) => {
       for (const answer of answers) {
         useTaskExecutionStore.getState().addQuestionAnswer(taskId, answer);
       }
@@ -71,6 +78,12 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           logs={taskState.logs}
           isRunning={taskState.isRunning}
           onClearLogs={onClearLogs}
+          runMode={execution.state.runMode}
+          cloneProgress={taskData.cloneProgress}
+          isCloning={taskData.isCloning}
+          onRunTask={execution.actions.run}
+          onCancelTask={execution.actions.cancel}
+          onRunModeChange={execution.actions.onRunModeChange}
         />
       </Box>
     </BackgroundWrapper>

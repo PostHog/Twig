@@ -3,6 +3,7 @@ import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
+import { queryClient } from "@renderer/lib/queryClient";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
@@ -105,12 +106,12 @@ function logEntryToAgentEvent(entry: LogEntry): AgentEvent | null {
         const parsed = JSON.parse(entry.message);
         return {
           ...parsed,
-          type: entry.type as any,
+          type: entry.type as unknown as AgentEvent["type"],
           ts: parsed.ts || baseTs,
         } as AgentEvent;
       } catch {
         return {
-          type: entry.type as any,
+          type: entry.type as unknown as AgentEvent["type"],
           ts: baseTs,
           message: entry.message,
         } as AgentEvent;
@@ -150,6 +151,40 @@ async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
     console.warn("Failed to fetch task logs from S3", err);
     return [];
   }
+}
+
+// Debounce map for file tree invalidation
+const fileTreeInvalidationTimers = new Map<string, number>();
+
+/**
+ * Invalidate file tree cache when file creation/modification is detected
+ * Debounced to avoid excessive invalidations during rapid file operations
+ */
+function invalidateFileTreeCache(repoPath: string, debounceMs = 500) {
+  // Clear existing timer for this repo
+  const existingTimer = fileTreeInvalidationTimers.get(repoPath);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  // Set new timer
+  const timer = setTimeout(async () => {
+    // Invalidate React Query cache
+    queryClient.invalidateQueries({
+      queryKey: ["repo-files", repoPath],
+    });
+
+    // Clear main process cache
+    try {
+      await window.electronAPI?.clearRepoFileCache(repoPath);
+    } catch (err) {
+      console.warn("Failed to clear repo file cache:", err);
+    }
+
+    fileTreeInvalidationTimers.delete(repoPath);
+  }, debounceMs);
+
+  fileTreeInvalidationTimers.set(repoPath, timer);
 }
 
 interface TaskExecutionState {
@@ -297,6 +332,21 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         store.updateTaskState(taskId, { logs });
         // Process logs for artifacts after setting
         store.processLogsForArtifacts(taskId);
+
+        // Check for successful file creation/modification and invalidate cache
+        const taskState = store.getTaskState(taskId);
+        if (taskState.repoPath) {
+          const hasFileOperation = logs.some(
+            (log) =>
+              log.type === "tool_result" &&
+              !log.isError &&
+              (log.toolName === "Write" || log.toolName === "Edit"),
+          );
+
+          if (hasFileOperation) {
+            invalidateFileTreeCache(taskState.repoPath);
+          }
+        }
       },
 
       setRepoPath: (taskId: string, repoPath: string | null) => {
@@ -958,11 +1008,14 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         // Look for todos artifact
         const todosArtifact = taskState.logs.findLast(
           (log): log is AgentEvent & { kind: string; content: TodoList } =>
-            isArtifactEvent(log) && (log as any).kind === "todos",
+            isArtifactEvent(log) &&
+            "kind" in log &&
+            log.kind === "todos" &&
+            "content" in log,
         );
 
         if (todosArtifact) {
-          store.setTodos(taskId, (todosArtifact as any).content);
+          store.setTodos(taskId, todosArtifact.content);
         }
       },
 

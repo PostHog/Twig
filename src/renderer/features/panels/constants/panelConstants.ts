@@ -24,4 +24,6 @@ export const DEFAULT_TAB_IDS = {
   SHELL: "shell",
   DETAILS: "details",
   FILES: "files",
+  TODO_LIST: "todo-list",
+  ARTIFACTS: "artifacts",
 } as const;

@@ -9,11 +9,14 @@ import {
   CaretDown as CaretDownIcon,
   CaretUp as CaretUpIcon,
   Copy as CopyIcon,
+  Play as PlayIcon,
+  Stop as StopIcon,
   Trash as TrashIcon,
 } from "@phosphor-icons/react";
 import type { AgentEvent } from "@posthog/agent";
 import {
   Box,
+  Button,
   Code,
   Flex,
   Heading,
@@ -28,9 +31,25 @@ interface LogViewProps {
   logs: AgentEvent[];
   isRunning: boolean;
   onClearLogs?: () => void;
+  runMode?: "local" | "cloud";
+  cloneProgress?: { message: string; percent: number } | null;
+  isCloning?: boolean;
+  onRunTask?: () => void;
+  onCancelTask?: () => void;
+  onRunModeChange?: (mode: "local" | "cloud") => void;
 }
 
-export function LogView({ logs, isRunning, onClearLogs }: LogViewProps) {
+export function LogView({
+  logs,
+  isRunning,
+  onClearLogs,
+  runMode,
+  cloneProgress,
+  isCloning,
+  onRunTask,
+  onCancelTask,
+  onRunModeChange,
+}: LogViewProps) {
   const viewMode = useLogsStore((state) => state.viewMode);
   const highlightedIndex = useLogsStore((state) => state.highlightedIndex);
   const expandAll = useLogsStore((state) => state.expandAll);
@@ -148,6 +167,56 @@ export function LogView({ logs, isRunning, onClearLogs }: LogViewProps) {
               </SegmentedControl.Item>
               <SegmentedControl.Item value="raw">Raw</SegmentedControl.Item>
             </SegmentedControl.Root>
+
+            {/* Run/Cancel Buttons */}
+            {onRunTask && (
+              <>
+                {!isRunning ? (
+                  <Tooltip
+                    content={
+                      runMode === "cloud" ? "Run on cloud" : "Run locally"
+                    }
+                  >
+                    <Button size="2" onClick={onRunTask} disabled={isCloning}>
+                      <PlayIcon size={16} weight="fill" />
+                      {isCloning
+                        ? `Cloning${cloneProgress?.percent ? ` (${cloneProgress.percent}%)` : ""}...`
+                        : runMode === "cloud"
+                          ? "Run (Cloud)"
+                          : "Run (Local)"}
+                    </Button>
+                  </Tooltip>
+                ) : (
+                  onCancelTask && (
+                    <Tooltip content="Cancel task">
+                      <Button size="2" color="red" onClick={onCancelTask}>
+                        <StopIcon size={16} weight="fill" />
+                        Cancel
+                      </Button>
+                    </Tooltip>
+                  )
+                )}
+
+                {/* Run Mode Toggle */}
+                {!isRunning && onRunModeChange && runMode && (
+                  <SegmentedControl.Root
+                    value={runMode}
+                    onValueChange={(value) =>
+                      onRunModeChange(value as "local" | "cloud")
+                    }
+                    size="1"
+                  >
+                    <SegmentedControl.Item value="local">
+                      Local
+                    </SegmentedControl.Item>
+                    <SegmentedControl.Item value="cloud">
+                      Cloud
+                    </SegmentedControl.Item>
+                  </SegmentedControl.Root>
+                )}
+              </>
+            )}
+
             {isRunning && (
               <Flex align="center" gap="2">
                 <Box

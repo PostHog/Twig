@@ -143,6 +143,13 @@ function createWindow(): void {
         { role: "zoomOut" },
         { type: "separator" },
         { role: "togglefullscreen" },
+        { type: "separator" },
+        {
+          label: "Reset layout",
+          click: () => {
+            mainWindow?.webContents.send("reset-layout");
+          },
+        },
       ],
     },
   ];

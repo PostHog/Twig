@@ -26,7 +26,7 @@ import {
   setActiveTabInPanel,
   updateTreeNode,
 } from "./panelTree";
-import type { PanelNode } from "./panelTypes";
+import type { PanelNode, Tab } from "./panelTypes";
 
 export interface TaskLayout {
   panelTree: PanelNode;
@@ -73,6 +73,11 @@ export interface PanelLayoutStore {
     direction: SplitDirection,
   ) => void;
   updateSizes: (taskId: string, groupId: string, sizes: number[]) => void;
+  updateTabMetadata: (
+    taskId: string,
+    tabId: string,
+    metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
+  ) => void;
   clearAllLayouts: () => void;
 }
 
@@ -128,6 +133,13 @@ function createDefaultPanelTree(): PanelNode {
                   closeable: false,
                   draggable: false,
                 },
+                {
+                  id: DEFAULT_TAB_IDS.TODO_LIST,
+                  label: "Todo list",
+                  component: null,
+                  closeable: false,
+                  draggable: false,
+                },
               ],
               activeTabId: DEFAULT_TAB_IDS.DETAILS,
               showTabs: true,
@@ -143,6 +155,13 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.FILES,
                   label: "Files",
+                  component: null,
+                  closeable: false,
+                  draggable: false,
+                },
+                {
+                  id: DEFAULT_TAB_IDS.ARTIFACTS,
+                  label: "Artifacts",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -452,6 +471,37 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               (node) => {
                 if (node.type !== "group") return node;
                 return { ...node, sizes };
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
+      updateTabMetadata: (taskId, tabId, metadata) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const tabLocation = findTabInTree(layout.panelTree, tabId);
+            if (!tabLocation) return {};
+
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              tabLocation.panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const updatedTabs = panel.content.tabs.map((tab) =>
+                  tab.id === tabId ? { ...tab, ...metadata } : tab,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: updatedTabs,
+                  },
+                };
               },
             );
 

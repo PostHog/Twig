@@ -3,6 +3,7 @@ import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { TopBar } from "@components/ui/topnav/TopBar";
 import { CommandMenu } from "@features/command/components/CommandMenu";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
@@ -24,6 +25,7 @@ export function MainLayout() {
     goBack,
     goForward,
   } = useNavigationStore();
+  const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   useIntegrations();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
 
@@ -34,6 +36,11 @@ export function MainLayout() {
   const handleFocusTaskMode = useCallback(() => {
     navigateToTaskInput();
   }, [navigateToTaskInput]);
+
+  const handleResetLayout = useCallback(() => {
+    clearAllLayouts();
+    window.location.reload();
+  }, [clearAllLayouts]);
 
   useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
     enabled: !commandMenuOpen,
@@ -58,11 +65,16 @@ export function MainLayout() {
       handleFocusTaskMode();
     });
 
+    const unsubscribeResetLayout = window.electronAPI?.onResetLayout(() => {
+      handleResetLayout();
+    });
+
     return () => {
       unsubscribeSettings?.();
       unsubscribeNewTask?.();
+      unsubscribeResetLayout?.();
     };
-  }, [handleOpenSettings, handleFocusTaskMode]);
+  }, [handleOpenSettings, handleFocusTaskMode, handleResetLayout]);
 
   const handleSelectTask = (task: Task) => {
     navigateToTask(task);
