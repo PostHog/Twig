@@ -32,7 +32,7 @@ jobs:
         run: |
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
-            VERSION=$(jq -r .version package.json)
+            VERSION=$(jq -r .version apps/array/package.json)
           fi
           VERSION="${VERSION#v}"
           if [ -z "$VERSION" ]; then
@@ -52,8 +52,8 @@ jobs:
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          CURRENT_VERSION=$(jq -r .version package.json)
-          PREVIOUS_VERSION=$(git show HEAD~1:package.json | jq -r .version)
+          CURRENT_VERSION=$(jq -r .version apps/array/package.json)
+          PREVIOUS_VERSION=$(git show HEAD~1:apps/array/package.json | jq -r .version)
           if [ "$CURRENT_VERSION" = "$PREVIOUS_VERSION" ]; then
             echo "Version unchanged ($CURRENT_VERSION), skipping publish."
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
@@ -93,8 +93,6 @@ jobs:
         with:
           node-version: 22
           cache: "pnpm"
-      - name: Setup workspace
-        run: bin/setup
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Import code signing certificate
@@ -119,7 +117,7 @@ jobs:
           rm "$RUNNER_TEMP/certificate.p12"
       - name: Verify package version
         run: |
-          PACKAGE_VERSION=$(jq -r .version package.json)
+          PACKAGE_VERSION=$(jq -r .version apps/array/package.json)
           if [ "$PACKAGE_VERSION" != "$APP_VERSION" ]; then
             echo "Package version $PACKAGE_VERSION does not match expected $APP_VERSION"
             exit 1
@@ -137,6 +135,6 @@ jobs:
             git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} "$TAG"
           fi
       - name: Build native modules
-        run: pnpm run build-native
+        run: pnpm --filter array run build-native
       - name: Publish with Electron Forge
-        run: pnpm run publish
+        run: pnpm --filter array run publish

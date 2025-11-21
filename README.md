@@ -1,10 +1,11 @@
-# PostHog - Array
+# PostHog Array Monorepo
 
-The PostHog desktop task manager
+This is the monorepo for PostHog's Array desktop task manager and the agent framework that powers it.
 
-## The Goal
+## Projects
 
-Free product engineers from distractions so they can focus on what they love: building great features. By using agents to transform all data collected across PostHog’s products into actionable “tasks,” then exposing them with that context through a single interface, we can automate all the chores and save developers hours every day, giving them more time to ship.
+- **[apps/array](./apps/array)** - The Array desktop application
+- **[packages/agent](./packages/agent)** - The TypeScript agent framework
 
 ## Development
 
