@@ -15,7 +15,7 @@
     "dev:array": "pnpm --filter array dev",
     "start": "pnpm --filter array start",
     "build": "pnpm --filter agent build && pnpm --filter array build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter agent build && pnpm -r typecheck",
     "lint": "biome check --write --unsafe",
     "format": "biome format --write",
     "test": "pnpm -r test",
