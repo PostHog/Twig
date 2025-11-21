@@ -4,7 +4,6 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import { FileTextIcon, ListBulletIcon } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useLayoutStore } from "@stores/layoutStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -15,8 +14,8 @@ interface CommandMenuProps {
 }
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
-  const { navigateToTaskList, navigateToTask } = useNavigationStore();
-  const { setCliMode } = useLayoutStore();
+  const { navigateToTaskList, navigateToTask, navigateToTaskInput } =
+    useNavigationStore();
   const { data: tasks = [] } = useTasks();
   const commandRef = useRef<HTMLDivElement>(null);
 
@@ -71,8 +70,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   };
 
   const handleCreateTask = () => {
-    navigateToTaskList();
-    setCliMode("task");
+    navigateToTaskInput();
     onOpenChange(false);
   };
 

@@ -19,7 +19,7 @@ interface TaskView {
 }
 
 interface ViewState {
-  type: "task-list" | "task-detail" | "settings";
+  type: "task-list" | "task-detail" | "task-input" | "settings";
   data?: Task;
 }
 

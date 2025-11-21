@@ -108,6 +108,18 @@ function createWindow(): void {
       ],
     },
     {
+      label: "File",
+      submenu: [
+        {
+          label: "New task",
+          accelerator: "CmdOrCtrl+N",
+          click: () => {
+            mainWindow?.webContents.send("new-task");
+          },
+        },
+      ],
+    },
+    {
       label: "Edit",
       submenu: [
         { role: "undo" },

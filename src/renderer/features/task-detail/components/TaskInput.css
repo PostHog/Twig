@@ -1,0 +1,39 @@
+/* Task Input Editor Styles */
+
+.cli-editor {
+  font-family: monospace;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  color: var(--gray-12);
+  font-size: var(--font-size-1);
+  width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.cli-editor.ProseMirror {
+  overflow-x: hidden;
+}
+
+.cli-editor.ProseMirror p {
+  margin: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.cli-editor.ProseMirror.ProseMirror-focused
+  p.is-editor-empty:first-child::before {
+  content: "";
+}
+
+.cli-editor.ProseMirror:not(.ProseMirror-focused)
+  p.is-editor-empty:first-child::before {
+  color: var(--gray-11);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

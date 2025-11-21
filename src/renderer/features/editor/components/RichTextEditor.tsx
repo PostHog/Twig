@@ -3,28 +3,37 @@ import {
   type MentionListRef,
 } from "@features/editor/components/FileMentionList";
 import { FormattingToolbar } from "@features/editor/components/FormattingToolbar";
-import { FilePathHighlight } from "@features/editor/extensions/filePathHighlight";
 import {
   markdownToTiptap,
   tiptapToMarkdown,
 } from "@features/editor/utils/tiptap-converter";
+import { computePosition, flip, shift } from "@floating-ui/dom";
 import { Box } from "@radix-ui/themes";
 import type { MentionItem } from "@shared/types";
+import type { Editor } from "@tiptap/core";
 import { Link } from "@tiptap/extension-link";
 import { Mention } from "@tiptap/extension-mention";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Typography } from "@tiptap/extension-typography";
 import { Underline } from "@tiptap/extension-underline";
-import { EditorContent, useEditor } from "@tiptap/react";
+import {
+  EditorContent,
+  posToDOMRect,
+  ReactRenderer,
+  useEditor,
+} from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { SuggestionOptions } from "@tiptap/suggestion";
+import type {
+  SuggestionKeyDownProps,
+  SuggestionOptions,
+  SuggestionProps,
+} from "@tiptap/suggestion";
 import {
   extractUrlFromMarkdown,
   isUrl,
   parsePostHogUrl,
 } from "@utils/posthog-url-parser";
 import { useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
 
 interface RichTextEditorProps {
   value: string;
@@ -92,6 +101,7 @@ export function RichTextEditor({
         placeholder,
       }),
       Mention.extend({
+        atom: false,
         addAttributes() {
           return {
             id: {
@@ -108,7 +118,11 @@ export function RichTextEditor({
             },
           };
         },
-        renderText({ node }) {
+        renderText({
+          node,
+        }: {
+          node: { attrs: { label?: string; id: string } };
+        }) {
           // Use the label for display, fallback to id
           return `@${node.attrs.label || node.attrs.id}`;
         },
@@ -120,14 +134,6 @@ export function RichTextEditor({
           char: "@",
           allowSpaces: true,
           command: ({ editor, range, props }) => {
-            // Insert mention with all attributes
-            const nodeAfter = editor.view.state.selection.$to.nodeAfter;
-            const overrideSpace = nodeAfter?.text?.startsWith(" ");
-
-            if (overrideSpace) {
-              range.to += 1;
-            }
-
             editor
               .chain()
               .focus()
@@ -203,111 +209,79 @@ export function RichTextEditor({
             return items;
           },
           render: () => {
-            let component: { destroy: () => void } | null = null;
-            let popup: HTMLDivElement | null = null;
-            let root: ReturnType<typeof createRoot> | null = null;
+            let component: ReactRenderer<MentionListRef> | null = null;
+
+            const updatePosition = (editor: Editor, element: HTMLElement) => {
+              const virtualElement = {
+                getBoundingClientRect: () =>
+                  posToDOMRect(
+                    editor.view,
+                    editor.state.selection.from,
+                    editor.state.selection.to,
+                  ),
+              };
+
+              computePosition(virtualElement, element, {
+                placement: "bottom-start",
+                strategy: "absolute",
+                middleware: [shift(), flip()],
+              }).then(({ x, y, strategy }) => {
+                element.style.width = "max-content";
+                element.style.position = strategy;
+                element.style.left = `${x}px`;
+                element.style.top = `${y}px`;
+              });
+            };
 
             return {
-              // biome-ignore lint/suspicious/noExplicitAny: TipTap suggestion API doesn't provide types
-              onStart: (props: any) => {
-                popup = document.createElement("div");
-                popup.style.position = "absolute";
-                popup.style.zIndex = "1000";
-                document.body.appendChild(popup);
-
-                root = createRoot(popup);
-
-                component = {
-                  destroy: () => {
-                    if (root) {
-                      root.unmount();
-                      root = null;
-                    }
-                    if (popup?.parentNode) {
-                      popup.parentNode.removeChild(popup);
-                    }
-                    popup = null;
+              onStart: (props: SuggestionProps) => {
+                component = new ReactRenderer(MentionList, {
+                  props: {
+                    items: mentionItemsRef.current,
+                    command: props.command,
                   },
-                };
+                  editor: props.editor,
+                });
 
-                const ref: { current: MentionListRef | null } = {
-                  current: null,
-                };
-
-                root.render(
-                  <MentionList
-                    items={mentionItemsRef.current}
-                    command={props.command}
-                    ref={(instance) => {
-                      ref.current = instance;
-                    }}
-                  />,
-                );
-
-                // Store ref for keyboard handling
-                // biome-ignore lint/suspicious/noExplicitAny: Dynamic property for component reference
-                (component as any).ref = ref;
-              },
-
-              // biome-ignore lint/suspicious/noExplicitAny: TipTap suggestion API doesn't provide types
-              onUpdate: (props: any) => {
-                if (!root) return;
-
-                const ref: { current: MentionListRef | null } = {
-                  current: null,
-                };
-
-                root.render(
-                  <MentionList
-                    items={mentionItemsRef.current}
-                    command={props.command}
-                    ref={(instance) => {
-                      ref.current = instance;
-                    }}
-                  />,
-                );
-
-                // Update position
-                if (popup && props.clientRect) {
-                  const rect =
-                    typeof props.clientRect === "function"
-                      ? props.clientRect()
-                      : props.clientRect;
-
-                  if (rect) {
-                    popup.style.top = `${rect.bottom + window.scrollY}px`;
-                    popup.style.left = `${rect.left + window.scrollX}px`;
-                  }
+                if (!props.clientRect) {
+                  return;
                 }
 
-                // Store ref for keyboard handling
-                // biome-ignore lint/suspicious/noExplicitAny: Dynamic property for component reference
-                (component as any).ref = ref;
+                component.element.style.position = "absolute";
+                document.body.appendChild(component.element);
+
+                updatePosition(props.editor, component.element);
               },
 
-              // biome-ignore lint/suspicious/noExplicitAny: TipTap suggestion API doesn't provide types
-              onKeyDown: (props: any) => {
-                if (!component) return false;
-                // biome-ignore lint/suspicious/noExplicitAny: Dynamic property for component reference
-                const ref = (component as any).ref;
-                if (ref?.current?.onKeyDown) {
-                  return ref.current.onKeyDown(props);
+              onUpdate: (props: SuggestionProps) => {
+                component?.updateProps({
+                  items: mentionItemsRef.current,
+                  command: props.command,
+                });
+
+                if (!props.clientRect || !component) {
+                  return;
                 }
-                return false;
+
+                updatePosition(props.editor, component.element);
+              },
+
+              onKeyDown: (props: SuggestionKeyDownProps) => {
+                if (props.event.key === "Escape") {
+                  component?.destroy();
+                  return true;
+                }
+
+                return component?.ref?.onKeyDown?.(props) ?? false;
               },
 
               onExit: () => {
-                if (component) {
-                  component.destroy();
-                  component = null;
-                }
+                component?.element.remove();
+                component?.destroy();
               },
             };
           },
         } as Partial<SuggestionOptions>,
-      }),
-      FilePathHighlight.configure({
-        className: "rich-text-file-path",
       }),
     ],
     content: markdownToTiptap(value),

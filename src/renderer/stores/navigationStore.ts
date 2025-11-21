@@ -3,7 +3,7 @@ import type { Task } from "@shared/types";
 import { create } from "zustand";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
-type ViewType = "task-list" | "task-detail" | "settings";
+type ViewType = "task-list" | "task-detail" | "task-input" | "settings";
 
 interface ViewState {
   type: ViewType;
@@ -16,6 +16,7 @@ interface NavigationStore {
   historyIndex: number;
   navigateToTaskList: () => void;
   navigateToTask: (task: Task) => void;
+  navigateToTaskInput: () => void;
   navigateToSettings: () => void;
   toggleSettings: () => void;
   goBack: () => void;
@@ -47,8 +48,8 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
   };
 
   return {
-    view: { type: "task-list" },
-    history: [{ type: "task-list" }],
+    view: { type: "task-input" },
+    history: [{ type: "task-input" }],
     historyIndex: 0,
 
     navigateToTaskList: () => {
@@ -60,6 +61,10 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
       track(ANALYTICS_EVENTS.TASK_VIEWED, {
         task_id: task.id,
       });
+    },
+
+    navigateToTaskInput: () => {
+      navigate({ type: "task-input" });
     },
 
     navigateToSettings: () => {
