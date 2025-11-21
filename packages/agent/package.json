@@ -28,9 +28,9 @@
     "url": "https://github.com/PostHog/posthog-agent"
   },
   "scripts": {
-    "build": "rimraf dist && rollup -c && tsc --project tsconfig.build.json --emitDeclarationOnly",
-    "dev": "rollup -c --watch",
-    "typecheck": "tsc --noEmit",
+    "build": "pnpm exec rimraf dist && pnpm exec rollup -c && pnpm exec tsc --project tsconfig.build.json --emitDeclarationOnly",
+    "dev": "pnpm exec rollup -c --watch",
+    "typecheck": "pnpm exec tsc --noEmit",
     "example": "pnpm run example-usage.ts",
     "prepublishOnly": "pnpm run build"
   },
