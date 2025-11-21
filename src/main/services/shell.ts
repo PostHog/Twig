@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
 import * as pty from "node-pty";
@@ -38,13 +39,44 @@ export function registerShellIpc(): void {
 
         const shell = getDefaultShell();
         const homeDir = os.homedir();
+        let workingDir = cwd || homeDir;
 
-        const ptyProcess = pty.spawn(shell, [], {
+        // Validate that the directory exists
+        if (!fs.existsSync(workingDir)) {
+          console.warn(
+            `Shell session ${sessionId}: cwd "${workingDir}" does not exist, falling back to home directory`,
+          );
+          workingDir = homeDir;
+        }
+
+        console.log(
+          `Creating shell session ${sessionId}: shell=${shell}, cwd=${workingDir}`,
+        );
+
+        // Build environment with proper locale settings for macOS
+        const env = { ...process.env } as Record<string, string>;
+
+        // On macOS, ensure locale is properly set for shell compatibility
+        if (os.platform() === "darwin" && !process.env.LC_ALL) {
+          const locale = process.env.LC_CTYPE || "en_US.UTF-8";
+          env.LANG = locale;
+          env.LC_ALL = locale;
+          env.LC_MESSAGES = locale;
+          env.LC_NUMERIC = locale;
+          env.LC_COLLATE = locale;
+          env.LC_MONETARY = locale;
+        }
+
+        // Spawn as login shell to properly load PATH and environment
+        const shellArgs = ["-l"];
+
+        const ptyProcess = pty.spawn(shell, shellArgs, {
           name: "xterm-256color",
           cols: 80,
           rows: 24,
-          cwd: cwd || homeDir,
-          env: process.env as Record<string, string>,
+          cwd: workingDir,
+          env,
+          encoding: null,
         });
 
         // Send data to renderer
@@ -53,7 +85,10 @@ export function registerShellIpc(): void {
         });
 
         // Handle exit
-        ptyProcess.onExit(() => {
+        ptyProcess.onExit(({ exitCode, signal }) => {
+          console.error(
+            `Shell session ${sessionId} exited with code ${exitCode}, signal ${signal}`,
+          );
           event.sender.send(`shell:exit:${sessionId}`);
           sessions.delete(sessionId);
         });

@@ -75,7 +75,7 @@ function createWindow(): void {
     titleBarStyle: "hiddenInset",
     show: false,
     webPreferences: {
-      nodeIntegration: false,
+      nodeIntegration: true,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
       enableBlinkFeatures: "GetDisplayMedia",
