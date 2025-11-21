@@ -20,7 +20,6 @@
     "build-icons": "bash scripts/generate-icns.sh",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
-    "prepare": "husky",
     "knip": "knip",
     "test": "vitest run"
   },
