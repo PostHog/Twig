@@ -22,6 +22,10 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify workspace linking
+        run: |
+          ls -la apps/array/node_modules/@posthog/ || echo "No symlink found"
+          ls -la node_modules/@posthog/ || echo "No root link found"
       - name: Run type check
         run: pnpm run typecheck
         
