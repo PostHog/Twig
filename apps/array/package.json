@@ -8,7 +8,6 @@
     "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@10.14.0",
   "scripts": {
     "setup": "bash bin/setup",
     "dev": "electron-forge start",
