@@ -65,6 +65,13 @@ const notarizeConfig =
 const osxSignConfig = shouldSignMacApp
   ? ({
       identity: appleCodesignIdentity!,
+      optionsForFile: (_filePath) => {
+        // Entitlements for all binaries/frameworks
+        return {
+          hardenedRuntime: true,
+          entitlements: "build/entitlements.mac.plist",
+        };
+      },
     } satisfies Record<string, unknown>)
   : undefined;
 
