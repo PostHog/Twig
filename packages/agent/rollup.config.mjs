@@ -50,12 +50,12 @@ export default defineConfig({
         },
         // Bundle Claude CLI so consumers don't need to navigate nested node_modules
         {
-          src: "node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
+          src: "../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
           dest: "dist/claude-cli",
         },
         // Create package.json for ES module support
         {
-          src: "node_modules/@anthropic-ai/claude-agent-sdk/package.json",
+          src: "../../node_modules/@anthropic-ai/claude-agent-sdk/package.json",
           dest: "dist/claude-cli",
           transform: (_contents) => {
             // Only keep "type": "module" from the original package.json
@@ -64,11 +64,11 @@ export default defineConfig({
         },
         // Copy yoga.wasm file that Claude CLI needs
         {
-          src: "node_modules/yoga-wasm-web/dist/yoga.wasm",
+          src: "../../node_modules/yoga-wasm-web/dist/yoga.wasm",
           dest: "dist/claude-cli",
         },
       ],
-      hook: "writeBundle",
+      hook: "buildStart", // Changed hook from writeBundle to buildStart to ensure copy happens early
     }),
   ],
 });

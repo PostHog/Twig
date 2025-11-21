@@ -95,6 +95,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build agent package
+        run: pnpm --filter @posthog/agent run build
       - name: Import code signing certificate
         if: env.APPLE_CODESIGN_IDENTITY != ''
         env:

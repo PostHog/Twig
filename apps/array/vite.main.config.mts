@@ -27,7 +27,7 @@ function fixFilenameCircularRef(): Plugin {
         if (chunk.type === "chunk") {
           // Replace circular __filename references with direct __filename usage
           chunk.code = chunk.code.replace(
-            /const __filename(\d+) = url\.fileURLToPath\(typeof document === "undefined" \? require\("url"\)\.pathToFileURL\(__filename\1\)\.href : [^;]+\);/g,
+            /const __filename(\d+) = [\w$]+\.fileURLToPath\(typeof document === "undefined" \? require\("url"\)\.pathToFileURL\(__filename\1\)\.href : [^;]+\);/g,
             "const __filename$1 = __filename;",
           );
         }
@@ -66,37 +66,84 @@ function copyClaudeExecutable(): Plugin {
   return {
     name: "copy-claude-executable",
     writeBundle() {
-      const sdkDir = join(
-        __dirname,
-        "node_modules/@posthog/agent/dist/claude-cli/",
-      );
-
-      // IMPORTANT: Copy to claude-cli/ subdirectory to isolate the package.json
-      // If we put package.json in .vite/build/, it breaks Vite's CommonJS output
       const destDir = join(__dirname, ".vite/build/claude-cli");
 
       if (!existsSync(destDir)) {
         mkdirSync(destDir, { recursive: true });
       }
 
-      const files = ["cli.js", "package.json", "yoga.wasm"];
+      // Define potential sources for the Claude CLI artifacts
+      // Priority 1: Pre-built agent package (Production / CI)
+      // Priority 2: Workspace source files (Development)
+      const candidates = [
+        // Local node_modules (standard package structure)
+        {
+          path: join(__dirname, "node_modules/@posthog/agent/dist/claude-cli"),
+          type: "package",
+        },
+        // Root node_modules (hoisted package)
+        {
+          path: join(
+            __dirname,
+            "../../node_modules/@posthog/agent/dist/claude-cli",
+          ),
+          type: "package",
+        },
+        // Direct workspace access (monorepo build)
+        {
+          path: join(__dirname, "../../packages/agent/dist/claude-cli"),
+          type: "package",
+        },
+      ];
 
-      for (const file of files) {
-        const src = join(sdkDir, file);
-        const dest = join(destDir, file);
-
-        if (!existsSync(src)) {
-          console.warn(
-            `[copy-claude-executable] ${file} not found. ` +
-              `Run 'pnpm build' in the agent directory first.`,
+      // Check if any pre-built candidate exists
+      for (const candidate of candidates) {
+        if (
+          existsSync(join(candidate.path, "cli.js")) &&
+          existsSync(join(candidate.path, "yoga.wasm"))
+        ) {
+          console.log(
+            `[copy-claude-executable] Found pre-built artifacts at ${candidate.path}`,
           );
-          continue;
+          const files = ["cli.js", "package.json", "yoga.wasm"];
+          for (const file of files) {
+            copyFileSync(join(candidate.path, file), join(destDir, file));
+          }
+          console.log("Copied Claude CLI to claude-cli/ subdirectory");
+          return;
         }
-
-        copyFileSync(src, dest);
       }
 
-      console.log("Copied Claude CLI to claude-cli/ subdirectory");
+      // Fallback: Assemble from individual source packages (Development Workspace)
+      console.log(
+        "[copy-claude-executable] Pre-built artifacts not found. Attempting to assemble from workspace sources...",
+      );
+
+      const rootNodeModules = join(__dirname, "../../node_modules");
+      const sdkDir = join(rootNodeModules, "@anthropic-ai/claude-agent-sdk");
+      const yogaDir = join(rootNodeModules, "yoga-wasm-web/dist");
+
+      if (
+        existsSync(join(sdkDir, "cli.js")) &&
+        existsSync(join(yogaDir, "yoga.wasm"))
+      ) {
+        copyFileSync(join(sdkDir, "cli.js"), join(destDir, "cli.js"));
+        copyFileSync(
+          join(sdkDir, "package.json"),
+          join(destDir, "package.json"),
+        ); // Note: This copies the SDK package.json, which might not be ideal but works for type: module
+        copyFileSync(join(yogaDir, "yoga.wasm"), join(destDir, "yoga.wasm"));
+        console.log(
+          "Assembled Claude CLI from workspace sources in claude-cli/ subdirectory",
+        );
+        return;
+      }
+
+      console.warn(
+        "[copy-claude-executable] FAILED to find Claude CLI artifacts. Agent execution may fail.",
+      );
+      console.warn("Checked paths:", candidates.map((c) => c.path).join(", "));
+      console.warn("Checked workspace sources:", sdkDir);
     },
   };
 }
