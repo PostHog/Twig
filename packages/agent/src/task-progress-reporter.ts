@@ -50,7 +50,6 @@ export class TaskProgressReporter {
         status: "started",
       });
       this.taskRun = run;
-      this.outputLog = [];
       this.logger.debug("Created task run", { taskId, runId: run.id });
     } catch (error) {
       this.logger.warn("Failed to create task run", {

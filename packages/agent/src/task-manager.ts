@@ -11,7 +11,7 @@ export interface TaskExecutionState {
 }
 
 export class TaskManager {
-  private executionStates = new Map<string, TaskExecutionState>();
+  public executionStates = new Map<string, TaskExecutionState>();
   private defaultTimeout = 10 * 60 * 1000; // 10 minutes
 
   generateExecutionId(): string {
