@@ -26,6 +26,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build agent
-        run: pnpm --filter agent build
+        run: cd packages/agent && pnpm build
       - name: Build array
-        run: pnpm --filter array build
+        run: cd apps/array && pnpm build
