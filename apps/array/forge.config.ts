@@ -80,14 +80,36 @@ function copyNativeDependency(
   dependency: string,
   destinationRoot: string,
 ): void {
-  const source = path.resolve("node_modules", dependency);
+  const source = path.resolve("../../node_modules", dependency);
   if (!existsSync(source)) {
+    // Fallback to local node_modules
+    const localSource = path.resolve("node_modules", dependency);
+    if (existsSync(localSource)) {
+      copySync(dependency, destinationRoot, localSource);
+      return;
+    }
+
     console.warn(
       `[forge] Native dependency "${dependency}" not found, skipping copy`,
     );
     return;
   }
 
+  const nodeModulesDir = path.join(destinationRoot, "node_modules");
+  mkdirSync(nodeModulesDir, { recursive: true });
+
+  const destination = path.join(nodeModulesDir, dependency);
+  rmSync(destination, { recursive: true, force: true });
+  cpSync(source, destination, { recursive: true, dereference: true });
+  console.log(
+    `[forge] Copied native dependency "${dependency}" into ${path.relative(
+      process.cwd(),
+      destination,
+    )}`,
+  );
+}
+
+function copySync(dependency: string, destinationRoot: string, source: string) {
   const nodeModulesDir = path.join(destinationRoot, "node_modules");
   mkdirSync(nodeModulesDir, { recursive: true });
 
