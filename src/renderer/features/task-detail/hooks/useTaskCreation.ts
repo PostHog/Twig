@@ -55,6 +55,7 @@ export function useTaskCreation({
     !editor.isEmpty;
 
   const handleSubmit = useCallback(() => {
+    // TRICKY: This needs to be redefined in the callback due to a weird issue where the callback uses a stale version of canSubmit, even if its a dependency
     const canSubmit =
       !!editor &&
       isAuthenticated &&
