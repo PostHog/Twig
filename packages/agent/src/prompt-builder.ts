@@ -36,8 +36,10 @@ export class PromptBuilder {
     const paths: string[] = [];
     let match: RegExpExecArray | null;
 
-    while ((match = fileTagRegex.exec(description)) !== null) {
+    match = fileTagRegex.exec(description);
+    while (match !== null) {
       paths.push(match[1]);
+      match = fileTagRegex.exec(description);
     }
 
     return paths;
@@ -74,7 +76,8 @@ export class PromptBuilder {
       /<(error|experiment|insight|feature_flag)\s+id="([^"]+)"\s*\/>/g;
     let match: RegExpExecArray | null;
 
-    while ((match = resourceRegex.exec(description)) !== null) {
+    match = resourceRegex.exec(description);
+    while (match !== null) {
       const [, type, id] = match;
       mentions.push({
         url: "", // Will be reconstructed if needed
@@ -82,17 +85,20 @@ export class PromptBuilder {
         id,
         label: this.generateUrlLabel("", type as any),
       });
+      match = resourceRegex.exec(description);
     }
 
     // Generic URL mentions: <url href="..." />
     const urlRegex = /<url\s+href="([^"]+)"\s*\/>/g;
-    while ((match = urlRegex.exec(description)) !== null) {
+    match = urlRegex.exec(description);
+    while (match !== null) {
       const [, url] = match;
       mentions.push({
         url,
         type: "generic",
         label: this.generateUrlLabel(url, "generic"),
       });
+      match = urlRegex.exec(description);
     }
 
     return mentions;

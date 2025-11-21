@@ -62,18 +62,19 @@ const notarizeConfig =
   !skipNotarize && shouldSignMacApp && notarizeCredentials
     ? notarizeCredentials
     : undefined;
-const osxSignConfig = shouldSignMacApp
-  ? ({
-      identity: appleCodesignIdentity!,
-      optionsForFile: (_filePath) => {
-        // Entitlements for all binaries/frameworks
-        return {
-          hardenedRuntime: true,
-          entitlements: "build/entitlements.mac.plist",
-        };
-      },
-    } satisfies Record<string, unknown>)
-  : undefined;
+const osxSignConfig =
+  shouldSignMacApp && appleCodesignIdentity
+    ? ({
+        identity: appleCodesignIdentity,
+        optionsForFile: (_filePath) => {
+          // Entitlements for all binaries/frameworks
+          return {
+            hardenedRuntime: true,
+            entitlements: "build/entitlements.mac.plist",
+          };
+        },
+      } satisfies Record<string, unknown>)
+    : undefined;
 
 function copyNativeDependency(
   dependency: string,
@@ -134,10 +135,10 @@ const config: ForgeConfig = {
     new MakerDMG({
       icon: "./build/app-icon.icns",
       format: "ULFO",
-      ...(shouldSignMacApp
+      ...(shouldSignMacApp && appleCodesignIdentity
         ? {
             "code-sign": {
-              "signing-identity": appleCodesignIdentity!,
+              "signing-identity": appleCodesignIdentity,
               identifier: "com.posthog.array",
             },
           }

@@ -18972,9 +18972,11 @@ export class ApiClient {
       if (value != null) {
         // Skip null/undefined values
         if (Array.isArray(value)) {
-          value.forEach(
-            (val) => val != null && searchParams.append(key, String(val)),
-          );
+          value.forEach((val) => {
+            if (val != null) {
+              searchParams.append(key, String(val));
+            }
+          });
         } else {
           searchParams.append(key, String(value));
         }

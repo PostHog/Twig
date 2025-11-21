@@ -1,4 +1,3 @@
-import type { DragEndEvent, DragStartEvent } from "@dnd-kit/react";
 import {
   type SplitDirection,
   usePanelLayoutStore,
@@ -15,14 +14,14 @@ export const useDragDropHandlers = (taskId: string) => {
   const { moveTab, splitPanel, setDraggingTab, reorderTabs, getLayout } =
     usePanelLayoutStore();
 
-  const handleDragStart = (event: DragStartEvent) => {
+  const handleDragStart = (event: any) => {
     const data = event.operation.source?.data;
     if (data?.type !== "tab" || !data.tabId || !data.panelId) return;
 
     setDraggingTab(taskId, data.tabId, data.panelId);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = (event: any) => {
     usePanelLayoutStore.getState().clearDraggingTab(taskId);
 
     if (event.canceled) return;

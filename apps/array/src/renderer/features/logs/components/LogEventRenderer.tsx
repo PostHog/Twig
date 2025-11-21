@@ -15,7 +15,7 @@ import { IS_DEV } from "@/constants/environment";
 
 const EVENT_COMPONENT_MAP: Record<
   string,
-  React.ComponentType<{ event: AgentEvent }>
+  React.ComponentType<{ event: any }>
 > = {
   token: TokenView,
   text: TokenView, // Legacy: treat "text" events like "token" events

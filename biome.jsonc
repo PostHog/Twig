@@ -20,6 +20,9 @@
       "nursery": {
         "useSortedClasses": "error"
       },
+      "suspicious": {
+        "noExplicitAny": "warn"
+      },
       "style": {
         "noRestrictedImports": {
           "options": {
@@ -53,21 +56,24 @@
   "overrides": [
     {
       // Files using unknownAtRules
-      "includes": ["src/renderer/styles/globals.css"],
+      "includes": ["apps/array/src/renderer/styles/globals.css"],
       "linter": {
         "enabled": false
       }
     },
     {
       // API client generates a a lot of Any
-      "includes": ["src/api/generated.ts"],
+      "includes": ["apps/array/src/api/generated.ts"],
       "linter": {
         "enabled": false
       }
     },
     {
       // Renderer code should use path aliases
-      "includes": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"],
+      "includes": [
+        "apps/array/src/renderer/**/*.ts",
+        "apps/array/src/renderer/**/*.tsx"
+      ],
       "linter": {
         "rules": {
           "style": {

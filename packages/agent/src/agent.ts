@@ -208,6 +208,7 @@ export class Agent {
     } finally {
       if (taskError) {
         await this.progressReporter.fail(taskError);
+        // biome-ignore lint/correctness/noUnsafeFinally: we actually want to throw the error
         throw taskError;
       } else {
         await this.progressReporter.complete();
