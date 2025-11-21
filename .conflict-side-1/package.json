@@ -1,0 +1,45 @@
+{
+  "name": "array-monorepo",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Array monorepo - PostHog desktop task manager and agent",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "setup": "bash apps/array/bin/setup",
+    "dev": "mprocs",
+    "dev:agent": "pnpm --filter agent dev",
+    "dev:array": "pnpm --filter array dev",
+    "start": "pnpm --filter array start",
+    "build": "pnpm --filter agent build && pnpm --filter array build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check --write --unsafe",
+    "format": "biome format --write",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "posthog",
+    "array",
+    "tasks",
+    "developer-tools",
+    "agent"
+  ],
+  "author": "PostHog",
+  "license": "SEE LICENSE IN LICENSE",
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "biome check --write --unsafe --files-ignore-unknown=true --no-errors-on-unmatched",
+      "bash -c 'pnpm typecheck'"
+    ]
+  }
+}

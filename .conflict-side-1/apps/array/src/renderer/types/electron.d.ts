@@ -1,0 +1,171 @@
+import type { AgentEvent } from "@posthog/agent";
+import type { TaskArtifact } from "@shared/types";
+import "@main/services/types";
+import type {
+  CloudRegion,
+  OAuthTokenResponse,
+  StoredOAuthTokens,
+} from "@shared/types/oauth";
+
+declare global {
+  interface IElectronAPI {
+    storeApiKey: (apiKey: string) => Promise<string>;
+    retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
+    fetchS3Logs: (logUrl: string) => Promise<string>;
+    // OAuth API
+    oauthStartFlow: (region: CloudRegion) => Promise<{
+      success: boolean;
+      data?: OAuthTokenResponse;
+      error?: string;
+    }>;
+    oauthEncryptTokens: (
+      tokens: StoredOAuthTokens,
+    ) => Promise<{ success: boolean; encrypted?: string; error?: string }>;
+    oauthRetrieveTokens: (encrypted: string) => Promise<{
+      success: boolean;
+      data?: StoredOAuthTokens;
+      error?: string;
+    }>;
+    oauthDeleteTokens: () => Promise<{ success: boolean }>;
+    oauthRefreshToken: (
+      refreshToken: string,
+      region: CloudRegion,
+    ) => Promise<{
+      success: boolean;
+      data?: OAuthTokenResponse;
+      error?: string;
+    }>;
+    selectDirectory: () => Promise<string | null>;
+    searchDirectories: (
+      query: string,
+      searchRoot?: string,
+    ) => Promise<string[]>;
+    findReposDirectory: () => Promise<string | null>;
+    validateRepo: (directoryPath: string) => Promise<boolean>;
+    checkWriteAccess: (directoryPath: string) => Promise<boolean>;
+    detectRepo: (directoryPath: string) => Promise<{
+      organization: string;
+      repository: string;
+      branch?: string;
+      remote?: string;
+    } | null>;
+    validateRepositoryMatch: (
+      path: string,
+      organization: string,
+      repository: string,
+    ) => Promise<{
+      valid: boolean;
+      detected?: { organization: string; repository: string } | null;
+      error?: string;
+    }>;
+    checkSSHAccess: () => Promise<{
+      available: boolean;
+      error?: string;
+    }>;
+    cloneRepository: (
+      repoUrl: string,
+      targetPath: string,
+      cloneId: string,
+    ) => Promise<{ cloneId: string }>;
+    onCloneProgress: (
+      cloneId: string,
+      listener: (event: {
+        status: "cloning" | "complete" | "error";
+        message: string;
+      }) => void,
+    ) => () => void;
+    showMessageBox: (options: {
+      type?: "none" | "info" | "error" | "question" | "warning";
+      title?: string;
+      message?: string;
+      detail?: string;
+      buttons?: string[];
+      defaultId?: number;
+      cancelId?: number;
+    }) => Promise<{ response: number }>;
+    openExternal: (url: string) => Promise<void>;
+    listRepoFiles: (
+      repoPath: string,
+      query?: string,
+    ) => Promise<Array<{ path: string; name: string }>>;
+    clearRepoFileCache: (repoPath: string) => Promise<void>;
+    agentStart: (params: {
+      taskId: string;
+      repoPath: string;
+      apiKey: string;
+      apiHost: string;
+      projectId: number;
+      permissionMode?: string;
+      autoProgress?: boolean;
+      model?: string;
+      executionMode?: "plan";
+      runMode?: "local" | "cloud";
+      createPR?: boolean;
+    }) => Promise<{ taskId: string; channel: string }>;
+    agentCancel: (taskId: string) => Promise<boolean>;
+    onAgentEvent: (
+      channel: string,
+      listener: (event: AgentEvent) => void,
+    ) => () => void;
+    // Task artifact operations
+    readPlanFile: (repoPath: string, taskId: string) => Promise<string | null>;
+    writePlanFile: (
+      repoPath: string,
+      taskId: string,
+      content: string,
+    ) => Promise<void>;
+    ensurePosthogFolder: (repoPath: string, taskId: string) => Promise<string>;
+    listTaskArtifacts: (
+      repoPath: string,
+      taskId: string,
+    ) => Promise<TaskArtifact[]>;
+    readTaskArtifact: (
+      repoPath: string,
+      taskId: string,
+      fileName: string,
+    ) => Promise<string | null>;
+    appendToArtifact: (
+      repoPath: string,
+      taskId: string,
+      fileName: string,
+      content: string,
+    ) => Promise<void>;
+    saveQuestionAnswers: (
+      repoPath: string,
+      taskId: string,
+      answers: Array<{
+        questionId: string;
+        selectedOption: string;
+        customInput?: string;
+      }>,
+    ) => Promise<void>;
+    readRepoFile: (
+      repoPath: string,
+      filePath: string,
+    ) => Promise<string | null>;
+    onOpenSettings: (listener: () => void) => () => void;
+    onNewTask: (listener: () => void) => () => void;
+    onResetLayout: (listener: () => void) => () => void;
+    getAppVersion: () => Promise<string>;
+    onUpdateReady: (listener: () => void) => () => void;
+    installUpdate: () => Promise<{ installed: boolean }>;
+    // Shell API
+    shellCreate: (sessionId: string, cwd?: string) => Promise<void>;
+    shellWrite: (sessionId: string, data: string) => Promise<void>;
+    shellResize: (
+      sessionId: string,
+      cols: number,
+      rows: number,
+    ) => Promise<void>;
+    shellDestroy: (sessionId: string) => Promise<void>;
+    onShellData: (
+      sessionId: string,
+      listener: (data: string) => void,
+    ) => () => void;
+    onShellExit: (sessionId: string, listener: () => void) => () => void;
+  }
+
+  interface Window {
+    electronAPI: IElectronAPI;
+  }
+}

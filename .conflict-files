@@ -1,0 +1,3 @@
+ancestorEntries = ["package.json"]
+ourEntries = ["package.json"]
+theirEntries = ["package.json"]
