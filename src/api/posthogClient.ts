@@ -59,7 +59,9 @@ export class PostHogAPIClient {
 
   async getTasks(repositoryOrg?: string, repositoryName?: string) {
     const teamId = await this.getTeamId();
-    const params: Record<string, string> = {};
+    const params: Record<string, string | number> = {
+      limit: 500,
+    };
 
     if (repositoryOrg && repositoryName) {
       params.repository_config__organization = repositoryOrg;
