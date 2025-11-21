@@ -1,9 +1,0 @@
-packages:
-  - .
-
-onlyBuiltDependencies:
-  - electron
-  - esbuild
-
-overrides:
-  "@posthog/agent": file:../agent
