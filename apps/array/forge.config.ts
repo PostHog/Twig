@@ -127,7 +127,8 @@ function copySync(dependency: string, destinationRoot: string, source: string) {
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**}",
+      unpack:
+        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**}",
     },
     prune: false,
     name: "Array",

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent, PermissionMode } from "@posthog/agent";
 import {
@@ -128,6 +129,15 @@ export function registerAgentIpc(
           ts: Date.now(),
           message: `[Claude stderr] ${text}`,
         });
+
+        // Propagate spawn errors specifically to help debugging
+        if (text.includes("spawn") && text.includes("ENOENT")) {
+          emitToRenderer({
+            type: "error",
+            ts: Date.now(),
+            message: `Critical Agent Error: ${text}`,
+          });
+        }
       };
 
       const agent = new Agent({
@@ -191,14 +201,35 @@ export function registerAgentIpc(
       (async () => {
         const resolvedPermission = resolvePermissionMode(permissionMode);
         try {
+          // Create a temporary directory to mock 'node' in PATH
+          // Electron apps don't have 'node' in PATH, and process.execPath points to the App binary
+          // We symlink 'node' -> process.execPath and add this dir to PATH
+          const mockNodeDir = join(tmpdir(), `array-agent-node-${taskId}`);
+          try {
+            mkdirSync(mockNodeDir, { recursive: true });
+            const nodeSymlinkPath = join(mockNodeDir, "node");
+            // Remove existing symlink if it exists
+            try {
+              rmSync(nodeSymlinkPath, { force: true });
+            } catch {}
+            symlinkSync(process.execPath, nodeSymlinkPath);
+          } catch (err) {
+            console.warn("[agent] Failed to setup mock node environment", err);
+          }
+
+          const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
+
           const envOverrides = {
             ...process.env,
+            PATH: newPath,
             POSTHOG_API_KEY: apiKey,
             POSTHOG_API_HOST: apiHost,
             POSTHOG_AUTH_HEADER: `Bearer ${apiKey}`,
             ANTHROPIC_API_KEY: apiKey,
             ANTHROPIC_AUTH_TOKEN: apiKey,
             ANTHROPIC_BASE_URL: `${apiHost}/api/projects/${projectId}/llm_gateway`,
+            // Ensure we can run node in the packaged app
+            ELECTRON_RUN_AS_NODE: "1",
           };
 
           const mcpOverrides = {};
@@ -216,8 +247,15 @@ export function registerAgentIpc(
               env: envOverrides,
               mcpServers: mcpOverrides,
               pathToClaudeCodeExecutable: getClaudeCliPath(),
+              // Still pass this, but the PATH hack above is the real fix
+              nodePath: process.execPath,
             },
           });
+
+          // Clean up mock node dir
+          try {
+            rmSync(mockNodeDir, { recursive: true, force: true });
+          } catch {}
 
           emitToRenderer({ type: "done", success: true, ts: Date.now() });
         } catch (err) {

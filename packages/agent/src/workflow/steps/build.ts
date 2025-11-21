@@ -87,20 +87,25 @@ export const buildStep: WorkflowStepRunner = async ({ step, context }) => {
   // Track todos from TodoWrite tool calls
   const todoManager = new TodoManager(context.fileManager, stepLogger);
 
-  for await (const message of response) {
-    emitEvent(adapter.createRawSDKEvent(message));
-    const transformedEvents = adapter.transform(message);
-    for (const event of transformedEvents) {
-      emitEvent(event);
-    }
+  try {
+    for await (const message of response) {
+      emitEvent(adapter.createRawSDKEvent(message));
+      const transformedEvents = adapter.transform(message);
+      for (const event of transformedEvents) {
+        emitEvent(event);
+      }
 
-    const todoList = await todoManager.checkAndPersistFromMessage(
-      message,
-      task.id,
-    );
-    if (todoList) {
-      emitEvent(adapter.createArtifactEvent("todos", todoList));
+      const todoList = await todoManager.checkAndPersistFromMessage(
+        message,
+        task.id,
+      );
+      if (todoList) {
+        emitEvent(adapter.createArtifactEvent("todos", todoList));
+      }
     }
+  } catch (error) {
+    stepLogger.error("Error during build step query", error);
+    throw error;
   }
 
   // Finalize: commit any remaining changes and optionally push

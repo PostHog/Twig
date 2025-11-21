@@ -110,29 +110,34 @@ export const planStep: WorkflowStepRunner = async ({ step, context }) => {
   const todoManager = new TodoManager(fileManager, stepLogger);
 
   let planContent = "";
-  for await (const message of response) {
-    emitEvent(adapter.createRawSDKEvent(message));
-    const transformedEvents = adapter.transform(message);
-    for (const event of transformedEvents) {
-      emitEvent(event);
-    }
+  try {
+    for await (const message of response) {
+      emitEvent(adapter.createRawSDKEvent(message));
+      const transformedEvents = adapter.transform(message);
+      for (const event of transformedEvents) {
+        emitEvent(event);
+      }
 
-    const todoList = await todoManager.checkAndPersistFromMessage(
-      message,
-      task.id,
-    );
-    if (todoList) {
-      emitEvent(adapter.createArtifactEvent("todos", todoList));
-    }
+      const todoList = await todoManager.checkAndPersistFromMessage(
+        message,
+        task.id,
+      );
+      if (todoList) {
+        emitEvent(adapter.createArtifactEvent("todos", todoList));
+      }
 
-    // Extract text content for plan
-    if (message.type === "assistant" && message.message?.content) {
-      for (const block of message.message.content) {
-        if (block.type === "text" && block.text) {
-          planContent += `${block.text}\n`;
+      // Extract text content for plan
+      if (message.type === "assistant" && message.message?.content) {
+        for (const block of message.message.content) {
+          if (block.type === "text" && block.text) {
+            planContent += `${block.text}\n`;
+          }
         }
       }
     }
+  } catch (error) {
+    stepLogger.error("Error during plan step query", error);
+    throw error;
   }
 
   if (planContent.trim()) {

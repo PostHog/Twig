@@ -247,15 +247,20 @@ export class Agent {
     });
 
     const results = [];
-    for await (const message of response) {
-      this.logger.debug("Received message in direct run", message);
-      // Emit raw SDK event
-      this.emitEvent(this.adapter.createRawSDKEvent(message));
-      const transformedEvents = this.adapter.transform(message);
-      for (const event of transformedEvents) {
-        this.emitEvent(event);
+    try {
+      for await (const message of response) {
+        this.logger.debug("Received message in direct run", message);
+        // Emit raw SDK event
+        this.emitEvent(this.adapter.createRawSDKEvent(message));
+        const transformedEvents = this.adapter.transform(message);
+        for (const event of transformedEvents) {
+          this.emitEvent(event);
+        }
+        results.push(message);
       }
-      results.push(message);
+    } catch (error) {
+      this.logger.error("Error during direct run", error);
+      throw error;
     }
 
     return { results };

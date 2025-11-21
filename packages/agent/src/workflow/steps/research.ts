@@ -87,19 +87,24 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
   });
 
   let jsonContent = "";
-  for await (const message of response) {
-    emitEvent(adapter.createRawSDKEvent(message));
-    const transformedEvents = adapter.transform(message);
-    for (const event of transformedEvents) {
-      emitEvent(event);
-    }
-    if (message.type === "assistant" && message.message?.content) {
-      for (const c of message.message.content) {
-        if (c.type === "text" && c.text) {
-          jsonContent += c.text;
+  try {
+    for await (const message of response) {
+      emitEvent(adapter.createRawSDKEvent(message));
+      const transformedEvents = adapter.transform(message);
+      for (const event of transformedEvents) {
+        emitEvent(event);
+      }
+      if (message.type === "assistant" && message.message?.content) {
+        for (const c of message.message.content) {
+          if (c.type === "text" && c.text) {
+            jsonContent += c.text;
+          }
         }
       }
     }
+  } catch (error) {
+    stepLogger.error("Error during research step query", error);
+    throw error;
   }
 
   if (!jsonContent.trim()) {
