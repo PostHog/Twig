@@ -93,8 +93,8 @@ importers:
         specifier: ^8.5.0
         version: 8.5.0
       node-pty:
-        specifier: 1.1.0-beta37
-        version: 1.1.0-beta37
+        specifier: 1.1.0-beta39
+        version: 1.1.0-beta39
       posthog-js:
         specifier: ^1.283.0
         version: 1.284.0
@@ -4170,8 +4170,8 @@ packages:
       encoding:
         optional: true
 
-  node-pty@1.1.0-beta37:
-    resolution: {integrity: sha512-Ys8AW98Atyu9cLV5QLQshvSTF+YMDksVi2ULkYNPAKLGzaDQbXuOEjStg4ZZuL4c8saOTh1+2PNlCoyuagBr1Q==}
+  node-pty@1.1.0-beta39:
+    resolution: {integrity: sha512-1xnN2dbS0QngT4xenpS/6Q77QtaDQo5vE6f4slATgZsFIv3NP4ObE7vAjYnZtMFG5OEh3jyDRZc+hy1DjDF7dg==}
 
   node-releases@2.0.25:
     resolution: {integrity: sha512-4auku8B/vw5psvTiiN9j1dAOsXvMoGqJuKJcR+dTdqiXEK20mMTk1UEo3HS16LeGQsVG6+qKTPM9u/qQ2LqATA==}
@@ -9981,7 +9981,7 @@ snapshots:
     optionalDependencies:
       encoding: 0.1.13
 
-  node-pty@1.1.0-beta37:
+  node-pty@1.1.0-beta39:
     dependencies:
       node-addon-api: 7.1.1
 
