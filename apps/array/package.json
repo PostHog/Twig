@@ -16,6 +16,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "build": "pnpm package",
     "build-native": "bash scripts/build-native-modules.sh",
     "build-icons": "bash scripts/generate-icns.sh",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
