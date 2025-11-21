@@ -31,8 +31,6 @@ AGENTS.md
 .claude/
 .claude-config/
 
-pnpm-workspace.yaml
-
 **.car
 
 .envrc
