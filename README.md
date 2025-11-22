@@ -1,10 +1,11 @@
-# PostHog - Array
+# PostHog Array Monorepo
 
-The PostHog desktop task manager
+This is the monorepo for PostHog's Array desktop task manager and the agent framework that powers it.
 
-## The Goal
+## Projects
 
-Free product engineers from distractions so they can focus on what they love: building great features. By using agents to transform all data collected across PostHog’s products into actionable “tasks,” then exposing them with that context through a single interface, we can automate all the chores and save developers hours every day, giving them more time to ship.
+- **[apps/array](./apps/array)** - The Array desktop application
+- **[packages/agent](./packages/agent)** - The TypeScript agent framework
 
 ## Development
 
@@ -19,145 +20,48 @@ Free product engineers from distractions so they can focus on what they love: bu
 # Install pnpm if you haven't already
 npm install -g pnpm
 
-# Install dependencies
+# Install dependencies for all packages
 pnpm install
 
-# Run in development mode
-pnpm run start
-
-# Build for production
-pnpm run make
-
-# Other useful commands
-pnpm run check:write       # Linting & typecheck
+# Build the agent package
+pnpm --filter agent build
 ```
 
-### Liquid Glass Icon (macOS 26+)
-
-The app supports macOS liquid glass icons for a modern, layered appearance. The icon configuration is in `build/icon.icon/`.
-
-**Compiling the liquid glass icon requires Xcode** (Command Line Tools are not sufficient):
+### Running in Development
 
 ```bash
-# Compile liquid glass icon (requires Xcode)
-bash scripts/compile-glass-icon.sh
+# Run both agent (watch mode) and array app in parallel
+pnpm dev
+
+# Or run them separately:
+pnpm dev:agent   # Run agent in watch mode
+pnpm dev:array   # Run array app
 ```
 
-If you don't have Xcode installed, the build will automatically fall back to the standard `.icns` icon. To enable liquid glass icons:
+### Other Commands
 
-1. Install Xcode from the App Store
-2. Run the compile script above, or
-3. Compile `Assets.car` on a machine with Xcode and commit it to the repo
+```bash
+# Build all packages
+pnpm build
 
-The `generateAssets` hook will automatically attempt to compile the icon during packaging if Xcode is available.
+# Run type checking across all packages
+pnpm typecheck
 
-### Environment Variables
+# Run linting across all packages
+pnpm lint
 
-You can set these environment variables instead of entering credentials in the app:
-
-- `POSTHOG_API_KEY` - Your PostHog personal API key
-- `POSTHOG_API_HOST` - PostHog instance URL (defaults to https://us.posthog.com)
-
-## Architecture
-
-- **Electron** - Desktop app framework
-- **React** - UI framework
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **Zustand** - State management - we should probably switch to kea
-- **Vite** - Build tool
+# Run tests across all packages
+pnpm test
+```
 
 ## Project Structure
 
 ```
-array/
-├── src/
-│   ├── main/           # Electron main process
-│   ├── renderer/       # React app
-│   ├── api/            # API client
-│   └── shared/         # Shared types
-├── dist/               # Build output
-└── release/            # Packaged apps
-```
-
-## Keyboard Shortcuts
-
-- `↑/↓` - Navigate tasks
-- `Enter` - Open selected task
-- `⌘R` - Refresh task list
-- `⌘⇧[/]` - Switch between tabs
-- `⌘W` - Close current tab
-
-
-### Building Distributables
-
-To create production distributables (DMG, ZIP):
-
-```bash
-# Package the app
-pnpm package
-
-# Create distributables (DMG + ZIP)
-pnpm make
-```
-
-Output will be in:
-- `out/Array-darwin-arm64/Array.app` - Packaged app
-- `out/make/Array-*.dmg` - macOS installer
-- `out/make/zip/` - ZIP archives
-
-**Note:** Native modules for the DMG maker are automatically compiled via the `prePackage` hook. If you need to manually rebuild them, run:
-
-```bash
-pnpm build-native
-```
-
-### Auto Updates & Releases
-
-Array uses Electron's built-in `autoUpdater` pointed at the public `update.electronjs.org` service for `PostHog/Array`. Every time a non-draft GitHub release is published with the platform archives, packaged apps will automatically download and install the newest version on macOS and Windows.
-
-Publishing a new release:
-
-1. Export a GitHub token with `repo` scope as `GH_PUBLISH_TOKEN`; set both `GH_TOKEN` and `GITHUB_TOKEN` to its value locally (e.g., in `.envrc`). In GitHub, store the token as the `GH_PUBLISH_TOKEN` repository secret.
-2. Run `pnpm run make` locally to sanity check artifacts, then bump `package.json`'s version (e.g., `pnpm version patch`).
-3. Merge the version bump into `main`. The `Publish Release` GitHub Action auto-detects the new version, tags `vX.Y.Z`, runs `pnpm run publish`, and uploads the release artifacts. You can also run the workflow manually (`workflow_dispatch`) and supply a tag if you need to re-publish.
-
-Set `ELECTRON_DISABLE_AUTO_UPDATE=1` if you ever need to ship a build with auto updates disabled.
-
-### macOS Code Signing & Notarization
-
-macOS packages are signed and notarized automatically when these environment variables are present:
-
-```bash
-export APPLE_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-export APPLE_ID="appleid@example.com"
-export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-export APPLE_TEAM_ID="TEAMID"
-```
-
-For CI releases, configure matching GitHub Actions secrets:
-
-- `APPLE_CODESIGN_IDENTITY`
-- `APPLE_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_TEAM_ID`
-- `APPLE_CODESIGN_CERT_BASE64` – Base64-encoded `.p12` export of the Developer ID Application certificate (include the private key)
-- `APPLE_CODESIGN_CERT_PASSWORD` – Password used when exporting the `.p12`
-- `APPLE_CODESIGN_KEYCHAIN_PASSWORD` – Password for the temporary keychain the workflow creates on the runner
-
-The `Publish Release` workflow imports the certificate into a temporary keychain, signs each artifact with hardened runtime enabled (using Electron’s default entitlements), and notarizes it before upload whenever these secrets are available.
-
-For local testing, copy `codesign.env.example` to `.env.codesign`, fill in the real values, and load it before running `pnpm run make`:
-
-```bash
-set -a
-source .env.codesign
-set +a
-pnpm run make
-```
-
-Set `SKIP_NOTARIZE=1` if you need to generate signed artifacts without submitting to Apple (e.g., while debugging credentials):
-
-```bash
-SKIP_NOTARIZE=1 pnpm run make
+array-monorepo/
+├── apps/
+│   └── array/          # Electron desktop app
+├── packages/
+│   └── agent/          # Agent framework
+├── pnpm-workspace.yaml # Workspace configuration
+└── package.json        # Root package.json
 ```

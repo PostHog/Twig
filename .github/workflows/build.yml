@@ -1,10 +1,13 @@
-name: Typecheck
+name: Build
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
-  typecheck:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -15,8 +18,7 @@ jobs:
           persist-credentials: false
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.14.0
+        
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -24,6 +26,7 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Run type check
-        run: pnpm run typecheck
-        
+      - name: Build agent
+        run: pnpm --filter agent build
+      - name: Build array
+        run: pnpm --filter array build
