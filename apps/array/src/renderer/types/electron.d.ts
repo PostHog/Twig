@@ -157,6 +157,7 @@ declare global {
       cols: number,
       rows: number,
     ) => Promise<void>;
+    shellCheck: (sessionId: string) => Promise<boolean>;
     shellDestroy: (sessionId: string) => Promise<void>;
     onShellData: (
       sessionId: string,

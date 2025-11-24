@@ -30,11 +30,9 @@ export function registerShellIpc(): void {
       cwd?: string,
     ): Promise<void> => {
       try {
-        // Clean up existing session if any
         const existing = sessions.get(sessionId);
         if (existing) {
-          existing.pty.kill();
-          sessions.delete(sessionId);
+          return;
         }
 
         const shell = getDefaultShell();
@@ -66,6 +64,11 @@ export function registerShellIpc(): void {
           env.LC_COLLATE = locale;
           env.LC_MONETARY = locale;
         }
+
+        env.TERM_PROGRAM = "Array";
+        env.TERM_PROGRAM_VERSION = "0.4.0";
+        env.COLORTERM = "truecolor";
+        env.FORCE_COLOR = "3"; // truecolor
 
         // Spawn as login shell to properly load PATH and environment
         const shellArgs = ["-l"];
@@ -136,6 +139,14 @@ export function registerShellIpc(): void {
       }
 
       session.pty.resize(cols, rows);
+    },
+  );
+
+  // Check if shell session exists
+  ipcMain.handle(
+    "shell:check",
+    async (_event: IpcMainInvokeEvent, sessionId: string): Promise<boolean> => {
+      return sessions.has(sessionId);
     },
   );
 

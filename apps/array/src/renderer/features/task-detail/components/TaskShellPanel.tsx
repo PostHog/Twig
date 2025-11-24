@@ -13,7 +13,7 @@ export function TaskShellPanel({ taskId, task }: TaskShellPanelProps) {
 
   return (
     <Box height="100%">
-      <ShellTerminal cwd={taskData.repoPath || undefined} />
+      <ShellTerminal cwd={taskData.repoPath || undefined} stateKey={taskId} />
     </Box>
   );
 }
