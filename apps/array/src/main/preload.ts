@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     region: CloudRegion,
   ): Promise<{ success: boolean; data?: OAuthTokenResponse; error?: string }> =>
     ipcRenderer.invoke("oauth:refresh-token", refreshToken, region),
+  oauthCancelFlow: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("oauth:cancel-flow"),
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke("select-directory"),
   searchDirectories: (query: string, searchRoot?: string): Promise<string[]> =>

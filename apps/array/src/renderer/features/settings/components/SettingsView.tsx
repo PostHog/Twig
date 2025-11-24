@@ -14,6 +14,7 @@ import {
   Flex,
   Heading,
   Select,
+  Spinner,
   Switch,
   Text,
 } from "@radix-ui/themes";
@@ -62,8 +63,11 @@ export function SettingsView() {
     },
   });
 
-  const handleReauthenticate = () => {
-    if (cloudRegion) {
+  const handleReauthenticate = async () => {
+    if (reauthMutation.isPending) {
+      reauthMutation.reset();
+      await window.electronAPI.oauthCancelFlow();
+    } else if (cloudRegion) {
       reauthMutation.mutate(cloudRegion);
     }
   };
@@ -263,11 +267,11 @@ export function SettingsView() {
                       variant="classic"
                       size="1"
                       onClick={handleReauthenticate}
-                      disabled={reauthMutation.isPending}
-                      loading={reauthMutation.isPending}
+                      color={reauthMutation.isPending ? "gray" : undefined}
                     >
+                      {reauthMutation.isPending && <Spinner />}
                       {reauthMutation.isPending
-                        ? "Authenticating..."
+                        ? "Cancel authorization"
                         : "Re-authenticate"}
                     </Button>
                     <Button

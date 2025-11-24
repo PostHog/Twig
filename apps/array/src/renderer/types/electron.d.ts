@@ -35,6 +35,7 @@ declare global {
       data?: OAuthTokenResponse;
       error?: string;
     }>;
+    oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
     selectDirectory: () => Promise<string | null>;
     searchDirectories: (
       query: string,
