@@ -396,4 +396,19 @@ export function registerOAuthHandlers(): void {
       }
     },
   );
+
+  ipcMain.handle("oauth:cancel-flow", async () => {
+    try {
+      if (activeCloseServer) {
+        activeCloseServer();
+        activeCloseServer = null;
+      }
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
 }

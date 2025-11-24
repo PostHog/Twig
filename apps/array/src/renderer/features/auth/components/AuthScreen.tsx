@@ -10,6 +10,7 @@ import {
   Flex,
   Heading,
   Select,
+  Spinner,
   Text,
 } from "@radix-ui/themes";
 import type { CloudRegion } from "@shared/types/oauth";
@@ -84,9 +85,14 @@ export function AuthScreen() {
     },
   });
 
-  const handleSignIn = () => {
-    setWorkspaceError(null);
-    authMutation.mutate({ selectedRegion: region, workspace });
+  const handleSignIn = async () => {
+    if (authMutation.isPending) {
+      authMutation.reset();
+      await window.electronAPI.oauthCancelFlow();
+    } else {
+      setWorkspaceError(null);
+      authMutation.mutate({ selectedRegion: region, workspace });
+    }
   };
 
   const handleRegionChange = (value: string) => {
@@ -175,14 +181,16 @@ export function AuthScreen() {
 
                   <Button
                     onClick={handleSignIn}
-                    disabled={authMutation.isPending || !workspace}
-                    variant="classic"
+                    disabled={!workspace}
+                    variant={"classic"}
                     size="3"
                     mt="2"
-                    loading={authMutation.isPending}
+                    color={authMutation.isPending ? "gray" : undefined}
                   >
+                    {authMutation.isPending && <Spinner />}
+
                     {authMutation.isPending
-                      ? "Waiting for authorization..."
+                      ? "Cancel authorization"
                       : "Sign in with PostHog"}
                   </Button>
                 </Flex>
