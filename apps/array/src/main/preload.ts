@@ -240,6 +240,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("shell:write", sessionId, data),
   shellResize: (sessionId: string, cols: number, rows: number): Promise<void> =>
     ipcRenderer.invoke("shell:resize", sessionId, cols, rows),
+  shellCheck: (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke("shell:check", sessionId),
   shellDestroy: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke("shell:destroy", sessionId),
   onShellData: (

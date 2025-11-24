@@ -21,7 +21,8 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "knip": "knip",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true"
   },
   "keywords": [
     "posthog",
@@ -39,6 +40,7 @@
     "@electron-forge/plugin-vite": "^7.10.2",
     "@electron-forge/publisher-github": "^7.10.2",
     "@electron-forge/shared-types": "^7.10.2",
+    "@electron/rebuild": "^4.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -87,6 +89,7 @@
     "@tiptap/starter-kit": "^3.11.0",
     "@tiptap/suggestion": "^3.11.0",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-serialize": "^0.13.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "ai": "^5.0.75",
