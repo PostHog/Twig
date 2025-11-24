@@ -5,7 +5,10 @@ import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useState } from "react";
 import { useEditorSetup } from "../hooks/useEditorSetup";
 import { useTaskCreation } from "../hooks/useTaskCreation";
+import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
+
+const DOT_FILL = "var(--gray-6)";
 
 export function TaskInput() {
   const { lastUsedDirectory } = useTaskDirectoryStore();
@@ -51,11 +54,53 @@ export function TaskInput() {
   });
 
   return (
-    <Flex align="center" justify="center" height="100%">
+    <Flex
+      align="center"
+      justify="center"
+      height="100%"
+      style={{ position: "relative" }}
+    >
+      <svg
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          width: "100%",
+          height: "100.333%",
+          pointerEvents: "none",
+          opacity: 0.4,
+          maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to top, black 0%, transparent 100%)",
+        }}
+      >
+        <defs>
+          <pattern
+            id="dot-pattern"
+            patternUnits="userSpaceOnUse"
+            width="8"
+            height="8"
+          >
+            <circle cx="0" cy="0" r="1" fill={DOT_FILL} />
+            <circle cx="0" cy="8" r="1" fill={DOT_FILL} />
+            <circle cx="8" cy="8" r="1" fill={DOT_FILL} />
+            <circle cx="8" cy="0" r="1" fill={DOT_FILL} />
+            <circle cx="4" cy="4" r="1" fill={DOT_FILL} />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dot-pattern)" />
+      </svg>
       <Flex
         direction="column"
         gap="4"
-        style={{ fontFamily: "monospace", width: "100%", maxWidth: "600px" }}
+        style={{
+          fontFamily: "monospace",
+          width: "100%",
+          maxWidth: "600px",
+          position: "relative",
+          zIndex: 1,
+        }}
       >
         <Box style={{ width: "50%" }}>
           <FolderPicker
@@ -79,6 +124,8 @@ export function TaskInput() {
             Create task
           </Button>
         </Flex>
+
+        <SuggestedTasks editor={editor} />
       </Flex>
     </Flex>
   );

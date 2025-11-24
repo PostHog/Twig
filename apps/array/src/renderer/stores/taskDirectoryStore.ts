@@ -13,6 +13,10 @@ interface TaskDirectoryState {
   clearRepoDirectory: (repoKey: string) => void;
 }
 
+const isValidPath = (path: string): boolean => {
+  return !path.includes("/undefined") && !path.includes("\\undefined");
+};
+
 export const useTaskDirectoryStore = create<TaskDirectoryState>()(
   persist(
     (set, get) => ({
@@ -81,6 +85,42 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
         repoDirectories: state.repoDirectories,
         lastUsedDirectory: state.lastUsedDirectory,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+
+        // Clean up invalid paths from localStorage
+        const cleanedTaskDirs: Record<string, string> = {};
+        for (const [key, value] of Object.entries(state.taskDirectories)) {
+          if (isValidPath(value)) {
+            cleanedTaskDirs[key] = value;
+          }
+        }
+
+        const cleanedRepoDirs: Record<string, string> = {};
+        for (const [key, value] of Object.entries(state.repoDirectories)) {
+          if (isValidPath(value)) {
+            cleanedRepoDirs[key] = value;
+          }
+        }
+
+        const cleanedLastUsed =
+          state.lastUsedDirectory && isValidPath(state.lastUsedDirectory)
+            ? state.lastUsedDirectory
+            : null;
+
+        // Update state with cleaned values
+        if (
+          Object.keys(cleanedTaskDirs).length !==
+            Object.keys(state.taskDirectories).length ||
+          Object.keys(cleanedRepoDirs).length !==
+            Object.keys(state.repoDirectories).length ||
+          cleanedLastUsed !== state.lastUsedDirectory
+        ) {
+          state.taskDirectories = cleanedTaskDirs;
+          state.repoDirectories = cleanedRepoDirs;
+          state.lastUsedDirectory = cleanedLastUsed;
+        }
+      },
     },
   ),
 );

@@ -922,9 +922,11 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (taskState.repoPath) return;
 
         // 1. Check taskDirectoryStore first
-        const repoKey = task.repository_config
-          ? `${task.repository_config.organization}/${task.repository_config.repository}`
-          : undefined;
+        const repoKey =
+          task.repository_config?.organization &&
+          task.repository_config?.repository
+            ? `${task.repository_config.organization}/${task.repository_config.repository}`
+            : undefined;
 
         const storedDirectory = useTaskDirectoryStore
           .getState()
@@ -945,7 +947,8 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         // 2. Fallback to deriving from workspace (existing logic)
-        if (!task.repository_config) return;
+        if (!task.repository_config || !task.repository_config.repository)
+          return;
 
         const { defaultWorkspace } = useAuthStore.getState();
         if (!defaultWorkspace) return;

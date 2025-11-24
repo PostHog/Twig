@@ -32,7 +32,14 @@ const MAX_RECENT_ITEMS = 5;
 const SEARCH_DEBOUNCE_MS = 100;
 const MAX_LIST_HEIGHT = "300px";
 
+const displayRepoName = (path: string): string => {
+  // Extract just the last segment (repository/directory name)
+  const segments = path.split("/");
+  return segments[segments.length - 1] || path;
+};
+
 const displayPath = (path: string): string => {
+  // Show full path with ~ for home directory
   const homePattern = /^\/Users\/[^/]+|^\/home\/[^/]+/;
   const match = path.match(homePattern);
   return match ? path.replace(match[0], "~") : path;
@@ -54,7 +61,7 @@ export function FolderPicker({
 
   const { recentDirectories, addRecentDirectory } = useFolderPickerStore();
 
-  const displayValue = value ? displayPath(value) : placeholder;
+  const displayValue = value ? displayRepoName(value) : placeholder;
   const totalItems = recentPreview.length + directoryPreview.length;
 
   useHotkeys(
@@ -165,7 +172,7 @@ export function FolderPicker({
       onSelect={() => handleSelect(path)}
     >
       <Text
-        size="2"
+        size="1"
         style={{
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -253,7 +260,7 @@ export function FolderPicker({
             )}
 
             {recentPreview.length > 0 && (
-              <Command.Group heading="Recent Directories">
+              <Command.Group>
                 {recentPreview.map((path, idx) => renderItem(path, idx))}
               </Command.Group>
             )}

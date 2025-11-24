@@ -39,7 +39,12 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     }
 
     // Fall back to deriving from workspace + repository (legacy behavior)
-    if (!task.repository_config || !defaultWorkspace) return null;
+    if (
+      !task.repository_config ||
+      !defaultWorkspace ||
+      !task.repository_config.repository
+    )
+      return null;
     const expandedWorkspace = expandTildePath(defaultWorkspace);
     return `${expandedWorkspace}/${task.repository_config.repository}`;
   }, [taskState.repoPath, task.repository_config, defaultWorkspace]);
