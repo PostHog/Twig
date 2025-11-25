@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Cross2Icon } from "@radix-ui/react-icons";
-import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, IconButton, Text } from "@radix-ui/themes";
 import type React from "react";
 
 interface DraggableTabProps {
@@ -40,6 +40,32 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     disabled: !draggable,
   });
 
+  if (!draggable) {
+    return (
+      <Flex align="center" flexShrink="0" ml="2" mr="2" px="2" py="1">
+        <Button
+          variant="ghost"
+          color="gray"
+          size="1"
+          onClick={onSelect}
+          style={{
+            backgroundColor: isActive ? "var(--gray-a3)" : undefined,
+          }}
+        >
+          {icon && (
+            <Box style={{ display: "flex", alignItems: "center" }}>{icon}</Box>
+          )}
+          {label}
+          {hasUnsavedChanges && (
+            <Text size="1" style={{ color: "var(--amber-9)" }}>
+              •
+            </Text>
+          )}
+        </Button>
+      </Flex>
+    );
+  }
+
   return (
     <Flex
       ref={ref}
@@ -49,7 +75,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       align="center"
       gap="2"
       px="4"
-      className={`group relative select-none border-r border-b-2 transition-colors ${draggable ? "cursor-grab" : "cursor-default"}`}
+      className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
         backgroundColor: isActive ? "var(--accent-3)" : "transparent",
         borderRightColor: "var(--gray-6)",
