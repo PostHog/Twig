@@ -11,8 +11,14 @@ const isSplitDirection = (zone: string): zone is SplitDirection => {
 };
 
 export const useDragDropHandlers = (taskId: string) => {
-  const { moveTab, splitPanel, setDraggingTab, reorderTabs, getLayout } =
-    usePanelLayoutStore();
+  const {
+    moveTab,
+    splitPanel,
+    setDraggingTab,
+    reorderTabs,
+    getLayout,
+    setFocusedPanel,
+  } = usePanelLayoutStore();
 
   const handleDragStart = (event: any) => {
     const data = event.operation.source?.data;
@@ -86,8 +92,12 @@ export const useDragDropHandlers = (taskId: string) => {
 
     if (zone === "center") {
       moveTab(taskId, tabId, sourcePanelId, targetPanelId);
+      setFocusedPanel(taskId, targetPanelId);
     } else if (isSplitDirection(zone)) {
       splitPanel(taskId, tabId, sourcePanelId, targetPanelId, zone);
+      // For splits, the new panel gets a generated ID, so we can't easily focus it here
+      // The target panel remains focused which is reasonable behavior
+      setFocusedPanel(taskId, targetPanelId);
     }
   };
 
