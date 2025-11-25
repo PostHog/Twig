@@ -220,18 +220,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-changed-files-head", repoPath),
   getFileAtHead: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("get-file-at-head", repoPath, filePath),
-  // Lazy directory listing
   listDirectory: (
     dirPath: string,
   ): Promise<
     Array<{ name: string; path: string; type: "file" | "directory" }>
   > => ipcRenderer.invoke("fs:list-directory", dirPath),
-  // Watcher control
   watcherStart: (repoPath: string): Promise<void> =>
     ipcRenderer.invoke("watcher:start", repoPath),
   watcherStop: (repoPath: string): Promise<void> =>
     ipcRenderer.invoke("watcher:stop", repoPath),
-  // Events
   onDirectoryChanged: (
     listener: (data: { repoPath: string; dirPath: string }) => void,
   ): (() => void) => {
