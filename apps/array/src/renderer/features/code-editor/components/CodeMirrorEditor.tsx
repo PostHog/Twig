@@ -1,3 +1,7 @@
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
 import { EditorState } from "@codemirror/state";
 import {
@@ -6,14 +10,17 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { useEffect, useRef } from "react";
+import { getLanguageExtension } from "../utils/languages";
 
 interface CodeMirrorEditorProps {
   content: string;
+  filePath?: string;
   readOnly?: boolean;
 }
 
 export function CodeMirrorEditor({
   content,
+  filePath,
   readOnly = false,
 }: CodeMirrorEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -24,10 +31,14 @@ export function CodeMirrorEditor({
       return;
     }
 
+    const languageExtension = filePath ? getLanguageExtension(filePath) : null;
+
     const extensions: Extension[] = [
       lineNumbers(),
       highlightActiveLineGutter(),
+      syntaxHighlighting(defaultHighlightStyle),
       EditorView.editable.of(!readOnly),
+      ...(languageExtension ? [languageExtension] : []),
       EditorView.theme({
         "&": {
           height: "100%",
@@ -69,7 +80,7 @@ export function CodeMirrorEditor({
       viewRef.current?.destroy();
       viewRef.current = null;
     };
-  }, [content, readOnly]);
+  }, [content, filePath, readOnly]);
 
   return <div ref={editorRef} style={{ height: "100%", width: "100%" }} />;
 }
