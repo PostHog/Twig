@@ -1,5 +1,5 @@
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { Text } from "@radix-ui/themes";
+import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,20 +12,35 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const repoPath = taskData.repoPath;
 
-  const { data: changedFiles = [] } = useQuery({
-    queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
+  const { data: diffStats } = useQuery({
+    queryKey: ["diff-stats", repoPath],
+    queryFn: () => window.electronAPI.getDiffStats(repoPath as string),
     enabled: !!repoPath,
     staleTime: Infinity,
   });
 
-  if (changedFiles.length === 0) {
+  if (!diffStats || diffStats.filesChanged === 0) {
     return null;
   }
 
   return (
-    <Text size="1" color="orange">
-      ({changedFiles.length})
-    </Text>
+    <Flex gap="1">
+      <Text size="1" color="blue">
+        {diffStats.filesChanged}
+      </Text>
+      {diffStats.linesAdded > 0 && (
+        <>
+          {" "}
+          <Text size="1" color="green">
+            +{diffStats.linesAdded}
+          </Text>
+        </>
+      )}
+      {diffStats.linesRemoved > 0 && (
+        <Text size="1" color="red">
+          -{diffStats.linesRemoved}
+        </Text>
+      )}
+    </Flex>
   );
 }

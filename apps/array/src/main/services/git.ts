@@ -242,6 +242,64 @@ const getFileAtHead = async (
   }
 };
 
+export interface DiffStats {
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
+const getDiffStats = async (directoryPath: string): Promise<DiffStats> => {
+  try {
+    // git diff --numstat HEAD shows: added\tremoved\tfilename
+    const { stdout } = await execAsync("git diff --numstat HEAD", {
+      cwd: directoryPath,
+    });
+
+    let linesAdded = 0;
+    let linesRemoved = 0;
+    let filesChanged = 0;
+
+    for (const line of stdout.trim().split("\n").filter(Boolean)) {
+      const parts = line.split("\t");
+      if (parts.length >= 2) {
+        // Binary files show "-" for added/removed
+        const added = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
+        const removed = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
+        linesAdded += added;
+        linesRemoved += removed;
+        filesChanged++;
+      }
+    }
+
+    // Also count untracked files
+    const { stdout: statusOutput } = await execAsync("git status --porcelain", {
+      cwd: directoryPath,
+    });
+
+    for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
+      const statusCode = line.substring(0, 2);
+      if (statusCode === "??") {
+        filesChanged++;
+        // Count lines in untracked file
+        const filePath = line.substring(3);
+        try {
+          const { stdout: wcOutput } = await execAsync(
+            `wc -l < "${filePath}"`,
+            { cwd: directoryPath },
+          );
+          linesAdded += parseInt(wcOutput.trim(), 10) || 0;
+        } catch {
+          // File might be binary or inaccessible
+        }
+      }
+    }
+
+    return { filesChanged, linesAdded, linesRemoved };
+  } catch {
+    return { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
+  }
+};
+
 export const findReposDirectory = async (): Promise<string | null> => {
   const platform = os.platform();
 
@@ -546,6 +604,16 @@ export function registerGitIpc(
       filePath: string,
     ): Promise<string | null> => {
       return getFileAtHead(directoryPath, filePath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-diff-stats",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<DiffStats> => {
+      return getDiffStats(directoryPath);
     },
   );
 }

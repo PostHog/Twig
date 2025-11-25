@@ -222,6 +222,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-changed-files-head", repoPath),
   getFileAtHead: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("get-file-at-head", repoPath, filePath),
+  getDiffStats: (
+    repoPath: string,
+  ): Promise<{
+    filesChanged: number;
+    linesAdded: number;
+    linesRemoved: number;
+  }> => ipcRenderer.invoke("get-diff-stats", repoPath),
   listDirectory: (
     dirPath: string,
   ): Promise<

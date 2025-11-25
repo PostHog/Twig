@@ -180,7 +180,12 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               />
             ))}
             {/* Spacer to increase DND area */}
-            <Box flexShrink="0" style={{ minWidth: "90px", height: "32px" }} />
+            {content.droppable && (
+              <Box
+                flexShrink="0"
+                style={{ minWidth: "90px", height: "32px" }}
+              />
+            )}
           </Flex>
           {isFocused &&
             content.droppable &&

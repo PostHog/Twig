@@ -158,6 +158,11 @@ declare global {
       repoPath: string,
       filePath: string,
     ) => Promise<string | null>;
+    getDiffStats: (repoPath: string) => Promise<{
+      filesChanged: number;
+      linesAdded: number;
+      linesRemoved: number;
+    }>;
     listDirectory: (
       dirPath: string,
     ) => Promise<
