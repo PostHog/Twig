@@ -112,3 +112,17 @@ export interface TaskArtifact {
   size: number;
   modifiedAt: string;
 }
+
+// Git file status types
+export type GitFileStatus =
+  | "modified"
+  | "added"
+  | "deleted"
+  | "renamed"
+  | "untracked";
+
+export interface ChangedFile {
+  path: string;
+  status: GitFileStatus;
+  originalPath?: string; // For renames: the old path
+}

@@ -2,6 +2,7 @@ import { PanelLayout } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
+import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useStatusBar } from "@hooks/useStatusBar";
 import { Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -15,6 +16,8 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     taskId: initialTask.id,
     initialTask,
   });
+
+  useFileWatcher(taskData.repoPath, taskData.task.id);
 
   const execution = useTaskExecution({
     taskId: taskData.task.id,

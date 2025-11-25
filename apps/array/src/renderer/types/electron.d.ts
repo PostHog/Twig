@@ -1,6 +1,10 @@
 import type { AgentEvent } from "@posthog/agent";
 import type { FolderContextMenuResult } from "@main/services/contextMenu.types";
-import type { RegisteredFolder, TaskArtifact } from "@shared/types";
+import type {
+  ChangedFile,
+  RegisteredFolder,
+  TaskArtifact,
+} from "@shared/types";
 import "@main/services/types";
 import type {
   CloudRegion,
@@ -145,6 +149,30 @@ declare global {
       repoPath: string,
       filePath: string,
     ) => Promise<string | null>;
+    getChangedFilesHead: (repoPath: string) => Promise<ChangedFile[]>;
+    getFileAtHead: (
+      repoPath: string,
+      filePath: string,
+    ) => Promise<string | null>;
+    listDirectory: (
+      dirPath: string,
+    ) => Promise<
+      Array<{ name: string; path: string; type: "file" | "directory" }>
+    >;
+    watcherStart: (repoPath: string) => Promise<void>;
+    watcherStop: (repoPath: string) => Promise<void>;
+    onDirectoryChanged: (
+      listener: (data: { repoPath: string; dirPath: string }) => void,
+    ) => () => void;
+    onFileChanged: (
+      listener: (data: { repoPath: string; filePath: string }) => void,
+    ) => () => void;
+    onFileDeleted: (
+      listener: (data: { repoPath: string; filePath: string }) => void,
+    ) => () => void;
+    onGitStateChanged: (
+      listener: (data: { repoPath: string }) => void,
+    ) => () => void;
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
     onResetLayout: (listener: () => void) => () => void;

@@ -6,6 +6,7 @@
 import "./agent.js";
 import "./contextMenu.js";
 import "./data.js";
+import "./fileWatcher.js";
 import "./folders.js";
 import "./fs.js";
 import "./git.js";

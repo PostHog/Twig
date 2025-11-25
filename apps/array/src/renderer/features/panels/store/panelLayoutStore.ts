@@ -9,6 +9,7 @@ import {
   addNewTabToPanel,
   applyCleanupWithFallback,
   createArtifactTabId,
+  createDiffTabId,
   createFileTabId,
   generatePanelId,
   getLeafPanel,
@@ -45,7 +46,9 @@ export interface PanelLayoutStore {
   initializeTask: (taskId: string) => void;
   openFile: (taskId: string, filePath: string) => void;
   openArtifact: (taskId: string, fileName: string) => void;
+  openDiff: (taskId: string, filePath: string, status?: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
+  closeTabsForFile: (taskId: string, filePath: string) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
     taskId: string,
@@ -136,6 +139,13 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.TODO_LIST,
                   label: "Todo list",
+                  component: null,
+                  closeable: false,
+                  draggable: false,
+                },
+                {
+                  id: DEFAULT_TAB_IDS.CHANGES,
+                  label: "Changes",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -254,6 +264,11 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         set((state) => openTab(state, taskId, tabId));
       },
 
+      openDiff: (taskId, filePath, status) => {
+        const tabId = createDiffTabId(filePath, status);
+        set((state) => openTab(state, taskId, tabId));
+      },
+
       closeTab: (taskId, panelId, tabId) => {
         set((state) =>
           updateTaskLayout(state, taskId, (layout) => {
@@ -300,6 +315,28 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             };
           }),
         );
+      },
+
+      closeTabsForFile: (taskId, filePath) => {
+        const layout = get().taskLayouts[taskId];
+        if (!layout) return;
+
+        const tabIds = [
+          createFileTabId(filePath),
+          createDiffTabId(filePath),
+          createDiffTabId(filePath, "modified"),
+          createDiffTabId(filePath, "deleted"),
+          createDiffTabId(filePath, "added"),
+          createDiffTabId(filePath, "untracked"),
+          createDiffTabId(filePath, "renamed"),
+        ];
+
+        for (const tabId of tabIds) {
+          const tabLocation = findTabInTree(layout.panelTree, tabId);
+          if (tabLocation) {
+            get().closeTab(taskId, tabLocation.panelId, tabId);
+          }
+        }
       },
 
       setActiveTab: (taskId, panelId, tabId) => {
@@ -516,6 +553,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     }),
     {
       name: "panel-layout-store",
+      // Bump this version when the default panel structure changes to reset all layouts
+      version: 1,
+      migrate: () => ({ taskLayouts: {} }),
     },
   ),
 );

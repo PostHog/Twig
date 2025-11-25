@@ -1,6 +1,7 @@
+import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 
@@ -25,50 +26,25 @@ export function CodeEditorPanel({
   } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
     enabled: !!repoPath && !!filePath,
-    staleTime: 30000,
+    staleTime: Infinity,
     queryFn: async () => {
       if (!window.electronAPI || !repoPath || !filePath) {
         return null;
       }
-      const content = await window.electronAPI.readRepoFile(repoPath, filePath);
-      return content;
+      return window.electronAPI.readRepoFile(repoPath, filePath);
     },
   });
 
   if (!repoPath) {
-    return (
-      <Box height="100%" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            No repository path available
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <PanelMessage>No repository path available</PanelMessage>;
   }
 
   if (isLoading) {
-    return (
-      <Box height="100%" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            Loading file...
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <PanelMessage>Loading file...</PanelMessage>;
   }
 
   if (error || !fileContent) {
-    return (
-      <Box height="100%" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            Failed to load file
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <PanelMessage>Failed to load file</PanelMessage>;
   }
 
   return (

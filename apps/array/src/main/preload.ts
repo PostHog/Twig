@@ -10,7 +10,7 @@ import type {
 } from "./services/contextMenu.types.js";
 
 interface MessageBoxOptions {
-  type?: "info" | "error" | "warning" | "question";
+  type?: "none" | "info" | "error" | "question" | "warning";
   title?: string;
   message?: string;
   detail?: string;
@@ -214,6 +214,59 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("save-question-answers", repoPath, taskId, answers),
   readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("read-repo-file", repoPath, filePath),
+  getChangedFilesHead: (
+    repoPath: string,
+  ): Promise<Array<{ path: string; status: string; originalPath?: string }>> =>
+    ipcRenderer.invoke("get-changed-files-head", repoPath),
+  getFileAtHead: (repoPath: string, filePath: string): Promise<string | null> =>
+    ipcRenderer.invoke("get-file-at-head", repoPath, filePath),
+  listDirectory: (
+    dirPath: string,
+  ): Promise<
+    Array<{ name: string; path: string; type: "file" | "directory" }>
+  > => ipcRenderer.invoke("fs:list-directory", dirPath),
+  watcherStart: (repoPath: string): Promise<void> =>
+    ipcRenderer.invoke("watcher:start", repoPath),
+  watcherStop: (repoPath: string): Promise<void> =>
+    ipcRenderer.invoke("watcher:stop", repoPath),
+  onDirectoryChanged: (
+    listener: (data: { repoPath: string; dirPath: string }) => void,
+  ): (() => void) => {
+    const wrapped = (
+      _event: IpcRendererEvent,
+      data: { repoPath: string; dirPath: string },
+    ) => listener(data);
+    ipcRenderer.on("fs:directory-changed", wrapped);
+    return () => ipcRenderer.removeListener("fs:directory-changed", wrapped);
+  },
+  onFileChanged: (
+    listener: (data: { repoPath: string; filePath: string }) => void,
+  ): (() => void) => {
+    const wrapped = (
+      _event: IpcRendererEvent,
+      data: { repoPath: string; filePath: string },
+    ) => listener(data);
+    ipcRenderer.on("fs:file-changed", wrapped);
+    return () => ipcRenderer.removeListener("fs:file-changed", wrapped);
+  },
+  onFileDeleted: (
+    listener: (data: { repoPath: string; filePath: string }) => void,
+  ): (() => void) => {
+    const wrapped = (
+      _event: IpcRendererEvent,
+      data: { repoPath: string; filePath: string },
+    ) => listener(data);
+    ipcRenderer.on("fs:file-deleted", wrapped);
+    return () => ipcRenderer.removeListener("fs:file-deleted", wrapped);
+  },
+  onGitStateChanged: (
+    listener: (data: { repoPath: string }) => void,
+  ): (() => void) => {
+    const wrapped = (_event: IpcRendererEvent, data: { repoPath: string }) =>
+      listener(data);
+    ipcRenderer.on("git:state-changed", wrapped);
+    return () => ipcRenderer.removeListener("git:state-changed", wrapped);
+  },
   onOpenSettings: (listener: () => void): (() => void) => {
     const wrapped = () => listener();
     ipcRenderer.on("open-settings", wrapped);
