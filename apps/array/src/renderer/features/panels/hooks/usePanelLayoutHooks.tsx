@@ -13,8 +13,10 @@ export interface PanelLayoutState {
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
+  setFocusedPanel: (taskId: string, panelId: string) => void;
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
+  focusedPanelId: string | null;
 }
 
 export function usePanelLayoutState(taskId: string): PanelLayoutState {
@@ -26,8 +28,10 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
         closeTab: state.closeTab,
         closeOtherTabs: state.closeOtherTabs,
         closeTabsToRight: state.closeTabsToRight,
+        setFocusedPanel: state.setFocusedPanel,
         draggingTabId: state.getLayout(taskId)?.draggingTabId ?? null,
         draggingTabPanelId: state.getLayout(taskId)?.draggingTabPanelId ?? null,
+        focusedPanelId: state.getLayout(taskId)?.focusedPanelId ?? null,
       }),
       [taskId],
     ),

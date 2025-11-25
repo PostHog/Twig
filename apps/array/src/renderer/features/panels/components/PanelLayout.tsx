@@ -3,6 +3,7 @@ import type { Task } from "@shared/types";
 import type React from "react";
 import { useCallback, useEffect } from "react";
 import { useDragDropHandlers } from "../hooks/useDragDropHandlers";
+import { usePanelKeyboardShortcuts } from "../hooks/usePanelKeyboardShortcuts";
 import {
   usePanelGroupRefs,
   usePanelLayoutState,
@@ -49,6 +50,13 @@ const PanelLayoutRenderer: React.FC<{
     [layoutState, taskId],
   );
 
+  const handlePanelFocus = useCallback(
+    (panelId: string) => {
+      layoutState.setFocusedPanel(taskId, panelId);
+    },
+    [layoutState, taskId],
+  );
+
   const handleLayout = useCallback(
     (groupId: string, sizes: number[]) => {
       layoutState.updateSizes(taskId, groupId, sizes);
@@ -70,6 +78,7 @@ const PanelLayoutRenderer: React.FC<{
             draggingTabId={layoutState.draggingTabId}
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
+            onPanelFocus={handlePanelFocus}
           />
         );
       }
@@ -94,6 +103,7 @@ const PanelLayoutRenderer: React.FC<{
       handleSetActiveTab,
       handleCloseOtherTabs,
       handleCloseTabsToRight,
+      handlePanelFocus,
       setGroupRef,
       handleLayout,
     ],
@@ -106,6 +116,8 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({ taskId, task }) => {
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const initializeTask = usePanelLayoutStore((state) => state.initializeTask);
   const dragDropHandlers = useDragDropHandlers(taskId);
+
+  usePanelKeyboardShortcuts(taskId);
 
   useEffect(() => {
     if (!layout) {

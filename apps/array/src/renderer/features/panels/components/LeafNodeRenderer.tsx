@@ -14,6 +14,7 @@ interface LeafNodeRendererProps {
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
   onActiveTabChange: (panelId: string, tabId: string) => void;
+  onPanelFocus: (panelId: string) => void;
 }
 
 export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
@@ -26,6 +27,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   draggingTabId,
   draggingTabPanelId,
   onActiveTabChange,
+  onPanelFocus,
 }) => {
   const tabs = useTabInjection(
     node.content.tabs,
@@ -47,6 +49,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
       onActiveTabChange={onActiveTabChange}
       onCloseOtherTabs={closeOtherTabs}
       onCloseTabsToRight={closeTabsToRight}
+      onPanelFocus={onPanelFocus}
       draggingTabId={draggingTabId}
       draggingTabPanelId={draggingTabPanelId}
     />

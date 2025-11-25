@@ -35,6 +35,7 @@ export interface TaskLayout {
   openArtifacts: string[];
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
+  focusedPanelId: string | null;
 }
 
 export type SplitDirection = "left" | "right" | "top" | "bottom";
@@ -83,6 +84,7 @@ export interface PanelLayoutStore {
     tabId: string,
     metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
   ) => void;
+  setFocusedPanel: (taskId: string, panelId: string) => void;
   clearAllLayouts: () => void;
 }
 
@@ -251,6 +253,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               openArtifacts: [],
               draggingTabId: null,
               draggingTabPanelId: null,
+              focusedPanelId: DEFAULT_PANEL_IDS.MAIN_PANEL,
             },
           },
         }));
@@ -608,6 +611,14 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
             return { panelTree: updatedTree };
           }),
+        );
+      },
+
+      setFocusedPanel: (taskId, panelId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, () => ({
+            focusedPanelId: panelId,
+          })),
         );
       },
 

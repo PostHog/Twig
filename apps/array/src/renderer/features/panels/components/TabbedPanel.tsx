@@ -11,6 +11,7 @@ interface TabbedPanelProps {
   onActiveTabChange?: (panelId: string, tabId: string) => void;
   onCloseOtherTabs?: (panelId: string, tabId: string) => void;
   onCloseTabsToRight?: (panelId: string, tabId: string) => void;
+  onPanelFocus?: (panelId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
 }
@@ -21,6 +22,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onActiveTabChange,
   onCloseOtherTabs,
   onCloseTabsToRight,
+  onPanelFocus,
   draggingTabId = null,
   draggingTabPanelId = null,
 }) => {
@@ -63,6 +65,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               closeable={tab.closeable !== false}
               onSelect={() => {
                 onActiveTabChange?.(panelId, tab.id);
+                onPanelFocus?.(panelId);
                 tab.onSelect?.();
               }}
               onClose={
@@ -82,7 +85,12 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         </Flex>
       )}
 
-      <Box flexGrow="1" className="overflow-hidden" position="relative">
+      <Box
+        flexGrow="1"
+        className="overflow-hidden"
+        position="relative"
+        onClick={() => onPanelFocus?.(panelId)}
+      >
         {activeTab ? (
           activeTab.component
         ) : (

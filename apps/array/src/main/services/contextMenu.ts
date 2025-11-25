@@ -77,6 +77,7 @@ export const showTabContextMenuService = createIpcService({
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Close tab",
+          accelerator: "CmdOrCtrl+W",
           enabled: canClose,
           click: () => resolve({ action: "close" }),
         },
