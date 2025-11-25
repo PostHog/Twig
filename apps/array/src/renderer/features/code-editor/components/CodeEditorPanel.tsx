@@ -73,7 +73,7 @@ export function CodeEditorPanel({
 
   return (
     <Box height="100%" style={{ overflow: "hidden" }}>
-      <CodeMirrorEditor content={fileContent} readOnly />
+      <CodeMirrorEditor content={fileContent} filePath={filePath} readOnly />
     </Box>
   );
 }
