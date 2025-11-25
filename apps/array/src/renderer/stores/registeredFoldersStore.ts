@@ -9,7 +9,6 @@ interface RegisteredFoldersState {
   removeFolder: (folderId: string) => Promise<void>;
   updateLastAccessed: (folderId: string) => Promise<void>;
   getFolderByPath: (path: string) => RegisteredFolder | undefined;
-  getSortedFolders: () => RegisteredFolder[];
 }
 
 let updateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -27,14 +26,6 @@ function updateFolderInList(
     return folders.map((f) => (f.id === folder.id ? folder : f));
   }
   return [...folders, folder];
-}
-
-function sortByLastAccessed(folders: RegisteredFolder[]): RegisteredFolder[] {
-  return [...folders].sort((a, b) => {
-    return (
-      new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime()
-    );
-  });
 }
 
 export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
@@ -114,10 +105,6 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       getFolderByPath: (path: string) => {
         return get().folders.find((f) => f.path === path);
-      },
-
-      getSortedFolders: () => {
-        return sortByLastAccessed(get().folders);
       },
     };
   },
