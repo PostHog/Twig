@@ -11,7 +11,7 @@ Free product engineers from distractions so they can focus on what they love: bu
 ### Prerequisites
 
 - Node.js 22+
-- pnpm 9+
+- pnpm 10+
 
 ### Setup
 
@@ -88,7 +88,6 @@ array/
 - `⌘⇧[/]` - Switch between tabs
 - `⌘W` - Close current tab
 
-
 ### Building Distributables
 
 To create production distributables (DMG, ZIP):
@@ -102,6 +101,7 @@ pnpm make
 ```
 
 Output will be in:
+
 - `out/Array-darwin-arm64/Array.app` - Packaged app
 - `out/make/Array-*.dmg` - macOS installer
 - `out/make/zip/` - ZIP archives
