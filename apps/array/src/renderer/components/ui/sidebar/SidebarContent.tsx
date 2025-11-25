@@ -7,12 +7,13 @@ import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
-import { Box, Button, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useSidebarStore } from "@stores/sidebarStore";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const SidebarContent: React.FC = () => {
   const {
@@ -28,9 +29,11 @@ export const SidebarContent: React.FC = () => {
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const setActiveFilters = useTaskStore((state) => state.setActiveFilters);
   const { data: currentUser } = useMeQuery();
+  const { folders, removeFolder } = useRegisteredFoldersStore();
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
+  const seenFoldersRef = useRef<Set<string>>(new Set());
 
   const expandedNodes = new Set(expandedNodesArray);
   const userName = currentUser?.first_name || currentUser?.email || "Account";
@@ -47,15 +50,43 @@ export const SidebarContent: React.FC = () => {
     navigateToTask(task);
   };
 
-  const handleCreateTask = () => {
-    navigateToTaskInput();
-  };
-
   const handleProjectClick = (repository: string) => {
     const newActiveFilters = { ...activeFilters };
     newActiveFilters.repository = [{ value: repository, operator: "is" }];
     setActiveFilters(newActiveFilters);
     handleNavigate("task-list", "Tasks");
+  };
+
+  const handleFolderNewTask = (folderId: string) => {
+    navigateToTaskInput(folderId);
+  };
+
+  const handleFolderContextMenu = async (
+    folderId: string,
+    e: React.MouseEvent,
+  ) => {
+    e.preventDefault();
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+
+    if (!window.electronAPI?.showFolderContextMenu) {
+      const confirmed = window.confirm(
+        `Remove "${folder.name}" from Array?\n\nThis will not delete any files on your computer.`,
+      );
+      if (confirmed) {
+        await removeFolder(folderId);
+      }
+      return;
+    }
+
+    const result = await window.electronAPI.showFolderContextMenu(
+      folderId,
+      folder.name,
+    );
+
+    if (result.action === "remove") {
+      await removeFolder(folderId);
+    }
   };
 
   const menuNodes = useSidebarMenuData({
@@ -66,15 +97,35 @@ export const SidebarContent: React.FC = () => {
     currentUser,
     setActiveFilters,
     onNavigate: handleNavigate,
+    onHomeClick: () => navigateToTaskInput(),
     onTaskClick: handleTaskClick,
     onProjectClick: handleProjectClick,
     onTaskContextMenu: showContextMenu,
+    onFolderNewTask: handleFolderNewTask,
+    onFolderContextMenu: handleFolderContextMenu,
   });
 
   const treeLines = buildTreeLines(menuNodes, "", "", expandedNodes, 0);
   const allNodeIds = getAllNodeIds(menuNodes, "", 0);
   const allExpanded =
     allNodeIds.length > 0 && allNodeIds.every((id) => expandedNodes.has(id));
+
+  useEffect(() => {
+    const folderNodeIds = menuNodes
+      .filter((node) => !node.isRootHeader && node.id)
+      .map((node) => node.id as string);
+
+    const newFolders = folderNodeIds.filter(
+      (id) => !seenFoldersRef.current.has(id) && !expandedNodes.has(id),
+    );
+
+    if (newFolders.length > 0) {
+      for (const folderId of newFolders) {
+        seenFoldersRef.current.add(folderId);
+        toggleNode(folderId);
+      }
+    }
+  }, [menuNodes, expandedNodes, toggleNode]);
 
   const handleToggleExpandAll = () => {
     if (allExpanded) {
@@ -100,18 +151,9 @@ export const SidebarContent: React.FC = () => {
         }}
       >
         <Flex direction="column" gap="4" p="2">
-          <Button
-            variant="outline"
-            size="1"
-            onClick={handleCreateTask}
-            style={{ width: "100%" }}
-          >
-            New task
-          </Button>
           <div className="sidebar-tree">
             {treeLines.map((line, index) => {
-              const isRoot = line.prefix === "" && line.connector === "";
-              if (isRoot) {
+              if (line.isRootHeader) {
                 return (
                   <Flex
                     key={line.nodeId}

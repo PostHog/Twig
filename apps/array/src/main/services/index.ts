@@ -5,6 +5,8 @@
 
 import "./agent.js";
 import "./contextMenu.js";
+import "./data.js";
+import "./folders.js";
 import "./fs.js";
 import "./git.js";
 import "./oauth.js";

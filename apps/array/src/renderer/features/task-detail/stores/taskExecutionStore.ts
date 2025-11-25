@@ -4,6 +4,7 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import { queryClient } from "@renderer/lib/queryClient";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
@@ -349,12 +350,25 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
       },
 
-      setRepoPath: (taskId: string, repoPath: string | null) => {
+      setRepoPath: async (taskId: string, repoPath: string | null) => {
         get().updateTaskState(taskId, { repoPath });
 
         // Persist to taskDirectoryStore
         if (repoPath) {
           useTaskDirectoryStore.getState().setTaskDirectory(taskId, repoPath);
+
+          // Auto-register folder only if it's not already registered
+          const existingFolder = useRegisteredFoldersStore
+            .getState()
+            .getFolderByPath(repoPath);
+
+          if (!existingFolder) {
+            try {
+              await useRegisteredFoldersStore.getState().addFolder(repoPath);
+            } catch (error) {
+              console.error("Failed to auto-register folder:", error);
+            }
+          }
         }
       },
 
@@ -689,7 +703,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             }
 
             // Set the repo path and revalidate
-            store.setRepoPath(taskId, selectedPath);
+            await store.setRepoPath(taskId, selectedPath);
             await store.revalidateRepo(taskId);
 
             // Retry running the task with the new path (skip initialization)
@@ -718,7 +732,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
               defaultWorkspace,
               repoConfig.repository,
             );
-            store.setRepoPath(taskId, derivedPath);
+            await store.setRepoPath(taskId, derivedPath);
 
             const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
             cloneStore.getState().startClone(cloneId, repoConfig, derivedPath);
@@ -778,7 +792,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (!canWrite || !isRepo) {
           // Repository path is invalid - clear it and show the prompt again
           // Don't log errors, just gracefully re-prompt the user
-          store.setRepoPath(taskId, null);
+          await store.setRepoPath(taskId, null);
 
           // Recursively call runTask to trigger the prompt flow (skip initialization)
           return store.runTask(taskId, task, true);
@@ -932,7 +946,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           .getState()
           .getTaskDirectory(taskId, repoKey);
         if (storedDirectory) {
-          store.setRepoPath(taskId, storedDirectory);
+          void store.setRepoPath(taskId, storedDirectory);
 
           // Validate repo exists
           window.electronAPI
@@ -957,7 +971,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           defaultWorkspace,
           task.repository_config.repository,
         );
-        store.setRepoPath(taskId, path);
+        void store.setRepoPath(taskId, path);
 
         // Validate repo exists
         window.electronAPI

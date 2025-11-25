@@ -1,8 +1,10 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import { Box, Button, Flex } from "@radix-ui/themes";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RepositoryConfig } from "@shared/types";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useEditorSetup } from "../hooks/useEditorSetup";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { SuggestedTasks } from "./SuggestedTasks";
@@ -11,7 +13,9 @@ import { TaskInputEditor } from "./TaskInputEditor";
 const DOT_FILL = "var(--gray-6)";
 
 export function TaskInput() {
+  const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
+  const { folders } = useRegisteredFoldersStore();
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
@@ -40,6 +44,16 @@ export function TaskInput() {
 
     setDetectedRepo(null);
   }, []);
+
+  useEffect(() => {
+    if (view.folderId) {
+      const folder = folders.find((f) => f.id === view.folderId);
+      if (folder) {
+        handleDirectoryChange(folder.path);
+      } else {
+      }
+    }
+  }, [view.folderId, folders, handleDirectoryChange]);
 
   const editor = useEditorSetup({
     onSubmit: () => handleSubmit(),
@@ -102,7 +116,37 @@ export function TaskInput() {
           zIndex: 1,
         }}
       >
-        <Box style={{ width: "50%" }}>
+        {/* <Flex direction="row" gap="4" className="w-full mb-4 items-center">
+        <Button
+          variant="outline"
+          size="1"
+          color="gray"
+          onClick={handleOpenProject}
+          className="flex justify-start gap-2 py-8 flex-1"
+        > 
+          <Flex direction="column" gap="2"> <FolderIcon size={16} weight="light" /> 
+          Open project
+          </Flex>
+        </Button>
+
+        <Button
+          variant="outline"
+          size="1"
+          color="gray"
+          onClick={handleOpenProject}
+          className="flex justify-start gap-2 py-8 flex-1"
+        >
+          < Flex direction="column" gap="2">
+
+          <LinkIcon size={16} weight="light" />
+          Clone repository 
+          </Flex>
+        </Button>
+        </Flex>
+
+        <hr className="w-full mb-4 border-gray-6" /> */}
+
+        <Box className="w-1/2 pr-2">
           <FolderPicker
             value={selectedDirectory}
             onChange={handleDirectoryChange}

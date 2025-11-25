@@ -12,6 +12,8 @@ import {
 } from "electron";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { registerAgentIpc, type TaskController } from "./services/agent.js";
+import { ensureDataDirectory } from "./services/data.js";
+import { registerFoldersIpc } from "./services/folders.js";
 import "./services/index.js";
 import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
@@ -38,6 +40,9 @@ const taskControllers = new Map<string, TaskController>();
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
+
+// Set app name to ensure consistent userData path across platforms
+app.setName("Array");
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
@@ -170,9 +175,10 @@ function createWindow(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   ensureClaudeConfigDir();
+  await ensureDataDirectory();
 
   // Initialize PostHog analytics
   initializePostHog();
@@ -205,4 +211,5 @@ registerOsIpc(() => mainWindow);
 registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
+registerFoldersIpc();
 registerShellIpc();

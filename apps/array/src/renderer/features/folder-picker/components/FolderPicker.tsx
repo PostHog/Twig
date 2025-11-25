@@ -11,7 +11,8 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from "react";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 interface FolderPickerProps {
@@ -59,7 +60,14 @@ export function FolderPicker({
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { recentDirectories, addRecentDirectory } = useFolderPickerStore();
+  const { addRecentDirectory } = useFolderPickerStore();
+  const { folders, addFolder, updateLastAccessed } =
+    useRegisteredFoldersStore();
+
+  const registeredFolderPaths = useMemo(
+    () => folders.map((f) => f.path),
+    [folders],
+  );
 
   const displayValue = value ? displayRepoName(value) : placeholder;
   const totalItems = recentPreview.length + directoryPreview.length;
@@ -113,7 +121,7 @@ export function FolderPicker({
     }
 
     if (!searchValue.trim()) {
-      setRecentPreview(recentDirectories.slice(0, MAX_RECENT_ITEMS));
+      setRecentPreview(registeredFolderPaths.slice(0, MAX_RECENT_ITEMS));
       setDirectoryPreview([]);
       setIsSearching(false);
       return;
@@ -126,7 +134,7 @@ export function FolderPicker({
         setDirectoryPreview(results);
 
         const searchLower = searchValue.toLowerCase();
-        const filtered = recentDirectories
+        const filtered = registeredFolderPaths
           .filter((dir) => dir.toLowerCase().includes(searchLower))
           .slice(0, MAX_RECENT_ITEMS);
         setRecentPreview(filtered);
@@ -136,11 +144,19 @@ export function FolderPicker({
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [searchValue, recentDirectories, open]);
+  }, [searchValue, registeredFolderPaths, open]);
 
-  const handleSelect = (path: string) => {
+  const handleSelect = async (path: string) => {
     onChange(path);
     addRecentDirectory(path);
+
+    const existingFolder = folders.find((f) => f.path === path);
+    if (existingFolder) {
+      await updateLastAccessed(existingFolder.id);
+    } else {
+      await addFolder(path);
+    }
+
     setSearchValue("");
     setOpen(false);
   };
@@ -161,7 +177,7 @@ export function FolderPicker({
   const handleOpenNativeFileFinder = async () => {
     const selectedPath = await window.electronAPI.selectDirectory();
     if (selectedPath) {
-      handleSelect(selectedPath);
+      await handleSelect(selectedPath);
     }
   };
 

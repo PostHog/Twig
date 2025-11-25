@@ -3,6 +3,14 @@ export interface RepositoryConfig {
   repository: string;
 }
 
+export interface RegisteredFolder {
+  id: string;
+  path: string;
+  name: string;
+  lastAccessed: string;
+  createdAt: string;
+}
+
 interface UserBasic {
   id: number;
   uuid: string;

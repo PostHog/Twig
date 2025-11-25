@@ -198,6 +198,50 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
+          <Flex direction="column" gap="3">
+            <Heading size="3">Data management</Heading>
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Clear application storage
+                  </Text>
+                  <Text size="1" color="gray">
+                    This will remove all locally stored application data.
+                  </Text>
+                </Flex>
+                <Button
+                  variant="soft"
+                  color="red"
+                  size="1"
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      "Are you sure you want to clear all application storage?\n\nThis will remove:\n• All registered folders\n• UI state (sidebar preferences, etc.)\n• Task directory mappings\n\nYour files will not be deleted from your computer.",
+                    );
+
+                    if (confirmed) {
+                      window.electronAPI.folders
+                        .clearAllData()
+                        .then(() => {
+                          localStorage.clear();
+                          window.location.reload();
+                        })
+                        .catch((error: unknown) => {
+                          console.error("Failed to clear storage:", error);
+                          alert("Failed to clear storage. Please try again.");
+                        });
+                    }
+                  }}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  Clear all data
+                </Button>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
           {/* Account Section */}
           <Flex direction="column" gap="3">
             <Flex align="center" gap="3">

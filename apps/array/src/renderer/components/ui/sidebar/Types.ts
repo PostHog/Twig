@@ -1,5 +1,6 @@
 export interface TreeNode {
   label: string;
+  id?: string;
   children?: TreeNode[];
   icon?: React.ReactNode;
   forceSeparator?: boolean;
@@ -11,6 +12,8 @@ export interface TreeNode {
   tooltip?: string;
   customColor?: string;
   onContextMenu?: (e: React.MouseEvent) => void;
+  isRootHeader?: boolean;
+  addSpacingBefore?: boolean;
 }
 
 export interface TreeLine {
@@ -28,4 +31,6 @@ export interface TreeLine {
   tooltip?: string;
   customColor?: string;
   onContextMenu?: (e: React.MouseEvent) => void;
+  isRootHeader?: boolean;
+  addSpacingBefore?: boolean;
 }
