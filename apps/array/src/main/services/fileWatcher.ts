@@ -39,6 +39,22 @@ class FileService {
     return path.join(app.getPath("userData"), "snapshots", `${hash}.snapshot`);
   }
 
+  private flushPendingChanges(repoPath: string, state: RepoState): void {
+    for (const dir of state.pendingDirs) {
+      this.emit("fs:directory-changed", { repoPath, dirPath: dir });
+    }
+    for (const filePath of state.pendingFiles) {
+      this.emit("fs:file-changed", { repoPath, filePath });
+    }
+    for (const filePath of state.pendingDeletes) {
+      this.emit("fs:file-deleted", { repoPath, filePath });
+    }
+    state.pendingDirs.clear();
+    state.pendingFiles.clear();
+    state.pendingDeletes.clear();
+    state.debounceTimer = null;
+  }
+
   async listDirectory(dirPath: string): Promise<DirectoryEntry[]> {
     try {
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -95,23 +111,6 @@ class FileService {
       debounceTimer: null,
     };
 
-    const flushPendingChanges = () => {
-      for (const dir of state.pendingDirs) {
-        this.emit("fs:directory-changed", { repoPath, dirPath: dir });
-      }
-      for (const filePath of state.pendingFiles) {
-        this.emit("fs:file-changed", { repoPath, filePath });
-      }
-      for (const filePath of state.pendingDeletes) {
-        this.emit("fs:file-deleted", { repoPath, filePath });
-      }
-      state.pendingDirs.clear();
-      state.pendingFiles.clear();
-      state.pendingDeletes.clear();
-      state.debounceTimer = null;
-    };
-
-    // Watch repo (excluding .git and node_modules)
     const subscription = await watcher.subscribe(
       repoPath,
       (err, events) => {
@@ -129,15 +128,15 @@ class FileService {
           }
         }
 
-        if (state.debounceTimer) {
-          clearTimeout(state.debounceTimer);
-        }
-        state.debounceTimer = setTimeout(flushPendingChanges, DEBOUNCE_MS);
+        if (state.debounceTimer) clearTimeout(state.debounceTimer);
+        state.debounceTimer = setTimeout(
+          () => this.flushPendingChanges(repoPath, state),
+          DEBOUNCE_MS,
+        );
       },
       { ignore: WATCHER_IGNORE_PATTERNS },
     );
 
-    // Watch .git directory for HEAD and index changes
     const gitDir = path.join(repoPath, ".git");
     let gitSubscription: watcher.AsyncSubscription | null = null;
     try {
@@ -147,16 +146,16 @@ class FileService {
           console.error("Git watcher error:", err);
           return;
         }
-
-        const gitStateChanged = events.some(
-          (e) => e.path.endsWith("/HEAD") || e.path.endsWith("/index"),
-        );
-        if (gitStateChanged) {
+        if (
+          events.some(
+            (e) => e.path.endsWith("/HEAD") || e.path.endsWith("/index"),
+          )
+        ) {
           this.emit("git:state-changed", { repoPath });
         }
       });
     } catch {
-      // .git directory doesn't exist (not a git repo)
+      // .git directory doesn't exist
     }
 
     state.subscription = subscription;

@@ -7,49 +7,43 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
   const closeTabsForFile = usePanelLayoutStore((s) => s.closeTabsForFile);
 
   useEffect(() => {
-    if (!repoPath || !window.electronAPI) return;
+    if (!repoPath) return;
 
-    const currentRepoPath = repoPath;
-
-    window.electronAPI.watcherStart(currentRepoPath).catch((error) => {
+    window.electronAPI.watcherStart(repoPath).catch((error) => {
       console.error("Failed to start file watcher:", error);
     });
 
     const unsubFile = window.electronAPI.onFileChanged(
       ({ repoPath: rp, filePath }) => {
-        if (rp !== currentRepoPath) return;
-        const relativePath = filePath.replace(`${currentRepoPath}/`, "");
+        if (rp !== repoPath) return;
+        const relativePath = filePath.replace(`${repoPath}/`, "");
         queryClient.invalidateQueries({
-          queryKey: ["repo-file", currentRepoPath, relativePath],
+          queryKey: ["repo-file", repoPath, relativePath],
         });
-        // Also refresh the changed files list since git status output changed
         queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", currentRepoPath],
+          queryKey: ["changed-files-head", repoPath],
         });
       },
     );
 
     const unsubDelete = window.electronAPI.onFileDeleted(
       ({ repoPath: rp, filePath }) => {
-        if (rp !== currentRepoPath) return;
-        // Refresh the changed files list
+        if (rp !== repoPath) return;
         queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", currentRepoPath],
+          queryKey: ["changed-files-head", repoPath],
         });
         if (!taskId) return;
-        const relativePath = filePath.replace(`${currentRepoPath}/`, "");
+        const relativePath = filePath.replace(`${repoPath}/`, "");
         closeTabsForFile(taskId, relativePath);
       },
     );
 
     const unsubGit = window.electronAPI.onGitStateChanged(
       ({ repoPath: rp }) => {
-        if (rp !== currentRepoPath) return;
+        if (rp !== repoPath) return;
+        queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
         queryClient.invalidateQueries({
-          queryKey: ["file-at-head", currentRepoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", currentRepoPath],
+          queryKey: ["changed-files-head", repoPath],
         });
       },
     );
@@ -58,7 +52,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
       unsubFile();
       unsubDelete();
       unsubGit();
-      window.electronAPI.watcherStop(currentRepoPath);
+      window.electronAPI.watcherStop(repoPath);
     };
   }, [repoPath, taskId, queryClient, closeTabsForFile]);
 }

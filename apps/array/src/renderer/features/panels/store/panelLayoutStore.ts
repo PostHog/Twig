@@ -318,24 +318,20 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       },
 
       closeTabsForFile: (taskId, filePath) => {
-        // Try all possible diff tab statuses
-        const statuses = [
-          "modified",
-          "deleted",
-          "added",
-          "untracked",
-          "renamed",
-          undefined,
-        ];
+        const layout = get().taskLayouts[taskId];
+        if (!layout) return;
+
         const tabIds = [
           createFileTabId(filePath),
-          ...statuses.map((status) => createDiffTabId(filePath, status)),
+          createDiffTabId(filePath),
+          createDiffTabId(filePath, "modified"),
+          createDiffTabId(filePath, "deleted"),
+          createDiffTabId(filePath, "added"),
+          createDiffTabId(filePath, "untracked"),
+          createDiffTabId(filePath, "renamed"),
         ];
 
         for (const tabId of tabIds) {
-          const layout = get().taskLayouts[taskId];
-          if (!layout) continue;
-
           const tabLocation = findTabInTree(layout.panelTree, tabId);
           if (tabLocation) {
             get().closeTab(taskId, tabLocation.panelId, tabId);
