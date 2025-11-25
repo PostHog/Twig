@@ -81,7 +81,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath!),
+    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
     enabled: !!repoPath,
     staleTime: Infinity,
   });

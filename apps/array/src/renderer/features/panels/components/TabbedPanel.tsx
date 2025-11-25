@@ -69,6 +69,8 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               hasUnsavedChanges={tab.hasUnsavedChanges}
             />
           ))}
+          {/* Spacer to increas DND area */}
+          <Box flexGrow="1" style={{ minWidth: "40px", height: "100%" }} />
         </Flex>
       )}
 
