@@ -15,8 +15,8 @@ export const DEFAULT_PANEL_IDS = {
   ROOT: "root",
   MAIN_PANEL: "main-panel",
   RIGHT_GROUP: "right-group",
-  DETAILS_PANEL: "details-panel",
-  FILES_PANEL: "files-panel",
+  TOP_RIGHT: "top-right",
+  BOTTOM_RIGHT: "bottom-right",
 } as const;
 
 export const DEFAULT_TAB_IDS = {

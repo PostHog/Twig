@@ -2,12 +2,18 @@ import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createIpcService } from "../ipc/createIpcService.js";
 import type {
   FolderContextMenuResult,
+  SplitContextMenuResult,
+  TabContextMenuResult,
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
 
 export type {
   FolderContextMenuAction,
   FolderContextMenuResult,
+  SplitContextMenuResult,
+  SplitDirection,
+  TabContextMenuAction,
+  TabContextMenuResult,
   TaskContextMenuAction,
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
@@ -62,6 +68,67 @@ export const showFolderContextMenuService = createIpcService({
       const menu = Menu.buildFromTemplate(template);
       menu.popup({
         callback: () => resolve({ action: null }),
+      });
+    });
+  },
+});
+
+export const showTabContextMenuService = createIpcService({
+  channel: "show-tab-context-menu",
+  handler: async (_event, canClose: boolean): Promise<TabContextMenuResult> => {
+    return new Promise((resolve) => {
+      const template: MenuItemConstructorOptions[] = [
+        {
+          label: "Close tab",
+          accelerator: "CmdOrCtrl+W",
+          enabled: canClose,
+          click: () => resolve({ action: "close" }),
+        },
+        { type: "separator" },
+        {
+          label: "Close other tabs",
+          click: () => resolve({ action: "close-others" }),
+        },
+        {
+          label: "Close tabs to the right",
+          click: () => resolve({ action: "close-right" }),
+        },
+      ];
+
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({
+        callback: () => resolve({ action: null }),
+      });
+    });
+  },
+});
+
+export const showSplitContextMenuService = createIpcService({
+  channel: "show-split-context-menu",
+  handler: async (_event): Promise<SplitContextMenuResult> => {
+    return new Promise((resolve) => {
+      const template: MenuItemConstructorOptions[] = [
+        {
+          label: "Split right",
+          click: () => resolve({ direction: "right" }),
+        },
+        {
+          label: "Split left",
+          click: () => resolve({ direction: "left" }),
+        },
+        {
+          label: "Split down",
+          click: () => resolve({ direction: "down" }),
+        },
+        {
+          label: "Split up",
+          click: () => resolve({ direction: "up" }),
+        },
+      ];
+
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({
+        callback: () => resolve({ direction: null }),
       });
     });
   },

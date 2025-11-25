@@ -26,8 +26,8 @@ export function TabContentRenderer({
     return <TaskLogsPanel taskId={taskId} task={task} />;
   }
 
-  if (tabId === "shell") {
-    return <TaskShellPanel taskId={taskId} task={task} />;
+  if (tabId === "shell" || tabId.startsWith("shell-")) {
+    return <TaskShellPanel taskId={taskId} task={task} shellId={tabId} />;
   }
 
   if (tabId === "details") {

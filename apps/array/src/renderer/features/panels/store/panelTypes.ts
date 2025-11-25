@@ -12,6 +12,7 @@ export type Tab = {
   onSelect?: () => void;
   icon?: React.ReactNode;
   hasUnsavedChanges?: boolean;
+  badge?: React.ReactNode;
 };
 
 export type PanelContent = {

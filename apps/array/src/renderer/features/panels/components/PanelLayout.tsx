@@ -3,11 +3,13 @@ import type { Task } from "@shared/types";
 import type React from "react";
 import { useCallback, useEffect } from "react";
 import { useDragDropHandlers } from "../hooks/useDragDropHandlers";
+import { usePanelKeyboardShortcuts } from "../hooks/usePanelKeyboardShortcuts";
 import {
   usePanelGroupRefs,
   usePanelLayoutState,
   usePanelSizeSync,
 } from "../hooks/usePanelLayoutHooks";
+import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode } from "../store/panelTypes";
 import { GroupNodeRenderer } from "./GroupNodeRenderer";
@@ -35,6 +37,66 @@ const PanelLayoutRenderer: React.FC<{
     [layoutState, taskId],
   );
 
+  const handleCloseOtherTabs = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.closeOtherTabs(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handleCloseTabsToRight = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.closeTabsToRight(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handlePanelFocus = useCallback(
+    (panelId: string) => {
+      layoutState.setFocusedPanel(taskId, panelId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handleAddTerminal = useCallback(
+    (panelId: string) => {
+      layoutState.addTerminalTab(taskId, panelId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handleSplitPanel = useCallback(
+    (panelId: string, direction: SplitDirection) => {
+      const layout = usePanelLayoutStore.getState().getLayout(taskId);
+      if (!layout) return;
+
+      const findActiveTabId = (panelNode: PanelNode): string | null => {
+        if (panelNode.type === "leaf" && panelNode.id === panelId) {
+          return panelNode.content.activeTabId ?? null;
+        }
+        if (panelNode.type === "group") {
+          for (const child of panelNode.children) {
+            const result = findActiveTabId(child);
+            if (result) return result;
+          }
+        }
+        return null;
+      };
+
+      const activeTabId = findActiveTabId(layout.panelTree);
+      if (activeTabId) {
+        layoutState.splitPanel(
+          taskId,
+          activeTabId,
+          panelId,
+          panelId,
+          direction,
+        );
+      }
+    },
+    [layoutState, taskId],
+  );
+
   const handleLayout = useCallback(
     (groupId: string, sizes: number[]) => {
       layoutState.updateSizes(taskId, groupId, sizes);
@@ -51,9 +113,15 @@ const PanelLayoutRenderer: React.FC<{
             taskId={taskId}
             task={task}
             closeTab={layoutState.closeTab}
+            closeOtherTabs={handleCloseOtherTabs}
+            closeTabsToRight={handleCloseTabsToRight}
             draggingTabId={layoutState.draggingTabId}
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
+            onPanelFocus={handlePanelFocus}
+            focusedPanelId={layoutState.focusedPanelId}
+            onAddTerminal={handleAddTerminal}
+            onSplitPanel={handleSplitPanel}
           />
         );
       }
@@ -71,7 +139,19 @@ const PanelLayoutRenderer: React.FC<{
 
       return null;
     },
-    [taskId, task, layoutState, handleSetActiveTab, setGroupRef, handleLayout],
+    [
+      taskId,
+      task,
+      layoutState,
+      handleSetActiveTab,
+      handleCloseOtherTabs,
+      handleCloseTabsToRight,
+      handlePanelFocus,
+      handleAddTerminal,
+      handleSplitPanel,
+      setGroupRef,
+      handleLayout,
+    ],
   );
 
   return <>{renderNode(node)}</>;
@@ -81,6 +161,8 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({ taskId, task }) => {
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const initializeTask = usePanelLayoutStore((state) => state.initializeTask);
   const dragDropHandlers = useDragDropHandlers(taskId);
+
+  usePanelKeyboardShortcuts(taskId);
 
   useEffect(() => {
     if (!layout) {

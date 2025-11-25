@@ -71,14 +71,10 @@ export function SidebarTreeItem({
           )}
           {line.tooltip ? (
             <Tooltip content={line.tooltip}>
-              <span style={{ color: line.customColor, fontSize: "13px" }}>
-                {line.label}
-              </span>
+              <span style={{ color: line.customColor }}>{line.label}</span>
             </Tooltip>
           ) : (
-            <span style={{ color: line.customColor, fontSize: "13px" }}>
-              {line.label}
-            </span>
+            <span style={{ color: line.customColor }}>{line.label}</span>
           )}
           {line.hasChildren && (
             <span style={{ display: "flex", alignItems: "center" }}>

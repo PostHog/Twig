@@ -21,7 +21,7 @@ export function DiffEditorPanel({
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath!),
+    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
     enabled: !!repoPath,
     staleTime: Infinity,
   });
@@ -34,14 +34,16 @@ export function DiffEditorPanel({
 
   const { data: modifiedContent, isLoading: loadingModified } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
-    queryFn: () => window.electronAPI.readRepoFile(repoPath!, filePath),
+    queryFn: () =>
+      window.electronAPI.readRepoFile(repoPath as string, filePath),
     enabled: !!repoPath && !isDeleted,
     staleTime: Infinity,
   });
 
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
     queryKey: ["file-at-head", repoPath, originalPath],
-    queryFn: () => window.electronAPI.getFileAtHead(repoPath!, originalPath),
+    queryFn: () =>
+      window.electronAPI.getFileAtHead(repoPath as string, originalPath),
     enabled: !!repoPath && !isNew,
     staleTime: Infinity,
   });

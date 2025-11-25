@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import type React from "react";
+import { useCallback } from "react";
 
 interface DraggableTabProps {
   tabId: string;
@@ -9,10 +10,13 @@ interface DraggableTabProps {
   label: string;
   isActive: boolean;
   index: number;
-  draggable?: boolean;
+  closeable?: boolean;
   onSelect: () => void;
   onClose?: () => void;
+  onCloseOthers?: () => void;
+  onCloseToRight?: () => void;
   icon?: React.ReactNode;
+  badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
 }
 
@@ -22,47 +26,73 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   label,
   isActive,
   index,
-  draggable = true,
+  closeable = true,
   onSelect,
   onClose,
+  onCloseOthers,
+  onCloseToRight,
   icon,
+  badge,
   hasUnsavedChanges,
 }) => {
   const { ref, isDragging } = useSortable({
     id: tabId,
     index,
+    group: panelId,
+    transition: {
+      duration: 200,
+      easing: "ease",
+    },
     data: { tabId, panelId, type: "tab" },
-    disabled: !draggable,
   });
+
+  const handleContextMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      const result = await window.electronAPI.showTabContextMenu(closeable);
+      switch (result.action) {
+        case "close":
+          onClose?.();
+          break;
+        case "close-others":
+          onCloseOthers?.();
+          break;
+        case "close-right":
+          onCloseToRight?.();
+          break;
+      }
+    },
+    [closeable, onClose, onCloseOthers, onCloseToRight],
+  );
 
   return (
     <Flex
       ref={ref}
       role="tab"
       aria-label={label}
+      data-tab-id={tabId}
       data-active={isActive}
       align="center"
-      gap="2"
-      px="4"
-      className={`group relative select-none border-r border-b-2 transition-colors ${draggable ? "cursor-grab" : "cursor-default"}`}
+      gap="1"
+      pl="3"
+      pr={onClose ? "1" : "3"}
+      className="group relative flex-shrink-0 cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
-        backgroundColor: isActive ? "var(--accent-3)" : "transparent",
         borderRightColor: "var(--gray-6)",
-        borderBottomColor: isActive ? "var(--accent-8)" : "transparent",
+        borderBottomColor: isActive ? "var(--accent-10)" : "transparent",
         color: isActive ? "var(--accent-12)" : "var(--gray-11)",
         opacity: isDragging ? 0.5 : 1,
-        minHeight: "40px",
+        height: "32px",
       }}
       onClick={onSelect}
+      onContextMenu={handleContextMenu}
       onMouseEnter={(e) => {
         if (!isActive) {
-          e.currentTarget.style.backgroundColor = "var(--gray-3)";
           e.currentTarget.style.color = "var(--gray-12)";
         }
       }}
       onMouseLeave={(e) => {
         if (!isActive) {
-          e.currentTarget.style.backgroundColor = "transparent";
           e.currentTarget.style.color = "var(--gray-11)";
         }
       }}
@@ -76,6 +106,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       >
         {label}
       </Text>
+      {badge}
       {hasUnsavedChanges && (
         <Text size="1" style={{ color: "var(--amber-9)", marginLeft: "2px" }}>
           •
@@ -83,19 +114,28 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       )}
 
       {onClose && (
-        <IconButton
-          size="1"
-          variant="ghost"
-          color={isActive ? undefined : "gray"}
-          className="opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label="Close tab"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
+        <Box
+          style={{
+            width: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Cross2Icon />
-        </IconButton>
+          <IconButton
+            size="1"
+            variant="ghost"
+            color={isActive ? undefined : "gray"}
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label="Close tab"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            <Cross2Icon width={12} height={12} />
+          </IconButton>
+        </Box>
       )}
     </Flex>
   );

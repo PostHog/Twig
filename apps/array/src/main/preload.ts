@@ -6,6 +6,8 @@ import type {
 } from "../shared/types/oauth";
 import type {
   FolderContextMenuResult,
+  SplitContextMenuResult,
+  TabContextMenuResult,
   TaskContextMenuResult,
 } from "./services/contextMenu.types.js";
 
@@ -220,6 +222,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-changed-files-head", repoPath),
   getFileAtHead: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("get-file-at-head", repoPath, filePath),
+  getDiffStats: (
+    repoPath: string,
+  ): Promise<{
+    filesChanged: number;
+    linesAdded: number;
+    linesRemoved: number;
+  }> => ipcRenderer.invoke("get-diff-stats", repoPath),
   listDirectory: (
     dirPath: string,
   ): Promise<
@@ -302,6 +311,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("shell:check", sessionId),
   shellDestroy: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke("shell:destroy", sessionId),
+  shellGetProcess: (sessionId: string): Promise<string | null> =>
+    ipcRenderer.invoke("shell:get-process", sessionId),
   onShellData: (
     sessionId: string,
     listener: (data: string) => void,
@@ -328,6 +339,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     folderName: string,
   ): Promise<FolderContextMenuResult> =>
     ipcRenderer.invoke("show-folder-context-menu", folderId, folderName),
+  showTabContextMenu: (canClose: boolean): Promise<TabContextMenuResult> =>
+    ipcRenderer.invoke("show-tab-context-menu", canClose),
+  showSplitContextMenu: (): Promise<SplitContextMenuResult> =>
+    ipcRenderer.invoke("show-split-context-menu"),
   folders: {
     getFolders: (): Promise<
       Array<{

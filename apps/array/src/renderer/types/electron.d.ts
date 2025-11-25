@@ -1,5 +1,9 @@
 import type { AgentEvent } from "@posthog/agent";
-import type { FolderContextMenuResult } from "@main/services/contextMenu.types";
+import type {
+  FolderContextMenuResult,
+  SplitContextMenuResult,
+  TabContextMenuResult,
+} from "@main/services/contextMenu.types";
 import type {
   ChangedFile,
   RegisteredFolder,
@@ -154,6 +158,11 @@ declare global {
       repoPath: string,
       filePath: string,
     ) => Promise<string | null>;
+    getDiffStats: (repoPath: string) => Promise<{
+      filesChanged: number;
+      linesAdded: number;
+      linesRemoved: number;
+    }>;
     listDirectory: (
       dirPath: string,
     ) => Promise<
@@ -189,6 +198,7 @@ declare global {
     ) => Promise<void>;
     shellCheck: (sessionId: string) => Promise<boolean>;
     shellDestroy: (sessionId: string) => Promise<void>;
+    shellGetProcess: (sessionId: string) => Promise<string | null>;
     onShellData: (
       sessionId: string,
       listener: (data: string) => void,
@@ -198,6 +208,8 @@ declare global {
       folderId: string,
       folderName: string,
     ) => Promise<FolderContextMenuResult>;
+    showTabContextMenu: (canClose: boolean) => Promise<TabContextMenuResult>;
+    showSplitContextMenu: () => Promise<SplitContextMenuResult>;
     folders: {
       getFolders: () => Promise<RegisteredFolder[]>;
       addFolder: (folderPath: string) => Promise<RegisteredFolder>;

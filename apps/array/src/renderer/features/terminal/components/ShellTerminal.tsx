@@ -96,11 +96,19 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
 
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       const isMac = /Mac/.test(navigator.platform);
-      const clearModifier = isMac ? event.metaKey : event.ctrlKey;
+      const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
 
-      if (event.key === "k" && clearModifier && event.type === "keydown") {
+      if (event.key === "k" && cmdOrCtrl && event.type === "keydown") {
         event.preventDefault();
         term.clear();
+        return false;
+      }
+
+      if (event.key === "w" && cmdOrCtrl) {
+        return false;
+      }
+
+      if (cmdOrCtrl && event.key >= "1" && event.key <= "9") {
         return false;
       }
 

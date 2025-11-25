@@ -1,14 +1,10 @@
 import { TaskActions } from "@features/task-detail/components/TaskActions";
-import { TaskHeader } from "@features/task-detail/components/TaskHeader";
 import { TaskMetadata } from "@features/task-detail/components/TaskMetadata";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskRepository } from "@features/task-detail/hooks/useTaskRepository";
-import { useUpdateTask } from "@features/tasks/hooks/useTasks";
 import { Box, Flex, TextArea } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
 
 interface TaskDetailPanelProps {
   taskId: string;
@@ -16,8 +12,6 @@ interface TaskDetailPanelProps {
 }
 
 export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
-  const { mutate: updateTask } = useUpdateTask();
-
   const taskData = useTaskData({
     taskId,
     initialTask: task,
@@ -34,46 +28,10 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
     isCloning: taskData.isCloning,
   });
 
-  const {
-    handleSubmit,
-    reset: resetForm,
-    control,
-  } = useForm({
-    defaultValues: {
-      title: taskData.task.title,
-      description: taskData.task.description || "",
-    },
-  });
-
-  useEffect(() => {
-    resetForm({
-      title: taskData.task.title,
-      description: taskData.task.description || "",
-    });
-  }, [taskData.task.title, taskData.task.description, resetForm]);
-
-  const onSubmit = handleSubmit((data) => {
-    if (data.title !== taskData.task.title) {
-      updateTask({ taskId: taskData.task.id, updates: { title: data.title } });
-    }
-    if (data.description !== taskData.task.description) {
-      updateTask({
-        taskId: taskData.task.id,
-        updates: { description: data.description || undefined },
-      });
-    }
-  });
-
   return (
     <Box height="100%" overflowY="auto">
       <Box p="4">
         <Flex direction="column" gap="4">
-          <TaskHeader
-            slug={taskData.task.slug}
-            control={control}
-            onSubmit={onSubmit}
-          />
-
           <Flex direction="column">
             <TextArea
               value={taskData.task.description || ""}

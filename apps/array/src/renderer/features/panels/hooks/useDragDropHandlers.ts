@@ -11,7 +11,7 @@ const isSplitDirection = (zone: string): zone is SplitDirection => {
 };
 
 export const useDragDropHandlers = (taskId: string) => {
-  const { moveTab, splitPanel, setDraggingTab, reorderTabs, getLayout } =
+  const { moveTab, splitPanel, setDraggingTab, reorderTabs, setFocusedPanel } =
     usePanelLayoutStore();
 
   const handleDragStart = (event: any) => {
@@ -19,6 +19,43 @@ export const useDragDropHandlers = (taskId: string) => {
     if (data?.type !== "tab" || !data.tabId || !data.panelId) return;
 
     setDraggingTab(taskId, data.tabId, data.panelId);
+  };
+
+  const handleDragOver = (event: any) => {
+    const sourceData = event.operation.source?.data;
+    const targetData = event.operation.target?.data;
+
+    // Only handle tab-over-tab within same panel
+    if (
+      sourceData?.type !== "tab" ||
+      targetData?.type !== "tab" ||
+      sourceData.panelId !== targetData.panelId ||
+      sourceData.tabId === targetData.tabId
+    ) {
+      return;
+    }
+
+    // Get current indices from store
+    const layout = usePanelLayoutStore.getState().getLayout(taskId);
+    const panel = layout
+      ? findPanelById(layout.panelTree, sourceData.panelId)
+      : null;
+    if (!panel || panel.type !== "leaf") return;
+
+    const sourceIndex = panel.content.tabs.findIndex(
+      (t) => t.id === sourceData.tabId,
+    );
+    const targetIndex = panel.content.tabs.findIndex(
+      (t) => t.id === targetData.tabId,
+    );
+
+    if (
+      sourceIndex !== -1 &&
+      targetIndex !== -1 &&
+      sourceIndex !== targetIndex
+    ) {
+      reorderTabs(taskId, sourceData.panelId, sourceIndex, targetIndex);
+    }
   };
 
   const handleDragEnd = (event: any) => {
@@ -29,45 +66,8 @@ export const useDragDropHandlers = (taskId: string) => {
     const sourceData = event.operation.source?.data;
     const targetData = event.operation.target?.data;
 
-    // Handle tab reordering within the same panel
-    if (
-      sourceData?.type === "tab" &&
-      targetData?.type === "tab" &&
-      sourceData.panelId === targetData.panelId
-    ) {
-      const sourceIndex = event.operation.source?.index;
-      const targetIndex = event.operation.target?.index;
-
-      if (
-        sourceIndex !== undefined &&
-        targetIndex !== undefined &&
-        sourceIndex !== targetIndex
-      ) {
-        reorderTabs(taskId, sourceData.panelId, sourceIndex, targetIndex);
-      }
-      return;
-    }
-
-    // Handle tab dropped on tab-bar (reorder to end)
-    if (
-      sourceData?.type === "tab" &&
-      targetData?.type === "tab-bar" &&
-      sourceData.panelId === targetData.panelId
-    ) {
-      const layout = getLayout(taskId);
-      const panel = layout
-        ? findPanelById(layout.panelTree, sourceData.panelId)
-        : null;
-      if (panel && panel.type === "leaf") {
-        const sourceIndex = event.operation.source?.index;
-        const targetIndex = panel.content.tabs.length - 1;
-
-        if (sourceIndex !== undefined && sourceIndex !== targetIndex) {
-          reorderTabs(taskId, sourceData.panelId, sourceIndex, targetIndex);
-        }
-      }
-      return;
-    }
+    // Tab reordering within same panel is handled by onDragOver
+    // Here we only handle cross-panel moves and splits
 
     // Handle panel splitting/moving
     if (
@@ -86,13 +86,18 @@ export const useDragDropHandlers = (taskId: string) => {
 
     if (zone === "center") {
       moveTab(taskId, tabId, sourcePanelId, targetPanelId);
+      setFocusedPanel(taskId, targetPanelId);
     } else if (isSplitDirection(zone)) {
       splitPanel(taskId, tabId, sourcePanelId, targetPanelId, zone);
+      // For splits, the new panel gets a generated ID, so we can't easily focus it here
+      // The target panel remains focused which is reasonable behavior
+      setFocusedPanel(taskId, targetPanelId);
     }
   };
 
   return {
     onDragStart: handleDragStart,
+    onDragOver: handleDragOver,
     onDragEnd: handleDragEnd,
   };
 };

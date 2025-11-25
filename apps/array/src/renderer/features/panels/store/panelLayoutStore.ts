@@ -35,6 +35,7 @@ export interface TaskLayout {
   openArtifacts: string[];
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
+  focusedPanelId: string | null;
 }
 
 export type SplitDirection = "left" | "right" | "top" | "bottom";
@@ -48,6 +49,8 @@ export interface PanelLayoutStore {
   openArtifact: (taskId: string, fileName: string) => void;
   openDiff: (taskId: string, filePath: string, status?: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
+  closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
+  closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsForFile: (taskId: string, filePath: string) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
@@ -81,6 +84,9 @@ export interface PanelLayoutStore {
     tabId: string,
     metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
   ) => void;
+  updateTabLabel: (taskId: string, tabId: string, label: string) => void;
+  setFocusedPanel: (taskId: string, panelId: string) => void;
+  addTerminalTab: (taskId: string, panelId: string) => void;
   clearAllLayouts: () => void;
 }
 
@@ -106,9 +112,9 @@ function createDefaultPanelTree(): PanelNode {
             },
             {
               id: DEFAULT_TAB_IDS.SHELL,
-              label: "Shell",
+              label: "Terminal",
               component: null,
-              closeable: false,
+              closeable: true,
               draggable: true,
             },
           ],
@@ -125,20 +131,13 @@ function createDefaultPanelTree(): PanelNode {
         children: [
           {
             type: "leaf",
-            id: DEFAULT_PANEL_IDS.DETAILS_PANEL,
+            id: DEFAULT_PANEL_IDS.TOP_RIGHT,
             content: {
-              id: DEFAULT_PANEL_IDS.DETAILS_PANEL,
+              id: DEFAULT_PANEL_IDS.TOP_RIGHT,
               tabs: [
                 {
-                  id: DEFAULT_TAB_IDS.DETAILS,
-                  label: "Details",
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-                {
-                  id: DEFAULT_TAB_IDS.TODO_LIST,
-                  label: "Todo list",
+                  id: DEFAULT_TAB_IDS.FILES,
+                  label: "Files",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -151,20 +150,20 @@ function createDefaultPanelTree(): PanelNode {
                   draggable: false,
                 },
               ],
-              activeTabId: DEFAULT_TAB_IDS.DETAILS,
+              activeTabId: DEFAULT_TAB_IDS.FILES,
               showTabs: true,
               droppable: false,
             },
           },
           {
             type: "leaf",
-            id: DEFAULT_PANEL_IDS.FILES_PANEL,
+            id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
             content: {
-              id: DEFAULT_PANEL_IDS.FILES_PANEL,
+              id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
               tabs: [
                 {
-                  id: DEFAULT_TAB_IDS.FILES,
-                  label: "Files",
+                  id: DEFAULT_TAB_IDS.TODO_LIST,
+                  label: "Todo list",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -176,8 +175,15 @@ function createDefaultPanelTree(): PanelNode {
                   closeable: false,
                   draggable: false,
                 },
+                {
+                  id: DEFAULT_TAB_IDS.DETAILS,
+                  label: "Details",
+                  component: null,
+                  closeable: false,
+                  draggable: false,
+                },
               ],
-              activeTabId: DEFAULT_TAB_IDS.FILES,
+              activeTabId: DEFAULT_TAB_IDS.TODO_LIST,
               showTabs: true,
               droppable: false,
             },
@@ -249,6 +255,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               openArtifacts: [],
               draggingTabId: null,
               draggingTabPanelId: null,
+              focusedPanelId: DEFAULT_PANEL_IDS.MAIN_PANEL,
             },
           },
         }));
@@ -313,6 +320,69 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               panelTree: cleanedTree,
               ...metadata,
             };
+          }),
+        );
+      },
+
+      closeOtherTabs: (taskId, panelId, tabId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const remainingTabs = panel.content.tabs.filter(
+                  (t) => t.id === tabId || t.closeable === false,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: remainingTabs,
+                    activeTabId: tabId,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
+      closeTabsToRight: (taskId, panelId, tabId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const tabIndex = panel.content.tabs.findIndex(
+                  (t) => t.id === tabId,
+                );
+                if (tabIndex === -1) return panel;
+
+                const remainingTabs = panel.content.tabs.filter(
+                  (t, index) => index <= tabIndex || t.closeable === false,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: remainingTabs,
+                    activeTabId: tabId,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
           }),
         );
       },
@@ -547,6 +617,69 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
+      updateTabLabel: (taskId, tabId, label) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const tabLocation = findTabInTree(layout.panelTree, tabId);
+            if (!tabLocation) return {};
+
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              tabLocation.panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const updatedTabs = panel.content.tabs.map((tab) =>
+                  tab.id === tabId ? { ...tab, label } : tab,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: updatedTabs,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
+      setFocusedPanel: (taskId, panelId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, () => ({
+            focusedPanelId: panelId,
+          })),
+        );
+      },
+
+      addTerminalTab: (taskId, panelId) => {
+        const tabId = `shell-${Date.now()}`;
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+                return addTabToPanel(panel, {
+                  id: tabId,
+                  label: "Terminal",
+                  component: null,
+                  draggable: true,
+                  closeable: true,
+                });
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
       clearAllLayouts: () => {
         set({ taskLayouts: {} });
       },
@@ -554,7 +687,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 1,
+      version: 3,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),
