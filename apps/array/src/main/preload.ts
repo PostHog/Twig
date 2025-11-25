@@ -311,6 +311,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("shell:check", sessionId),
   shellDestroy: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke("shell:destroy", sessionId),
+  shellGetProcess: (sessionId: string): Promise<string | null> =>
+    ipcRenderer.invoke("shell:get-process", sessionId),
   onShellData: (
     sessionId: string,
     listener: (data: string) => void,

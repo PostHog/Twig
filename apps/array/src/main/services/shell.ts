@@ -163,4 +163,19 @@ export function registerShellIpc(): void {
       sessions.delete(sessionId);
     },
   );
+
+  // Get foreground process name
+  ipcMain.handle(
+    "shell:get-process",
+    async (
+      _event: IpcMainInvokeEvent,
+      sessionId: string,
+    ): Promise<string | null> => {
+      const session = sessions.get(sessionId);
+      if (!session) {
+        return null;
+      }
+      return session.pty.process;
+    },
+  );
 }

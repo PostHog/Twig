@@ -84,6 +84,7 @@ export interface PanelLayoutStore {
     tabId: string,
     metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
   ) => void;
+  updateTabLabel: (taskId: string, tabId: string, label: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
   addTerminalTab: (taskId: string, panelId: string) => void;
   clearAllLayouts: () => void;
@@ -111,7 +112,7 @@ function createDefaultPanelTree(): PanelNode {
             },
             {
               id: DEFAULT_TAB_IDS.SHELL,
-              label: "Shell",
+              label: "Terminal",
               component: null,
               closeable: true,
               draggable: true,
@@ -375,6 +376,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                   content: {
                     ...panel.content,
                     tabs: remainingTabs,
+                    activeTabId: tabId,
                   },
                 };
               },
@@ -615,6 +617,37 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
+      updateTabLabel: (taskId, tabId, label) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const tabLocation = findTabInTree(layout.panelTree, tabId);
+            if (!tabLocation) return {};
+
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              tabLocation.panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const updatedTabs = panel.content.tabs.map((tab) =>
+                  tab.id === tabId ? { ...tab, label } : tab,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: updatedTabs,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
       setFocusedPanel: (taskId, panelId) => {
         set((state) =>
           updateTaskLayout(state, taskId, () => ({
@@ -634,7 +667,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                 if (panel.type !== "leaf") return panel;
                 return addTabToPanel(panel, {
                   id: tabId,
-                  label: "Shell",
+                  label: "Terminal",
                   component: null,
                   draggable: true,
                   closeable: true,

@@ -198,6 +198,7 @@ declare global {
     ) => Promise<void>;
     shellCheck: (sessionId: string) => Promise<boolean>;
     shellDestroy: (sessionId: string) => Promise<void>;
+    shellGetProcess: (sessionId: string) => Promise<string | null>;
     onShellData: (
       sessionId: string,
       listener: (data: string) => void,
