@@ -23,24 +23,29 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
     return null;
   }
 
+  const filesLabel = diffStats.filesChanged === 1 ? "file" : "files";
+
   return (
-    <Flex gap="1">
-      <Text size="1" color="blue">
-        {diffStats.filesChanged}
-      </Text>
+    <Flex gap="2">
       {diffStats.linesAdded > 0 && (
-        <>
-          {" "}
+        <Text size="1">
           <Text size="1" color="green">
             +{diffStats.linesAdded}
           </Text>
-        </>
-      )}
-      {diffStats.linesRemoved > 0 && (
-        <Text size="1" color="red">
-          -{diffStats.linesRemoved}
+          ,
         </Text>
       )}
+      {diffStats.linesRemoved > 0 && (
+        <Text size="1">
+          <Text size="1" color="red">
+            -{diffStats.linesRemoved}
+          </Text>
+          ,
+        </Text>
+      )}
+      <Text size="1">
+        <Text color="blue">{diffStats.filesChanged}</Text> {filesLabel} changed
+      </Text>
     </Flex>
   );
 }

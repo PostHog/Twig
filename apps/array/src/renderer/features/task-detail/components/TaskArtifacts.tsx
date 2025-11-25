@@ -1,3 +1,4 @@
+import { PanelMessage } from "@components/ui/PanelMessage";
 import { FileTextIcon } from "@radix-ui/react-icons";
 import { Box, Card, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { TaskArtifact } from "@shared/types";
@@ -34,7 +35,7 @@ export function TaskArtifacts({
   });
 
   if (!repoPath || artifacts.length === 0) {
-    return null;
+    return <PanelMessage>No artifacts yet</PanelMessage>;
   }
 
   const formatFileSize = (bytes: number): string => {

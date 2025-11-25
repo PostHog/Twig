@@ -1,7 +1,6 @@
 import { MainSidebar } from "@components/MainSidebar";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
-import { TopBar } from "@components/ui/topnav/TopBar";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { SettingsView } from "@features/settings/components/SettingsView";
@@ -82,7 +81,6 @@ export function MainLayout() {
 
   return (
     <Flex direction="column" height="100vh">
-      <TopBar onSearchClick={() => setCommandMenuOpen(true)} />
       <Flex flexGrow="1" overflow="hidden">
         <MainSidebar />
 

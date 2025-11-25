@@ -23,6 +23,9 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         queryClient.invalidateQueries({
           queryKey: ["changed-files-head", repoPath],
         });
+        queryClient.invalidateQueries({
+          queryKey: ["diff-stats", repoPath],
+        });
       },
     );
 
@@ -31,6 +34,9 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         if (rp !== repoPath) return;
         queryClient.invalidateQueries({
           queryKey: ["changed-files-head", repoPath],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["diff-stats", repoPath],
         });
         if (!taskId) return;
         const relativePath = filePath.replace(`${repoPath}/`, "");
@@ -44,6 +50,9 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
         queryClient.invalidateQueries({
           queryKey: ["changed-files-head", repoPath],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["diff-stats", repoPath],
         });
       },
     );

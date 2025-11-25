@@ -1,10 +1,11 @@
 import { PanelLayout } from "@features/panels";
+import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { Flex } from "@radix-ui/themes";
+import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 
 interface TaskDetailProps {
@@ -47,7 +48,30 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   return (
     <Flex direction="column" height="100%">
-      <PanelLayout taskId={taskId} task={task} />
+      <Flex
+        align="center"
+        justify="between"
+        px="3"
+        className="drag"
+        style={{
+          height: "40px",
+          minHeight: "40px",
+          borderBottom: "1px solid var(--gray-6)",
+        }}
+      >
+        <Flex align="center" gap="2">
+          <Code size="2" color="gray" variant="ghost" style={{ flexShrink: 0 }}>
+            {task.slug}
+          </Code>
+          <Text size="2" weight="medium" truncate>
+            {task.title}
+          </Text>
+        </Flex>
+        <ChangesTabBadge taskId={taskId} task={task} />
+      </Flex>
+      <Box flexGrow="1" style={{ minHeight: 0 }}>
+        <PanelLayout taskId={taskId} task={task} />
+      </Box>
     </Flex>
   );
 }

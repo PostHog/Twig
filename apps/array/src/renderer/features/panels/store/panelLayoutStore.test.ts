@@ -379,7 +379,7 @@ describe("panelLayoutStore", () => {
     it("moves tab to different panel", () => {
       usePanelLayoutStore
         .getState()
-        .moveTab("task-1", "file-src/App.tsx", "main-panel", "details-panel");
+        .moveTab("task-1", "file-src/App.tsx", "main-panel", "top-right");
 
       assertTabInNestedPanel("task-1", "file-src/App.tsx", false, "left");
       assertTabInNestedPanel(
@@ -394,7 +394,7 @@ describe("panelLayoutStore", () => {
     it("sets moved tab as active in target panel", () => {
       usePanelLayoutStore
         .getState()
-        .moveTab("task-1", "file-src/App.tsx", "main-panel", "details-panel");
+        .moveTab("task-1", "file-src/App.tsx", "main-panel", "top-right");
 
       assertActiveTabInNestedPanel(
         "task-1",

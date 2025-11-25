@@ -130,20 +130,13 @@ function createDefaultPanelTree(): PanelNode {
         children: [
           {
             type: "leaf",
-            id: DEFAULT_PANEL_IDS.DETAILS_PANEL,
+            id: DEFAULT_PANEL_IDS.TOP_RIGHT,
             content: {
-              id: DEFAULT_PANEL_IDS.DETAILS_PANEL,
+              id: DEFAULT_PANEL_IDS.TOP_RIGHT,
               tabs: [
                 {
-                  id: DEFAULT_TAB_IDS.DETAILS,
-                  label: "Details",
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-                {
-                  id: DEFAULT_TAB_IDS.TODO_LIST,
-                  label: "Todo list",
+                  id: DEFAULT_TAB_IDS.FILES,
+                  label: "Files",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -156,20 +149,20 @@ function createDefaultPanelTree(): PanelNode {
                   draggable: false,
                 },
               ],
-              activeTabId: DEFAULT_TAB_IDS.DETAILS,
+              activeTabId: DEFAULT_TAB_IDS.FILES,
               showTabs: true,
               droppable: false,
             },
           },
           {
             type: "leaf",
-            id: DEFAULT_PANEL_IDS.FILES_PANEL,
+            id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
             content: {
-              id: DEFAULT_PANEL_IDS.FILES_PANEL,
+              id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
               tabs: [
                 {
-                  id: DEFAULT_TAB_IDS.FILES,
-                  label: "Files",
+                  id: DEFAULT_TAB_IDS.TODO_LIST,
+                  label: "Todo list",
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -181,8 +174,15 @@ function createDefaultPanelTree(): PanelNode {
                   closeable: false,
                   draggable: false,
                 },
+                {
+                  id: DEFAULT_TAB_IDS.DETAILS,
+                  label: "Details",
+                  component: null,
+                  closeable: false,
+                  draggable: false,
+                },
               ],
-              activeTabId: DEFAULT_TAB_IDS.FILES,
+              activeTabId: DEFAULT_TAB_IDS.TODO_LIST,
               showTabs: true,
               droppable: false,
             },
@@ -654,7 +654,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 2,
+      version: 3,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),
