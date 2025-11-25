@@ -1,3 +1,4 @@
+import { PanelMessage } from "@components/ui/PanelMessage";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
 import { useEffect } from "react";
@@ -24,13 +25,7 @@ export function TodoListPanel({ taskId }: TodoListPanelProps) {
   const todos = taskState.todos?.items || [];
 
   if (todos.length === 0) {
-    return (
-      <Box height="100%" overflowY="auto" p="4">
-        <Text size="2" color="gray">
-          No todos yet
-        </Text>
-      </Box>
-    );
+    return <PanelMessage>No todos yet</PanelMessage>;
   }
 
   return (
