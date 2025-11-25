@@ -72,8 +72,9 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       aria-label={label}
       data-active={isActive}
       align="center"
-      gap="2"
-      px="4"
+      gap="1"
+      pl="3"
+      pr={onClose ? "1" : "3"}
       className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
         borderRightColor: "var(--gray-6)",
@@ -112,19 +113,28 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       )}
 
       {onClose && (
-        <IconButton
-          size="1"
-          variant="ghost"
-          color={isActive ? undefined : "gray"}
-          className="opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label="Close tab"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
+        <Box
+          style={{
+            width: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Cross2Icon />
-        </IconButton>
+          <IconButton
+            size="1"
+            variant="ghost"
+            color={isActive ? undefined : "gray"}
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label="Close tab"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            <Cross2Icon width={12} height={12} />
+          </IconButton>
+        </Box>
       )}
     </Flex>
   );
