@@ -12,7 +12,7 @@ This is the monorepo for PostHog's Array desktop task manager and the agent fram
 ### Prerequisites
 
 - Node.js 22+
-- pnpm 9+
+- pnpm 10.23.0
 
 ### Setup
 
