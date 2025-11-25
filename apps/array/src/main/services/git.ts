@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import type { ChangedFile, GitFileStatus } from "@shared/types";
 import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
 
 const execAsync = promisify(exec);
@@ -161,6 +162,85 @@ const getChangedFiles = async (directoryPath: string): Promise<Set<string>> => {
 };
 
 export const getChangedFilesForRepo = getChangedFiles;
+
+const getChangedFilesAgainstHead = async (
+  directoryPath: string,
+): Promise<ChangedFile[]> => {
+  try {
+    const files: ChangedFile[] = [];
+    const seenPaths = new Set<string>();
+
+    // Use git diff with -M to detect renames in working tree
+    const { stdout: diffOutput } = await execAsync(
+      "git diff -M --name-status HEAD",
+      { cwd: directoryPath },
+    );
+
+    for (const line of diffOutput.trim().split("\n").filter(Boolean)) {
+      // Format: STATUS\tPATH or STATUS\tOLD_PATH\tNEW_PATH for renames
+      const parts = line.split("\t");
+      const statusChar = parts[0][0]; // First char (ignore rename percentage like R100)
+
+      if (statusChar === "R" && parts.length >= 3) {
+        // Rename: R100\told-path\tnew-path
+        const originalPath = parts[1];
+        const newPath = parts[2];
+        files.push({ path: newPath, status: "renamed", originalPath });
+        seenPaths.add(newPath);
+        seenPaths.add(originalPath);
+      } else if (parts.length >= 2) {
+        const filePath = parts[1];
+        let status: GitFileStatus;
+        switch (statusChar) {
+          case "D":
+            status = "deleted";
+            break;
+          case "A":
+            status = "added";
+            break;
+          default:
+            status = "modified";
+        }
+        files.push({ path: filePath, status });
+        seenPaths.add(filePath);
+      }
+    }
+
+    // Add untracked files from git status
+    const { stdout: statusOutput } = await execAsync("git status --porcelain", {
+      cwd: directoryPath,
+    });
+
+    for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
+      const statusCode = line.substring(0, 2);
+      const filePath = line.substring(3);
+
+      // Only add untracked files not already seen
+      if (statusCode === "??" && !seenPaths.has(filePath)) {
+        files.push({ path: filePath, status: "untracked" });
+      }
+    }
+
+    return files;
+  } catch {
+    return [];
+  }
+};
+
+const getFileAtHead = async (
+  directoryPath: string,
+  filePath: string,
+): Promise<string | null> => {
+  try {
+    const { stdout } = await execAsync(`git show HEAD:"${filePath}"`, {
+      cwd: directoryPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return stdout;
+  } catch {
+    return null;
+  }
+};
 
 export const findReposDirectory = async (): Promise<string | null> => {
   const platform = os.platform();
@@ -370,17 +450,13 @@ export function registerGitIpc(
       message: `Cloning ${repoUrl}...`,
     });
 
-    // Collect all output for debugging
-    let _stdoutData = "";
     let stderrData = "";
 
     cloneProcess.stdout?.on("data", (data: Buffer) => {
-      const text = data.toString();
-      _stdoutData += text;
       if (activeClones.get(cloneId)) {
         sendCloneProgress(win, cloneId, {
           status: "cloning",
-          message: text.trim(),
+          message: data.toString().trim(),
         });
       }
     });
@@ -449,6 +525,27 @@ export function registerGitIpc(
       setupCloneProcess(cloneId, repoUrl, targetPath, win);
 
       return { cloneId };
+    },
+  );
+
+  ipcMain.handle(
+    "get-changed-files-head",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<ChangedFile[]> => {
+      return getChangedFilesAgainstHead(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-file-at-head",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      filePath: string,
+    ): Promise<string | null> => {
+      return getFileAtHead(directoryPath, filePath);
     },
   );
 }

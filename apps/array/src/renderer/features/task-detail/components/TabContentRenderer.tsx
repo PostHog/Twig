@@ -1,4 +1,7 @@
 import { CodeEditorPanel } from "@features/code-editor/components/CodeEditorPanel";
+import { DiffEditorPanel } from "@features/code-editor/components/DiffEditorPanel";
+import { parseTabId } from "@features/panels/store/panelStoreHelpers";
+import { ChangesPanel } from "@features/task-detail/components/ChangesPanel";
 import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
@@ -43,18 +46,31 @@ export function TabContentRenderer({
     return <TaskArtifactsPanel taskId={taskId} task={task} />;
   }
 
+  if (tabId === "changes") {
+    return <ChangesPanel taskId={taskId} task={task} />;
+  }
+
+  if (tabId.startsWith("diff-")) {
+    const parsed = parseTabId(tabId);
+    return (
+      <DiffEditorPanel taskId={taskId} task={task} filePath={parsed.value} />
+    );
+  }
+
   if (tabId.startsWith("file-")) {
-    const filePath = tabId.replace("file-", "");
-    return <CodeEditorPanel taskId={taskId} task={task} filePath={filePath} />;
+    const parsed = parseTabId(tabId);
+    return (
+      <CodeEditorPanel taskId={taskId} task={task} filePath={parsed.value} />
+    );
   }
 
   if (tabId.startsWith("artifact-")) {
-    const fileName = tabId.replace("artifact-", "");
+    const parsed = parseTabId(tabId);
     return (
       <TaskArtifactEditorPanel
         taskId={taskId}
         task={task}
-        fileName={fileName}
+        fileName={parsed.value}
       />
     );
   }

@@ -26,4 +26,5 @@ export const DEFAULT_TAB_IDS = {
   FILES: "files",
   TODO_LIST: "todo-list",
   ARTIFACTS: "artifacts",
+  CHANGES: "changes",
 } as const;

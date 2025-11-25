@@ -1,13 +1,7 @@
 import { EditorState } from "@codemirror/state";
-import {
-  EditorView,
-  highlightActiveLineGutter,
-  lineNumbers,
-} from "@codemirror/view";
-import { useThemeStore } from "@stores/themeStore";
+import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
-import { oneDark, oneLight } from "../theme/editorTheme";
-import { getLanguageExtension } from "../utils/languages";
+import { useEditorExtensions } from "../hooks/useEditorExtensions";
 
 interface CodeMirrorEditorProps {
   content: string;
@@ -22,23 +16,10 @@ export function CodeMirrorEditor({
 }: CodeMirrorEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const isDarkMode = useThemeStore((state) => state.isDarkMode);
+  const extensions = useEditorExtensions(filePath, readOnly);
 
   useEffect(() => {
-    if (!editorRef.current) {
-      return;
-    }
-
-    const languageExtension = filePath ? getLanguageExtension(filePath) : null;
-    const theme = isDarkMode ? oneDark : oneLight;
-
-    const extensions = [
-      lineNumbers(),
-      highlightActiveLineGutter(),
-      theme,
-      EditorView.editable.of(!readOnly),
-      ...(languageExtension ? [languageExtension] : []),
-    ];
+    if (!editorRef.current) return;
 
     const state = EditorState.create({
       doc: content,
@@ -54,7 +35,7 @@ export function CodeMirrorEditor({
       viewRef.current?.destroy();
       viewRef.current = null;
     };
-  }, [content, filePath, isDarkMode, readOnly]);
+  }, [content, extensions]);
 
   return <div ref={editorRef} style={{ height: "100%", width: "100%" }} />;
 }

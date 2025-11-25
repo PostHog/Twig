@@ -1,121 +1,111 @@
+import { PanelMessage } from "@components/ui/PanelMessage";
 import { usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
+import {
+  FileIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  SpinnerGap,
+} from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-
-// Maximum depth to auto-expand in the file tree
-const MAX_AUTO_EXPAND_DEPTH = 2;
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 interface FileTreePanelProps {
   taskId: string;
   task: Task;
 }
 
-interface TreeNode {
+interface DirectoryEntry {
   name: string;
-  type: "file" | "folder";
-  children?: TreeNode[];
   path: string;
-  changed?: boolean;
+  type: "file" | "directory";
 }
 
-interface TreeNodeBuilder {
-  name: string;
-  type: "file" | "folder";
-  children?: Record<string, TreeNodeBuilder>;
-  path: string;
-  changed?: boolean;
+type DirectoryChangeCallback = (dirPath: string) => void;
+
+interface DirectoryChangeContextValue {
+  subscribe: (dirPath: string, callback: DirectoryChangeCallback) => () => void;
 }
 
-function buildTreeFromPaths(
-  files: Array<{ path: string; name: string; changed?: boolean }>,
-): TreeNode[] {
-  const root: Record<string, TreeNodeBuilder> = {};
+const DirectoryChangeContext =
+  createContext<DirectoryChangeContextValue | null>(null);
 
-  for (const file of files) {
-    const parts = file.path.split("/").filter(Boolean);
-    let currentLevel = root;
+function useDirectoryChange(
+  dirPath: string | null,
+  callback: DirectoryChangeCallback,
+) {
+  const ctx = useContext(DirectoryChangeContext);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
 
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLastPart = i === parts.length - 1;
-      const pathSoFar = parts.slice(0, i + 1).join("/");
-
-      if (!currentLevel[part]) {
-        currentLevel[part] = {
-          name: part,
-          type: isLastPart ? "file" : "folder",
-          path: pathSoFar,
-          children: isLastPart ? undefined : {},
-          changed: isLastPart ? file.changed : undefined,
-        };
-      }
-
-      if (!isLastPart && currentLevel[part].children) {
-        currentLevel = currentLevel[part].children;
-      }
-    }
-  }
-
-  // Convert children objects to arrays and sort
-  const convertToArray = (node: TreeNodeBuilder): TreeNode => {
-    if (node.children && typeof node.children === "object") {
-      const childrenArray = Object.values(node.children)
-        .map(convertToArray)
-        .sort((a, b) => {
-          // Folders first, then files
-          if (a.type !== b.type) {
-            return a.type === "folder" ? -1 : 1;
-          }
-          return a.name.localeCompare(b.name);
-        });
-      return {
-        name: node.name,
-        type: node.type,
-        path: node.path,
-        children: childrenArray,
-        changed: node.changed,
-      };
-    }
-    return {
-      name: node.name,
-      type: node.type,
-      path: node.path,
-      children: undefined,
-      changed: node.changed,
-    };
-  };
-
-  return Object.values(root)
-    .map(convertToArray)
-    .sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === "folder" ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
+  useEffect(() => {
+    if (!ctx || !dirPath) return;
+    return ctx.subscribe(dirPath, (path) => callbackRef.current(path));
+  }, [ctx, dirPath]);
 }
 
-interface TreeItemProps {
-  node: TreeNode;
+interface LazyTreeItemProps {
+  entry: DirectoryEntry;
   depth: number;
   taskId: string;
+  repoPath: string;
 }
 
-function TreeItem({ node, depth, taskId }: TreeItemProps) {
-  const [isExpanded, setIsExpanded] = useState(depth < MAX_AUTO_EXPAND_DEPTH);
+function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [children, setChildren] = useState<DirectoryEntry[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const openFile = usePanelLayoutStore((state) => state.openFile);
 
-  const handleClick = () => {
-    if (node.type === "folder") {
+  const loadChildren = useCallback(async () => {
+    if (entry.type !== "directory") return;
+
+    setIsLoading(true);
+    try {
+      const entries = await window.electronAPI.listDirectory(entry.path);
+      setChildren(entries);
+    } catch (error) {
+      console.error("Failed to load directory:", error);
+      setChildren([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [entry.path, entry.type]);
+
+  const handleClick = async () => {
+    if (entry.type === "directory") {
+      if (!isExpanded && children === null) {
+        await loadChildren();
+      }
       setIsExpanded(!isExpanded);
     } else {
-      openFile(taskId, node.path);
+      const relativePath = entry.path.replace(`${repoPath}/`, "");
+      openFile(taskId, relativePath);
     }
   };
+
+  useDirectoryChange(
+    entry.type === "directory" && isExpanded ? entry.path : null,
+    useCallback(() => {
+      window.electronAPI
+        .listDirectory(entry.path)
+        .then((entries) => {
+          setChildren(entries);
+        })
+        .catch((error) => {
+          console.error("Failed to refresh directory:", error);
+        });
+    }, [entry.path]),
+  );
 
   return (
     <Box>
@@ -127,12 +117,11 @@ function TreeItem({ node, depth, taskId }: TreeItemProps) {
         style={{
           paddingLeft: `${depth * 16 + 8}px`,
           cursor: "pointer",
-          backgroundColor: node.changed ? "var(--amber-3)" : undefined,
         }}
         className="rounded hover:bg-gray-2"
         onClick={handleClick}
       >
-        {node.type === "folder" ? (
+        {entry.type === "directory" ? (
           isExpanded ? (
             <FolderOpenIcon size={16} weight="fill" color="var(--accent-9)" />
           ) : (
@@ -142,17 +131,25 @@ function TreeItem({ node, depth, taskId }: TreeItemProps) {
           <FileIcon size={16} weight="regular" color="var(--gray-11)" />
         )}
         <Text size="2" style={{ userSelect: "none" }}>
-          {node.name}
+          {entry.name}
         </Text>
+        {isLoading && (
+          <SpinnerGap
+            size={12}
+            className="animate-spin"
+            color="var(--gray-9)"
+          />
+        )}
       </Flex>
-      {node.type === "folder" && isExpanded && node.children && (
+      {entry.type === "directory" && isExpanded && children && (
         <Box>
-          {node.children.map((child, index) => (
-            <TreeItem
-              key={`${child.name}-${index}`}
-              node={child}
+          {children.map((child) => (
+            <LazyTreeItem
+              key={child.path}
+              entry={child}
               depth={depth + 1}
               taskId={taskId}
+              repoPath={repoPath}
             />
           ))}
         </Box>
@@ -165,64 +162,104 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const repoPath = taskData.repoPath;
 
-  const { data: files = [], isLoading } = useQuery({
-    queryKey: ["repo-files", repoPath],
-    enabled: !!repoPath,
-    staleTime: 30000, // 30 seconds
-    queryFn: async () => {
-      if (!window.electronAPI || !repoPath) {
-        return [];
-      }
-      const result = await window.electronAPI.listRepoFiles(repoPath);
-      return result || [];
-    },
-  });
+  const [rootEntries, setRootEntries] = useState<DirectoryEntry[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fileTree = buildTreeFromPaths(files);
+  const subscribersRef = useRef<Map<string, Set<DirectoryChangeCallback>>>(
+    new Map(),
+  );
+
+  const contextValue = useMemo<DirectoryChangeContextValue>(
+    () => ({
+      subscribe: (dirPath, callback) => {
+        if (!subscribersRef.current.has(dirPath)) {
+          subscribersRef.current.set(dirPath, new Set());
+        }
+        subscribersRef.current.get(dirPath)?.add(callback);
+        return () => {
+          subscribersRef.current.get(dirPath)?.delete(callback);
+          if (subscribersRef.current.get(dirPath)?.size === 0) {
+            subscribersRef.current.delete(dirPath);
+          }
+        };
+      },
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!repoPath) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    window.electronAPI
+      .listDirectory(repoPath)
+      .then((entries) => {
+        setRootEntries(entries);
+      })
+      .catch((err) => {
+        console.error("Failed to load root directory:", err);
+        setError("Failed to load files");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const unsub = window.electronAPI.onDirectoryChanged(({ dirPath }) => {
+      if (dirPath === repoPath) {
+        window.electronAPI.listDirectory(repoPath).then((entries) => {
+          setRootEntries(entries);
+        });
+      }
+
+      const callbacks = subscribersRef.current.get(dirPath);
+      if (callbacks) {
+        for (const cb of callbacks) {
+          cb(dirPath);
+        }
+      }
+    });
+
+    return unsub;
+  }, [repoPath]);
 
   if (!repoPath) {
-    return (
-      <Box height="100%" overflowY="auto" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            No repository path available
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <PanelMessage>No repository path available</PanelMessage>;
   }
 
   if (isLoading) {
-    return (
-      <Box height="100%" overflowY="auto" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            Loading files...
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <PanelMessage>Loading files...</PanelMessage>;
   }
 
-  if (fileTree.length === 0) {
-    return (
-      <Box height="100%" overflowY="auto" p="4">
-        <Flex align="center" justify="center" height="100%">
-          <Text size="2" color="gray">
-            No files found
-          </Text>
-        </Flex>
-      </Box>
-    );
+  if (error) {
+    return <PanelMessage color="red">{error}</PanelMessage>;
+  }
+
+  if (!rootEntries || rootEntries.length === 0) {
+    return <PanelMessage>No files found</PanelMessage>;
   }
 
   return (
-    <Box height="100%" overflowY="auto" p="4">
-      <Flex direction="column" gap="1">
-        {fileTree.map((node) => (
-          <TreeItem key={node.path} node={node} depth={0} taskId={taskId} />
-        ))}
-      </Flex>
-    </Box>
+    <DirectoryChangeContext.Provider value={contextValue}>
+      <Box height="100%" overflowY="auto" p="4">
+        <Flex direction="column" gap="1">
+          {rootEntries.map((entry) => (
+            <LazyTreeItem
+              key={entry.path}
+              entry={entry}
+              depth={0}
+              taskId={taskId}
+              repoPath={repoPath}
+            />
+          ))}
+        </Flex>
+      </Box>
+    </DirectoryChangeContext.Provider>
   );
 }

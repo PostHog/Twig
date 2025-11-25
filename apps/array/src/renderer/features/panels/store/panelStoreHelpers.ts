@@ -6,7 +6,7 @@ import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
 export const DEFAULT_FALLBACK_TAB = DEFAULT_TAB_IDS.LOGS;
 
 // Tab ID utilities
-export type TabType = "file" | "artifact" | "system";
+export type TabType = "file" | "artifact" | "diff" | "system";
 
 export interface ParsedTabId {
   type: TabType;
@@ -21,20 +21,57 @@ export function createArtifactTabId(fileName: string): string {
   return `artifact-${fileName}`;
 }
 
-export function parseTabId(tabId: string): ParsedTabId {
+export function createDiffTabId(filePath: string, status?: string): string {
+  if (status) {
+    return `diff-${status}:${filePath}`;
+  }
+  return `diff-${filePath}`;
+}
+
+export function parseTabId(tabId: string): ParsedTabId & { status?: string } {
   if (tabId.startsWith("file-")) {
     return { type: "file", value: tabId.slice(5) };
   }
   if (tabId.startsWith("artifact-")) {
     return { type: "artifact", value: tabId.slice(9) };
   }
+  if (tabId.startsWith("diff-")) {
+    const rest = tabId.slice(5);
+    // Check for status:path format
+    const colonIndex = rest.indexOf(":");
+    if (colonIndex !== -1) {
+      const status = rest.slice(0, colonIndex);
+      const value = rest.slice(colonIndex + 1);
+      return { type: "diff", value, status };
+    }
+    return { type: "diff", value: rest };
+  }
   return { type: "system", value: tabId };
+}
+
+function getStatusLabel(status?: string): string {
+  switch (status) {
+    case "deleted":
+      return "Deleted";
+    case "untracked":
+    case "added":
+      return "New";
+    case "renamed":
+      return "Renamed";
+    default:
+      return "diff";
+  }
 }
 
 export function createTabLabel(tabId: string): string {
   const parsed = parseTabId(tabId);
   if (parsed.type === "file") {
     return parsed.value.split("/").pop() || parsed.value;
+  }
+  if (parsed.type === "diff") {
+    const fileName = parsed.value.split("/").pop() || parsed.value;
+    const label = getStatusLabel(parsed.status);
+    return `${fileName} (${label})`;
   }
   return parsed.value;
 }

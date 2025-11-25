@@ -128,7 +128,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: {
       unpack:
-        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**}",
+        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**}",
     },
     prune: false,
     name: "Array",
@@ -196,6 +196,8 @@ const config: ForgeConfig = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyNativeDependency("node-pty", buildPath);
       copyNativeDependency("node-addon-api", buildPath);
+      copyNativeDependency("@parcel/watcher", buildPath);
+      copyNativeDependency("@parcel/watcher-darwin-arm64", buildPath);
     },
   },
   publishers: [
