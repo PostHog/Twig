@@ -9,8 +9,11 @@ interface PanelTabProps {
   isActive: boolean;
   index: number;
   draggable?: boolean;
+  closeable?: boolean;
   onSelect: () => void;
   onClose?: () => void;
+  onCloseOthers?: () => void;
+  onCloseToRight?: () => void;
   icon?: React.ReactNode;
   badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
@@ -23,8 +26,11 @@ export const PanelTab: React.FC<PanelTabProps> = ({
   isActive,
   index,
   draggable = true,
+  closeable = true,
   onSelect,
   onClose,
+  onCloseOthers,
+  onCloseToRight,
   icon,
   badge,
   hasUnsavedChanges,
@@ -49,8 +55,11 @@ export const PanelTab: React.FC<PanelTabProps> = ({
       label={label}
       isActive={isActive}
       index={index}
+      closeable={closeable}
       onSelect={onSelect}
       onClose={onClose}
+      onCloseOthers={onCloseOthers}
+      onCloseToRight={onCloseToRight}
       icon={icon}
       badge={badge}
       hasUnsavedChanges={hasUnsavedChanges}

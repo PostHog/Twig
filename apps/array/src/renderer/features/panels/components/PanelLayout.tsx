@@ -35,6 +35,20 @@ const PanelLayoutRenderer: React.FC<{
     [layoutState, taskId],
   );
 
+  const handleCloseOtherTabs = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.closeOtherTabs(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handleCloseTabsToRight = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.closeTabsToRight(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
+
   const handleLayout = useCallback(
     (groupId: string, sizes: number[]) => {
       layoutState.updateSizes(taskId, groupId, sizes);
@@ -51,6 +65,8 @@ const PanelLayoutRenderer: React.FC<{
             taskId={taskId}
             task={task}
             closeTab={layoutState.closeTab}
+            closeOtherTabs={handleCloseOtherTabs}
+            closeTabsToRight={handleCloseTabsToRight}
             draggingTabId={layoutState.draggingTabId}
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
@@ -71,7 +87,16 @@ const PanelLayoutRenderer: React.FC<{
 
       return null;
     },
-    [taskId, task, layoutState, handleSetActiveTab, setGroupRef, handleLayout],
+    [
+      taskId,
+      task,
+      layoutState,
+      handleSetActiveTab,
+      handleCloseOtherTabs,
+      handleCloseTabsToRight,
+      setGroupRef,
+      handleLayout,
+    ],
   );
 
   return <>{renderNode(node)}</>;

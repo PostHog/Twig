@@ -11,6 +11,8 @@ export interface PanelLayoutState {
   updateSizes: (taskId: string, groupId: string, sizes: number[]) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
+  closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
+  closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
 }
@@ -22,6 +24,8 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
         updateSizes: state.updateSizes,
         setActiveTab: state.setActiveTab,
         closeTab: state.closeTab,
+        closeOtherTabs: state.closeOtherTabs,
+        closeTabsToRight: state.closeTabsToRight,
         draggingTabId: state.getLayout(taskId)?.draggingTabId ?? null,
         draggingTabPanelId: state.getLayout(taskId)?.draggingTabPanelId ?? null,
       }),

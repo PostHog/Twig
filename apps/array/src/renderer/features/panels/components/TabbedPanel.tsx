@@ -9,6 +9,8 @@ interface TabbedPanelProps {
   panelId: string;
   content: PanelContent;
   onActiveTabChange?: (panelId: string, tabId: string) => void;
+  onCloseOtherTabs?: (panelId: string, tabId: string) => void;
+  onCloseTabsToRight?: (panelId: string, tabId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
 }
@@ -17,6 +19,8 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   panelId,
   content,
   onActiveTabChange,
+  onCloseOtherTabs,
+  onCloseTabsToRight,
   draggingTabId = null,
   draggingTabPanelId = null,
 }) => {
@@ -43,8 +47,8 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
           className="flex-shrink-0 overflow-hidden border-b"
           style={{
             borderColor: "var(--gray-6)",
-            minHeight: "40px",
-            height: "40px",
+            minHeight: "32px",
+            height: "32px",
           }}
         >
           {content.tabs.map((tab, index) => (
@@ -56,6 +60,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               isActive={tab.id === content.activeTabId}
               index={index}
               draggable={tab.draggable}
+              closeable={tab.closeable !== false}
               onSelect={() => {
                 onActiveTabChange?.(panelId, tab.id);
                 tab.onSelect?.();
@@ -65,6 +70,8 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                   ? () => handleCloseTab(tab.id)
                   : undefined
               }
+              onCloseOthers={() => onCloseOtherTabs?.(panelId, tab.id)}
+              onCloseToRight={() => onCloseTabsToRight?.(panelId, tab.id)}
               icon={tab.icon}
               hasUnsavedChanges={tab.hasUnsavedChanges}
               badge={tab.badge}

@@ -48,6 +48,8 @@ export interface PanelLayoutStore {
   openArtifact: (taskId: string, fileName: string) => void;
   openDiff: (taskId: string, filePath: string, status?: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
+  closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
+  closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsForFile: (taskId: string, filePath: string) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
@@ -313,6 +315,68 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               panelTree: cleanedTree,
               ...metadata,
             };
+          }),
+        );
+      },
+
+      closeOtherTabs: (taskId, panelId, tabId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const remainingTabs = panel.content.tabs.filter(
+                  (t) => t.id === tabId || t.closeable === false,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: remainingTabs,
+                    activeTabId: tabId,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
+      closeTabsToRight: (taskId, panelId, tabId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+
+                const tabIndex = panel.content.tabs.findIndex(
+                  (t) => t.id === tabId,
+                );
+                if (tabIndex === -1) return panel;
+
+                const remainingTabs = panel.content.tabs.filter(
+                  (t, index) => index <= tabIndex || t.closeable === false,
+                );
+
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: remainingTabs,
+                  },
+                };
+              },
+            );
+
+            return { panelTree: updatedTree };
           }),
         );
       },

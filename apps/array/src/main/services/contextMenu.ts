@@ -2,12 +2,15 @@ import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createIpcService } from "../ipc/createIpcService.js";
 import type {
   FolderContextMenuResult,
+  TabContextMenuResult,
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
 
 export type {
   FolderContextMenuAction,
   FolderContextMenuResult,
+  TabContextMenuAction,
+  TabContextMenuResult,
   TaskContextMenuAction,
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
@@ -56,6 +59,35 @@ export const showFolderContextMenuService = createIpcService({
         {
           label: "Remove folder",
           click: () => resolve({ action: "remove" }),
+        },
+      ];
+
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({
+        callback: () => resolve({ action: null }),
+      });
+    });
+  },
+});
+
+export const showTabContextMenuService = createIpcService({
+  channel: "show-tab-context-menu",
+  handler: async (_event, canClose: boolean): Promise<TabContextMenuResult> => {
+    return new Promise((resolve) => {
+      const template: MenuItemConstructorOptions[] = [
+        {
+          label: "Close tab",
+          enabled: canClose,
+          click: () => resolve({ action: "close" }),
+        },
+        { type: "separator" },
+        {
+          label: "Close other tabs",
+          click: () => resolve({ action: "close-others" }),
+        },
+        {
+          label: "Close tabs to the right",
+          click: () => resolve({ action: "close-right" }),
         },
       ];
 

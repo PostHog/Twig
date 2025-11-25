@@ -6,6 +6,7 @@ import type {
 } from "../shared/types/oauth";
 import type {
   FolderContextMenuResult,
+  TabContextMenuResult,
   TaskContextMenuResult,
 } from "./services/contextMenu.types.js";
 
@@ -328,6 +329,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     folderName: string,
   ): Promise<FolderContextMenuResult> =>
     ipcRenderer.invoke("show-folder-context-menu", folderId, folderName),
+  showTabContextMenu: (canClose: boolean): Promise<TabContextMenuResult> =>
+    ipcRenderer.invoke("show-tab-context-menu", canClose),
   folders: {
     getFolders: (): Promise<
       Array<{

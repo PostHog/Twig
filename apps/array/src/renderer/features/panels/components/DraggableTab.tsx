@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import type React from "react";
+import { useCallback } from "react";
 
 interface DraggableTabProps {
   tabId: string;
@@ -9,8 +10,11 @@ interface DraggableTabProps {
   label: string;
   isActive: boolean;
   index: number;
+  closeable?: boolean;
   onSelect: () => void;
   onClose?: () => void;
+  onCloseOthers?: () => void;
+  onCloseToRight?: () => void;
   icon?: React.ReactNode;
   badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
@@ -22,8 +26,11 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   label,
   isActive,
   index,
+  closeable = true,
   onSelect,
   onClose,
+  onCloseOthers,
+  onCloseToRight,
   icon,
   badge,
   hasUnsavedChanges,
@@ -39,6 +46,25 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     data: { tabId, panelId, type: "tab" },
   });
 
+  const handleContextMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      const result = await window.electronAPI.showTabContextMenu(closeable);
+      switch (result.action) {
+        case "close":
+          onClose?.();
+          break;
+        case "close-others":
+          onCloseOthers?.();
+          break;
+        case "close-right":
+          onCloseToRight?.();
+          break;
+      }
+    },
+    [closeable, onClose, onCloseOthers, onCloseToRight],
+  );
+
   return (
     <Flex
       ref={ref}
@@ -50,14 +76,15 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       px="4"
       className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
-        backgroundColor: isActive ? "var(--accent-3)" : "transparent",
+        backgroundColor: "transparent",
         borderRightColor: "var(--gray-6)",
-        borderBottomColor: isActive ? "var(--accent-8)" : "transparent",
+        borderBottomColor: isActive ? "var(--accent-10)" : "transparent",
         color: isActive ? "var(--accent-12)" : "var(--gray-11)",
         opacity: isDragging ? 0.5 : 1,
-        minHeight: "40px",
+        minHeight: "32px",
       }}
       onClick={onSelect}
+      onContextMenu={handleContextMenu}
       onMouseEnter={(e) => {
         if (!isActive) {
           e.currentTarget.style.backgroundColor = "var(--gray-3)";
