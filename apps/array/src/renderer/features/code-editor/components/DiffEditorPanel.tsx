@@ -3,7 +3,7 @@ import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirro
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
-import type { ChangedFile, Task } from "@shared/types";
+import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 
 interface DiffEditorPanelProps {
@@ -17,49 +17,33 @@ export function DiffEditorPanel({
   task,
   filePath,
 }: DiffEditorPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const { repoPath } = useTaskData({ taskId, initialTask: task });
 
-  // Fetch changed files to get status information
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
+    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath!),
     enabled: !!repoPath,
     staleTime: Infinity,
-    queryFn: async () => {
-      if (!window.electronAPI || !repoPath) return [];
-      return window.electronAPI.getChangedFilesHead(repoPath);
-    },
   });
 
-  // Find the file info to get status and originalPath (for renames)
-  const fileInfo = changedFiles.find((f: ChangedFile) => f.path === filePath);
+  const fileInfo = changedFiles.find((f) => f.path === filePath);
   const status = fileInfo?.status ?? "modified";
   const originalPath = fileInfo?.originalPath ?? filePath;
+  const isDeleted = status === "deleted";
+  const isNew = status === "untracked" || status === "added";
 
-  // Determine what to fetch based on status
-  const skipModified = status === "deleted";
-  const skipOriginal = status === "untracked" || status === "added";
-
-  // Fetch modified content (current working directory)
-  const { data: modifiedContent, isLoading: isLoadingModified } = useQuery({
+  const { data: modifiedContent, isLoading: loadingModified } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
-    enabled: !!repoPath && !!filePath && !skipModified,
+    queryFn: () => window.electronAPI.readRepoFile(repoPath!, filePath),
+    enabled: !!repoPath && !isDeleted,
     staleTime: Infinity,
-    queryFn: async () => {
-      if (!window.electronAPI || !repoPath || !filePath) return null;
-      return window.electronAPI.readRepoFile(repoPath, filePath);
-    },
   });
 
-  // Fetch original content (HEAD) - use originalPath for renames
-  const { data: originalContent, isLoading: isLoadingOriginal } = useQuery({
+  const { data: originalContent, isLoading: loadingOriginal } = useQuery({
     queryKey: ["file-at-head", repoPath, originalPath],
-    enabled: !!repoPath && !!originalPath && !skipOriginal,
+    queryFn: () => window.electronAPI.getFileAtHead(repoPath!, originalPath),
+    enabled: !!repoPath && !isNew,
     staleTime: Infinity,
-    queryFn: async () => {
-      if (!window.electronAPI || !repoPath || !originalPath) return null;
-      return window.electronAPI.getFileAtHead(repoPath, originalPath);
-    },
   });
 
   if (!repoPath) {
@@ -67,44 +51,29 @@ export function DiffEditorPanel({
   }
 
   const isLoading =
-    (!skipModified && isLoadingModified) ||
-    (!skipOriginal && isLoadingOriginal);
-
+    (!isDeleted && loadingModified) || (!isNew && loadingOriginal);
   if (isLoading) {
     return <PanelMessage>Loading diff...</PanelMessage>;
   }
 
-  if (skipModified) {
-    return (
-      <Box height="100%" style={{ overflow: "hidden" }}>
-        <CodeMirrorEditor
-          content={originalContent ?? ""}
-          filePath={filePath}
-          readOnly
-        />
-      </Box>
-    );
-  }
-
-  if (skipOriginal) {
-    return (
-      <Box height="100%" style={{ overflow: "hidden" }}>
-        <CodeMirrorEditor
-          content={modifiedContent ?? ""}
-          filePath={filePath}
-          readOnly
-        />
-      </Box>
-    );
-  }
+  const showDiff = !isDeleted && !isNew;
+  const content = isDeleted ? originalContent : modifiedContent;
 
   return (
     <Box height="100%" style={{ overflow: "hidden" }}>
-      <CodeMirrorDiffEditor
-        originalContent={originalContent ?? ""}
-        modifiedContent={modifiedContent ?? ""}
-        filePath={filePath}
-      />
+      {showDiff ? (
+        <CodeMirrorDiffEditor
+          originalContent={originalContent ?? ""}
+          modifiedContent={modifiedContent ?? ""}
+          filePath={filePath}
+        />
+      ) : (
+        <CodeMirrorEditor
+          content={content ?? ""}
+          filePath={filePath}
+          readOnly
+        />
+      )}
     </Box>
   );
 }

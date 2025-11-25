@@ -1,7 +1,6 @@
-import { MergeView, unifiedMergeView } from "@codemirror/merge";
-import { EditorView } from "@codemirror/view";
 import { Box, Flex, SegmentedControl } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { useCodeMirror } from "../hooks/useCodeMirror";
 import { useEditorExtensions } from "../hooks/useEditorExtensions";
 
 type ViewMode = "split" | "unified";
@@ -17,65 +16,25 @@ export function CodeMirrorDiffEditor({
   modifiedContent,
   filePath,
 }: CodeMirrorDiffEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const mergeViewRef = useRef<MergeView | null>(null);
-  const editorViewRef = useRef<EditorView | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const baseExtensions = useEditorExtensions(filePath, true);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-
-    mergeViewRef.current?.destroy();
-    editorViewRef.current?.destroy();
-    mergeViewRef.current = null;
-    editorViewRef.current = null;
-
-    if (viewMode === "split") {
-      mergeViewRef.current = new MergeView({
-        a: {
-          doc: originalContent,
-          extensions: baseExtensions,
-        },
-        b: {
-          doc: modifiedContent,
-          extensions: baseExtensions,
-        },
-        parent: editorRef.current,
-      });
-    } else {
-      editorViewRef.current = new EditorView({
-        doc: modifiedContent,
-        extensions: [
-          ...baseExtensions,
-          unifiedMergeView({
-            original: originalContent,
-            highlightChanges: true,
-            gutter: true,
-            mergeControls: false,
-          }),
-        ],
-        parent: editorRef.current,
-      });
-    }
-
-    return () => {
-      mergeViewRef.current?.destroy();
-      editorViewRef.current?.destroy();
-      mergeViewRef.current = null;
-      editorViewRef.current = null;
-    };
-  }, [originalContent, modifiedContent, baseExtensions, viewMode]);
+  const extensions = useEditorExtensions(filePath, true);
+  const options = useMemo(
+    () => ({
+      original: originalContent,
+      modified: modifiedContent,
+      extensions,
+      mode: viewMode,
+    }),
+    [originalContent, modifiedContent, extensions, viewMode],
+  );
+  const containerRef = useCodeMirror(options);
 
   return (
     <Flex direction="column" height="100%">
       <Box
         px="3"
         py="2"
-        style={{
-          borderBottom: "1px solid var(--gray-6)",
-          flexShrink: 0,
-        }}
+        style={{ borderBottom: "1px solid var(--gray-6)", flexShrink: 0 }}
       >
         <SegmentedControl.Root
           size="1"
@@ -87,7 +46,7 @@ export function CodeMirrorDiffEditor({
         </SegmentedControl.Root>
       </Box>
       <Box style={{ flex: 1, overflow: "auto" }}>
-        <div ref={editorRef} style={{ height: "100%", width: "100%" }} />
+        <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
       </Box>
     </Flex>
   );
