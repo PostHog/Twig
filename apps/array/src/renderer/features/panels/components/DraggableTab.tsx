@@ -76,7 +76,6 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       px="4"
       className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
-        backgroundColor: "transparent",
         borderRightColor: "var(--gray-6)",
         borderBottomColor: isActive ? "var(--accent-10)" : "transparent",
         color: isActive ? "var(--accent-12)" : "var(--gray-11)",
@@ -87,13 +86,11 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       onContextMenu={handleContextMenu}
       onMouseEnter={(e) => {
         if (!isActive) {
-          e.currentTarget.style.backgroundColor = "var(--gray-3)";
           e.currentTarget.style.color = "var(--gray-12)";
         }
       }}
       onMouseLeave={(e) => {
         if (!isActive) {
-          e.currentTarget.style.backgroundColor = "transparent";
           e.currentTarget.style.color = "var(--gray-11)";
         }
       }}
