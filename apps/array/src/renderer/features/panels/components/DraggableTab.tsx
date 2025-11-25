@@ -75,13 +75,13 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       gap="1"
       pl="3"
       pr={onClose ? "1" : "3"}
-      className="group relative cursor-grab select-none border-r border-b-2 transition-colors"
+      className="group relative flex-shrink-0 cursor-grab select-none border-r border-b-2 transition-colors"
       style={{
         borderRightColor: "var(--gray-6)",
         borderBottomColor: isActive ? "var(--accent-10)" : "transparent",
         color: isActive ? "var(--accent-12)" : "var(--gray-11)",
         opacity: isDragging ? 0.5 : 1,
-        minHeight: "32px",
+        height: "32px",
       }}
       onClick={onSelect}
       onContextMenu={handleContextMenu}

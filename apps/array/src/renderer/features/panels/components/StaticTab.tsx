@@ -19,7 +19,14 @@ export const StaticTab: React.FC<StaticTabProps> = ({
   hasUnsavedChanges,
 }) => {
   return (
-    <Flex align="center" flexShrink="0" ml="2" mr="2" px="2" py="1">
+    <Flex
+      align="center"
+      flexShrink="0"
+      ml="2"
+      mr="2"
+      px="2"
+      style={{ height: "30px" }}
+    >
       <Button
         variant="ghost"
         color="gray"

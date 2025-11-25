@@ -43,46 +43,57 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   return (
     <Box position="relative" height="100%" className="flex flex-col">
       {content.showTabs !== false && (
-        <Flex
-          ref={tabBarRef}
-          align="center"
-          className="flex-shrink-0 overflow-hidden border-b"
+        <Box
+          className="flex-shrink-0 border-b"
           style={{
             borderColor: "var(--gray-6)",
-            minHeight: "32px",
             height: "32px",
+            position: "relative",
           }}
         >
-          {content.tabs.map((tab, index) => (
-            <PanelTab
-              key={tab.id}
-              tabId={tab.id}
-              panelId={panelId}
-              label={tab.label}
-              isActive={tab.id === content.activeTabId}
-              index={index}
-              draggable={tab.draggable}
-              closeable={tab.closeable !== false}
-              onSelect={() => {
-                onActiveTabChange?.(panelId, tab.id);
-                onPanelFocus?.(panelId);
-                tab.onSelect?.();
-              }}
-              onClose={
-                tab.closeable !== false
-                  ? () => handleCloseTab(tab.id)
-                  : undefined
-              }
-              onCloseOthers={() => onCloseOtherTabs?.(panelId, tab.id)}
-              onCloseToRight={() => onCloseTabsToRight?.(panelId, tab.id)}
-              icon={tab.icon}
-              hasUnsavedChanges={tab.hasUnsavedChanges}
-              badge={tab.badge}
-            />
-          ))}
-          {/* Spacer to increas DND area */}
-          <Box flexGrow="1" style={{ minWidth: "40px", height: "100%" }} />
-        </Flex>
+          <Flex
+            ref={tabBarRef}
+            className="scrollbar-overlay"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "36px",
+              alignItems: "flex-start",
+            }}
+          >
+            {content.tabs.map((tab, index) => (
+              <PanelTab
+                key={tab.id}
+                tabId={tab.id}
+                panelId={panelId}
+                label={tab.label}
+                isActive={tab.id === content.activeTabId}
+                index={index}
+                draggable={tab.draggable}
+                closeable={tab.closeable !== false}
+                onSelect={() => {
+                  onActiveTabChange?.(panelId, tab.id);
+                  onPanelFocus?.(panelId);
+                  tab.onSelect?.();
+                }}
+                onClose={
+                  tab.closeable !== false
+                    ? () => handleCloseTab(tab.id)
+                    : undefined
+                }
+                onCloseOthers={() => onCloseOtherTabs?.(panelId, tab.id)}
+                onCloseToRight={() => onCloseTabsToRight?.(panelId, tab.id)}
+                icon={tab.icon}
+                hasUnsavedChanges={tab.hasUnsavedChanges}
+                badge={tab.badge}
+              />
+            ))}
+            {/* Spacer to increase DND area */}
+            <Box flexShrink="0" style={{ minWidth: "40px", height: "32px" }} />
+          </Flex>
+        </Box>
       )}
 
       <Box
