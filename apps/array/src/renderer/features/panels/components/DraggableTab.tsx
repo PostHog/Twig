@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Cross2Icon } from "@radix-ui/react-icons";
-import { Box, Button, Flex, IconButton, Text } from "@radix-ui/themes";
+import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import type React from "react";
 
 interface DraggableTabProps {
@@ -9,10 +9,10 @@ interface DraggableTabProps {
   label: string;
   isActive: boolean;
   index: number;
-  draggable?: boolean;
   onSelect: () => void;
   onClose?: () => void;
   icon?: React.ReactNode;
+  badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
 }
 
@@ -22,10 +22,10 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   label,
   isActive,
   index,
-  draggable = true,
   onSelect,
   onClose,
   icon,
+  badge,
   hasUnsavedChanges,
 }) => {
   const { ref, isDragging } = useSortable({
@@ -37,34 +37,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       easing: "ease",
     },
     data: { tabId, panelId, type: "tab" },
-    disabled: !draggable,
   });
-
-  if (!draggable) {
-    return (
-      <Flex align="center" flexShrink="0" ml="2" mr="2" px="2" py="1">
-        <Button
-          variant="ghost"
-          color="gray"
-          size="1"
-          onClick={onSelect}
-          style={{
-            backgroundColor: isActive ? "var(--gray-a3)" : undefined,
-          }}
-        >
-          {icon && (
-            <Box style={{ display: "flex", alignItems: "center" }}>{icon}</Box>
-          )}
-          {label}
-          {hasUnsavedChanges && (
-            <Text size="1" style={{ color: "var(--amber-9)" }}>
-              •
-            </Text>
-          )}
-        </Button>
-      </Flex>
-    );
-  }
 
   return (
     <Flex
@@ -107,6 +80,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       >
         {label}
       </Text>
+      {badge}
       {hasUnsavedChanges && (
         <Text size="1" style={{ color: "var(--amber-9)", marginLeft: "2px" }}>
           •

@@ -2,8 +2,8 @@ import { useDroppable } from "@dnd-kit/react";
 import { Box, Flex } from "@radix-ui/themes";
 import type React from "react";
 import type { PanelContent } from "../store/panelStore";
-import { DraggableTab } from "./DraggableTab";
 import { PanelDropZones } from "./PanelDropZones";
+import { PanelTab } from "./PanelTab";
 
 interface TabbedPanelProps {
   panelId: string;
@@ -48,7 +48,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
           }}
         >
           {content.tabs.map((tab, index) => (
-            <DraggableTab
+            <PanelTab
               key={tab.id}
               tabId={tab.id}
               panelId={panelId}
@@ -67,6 +67,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               }
               icon={tab.icon}
               hasUnsavedChanges={tab.hasUnsavedChanges}
+              badge={tab.badge}
             />
           ))}
           {/* Spacer to increas DND area */}

@@ -1,3 +1,4 @@
+import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -65,6 +66,10 @@ export function useTabInjection(
               closeTab(taskId, panelId, tab.id);
             }
           : undefined,
+        badge:
+          tab.id === "changes" ? (
+            <ChangesTabBadge taskId={taskId} task={task} />
+          ) : undefined,
       })),
     [tabs, panelId, taskId, task, closeTab],
   );
