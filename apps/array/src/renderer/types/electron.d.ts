@@ -1,6 +1,7 @@
 import type { AgentEvent } from "@posthog/agent";
 import type {
   FolderContextMenuResult,
+  SplitContextMenuResult,
   TabContextMenuResult,
 } from "@main/services/contextMenu.types";
 import type {
@@ -202,6 +203,7 @@ declare global {
       folderName: string,
     ) => Promise<FolderContextMenuResult>;
     showTabContextMenu: (canClose: boolean) => Promise<TabContextMenuResult>;
+    showSplitContextMenu: () => Promise<SplitContextMenuResult>;
     folders: {
       getFolders: () => Promise<RegisteredFolder[]>;
       addFolder: (folderPath: string) => Promise<RegisteredFolder>;

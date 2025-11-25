@@ -70,6 +70,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       ref={ref}
       role="tab"
       aria-label={label}
+      data-tab-id={tabId}
       data-active={isActive}
       align="center"
       gap="1"

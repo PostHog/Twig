@@ -9,6 +9,7 @@ import {
   usePanelLayoutState,
   usePanelSizeSync,
 } from "../hooks/usePanelLayoutHooks";
+import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode } from "../store/panelTypes";
 import { GroupNodeRenderer } from "./GroupNodeRenderer";
@@ -57,6 +58,45 @@ const PanelLayoutRenderer: React.FC<{
     [layoutState, taskId],
   );
 
+  const handleAddTerminal = useCallback(
+    (panelId: string) => {
+      layoutState.addTerminalTab(taskId, panelId);
+    },
+    [layoutState, taskId],
+  );
+
+  const handleSplitPanel = useCallback(
+    (panelId: string, direction: SplitDirection) => {
+      const layout = usePanelLayoutStore.getState().getLayout(taskId);
+      if (!layout) return;
+
+      const findActiveTabId = (panelNode: PanelNode): string | null => {
+        if (panelNode.type === "leaf" && panelNode.id === panelId) {
+          return panelNode.content.activeTabId ?? null;
+        }
+        if (panelNode.type === "group") {
+          for (const child of panelNode.children) {
+            const result = findActiveTabId(child);
+            if (result) return result;
+          }
+        }
+        return null;
+      };
+
+      const activeTabId = findActiveTabId(layout.panelTree);
+      if (activeTabId) {
+        layoutState.splitPanel(
+          taskId,
+          activeTabId,
+          panelId,
+          panelId,
+          direction,
+        );
+      }
+    },
+    [layoutState, taskId],
+  );
+
   const handleLayout = useCallback(
     (groupId: string, sizes: number[]) => {
       layoutState.updateSizes(taskId, groupId, sizes);
@@ -79,6 +119,9 @@ const PanelLayoutRenderer: React.FC<{
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
             onPanelFocus={handlePanelFocus}
+            focusedPanelId={layoutState.focusedPanelId}
+            onAddTerminal={handleAddTerminal}
+            onSplitPanel={handleSplitPanel}
           />
         );
       }
@@ -104,6 +147,8 @@ const PanelLayoutRenderer: React.FC<{
       handleCloseOtherTabs,
       handleCloseTabsToRight,
       handlePanelFocus,
+      handleAddTerminal,
+      handleSplitPanel,
       setGroupRef,
       handleLayout,
     ],

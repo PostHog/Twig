@@ -1,9 +1,46 @@
 import { useDroppable } from "@dnd-kit/react";
+import { SquareSplitHorizontalIcon } from "@phosphor-icons/react";
+import { PlusIcon } from "@radix-ui/react-icons";
 import { Box, Flex } from "@radix-ui/themes";
 import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { SplitDirection } from "../store/panelLayoutStore";
 import type { PanelContent } from "../store/panelStore";
 import { PanelDropZones } from "./PanelDropZones";
 import { PanelTab } from "./PanelTab";
+
+interface TabBarButtonProps {
+  ariaLabel: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+function TabBarButton({ ariaLabel, onClick, children }: TabBarButtonProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        height: "32px",
+        width: "32px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: isHovered ? "var(--gray-4)" : "var(--color-background)",
+        border: "none",
+        cursor: "pointer",
+        color: "var(--gray-11)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 interface TabbedPanelProps {
   panelId: string;
@@ -14,6 +51,9 @@ interface TabbedPanelProps {
   onPanelFocus?: (panelId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
+  isFocused?: boolean;
+  onAddTerminal?: () => void;
+  onSplitPanel?: (direction: SplitDirection) => void;
 }
 
 export const TabbedPanel: React.FC<TabbedPanelProps> = ({
@@ -25,8 +65,18 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onPanelFocus,
   draggingTabId = null,
   draggingTabPanelId = null,
+  isFocused = false,
+  onAddTerminal,
+  onSplitPanel,
 }) => {
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
+
+  const handleSplitClick = async () => {
+    const result = await window.electronAPI.showSplitContextMenu();
+    if (result.direction) {
+      onSplitPanel?.(result.direction as SplitDirection);
+    }
+  };
 
   const handleCloseTab = (tabId: string) => {
     const tab = content.tabs.find((t) => t.id === tabId);
@@ -35,10 +85,49 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
     }
   };
 
-  const { ref: tabBarRef } = useDroppable({
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const { ref: droppableRef } = useDroppable({
     id: `tab-bar-${panelId}`,
     data: { panelId, type: "tab-bar" },
   });
+
+  const tabBarRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollContainerRef.current = node;
+      droppableRef(node);
+    },
+    [droppableRef],
+  );
+
+  useEffect(() => {
+    if (!scrollContainerRef.current || !content.activeTabId) return;
+
+    const activeTabIndex = content.tabs.findIndex(
+      (tab) => tab.id === content.activeTabId,
+    );
+    if (activeTabIndex === -1) return;
+
+    const container = scrollContainerRef.current;
+    const tabElement = container.children[activeTabIndex] as HTMLElement;
+    if (!tabElement) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = tabElement.getBoundingClientRect();
+
+    if (tabRect.right > containerRect.right - 64) {
+      tabElement.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "end",
+      });
+    } else if (tabRect.left < containerRect.left) {
+      tabElement.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start",
+      });
+    }
+  }, [content.activeTabId, content.tabs]);
 
   return (
     <Box position="relative" height="100%" className="flex flex-col">
@@ -91,8 +180,39 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               />
             ))}
             {/* Spacer to increase DND area */}
-            <Box flexShrink="0" style={{ minWidth: "40px", height: "32px" }} />
+            <Box flexShrink="0" style={{ minWidth: "90px", height: "32px" }} />
           </Flex>
+          {isFocused &&
+            content.droppable &&
+            (onSplitPanel || onAddTerminal) && (
+              <Flex
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  height: "32px",
+                  borderLeft: "1px solid var(--gray-6)",
+                  background: "var(--color-background)",
+                }}
+              >
+                {onSplitPanel && (
+                  <TabBarButton
+                    ariaLabel="Split panel"
+                    onClick={handleSplitClick}
+                  >
+                    <SquareSplitHorizontalIcon width={12} height={12} />
+                  </TabBarButton>
+                )}
+                {onAddTerminal && (
+                  <TabBarButton
+                    ariaLabel="Add terminal"
+                    onClick={onAddTerminal}
+                  >
+                    <PlusIcon width={12} height={12} />
+                  </TabBarButton>
+                )}
+              </Flex>
+            )}
         </Box>
       )}
 

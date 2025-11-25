@@ -6,6 +6,7 @@ import type {
 } from "../shared/types/oauth";
 import type {
   FolderContextMenuResult,
+  SplitContextMenuResult,
   TabContextMenuResult,
   TaskContextMenuResult,
 } from "./services/contextMenu.types.js";
@@ -331,6 +332,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("show-folder-context-menu", folderId, folderName),
   showTabContextMenu: (canClose: boolean): Promise<TabContextMenuResult> =>
     ipcRenderer.invoke("show-tab-context-menu", canClose),
+  showSplitContextMenu: (): Promise<SplitContextMenuResult> =>
+    ipcRenderer.invoke("show-split-context-menu"),
   folders: {
     getFolders: (): Promise<
       Array<{

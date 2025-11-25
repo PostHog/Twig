@@ -8,6 +8,8 @@ export type TabContextMenuAction =
   | "close-right"
   | null;
 
+export type SplitDirection = "left" | "right" | "up" | "down" | null;
+
 export interface TaskContextMenuResult {
   action: TaskContextMenuAction;
 }
@@ -18,6 +20,10 @@ export interface FolderContextMenuResult {
 
 export interface TabContextMenuResult {
   action: TabContextMenuAction;
+}
+
+export interface SplitContextMenuResult {
+  direction: SplitDirection;
 }
 
 declare global {

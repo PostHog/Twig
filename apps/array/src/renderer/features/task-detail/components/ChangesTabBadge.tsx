@@ -24,7 +24,7 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   }
 
   return (
-    <Text size="1" color="orange" >
+    <Text size="1" color="orange">
       ({changedFiles.length})
     </Text>
   );

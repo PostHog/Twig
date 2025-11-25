@@ -85,6 +85,7 @@ export interface PanelLayoutStore {
     metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
   ) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
+  addTerminalTab: (taskId: string, panelId: string) => void;
   clearAllLayouts: () => void;
 }
 
@@ -619,6 +620,30 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
           updateTaskLayout(state, taskId, () => ({
             focusedPanelId: panelId,
           })),
+        );
+      },
+
+      addTerminalTab: (taskId, panelId) => {
+        const tabId = `shell-${Date.now()}`;
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+                return addTabToPanel(panel, {
+                  id: tabId,
+                  label: "Shell",
+                  component: null,
+                  draggable: true,
+                  closeable: true,
+                });
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
         );
       },
 

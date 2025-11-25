@@ -3,6 +3,7 @@ import { TabContentRenderer } from "@features/task-detail/components/TabContentR
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode, Tab } from "../store/panelTypes";
 import { shouldUpdateSizes } from "../utils/panelLayoutUtils";
@@ -14,6 +15,14 @@ export interface PanelLayoutState {
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
+  addTerminalTab: (taskId: string, panelId: string) => void;
+  splitPanel: (
+    taskId: string,
+    tabId: string,
+    sourcePanelId: string,
+    targetPanelId: string,
+    direction: SplitDirection,
+  ) => void;
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
   focusedPanelId: string | null;
@@ -29,6 +38,8 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
         closeOtherTabs: state.closeOtherTabs,
         closeTabsToRight: state.closeTabsToRight,
         setFocusedPanel: state.setFocusedPanel,
+        addTerminalTab: state.addTerminalTab,
+        splitPanel: state.splitPanel,
         draggingTabId: state.getLayout(taskId)?.draggingTabId ?? null,
         draggingTabPanelId: state.getLayout(taskId)?.draggingTabPanelId ?? null,
         focusedPanelId: state.getLayout(taskId)?.focusedPanelId ?? null,
