@@ -1,7 +1,7 @@
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import { SidebarTreeItem } from "@components/ui/sidebar/SidebarTreeItem";
 import { useSidebarMenuData } from "@components/ui/sidebar/UseSidebarMenuData";
-import { buildTreeLines, getAllNodeIds } from "@components/ui/sidebar/utils";
+import { buildTreeLines, getAllNodeIds } from "@components/ui/sidebar/Utils";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
