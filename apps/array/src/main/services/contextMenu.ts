@@ -1,10 +1,15 @@
 import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createIpcService } from "../ipc/createIpcService.js";
-import type { ContextMenuResult } from "./contextMenu.types.js";
+import type {
+  FolderContextMenuResult,
+  TaskContextMenuResult,
+} from "./contextMenu.types.js";
 
 export type {
-  ContextMenuAction,
-  ContextMenuResult,
+  FolderContextMenuAction,
+  FolderContextMenuResult,
+  TaskContextMenuAction,
+  TaskContextMenuResult,
 } from "./contextMenu.types.js";
 
 export const showTaskContextMenuService = createIpcService({
@@ -13,7 +18,7 @@ export const showTaskContextMenuService = createIpcService({
     _event,
     _taskId: string,
     _taskTitle: string,
-  ): Promise<ContextMenuResult> => {
+  ): Promise<TaskContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
         {
@@ -28,6 +33,29 @@ export const showTaskContextMenuService = createIpcService({
         {
           label: "Delete",
           click: () => resolve({ action: "delete" }),
+        },
+      ];
+
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({
+        callback: () => resolve({ action: null }),
+      });
+    });
+  },
+});
+
+export const showFolderContextMenuService = createIpcService({
+  channel: "show-folder-context-menu",
+  handler: async (
+    _event,
+    _folderId: string,
+    _folderName: string,
+  ): Promise<FolderContextMenuResult> => {
+    return new Promise((resolve) => {
+      const template: MenuItemConstructorOptions[] = [
+        {
+          label: "Remove folder",
+          click: () => resolve({ action: "remove" }),
         },
       ];
 

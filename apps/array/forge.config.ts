@@ -173,13 +173,11 @@ const config: ForgeConfig = {
     generateAssets: async () => {
       // Generate ICNS from source PNG
       if (existsSync("build/icon@3x.png")) {
-        console.log("Generating ICNS icon...");
         execSync("bash scripts/generate-icns.sh", { stdio: "inherit" });
       }
 
       // Compile liquid glass icon to Assets.car
       if (existsSync("build/icon.icon")) {
-        console.log("Compiling liquid glass icon...");
         execSync("bash scripts/compile-glass-icon.sh", { stdio: "inherit" });
       }
     },

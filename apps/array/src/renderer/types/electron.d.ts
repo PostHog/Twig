@@ -1,5 +1,6 @@
 import type { AgentEvent } from "@posthog/agent";
-import type { TaskArtifact } from "@shared/types";
+import type { FolderContextMenuResult } from "@main/services/contextMenu.types";
+import type { RegisteredFolder, TaskArtifact } from "@shared/types";
 import "@main/services/types";
 import type {
   CloudRegion,
@@ -165,6 +166,17 @@ declare global {
       listener: (data: string) => void,
     ) => () => void;
     onShellExit: (sessionId: string, listener: () => void) => () => void;
+    showFolderContextMenu: (
+      folderId: string,
+      folderName: string,
+    ) => Promise<FolderContextMenuResult>;
+    folders: {
+      getFolders: () => Promise<RegisteredFolder[]>;
+      addFolder: (folderPath: string) => Promise<RegisteredFolder>;
+      removeFolder: (folderId: string) => Promise<void>;
+      updateFolderAccessed: (folderId: string) => Promise<void>;
+      clearAllData: () => Promise<void>;
+    };
   }
 
   interface Window {

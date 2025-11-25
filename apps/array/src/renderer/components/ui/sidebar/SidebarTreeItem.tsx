@@ -34,6 +34,9 @@ export function SidebarTreeItem({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        width: "100%",
+        paddingRight: "8px",
+        marginTop: line.addSpacingBefore ? "16px" : undefined,
       }}
       className={`${isInteractive ? "tree-item-hover" : ""} ${line.isActive ? "tree-item-active" : ""}`}
       onMouseEnter={onMouseEnter}
@@ -68,10 +71,14 @@ export function SidebarTreeItem({
           )}
           {line.tooltip ? (
             <Tooltip content={line.tooltip}>
-              <span style={{ color: line.customColor }}>{line.label}</span>
+              <span style={{ color: line.customColor, fontSize: "13px" }}>
+                {line.label}
+              </span>
             </Tooltip>
           ) : (
-            <span style={{ color: line.customColor }}>{line.label}</span>
+            <span style={{ color: line.customColor, fontSize: "13px" }}>
+              {line.label}
+            </span>
           )}
           {line.hasChildren && (
             <span style={{ display: "flex", alignItems: "center" }}>

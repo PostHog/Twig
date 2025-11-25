@@ -4,7 +4,10 @@ import type {
   OAuthTokenResponse,
   StoredOAuthTokens,
 } from "../shared/types/oauth";
-import type { ContextMenuResult } from "./services/contextMenu.types.js";
+import type {
+  FolderContextMenuResult,
+  TaskContextMenuResult,
+} from "./services/contextMenu.types.js";
 
 interface MessageBoxOptions {
   type?: "info" | "error" | "warning" | "question";
@@ -265,6 +268,36 @@ contextBridge.exposeInMainWorld("electronAPI", {
   showTaskContextMenu: (
     taskId: string,
     taskTitle: string,
-  ): Promise<ContextMenuResult> =>
+  ): Promise<TaskContextMenuResult> =>
     ipcRenderer.invoke("show-task-context-menu", taskId, taskTitle),
+  showFolderContextMenu: (
+    folderId: string,
+    folderName: string,
+  ): Promise<FolderContextMenuResult> =>
+    ipcRenderer.invoke("show-folder-context-menu", folderId, folderName),
+  folders: {
+    getFolders: (): Promise<
+      Array<{
+        id: string;
+        path: string;
+        name: string;
+        lastAccessed: string;
+        createdAt: string;
+      }>
+    > => ipcRenderer.invoke("get-folders"),
+    addFolder: (
+      folderPath: string,
+    ): Promise<{
+      id: string;
+      path: string;
+      name: string;
+      lastAccessed: string;
+      createdAt: string;
+    }> => ipcRenderer.invoke("add-folder", folderPath),
+    removeFolder: (folderId: string): Promise<void> =>
+      ipcRenderer.invoke("remove-folder", folderId),
+    updateFolderAccessed: (folderId: string): Promise<void> =>
+      ipcRenderer.invoke("update-folder-accessed", folderId),
+    clearAllData: (): Promise<void> => ipcRenderer.invoke("clear-all-data"),
+  },
 });

@@ -4,6 +4,7 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RepositoryConfig, Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
@@ -45,6 +46,8 @@ export function useTaskCreation({
   } = useTaskExecutionStore();
   const { autoRunTasks, defaultRunMode, lastUsedRunMode } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
+  const { folders, addFolder, updateLastAccessed } =
+    useRegisteredFoldersStore();
 
   const canSubmit =
     !!editor &&
@@ -83,9 +86,18 @@ export function useTaskCreation({
         createdFrom: "cli",
       },
       {
-        onSuccess: (newTask: Task) => {
+        onSuccess: async (newTask: Task) => {
           if (selectedDirectory) {
             saveRepoPath(newTask.id, selectedDirectory);
+
+            const existingFolder = folders.find(
+              (f) => f.path === selectedDirectory,
+            );
+            if (existingFolder) {
+              await updateLastAccessed(existingFolder.id);
+            } else {
+              await addFolder(selectedDirectory);
+            }
           }
 
           navigateToTask(newTask);
@@ -126,6 +138,9 @@ export function useTaskCreation({
     isCreatingTask,
     client,
     isAuthenticated,
+    folders,
+    addFolder,
+    updateLastAccessed,
   ]);
 
   return {
