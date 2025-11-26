@@ -1,0 +1,109 @@
+import { MainSidebar } from "@components/MainSidebar";
+import { StatusBar } from "@components/StatusBar";
+import { UpdatePrompt } from "@components/UpdatePrompt";
+import { CommandMenu } from "@features/command/components/CommandMenu";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
+import { SettingsView } from "@features/settings/components/SettingsView";
+import { TaskDetail } from "@features/task-detail/components/TaskDetail";
+import { TaskInput } from "@features/task-detail/components/TaskInput";
+import { TaskList } from "@features/task-list/components/TaskList";
+import { useIntegrations } from "@hooks/useIntegrations";
+import { Box, Flex } from "@radix-ui/themes";
+import type { Task } from "@shared/types";
+import { useNavigationStore } from "@stores/navigationStore";
+import { useCallback, useEffect, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
+import { Toaster } from "sonner";
+
+export function MainLayout() {
+  const {
+    view,
+    toggleSettings,
+    navigateToTask,
+    navigateToTaskInput,
+    goBack,
+    goForward,
+  } = useNavigationStore();
+  const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
+  useIntegrations();
+  const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+
+  const handleOpenSettings = useCallback(() => {
+    toggleSettings();
+  }, [toggleSettings]);
+
+  const handleFocusTaskMode = useCallback(() => {
+    navigateToTaskInput();
+  }, [navigateToTaskInput]);
+
+  const handleResetLayout = useCallback(() => {
+    clearAllLayouts();
+    window.location.reload();
+  }, [clearAllLayouts]);
+
+  useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+t", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+p", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+n", () => handleFocusTaskMode());
+  useHotkeys("mod+,", () => handleOpenSettings());
+  useHotkeys("mod+[", () => goBack());
+  useHotkeys("mod+]", () => goForward());
+
+  useEffect(() => {
+    const unsubscribeSettings = window.electronAPI?.onOpenSettings(() => {
+      handleOpenSettings();
+    });
+
+    const unsubscribeNewTask = window.electronAPI?.onNewTask(() => {
+      handleFocusTaskMode();
+    });
+
+    const unsubscribeResetLayout = window.electronAPI?.onResetLayout(() => {
+      handleResetLayout();
+    });
+
+    return () => {
+      unsubscribeSettings?.();
+      unsubscribeNewTask?.();
+      unsubscribeResetLayout?.();
+    };
+  }, [handleOpenSettings, handleFocusTaskMode, handleResetLayout]);
+
+  const handleSelectTask = (task: Task) => {
+    navigateToTask(task);
+  };
+
+  return (
+    <Flex direction="column" height="100vh">
+      <Flex flexGrow="1" overflow="hidden">
+        <MainSidebar />
+
+        <Box flexGrow="1" overflow="hidden">
+          {view.type === "task-list" && (
+            <TaskList onSelectTask={handleSelectTask} />
+          )}
+
+          {view.type === "task-input" && <TaskInput />}
+
+          {view.type === "task-detail" && view.data && (
+            <TaskDetail key={view.data.id} task={view.data} />
+          )}
+
+          {view.type === "settings" && <SettingsView />}
+        </Box>
+      </Flex>
+
+      <StatusBar />
+
+      <CommandMenu open={commandMenuOpen} onOpenChange={setCommandMenuOpen} />
+      <UpdatePrompt />
+      <Toaster position="bottom-right" />
+    </Flex>
+  );
+}

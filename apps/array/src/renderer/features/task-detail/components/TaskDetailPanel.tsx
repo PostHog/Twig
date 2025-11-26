@@ -1,0 +1,70 @@
+import { TaskActions } from "@features/task-detail/components/TaskActions";
+import { TaskMetadata } from "@features/task-detail/components/TaskMetadata";
+import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
+import { useTaskRepository } from "@features/task-detail/hooks/useTaskRepository";
+import { Box, Flex, TextArea } from "@radix-ui/themes";
+import type { Task } from "@shared/types";
+
+interface TaskDetailPanelProps {
+  taskId: string;
+  task: Task;
+}
+
+export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
+  const taskData = useTaskData({
+    taskId,
+    initialTask: task,
+  });
+
+  const execution = useTaskExecution({
+    taskId: taskData.task.id,
+    task: taskData.task,
+    repoPath: taskData.repoPath,
+  });
+
+  const repository = useTaskRepository({
+    task: taskData.task,
+    isCloning: taskData.isCloning,
+  });
+
+  return (
+    <Box height="100%" overflowY="auto">
+      <Box p="4">
+        <Flex direction="column" gap="4">
+          <Flex direction="column">
+            <TextArea
+              value={taskData.task.description || ""}
+              readOnly
+              className="min-h-full flex-1 resize-none rounded-none border-none bg-transparent font-mono text-sm shadow-none outline-none"
+              placeholder="No description provided. Use @ to mention files, or format text with markdown."
+            />
+            <Box className="border-gray-6 border-t" mt="4" />
+          </Flex>
+
+          <TaskMetadata
+            task={taskData.task}
+            progress={
+              execution.state.progress
+                ? { status: execution.state.progress.status }
+                : undefined
+            }
+          />
+        </Flex>
+
+        <Flex direction="column" gap="3" mt="4">
+          <TaskActions
+            isRunning={execution.state.isRunning}
+            isCloningRepo={repository.isCloning}
+            cloneProgress={taskData.cloneProgress}
+            runMode={execution.state.runMode}
+            hasRepository={!!taskData.task.repository}
+            onRunTask={execution.actions.run}
+            onCancel={execution.actions.cancel}
+            onRunModeChange={execution.actions.onRunModeChange}
+          />
+        </Flex>
+      </Box>
+    </Box>
+  );
+}

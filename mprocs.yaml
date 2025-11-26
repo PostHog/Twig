@@ -1,24 +1,12 @@
 procs:
-  vite:
-    cmd: ["pnpm", "run", "dev:vite"]
+  agent:
+    cmd: ["pnpm", "--filter", "agent", "run", "dev"]
+    cwd: .
+    color: magenta
+
+  array:
+    cmd: ["pnpm", "--filter", "array", "run", "start"]
     cwd: .
     color: blue
-
-  node:
-    cmd: ["pnpm", "run", "dev:node"]
-    cwd: .
-    color: green
-
-  preload:
-    cmd: ["pnpm", "run", "dev:preload"]
-    cwd: .
-    color: cyan
-
-  electron:
-    cmd: ["pnpm", "run", "dev:electron"]
-    cwd: .
-    color: yellow
     depends_on:
-      - vite
-      - node
-      - preload
+      - agent

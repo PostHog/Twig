@@ -1,6 +1,14 @@
 packages:
-  - .
+  - apps/*
+  - packages/*
 
 onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - core-js
   - electron
   - esbuild
+  - fs-xattr
+  - macos-alias
+  - node-pty
+
+minimumReleaseAge: 1440
