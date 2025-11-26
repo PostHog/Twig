@@ -3,7 +3,7 @@ import type { PostHogFileManager } from "../file-manager.js";
 import type { GitManager } from "../git-manager.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import type { PromptBuilder } from "../prompt-builder.js";
-import type { TaskProgressReporter } from "../task-progress-reporter.js";
+import type { TaskRunProgressReporter } from "../task-run-progress-reporter.js";
 import type { PermissionMode, Task, TaskExecutionOptions } from "../types.js";
 import type { Logger } from "../utils/logger.js";
 
@@ -17,7 +17,7 @@ export interface WorkflowRuntime {
   fileManager: PostHogFileManager;
   gitManager: GitManager;
   promptBuilder: PromptBuilder;
-  progressReporter: TaskProgressReporter;
+  progressReporter: TaskRunProgressReporter;
   adapter: ProviderAdapter;
   mcpServers?: Record<string, unknown>;
   posthogAPI?: PostHogAPIClient;

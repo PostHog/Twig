@@ -10,3 +10,9 @@ procs:
     color: blue
     depends_on:
       - agent
+
+  agent-example:
+    cmd: ["pnpm", "--filter", "agent", "run", "example"]
+    cwd: .
+    color: cyan
+    autostart: false

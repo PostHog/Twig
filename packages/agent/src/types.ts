@@ -8,27 +8,23 @@ export type { CanUseTool, PermissionResult };
 // PostHog Task model (matches Array's OpenAPI schema)
 export interface Task {
   id: string;
+  task_number?: number;
+  slug?: string;
   title: string;
   description: string;
-  origin_product:
-    | "error_tracking"
-    | "eval_clusters"
-    | "user_created"
-    | "support_queue"
-    | "session_summaries";
-  position?: number;
+  origin_product: 'error_tracking' | 'eval_clusters' | 'user_created' | 'support_queue' | 'session_summaries';
   github_integration?: number | null;
-  repository_config?: unknown; // JSONField
-  repository_list: string;
-  primary_repository: string;
+  repository: string; // Format: "organization/repository" (e.g., "posthog/posthog-js")
+  json_schema?: Record<string, unknown> | null; // JSON schema for task output validation
   created_at: string;
   updated_at: string;
-
-  // DEPRECATED: These fields have been moved to TaskRun
-  // Use task.latest_run instead
-  current_stage?: string | null;
-  github_branch?: string | null;
-  github_pr_url?: string | null;
+  created_by?: {
+    id: number;
+    uuid: string;
+    distinct_id: string;
+    first_name: string;
+    email: string;
+  };
   latest_run?: TaskRun;
 }
 
@@ -55,13 +51,19 @@ export interface TaskRunArtifact {
   uploaded_at?: string;
 }
 
+export type TaskRunStatus = 'not_started' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+
+export type TaskRunEnvironment = 'local' | 'cloud';
+
 // TaskRun model - represents individual execution runs of tasks
 export interface TaskRun {
   id: string;
   task: string; // Task ID
   team: number;
   branch: string | null;
-  status: "started" | "in_progress" | "completed" | "failed";
+  stage: string | null; // Current stage (e.g., 'research', 'plan', 'build')
+  environment: TaskRunEnvironment;
+  status: TaskRunStatus;
   log_url?: string; // Presigned S3 URL for log access (valid for 1 hour)
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
@@ -71,6 +73,7 @@ export interface TaskRun {
   updated_at: string;
   completed_at: string | null;
 }
+
 
 export interface SupportingFile {
   name: string;

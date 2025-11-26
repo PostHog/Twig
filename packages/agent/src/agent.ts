@@ -6,7 +6,7 @@ import { GitManager } from "./git-manager.js";
 import { PostHogAPIClient } from "./posthog-api.js";
 import { PromptBuilder } from "./prompt-builder.js";
 import { TaskManager } from "./task-manager.js";
-import { TaskProgressReporter } from "./task-progress-reporter.js";
+import { TaskRunProgressReporter } from "./task-run-progress-reporter.js";
 import { TemplateManager } from "./template-manager.js";
 import type {
   AgentConfig,
@@ -28,7 +28,7 @@ export class Agent {
   private templateManager: TemplateManager;
   private adapter: ProviderAdapter;
   private logger: Logger;
-  private progressReporter: TaskProgressReporter;
+  private progressReporter: TaskRunProgressReporter;
   private promptBuilder: PromptBuilder;
   private mcpServers?: Record<string, any>;
   private canUseTool?: CanUseTool;
@@ -95,7 +95,7 @@ export class Agent {
       posthogClient: this.posthogAPI,
       logger: this.logger.child("PromptBuilder"),
     });
-    this.progressReporter = new TaskProgressReporter(
+    this.progressReporter = new TaskRunProgressReporter(
       this.posthogAPI,
       this.logger,
     );
@@ -134,32 +134,20 @@ export class Agent {
 
   // Adaptive task execution orchestrated via workflow steps
   async runTask(
-    taskOrId: Task | string,
+    taskId: string, taskRunId: string,
     options: import("./types.js").TaskExecutionOptions = {},
   ): Promise<void> {
     await this._configureLlmGateway();
 
-    const task =
-      typeof taskOrId === "string" ? await this.fetchTask(taskOrId) : taskOrId;
+    const task = await this.fetchTask(taskId);
     const cwd = options.repositoryPath || this.workingDirectory;
     const isCloudMode = options.isCloudMode ?? false;
     const taskSlug = (task as any).slug || task.id;
 
-    this.logger.info("Starting adaptive task execution", {
-      taskId: task.id,
-      taskSlug,
-      isCloudMode,
-    });
+    this.logger.info('Starting adaptive task execution', { taskId: task.id, taskSlug, taskRunId, isCloudMode });
 
-    // Initialize progress reporter for task run tracking (needed for PR attachment)
-    await this.progressReporter.start(task.id, {
-      totalSteps: TASK_WORKFLOW.length,
-    });
-    this.emitEvent(
-      this.adapter.createStatusEvent("run_started", {
-        runId: this.progressReporter.runId,
-      }),
-    );
+    await this.progressReporter.start(taskId, taskRunId, { totalSteps: TASK_WORKFLOW.length });
+    this.emitEvent(this.adapter.createStatusEvent('run_started', { runId: taskRunId }));
 
     await this.prepareTaskBranch(taskSlug, isCloudMode);
 

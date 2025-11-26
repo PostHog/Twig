@@ -16,14 +16,7 @@ interface PostHogApiResponse<T> {
   previous?: string | null;
 }
 
-export interface TaskRunUpdate {
-  status?: TaskRun["status"];
-  branch?: string | null;
-  current_stage?: string | null;
-  error_message?: string | null;
-  output?: Record<string, unknown> | null;
-  state?: Record<string, unknown>;
-}
+export type TaskRunUpdate = Partial<Pick<TaskRun, 'status' | 'branch' | 'stage' | 'error_message' | 'output' | 'state'>>;
 
 export class PostHogAPIClient {
   private config: PostHogAPIConfig;
@@ -146,7 +139,7 @@ export class PostHogAPIClient {
     payload?: Partial<
       Omit<
         TaskRun,
-        "id" | "task" | "team" | "created_at" | "updated_at" | "completed_at"
+        "id" | "task" | "team" | "created_at" | "updated_at" | "completed_at" | "artifacts"
       >
     >,
   ): Promise<TaskRun> {
