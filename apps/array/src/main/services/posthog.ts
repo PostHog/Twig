@@ -1,4 +1,7 @@
 import { type IpcMainInvokeEvent, ipcMain, safeStorage } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("posthog");
 
 export function registerPosthogIpc(): void {
   // IPC handlers for secure storage
@@ -36,7 +39,7 @@ export function registerPosthogIpc(): void {
     "fetch-s3-logs",
     async (_event: IpcMainInvokeEvent, logUrl: string): Promise<string> => {
       try {
-        console.log("Fetching S3 logs from:", logUrl);
+        log.debug("Fetching S3 logs from:", logUrl);
         const response = await fetch(logUrl);
 
         if (!response.ok) {
@@ -46,10 +49,10 @@ export function registerPosthogIpc(): void {
         }
 
         const content = await response.text();
-        console.log("S3 logs fetched:", content);
+        log.debug("S3 logs fetched:", content);
         return content;
       } catch (error) {
-        console.error("Failed to fetch S3 logs:", error);
+        log.error("Failed to fetch S3 logs:", error);
         throw error;
       }
     },

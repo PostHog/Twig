@@ -3,6 +3,7 @@ import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import type {
   ClarifyingQuestion,
@@ -26,6 +27,8 @@ import type {
   ExecutionType,
 } from "@/types/analytics";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+
+const log = logger.scope("task-execution-store");
 
 interface ArtifactEvent {
   type: string;
@@ -120,7 +123,7 @@ function logEntryToAgentEvent(entry: LogEntry): AgentEvent | null {
 
     return null;
   } catch (err) {
-    console.warn("Failed to convert log entry to agent event", err, entry);
+    log.warn("Failed to convert log entry to agent event", err, entry);
     return null;
   }
 }
@@ -148,7 +151,7 @@ async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
 
     return events;
   } catch (err) {
-    console.warn("Failed to fetch task logs from S3", err);
+    log.warn("Failed to fetch task logs from S3", err);
     return [];
   }
 }
@@ -178,7 +181,7 @@ function invalidateFileTreeCache(repoPath: string, debounceMs = 500) {
     try {
       await window.electronAPI?.clearRepoFileCache(repoPath);
     } catch (err) {
-      console.warn("Failed to clear repo file cache:", err);
+      log.warn("Failed to clear repo file cache:", err);
     }
 
     fileTreeInvalidationTimers.delete(repoPath);
@@ -358,7 +361,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
               .getState()
               .setTaskDirectory(taskId, repoPath);
           } catch (error) {
-            console.error("Failed to persist task directory:", error);
+            log.error("Failed to persist task directory:", error);
           }
         }
       },
@@ -469,7 +472,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
                         }
                       })
                       .catch((err) =>
-                        console.warn("Failed to fetch final logs", err),
+                        log.warn("Failed to fetch final logs", err),
                       );
                   }
                   return;
@@ -1144,7 +1147,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             usePanelLayoutStore.getState().openArtifact(taskId, "plan.md");
           }
         } catch (error) {
-          console.error("Failed to load plan:", error);
+          log.error("Failed to load plan:", error);
         }
       },
 
@@ -1167,7 +1170,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             store.setTodos(taskId, todos);
           }
         } catch (error) {
-          console.error("Failed to load todos:", error);
+          log.error("Failed to load todos:", error);
         }
       },
     }),

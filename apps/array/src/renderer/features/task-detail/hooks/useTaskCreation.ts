@@ -4,10 +4,13 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
 import { useCallback } from "react";
+
+const log = logger.scope("task-creation");
 
 interface UseTaskCreationOptions {
   editor: Editor | null;
@@ -111,7 +114,7 @@ export function useTaskCreation({
           }
         },
         onError: (error) => {
-          console.error("Failed to create task:", error);
+          log.error("Failed to create task:", error);
         },
       },
     );

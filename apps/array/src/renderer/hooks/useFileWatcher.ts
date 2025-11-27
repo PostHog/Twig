@@ -1,6 +1,9 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
+import { logger } from "@renderer/lib/logger";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+
+const log = logger.scope("file-watcher");
 
 export function useFileWatcher(repoPath: string | null, taskId?: string) {
   const queryClient = useQueryClient();
@@ -10,7 +13,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
     if (!repoPath) return;
 
     window.electronAPI.watcherStart(repoPath).catch((error) => {
-      console.error("Failed to start file watcher:", error);
+      log.error("Failed to start file watcher:", error);
     });
 
     const unsubFile = window.electronAPI.onFileChanged(

@@ -13,10 +13,13 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { IS_DEV } from "@/constants/environment";
+
+const log = logger.scope("auth");
 
 export const getErrorMessage = (error: unknown) => {
   if (!(error instanceof Error)) {
@@ -42,7 +45,7 @@ const detectWorkspacePath = async () => {
       return detectedPath;
     }
   } catch (error) {
-    console.error("Failed to detect repos directory:", error);
+    log.error("Failed to detect repos directory:", error);
   }
 
   return null;

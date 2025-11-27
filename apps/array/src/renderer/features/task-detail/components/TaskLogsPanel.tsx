@@ -5,8 +5,11 @@ import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { Box } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { QuestionAnswer, Task } from "@shared/types";
 import { useCallback } from "react";
+
+const log = logger.scope("task-logs-panel");
 
 interface TaskLogsPanelProps {
   taskId: string;
@@ -42,7 +45,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             useTaskExecutionStore.getState().runTask(taskId, task);
           })
           .catch((error) => {
-            console.error("Failed to save answers to research.json:", error);
+            log.error("Failed to save answers to research.json:", error);
           });
       }
     },

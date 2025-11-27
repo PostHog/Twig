@@ -1,6 +1,9 @@
 import type { WorktreeInfo } from "@posthog/agent";
 import { WorktreeManager } from "@posthog/agent";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("worktree");
 
 export function registerWorktreeIpc(): void {
   ipcMain.handle(
@@ -13,7 +16,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.createWorktree();
       } catch (error) {
-        console.error(`Failed to create worktree in ${mainRepoPath}:`, error);
+        log.error(`Failed to create worktree in ${mainRepoPath}:`, error);
         throw error;
       }
     },
@@ -30,7 +33,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         await manager.deleteWorktree(worktreePath);
       } catch (error) {
-        console.error(`Failed to delete worktree ${worktreePath}:`, error);
+        log.error(`Failed to delete worktree ${worktreePath}:`, error);
         throw error;
       }
     },
@@ -47,10 +50,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.getWorktreeInfo(worktreePath);
       } catch (error) {
-        console.error(
-          `Failed to get worktree info for ${worktreePath}:`,
-          error,
-        );
+        log.error(`Failed to get worktree info for ${worktreePath}:`, error);
         return null;
       }
     },
@@ -67,7 +67,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.worktreeExists(name);
       } catch (error) {
-        console.error(`Failed to check worktree exists ${name}:`, error);
+        log.error(`Failed to check worktree exists ${name}:`, error);
         return false;
       }
     },
@@ -83,7 +83,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.listWorktrees();
       } catch (error) {
-        console.error(`Failed to list worktrees in ${mainRepoPath}:`, error);
+        log.error(`Failed to list worktrees in ${mainRepoPath}:`, error);
         return [];
       }
     },
@@ -100,7 +100,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.isWorktree(repoPath);
       } catch (error) {
-        console.error(`Failed to check if ${repoPath} is a worktree:`, error);
+        log.error(`Failed to check if ${repoPath} is a worktree:`, error);
         return false;
       }
     },
@@ -117,10 +117,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.getMainRepoPathFromWorktree(worktreePath);
       } catch (error) {
-        console.error(
-          `Failed to get main repo path from ${worktreePath}:`,
-          error,
-        );
+        log.error(`Failed to get main repo path from ${worktreePath}:`, error);
         return null;
       }
     },

@@ -1,6 +1,9 @@
 import { existsSync, promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Logger } from "./utils/logger";
+
+const logger = new Logger({ prefix: "[TemplateManager]" });
 
 export interface TemplateVariables {
   task_id: string;
@@ -77,14 +80,11 @@ export class TemplateManager {
     const resolvedDir = candidateDirs.find((dir) => existsSync(dir));
 
     if (!resolvedDir) {
-      console.error("[TemplateManager] Could not find templates directory.");
-      console.error("[TemplateManager] Current file:", __filename);
-      console.error("[TemplateManager] Current dir:", __dirname);
-      console.error(
-        "[TemplateManager] Tried:",
-        candidateDirs
-          .map((d) => `\n  - ${d} (exists: ${existsSync(d)})`)
-          .join(""),
+      logger.error("Could not find templates directory.");
+      logger.error(`Current file: ${__filename}`);
+      logger.error(`Current dir: ${__dirname}`);
+      logger.error(
+        `Tried: ${candidateDirs.map((d) => `\n  - ${d} (exists: ${existsSync(d)})`).join("")}`,
       );
     }
 

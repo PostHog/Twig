@@ -2,9 +2,12 @@ import { RichTextEditor } from "@features/editor/components/RichTextEditor";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { FloppyDiskIcon } from "@phosphor-icons/react";
 import { Box, Button, TextArea } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+
+const log = logger.scope("plan-editor");
 
 interface PlanEditorProps {
   taskId: string;
@@ -79,7 +82,7 @@ export function PlanEditor({
         );
         setHasUnsavedChanges(false);
       } catch (error) {
-        console.error("Failed to save file:", error);
+        log.error("Failed to save file:", error);
       } finally {
         setIsSaving(false);
       }

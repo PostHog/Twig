@@ -1,8 +1,11 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { logger } from "@renderer/lib/logger";
 import { cloneStore } from "@stores/cloneStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+const log = logger.scope("repository-workspace-store");
 
 interface RepositoryWorkspaceState {
   selectedRepository: string | null;
@@ -182,7 +185,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
             );
             set({ pathExists: validation.valid, isValidating: false });
           } catch (error) {
-            console.error("Failed to validate path:", error);
+            log.error("Failed to validate path:", error);
             set({ pathExists: false, isValidating: false });
           }
         },

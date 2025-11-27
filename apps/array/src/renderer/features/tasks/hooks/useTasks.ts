@@ -2,10 +2,13 @@ import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutio
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { track } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+
+const log = logger.scope("tasks");
 
 const taskKeys = {
   all: ["tasks"] as const,
@@ -107,7 +110,7 @@ export function useDeleteTask() {
               worktreeInfo.worktreePath,
             );
           } catch (error) {
-            console.error("[useDeleteTask] Failed to delete worktree:", error);
+            log.error("Failed to delete worktree:", error);
           }
         }
         await worktreeStore.clearWorktree(taskId);
@@ -117,10 +120,7 @@ export function useDeleteTask() {
       try {
         await window.electronAPI?.folders.removeTaskAssociation(taskId);
       } catch (error) {
-        console.error(
-          "[useDeleteTask] Failed to remove task association:",
-          error,
-        );
+        log.error("Failed to remove task association:", error);
       }
 
       return client.deleteTask(taskId);
