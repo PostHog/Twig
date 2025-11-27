@@ -54,11 +54,7 @@ export interface TaskGroupingResult {
 }
 
 export interface TaskState {
-  taskOrder: Record<string, number>;
   selectedTaskId: string | null;
-  draggedTaskId: string | null;
-  dragOverIndex: number | null;
-  dropPosition: "top" | "bottom" | null;
   selectedIndex: number | null;
   hoveredIndex: number | null;
   contextMenuIndex: number | null;
@@ -75,19 +71,6 @@ export interface TaskState {
   editingFilterBadgeKey: string | null;
 
   selectTask: (taskId: string | null) => void;
-  setTaskOrder: (order: Record<string, number>) => void;
-  moveTask: (
-    taskId: string,
-    fromIndex: number,
-    toIndex: number,
-    allTasks: Task[],
-  ) => void;
-  setDraggedTaskId: (taskId: string | null) => void;
-  setDragOverState: (
-    index: number | null,
-    position: "top" | "bottom" | null,
-  ) => void;
-  clearDragState: () => void;
   setSelectedIndex: (index: number | null) => void;
   setHoveredIndex: (index: number | null) => void;
   setContextMenuIndex: (index: number | null) => void;
