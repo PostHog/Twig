@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { config } from "dotenv";
 import { execSync } from "node:child_process";
 import * as readline from "node:readline";
+import { config } from "dotenv";
 
 config();
 
@@ -40,7 +40,7 @@ Create a simple hello.txt file in the root of the repository with the text "Hell
 `;
 
 async function testAgent() {
-    let TASK_ID = process.argv[2];
+  let TASK_ID = process.argv[2];
 
   if (!process.env.POSTHOG_API_KEY) {
     console.error("❌ POSTHOG_API_KEY required");
@@ -57,7 +57,7 @@ async function testAgent() {
     process.exit(1);
   }
 
-  const REPO_PATH = process.env.REPO_PATH
+  const REPO_PATH = process.env.REPO_PATH;
 
   if (!REPO_PATH) {
     console.error("❌ REPO_PATH required");
@@ -69,7 +69,9 @@ async function testAgent() {
   // Check for uncommitted changes
   if (hasUncommittedChanges(REPO_PATH)) {
     console.log("⚠️  Warning: There are uncommitted changes in the repository.");
-    const proceed = await promptUser("These changes will be discarded. Continue? (y/n): ");
+    const proceed = await promptUser(
+      "These changes will be discarded. Continue? (y/n): ",
+    );
     if (!proceed) {
       console.log("❌ Aborted.");
       process.exit(0);

@@ -1,7 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import type { AgentEvent } from "@posthog/agent";
+import { type AgentEvent, parseAgentEvents } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
@@ -94,10 +94,19 @@ async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
       return [];
     }
 
-    return content
+    const rawEntries = content
       .trim()
       .split("\n")
-      .map((line: string) => JSON.parse(line) as AgentEvent);
+      .map((line: string) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    return parseAgentEvents(rawEntries);
   } catch (err) {
     log.warn("Failed to fetch task logs from S3", err);
     return [];

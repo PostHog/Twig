@@ -118,200 +118,53 @@ export interface TaskExecutionOptions {
   canUseTool?: CanUseTool;
 }
 
-// Base event with timestamp
-interface BaseEvent {
-  ts: number;
-}
+export type {
+  AgentEvent,
+  ArtifactEvent,
+  CompactBoundaryEvent,
+  ConsoleEvent,
+  ContentBlockStartEvent,
+  ContentBlockStopEvent,
+  DoneEvent,
+  ErrorEvent,
+  InitEvent,
+  MessageDeltaEvent,
+  MessageStartEvent,
+  MessageStopEvent,
+  MetricEvent,
+  RawSDKEvent,
+  StatusEvent,
+  TokenEvent,
+  ToolCallEvent,
+  ToolResultEvent,
+  UserMessageEvent,
+} from "./schemas.js";
+// Re-export event types and schemas from schemas.ts
+export {
+  AgentEventSchema,
+  ArtifactEventSchema,
+  CompactBoundaryEventSchema,
+  ConsoleEventSchema,
+  ContentBlockStartEventSchema,
+  ContentBlockStopEventSchema,
+  DoneEventSchema,
+  ErrorEventSchema,
+  InitEventSchema,
+  MessageDeltaEventSchema,
+  MessageStartEventSchema,
+  MessageStopEventSchema,
+  MetricEventSchema,
+  parseAgentEvent,
+  parseAgentEvents,
+  RawSDKEventSchema,
+  StatusEventSchema,
+  TokenEventSchema,
+  ToolCallEventSchema,
+  ToolResultEventSchema,
+  UserMessageEventSchema,
+} from "./schemas.js";
 
-// Streaming content events
-export interface TokenEvent extends BaseEvent {
-  type: "token";
-  content: string;
-  contentType?: "text" | "thinking" | "tool_input";
-}
-
-export interface ContentBlockStartEvent extends BaseEvent {
-  type: "content_block_start";
-  index: number;
-  contentType: "text" | "tool_use" | "thinking";
-  toolName?: string;
-  toolId?: string;
-}
-
-export interface ContentBlockStopEvent extends BaseEvent {
-  type: "content_block_stop";
-  index: number;
-}
-
-// Tool events
-export interface ToolCallEvent extends BaseEvent {
-  type: "tool_call";
-  toolName: string;
-  callId: string;
-  args: Record<string, unknown>;
-  parentToolUseId?: string | null; // For nested tool calls (subagents)
-  // Tool metadata (enriched by adapter for UI consumption)
-  tool?: import("./tools/types.js").Tool;
-  category?: import("./tools/types.js").ToolCategory;
-}
-
-export interface ToolResultEvent extends BaseEvent {
-  type: "tool_result";
-  toolName: string;
-  callId: string;
-  result: unknown;
-  isError?: boolean; // Whether the tool execution failed
-  parentToolUseId?: string | null; // For nested tool calls (subagents)
-  // Tool metadata (enriched by adapter for UI consumption)
-  tool?: import("./tools/types.js").Tool;
-  category?: import("./tools/types.js").ToolCategory;
-}
-
-// Message lifecycle events
-export interface MessageStartEvent extends BaseEvent {
-  type: "message_start";
-  messageId?: string;
-  model?: string;
-}
-
-export interface MessageDeltaEvent extends BaseEvent {
-  type: "message_delta";
-  stopReason?: string;
-  stopSequence?: string;
-  usage?: {
-    outputTokens: number;
-  };
-}
-
-export interface MessageStopEvent extends BaseEvent {
-  type: "message_stop";
-}
-
-// User message events
-export interface UserMessageEvent extends BaseEvent {
-  type: "user_message";
-  content: string;
-  isSynthetic?: boolean;
-}
-
-// System events
-export interface StatusEvent extends BaseEvent {
-  type: "status";
-  phase: string;
-  // Common optional fields (varies by phase):
-  kind?: string; // Kind of status (plan, implementation)
-  branch?: string; // Git branch name
-  prUrl?: string; // Pull request URL
-  taskId?: string; // Task identifier
-  messageId?: string; // Claude message ID
-  model?: string; // Model name
-  [key: string]: unknown; // Allow additional fields
-}
-
-export interface InitEvent extends BaseEvent {
-  type: "init";
-  model: string;
-  tools: string[];
-  permissionMode: string;
-  cwd: string;
-  apiKeySource: string;
-  agents?: string[];
-  slashCommands?: string[];
-  outputStyle?: string;
-  mcpServers?: Array<{ name: string; status: string }>;
-}
-
-// Generic console message event for log-style output
-export interface ConsoleEvent extends BaseEvent {
-  type: "console";
-  level: "debug" | "info" | "warn" | "error";
-  message: string;
-}
-
-export interface CompactBoundaryEvent extends BaseEvent {
-  type: "compact_boundary";
-  trigger: "manual" | "auto";
-  preTokens: number;
-}
-
-// Result events
-export interface DoneEvent extends BaseEvent {
-  type: "done";
-  result?: string; // Final summary text from Claude
-  durationMs?: number;
-  durationApiMs?: number; // API-only duration (excluding local processing)
-  numTurns?: number;
-  totalCostUsd?: number;
-  usage?: unknown;
-  modelUsage?: {
-    // Per-model usage breakdown
-    [modelName: string]: {
-      inputTokens: number;
-      outputTokens: number;
-      cacheReadInputTokens: number;
-      cacheCreationInputTokens: number;
-      webSearchRequests: number;
-      costUSD: number;
-      contextWindow: number;
-    };
-  };
-  permissionDenials?: Array<{
-    // Tools that were denied by permissions
-    tool_name: string;
-    tool_use_id: string;
-    tool_input: Record<string, unknown>;
-  }>;
-}
-
-export interface ErrorEvent extends BaseEvent {
-  type: "error";
-  message: string;
-  error?: unknown;
-  errorType?: string;
-  context?: Record<string, unknown>; // Partial error context for debugging
-  sdkError?: unknown; // Original SDK error object
-}
-
-// Metric and artifact events (general purpose, not tool-specific)
-export interface MetricEvent extends BaseEvent {
-  type: "metric";
-  key: string;
-  value: number;
-  unit?: string;
-}
-
-export interface ArtifactEvent extends BaseEvent {
-  type: "artifact";
-  kind: string;
-  // biome-ignore lint/suspicious/noExplicitAny: Artifact content can be any JSON-serializable value
-  content: any;
-}
-
-export interface RawSDKEvent extends BaseEvent {
-  type: "raw_sdk_event";
-  // biome-ignore lint/suspicious/noExplicitAny: SDK messages have dynamic structure for debugging
-  sdkMessage: any;
-}
-
-export type AgentEvent =
-  | TokenEvent
-  | ContentBlockStartEvent
-  | ContentBlockStopEvent
-  | ToolCallEvent
-  | ToolResultEvent
-  | MessageStartEvent
-  | MessageDeltaEvent
-  | MessageStopEvent
-  | UserMessageEvent
-  | StatusEvent
-  | InitEvent
-  | ConsoleEvent
-  | CompactBoundaryEvent
-  | DoneEvent
-  | ErrorEvent
-  | MetricEvent
-  | ArtifactEvent
-  | RawSDKEvent;
+import type { AgentEvent } from "./schemas.js";
 
 export interface ExecutionResult {
   // biome-ignore lint/suspicious/noExplicitAny: Results array contains varying SDK response types

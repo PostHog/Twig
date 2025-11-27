@@ -61,7 +61,12 @@ export type {
   UserMessageEvent,
   WorktreeInfo,
 } from "./src/types.js";
-export { PermissionMode } from "./src/types.js";
+export {
+  AgentEventSchema,
+  PermissionMode,
+  parseAgentEvent,
+  parseAgentEvents,
+} from "./src/types.js";
 export type { LoggerConfig } from "./src/utils/logger.js";
 export {
   Logger,
