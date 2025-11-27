@@ -117,7 +117,7 @@ export interface TaskExecutionOptions {
   isCloudMode?: boolean; // Determines local vs cloud behavior (local pauses after each phase)
   createPR?: boolean; // Whether to create PR after build (defaults to false if local. This setting has no effect if isCloudMode is true.)
   autoProgress?: boolean;
-  queryOverrides?: Record<string, any>;
+  queryOverrides?: Record<string, unknown>;
   // Fine-grained permission control (only applied to build phase)
   // See: https://docs.claude.com/en/api/agent-sdk/permissions
   canUseTool?: CanUseTool;
@@ -153,7 +153,7 @@ export interface ToolCallEvent extends BaseEvent {
   type: "tool_call";
   toolName: string;
   callId: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
   parentToolUseId?: string | null; // For nested tool calls (subagents)
   // Tool metadata (enriched by adapter for UI consumption)
   tool?: import("./tools/types.js").Tool;
@@ -164,7 +164,7 @@ export interface ToolResultEvent extends BaseEvent {
   type: "tool_result";
   toolName: string;
   callId: string;
-  result: any;
+  result: unknown;
   isError?: boolean; // Whether the tool execution failed
   parentToolUseId?: string | null; // For nested tool calls (subagents)
   // Tool metadata (enriched by adapter for UI consumption)
@@ -210,7 +210,7 @@ export interface StatusEvent extends BaseEvent {
   taskId?: string; // Task identifier
   messageId?: string; // Claude message ID
   model?: string; // Model name
-  [key: string]: any; // Allow additional fields
+  [key: string]: unknown; // Allow additional fields
 }
 
 export interface InitEvent extends BaseEvent {
@@ -240,7 +240,7 @@ export interface DoneEvent extends BaseEvent {
   durationApiMs?: number; // API-only duration (excluding local processing)
   numTurns?: number;
   totalCostUsd?: number;
-  usage?: any;
+  usage?: unknown;
   modelUsage?: {
     // Per-model usage breakdown
     [modelName: string]: {
@@ -264,10 +264,10 @@ export interface DoneEvent extends BaseEvent {
 export interface ErrorEvent extends BaseEvent {
   type: "error";
   message: string;
-  error?: any;
+  error?: unknown;
   errorType?: string;
-  context?: Record<string, any>; // Partial error context for debugging
-  sdkError?: any; // Original SDK error object
+  context?: Record<string, unknown>; // Partial error context for debugging
+  sdkError?: unknown; // Original SDK error object
 }
 
 // Metric and artifact events (general purpose, not tool-specific)
@@ -281,12 +281,14 @@ export interface MetricEvent extends BaseEvent {
 export interface ArtifactEvent extends BaseEvent {
   type: "artifact";
   kind: string;
+  // biome-ignore lint/suspicious/noExplicitAny: Artifact content can be any JSON-serializable value
   content: any;
 }
 
 export interface RawSDKEvent extends BaseEvent {
   type: "raw_sdk_event";
-  sdkMessage: any; // Full SDK message for debugging
+  // biome-ignore lint/suspicious/noExplicitAny: SDK messages have dynamic structure for debugging
+  sdkMessage: any;
 }
 
 export type AgentEvent =
@@ -309,6 +311,7 @@ export type AgentEvent =
   | RawSDKEvent;
 
 export interface ExecutionResult {
+  // biome-ignore lint/suspicious/noExplicitAny: Results array contains varying SDK response types
   results: any[];
 }
 
@@ -343,7 +346,8 @@ export type McpServerConfig =
   | {
       type: "sdk";
       name: string;
-      instance?: any; // McpServer instance
+      // biome-ignore lint/suspicious/noExplicitAny: McpServer instance type from external SDK
+      instance?: any;
     };
 
 export interface AgentConfig {
@@ -391,6 +395,7 @@ export interface PostHogResource {
   url: string;
   title?: string;
   content: string;
+  // biome-ignore lint/suspicious/noExplicitAny: Metadata contains varying resource-specific fields
   metadata?: Record<string, any>;
 }
 
@@ -422,4 +427,13 @@ export interface ResearchEvaluation {
   questions?: ResearchQuestion[]; // only if score < 0.7
   answered?: boolean; // whether questions have been answered
   answers?: ResearchAnswer[]; // user's answers to questions
+}
+
+// Worktree types for parallel task development
+export interface WorktreeInfo {
+  worktreePath: string;
+  worktreeName: string;
+  branchName: string;
+  baseBranch: string;
+  createdAt: string;
 }

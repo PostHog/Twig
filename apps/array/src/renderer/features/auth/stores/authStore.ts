@@ -10,13 +10,21 @@ import {
 } from "@/constants/oauth";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
+interface StoredTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  cloudRegion: CloudRegion;
+  scopedTeams?: number[];
+}
+
 interface AuthState {
   // OAuth state
   oauthAccessToken: string | null;
   oauthRefreshToken: string | null;
   tokenExpiry: number | null; // Unix timestamp in milliseconds
   cloudRegion: CloudRegion | null;
-  encryptedOAuthTokens: string | null;
+  storedTokens: StoredTokens | null;
 
   // PostHog client
   isAuthenticated: boolean;
@@ -50,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
       oauthRefreshToken: null,
       tokenExpiry: null,
       cloudRegion: null,
-      encryptedOAuthTokens: null,
+      storedTokens: null,
 
       // PostHog client
       isAuthenticated: false,
@@ -78,17 +86,13 @@ export const useAuthStore = create<AuthState>()(
           throw new Error("No team found in OAuth scopes");
         }
 
-        const storeResult = await window.electronAPI.oauthEncryptTokens({
+        const storedTokens: StoredTokens = {
           accessToken: tokenResponse.access_token,
           refreshToken: tokenResponse.refresh_token,
           expiresAt,
           cloudRegion: region,
           scopedTeams: tokenResponse.scoped_teams,
-        });
-
-        if (!storeResult.success || !storeResult.encrypted) {
-          throw new Error(storeResult.error || "Failed to store tokens");
-        }
+        };
 
         const apiHost = getCloudUrlFromRegion(region);
 
@@ -114,7 +118,7 @@ export const useAuthStore = create<AuthState>()(
             oauthRefreshToken: tokenResponse.refresh_token,
             tokenExpiry: expiresAt,
             cloudRegion: region,
-            encryptedOAuthTokens: storeResult.encrypted,
+            storedTokens,
             isAuthenticated: true,
             client,
             projectId,
@@ -160,19 +164,13 @@ export const useAuthStore = create<AuthState>()(
         const tokenResponse = result.data;
         const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
 
-        const storeResult = await window.electronAPI.oauthEncryptTokens({
+        const storedTokens: StoredTokens = {
           accessToken: tokenResponse.access_token,
           refreshToken: tokenResponse.refresh_token,
           expiresAt,
           cloudRegion: state.cloudRegion,
           scopedTeams: tokenResponse.scoped_teams,
-        });
-
-        if (!storeResult.success || !storeResult.encrypted) {
-          throw new Error(
-            storeResult.error || "Failed to store refreshed tokens",
-          );
-        }
+        };
 
         const apiHost = getCloudUrlFromRegion(state.cloudRegion);
         const projectId =
@@ -196,7 +194,7 @@ export const useAuthStore = create<AuthState>()(
           oauthAccessToken: tokenResponse.access_token,
           oauthRefreshToken: tokenResponse.refresh_token,
           tokenExpiry: expiresAt,
-          encryptedOAuthTokens: storeResult.encrypted,
+          storedTokens,
           client,
           ...(projectId && { projectId }),
         });
@@ -239,90 +237,83 @@ export const useAuthStore = create<AuthState>()(
       initializeOAuth: async () => {
         const state = get();
 
-        if (state.encryptedOAuthTokens) {
-          const result = await window.electronAPI.oauthRetrieveTokens(
-            state.encryptedOAuthTokens,
+        if (state.storedTokens) {
+          const tokens = state.storedTokens;
+          const now = Date.now();
+          const isExpired = tokens.expiresAt <= now;
+
+          set({
+            oauthAccessToken: tokens.accessToken,
+            oauthRefreshToken: tokens.refreshToken,
+            tokenExpiry: tokens.expiresAt,
+            cloudRegion: tokens.cloudRegion,
+          });
+
+          if (isExpired) {
+            try {
+              await get().refreshAccessToken();
+            } catch (error) {
+              console.error("Failed to refresh expired token:", error);
+              set({ storedTokens: null, isAuthenticated: false });
+              return false;
+            }
+          }
+
+          const apiHost = getCloudUrlFromRegion(tokens.cloudRegion);
+          const projectId = tokens.scopedTeams?.[0];
+
+          if (!projectId) {
+            console.error("No project ID found in stored tokens");
+            get().logout();
+            return false;
+          }
+
+          const client = new PostHogAPIClient(
+            tokens.accessToken,
+            apiHost,
+            async () => {
+              await get().refreshAccessToken();
+              const token = get().oauthAccessToken;
+              if (!token) {
+                throw new Error("No access token after refresh");
+              }
+              return token;
+            },
+            projectId,
           );
 
-          if (result.success && result.data) {
-            const tokens = result.data;
-            const now = Date.now();
-            const isExpired = tokens.expiresAt <= now;
+          try {
+            const user = await client.getCurrentUser();
 
             set({
-              oauthAccessToken: tokens.accessToken,
-              oauthRefreshToken: tokens.refreshToken,
-              tokenExpiry: tokens.expiresAt,
-              cloudRegion: tokens.cloudRegion,
+              isAuthenticated: true,
+              client,
+              projectId,
             });
 
-            if (isExpired) {
-              try {
-                await get().refreshAccessToken();
-              } catch (error) {
-                console.error("Failed to refresh expired token:", error);
-                set({ encryptedOAuthTokens: null, isAuthenticated: false });
-                return false;
+            get().scheduleTokenRefresh();
+
+            identifyUser(user.uuid, {
+              project_id: projectId.toString(),
+              region: tokens.cloudRegion,
+            });
+
+            if (state.encryptedOpenaiKey) {
+              const decryptedOpenaiKey =
+                await window.electronAPI.retrieveApiKey(
+                  state.encryptedOpenaiKey,
+                );
+
+              if (decryptedOpenaiKey) {
+                set({ openaiApiKey: decryptedOpenaiKey });
               }
             }
 
-            const apiHost = getCloudUrlFromRegion(tokens.cloudRegion);
-            const projectId = tokens.scopedTeams?.[0];
-
-            if (!projectId) {
-              console.error("No project ID found in stored tokens");
-              get().logout();
-              return false;
-            }
-
-            const client = new PostHogAPIClient(
-              tokens.accessToken,
-              apiHost,
-              async () => {
-                await get().refreshAccessToken();
-                const token = get().oauthAccessToken;
-                if (!token) {
-                  throw new Error("No access token after refresh");
-                }
-                return token;
-              },
-              projectId,
-            );
-
-            try {
-              const user = await client.getCurrentUser();
-
-              set({
-                isAuthenticated: true,
-                client,
-                projectId,
-              });
-
-              get().scheduleTokenRefresh();
-
-              // Track user identity on session restoration
-              identifyUser(user.uuid, {
-                project_id: projectId.toString(),
-                region: tokens.cloudRegion,
-              });
-
-              if (state.encryptedOpenaiKey) {
-                const decryptedOpenaiKey =
-                  await window.electronAPI.retrieveApiKey(
-                    state.encryptedOpenaiKey,
-                  );
-
-                if (decryptedOpenaiKey) {
-                  set({ openaiApiKey: decryptedOpenaiKey });
-                }
-              }
-
-              return true;
-            } catch (error) {
-              console.error("Failed to validate OAuth session:", error);
-              set({ encryptedOAuthTokens: null, isAuthenticated: false });
-              return false;
-            }
+            return true;
+          } catch (error) {
+            console.error("Failed to validate OAuth session:", error);
+            set({ storedTokens: null, isAuthenticated: false });
+            return false;
           }
         }
 
@@ -351,7 +342,6 @@ export const useAuthStore = create<AuthState>()(
         set({ defaultWorkspace: workspace });
       },
       logout: () => {
-        // Track logout before clearing state
         track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
         resetUser();
 
@@ -360,8 +350,6 @@ export const useAuthStore = create<AuthState>()(
           refreshTimeoutId = null;
         }
 
-        window.electronAPI.oauthDeleteTokens();
-
         queryClient.clear();
 
         set({
@@ -369,7 +357,7 @@ export const useAuthStore = create<AuthState>()(
           oauthRefreshToken: null,
           tokenExpiry: null,
           cloudRegion: null,
-          encryptedOAuthTokens: null,
+          storedTokens: null,
           isAuthenticated: false,
           client: null,
           projectId: null,
@@ -382,7 +370,7 @@ export const useAuthStore = create<AuthState>()(
       name: "mission-control-auth",
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
-        encryptedOAuthTokens: state.encryptedOAuthTokens,
+        storedTokens: state.storedTokens,
         encryptedOpenaiKey: state.encryptedOpenaiKey,
         defaultWorkspace: state.defaultWorkspace,
         projectId: state.projectId,

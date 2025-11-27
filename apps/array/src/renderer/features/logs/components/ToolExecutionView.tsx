@@ -21,7 +21,7 @@ import {
   CircleNotch as CircleNotchIcon,
   X as XIcon,
 } from "@phosphor-icons/react";
-import type { AgentEvent } from "@posthog/agent";
+import type { AgentEvent, TodoItem } from "@posthog/agent";
 import { Box, Code } from "@radix-ui/themes";
 import type { ReactNode } from "react";
 
@@ -34,6 +34,7 @@ interface ToolExecutionViewProps {
 }
 
 // Map tool names to their view components
+// biome-ignore lint/suspicious/noExplicitAny: Tool args have varying shapes, components handle type narrowing
 const TOOL_VIEW_MAP: Record<
   string,
   React.ComponentType<{ args: any; result?: any }>
@@ -64,6 +65,7 @@ function getToolDisplayName(toolName: string): string {
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Args have varying shapes depending on tool
 function getToolSummary(
   toolName: string,
   args: Record<string, any>,
@@ -165,11 +167,9 @@ function getToolSummary(
         </Code>
       );
     case "TodoWrite": {
-      const todos = args.todos || [];
-      const inProgressTodo = todos.find((t: any) => t.status === "in_progress");
-      const currentIndex = todos.findIndex(
-        (t: any) => t.status === "in_progress",
-      );
+      const todos = (args.todos || []) as TodoItem[];
+      const inProgressTodo = todos.find((t) => t.status === "in_progress");
+      const currentIndex = todos.findIndex((t) => t.status === "in_progress");
       const totalTodos = todos.length;
 
       if (inProgressTodo && currentIndex !== -1) {
@@ -186,9 +186,7 @@ function getToolSummary(
       }
 
       // If no in-progress todo, show completed count
-      const completed = todos.filter(
-        (t: any) => t.status === "completed",
-      ).length;
+      const completed = todos.filter((t) => t.status === "completed").length;
       if (completed === totalTodos && totalTodos > 0) {
         return (
           <Code size="1" color="green" variant="soft">
@@ -212,6 +210,7 @@ function getToolSummary(
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Args and results have varying shapes depending on tool
 function renderToolContent(
   toolName: string,
   args: Record<string, any>,

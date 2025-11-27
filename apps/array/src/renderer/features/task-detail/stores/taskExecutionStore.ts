@@ -4,7 +4,6 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import { queryClient } from "@renderer/lib/queryClient";
-import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
@@ -15,7 +14,9 @@ import type {
   TaskRun,
 } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
+import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -351,21 +352,13 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       setRepoPath: async (taskId: string, repoPath: string | null) => {
         get().updateTaskState(taskId, { repoPath });
 
-        // Persist to taskDirectoryStore
         if (repoPath) {
-          useTaskDirectoryStore.getState().setTaskDirectory(taskId, repoPath);
-
-          // Auto-register folder only if it's not already registered
-          const existingFolder = useRegisteredFoldersStore
-            .getState()
-            .getFolderByPath(repoPath);
-
-          if (!existingFolder) {
-            try {
-              await useRegisteredFoldersStore.getState().addFolder(repoPath);
-            } catch (error) {
-              console.error("Failed to auto-register folder:", error);
-            }
+          try {
+            await useTaskDirectoryStore
+              .getState()
+              .setTaskDirectory(taskId, repoPath);
+          } catch (error) {
+            console.error("Failed to persist task directory:", error);
           }
         }
       },
@@ -714,14 +707,14 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
               "@stores/repositoryWorkspaceStore"
             );
 
-            // Derive default path from workspace
+            // Derive default path from clone location
             const { defaultWorkspace } = useAuthStore.getState();
             if (!defaultWorkspace) {
               store.addLog(taskId, {
                 type: "error",
                 ts: Date.now(),
                 message:
-                  "No workspace configured. Please configure a workspace in settings.",
+                  "No clone location configured. Please configure a clone location in settings.",
               });
               return;
             }
@@ -796,6 +789,63 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         const permissionMode = "acceptEdits";
 
+        // For local mode, ensure we have a worktree
+        let workingPath = effectiveRepoPath;
+        const worktreeStore = useWorktreeStore.getState();
+        let worktreeInfo = worktreeStore.getWorktree(taskId);
+
+        // Verify that stored worktree still exists
+        if (worktreeInfo) {
+          const worktreeExists = await window.electronAPI?.worktree.exists(
+            effectiveRepoPath,
+            worktreeInfo.worktreeName,
+          );
+          if (!worktreeExists) {
+            // Worktree was deleted externally, clear the stored info
+            await worktreeStore.clearWorktree(taskId);
+            worktreeInfo = null;
+            store.addLog(taskId, {
+              type: "token",
+              ts: Date.now(),
+              content: `Worktree was removed externally, recreating...`,
+            });
+          }
+        }
+
+        if (!worktreeInfo) {
+          // Create a new worktree for this task
+          store.addLog(taskId, {
+            type: "token",
+            ts: Date.now(),
+            content: `Creating worktree for task...`,
+          });
+
+          try {
+            worktreeInfo =
+              await window.electronAPI?.worktree.create(effectiveRepoPath);
+            if (worktreeInfo) {
+              await worktreeStore.setWorktree(taskId, worktreeInfo);
+              store.addLog(taskId, {
+                type: "token",
+                ts: Date.now(),
+                content: `Created worktree: ${worktreeInfo.worktreeName}`,
+              });
+            }
+          } catch (error) {
+            store.addLog(taskId, {
+              type: "error",
+              ts: Date.now(),
+              message: `Failed to create worktree: ${error instanceof Error ? error.message : "Unknown error"}. Running in main repo instead.`,
+            });
+            // Continue with main repo if worktree creation fails
+          }
+        }
+
+        // Use worktree path if available, otherwise fall back to main repo
+        if (worktreeInfo) {
+          workingPath = worktreeInfo.worktreePath;
+        }
+
         store.setProgress(taskId, null);
         store.setRunning(taskId, true);
         const startTs = Date.now();
@@ -813,8 +863,17 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           {
             type: "token",
             ts: startTs,
-            content: `Repo: ${effectiveRepoPath}`,
+            content: `Working directory: ${workingPath}`,
           },
+          ...(worktreeInfo
+            ? [
+                {
+                  type: "token" as const,
+                  ts: startTs,
+                  content: `Worktree: ${worktreeInfo.worktreeName} (branch: ${worktreeInfo.branchName})`,
+                },
+              ]
+            : []),
         ]);
 
         try {
@@ -833,7 +892,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           const result = await window.electronAPI?.agentStart({
             taskId: task.id,
             taskRunId: taskRun.id,
-            repoPath: effectiveRepoPath,
+            repoPath: workingPath,
             apiKey,
             apiHost,
             projectId,
@@ -941,7 +1000,20 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const store = get();
         const taskState = store.getTaskState(taskId);
 
-        if (taskState.repoPath) return;
+        if (taskState.repoPath) {
+          // Even if repoPath is already set, ensure workspace store is in sync
+          if (task.repository) {
+            const currentWorkspaceRepo =
+              repositoryWorkspaceStore.getState().selectedRepository;
+
+            if (task.repository !== currentWorkspaceRepo) {
+              repositoryWorkspaceStore
+                .getState()
+                .selectRepository(task.repository);
+            }
+          }
+          return;
+        }
 
         // 1. Check taskDirectoryStore first
         const storedDirectory = useTaskDirectoryStore
@@ -949,6 +1021,13 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           .getTaskDirectory(taskId, task.repository ?? undefined);
         if (storedDirectory) {
           void store.setRepoPath(taskId, storedDirectory);
+
+          // Update workspace store with task's repository
+          if (task.repository) {
+            repositoryWorkspaceStore
+              .getState()
+              .selectRepository(task.repository);
+          }
 
           // Validate repo exists
           window.electronAPI
@@ -973,6 +1052,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           task.repository.split("/")[1],
         );
         void store.setRepoPath(taskId, path);
+
+        // Update workspace store with task's repository
+        repositoryWorkspaceStore.getState().selectRepository(task.repository);
 
         // Validate repo exists
         window.electronAPI

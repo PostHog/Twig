@@ -13,6 +13,7 @@ import type { AgentEvent } from "@posthog/agent";
 import { Code, ContextMenu } from "@radix-ui/themes";
 import { IS_DEV } from "@/constants/environment";
 
+// biome-ignore lint/suspicious/noExplicitAny: Components are type-safe internally, map handles dispatch
 const EVENT_COMPONENT_MAP: Record<
   string,
   React.ComponentType<{ event: any }>

@@ -5,7 +5,6 @@
 
 import "./agent.js";
 import "./contextMenu.js";
-import "./data.js";
 import "./fileWatcher.js";
 import "./folders.js";
 import "./fs.js";
@@ -15,5 +14,7 @@ import "./os.js";
 import "./posthog-analytics.js";
 import "./posthog.js";
 import "./shell.js";
+import "./store.js";
 import "./transcription-prompts.js";
 import "./updates.js";
+import "./worktree.js";

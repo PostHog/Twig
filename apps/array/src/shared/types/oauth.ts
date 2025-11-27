@@ -14,11 +14,3 @@ export interface OAuthConfig {
   scopes: string[];
   cloudRegion: CloudRegion;
 }
-
-export interface StoredOAuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number; // Unix timestamp in milliseconds
-  cloudRegion: CloudRegion;
-  scopedTeams?: number[];
-}

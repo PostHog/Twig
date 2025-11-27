@@ -4,6 +4,7 @@ import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FileIcon } from "@phosphor-icons/react";
 import { Badge, Box, Flex, Text } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
 
 interface ChangesPanelProps {
@@ -77,13 +78,16 @@ function ChangedFileItem({ file, taskId }: ChangedFileItemProps) {
 
 export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const worktreePath = useWorktreeStore(
+    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  );
+  const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
     queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
     enabled: !!repoPath,
-    staleTime: Infinity,
+    refetchOnMount: "always",
   });
 
   if (!repoPath) {

@@ -4,7 +4,6 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
-import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
@@ -13,7 +12,6 @@ import { useCallback } from "react";
 interface UseTaskCreationOptions {
   editor: Editor | null;
   selectedDirectory: string;
-  detectedRepository: string | null;
 }
 
 interface UseTaskCreationReturn {
@@ -34,7 +32,6 @@ interface UseTaskCreationReturn {
 export function useTaskCreation({
   editor,
   selectedDirectory,
-  detectedRepository,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
@@ -46,8 +43,6 @@ export function useTaskCreation({
   } = useTaskExecutionStore();
   const { autoRunTasks, defaultRunMode, lastUsedRunMode } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
-  const { folders, addFolder, updateLastAccessed } =
-    useRegisteredFoldersStore();
 
   const canSubmit =
     !!editor &&
@@ -57,7 +52,7 @@ export function useTaskCreation({
     !isCreatingTask &&
     !editor.isEmpty;
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     // TRICKY: This needs to be redefined in the callback due to a weird issue where the callback uses a stale version of canSubmit, even if its a dependency
     const canSubmit =
       !!editor &&
@@ -76,7 +71,14 @@ export function useTaskCreation({
       return;
     }
 
-    const repository = detectedRepository || undefined;
+    // Detect repo config fresh at submit time to avoid stale closure issues
+    let repository: string | undefined;
+    if (selectedDirectory) {
+      const detected = await window.electronAPI.detectRepo(selectedDirectory);
+      if (detected) {
+        repository = `${detected.organization}/${detected.repository}`;
+      }
+    }
 
     createTask(
       {
@@ -88,16 +90,7 @@ export function useTaskCreation({
       {
         onSuccess: async (newTask: Task) => {
           if (selectedDirectory) {
-            saveRepoPath(newTask.id, selectedDirectory);
-
-            const existingFolder = folders.find(
-              (f) => f.path === selectedDirectory,
-            );
-            if (existingFolder) {
-              await updateLastAccessed(existingFolder.id);
-            } else {
-              await addFolder(selectedDirectory);
-            }
+            await saveRepoPath(newTask.id, selectedDirectory);
           }
 
           navigateToTask(newTask);
@@ -125,7 +118,6 @@ export function useTaskCreation({
   }, [
     editor,
     selectedDirectory,
-    detectedRepository,
     createTask,
     saveRepoPath,
     navigateToTask,
@@ -138,9 +130,6 @@ export function useTaskCreation({
     isCreatingTask,
     client,
     isAuthenticated,
-    folders,
-    addFolder,
-    updateLastAccessed,
   ]);
 
   return {

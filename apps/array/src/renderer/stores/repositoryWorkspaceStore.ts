@@ -210,8 +210,8 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
 
           if (!targetPath) {
             await showError(
-              "Workspace not configured",
-              "Please configure a default workspace in settings",
+              "Clone location not configured",
+              "Please configure a default clone location in settings",
             );
             return;
           }

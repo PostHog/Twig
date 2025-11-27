@@ -5,6 +5,7 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { GitPullRequest } from "@phosphor-icons/react";
 import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import type React from "react";
 import { memo, useRef } from "react";
@@ -49,6 +50,9 @@ function TaskItemComponent({
   const selectedIndex = useTaskStore((state) => state.selectedIndex);
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
+  const worktreeName = useWorktreeStore(
+    (state) => state.taskWorktrees[task.id]?.worktreeName ?? null,
+  );
   const createdAt = new Date(task.created_at);
   const hoursSinceCreated = differenceInHours(new Date(), createdAt);
   const timeDisplay =
@@ -178,7 +182,7 @@ function TaskItemComponent({
         {showBottomIndicator && (
           <Box className="absolute right-0 bottom-0 left-0 z-10 h-0.5 bg-accent-8" />
         )}
-        <Flex align="baseline" gap="2" style={{ minWidth: 0 }}>
+        <Flex align="center" gap="2" style={{ minWidth: 0 }}>
           <Text color="gray" size="1" style={{ flexShrink: 0 }}>
             {isHighlighted ? "[•]" : "[ ]"}
           </Text>
@@ -209,6 +213,16 @@ function TaskItemComponent({
             >
               {task.title}
             </Text>
+            {worktreeName && (
+              <Text
+                size="1"
+                color="gray"
+                className="overflow-hidden text-ellipsis whitespace-nowrap"
+                style={{ fontStyle: "italic", opacity: 0.7, minWidth: 0 }}
+              >
+                {worktreeName}
+              </Text>
+            )}
             {hasPR && (
               <Flex
                 align="center"
