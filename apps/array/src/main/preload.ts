@@ -1,3 +1,4 @@
+import type { AgentEvent } from "@posthog/agent";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import type { CloudRegion, OAuthTokenResponse } from "../shared/types/oauth";
 import type {
@@ -38,7 +39,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("store-api-key", apiKey),
   retrieveApiKey: (encryptedKey: string): Promise<string | null> =>
     ipcRenderer.invoke("retrieve-api-key", encryptedKey),
-  fetchS3Logs: (logUrl: string): Promise<string> =>
+  fetchS3Logs: (logUrl: string): Promise<AgentEvent[]> =>
     ipcRenderer.invoke("fetch-s3-logs", logUrl),
   // OAuth API
   oauthStartFlow: (

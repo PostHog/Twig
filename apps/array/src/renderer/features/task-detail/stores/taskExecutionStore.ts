@@ -1,7 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { type AgentEvent, parseAgentEvents } from "@posthog/agent";
+import type { AgentEvent } from "@posthog/agent";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
@@ -83,30 +83,12 @@ const toClarifyingQuestions = (
 };
 
 /**
- * Fetch logs from S3 log URL via main process to avoid CORS issues
- * S3 stores AgentEvent objects as newline-delimited JSON
+ * Fetch logs from S3 log URL via main process
+ * Main process handles parsing and validation
  */
 async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
   try {
-    const content = await window.electronAPI?.fetchS3Logs(logUrl);
-
-    if (!content || !content.trim()) {
-      return [];
-    }
-
-    const rawEntries = content
-      .trim()
-      .split("\n")
-      .map((line: string) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    return parseAgentEvents(rawEntries);
+    return (await window.electronAPI?.fetchS3Logs(logUrl)) ?? [];
   } catch (err) {
     log.warn("Failed to fetch task logs from S3", err);
     return [];
@@ -385,9 +367,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           }
         };
 
-        // Poll immediately, then every 2 seconds
+        // Poll immediately, then every 500ms
         void poll();
-        const poller = setInterval(() => void poll(), 2000);
+        const poller = setInterval(() => void poll(), 500);
         store.updateTaskState(taskId, { logPoller: poller });
       },
 
