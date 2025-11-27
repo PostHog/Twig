@@ -8,5 +8,6 @@ procs:
     cmd: ["pnpm", "--filter", "array", "run", "start"]
     cwd: .
     color: blue
+    autorestart: true
     depends_on:
       - agent

@@ -5,6 +5,7 @@
 
 import "./agent.js";
 import "./contextMenu.js";
+import "./dev-reload.js";
 import "./fileWatcher.js";
 import "./folders.js";
 import "./fs.js";
