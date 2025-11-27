@@ -87,6 +87,7 @@ function createWindow(): void {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
       enableBlinkFeatures: "GetDisplayMedia",
+      partition: "persist:main",
     },
   });
 

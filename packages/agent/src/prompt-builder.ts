@@ -1,11 +1,17 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import type { TemplateVariables } from "./template-manager.js";
-import type { PostHogResource, Task, UrlMention } from "./types.js";
+import type {
+  PostHogResource,
+  ResourceType,
+  SupportingFile,
+  Task,
+  UrlMention,
+} from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export interface PromptBuilderDeps {
-  getTaskFiles: (taskId: string) => Promise<any[]>;
+  getTaskFiles: (taskId: string) => Promise<SupportingFile[]>;
   generatePlanTemplate: (vars: TemplateVariables) => Promise<string>;
   posthogClient?: {
     fetchResourceByUrl: (mention: UrlMention) => Promise<PostHogResource>;
@@ -81,9 +87,9 @@ export class PromptBuilder {
       const [, type, id] = match;
       mentions.push({
         url: "", // Will be reconstructed if needed
-        type: type as any,
+        type: type as ResourceType,
         id,
-        label: this.generateUrlLabel("", type as any),
+        label: this.generateUrlLabel("", type as ResourceType),
       });
       match = resourceRegex.exec(description);
     }
@@ -249,8 +255,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if ((task as any).primary_repository) {
-      prompt += `<repository>${(task as any).primary_repository}</repository>\n`;
+    if (task.primary_repository) {
+      prompt += `<repository>${task.primary_repository}</repository>\n`;
     }
     prompt += "</task>\n";
 
@@ -278,7 +284,7 @@ export class PromptBuilder {
     try {
       const taskFiles = await this.getTaskFiles(task.id);
       const contextFiles = taskFiles.filter(
-        (f: any) => f.type === "context" || f.type === "reference",
+        (f: SupportingFile) => f.type === "context" || f.type === "reference",
       );
       if (contextFiles.length > 0) {
         prompt += "\n<supporting_files>\n";
@@ -312,8 +318,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if ((task as any).primary_repository) {
-      prompt += `<repository>${(task as any).primary_repository}</repository>\n`;
+    if (task.primary_repository) {
+      prompt += `<repository>${task.primary_repository}</repository>\n`;
     }
     prompt += "</task>\n";
 
@@ -341,7 +347,7 @@ export class PromptBuilder {
     try {
       const taskFiles = await this.getTaskFiles(task.id);
       const contextFiles = taskFiles.filter(
-        (f: any) => f.type === "context" || f.type === "reference",
+        (f: SupportingFile) => f.type === "context" || f.type === "reference",
       );
       if (contextFiles.length > 0) {
         prompt += "\n<supporting_files>\n";
@@ -361,7 +367,7 @@ export class PromptBuilder {
       task_title: task.title,
       task_description: processedDescription,
       date: new Date().toISOString().split("T")[0],
-      repository: ((task as any).primary_repository || "") as string,
+      repository: task.primary_repository || "",
     };
 
     const planTemplate = await this.generatePlanTemplate(templateVariables);
@@ -393,8 +399,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if ((task as any).primary_repository) {
-      prompt += `<repository>${(task as any).primary_repository}</repository>\n`;
+    if (task.primary_repository) {
+      prompt += `<repository>${task.primary_repository}</repository>\n`;
     }
     prompt += "</task>\n";
 
@@ -421,8 +427,10 @@ export class PromptBuilder {
 
     try {
       const taskFiles = await this.getTaskFiles(task.id);
-      const hasPlan = taskFiles.some((f: any) => f.type === "plan");
-      const todosFile = taskFiles.find((f: any) => f.name === "todos.json");
+      const hasPlan = taskFiles.some((f: SupportingFile) => f.type === "plan");
+      const todosFile = taskFiles.find(
+        (f: SupportingFile) => f.name === "todos.json",
+      );
 
       if (taskFiles.length > 0) {
         prompt += "\n<context>\n";

@@ -5,7 +5,7 @@ interface SidebarStoreState {
   open: boolean;
   width: number;
   isResizing: boolean;
-  expandedSections: Set<string>;
+  collapsedSections: Set<string>;
 }
 
 interface SidebarStoreActions {
@@ -23,19 +23,19 @@ export const useSidebarStore = create<SidebarStore>()(
       open: true,
       width: 256,
       isResizing: false,
-      expandedSections: new Set<string>(),
+      collapsedSections: new Set<string>(),
       setOpen: (open) => set({ open }),
       setWidth: (width) => set({ width }),
       setIsResizing: (isResizing) => set({ isResizing }),
       toggleSection: (sectionId) =>
         set((state) => {
-          const newExpandedSections = new Set(state.expandedSections);
-          if (newExpandedSections.has(sectionId)) {
-            newExpandedSections.delete(sectionId);
+          const newCollapsedSections = new Set(state.collapsedSections);
+          if (newCollapsedSections.has(sectionId)) {
+            newCollapsedSections.delete(sectionId);
           } else {
-            newExpandedSections.add(sectionId);
+            newCollapsedSections.add(sectionId);
           }
-          return { expandedSections: newExpandedSections };
+          return { collapsedSections: newCollapsedSections };
         }),
     }),
     {
@@ -43,19 +43,19 @@ export const useSidebarStore = create<SidebarStore>()(
       partialize: (state) => ({
         open: state.open,
         width: state.width,
-        expandedSections: Array.from(state.expandedSections),
+        collapsedSections: Array.from(state.collapsedSections),
       }),
       merge: (persisted, current) => {
         const persistedState = persisted as {
           open?: boolean;
           width?: number;
-          expandedSections?: string[];
+          collapsedSections?: string[];
         };
         return {
           ...current,
           open: persistedState.open ?? current.open,
           width: persistedState.width ?? current.width,
-          expandedSections: new Set(persistedState.expandedSections ?? []),
+          collapsedSections: new Set(persistedState.collapsedSections ?? []),
         };
       },
     },

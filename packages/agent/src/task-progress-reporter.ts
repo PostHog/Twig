@@ -407,7 +407,9 @@ export class TaskProgressReporter {
 
       default:
         // For any unfamiliar event types, log them as-is
-        this.logger.debug("Unknown event type", { type: (event as any).type });
+        this.logger.debug("Unknown event type", {
+          type: (event as { type: string }).type,
+        });
         return;
     }
   }

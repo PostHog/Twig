@@ -93,7 +93,10 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
     error,
   } = useQuery({
     queryKey: ["directory", repoPath],
-    queryFn: () => window.electronAPI.listDirectory(repoPath!),
+    queryFn: () => {
+      if (!repoPath) throw new Error("repoPath is required");
+      return window.electronAPI.listDirectory(repoPath);
+    },
     enabled: !!repoPath,
     staleTime: Infinity,
   });
