@@ -16,7 +16,15 @@ interface PostHogApiResponse<T> {
   previous?: string | null;
 }
 
-export type TaskRunUpdate = Partial<Pick<TaskRun, 'status' | 'branch' | 'stage' | 'error_message' | 'output' | 'state'>>;
+export type TaskRunUpdate = Partial<
+  Pick<
+    TaskRun,
+    "status" | "branch" | "stage" | "error_message" | "output" | "state"
+  >
+>;
+
+export type TaskCreatePayload = Pick<Task, "description"> &
+  Partial<Pick<Task, "title" | "repository" | "origin_product">>;
 
 export class PostHogAPIClient {
   private config: PostHogAPIConfig;
@@ -118,6 +126,17 @@ export class PostHogAPIClient {
     });
   }
 
+  async createTask(payload: TaskCreatePayload): Promise<Task> {
+    const teamId = this.getTeamId();
+    return this.apiRequest<Task>(`/api/projects/${teamId}/tasks/`, {
+      method: "POST",
+      body: JSON.stringify({
+        origin_product: "user_created",
+        ...payload,
+      }),
+    });
+  }
+
   // TaskRun methods
   async listTaskRuns(taskId: string): Promise<TaskRun[]> {
     const teamId = this.getTeamId();
@@ -139,7 +158,13 @@ export class PostHogAPIClient {
     payload?: Partial<
       Omit<
         TaskRun,
-        "id" | "task" | "team" | "created_at" | "updated_at" | "completed_at" | "artifacts"
+        | "id"
+        | "task"
+        | "team"
+        | "created_at"
+        | "updated_at"
+        | "completed_at"
+        | "artifacts"
       >
     >,
   ): Promise<TaskRun> {

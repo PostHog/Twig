@@ -37,7 +37,11 @@ export class TaskRunProgressReporter {
     return this.taskRun?.id;
   }
 
-  async start(taskId: string, taskRunId: string, metadata: ProgressMetadata = {}): Promise<void> {
+  async start(
+    taskId: string,
+    taskRunId: string,
+    metadata: ProgressMetadata = {},
+  ): Promise<void> {
     if (!this.posthogAPI) {
       return;
     }

@@ -12,7 +12,12 @@ export interface Task {
   slug?: string;
   title: string;
   description: string;
-  origin_product: 'error_tracking' | 'eval_clusters' | 'user_created' | 'support_queue' | 'session_summaries';
+  origin_product:
+    | "error_tracking"
+    | "eval_clusters"
+    | "user_created"
+    | "support_queue"
+    | "session_summaries";
   github_integration?: number | null;
   repository: string; // Format: "organization/repository" (e.g., "posthog/posthog-js")
   json_schema?: Record<string, unknown> | null; // JSON schema for task output validation
@@ -51,9 +56,15 @@ export interface TaskRunArtifact {
   uploaded_at?: string;
 }
 
-export type TaskRunStatus = 'not_started' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+export type TaskRunStatus =
+  | "not_started"
+  | "queued"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
-export type TaskRunEnvironment = 'local' | 'cloud';
+export type TaskRunEnvironment = "local" | "cloud";
 
 // TaskRun model - represents individual execution runs of tasks
 export interface TaskRun {
@@ -73,7 +84,6 @@ export interface TaskRun {
   updated_at: string;
   completed_at: string | null;
 }
-
 
 export interface SupportingFile {
   name: string;

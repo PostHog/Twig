@@ -134,7 +134,8 @@ export class Agent {
 
   // Adaptive task execution orchestrated via workflow steps
   async runTask(
-    taskId: string, taskRunId: string,
+    taskId: string,
+    taskRunId: string,
     options: import("./types.js").TaskExecutionOptions = {},
   ): Promise<void> {
     await this._configureLlmGateway();
@@ -144,10 +145,20 @@ export class Agent {
     const isCloudMode = options.isCloudMode ?? false;
     const taskSlug = (task as any).slug || task.id;
 
-    this.logger.info('Starting adaptive task execution', { taskId: task.id, taskSlug, taskRunId, isCloudMode });
+    this.logger.info("Starting adaptive task execution", {
+      taskId: task.id,
+      taskSlug,
+      taskRunId,
+      isCloudMode,
+    });
 
-    await this.progressReporter.start(taskId, taskRunId, { totalSteps: TASK_WORKFLOW.length });
-    this.emitEvent(this.adapter.createStatusEvent('run_started', { runId: taskRunId }));
+    await this.progressReporter.start(taskId, taskRunId, {
+      totalSteps: TASK_WORKFLOW.length,
+    });
+    
+    this.emitEvent(
+      this.adapter.createStatusEvent("run_started", { runId: taskRunId }),
+    );
 
     await this.prepareTaskBranch(taskSlug, isCloudMode);
 
