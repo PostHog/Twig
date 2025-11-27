@@ -1,9 +1,5 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
-import type {
-  CloudRegion,
-  OAuthTokenResponse,
-  StoredOAuthTokens,
-} from "../shared/types/oauth";
+import type { CloudRegion, OAuthTokenResponse } from "../shared/types/oauth";
 import type {
   FolderContextMenuResult,
   SplitContextMenuResult,
@@ -47,16 +43,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     region: CloudRegion,
   ): Promise<{ success: boolean; data?: OAuthTokenResponse; error?: string }> =>
     ipcRenderer.invoke("oauth:start-flow", region),
-  oauthEncryptTokens: (
-    tokens: StoredOAuthTokens,
-  ): Promise<{ success: boolean; encrypted?: string; error?: string }> =>
-    ipcRenderer.invoke("oauth:encrypt-tokens", tokens),
-  oauthRetrieveTokens: (
-    encrypted: string,
-  ): Promise<{ success: boolean; data?: StoredOAuthTokens; error?: string }> =>
-    ipcRenderer.invoke("oauth:retrieve-tokens", encrypted),
-  oauthDeleteTokens: (): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke("oauth:delete-tokens"),
   oauthRefreshToken: (
     refreshToken: string,
     region: CloudRegion,
@@ -367,5 +353,133 @@ contextBridge.exposeInMainWorld("electronAPI", {
     updateFolderAccessed: (folderId: string): Promise<void> =>
       ipcRenderer.invoke("update-folder-accessed", folderId),
     clearAllData: (): Promise<void> => ipcRenderer.invoke("clear-all-data"),
+    getTaskAssociations: (): Promise<
+      Array<{
+        taskId: string;
+        folderId: string;
+        folderPath: string;
+        worktree?: {
+          worktreePath: string;
+          worktreeName: string;
+          branchName: string;
+          baseBranch: string;
+          createdAt: string;
+        };
+      }>
+    > => ipcRenderer.invoke("get-task-associations"),
+    getTaskAssociation: (
+      taskId: string,
+    ): Promise<{
+      taskId: string;
+      folderId: string;
+      folderPath: string;
+      worktree?: {
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      };
+    } | null> => ipcRenderer.invoke("get-task-association", taskId),
+    setTaskAssociation: (
+      taskId: string,
+      folderId: string,
+      folderPath: string,
+      worktree?: {
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      },
+    ): Promise<{
+      taskId: string;
+      folderId: string;
+      folderPath: string;
+      worktree?: {
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      };
+    }> =>
+      ipcRenderer.invoke(
+        "set-task-association",
+        taskId,
+        folderId,
+        folderPath,
+        worktree,
+      ),
+    updateTaskWorktree: (
+      taskId: string,
+      worktree: {
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      },
+    ): Promise<{
+      taskId: string;
+      folderId: string;
+      folderPath: string;
+      worktree?: {
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      };
+    } | null> => ipcRenderer.invoke("update-task-worktree", taskId, worktree),
+    removeTaskAssociation: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke("remove-task-association", taskId),
+    clearTaskWorktree: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke("clear-task-worktree", taskId),
+  },
+  // Worktree API
+  worktree: {
+    create: (
+      mainRepoPath: string,
+    ): Promise<{
+      worktreePath: string;
+      worktreeName: string;
+      branchName: string;
+      baseBranch: string;
+      createdAt: string;
+    }> => ipcRenderer.invoke("worktree-create", mainRepoPath),
+    delete: (mainRepoPath: string, worktreePath: string): Promise<void> =>
+      ipcRenderer.invoke("worktree-delete", mainRepoPath, worktreePath),
+    getInfo: (
+      mainRepoPath: string,
+      worktreePath: string,
+    ): Promise<{
+      worktreePath: string;
+      worktreeName: string;
+      branchName: string;
+      baseBranch: string;
+      createdAt: string;
+    } | null> =>
+      ipcRenderer.invoke("worktree-get-info", mainRepoPath, worktreePath),
+    exists: (mainRepoPath: string, name: string): Promise<boolean> =>
+      ipcRenderer.invoke("worktree-exists", mainRepoPath, name),
+    list: (
+      mainRepoPath: string,
+    ): Promise<
+      Array<{
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      }>
+    > => ipcRenderer.invoke("worktree-list", mainRepoPath),
+    isWorktree: (mainRepoPath: string, repoPath: string): Promise<boolean> =>
+      ipcRenderer.invoke("worktree-is-worktree", mainRepoPath, repoPath),
+    getMainRepoPath: (
+      mainRepoPath: string,
+      worktreePath: string,
+    ): Promise<string | null> =>
+      ipcRenderer.invoke("worktree-get-main-repo", mainRepoPath, worktreePath),
   },
 });

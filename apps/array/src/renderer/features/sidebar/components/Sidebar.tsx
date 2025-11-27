@@ -1,8 +1,6 @@
-import { SIDEBAR_BORDER } from "@components/ui/sidebar/Context";
-import { SidebarTrigger } from "@components/ui/sidebar/SidebarTrigger";
 import { Box, Flex } from "@radix-ui/themes";
-import { useSidebarStore } from "@stores/sidebarStore";
 import React from "react";
+import { useSidebarStore } from "../stores/sidebarStore";
 
 const MIN_WIDTH = 140;
 
@@ -55,7 +53,7 @@ export const Sidebar: React.FC<{ children: React.ReactNode }> = ({
         height: "100%",
         overflow: "hidden",
         transition: isResizing ? "none" : "width 0.2s ease-in-out",
-        borderRight: open ? SIDEBAR_BORDER : "none",
+        borderRight: open ? "1px solid var(--gray-6)" : "none",
         position: "relative",
       }}
     >
@@ -66,18 +64,6 @@ export const Sidebar: React.FC<{ children: React.ReactNode }> = ({
           height: "100%",
         }}
       >
-        <Flex
-          align="center"
-          className="drag"
-          px="2"
-          style={{
-            height: "40px",
-            minHeight: "40px",
-            borderBottom: SIDEBAR_BORDER,
-          }}
-        >
-          <SidebarTrigger />
-        </Flex>
         {children}
       </Flex>
       {open && (

@@ -37,6 +37,7 @@ export function useEditorSetup({
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
   const mentionItemsRef = useRef(mentionItems);
   const repoPathRef = useRef(repoPath);
+  const onSubmitRef = useRef(onSubmit);
 
   // Keep refs synced
   useEffect(() => {
@@ -46,6 +47,10 @@ export function useEditorSetup({
   useEffect(() => {
     repoPathRef.current = repoPath;
   }, [repoPath]);
+
+  useEffect(() => {
+    onSubmitRef.current = onSubmit;
+  }, [onSubmit]);
 
   const editor = useEditor({
     extensions: [
@@ -61,7 +66,7 @@ export function useEditorSetup({
               if (!this.editor.state.selection.$from.parent.textContent) {
                 return false;
               }
-              onSubmit();
+              onSubmitRef.current();
               return true;
             },
             Escape: () => {

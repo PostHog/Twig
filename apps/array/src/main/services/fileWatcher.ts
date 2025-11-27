@@ -137,25 +137,45 @@ class FileService {
       { ignore: WATCHER_IGNORE_PATTERNS },
     );
 
-    const gitDir = path.join(repoPath, ".git");
+    const gitPath = path.join(repoPath, ".git");
     let gitSubscription: watcher.AsyncSubscription | null = null;
     try {
-      await fs.access(gitDir);
-      gitSubscription = await watcher.subscribe(gitDir, (err, events) => {
-        if (err) {
-          console.error("Git watcher error:", err);
-          return;
+      const gitStat = await fs.stat(gitPath);
+      let gitDirToWatch: string;
+
+      if (gitStat.isDirectory()) {
+        // Regular repo: .git is a directory
+        gitDirToWatch = gitPath;
+      } else if (gitStat.isFile()) {
+        // Worktree: .git is a file containing "gitdir: /path/to/main/.git/worktrees/name"
+        const gitFileContent = await fs.readFile(gitPath, "utf-8");
+        const match = gitFileContent.match(/gitdir:\s*(.+)/);
+        if (!match) {
+          throw new Error("Invalid .git file format");
         }
-        if (
-          events.some(
-            (e) => e.path.endsWith("/HEAD") || e.path.endsWith("/index"),
-          )
-        ) {
-          this.emit("git:state-changed", { repoPath });
-        }
-      });
-    } catch {
-      // .git directory doesn't exist
+        gitDirToWatch = match[1].trim();
+      } else {
+        throw new Error(".git is neither file nor directory");
+      }
+
+      gitSubscription = await watcher.subscribe(
+        gitDirToWatch,
+        (err, events) => {
+          if (err) {
+            console.error("Git watcher error:", err);
+            return;
+          }
+          if (
+            events.some(
+              (e) => e.path.endsWith("/HEAD") || e.path.endsWith("/index"),
+            )
+          ) {
+            this.emit("git:state-changed", { repoPath });
+          }
+        },
+      );
+    } catch (error) {
+      console.warn("Failed to set up git watcher:", error);
     }
 
     state.subscription = subscription;

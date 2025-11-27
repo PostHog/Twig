@@ -1,15 +1,16 @@
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useRegisteredFoldersStore } from "./registeredFoldersStore";
+import { useTaskAssociationStore } from "./taskAssociationStore";
 
 interface TaskDirectoryState {
-  taskDirectories: Record<string, string>;
   repoDirectories: Record<string, string>;
   lastUsedDirectory: string | null;
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
-  setTaskDirectory: (taskId: string, directory: string) => void;
+  setTaskDirectory: (taskId: string, directory: string) => Promise<void>;
   setRepoDirectory: (repoKey: string, directory: string) => void;
-  clearTaskDirectory: (taskId: string) => void;
+  clearTaskDirectory: (taskId: string) => Promise<void>;
   clearRepoDirectory: (repoKey: string) => void;
 }
 
@@ -20,39 +21,40 @@ const isValidPath = (path: string): boolean => {
 export const useTaskDirectoryStore = create<TaskDirectoryState>()(
   persist(
     (set, get) => ({
-      taskDirectories: {},
       repoDirectories: {},
       lastUsedDirectory: null,
 
       getTaskDirectory: (taskId: string, repoKey?: string) => {
-        // 1. Check for direct task mapping
-        const taskDir = get().taskDirectories[taskId];
+        const taskAssocStore = useTaskAssociationStore.getState();
+
+        const taskDir = taskAssocStore.getTaskDirectory(taskId);
         if (taskDir) {
           return expandTildePath(taskDir);
         }
 
-        // 2. Check for repo mapping (if repoKey provided)
         if (repoKey) {
           const repoDir = get().repoDirectories[repoKey];
           if (repoDir) {
-            // Auto-map task to this directory for convenience
-            get().setTaskDirectory(taskId, repoDir);
             return expandTildePath(repoDir);
           }
         }
 
-        // 3. No mapping found
         return null;
       },
 
-      setTaskDirectory: (taskId: string, directory: string) => {
-        set((state) => ({
-          taskDirectories: {
-            ...state.taskDirectories,
-            [taskId]: directory,
-          },
-          lastUsedDirectory: directory,
-        }));
+      setTaskDirectory: async (taskId: string, directory: string) => {
+        set({ lastUsedDirectory: directory });
+
+        const foldersStore = useRegisteredFoldersStore.getState();
+        let folder = foldersStore.getFolderByPath(directory);
+
+        if (!folder) {
+          folder = await foldersStore.addFolder(directory);
+        }
+
+        await useTaskAssociationStore
+          .getState()
+          .setAssociation(taskId, folder.id, directory);
       },
 
       setRepoDirectory: (repoKey: string, directory: string) => {
@@ -64,11 +66,8 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
         }));
       },
 
-      clearTaskDirectory: (taskId: string) => {
-        set((state) => {
-          const { [taskId]: _, ...rest } = state.taskDirectories;
-          return { taskDirectories: rest };
-        });
+      clearTaskDirectory: async (taskId: string) => {
+        await useTaskAssociationStore.getState().removeAssociation(taskId);
       },
 
       clearRepoDirectory: (repoKey: string) => {
@@ -81,20 +80,11 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
     {
       name: "task-directory-mappings",
       partialize: (state) => ({
-        taskDirectories: state.taskDirectories,
         repoDirectories: state.repoDirectories,
         lastUsedDirectory: state.lastUsedDirectory,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-
-        // Clean up invalid paths from localStorage
-        const cleanedTaskDirs: Record<string, string> = {};
-        for (const [key, value] of Object.entries(state.taskDirectories)) {
-          if (isValidPath(value)) {
-            cleanedTaskDirs[key] = value;
-          }
-        }
 
         const cleanedRepoDirs: Record<string, string> = {};
         for (const [key, value] of Object.entries(state.repoDirectories)) {
@@ -108,15 +98,11 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
             ? state.lastUsedDirectory
             : null;
 
-        // Update state with cleaned values
         if (
-          Object.keys(cleanedTaskDirs).length !==
-            Object.keys(state.taskDirectories).length ||
           Object.keys(cleanedRepoDirs).length !==
             Object.keys(state.repoDirectories).length ||
           cleanedLastUsed !== state.lastUsedDirectory
         ) {
-          state.taskDirectories = cleanedTaskDirs;
           state.repoDirectories = cleanedRepoDirs;
           state.lastUsedDirectory = cleanedLastUsed;
         }

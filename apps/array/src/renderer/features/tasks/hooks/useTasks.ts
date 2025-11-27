@@ -3,6 +3,7 @@ import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { track } from "@renderer/lib/analytics";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
@@ -95,7 +96,41 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
 
   return useAuthenticatedMutation(
-    (client, taskId: string) => client.deleteTask(taskId),
+    async (client, taskId: string) => {
+      // Clean up worktree before deleting task
+      const worktreeStore = useWorktreeStore.getState();
+      const worktreeInfo = worktreeStore.getWorktree(taskId);
+
+      if (worktreeInfo) {
+        const taskExecutionStore = useTaskExecutionStore.getState();
+        const taskState = taskExecutionStore.getTaskState(taskId);
+        const repoPath = taskState.repoPath;
+
+        if (repoPath) {
+          try {
+            await window.electronAPI?.worktree.delete(
+              repoPath,
+              worktreeInfo.worktreePath,
+            );
+          } catch (error) {
+            console.error("[useDeleteTask] Failed to delete worktree:", error);
+          }
+        }
+        await worktreeStore.clearWorktree(taskId);
+      }
+
+      // Clean up task association from electron-store
+      try {
+        await window.electronAPI?.folders.removeTaskAssociation(taskId);
+      } catch (error) {
+        console.error(
+          "[useDeleteTask] Failed to remove task association:",
+          error,
+        );
+      }
+
+      return client.deleteTask(taskId);
+    },
     {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: taskKeys.lists() });

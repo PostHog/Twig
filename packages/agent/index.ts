@@ -38,6 +38,7 @@ export type {
   SupportingFile,
   Task,
   TaskRun,
+  WorktreeInfo,
 } from "./src/types.js";
 export { PermissionMode } from "./src/types.js";
 export type { LoggerConfig } from "./src/utils/logger.js";
@@ -45,3 +46,6 @@ export {
   Logger,
   LogLevel,
 } from "./src/utils/logger.js";
+export type { WorktreeConfig } from "./src/worktree-manager.js";
+// Worktree management
+export { WorktreeManager } from "./src/worktree-manager.js";

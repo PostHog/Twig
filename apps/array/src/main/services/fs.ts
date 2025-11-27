@@ -276,6 +276,10 @@ export function registerFsIpc(): void {
         const content = await fsPromises.readFile(filePath, "utf-8");
         return content;
       } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException;
+        if (nodeError.code === "ENOENT") {
+          return null;
+        }
         console.error(
           `Failed to read artifact ${fileName} for task ${taskId}:`,
           error,
@@ -329,14 +333,13 @@ export function registerFsIpc(): void {
       }>,
     ): Promise<void> => {
       try {
-        const researchPath = path.join(
-          repoPath,
-          ".posthog",
-          taskId,
-          "research.json",
-        );
+        const posthogDir = path.join(repoPath, ".posthog", taskId);
+        const researchPath = path.join(posthogDir, "research.json");
 
-        // Read existing research.json
+        // Ensure .posthog/taskId directory exists
+        await fsPromises.mkdir(posthogDir, { recursive: true });
+
+        // Read existing research.json or create minimal structure
         let researchData: {
           actionabilityScore: number;
           context: string;
@@ -358,7 +361,14 @@ export function registerFsIpc(): void {
           const content = await fsPromises.readFile(researchPath, "utf-8");
           researchData = JSON.parse(content);
         } catch {
-          throw new Error(`research.json not found for task ${taskId}`);
+          console.log(
+            `research.json not found for task ${taskId}, creating with answers only`,
+          );
+          researchData = {
+            actionabilityScore: 0.5,
+            context: "User provided answers to clarifying questions",
+            keyFiles: [],
+          };
         }
 
         // Update with answers

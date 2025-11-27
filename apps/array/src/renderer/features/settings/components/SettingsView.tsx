@@ -6,6 +6,7 @@ import {
 } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
+import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import {
   Badge,
   Box,
@@ -35,6 +36,8 @@ const REGION_URLS: Record<CloudRegion, string> = {
 };
 
 export function SettingsView() {
+  useSetHeaderContent(null);
+
   const {
     isAuthenticated,
     defaultWorkspace,
@@ -172,19 +175,19 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
-          {/* Workspace Section */}
+          {/* Clone Location Section */}
           <Flex direction="column" gap="3">
-            <Heading size="3">Workspace</Heading>
+            <Heading size="3">Clone location</Heading>
             <Card>
               <Flex direction="column" gap="3">
                 <Flex direction="column" gap="2">
                   <Text size="1" weight="medium">
-                    Default workspace
+                    Default clone location
                   </Text>
                   <FolderPicker
                     value={defaultWorkspace || ""}
                     onChange={setDefaultWorkspace}
-                    placeholder="~/workspace"
+                    placeholder="~/repos"
                     size="1"
                   />
                   <Text size="1" color="gray">

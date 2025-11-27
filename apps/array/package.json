@@ -51,7 +51,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/ui": "^4.0.10",
     "autoprefixer": "^10.4.17",
-    "electron": "^28.2.0",
+    "electron": "^30.0.0",
     "husky": "^9.1.7",
     "jsdom": "^26.0.0",
     "knip": "^5.66.3",
@@ -133,6 +133,7 @@
     "sonner": "^2.0.7",
     "uuid": "^9.0.1",
     "zod": "^4.1.12",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "electron-store": "^11.0.0"
   }
 }

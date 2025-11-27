@@ -1,9 +1,10 @@
-import { MainSidebar } from "@components/MainSidebar";
+import { HeaderRow } from "@components/HeaderRow";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { SettingsView } from "@features/settings/components/SettingsView";
+import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { TaskList } from "@features/task-list/components/TaskList";
@@ -81,6 +82,7 @@ export function MainLayout() {
 
   return (
     <Flex direction="column" height="100vh">
+      <HeaderRow />
       <Flex flexGrow="1" overflow="hidden">
         <MainSidebar />
 

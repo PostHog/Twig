@@ -83,6 +83,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
         color: isActive ? "var(--accent-12)" : "var(--gray-11)",
         opacity: isDragging ? 0.5 : 1,
         height: "32px",
+        minWidth: "60px",
       }}
       onClick={onSelect}
       onContextMenu={handleContextMenu}
