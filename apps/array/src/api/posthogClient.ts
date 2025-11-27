@@ -1,5 +1,6 @@
+import type { AgentEvent } from "@posthog/agent";
 import { logger } from "@renderer/lib/logger";
-import type { LogEntry, Task, TaskRun } from "@shared/types";
+import type { Task, TaskRun } from "@shared/types";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
 
@@ -171,7 +172,7 @@ export class PostHogAPIClient {
     return data.results ?? data ?? [];
   }
 
-  async getTaskRun(taskId: string, runId: string) {
+  async getTaskRun(taskId: string, runId: string): Promise<TaskRun> {
     const teamId = await this.getTeamId();
     const url = new URL(
       `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/`,
@@ -229,7 +230,31 @@ export class PostHogAPIClient {
     return data as unknown as TaskRun;
   }
 
-  async getTaskLogs(taskId: string): Promise<LogEntry[]> {
+  /**
+   * Append events to a task run's S3 log file
+   */
+  async appendTaskRunLog(
+    taskId: string,
+    runId: string,
+    entries: AgentEvent[],
+  ): Promise<void> {
+    const teamId = await this.getTeamId();
+    const url = `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/append_log/`;
+    const response = await this.api.fetcher.fetch({
+      method: "post",
+      url: new URL(url),
+      path: url,
+      overrides: {
+        body: JSON.stringify({ entries }),
+        headers: { "Content-Type": "application/json" },
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to append log: ${response.statusText}`);
+    }
+  }
+
+  async getTaskLogs(taskId: string): Promise<AgentEvent[]> {
     try {
       const task = (await this.getTask(taskId)) as unknown as Task;
       const logUrl = task?.latest_run?.log_url;
@@ -255,7 +280,7 @@ export class PostHogAPIClient {
       return content
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as LogEntry);
+        .map((line) => JSON.parse(line) as AgentEvent);
     } catch (err) {
       log.warn("Failed to fetch task logs from latest run", err);
       return [];

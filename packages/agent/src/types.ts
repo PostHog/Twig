@@ -34,11 +34,6 @@ export interface Task {
 }
 
 // Log entry structure for TaskRun.log
-export interface LogEntry {
-  type: string; // e.g., "info", "warning", "error", "success", "debug"
-  message: string;
-  [key: string]: unknown; // Allow additional fields
-}
 
 export type ArtifactType =
   | "plan"
@@ -75,7 +70,7 @@ export interface TaskRun {
   stage: string | null; // Current stage (e.g., 'research', 'plan', 'build')
   environment: TaskRunEnvironment;
   status: TaskRunStatus;
-  log_url?: string; // Presigned S3 URL for log access (valid for 1 hour)
+  log_url: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)
@@ -226,6 +221,13 @@ export interface InitEvent extends BaseEvent {
   mcpServers?: Array<{ name: string; status: string }>;
 }
 
+// Generic console message event for log-style output
+export interface ConsoleEvent extends BaseEvent {
+  type: "console";
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+}
+
 export interface CompactBoundaryEvent extends BaseEvent {
   type: "compact_boundary";
   trigger: "manual" | "auto";
@@ -303,6 +305,7 @@ export type AgentEvent =
   | UserMessageEvent
   | StatusEvent
   | InitEvent
+  | ConsoleEvent
   | CompactBoundaryEvent
   | DoneEvent
   | ErrorEvent

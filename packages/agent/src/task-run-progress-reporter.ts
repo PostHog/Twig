@@ -1,5 +1,5 @@
 import type { PostHogAPIClient, TaskRunUpdate } from "./posthog-api.js";
-import type { AgentEvent, LogEntry, TaskRun } from "./types.js";
+import type { AgentEvent, ConsoleEvent, TaskRun, TokenEvent } from "./types.js";
 import type { Logger } from "./utils/logger.js";
 
 interface ProgressMetadata {
@@ -52,7 +52,11 @@ export class TaskRunProgressReporter {
     try {
       const run = await this.posthogAPI.getTaskRun(taskId, taskRunId);
       this.taskRun = run;
-      this.logger.debug("Loaded task run", { taskId, runId: run.id });
+      this.logger.info("Loaded task run", {
+        taskId,
+        runId: run.id,
+        logUrl: run.log_url ?? "(not yet available)",
+      });
 
       await this.update({ status: "in_progress" }, "Task execution started");
     } catch (error) {
@@ -60,6 +64,7 @@ export class TaskRunProgressReporter {
         taskId,
         error: (error as Error).message,
       });
+      throw error;
     }
   }
 
@@ -109,10 +114,12 @@ export class TaskRunProgressReporter {
     this.tokenBuffer = "";
     this.tokenCount = 0;
 
-    await this.appendLogEntry({
+    const tokenEvent: TokenEvent = {
       type: "token",
-      message: buffer,
-    });
+      ts: Date.now(),
+      content: buffer,
+    };
+    await this.appendEvent(tokenEvent);
   }
 
   private scheduleTokenFlush(): void {
@@ -128,7 +135,7 @@ export class TaskRunProgressReporter {
     }, this.TOKEN_FLUSH_INTERVAL_MS);
   }
 
-  private appendLogEntry(entry: LogEntry): Promise<void> {
+  private appendEvent(event: AgentEvent): Promise<void> {
     if (!this.posthogAPI || !this.runId || !this.taskId) {
       return Promise.resolve();
     }
@@ -144,15 +151,15 @@ export class TaskRunProgressReporter {
           error: error instanceof Error ? error.message : String(error),
         });
       })
-      .then(() => this.writeLogEntry(taskId, runId, entry));
+      .then(() => this.writeEvent(taskId, runId, event));
 
     return this.logWriteQueue;
   }
 
-  private async writeLogEntry(
+  private async writeEvent(
     taskId: string,
     runId: string,
-    entry: LogEntry,
+    event: AgentEvent,
   ): Promise<void> {
     if (!this.posthogAPI) {
       return;
@@ -160,10 +167,10 @@ export class TaskRunProgressReporter {
 
     for (let attempt = 1; attempt <= this.LOG_APPEND_MAX_RETRIES; attempt++) {
       try {
-        await this.posthogAPI.appendTaskRunLog(taskId, runId, [entry]);
+        await this.posthogAPI.appendTaskRunLog(taskId, runId, [event]);
         return;
       } catch (error) {
-        this.logger.warn("Failed to append log entry", {
+        this.logger.warn("Failed to append event", {
           taskId,
           runId,
           attempt,
@@ -187,233 +194,30 @@ export class TaskRunProgressReporter {
       return;
     }
 
-    switch (event.type) {
-      case "token": {
-        // Batch tokens for efficiency
-        this.tokenBuffer += event.content;
-        this.tokenCount++;
-
-        if (this.tokenCount >= this.TOKEN_BATCH_SIZE) {
-          await this.flushTokens();
-          if (this.tokenFlushTimer) {
-            clearTimeout(this.tokenFlushTimer);
-            this.tokenFlushTimer = undefined;
-          }
-        } else {
-          this.scheduleTokenFlush();
-        }
-        return;
-      }
-
-      case "content_block_start": {
-        await this.appendLogEntry({
-          type: "content_block_start",
-          message: JSON.stringify({
-            index: event.index,
-            contentType: event.contentType,
-            toolName: event.toolName,
-            toolId: event.toolId,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "content_block_stop": {
-        await this.appendLogEntry({
-          type: "content_block_stop",
-          message: JSON.stringify({
-            index: event.index,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "message_start": {
-        await this.appendLogEntry({
-          type: "message_start",
-          message: JSON.stringify({
-            messageId: event.messageId,
-            model: event.model,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "message_delta": {
-        await this.appendLogEntry({
-          type: "message_delta",
-          message: JSON.stringify({
-            stopReason: event.stopReason,
-            stopSequence: event.stopSequence,
-            usage: event.usage,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "message_stop": {
-        await this.appendLogEntry({
-          type: "message_stop",
-          message: JSON.stringify({ ts: event.ts }),
-        });
-        return;
-      }
-
-      case "status": {
-        await this.appendLogEntry({
-          type: "status",
-          message: JSON.stringify({
-            phase: event.phase,
-            kind: event.kind,
-            branch: event.branch,
-            prUrl: event.prUrl,
-            taskId: event.taskId,
-            messageId: event.messageId,
-            model: event.model,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "artifact": {
-        await this.appendLogEntry({
-          type: "artifact",
-          message: JSON.stringify({
-            kind: event.kind,
-            content: event.content,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "init": {
-        await this.appendLogEntry({
-          type: "init",
-          message: JSON.stringify({
-            model: event.model,
-            tools: event.tools,
-            permissionMode: event.permissionMode,
-            cwd: event.cwd,
-            apiKeySource: event.apiKeySource,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "metric": {
-        await this.appendLogEntry({
-          type: "metric",
-          message: JSON.stringify({
-            key: event.key,
-            value: event.value,
-            unit: event.unit,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "compact_boundary": {
-        await this.appendLogEntry({
-          type: "compact_boundary",
-          message: JSON.stringify({
-            trigger: event.trigger,
-            preTokens: event.preTokens,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "tool_call": {
-        await this.appendLogEntry({
-          type: "tool_call",
-          message: JSON.stringify({
-            toolName: event.toolName,
-            callId: event.callId,
-            args: event.args,
-            parentToolUseId: event.parentToolUseId,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "tool_result": {
-        await this.appendLogEntry({
-          type: "tool_result",
-          message: JSON.stringify({
-            toolName: event.toolName,
-            callId: event.callId,
-            result: event.result,
-            isError: event.isError,
-            parentToolUseId: event.parentToolUseId,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "error": {
-        await this.appendLogEntry({
-          type: "error",
-          message: JSON.stringify({
-            message: event.message,
-            errorType: event.errorType,
-            context: event.context,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "done": {
-        await this.appendLogEntry({
-          type: "done",
-          message: JSON.stringify({
-            result: event.result,
-            durationMs: event.durationMs,
-            durationApiMs: event.durationApiMs,
-            numTurns: event.numTurns,
-            totalCostUsd: event.totalCostUsd,
-            usage: event.usage,
-            modelUsage: event.modelUsage,
-            permissionDenials: event.permissionDenials,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "user_message": {
-        await this.appendLogEntry({
-          type: "user_message",
-          message: JSON.stringify({
-            content: event.content,
-            isSynthetic: event.isSynthetic,
-            ts: event.ts,
-          }),
-        });
-        return;
-      }
-
-      case "raw_sdk_event": {
-        // Skip raw SDK events - too verbose for persistence
-        return;
-      }
-
-      default:
-        // For any unfamiliar event types, log them as-is
-        this.logger.debug("Unknown event type", { type: (event as any).type });
-        return;
+    // Skip raw SDK events - too verbose for persistence
+    if (event.type === "raw_sdk_event") {
+      return;
     }
+
+    // Batch tokens for efficiency
+    if (event.type === "token") {
+      this.tokenBuffer += event.content;
+      this.tokenCount++;
+
+      if (this.tokenCount >= this.TOKEN_BATCH_SIZE) {
+        await this.flushTokens();
+        if (this.tokenFlushTimer) {
+          clearTimeout(this.tokenFlushTimer);
+          this.tokenFlushTimer = undefined;
+        }
+      } else {
+        this.scheduleTokenFlush();
+      }
+      return;
+    }
+
+    // Append all other events directly
+    await this.appendEvent(event);
   }
 
   private async update(update: TaskRunUpdate, logLine?: string): Promise<void> {
@@ -421,15 +225,21 @@ export class TaskRunProgressReporter {
       return;
     }
 
-    // If there's a log line, append it separately using the append_log endpoint
+    // If there's a log line, append it as a console event
     if (logLine && logLine !== this.lastLogEntry) {
+      const consoleEvent: ConsoleEvent = {
+        type: "console",
+        ts: Date.now(),
+        level: "info",
+        message: logLine,
+      };
       try {
         await this.posthogAPI.appendTaskRunLog(this.taskId, this.runId, [
-          { type: "info", message: logLine },
+          consoleEvent,
         ]);
         this.lastLogEntry = logLine;
       } catch (error) {
-        this.logger.warn("Failed to append log entry", {
+        this.logger.warn("Failed to append console event", {
           taskId: this.taskId,
           runId: this.runId,
           error: (error as Error).message,

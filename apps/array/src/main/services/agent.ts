@@ -16,7 +16,7 @@ const log = logger.scope("agent");
 const onAgentLog: OnLogCallback = (level, scope, message, data) => {
   const scopedLog = logger.scope(scope);
   if (data !== undefined) {
-    scopedLog[level](message, data);
+    scopedLog[level as keyof typeof scopedLog](message, data);
   } else {
     scopedLog[level](message);
   }
@@ -88,7 +88,7 @@ export function registerAgentIpc(
         permissionMode,
         autoProgress,
         model,
-        runMode,
+        runMode: _runMode, // TODO: Add support for cloud runs
         createPR,
       }: AgentStartParams,
     ): Promise<{ taskId: string; channel: string }> => {
@@ -158,7 +158,7 @@ export function registerAgentIpc(
         posthogApiKey: apiKey,
         posthogApiUrl: apiHost,
         posthogProjectId: projectId,
-        debug: true,
+        debug: !app.isPackaged,
         onLog: onAgentLog,
       });
 
@@ -187,6 +187,12 @@ export function registerAgentIpc(
             ) {
               // Store the current run ID
               controllerEntry.currentRunId = latestRun.id;
+
+              log.debug("Task progress poll", {
+                runId: latestRun.id,
+                status: latestRun.status,
+                hasLogUrl: !!latestRun.log_url,
+              });
 
               emitToRenderer({
                 type: "progress",
@@ -252,7 +258,7 @@ export function registerAgentIpc(
           await agent.runTask(posthogTaskId, taskRunId, {
             repositoryPath: repoPath,
             permissionMode: resolvedPermission,
-            isCloudMode: runMode === "cloud",
+            isCloudMode: false,
             autoProgress: autoProgress ?? true,
             createPR: createPR ?? true,
             queryOverrides: {

@@ -47,12 +47,6 @@ export interface Task {
   latest_run?: TaskRun;
 }
 
-export interface LogEntry {
-  type: string; // e.g., "info", "warning", "error", "success", "debug"
-  message: string;
-  [key: string]: unknown; // Allow additional fields
-}
-
 export interface TaskRun {
   id: string;
   task: string; // Task ID
@@ -67,7 +61,7 @@ export interface TaskRun {
     | "completed"
     | "failed"
     | "cancelled";
-  log_url?: string;
+  log_url: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)
