@@ -5,7 +5,10 @@ import type {
   TaskFolderAssociation,
   WorktreeInfo,
 } from "../../shared/types";
+import { logger } from "../lib/logger";
 import { clearAllStoreData, foldersStore } from "./store";
+
+const log = logger.scope("folders");
 
 function generateFolderId(): string {
   return `folder_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -54,7 +57,7 @@ async function removeFolder(folderId: string): Promise<void> {
 
   foldersStore.set("folders", filtered);
   foldersStore.set("taskAssociations", filteredAssociations);
-  console.log(`Removed folder with ID: ${folderId}`);
+  log.debug(`Removed folder with ID: ${folderId}`);
 }
 
 async function updateFolderAccessed(folderId: string): Promise<void> {
@@ -148,7 +151,7 @@ export function registerFoldersIpc(): void {
       try {
         return await getFolders();
       } catch (error) {
-        console.error("Failed to get folders:", error);
+        log.error("Failed to get folders:", error);
         return [];
       }
     },
@@ -163,7 +166,7 @@ export function registerFoldersIpc(): void {
       try {
         return await addFolder(folderPath);
       } catch (error) {
-        console.error(`Failed to add folder ${folderPath}:`, error);
+        log.error(`Failed to add folder ${folderPath}:`, error);
         throw error;
       }
     },
@@ -175,7 +178,7 @@ export function registerFoldersIpc(): void {
       try {
         await removeFolder(folderId);
       } catch (error) {
-        console.error(`Failed to remove folder ${folderId}:`, error);
+        log.error(`Failed to remove folder ${folderId}:`, error);
         throw error;
       }
     },
@@ -187,7 +190,7 @@ export function registerFoldersIpc(): void {
       try {
         await updateFolderAccessed(folderId);
       } catch (error) {
-        console.error(`Failed to update folder with ID: ${folderId}:`, error);
+        log.error(`Failed to update folder with ID: ${folderId}:`, error);
       }
     },
   );
@@ -197,9 +200,9 @@ export function registerFoldersIpc(): void {
     async (_event: IpcMainInvokeEvent): Promise<void> => {
       try {
         clearAllStoreData();
-        console.log("Cleared all application data");
+        log.info("Cleared all application data");
       } catch (error) {
-        console.error("Failed to clear all data:", error);
+        log.error("Failed to clear all data:", error);
         throw error;
       }
     },
@@ -211,7 +214,7 @@ export function registerFoldersIpc(): void {
       try {
         return await getTaskAssociations();
       } catch (error) {
-        console.error("Failed to get task associations:", error);
+        log.error("Failed to get task associations:", error);
         return [];
       }
     },
@@ -226,7 +229,7 @@ export function registerFoldersIpc(): void {
       try {
         return await getTaskAssociation(taskId);
       } catch (error) {
-        console.error(`Failed to get task association for ${taskId}:`, error);
+        log.error(`Failed to get task association for ${taskId}:`, error);
         return null;
       }
     },
@@ -244,7 +247,7 @@ export function registerFoldersIpc(): void {
       try {
         return await setTaskAssociation(taskId, folderId, folderPath, worktree);
       } catch (error) {
-        console.error(`Failed to set task association for ${taskId}:`, error);
+        log.error(`Failed to set task association for ${taskId}:`, error);
         throw error;
       }
     },
@@ -260,7 +263,7 @@ export function registerFoldersIpc(): void {
       try {
         return await updateTaskWorktree(taskId, worktree);
       } catch (error) {
-        console.error(`Failed to update worktree for ${taskId}:`, error);
+        log.error(`Failed to update worktree for ${taskId}:`, error);
         return null;
       }
     },
@@ -272,7 +275,7 @@ export function registerFoldersIpc(): void {
       try {
         await removeTaskAssociation(taskId);
       } catch (error) {
-        console.error(
+        log.error(
           `Failed to remove task association for ${taskId}:`,
           error,
         );
@@ -287,7 +290,7 @@ export function registerFoldersIpc(): void {
       try {
         await clearTaskWorktree(taskId);
       } catch (error) {
-        console.error(`Failed to clear worktree for ${taskId}:`, error);
+        log.error(`Failed to clear worktree for ${taskId}:`, error);
         throw error;
       }
     },

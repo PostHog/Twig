@@ -2,9 +2,12 @@ import {
   useDeleteTask,
   useDuplicateTask,
 } from "@features/tasks/hooks/useTasks";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useCallback, useState } from "react";
 import "@main/services/contextMenu.types";
+
+const log = logger.scope("context-menu");
 
 export function useTaskContextMenu() {
   const [renameTask, setRenameTask] = useState<Task | null>(null);
@@ -18,7 +21,7 @@ export function useTaskContextMenu() {
       event.stopPropagation();
 
       if (!window.electronAPI?.showTaskContextMenu) {
-        console.error("[context-menu] Electron API not available");
+        log.error("Electron API not available");
         return;
       }
 
@@ -45,7 +48,7 @@ export function useTaskContextMenu() {
             break;
         }
       } catch (error) {
-        console.error("[context-menu] Failed to show context menu", error);
+        log.error("Failed to show context menu", error);
       }
     },
     [duplicateTask, deleteTask],

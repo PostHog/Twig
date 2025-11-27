@@ -19,9 +19,12 @@ import {
   Switch,
   Text,
 } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
 import { useThemeStore } from "../../../stores/themeStore";
+
+const log = logger.scope("settings");
 
 const REGION_LABELS: Record<CloudRegion, string> = {
   us: "US Cloud",
@@ -230,7 +233,7 @@ export function SettingsView() {
                           window.location.reload();
                         })
                         .catch((error: unknown) => {
-                          console.error("Failed to clear storage:", error);
+                          log.error("Failed to clear storage:", error);
                           alert("Failed to clear storage. Please try again.");
                         });
                     }

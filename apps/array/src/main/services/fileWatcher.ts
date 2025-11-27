@@ -7,6 +7,9 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("file-watcher");
 
 const WATCHER_IGNORE_PATTERNS = ["**/node_modules/**", "**/.git/**"];
 const DEBOUNCE_MS = 100;
@@ -72,7 +75,7 @@ class FileService {
           return a.name.localeCompare(b.name);
         });
     } catch (error) {
-      console.error("Failed to list directory:", error);
+      log.error("Failed to list directory:", error);
       return [];
     }
   }
@@ -115,7 +118,7 @@ class FileService {
       repoPath,
       (err, events) => {
         if (err) {
-          console.error("Watcher error:", err);
+          log.error("Watcher error:", err);
           return;
         }
 
@@ -162,7 +165,7 @@ class FileService {
         gitDirToWatch,
         (err, events) => {
           if (err) {
-            console.error("Git watcher error:", err);
+            log.error("Git watcher error:", err);
             return;
           }
           if (
@@ -175,7 +178,7 @@ class FileService {
         },
       );
     } catch (error) {
-      console.warn("Failed to set up git watcher:", error);
+      log.warn("Failed to set up git watcher:", error);
     }
 
     state.subscription = subscription;
@@ -196,7 +199,7 @@ class FileService {
           ignore: WATCHER_IGNORE_PATTERNS,
         });
       } catch (error) {
-        console.error("Failed to write snapshot:", error);
+        log.error("Failed to write snapshot:", error);
       }
 
       await state.subscription?.unsubscribe();

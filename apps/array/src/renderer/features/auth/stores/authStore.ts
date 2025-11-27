@@ -1,5 +1,6 @@
 import { PostHogAPIClient } from "@api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import type { CloudRegion } from "@shared/types/oauth";
 import { create } from "zustand";
@@ -9,6 +10,8 @@ import {
   TOKEN_REFRESH_BUFFER_MS,
 } from "@/constants/oauth";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+
+const log = logger.scope("auth-store");
 
 interface StoredTokens {
   accessToken: string;
@@ -222,14 +225,14 @@ export const useAuthStore = create<AuthState>()(
             get()
               .refreshAccessToken()
               .catch((error) => {
-                console.error("Proactive token refresh failed:", error);
+                log.error("Proactive token refresh failed:", error);
               });
           }, timeUntilRefresh);
         } else {
           get()
             .refreshAccessToken()
             .catch((error) => {
-              console.error("Immediate token refresh failed:", error);
+              log.error("Immediate token refresh failed:", error);
             });
         }
       },
@@ -253,7 +256,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               await get().refreshAccessToken();
             } catch (error) {
-              console.error("Failed to refresh expired token:", error);
+              log.error("Failed to refresh expired token:", error);
               set({ storedTokens: null, isAuthenticated: false });
               return false;
             }
@@ -263,7 +266,7 @@ export const useAuthStore = create<AuthState>()(
           const projectId = tokens.scopedTeams?.[0];
 
           if (!projectId) {
-            console.error("No project ID found in stored tokens");
+            log.error("No project ID found in stored tokens");
             get().logout();
             return false;
           }
@@ -311,7 +314,7 @@ export const useAuthStore = create<AuthState>()(
 
             return true;
           } catch (error) {
-            console.error("Failed to validate OAuth session:", error);
+            log.error("Failed to validate OAuth session:", error);
             set({ storedTokens: null, isAuthenticated: false });
             return false;
           }

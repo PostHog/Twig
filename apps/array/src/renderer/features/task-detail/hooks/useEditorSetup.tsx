@@ -1,4 +1,5 @@
 import { computePosition, flip, shift } from "@floating-ui/dom";
+import { logger } from "@renderer/lib/logger";
 import type { MentionItem } from "@shared/types";
 import { Extension } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
@@ -21,6 +22,8 @@ import {
   type TaskFileMentionListRef,
 } from "../components/TaskFileMentionList";
 import { useTaskInputStore } from "../stores/taskInputStore";
+
+const log = logger.scope("editor-setup");
 
 interface UseEditorSetupOptions {
   onSubmit: () => void;
@@ -123,7 +126,7 @@ export function useEditorSetup({
               setMentionItems(items);
               return items;
             } catch (error) {
-              console.error("Error fetching files:", error);
+              log.error("Error fetching files:", error);
               setMentionItems([]);
               return [];
             }

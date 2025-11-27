@@ -1,6 +1,9 @@
+import { logger } from "@renderer/lib/logger";
 import type { LogEntry, RepositoryConfig, Task, TaskRun } from "@shared/types";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
+
+const log = logger.scope("posthog-client");
 
 export class PostHogAPIClient {
   private api: ReturnType<typeof createApiClient>;
@@ -195,7 +198,7 @@ export class PostHogAPIClient {
       const response = await fetch(logUrl);
 
       if (!response.ok) {
-        console.warn(
+        log.warn(
           `Failed to fetch logs: ${response.status} ${response.statusText}`,
         );
         return [];
@@ -211,7 +214,7 @@ export class PostHogAPIClient {
         .split("\n")
         .map((line) => JSON.parse(line) as LogEntry);
     } catch (err) {
-      console.warn("Failed to fetch task logs from latest run", err);
+      log.warn("Failed to fetch task logs from latest run", err);
       return [];
     }
   }

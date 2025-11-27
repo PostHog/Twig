@@ -6,6 +6,7 @@ import type {
   TabContextMenuResult,
   TaskContextMenuResult,
 } from "./services/contextMenu.types.js";
+import 'electron-log/preload'
 
 interface MessageBoxOptions {
   type?: "none" | "info" | "error" | "question" | "warning";
