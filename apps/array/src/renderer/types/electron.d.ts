@@ -6,6 +6,7 @@ import type {
 } from "@main/services/contextMenu.types";
 import type {
   ChangedFile,
+  DetectedApplication,
   RegisteredFolder,
   TaskArtifact,
   TaskFolderAssociation,
@@ -260,6 +261,18 @@ declare global {
         mainRepoPath: string,
         worktreePath: string,
       ) => Promise<string | null>;
+    };
+    externalApps: {
+      getDetectedApps: () => Promise<DetectedApplication[]>;
+      openInApp: (
+        appId: string,
+        path: string,
+      ) => Promise<{ success: boolean; error?: string }>;
+      setLastUsed: (appId: string) => Promise<void>;
+      getLastUsed: () => Promise<{
+        lastUsedApp?: string;
+      }>;
+      copyPath: (path: string) => Promise<void>;
     };
   }
 

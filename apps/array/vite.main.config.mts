@@ -172,7 +172,7 @@ export default defineConfig({
       transformMixedEsModules: true,
     },
     rollupOptions: {
-      external: ["node-pty", "@parcel/watcher"],
+      external: ["node-pty", "@parcel/watcher", "file-icon"],
     },
   },
 });
