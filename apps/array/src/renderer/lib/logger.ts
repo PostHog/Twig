@@ -1,5 +1,8 @@
 import log from "electron-log/renderer";
 
+// Ensure logs appear in dev tools console
+log.transports.console.level = "debug";
+
 export const logger = {
   info: (message: string, ...args: unknown[]) => log.info(message, ...args),
   warn: (message: string, ...args: unknown[]) => log.warn(message, ...args),

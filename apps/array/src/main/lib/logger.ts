@@ -1,7 +1,10 @@
 import log from "electron-log/main";
 
+// Initialize IPC transport to forward main process logs to renderer dev tools
+log.initialize();
+
 log.transports.file.level = "info";
-log.transports.console.level = "debug";
+log.transports.console.level = "info";
 
 export const logger = {
   info: (message: string, ...args: unknown[]) => log.info(message, ...args),

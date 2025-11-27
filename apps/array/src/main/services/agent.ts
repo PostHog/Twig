@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent, PermissionMode } from "@posthog/agent";
+import { Agent, type OnLogCallback, PermissionMode } from "@posthog/agent";
 import {
   app,
   type BrowserWindow,
@@ -12,6 +12,15 @@ import {
 import { logger } from "../lib/logger";
 
 const log = logger.scope("agent");
+
+const onAgentLog: OnLogCallback = (level, scope, message, data) => {
+  const scopedLog = logger.scope(scope);
+  if (data !== undefined) {
+    scopedLog[level](message, data);
+  } else {
+    scopedLog[level](message);
+  }
+};
 
 interface AgentStartParams {
   taskId: string;
@@ -146,6 +155,7 @@ export function registerAgentIpc(
         posthogApiUrl: apiHost,
         posthogProjectId: projectId,
         debug: true,
+        onLog: onAgentLog,
       });
 
       const controllerEntry: TaskController = {
