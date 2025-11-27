@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -6,6 +6,7 @@ import type { WorktreeInfo } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface WorktreeConfig {
   mainRepoPath: string;
@@ -503,9 +504,9 @@ export class WorktreeManager {
 
   private async runGitCommand(command: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(
-        `cd "${this.mainRepoPath}" && git ${command}`,
-      );
+      const { stdout } = await execAsync(`git ${command}`, {
+        cwd: this.mainRepoPath,
+      });
       return stdout.trim();
     } catch (error) {
       throw new Error(`Git command failed: ${command}\n${error}`);
@@ -659,8 +660,14 @@ export class WorktreeManager {
     this.logger.info("Deleting worktree", { worktreePath });
 
     try {
-      // First, try to remove the worktree via git
-      await this.runGitCommand(`worktree remove "${worktreePath}" --force`);
+      // First, try to remove the worktree via git using execFileAsync for safety
+      await execFileAsync(
+        "git",
+        ["worktree", "remove", worktreePath, "--force"],
+        {
+          cwd: this.mainRepoPath,
+        },
+      );
       this.logger.info("Worktree deleted successfully", { worktreePath });
     } catch (error) {
       this.logger.warn(
@@ -747,7 +754,8 @@ export class WorktreeManager {
   async isWorktree(repoPath: string): Promise<boolean> {
     try {
       const { stdout } = await execAsync(
-        `cd "${repoPath}" && git rev-parse --is-inside-work-tree`,
+        "git rev-parse --is-inside-work-tree",
+        { cwd: repoPath },
       );
       if (stdout.trim() !== "true") {
         return false;
