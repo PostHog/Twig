@@ -4,7 +4,7 @@ export interface TaskExecutionState {
   taskId: string;
   status: "running" | "completed" | "failed" | "canceled" | "timeout";
   mode: "plan_only" | "plan_and_build" | "build_only";
-  result?: any;
+  result?: unknown;
   startedAt: number;
   completedAt?: number;
   abortController?: AbortController;
@@ -37,7 +37,7 @@ export class TaskManager {
     return executionState;
   }
 
-  async waitForCompletion(executionId: string): Promise<any> {
+  async waitForCompletion(executionId: string): Promise<unknown> {
     const execution = this.executionStates.get(executionId);
     if (!execution) {
       throw new Error(`Execution ${executionId} not found`);
@@ -76,7 +76,7 @@ export class TaskManager {
     });
   }
 
-  completeExecution(executionId: string, result: any): void {
+  completeExecution(executionId: string, result: unknown): void {
     const execution = this.executionStates.get(executionId);
     if (!execution) {
       throw new Error(`Execution ${executionId} not found`);

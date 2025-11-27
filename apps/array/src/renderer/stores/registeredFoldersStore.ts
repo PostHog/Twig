@@ -9,9 +9,7 @@ interface RegisteredFoldersState {
   removeFolder: (folderId: string) => Promise<void>;
   updateLastAccessed: (folderId: string) => Promise<void>;
   getFolderByPath: (path: string) => RegisteredFolder | undefined;
-  cleanupOrphanedWorktrees: (
-    mainRepoPath: string,
-  ) => Promise<{
+  cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
     deleted: string[];
     errors: Array<{ path: string; error: string }>;
   }>;

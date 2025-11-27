@@ -273,7 +273,7 @@ export class PostHogAPIClient {
     const teamId = projectId ? parseInt(projectId, 10) : this.getTeamId();
 
     try {
-      const errorData = await this.apiRequest<any>(
+      const errorData = await this.apiRequest<Record<string, unknown>>(
         `/api/projects/${teamId}/error_tracking/${errorId}/`,
       );
 
@@ -284,7 +284,10 @@ export class PostHogAPIClient {
         type: "error",
         id: errorId,
         url: `${this.baseUrl}/project/${teamId}/error_tracking/${errorId}`,
-        title: errorData.exception_type || "Unknown Error",
+        title:
+          (typeof errorData.exception_type === "string"
+            ? errorData.exception_type
+            : undefined) || "Unknown Error",
         content,
         metadata: {
           exception_type: errorData.exception_type,
@@ -343,7 +346,7 @@ export class PostHogAPIClient {
   /**
    * Format error data for agent consumption
    */
-  private formatErrorContent(errorData: any): string {
+  private formatErrorContent(errorData: Record<string, unknown>): string {
     const sections = [];
 
     if (errorData.exception_type) {

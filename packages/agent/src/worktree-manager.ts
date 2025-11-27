@@ -792,9 +792,7 @@ export class WorktreeManager {
     }
   }
 
-  async cleanupOrphanedWorktrees(
-    associatedWorktreePaths: string[],
-  ): Promise<{
+  async cleanupOrphanedWorktrees(associatedWorktreePaths: string[]): Promise<{
     deleted: string[];
     errors: Array<{ path: string; error: string }>;
   }> {

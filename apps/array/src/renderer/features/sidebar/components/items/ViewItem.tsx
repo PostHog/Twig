@@ -11,7 +11,13 @@ export function ViewItem({ label, isActive, onClick }: ViewItemProps) {
   return (
     <SidebarItem
       depth={0}
-      icon={label === "My tasks" ? <UserIcon size={12} weight={isActive ? "fill" : "regular"} /> : <ListNumbersIcon size={12} weight={isActive ? "fill" : "regular"} />}
+      icon={
+        label === "My tasks" ? (
+          <UserIcon size={12} weight={isActive ? "fill" : "regular"} />
+        ) : (
+          <ListNumbersIcon size={12} weight={isActive ? "fill" : "regular"} />
+        )
+      }
       label={label}
       isActive={isActive}
       onClick={onClick}
