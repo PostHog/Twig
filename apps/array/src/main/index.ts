@@ -10,6 +10,7 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
+import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { registerAgentIpc, type TaskController } from "./services/agent.js";
 import { setupAgentHotReload } from "./services/dev-reload.js";

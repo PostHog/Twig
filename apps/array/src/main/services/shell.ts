@@ -2,6 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
 import * as pty from "node-pty";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("shell");
 
 interface ShellSession {
   pty: pty.IPty;
@@ -41,13 +44,13 @@ export function registerShellIpc(): void {
 
         // Validate that the directory exists
         if (!fs.existsSync(workingDir)) {
-          console.warn(
+          log.warn(
             `Shell session ${sessionId}: cwd "${workingDir}" does not exist, falling back to home directory`,
           );
           workingDir = homeDir;
         }
 
-        console.log(
+        log.info(
           `Creating shell session ${sessionId}: shell=${shell}, cwd=${workingDir}`,
         );
 
@@ -89,7 +92,7 @@ export function registerShellIpc(): void {
 
         // Handle exit
         ptyProcess.onExit(({ exitCode, signal }) => {
-          console.error(
+          log.info(
             `Shell session ${sessionId} exited with code ${exitCode}, signal ${signal}`,
           );
           event.sender.send(`shell:exit:${sessionId}`);
@@ -101,7 +104,7 @@ export function registerShellIpc(): void {
           webContents: event.sender,
         });
       } catch (error) {
-        console.error(`Failed to create shell session ${sessionId}:`, error);
+        log.error(`Failed to create shell session ${sessionId}:`, error);
         throw error;
       }
     },

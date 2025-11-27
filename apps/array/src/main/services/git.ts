@@ -5,6 +5,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { ChangedFile, GitFileStatus } from "@shared/types";
 import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("git");
 
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
@@ -155,7 +158,7 @@ const getChangedFiles = async (directoryPath: string): Promise<Set<string>> => {
       }
     }
   } catch (error) {
-    console.error("Error getting changed files:", error);
+    log.error("Error getting changed files:", error);
   }
 
   return changedFiles;
@@ -554,7 +557,7 @@ export function registerGitIpc(
     });
 
     cloneProcess.on("error", (error: Error) => {
-      console.error(`[git clone] Process error:`, error);
+      log.error("Process error:", error);
       if (activeClones.get(cloneId)) {
         sendCloneProgress(win, cloneId, {
           status: "error",

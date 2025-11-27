@@ -1,5 +1,8 @@
 import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import { useCallback, useEffect, useState } from "react";
+
+const log = logger.scope("updates");
 
 export function UpdatePrompt() {
   const [open, setOpen] = useState(false);
@@ -35,7 +38,7 @@ export function UpdatePrompt() {
       }
       // When installed === true the app will quit immediately.
     } catch (error) {
-      console.error("[updates] Failed to install update", error);
+      log.error("Failed to install update", error);
       setErrorMessage("Update failed to install. Try quitting manually.");
       setIsInstalling(false);
     }

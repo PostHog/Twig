@@ -1,7 +1,10 @@
 import { useUpdateTask } from "@features/tasks/hooks/useTasks";
 import { Button, Dialog, Flex, Text, TextField } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useState } from "react";
+
+const log = logger.scope("rename-dialog");
 
 interface RenameTaskDialogProps {
   task: Task | null;
@@ -37,7 +40,7 @@ export function RenameTaskDialog({
       });
       onOpenChange(false);
     } catch (error) {
-      console.error("[rename] Failed to rename task", error);
+      log.error("Failed to rename task", error);
       setErrorMessage("Failed to rename task. Please try again.");
     }
   }, [task, newTitle, updateTask, onOpenChange]);

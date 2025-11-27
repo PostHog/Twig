@@ -9,6 +9,7 @@ import {
 } from "@features/editor/utils/tiptap-converter";
 import { computePosition, flip, shift } from "@floating-ui/dom";
 import { Box } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { MentionItem } from "@shared/types";
 import type { Editor } from "@tiptap/core";
 import { Link } from "@tiptap/extension-link";
@@ -34,6 +35,8 @@ import {
   parsePostHogUrl,
 } from "@utils/posthog-url-parser";
 import { useEffect, useRef, useState } from "react";
+
+const log = logger.scope("rich-text-editor");
 
 interface RichTextEditorProps {
   value: string;
@@ -201,7 +204,7 @@ export function RichTextEditor({
                 }));
                 items.push(...fileItems);
               } catch (error) {
-                console.error("Error fetching files:", error);
+                log.error("Error fetching files:", error);
               }
             }
 

@@ -5,7 +5,10 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef } from "react";
+import { logger } from "@/renderer/lib/logger";
 import { useTerminalStore } from "../stores/terminalStore";
+
+const log = logger.scope("shell-terminal");
 
 interface ShellTerminalProps {
   cwd?: string;
@@ -31,7 +34,7 @@ function loadAddons(term: Terminal) {
 
     if (hasModifier) {
       window.electronAPI?.openExternal(uri).catch((error: Error) => {
-        console.error("Failed to open link:", uri, error);
+        log.error("Failed to open link:", uri, error);
       });
     }
   };
@@ -119,13 +122,10 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
     fitAddon.current = fit;
     serializeAddon.current = serialize;
 
-    console.log(
-      `[ShellTerminal] Restoring state for key: ${persistenceKey}`,
-      savedState,
-    );
+    log.debug(`Restoring state for key: ${persistenceKey}`, savedState);
     if (savedState?.serializedState) {
-      console.log(
-        `[ShellTerminal] Writing ${savedState.serializedState.length} chars to terminal`,
+      log.debug(
+        `Writing ${savedState.serializedState.length} chars to terminal`,
       );
       term.write(savedState.serializedState);
       restoredStateLengthRef.current = savedState.serializedState.length;
@@ -138,12 +138,10 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
         if (sessionId) {
           const sessionExists = await window.electronAPI?.shellCheck(sessionId);
           if (sessionExists) {
-            console.log(
-              `[ShellTerminal] Reconnecting to existing session ${sessionId}`,
-            );
+            log.debug(`Reconnecting to existing session ${sessionId}`);
           } else {
-            console.log(
-              `[ShellTerminal] Saved session ${sessionId} no longer exists, creating new one`,
+            log.debug(
+              `Saved session ${sessionId} no longer exists, creating new one`,
             );
             sessionId = null;
           }
@@ -151,7 +149,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
 
         if (!sessionId) {
           sessionId = `shell-${Date.now()}-${secureRandomString(7)}`;
-          console.log(`[ShellTerminal] Creating new session ${sessionId}`);
+          log.debug(`Creating new session ${sessionId}`);
           terminalStore.setSessionId(persistenceKey, sessionId);
         }
 
@@ -171,7 +169,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
           }
         }, 0);
       } catch (error) {
-        console.error("Failed to initialize shell session:", error);
+        log.error("Failed to initialize shell session:", error);
         term.writeln(
           `\r\n\x1b[31mFailed to create shell: ${(error as Error).message}\x1b[0m\r\n`,
         );
@@ -184,8 +182,8 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       }
       saveTimeoutRef.current = setTimeout(() => {
         const serialized = serialize.serialize();
-        console.log(
-          `[ShellTerminal] Saving state for key: ${persistenceKey}, ${serialized.length} chars`,
+        log.debug(
+          `Saving state for key: ${persistenceKey}, ${serialized.length} chars`,
         );
         terminalStore.setSerializedState(persistenceKey, serialized);
       }, 500); // 500ms debounce
@@ -225,7 +223,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       window.electronAPI
         ?.shellWrite(sessionIdRef.current, data)
         .catch((error: Error) => {
-          console.error("Failed to write to shell:", error);
+          log.error("Failed to write to shell:", error);
         });
       saveTerminalState();
     });
@@ -243,7 +241,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
               terminal.current.rows,
             )
             .catch((error: Error) => {
-              console.error("Failed to resize shell:", error);
+              log.error("Failed to resize shell:", error);
             });
         }
       }
@@ -275,13 +273,13 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
           serialized.length >= restoredStateLengthRef.current);
 
       if (shouldSave) {
-        console.log(
-          `[ShellTerminal] Cleanup: Saving final state for key: ${persistenceKey}, ${serialized.length} chars (hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
+        log.debug(
+          `Cleanup: Saving final state for key: ${persistenceKey}, ${serialized.length} chars (hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
         );
         terminalStore.setSerializedState(persistenceKey, serialized);
       } else {
-        console.log(
-          `[ShellTerminal] Cleanup: Not saving for key: ${persistenceKey}, ${serialized.length} chars (would lose data - hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
+        log.debug(
+          `Cleanup: Not saving for key: ${persistenceKey}, ${serialized.length} chars (would lose data - hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
         );
       }
 
