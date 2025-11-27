@@ -1,4 +1,5 @@
 import path from "node:path";
+import { WorktreeManager } from "@posthog/agent";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
 import type {
   RegisteredFolder,
@@ -147,7 +148,6 @@ async function cleanupOrphanedWorktreesForFolder(
   deleted: string[];
   errors: Array<{ path: string; error: string }>;
 }> {
-  const WorktreeManager = (await import("@posthog/agent")).WorktreeManager;
   const manager = new WorktreeManager({ mainRepoPath });
 
   const associations = foldersStore.get("taskAssociations", []);
