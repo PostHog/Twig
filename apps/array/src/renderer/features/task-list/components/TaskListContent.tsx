@@ -3,7 +3,6 @@ import { TaskListItems } from "@features/task-list/components/TaskListItems";
 import type { GroupByField } from "@features/tasks/stores/taskStore";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import type React from "react";
 
 interface TaskListContentProps {
   filteredTasks: Task[];
@@ -14,19 +13,10 @@ interface TaskListContentProps {
   groupBy: GroupByField;
   expandedGroups: Record<string, boolean>;
   toggleGroupExpanded: (groupName: string) => void;
-  draggedTaskId: string | null;
-  dragOverIndex: number | null;
-  dropPosition: "top" | "bottom" | null;
   selectedIndex: number | null;
   hoveredIndex: number | null;
   contextMenuIndex: number | null;
   onSelectTask: (task: Task) => void;
-  onDragStart: (e: React.DragEvent, taskId: string) => void;
-  onDragOver: (e: React.DragEvent, index: number) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent, index: number) => void;
-  onDragEnd: () => void;
-  onMoveTask: (fromIndex: number, toIndex: number) => void;
   filter: string;
 }
 
@@ -35,19 +25,10 @@ export function TaskListContent({
   groupedTasks,
   expandedGroups,
   toggleGroupExpanded,
-  draggedTaskId,
-  dragOverIndex,
-  dropPosition,
   selectedIndex,
   hoveredIndex,
   contextMenuIndex,
   onSelectTask,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-  onMoveTask,
   filter,
 }: TaskListContentProps) {
   if (filteredTasks.length === 0) {
@@ -72,19 +53,10 @@ export function TaskListContent({
               tasks={group.tasks}
               isExpanded={isExpanded}
               onToggle={() => toggleGroupExpanded(group.name)}
-              draggedTaskId={draggedTaskId}
-              dragOverIndex={dragOverIndex}
-              dropPosition={dropPosition}
               selectedIndex={selectedIndex}
               hoveredIndex={hoveredIndex}
               contextMenuIndex={contextMenuIndex}
               onSelectTask={onSelectTask}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onDragEnd={onDragEnd}
-              onMoveTask={onMoveTask}
               taskToGlobalIndex={groupedTasks.taskToGlobalIndex}
             />
           );
@@ -96,19 +68,10 @@ export function TaskListContent({
   return (
     <TaskListItems
       tasks={filteredTasks}
-      draggedTaskId={draggedTaskId}
-      dragOverIndex={dragOverIndex}
-      dropPosition={dropPosition}
       selectedIndex={selectedIndex}
       hoveredIndex={hoveredIndex}
       contextMenuIndex={contextMenuIndex}
       onSelectTask={onSelectTask}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      onMoveTask={onMoveTask}
     />
   );
 }

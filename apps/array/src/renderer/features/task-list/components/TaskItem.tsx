@@ -1,5 +1,4 @@
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
-import { TaskDragPreview } from "@features/task-list/components/TaskDragPreview";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { GitPullRequest } from "@phosphor-icons/react";
@@ -7,42 +6,20 @@ import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useWorktreeStore } from "@stores/worktreeStore";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
-import type React from "react";
-import { memo, useRef } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
+import { memo } from "react";
 
 interface TaskItemProps {
   task: Task;
   index: number;
   isHighlighted: boolean;
-  isDragging: boolean;
-  showTopIndicator: boolean;
-  showBottomIndicator: boolean;
   onSelectTask: (task: Task) => void;
-  onDragStart: (e: React.DragEvent, taskId: string) => void;
-  onDragOver: (e: React.DragEvent, index: number) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent, index: number) => void;
-  onDragEnd: () => void;
-  onMoveTask: (fromIndex: number, toIndex: number) => void;
-  filteredTasksLength: number;
 }
 
 function TaskItemComponent({
   task,
   index,
   isHighlighted,
-  isDragging,
-  showTopIndicator,
-  showBottomIndicator,
   onSelectTask,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-  onMoveTask,
-  filteredTasksLength,
 }: TaskItemProps) {
   // Get store actions and hooks
   const setSelectedIndex = useTaskStore((state) => state.setSelectedIndex);
@@ -59,7 +36,6 @@ function TaskItemComponent({
     hoursSinceCreated < 24
       ? formatDistanceToNow(createdAt, { addSuffix: true })
       : format(createdAt, "MMM d");
-  const dragPreviewRef = useRef<HTMLDivElement>(null);
 
   // Determine status: If PR exists, mark as completed, otherwise use latest_run status
   const prUrl = task.latest_run?.output?.pr_url as string | undefined;
@@ -92,57 +68,8 @@ function TaskItemComponent({
     backlog: "Backlog",
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
-    if (dragPreviewRef.current) {
-      e.dataTransfer.setDragImage(dragPreviewRef.current, 0, 0);
-    }
-    onDragStart(e, task.id);
-  };
-
-  useHotkeys(
-    "alt+shift+up",
-    (e) => {
-      e.preventDefault();
-      onMoveTask(index, 0);
-    },
-    { enabled: isHighlighted },
-  );
-
-  useHotkeys(
-    "alt+up",
-    (e) => {
-      e.preventDefault();
-      onMoveTask(index, Math.max(0, index - 1));
-    },
-    { enabled: isHighlighted },
-  );
-
-  useHotkeys(
-    "alt+down",
-    (e) => {
-      e.preventDefault();
-      onMoveTask(index, Math.min(filteredTasksLength - 1, index + 1));
-    },
-    { enabled: isHighlighted },
-  );
-
-  useHotkeys(
-    "alt+shift+down",
-    (e) => {
-      e.preventDefault();
-      onMoveTask(index, filteredTasksLength - 1);
-    },
-    { enabled: isHighlighted },
-  );
-
   return (
     <>
-      <TaskDragPreview
-        ref={dragPreviewRef}
-        status={status}
-        title={task.title}
-      />
-
       <RenameTaskDialog
         task={renameTask}
         open={renameDialogOpen}
@@ -153,7 +80,7 @@ function TaskItemComponent({
         p="2"
         className={`relative cursor-pointer border-gray-6 border-b font-mono ${
           isHighlighted ? "bg-gray-3" : ""
-        } ${isDragging ? "opacity-50" : ""}`}
+        }`}
         data-task-item="true"
         onClick={() => {
           setSelectedIndex(index);
@@ -168,20 +95,7 @@ function TaskItemComponent({
             setHoveredIndex(index);
           }
         }}
-        draggable
-        onDragStart={handleDragStart}
-        onDragOver={(e) => onDragOver(e, index)}
-        onDragLeave={onDragLeave}
-        onDrop={(e) => onDrop(e, index)}
-        onDragEnd={onDragEnd}
       >
-        {showTopIndicator && (
-          <Box className="absolute top-0 right-0 left-0 z-10 h-0.5 bg-accent-8" />
-        )}
-
-        {showBottomIndicator && (
-          <Box className="absolute right-0 bottom-0 left-0 z-10 h-0.5 bg-accent-8" />
-        )}
         <Flex align="center" gap="2" style={{ minWidth: 0 }}>
           <Text color="gray" size="1" style={{ flexShrink: 0 }}>
             {isHighlighted ? "[•]" : "[ ]"}

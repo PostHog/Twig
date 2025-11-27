@@ -274,7 +274,7 @@ describe("panelLayoutStore", () => {
       const storedData = localStorage.getItem("panel-layout-store");
       expect(storedData).not.toBeNull();
 
-      const parsed = JSON.parse(storedData!);
+      const parsed = JSON.parse(storedData ?? "");
       expect(parsed.state.taskLayouts["task-1"]).toBeDefined();
       expect(parsed.state.taskLayouts["task-1"].openFiles).toContain(
         "src/App.tsx",

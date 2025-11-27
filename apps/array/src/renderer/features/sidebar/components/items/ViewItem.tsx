@@ -1,4 +1,4 @@
-import { ListNumbersIcon } from "@phosphor-icons/react";
+import { ListNumbersIcon, UserIcon } from "@phosphor-icons/react";
 import { SidebarItem } from "../SidebarItem";
 
 interface ViewItemProps {
@@ -12,7 +12,11 @@ export function ViewItem({ label, isActive, onClick }: ViewItemProps) {
     <SidebarItem
       depth={0}
       icon={
-        <ListNumbersIcon size={12} weight={isActive ? "fill" : "regular"} />
+        label === "My tasks" ? (
+          <UserIcon size={12} weight={isActive ? "fill" : "regular"} />
+        ) : (
+          <ListNumbersIcon size={12} weight={isActive ? "fill" : "regular"} />
+        )
       }
       label={label}
       isActive={isActive}

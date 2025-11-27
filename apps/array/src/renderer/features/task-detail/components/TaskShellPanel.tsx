@@ -4,6 +4,7 @@ import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
 import { useTerminalStore } from "@features/terminal/stores/terminalStore";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useEffect } from "react";
 
 interface TaskShellPanelProps {
@@ -16,6 +17,10 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const stateKey = shellId ? `${taskId}-${shellId}` : taskId;
   const tabId = shellId || "shell";
+
+  const worktreePath = useWorktreeStore((state) =>
+    state.getWorktreePathForTask(taskId),
+  );
 
   const processName = useTerminalStore(
     (state) => state.terminalStates[stateKey]?.processName,
@@ -35,9 +40,11 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
     }
   }, [processName, taskId, tabId, updateTabLabel]);
 
+  const effectiveCwd = worktreePath || taskData.repoPath || undefined;
+
   return (
     <Box height="100%">
-      <ShellTerminal cwd={taskData.repoPath || undefined} stateKey={stateKey} />
+      <ShellTerminal cwd={effectiveCwd} stateKey={stateKey} />
     </Box>
   );
 }

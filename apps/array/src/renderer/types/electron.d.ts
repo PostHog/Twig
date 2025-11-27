@@ -6,6 +6,7 @@ import type {
 } from "@main/services/contextMenu.types";
 import type {
   ChangedFile,
+  DetectedApplication,
   RegisteredFolder,
   TaskArtifact,
   TaskFolderAssociation,
@@ -222,6 +223,10 @@ declare global {
       ) => Promise<TaskFolderAssociation | null>;
       removeTaskAssociation: (taskId: string) => Promise<void>;
       clearTaskWorktree: (taskId: string) => Promise<void>;
+      cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
+        deleted: string[];
+        errors: Array<{ path: string; error: string }>;
+      }>;
     };
     worktree: {
       create: (mainRepoPath: string) => Promise<{
@@ -257,6 +262,18 @@ declare global {
         mainRepoPath: string,
         worktreePath: string,
       ) => Promise<string | null>;
+    };
+    externalApps: {
+      getDetectedApps: () => Promise<DetectedApplication[]>;
+      openInApp: (
+        appId: string,
+        path: string,
+      ) => Promise<{ success: boolean; error?: string }>;
+      setLastUsed: (appId: string) => Promise<void>;
+      getLastUsed: () => Promise<{
+        lastUsedApp?: string;
+      }>;
+      copyPath: (path: string) => Promise<void>;
     };
   }
 

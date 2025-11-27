@@ -121,6 +121,7 @@
     "date-fns": "^3.3.1",
     "electron-log": "^5.4.3",
     "electron-store": "^11.0.0",
+    "file-icon": "^6.0.0",
     "idb-keyval": "^6.2.2",
     "node-addon-api": "^8.5.0",
     "node-pty": "1.1.0-beta39",

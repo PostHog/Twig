@@ -76,7 +76,7 @@ export class TodoManager {
     });
   }
 
-  parseTodoWriteInput(toolInput: any): TodoList {
+  parseTodoWriteInput(toolInput: Record<string, unknown>): TodoList {
     const items: TodoItem[] = [];
 
     if (toolInput.todos && Array.isArray(toolInput.todos)) {
@@ -137,10 +137,16 @@ export class TodoManager {
 
   // check for TodoWrite tool call and persist if found
   async checkAndPersistFromMessage(
-    message: any,
+    message: Record<string, unknown>,
     taskId: string,
   ): Promise<TodoList | null> {
-    if (message.type !== "assistant" || !message.message?.content) {
+    if (
+      message.type !== "assistant" ||
+      typeof message.message !== "object" ||
+      !message.message ||
+      !("content" in message.message) ||
+      !Array.isArray(message.message.content)
+    ) {
       return null;
     }
 

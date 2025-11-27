@@ -5,7 +5,6 @@ import { TaskListContent } from "@features/task-list/components/TaskListContent"
 import { TaskListDisplayOptions } from "@features/task-list/components/TaskListDisplayOptions";
 import { TaskListFilter } from "@features/task-list/components/TaskListFilter";
 import { TaskSearch } from "@features/task-list/components/TaskSearch";
-import { useTaskDragDrop } from "@features/task-list/hooks/useTaskDragDrop";
 import { useTaskGrouping } from "@features/task-list/hooks/useTaskGrouping";
 import { useTaskKeyboardNavigation } from "@features/task-list/hooks/useTaskKeyboardNavigation";
 import { useTaskScrolling } from "@features/task-list/hooks/useTaskScrolling";
@@ -17,7 +16,7 @@ import { useStatusBar } from "@hooks/useStatusBar";
 import { getUserDisplayName, useUsers } from "@hooks/useUsers";
 import { Box, Button, Flex, Separator, Spinner, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useCallback, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 interface TaskListProps {
   onSelectTask: (task: Task) => void;
@@ -42,7 +41,6 @@ export function TaskList({ onSelectTask }: TaskListProps) {
   const filterMatchMode = useTaskStore((state) => state.filterMatchMode);
 
   // Store actions
-  const moveTask = useTaskStore((state) => state.moveTask);
   const setSelectedIndex = useTaskStore((state) => state.setSelectedIndex);
   const setHoveredIndex = useTaskStore((state) => state.setHoveredIndex);
   const setFilter = useTaskStore((state) => state.setFilter);
@@ -62,25 +60,6 @@ export function TaskList({ onSelectTask }: TaskListProps) {
     filterMatchMode,
   );
   const groupedTasks = useTaskGrouping(filteredTasks, groupBy, users);
-
-  const handleMoveTask = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      const taskId = filteredTasks[fromIndex].id;
-      moveTask(taskId, fromIndex, toIndex, filteredTasks);
-    },
-    [filteredTasks, moveTask],
-  );
-
-  const {
-    draggedTaskId,
-    dragOverIndex,
-    dropPosition,
-    handleDragStart,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
-    handleDragEnd,
-  } = useTaskDragDrop(filteredTasks, moveTask);
 
   useTaskKeyboardNavigation(
     filteredTasks,
@@ -233,19 +212,10 @@ export function TaskList({ onSelectTask }: TaskListProps) {
           groupBy={groupBy}
           expandedGroups={expandedGroups}
           toggleGroupExpanded={toggleGroupExpanded}
-          draggedTaskId={draggedTaskId}
-          dragOverIndex={dragOverIndex}
-          dropPosition={dropPosition}
           selectedIndex={selectedIndex}
           hoveredIndex={hoveredIndex}
           contextMenuIndex={contextMenuIndex}
           onSelectTask={onSelectTask}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onDragEnd={handleDragEnd}
-          onMoveTask={handleMoveTask}
           filter={filter}
         />
       </Box>

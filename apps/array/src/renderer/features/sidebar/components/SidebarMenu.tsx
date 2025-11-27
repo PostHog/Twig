@@ -9,7 +9,7 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import { useWorktreeStore } from "@renderer/stores/worktreeStore";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { memo, useEffect, useRef } from "react";
+import { memo } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { HomeItem } from "./items/HomeItem";
@@ -29,14 +29,12 @@ function SidebarMenuComponent() {
   const { data: allTasks = [] } = useTasks();
   const { folders, removeFolder } = useRegisteredFoldersStore();
 
-  const expandedSections = useSidebarStore((state) => state.expandedSections);
+  const collapsedSections = useSidebarStore((state) => state.collapsedSections);
   const toggleSection = useSidebarStore((state) => state.toggleSection);
   const taskWorktrees = useWorktreeStore((state) => state.taskWorktrees);
 
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
-
-  const seenFoldersRef = useRef<Set<string>>(new Set());
 
   const sidebarData = useSidebarData({
     activeView: view,
@@ -48,21 +46,6 @@ function SidebarMenuComponent() {
   for (const task of allTasks) {
     taskMap.set(task.id, task);
   }
-
-  useEffect(() => {
-    const newFolders = sidebarData.folders.filter(
-      (folder) =>
-        !seenFoldersRef.current.has(folder.id) &&
-        !expandedSections.has(folder.id),
-    );
-
-    if (newFolders.length > 0) {
-      for (const folder of newFolders) {
-        seenFoldersRef.current.add(folder.id);
-        toggleSection(folder.id);
-      }
-    }
-  }, [sidebarData.folders, expandedSections, toggleSection]);
 
   const handleHomeClick = () => {
     navigateToTaskInput();
@@ -168,8 +151,8 @@ function SidebarMenuComponent() {
               key={folder.id}
               id={folder.id}
               label={folder.name}
-              icon={<FolderIcon size={14} weight="fill" />}
-              isExpanded={expandedSections.has(folder.id)}
+              icon={<FolderIcon size={14} weight="regular" />}
+              isExpanded={!collapsedSections.has(folder.id)}
               onToggle={() => toggleSection(folder.id)}
               addSpacingBefore={index === 0}
               onContextMenu={(e) => handleFolderContextMenu(folder.id, e)}

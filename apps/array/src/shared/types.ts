@@ -134,3 +134,19 @@ export interface ChangedFile {
   status: GitFileStatus;
   originalPath?: string; // For renames: the old path
 }
+
+// External apps detection types
+export type ExternalAppType = "editor" | "terminal";
+
+export interface DetectedApplication {
+  id: string; // "vscode", "cursor", "iterm"
+  name: string; // "Visual Studio Code"
+  type: ExternalAppType;
+  path: string; // "/Applications/Visual Studio Code.app"
+  command: string; // Launch command
+  icon?: string; // Base64 data URL
+}
+
+export interface ExternalAppsPreferences {
+  lastUsedApp?: string;
+}

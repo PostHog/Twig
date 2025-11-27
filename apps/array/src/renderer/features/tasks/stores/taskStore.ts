@@ -58,11 +58,7 @@ export type {
 export const useTaskStore = create<TaskState>()(
   persist(
     (set) => ({
-      taskOrder: {},
       selectedTaskId: null,
-      draggedTaskId: null,
-      dragOverIndex: null,
-      dropPosition: null,
       selectedIndex: null,
       hoveredIndex: null,
       contextMenuIndex: null,
@@ -79,29 +75,6 @@ export const useTaskStore = create<TaskState>()(
       editingFilterBadgeKey: null,
 
       selectTask: (taskId) => set({ selectedTaskId: taskId }),
-      setTaskOrder: (order) => set({ taskOrder: order }),
-
-      moveTask: (_taskId, fromIndex, toIndex, allTasks) => {
-        const newOrder = [...allTasks];
-        const [movedTask] = newOrder.splice(fromIndex, 1);
-        newOrder.splice(toIndex, 0, movedTask);
-
-        const orderMap = newOrder.reduce(
-          (acc, task, index) => {
-            acc[task.id] = index;
-            return acc;
-          },
-          {} as Record<string, number>,
-        );
-        set({ taskOrder: orderMap });
-      },
-
-      setDraggedTaskId: (taskId) => set({ draggedTaskId: taskId }),
-      setDragOverState: (index, position) =>
-        set({ dragOverIndex: index, dropPosition: position }),
-      clearDragState: () =>
-        set({ draggedTaskId: null, dragOverIndex: null, dropPosition: null }),
-
       setSelectedIndex: (index) => set({ selectedIndex: index }),
       setHoveredIndex: (index) => set({ hoveredIndex: index }),
       setContextMenuIndex: (index) => set({ contextMenuIndex: index }),
@@ -217,7 +190,6 @@ export const useTaskStore = create<TaskState>()(
     {
       name: "task-store",
       partialize: (state) => ({
-        taskOrder: state.taskOrder,
         orderBy: state.orderBy,
         orderDirection: state.orderDirection,
         groupBy: state.groupBy,

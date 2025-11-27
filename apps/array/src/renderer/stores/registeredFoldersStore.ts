@@ -12,6 +12,10 @@ interface RegisteredFoldersState {
   removeFolder: (folderId: string) => Promise<void>;
   updateLastAccessed: (folderId: string) => Promise<void>;
   getFolderByPath: (path: string) => RegisteredFolder | undefined;
+  cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
+    deleted: string[];
+    errors: Array<{ path: string; error: string }>;
+  }>;
 }
 
 let updateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -37,6 +41,17 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
       try {
         const folders = await loadFolders();
         set({ folders, isLoaded: true });
+
+        for (const folder of folders) {
+          get()
+            .cleanupOrphanedWorktrees(folder.path)
+            .catch((error) => {
+              log.error(
+                `Failed to cleanup orphaned worktrees for ${folder.path}:`,
+                error,
+              );
+            });
+        }
       } catch (error) {
         log.error("Failed to load folders:", error);
         set({ folders: [], isLoaded: true });
@@ -108,6 +123,20 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       getFolderByPath: (path: string) => {
         return get().folders.find((f) => f.path === path);
+      },
+
+      cleanupOrphanedWorktrees: async (mainRepoPath: string) => {
+        try {
+          return await window.electronAPI.folders.cleanupOrphanedWorktrees(
+            mainRepoPath,
+          );
+        } catch (error) {
+          log.error("Failed to cleanup orphaned worktrees:", error);
+          return {
+            deleted: [],
+            errors: [{ path: mainRepoPath, error: String(error) }],
+          };
+        }
       },
     };
   },

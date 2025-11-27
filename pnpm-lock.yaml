@@ -182,6 +182,9 @@ importers:
       electron-store:
         specifier: ^11.0.0
         version: 11.0.2
+      file-icon:
+        specifier: ^6.0.0
+        version: 6.0.0
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
@@ -3977,6 +3980,10 @@ packages:
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+
+  file-icon@6.0.0:
+    resolution: {integrity: sha512-cNWEJlqKoqcCt8v9ybKL1k69oHqbmEdNSHKUI2o/RmrCiBnG+yJXThfIeljiqfEs/PW1HeazJj2/SJABhtaawQ==}
+    engines: {node: '>=20'}
 
   filename-reserved-regex@2.0.0:
     resolution: {integrity: sha512-lc1bnsSr4L4Bdif8Xb/qrtokGbq5zlsms/CYH8PP+WtCkGNF65DPiQY8vG3SakEdRn8Dlnm+gW/qWKKjS5sZzQ==}
@@ -10590,6 +10597,10 @@ snapshots:
   fflate@0.4.8: {}
 
   fflate@0.8.2: {}
+
+  file-icon@6.0.0:
+    dependencies:
+      p-map: 7.0.4
 
   filename-reserved-regex@2.0.0: {}
 

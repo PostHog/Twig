@@ -3,26 +3,16 @@ import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { Box, Code, Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import type React from "react";
 
 interface TaskGroupProps {
   name: string;
   tasks: Task[];
   isExpanded: boolean;
   onToggle: () => void;
-  draggedTaskId: string | null;
-  dragOverIndex: number | null;
-  dropPosition: "top" | "bottom" | null;
   selectedIndex: number | null;
   hoveredIndex: number | null;
   contextMenuIndex: number | null;
   onSelectTask: (task: Task) => void;
-  onDragStart: (e: React.DragEvent, taskId: string) => void;
-  onDragOver: (e: React.DragEvent, index: number) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent, index: number) => void;
-  onDragEnd: () => void;
-  onMoveTask: (fromIndex: number, toIndex: number) => void;
   taskToGlobalIndex: Map<string, number>;
 }
 
@@ -31,19 +21,10 @@ export function TaskGroup({
   tasks,
   isExpanded,
   onToggle,
-  draggedTaskId,
-  dragOverIndex,
-  dropPosition,
   selectedIndex,
   hoveredIndex,
   contextMenuIndex,
   onSelectTask,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-  onMoveTask,
   taskToGlobalIndex,
 }: TaskGroupProps) {
   return (
@@ -80,19 +61,10 @@ export function TaskGroup({
       <Collapsible.Content>
         <TaskListItems
           tasks={tasks}
-          draggedTaskId={draggedTaskId}
-          dragOverIndex={dragOverIndex}
-          dropPosition={dropPosition}
           selectedIndex={selectedIndex}
           hoveredIndex={hoveredIndex}
           contextMenuIndex={contextMenuIndex}
           onSelectTask={onSelectTask}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onDragEnd={onDragEnd}
-          onMoveTask={onMoveTask}
           taskToGlobalIndex={taskToGlobalIndex}
         />
       </Collapsible.Content>

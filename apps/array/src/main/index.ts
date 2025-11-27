@@ -19,6 +19,10 @@ import { registerFoldersIpc } from "./services/folders.js";
 import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
+import {
+  getOrRefreshApps,
+  registerExternalAppsIpc,
+} from "./services/externalApps.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
 import { registerOsIpc } from "./services/os.js";
 import { registerPosthogIpc } from "./services/posthog.js";
@@ -87,6 +91,7 @@ function createWindow(): void {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
       enableBlinkFeatures: "GetDisplayMedia",
+      partition: "persist:main",
     },
   });
 
@@ -186,6 +191,11 @@ app.whenReady().then(() => {
   initializePostHog();
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
 
+  // Preload external app icons in background
+  getOrRefreshApps().catch(() => {
+    // Silently fail, will retry on first use
+  });
+
   // Dev mode: Watch agent package and restart via mprocs
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     setupAgentHotReload();
@@ -222,3 +232,4 @@ registerFileWatcherIpc(() => mainWindow);
 registerFoldersIpc();
 registerWorktreeIpc();
 registerShellIpc();
+registerExternalAppsIpc();

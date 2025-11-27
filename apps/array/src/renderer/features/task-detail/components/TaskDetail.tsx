@@ -1,12 +1,13 @@
 import { PanelLayout } from "@features/panels";
 import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
+import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
+import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useWorktreeStore } from "@stores/worktreeStore";
 import { useMemo } from "react";
@@ -67,16 +68,15 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
-          {worktreeInfo && (
-            <Badge size="1" color="purple" variant="soft">
-              {worktreeInfo.worktreeName}
-            </Badge>
-          )}
+          <ExternalAppsOpener
+            targetPath={effectiveRepoPath}
+            label={worktreeInfo?.worktreeName}
+          />
         </Flex>
         <ChangesTabBadge taskId={taskId} task={task} />
       </>
     ),
-    [task.slug, task.title, worktreeInfo, taskId, task],
+    [task.slug, task.title, worktreeInfo, taskId, task, effectiveRepoPath],
   );
 
   useSetHeaderContent(headerContent);
