@@ -36,7 +36,7 @@ export function mockElectronAPI(
     onShellData: vi.fn().mockReturnValue(() => {}),
     onShellExit: vi.fn().mockReturnValue(() => {}),
     ...overrides,
-  } as any;
+  } as unknown as typeof window.electronAPI;
 }
 
 export interface PanelStructure {

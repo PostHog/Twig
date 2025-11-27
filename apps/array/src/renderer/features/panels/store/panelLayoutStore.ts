@@ -106,6 +106,7 @@ function createDefaultPanelTree(): PanelNode {
             {
               id: DEFAULT_TAB_IDS.LOGS,
               label: "Logs",
+              data: { type: "logs" },
               component: null,
               closeable: false,
               draggable: true,
@@ -113,6 +114,11 @@ function createDefaultPanelTree(): PanelNode {
             {
               id: DEFAULT_TAB_IDS.SHELL,
               label: "Terminal",
+              data: {
+                type: "terminal",
+                terminalId: DEFAULT_TAB_IDS.SHELL,
+                cwd: "",
+              },
               component: null,
               closeable: true,
               draggable: true,
@@ -138,6 +144,7 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.FILES,
                   label: "Files",
+                  data: { type: "other" },
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -145,6 +152,7 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.CHANGES,
                   label: "Changes",
+                  data: { type: "other" },
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -164,6 +172,7 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.TODO_LIST,
                   label: "Todo list",
+                  data: { type: "other" },
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -171,6 +180,7 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.ARTIFACTS,
                   label: "Artifacts",
+                  data: { type: "other" },
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -178,6 +188,7 @@ function createDefaultPanelTree(): PanelNode {
                 {
                   id: DEFAULT_TAB_IDS.DETAILS,
                   label: "Details",
+                  data: { type: "other" },
                   component: null,
                   closeable: false,
                   draggable: false,
@@ -668,6 +679,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                 return addTabToPanel(panel, {
                   id: tabId,
                   label: "Terminal",
+                  data: { type: "terminal", terminalId: tabId, cwd: "" },
                   component: null,
                   draggable: true,
                   closeable: true,
@@ -687,7 +699,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 3,
+      version: 4,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

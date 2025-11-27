@@ -34,9 +34,9 @@ interface ToolExecutionViewProps {
 }
 
 // Map tool names to their view components
-// biome-ignore lint/suspicious/noExplicitAny: Tool args have varying shapes, components handle type narrowing
 const TOOL_VIEW_MAP: Record<
   string,
+  // biome-ignore lint/suspicious/noExplicitAny: Tool args vary by type, components handle narrowing
   React.ComponentType<{ args: any; result?: any }>
 > = {
   Read: ReadToolView,
@@ -65,9 +65,9 @@ function getToolDisplayName(toolName: string): string {
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Args have varying shapes depending on tool
 function getToolSummary(
   toolName: string,
+  // biome-ignore lint/suspicious/noExplicitAny: Args accessed dynamically based on tool type
   args: Record<string, any>,
 ): ReactNode {
   switch (toolName) {
@@ -210,10 +210,11 @@ function getToolSummary(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Args and results have varying shapes depending on tool
 function renderToolContent(
   toolName: string,
+  // biome-ignore lint/suspicious/noExplicitAny: Args accessed dynamically based on tool type
   args: Record<string, any>,
+  // biome-ignore lint/suspicious/noExplicitAny: Result type varies by tool
   result?: any,
 ) {
   // Extract args and result if structured

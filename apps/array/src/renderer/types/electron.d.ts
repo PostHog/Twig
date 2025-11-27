@@ -1,8 +1,10 @@
 import type { AgentEvent } from "@posthog/agent";
 import type {
+  ExternalAppContextMenuResult,
   FolderContextMenuResult,
   SplitContextMenuResult,
   TabContextMenuResult,
+  TaskContextMenuResult,
 } from "@main/services/contextMenu.types";
 import type {
   ChangedFile,
@@ -194,12 +196,24 @@ declare global {
       listener: (data: string) => void,
     ) => () => void;
     onShellExit: (sessionId: string, listener: () => void) => () => void;
+    showTaskContextMenu: (
+      taskId: string,
+      taskTitle: string,
+      worktreePath?: string,
+    ) => Promise<TaskContextMenuResult>;
     showFolderContextMenu: (
       folderId: string,
       folderName: string,
+      folderPath?: string,
     ) => Promise<FolderContextMenuResult>;
-    showTabContextMenu: (canClose: boolean) => Promise<TabContextMenuResult>;
+    showTabContextMenu: (
+      canClose: boolean,
+      filePath?: string,
+    ) => Promise<TabContextMenuResult>;
     showSplitContextMenu: () => Promise<SplitContextMenuResult>;
+    showFileContextMenu: (
+      filePath: string,
+    ) => Promise<ExternalAppContextMenuResult>;
     folders: {
       getFolders: () => Promise<RegisteredFolder[]>;
       addFolder: (folderPath: string) => Promise<RegisteredFolder>;

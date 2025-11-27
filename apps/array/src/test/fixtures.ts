@@ -5,6 +5,7 @@ export function createMockTab(overrides?: Partial<Tab>): Tab {
   return {
     id: "test-tab",
     label: "Test Tab",
+    data: { type: "other" },
     component: undefined,
     closeable: true,
     ...overrides,

@@ -1,6 +1,8 @@
 import { useSortable } from "@dnd-kit/react/sortable";
+import type { TabData } from "@features/panels/store/panelTypes";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import type React from "react";
 import { useCallback } from "react";
 
@@ -8,6 +10,7 @@ interface DraggableTabProps {
   tabId: string;
   panelId: string;
   label: string;
+  tabData: TabData;
   isActive: boolean;
   index: number;
   closeable?: boolean;
@@ -24,6 +27,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   tabId,
   panelId,
   label,
+  tabData,
   isActive,
   index,
   closeable = true,
@@ -49,20 +53,42 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   const handleContextMenu = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();
-      const result = await window.electronAPI.showTabContextMenu(closeable);
-      switch (result.action) {
-        case "close":
-          onClose?.();
-          break;
-        case "close-others":
-          onCloseOthers?.();
-          break;
-        case "close-right":
-          onCloseToRight?.();
-          break;
+
+      // Get absolute path from tab data for file and diff tabs
+      let filePath: string | undefined;
+      if (tabData.type === "file" || tabData.type === "diff") {
+        filePath = tabData.absolutePath;
+      }
+
+      const result = await window.electronAPI.showTabContextMenu(
+        closeable,
+        filePath,
+      );
+
+      // Handle string actions (close, close-others, close-right)
+      if (typeof result.action === "string") {
+        switch (result.action) {
+          case "close":
+            onClose?.();
+            break;
+          case "close-others":
+            onCloseOthers?.();
+            break;
+          case "close-right":
+            onCloseToRight?.();
+            break;
+        }
+      }
+      // Handle external app actions
+      else if (
+        typeof result.action === "object" &&
+        result.action !== null &&
+        filePath
+      ) {
+        await handleExternalAppAction(result.action, filePath, label);
       }
     },
-    [closeable, onClose, onCloseOthers, onCloseToRight],
+    [closeable, onClose, onCloseOthers, onCloseToRight, tabData, label],
   );
 
   return (

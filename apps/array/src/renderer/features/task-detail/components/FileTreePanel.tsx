@@ -5,6 +5,7 @@ import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useEffect, useState } from "react";
 
 interface FileTreePanelProps {
@@ -44,6 +45,15 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
     }
   };
 
+  const handleContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const result = await window.electronAPI.showFileContextMenu(entry.path);
+
+    if (!result.action) return;
+
+    await handleExternalAppAction(result.action, entry.path, entry.name);
+  };
+
   return (
     <Box>
       <Flex
@@ -54,6 +64,7 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
         style={{ paddingLeft: `${depth * 16 + 8}px`, cursor: "pointer" }}
         className="rounded hover:bg-gray-2"
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         {entry.type === "directory" ? (
           isExpanded ? (

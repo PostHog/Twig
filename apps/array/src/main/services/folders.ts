@@ -8,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { logger } from "../lib/logger";
 import { clearAllStoreData, foldersStore } from "./store";
+import { deleteWorktreeIfExists } from "./worktreeUtils";
 
 const log = logger.scope("folders");
 
@@ -50,6 +51,19 @@ async function addFolder(folderPath: string): Promise<RegisteredFolder> {
 async function removeFolder(folderId: string): Promise<void> {
   const folders = foldersStore.get("folders", []);
   const associations = foldersStore.get("taskAssociations", []);
+
+  // Delete worktrees for all tasks associated with this folder
+  const associationsToRemove = associations.filter(
+    (a) => a.folderId === folderId,
+  );
+  for (const assoc of associationsToRemove) {
+    if (assoc.worktree) {
+      await deleteWorktreeIfExists(
+        assoc.folderPath,
+        assoc.worktree.worktreePath,
+      );
+    }
+  }
 
   const filtered = folders.filter((f) => f.id !== folderId);
   const filteredAssociations = associations.filter(
@@ -130,6 +144,13 @@ async function updateTaskWorktree(
 
 async function removeTaskAssociation(taskId: string): Promise<void> {
   const associations = foldersStore.get("taskAssociations", []);
+
+  // Delete worktree if it exists
+  const assoc = associations.find((a) => a.taskId === taskId);
+  if (assoc?.worktree) {
+    await deleteWorktreeIfExists(assoc.folderPath, assoc.worktree.worktreePath);
+  }
+
   const filtered = associations.filter((a) => a.taskId !== taskId);
   foldersStore.set("taskAssociations", filtered);
 }
@@ -139,7 +160,17 @@ async function clearTaskWorktree(taskId: string): Promise<void> {
 
   const existingIndex = associations.findIndex((a) => a.taskId === taskId);
   if (existingIndex >= 0) {
-    const { worktree: _, ...rest } = associations[existingIndex];
+    const assoc = associations[existingIndex];
+
+    // Delete worktree if it exists
+    if (assoc.worktree) {
+      await deleteWorktreeIfExists(
+        assoc.folderPath,
+        assoc.worktree.worktreePath,
+      );
+    }
+
+    const { worktree: _, ...rest } = assoc;
     associations[existingIndex] = rest;
     foldersStore.set("taskAssociations", associations);
   }
@@ -220,7 +251,7 @@ export function registerFoldersIpc(): void {
     "clear-all-data",
     async (_event: IpcMainInvokeEvent): Promise<void> => {
       try {
-        clearAllStoreData();
+        await clearAllStoreData();
         log.info("Cleared all application data");
       } catch (error) {
         log.error("Failed to clear all data:", error);

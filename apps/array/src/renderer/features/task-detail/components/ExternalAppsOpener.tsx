@@ -1,9 +1,9 @@
 import { CodeIcon, CopyIcon } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
-import type { DetectedApplication } from "@shared/types";
-import { toast } from "@utils/toast";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useExternalAppsStore } from "@stores/externalAppsStore";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
+import { useCallback, useEffect, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 const THUMBNAIL_ICON_SIZE = 20;
@@ -18,96 +18,52 @@ export function ExternalAppsOpener({
   targetPath,
   label = "Open",
 }: ExternalAppsOpenerProps) {
-  const [detectedApps, setDetectedApps] = useState<DetectedApplication[]>([]);
-  const [lastUsed, setLastUsed] = useState<{
-    lastUsedApp?: string;
-  }>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const { detectedApps, lastUsedAppId, isLoading, initialize } =
+    useExternalAppsStore();
 
   useEffect(() => {
-    Promise.all([
-      window.electronAPI.externalApps.getDetectedApps(),
-      window.electronAPI.externalApps.getLastUsed(),
-    ])
-      .then(([apps, last]) => {
-        setDetectedApps(apps);
-        setLastUsed(last);
-        setIsLoading(false);
-      })
-      .catch(() => {
-        setIsLoading(false);
-      });
-  }, []);
+    initialize();
+  }, [initialize]);
 
   const defaultApp = useMemo(() => {
-    if (lastUsed.lastUsedApp) {
-      const app = detectedApps.find((a) => a.id === lastUsed.lastUsedApp);
+    if (lastUsedAppId) {
+      const app = detectedApps.find((a) => a.id === lastUsedAppId);
       if (app) return app;
     }
     return detectedApps[0] || null;
-  }, [detectedApps, lastUsed]);
+  }, [detectedApps, lastUsedAppId]);
 
   const handleOpenDefault = useCallback(async () => {
     if (!defaultApp || !targetPath) return;
-    try {
-      const result = await window.electronAPI.externalApps.openInApp(
-        defaultApp.id,
-        targetPath,
-      );
-      if (result.success) {
-        await window.electronAPI.externalApps.setLastUsed(defaultApp.id);
-        setLastUsed({
-          lastUsedApp: defaultApp.id,
-        });
-        const pathName = targetPath.split("/").pop() || targetPath;
-        toast.success(`Opening in ${defaultApp.name}`, {
-          description: pathName,
-        });
-      } else {
-        toast.error(`Failed to open in ${defaultApp.name}`);
-      }
-    } catch (_error) {
-      toast.error(`Failed to open in ${defaultApp.name}`);
-    }
+    const displayName = targetPath.split("/").pop() || targetPath;
+    await handleExternalAppAction(
+      { type: "open-in-app", appId: defaultApp.id },
+      targetPath,
+      displayName,
+    );
   }, [defaultApp, targetPath]);
 
   const handleOpenWith = useCallback(
     async (appId: string) => {
       if (!targetPath) return;
-      const app = detectedApps.find((a) => a.id === appId);
-      if (!app) return;
-      try {
-        const result = await window.electronAPI.externalApps.openInApp(
-          appId,
-          targetPath,
-        );
-        if (result.success) {
-          await window.electronAPI.externalApps.setLastUsed(appId);
-          setLastUsed({
-            lastUsedApp: appId,
-          });
-          const pathName = targetPath.split("/").pop() || targetPath;
-          toast.success(`Opening in ${app.name}`, {
-            description: pathName,
-          });
-        } else {
-          toast.error(`Failed to open in ${app.name}`);
-        }
-      } catch (_error) {
-        toast.error(`Failed to open in ${app.name}`);
-      }
+      const displayName = targetPath.split("/").pop() || targetPath;
+      await handleExternalAppAction(
+        { type: "open-in-app", appId },
+        targetPath,
+        displayName,
+      );
     },
-    [detectedApps, targetPath],
+    [targetPath],
   );
 
   const handleCopyPath = useCallback(async () => {
     if (!targetPath) return;
-    try {
-      await window.electronAPI.externalApps.copyPath(targetPath);
-      toast.success("Path copied to clipboard");
-    } catch (_error) {
-      toast.error("Failed to copy path");
-    }
+    const displayName = targetPath.split("/").pop() || targetPath;
+    await handleExternalAppAction(
+      { type: "copy-path" },
+      targetPath,
+      displayName,
+    );
   }, [targetPath]);
 
   useHotkeys(

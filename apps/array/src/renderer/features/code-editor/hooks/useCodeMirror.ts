@@ -1,12 +1,14 @@
 import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useEffect, useRef } from "react";
 
 type EditorInstance = EditorView | MergeView;
 
 interface UseCodeMirrorOptions {
   extensions: Extension[];
+  filePath?: string;
 }
 
 interface SingleDocOptions extends UseCodeMirrorOptions {
@@ -64,6 +66,32 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
       instanceRef.current = null;
     };
   }, [options]);
+
+  useEffect(() => {
+    if (!instanceRef.current || !options.filePath) return;
+
+    const filePath = options.filePath;
+    const domElement =
+      instanceRef.current instanceof EditorView
+        ? instanceRef.current.dom
+        : instanceRef.current.a.dom;
+
+    const handleContextMenu = async (e: MouseEvent) => {
+      e.preventDefault();
+      const result = await window.electronAPI.showFileContextMenu(filePath);
+
+      if (!result.action) return;
+
+      const fileName = filePath.split("/").pop() || "file";
+      await handleExternalAppAction(result.action, filePath, fileName);
+    };
+
+    domElement.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      domElement.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [options.filePath]);
 
   return containerRef;
 }

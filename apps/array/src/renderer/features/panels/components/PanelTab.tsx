@@ -1,3 +1,4 @@
+import type { TabData } from "@features/panels/store/panelTypes";
 import type React from "react";
 import { DraggableTab } from "./DraggableTab";
 import { StaticTab } from "./StaticTab";
@@ -6,6 +7,7 @@ interface PanelTabProps {
   tabId: string;
   panelId: string;
   label: string;
+  tabData: TabData;
   isActive: boolean;
   index: number;
   draggable?: boolean;
@@ -23,6 +25,7 @@ export const PanelTab: React.FC<PanelTabProps> = ({
   tabId,
   panelId,
   label,
+  tabData,
   isActive,
   index,
   draggable = true,
@@ -53,6 +56,7 @@ export const PanelTab: React.FC<PanelTabProps> = ({
       tabId={tabId}
       panelId={panelId}
       label={label}
+      tabData={tabData}
       isActive={isActive}
       index={index}
       closeable={closeable}

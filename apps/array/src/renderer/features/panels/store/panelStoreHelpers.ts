@@ -1,3 +1,4 @@
+import type { GitFileStatus } from "@/shared/types";
 import { DEFAULT_TAB_IDS } from "../constants/panelConstants";
 import type { SplitDirection, TaskLayout } from "./panelLayoutStore";
 import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
@@ -146,9 +147,55 @@ export function updateTaskLayout(
 
 // Tree update helpers
 export function createNewTab(tabId: string, closeable = true): Tab {
+  const parsed = parseTabId(tabId);
+  let data: Tab["data"];
+
+  // Build typed data based on tab type
+  switch (parsed.type) {
+    case "file":
+      data = {
+        type: "file",
+        relativePath: parsed.value,
+        absolutePath: "", // Will be populated by tab injection
+        repoPath: "", // Will be populated by tab injection
+      };
+      break;
+    case "diff":
+      data = {
+        type: "diff",
+        relativePath: parsed.value,
+        absolutePath: "", // Will be populated by tab injection
+        repoPath: "", // Will be populated by tab injection
+        status: (parsed.status || "modified") as GitFileStatus,
+      };
+      break;
+    case "artifact":
+      data = {
+        type: "artifact",
+        artifactId: parsed.value,
+      };
+      break;
+    case "system":
+      if (tabId === "logs") {
+        data = { type: "logs" };
+      } else if (tabId.startsWith("shell")) {
+        data = {
+          type: "terminal",
+          terminalId: tabId,
+          cwd: "",
+        };
+      } else {
+        data = { type: "other" };
+      }
+      break;
+    default:
+      data = { type: "other" };
+  }
+
   return {
     id: tabId,
     label: createTabLabel(tabId),
+    data,
     component: null,
     closeable,
     draggable: true,
