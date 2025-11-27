@@ -1,6 +1,9 @@
 import path from "node:path";
+import { type FSWatcher, watch } from "chokidar";
 import { app } from "electron";
-import { watch, type FSWatcher } from "chokidar";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("dev-reload");
 
 let watcher: FSWatcher | null = null;
 
@@ -10,7 +13,7 @@ export function setupAgentHotReload(): void {
   const monorepoRoot = path.resolve(app.getAppPath(), "../..");
   const agentDistPath = path.join(monorepoRoot, "packages/agent/dist");
 
-  console.log(`[dev] Watching agent package: ${agentDistPath}`);
+  log.info(`Watching agent package: ${agentDistPath}`);
 
   let debounceTimeout: NodeJS.Timeout | null = null;
 
@@ -22,8 +25,8 @@ export function setupAgentHotReload(): void {
   watcher.on("change", (filePath) => {
     if (debounceTimeout) clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(() => {
-      console.log(`[dev] Agent rebuilt: ${path.basename(filePath)}`);
-      console.log("[dev] Exiting for mprocs to restart...");
+      log.info(`Agent rebuilt: ${path.basename(filePath)}`);
+      log.info("Exiting for mprocs to restart...");
       process.exit(0);
     }, 1000);
   });
