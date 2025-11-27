@@ -2,13 +2,25 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent, PermissionMode } from "@posthog/agent";
+import { Agent, type OnLogCallback, PermissionMode } from "@posthog/agent";
 import {
   app,
   type BrowserWindow,
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("agent");
+
+const onAgentLog: OnLogCallback = (level, scope, message, data) => {
+  const scopedLog = logger.scope(scope);
+  if (data !== undefined) {
+    scopedLog[level](message, data);
+  } else {
+    scopedLog[level](message);
+  }
+};
 
 interface AgentStartParams {
   taskId: string;
@@ -96,12 +108,9 @@ export function registerAgentIpc(
           process.env.CLAUDE_CONFIG_DIR || join(app.getPath("home"), ".claude");
         const statsigPath = join(claudeConfigDir, "statsig");
         rmSync(statsigPath, { recursive: true, force: true });
-        console.log(
-          "[agent] Cleared statsig cache to work around input_examples bug",
-        );
+        log.info("Cleared statsig cache to work around input_examples bug");
       } catch (error) {
-        // Ignore errors if the folder doesn't exist
-        console.warn("[agent] Could not clear statsig cache:", error);
+        log.warn("Could not clear statsig cache:", error);
       }
 
       const taskId = randomUUID();
@@ -123,7 +132,7 @@ export function registerAgentIpc(
         if (stderrBuffer.length > 50) {
           stderrBuffer.shift();
         }
-        console.error(`[agent][claude-stderr] ${text}`);
+        log.error(`[claude-stderr] ${text}`);
         emitToRenderer({
           type: "status",
           ts: Date.now(),
@@ -146,6 +155,7 @@ export function registerAgentIpc(
         posthogApiUrl: apiHost,
         posthogProjectId: projectId,
         debug: true,
+        onLog: onAgentLog,
       });
 
       const controllerEntry: TaskController = {
@@ -181,7 +191,7 @@ export function registerAgentIpc(
               });
             }
           } catch (err) {
-            console.warn("[agent] failed to fetch task progress", err);
+            log.warn("Failed to fetch task progress", err);
           }
         };
 
@@ -214,7 +224,7 @@ export function registerAgentIpc(
             } catch {}
             symlinkSync(process.execPath, nodeSymlinkPath);
           } catch (err) {
-            console.warn("[agent] Failed to setup mock node environment", err);
+            log.warn("Failed to setup mock node environment", err);
           }
 
           const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
@@ -259,7 +269,7 @@ export function registerAgentIpc(
 
           emitToRenderer({ type: "done", success: true, ts: Date.now() });
         } catch (err) {
-          console.error("[agent] task execution failed", err);
+          log.error("Task execution failed", err);
           let errorMessage = err instanceof Error ? err.message : String(err);
           const cause =
             err instanceof Error && "cause" in err && err.cause

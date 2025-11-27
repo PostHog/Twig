@@ -1,4 +1,7 @@
 import { app, autoUpdater, type BrowserWindow, ipcMain } from "electron";
+import { logger } from "../lib/logger";
+
+const log = logger.scope("updates");
 
 const UPDATE_SERVER_HOST = "https://update.electronjs.org";
 const REPO_OWNER = "PostHog";
@@ -30,11 +33,11 @@ function checkForUpdates(): void {
     ) {
       const promise = maybePromise as Promise<unknown>;
       void promise.catch((error) => {
-        console.error("[updates] Failed to check for updates", error);
+        log.error("Failed to check for updates", error);
       });
     }
   } catch (error) {
-    console.error("[updates] Failed to initiate update check", error);
+    log.error("Failed to initiate update check", error);
   }
 }
 
@@ -52,7 +55,7 @@ export function registerAutoUpdater(
   });
 
   if (process.env[DISABLE_FLAG]) {
-    console.info("[updates] Auto updates disabled via environment flag");
+    log.info("Auto updates disabled via environment flag");
     return;
   }
 
@@ -61,9 +64,7 @@ export function registerAutoUpdater(
   }
 
   if (!isAutoUpdateSupported()) {
-    console.info(
-      "[updates] Auto updates are only enabled on macOS and Windows",
-    );
+    log.info("Auto updates are only enabled on macOS and Windows");
     return;
   }
 
@@ -88,19 +89,19 @@ export function registerAutoUpdater(
     autoUpdater.setFeedURL({ url: feedURL });
 
     autoUpdater.on("error", (error) => {
-      console.error("[updates] Auto update error", error);
+      log.error("Auto update error", error);
     });
 
     autoUpdater.on("update-available", () => {
-      console.info("[updates] Update available, downloading…");
+      log.info("Update available, downloading…");
     });
 
     autoUpdater.on("update-not-available", () => {
-      console.info("[updates] No updates available");
+      log.info("No updates available");
     });
 
     autoUpdater.on("update-downloaded", () => {
-      console.info("[updates] Update downloaded, awaiting user confirmation");
+      log.info("Update downloaded, awaiting user confirmation");
       updateReady = true;
       notifyRenderer();
     });

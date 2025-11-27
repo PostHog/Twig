@@ -1,7 +1,10 @@
 import { track } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { create } from "zustand";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+
+const log = logger.scope("navigation-store");
 
 type ViewType = "task-list" | "task-detail" | "task-input" | "settings";
 
@@ -86,7 +89,7 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
         try {
           await useRegisteredFoldersStore.getState().addFolder(directory);
         } catch (error) {
-          console.error("Failed to auto-register folder on task open:", error);
+          log.error("Failed to auto-register folder on task open:", error);
         }
       }
     },

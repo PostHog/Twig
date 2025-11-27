@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
+import { logger } from "../lib/logger";
 import { getChangedFilesForRepo } from "./git";
+
+const log = logger.scope("fs");
 
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
@@ -88,7 +91,7 @@ async function listFilesRecursive(
     }
   } catch (error) {
     // Skip directories we can't read
-    console.error(`Error reading directory ${dirPath}:`, error);
+    log.error(`Error reading directory ${dirPath}:`, error);
   }
 
   return files;
@@ -149,7 +152,7 @@ export function registerFsIpc(): void {
 
         return allFiles; // Return all files for full tree view
       } catch (error) {
-        console.error("Error listing repo files:", error);
+        log.error("Error listing repo files:", error);
         return [];
       }
     },
@@ -191,7 +194,7 @@ export function registerFsIpc(): void {
         return content;
       } catch (error) {
         // File doesn't exist or can't be read
-        console.log(`Plan file not found for task ${taskId}:`, error);
+        log.debug(`Plan file not found for task ${taskId}:`, error);
         return null;
       }
     },
@@ -210,9 +213,9 @@ export function registerFsIpc(): void {
         await fsPromises.mkdir(posthogDir, { recursive: true });
         const planPath = path.join(posthogDir, "plan.md");
         await fsPromises.writeFile(planPath, content, "utf-8");
-        console.log(`Plan file written for task ${taskId}`);
+        log.debug(`Plan file written for task ${taskId}`);
       } catch (error) {
-        console.error(`Failed to write plan file for task ${taskId}:`, error);
+        log.error(`Failed to write plan file for task ${taskId}:`, error);
         throw error;
       }
     },
@@ -257,7 +260,7 @@ export function registerFsIpc(): void {
 
         return artifacts;
       } catch (error) {
-        console.error(`Failed to list artifacts for task ${taskId}:`, error);
+        log.error(`Failed to list artifacts for task ${taskId}:`, error);
         return [];
       }
     },
@@ -280,7 +283,7 @@ export function registerFsIpc(): void {
         if (nodeError.code === "ENOENT") {
           return null;
         }
-        console.error(
+        log.error(
           `Failed to read artifact ${fileName} for task ${taskId}:`,
           error,
         );
@@ -309,9 +312,9 @@ export function registerFsIpc(): void {
         }
 
         await fsPromises.appendFile(filePath, content, "utf-8");
-        console.log(`Appended content to ${fileName} for task ${taskId}`);
+        log.debug(`Appended content to ${fileName} for task ${taskId}`);
       } catch (error) {
-        console.error(
+        log.error(
           `Failed to append to artifact ${fileName} for task ${taskId}:`,
           error,
         );
@@ -361,7 +364,7 @@ export function registerFsIpc(): void {
           const content = await fsPromises.readFile(researchPath, "utf-8");
           researchData = JSON.parse(content);
         } catch {
-          console.log(
+          log.debug(
             `research.json not found for task ${taskId}, creating with answers only`,
           );
           researchData = {
@@ -382,7 +385,7 @@ export function registerFsIpc(): void {
           "utf-8",
         );
 
-        console.log(`Saved answers to research.json for task ${taskId}`);
+        log.debug(`Saved answers to research.json for task ${taskId}`);
 
         // Commit the answers (local mode - no push)
         try {
@@ -393,16 +396,16 @@ export function registerFsIpc(): void {
             `cd "${repoPath}" && git commit -m "Answer research questions for task ${taskId}"`,
             { cwd: repoPath },
           );
-          console.log(`Committed answers for task ${taskId}`);
+          log.debug(`Committed answers for task ${taskId}`);
         } catch (gitError) {
-          console.warn(
+          log.warn(
             `Failed to commit answers (may not be a git repo or no changes):`,
             gitError,
           );
           // Don't throw - answers are still saved
         }
       } catch (error) {
-        console.error(`Failed to save answers for task ${taskId}:`, error);
+        log.error(`Failed to save answers for task ${taskId}:`, error);
         throw error;
       }
     },
@@ -426,10 +429,7 @@ export function registerFsIpc(): void {
         const content = await fsPromises.readFile(fullPath, "utf-8");
         return content;
       } catch (error) {
-        console.error(
-          `Failed to read file ${filePath} from ${repoPath}:`,
-          error,
-        );
+        log.error(`Failed to read file ${filePath} from ${repoPath}:`, error);
         return null;
       }
     },

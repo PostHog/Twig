@@ -1,5 +1,8 @@
+import { logger } from "@renderer/lib/logger";
 import type { RegisteredFolder } from "@shared/types";
 import { create } from "zustand";
+
+const log = logger.scope("registered-folders-store");
 
 interface RegisteredFoldersState {
   folders: RegisteredFolder[];
@@ -50,7 +53,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
             });
         }
       } catch (error) {
-        console.error("Failed to load folders:", error);
+        log.error("Failed to load folders:", error);
         set({ folders: [], isLoaded: true });
       }
     })();
@@ -64,7 +67,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
           const folders = await loadFolders();
           set({ folders, isLoaded: true });
         } catch (error) {
-          console.error("Failed to load folders:", error);
+          log.error("Failed to load folders:", error);
           set({ folders: [], isLoaded: true });
         }
       },
@@ -77,7 +80,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
           }));
           return folder;
         } catch (error) {
-          console.error("Failed to add folder:", error);
+          log.error("Failed to add folder:", error);
           throw error;
         }
       },
@@ -89,7 +92,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
             folders: state.folders.filter((f) => f.id !== folderId),
           }));
         } catch (error) {
-          console.error("Failed to remove folder:", error);
+          log.error("Failed to remove folder:", error);
           throw error;
         }
       },
@@ -113,7 +116,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
           try {
             await window.electronAPI.folders.updateFolderAccessed(folderId);
           } catch (error) {
-            console.error("Failed to update folder accessed time:", error);
+            log.error("Failed to update folder accessed time:", error);
           }
         }, 1000);
       },

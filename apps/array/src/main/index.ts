@@ -10,14 +10,15 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
+import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { registerAgentIpc, type TaskController } from "./services/agent.js";
-import { registerFoldersIpc } from "./services/folders.js";
-import { registerWorktreeIpc } from "./services/worktree.js";
-import "./services/index.js";
+import { setupAgentHotReload } from "./services/dev-reload.js";
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
+import { registerFoldersIpc } from "./services/folders.js";
 import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
+import "./services/index.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
 import { registerOsIpc } from "./services/os.js";
 import { registerPosthogIpc } from "./services/posthog.js";
@@ -28,6 +29,7 @@ import {
 } from "./services/posthog-analytics.js";
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
+import { registerWorktreeIpc } from "./services/worktree.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -184,6 +186,11 @@ app.whenReady().then(() => {
   // Initialize PostHog analytics
   initializePostHog();
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
+
+  // Dev mode: Watch agent package and restart via mprocs
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    setupAgentHotReload();
+  }
 });
 
 app.on("window-all-closed", async () => {

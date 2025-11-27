@@ -1,5 +1,8 @@
+import { logger } from "@renderer/lib/logger";
 import type { TaskFolderAssociation, WorktreeInfo } from "@shared/types";
 import { create } from "zustand";
+
+const log = logger.scope("task-association-store");
 
 interface TaskAssociationState {
   associations: Record<string, TaskFolderAssociation>;
@@ -43,7 +46,7 @@ export const useTaskAssociationStore = create<TaskAssociationState>()(
         const associations = await loadAssociations();
         set({ associations: arrayToRecord(associations), isLoaded: true });
       } catch (error) {
-        console.error("Failed to load task associations:", error);
+        log.error("Failed to load task associations:", error);
         set({ associations: {}, isLoaded: true });
       }
     })();
@@ -57,7 +60,7 @@ export const useTaskAssociationStore = create<TaskAssociationState>()(
           const associations = await loadAssociations();
           set({ associations: arrayToRecord(associations), isLoaded: true });
         } catch (error) {
-          console.error("Failed to load task associations:", error);
+          log.error("Failed to load task associations:", error);
           set({ associations: {}, isLoaded: true });
         }
       },

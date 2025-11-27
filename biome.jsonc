@@ -69,6 +69,47 @@
       }
     },
     {
+      // Disallow console.* in array and agent source code - use logger instead
+      "includes": [
+        "apps/array/src/**/*.ts",
+        "apps/array/src/**/*.tsx",
+        "packages/agent/src/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "error"
+          }
+        }
+      }
+    },
+    {
+      // Logger implementations intentionally wrap console
+      "includes": [
+        "packages/agent/src/utils/logger.ts",
+        "apps/array/src/main/lib/logger.ts",
+        "apps/array/src/renderer/lib/logger.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      // Test files can use console for setup/debugging
+      "includes": ["apps/array/src/test/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
       // Renderer code should use path aliases
       "includes": [
         "apps/array/src/renderer/**/*.ts",

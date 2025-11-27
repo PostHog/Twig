@@ -1,5 +1,7 @@
+import type { LogLevel as LogLevelType, OnLogCallback } from "../types.js";
+
 /**
- * Simple logger utility with configurable debug mode
+ * Simple logger utility with configurable debug mode and external log forwarding
  */
 export enum LogLevel {
   ERROR = 0,
@@ -11,19 +13,29 @@ export enum LogLevel {
 export interface LoggerConfig {
   debug?: boolean;
   prefix?: string;
+  scope?: string;
+  onLog?: OnLogCallback;
 }
 
 export class Logger {
   private debugEnabled: boolean;
   private prefix: string;
+  private scope: string;
+  private onLog?: OnLogCallback;
 
   constructor(config: LoggerConfig = {}) {
     this.debugEnabled = config.debug ?? false;
     this.prefix = config.prefix ?? "[PostHog Agent]";
+    this.scope = config.scope ?? "agent";
+    this.onLog = config.onLog;
   }
 
   setDebug(enabled: boolean) {
     this.debugEnabled = enabled;
+  }
+
+  setOnLog(onLog: OnLogCallback | undefined) {
+    this.onLog = onLog;
   }
 
   private formatMessage(
@@ -32,7 +44,7 @@ export class Logger {
     data?: unknown,
   ): string {
     const timestamp = new Date().toISOString();
-    const base = `${timestamp} ${this.prefix} ${level} ${message}`;
+    const base = `${timestamp} ${this.prefix} [${level}] ${message}`;
 
     if (data !== undefined) {
       return `${base} ${JSON.stringify(data, null, 2)}`;
@@ -41,45 +53,49 @@ export class Logger {
     return base;
   }
 
-  error(message: string, error?: Error | unknown) {
-    // Always log errors
-    if (error instanceof Error) {
-      console.error(
-        this.formatMessage("[ERROR]", message, {
-          message: error.message,
-          stack: error.stack,
-        }),
-      );
-    } else {
-      console.error(this.formatMessage("[ERROR]", message, error));
+  private emitLog(level: LogLevelType, message: string, data?: unknown) {
+    if (this.onLog) {
+      this.onLog(level, this.scope, message, data);
+      return;
     }
+
+    const shouldLog = this.debugEnabled || level === "error";
+
+    if (shouldLog) {
+      console[level](this.formatMessage(level.toLowerCase(), message, data));
+    }
+  }
+
+  error(message: string, error?: Error | unknown) {
+    const data =
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : error;
+
+    this.emitLog("error", message, data);
   }
 
   warn(message: string, data?: unknown) {
-    if (this.debugEnabled) {
-      console.warn(this.formatMessage("[WARN]", message, data));
-    }
+    this.emitLog("warn", message, data);
   }
 
   info(message: string, data?: unknown) {
-    if (this.debugEnabled) {
-      console.log(this.formatMessage("[INFO]", message, data));
-    }
+    this.emitLog("info", message, data);
   }
 
   debug(message: string, data?: unknown) {
-    if (this.debugEnabled) {
-      console.log(this.formatMessage("[DEBUG]", message, data));
-    }
+    this.emitLog("debug", message, data);
   }
 
   /**
-   * Create a child logger with additional prefix
+   * Create a child logger with additional prefix and scope
    */
   child(childPrefix: string): Logger {
     return new Logger({
       debug: this.debugEnabled,
       prefix: `${this.prefix} [${childPrefix}]`,
+      scope: `${this.scope}:${childPrefix}`,
+      onLog: this.onLog,
     });
   }
 }

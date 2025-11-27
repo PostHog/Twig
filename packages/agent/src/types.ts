@@ -337,6 +337,15 @@ export type McpServerConfig =
       instance?: any;
     };
 
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export type OnLogCallback = (
+  level: LogLevel,
+  scope: string,
+  message: string,
+  data?: unknown,
+) => void;
+
 export interface AgentConfig {
   workingDirectory?: string;
   onEvent?: (event: AgentEvent) => void;
@@ -356,6 +365,7 @@ export interface AgentConfig {
 
   // Logging configuration
   debug?: boolean;
+  onLog?: OnLogCallback;
 
   // Fine-grained permission control for direct run() calls
   // See: https://docs.claude.com/en/api/agent-sdk/permissions

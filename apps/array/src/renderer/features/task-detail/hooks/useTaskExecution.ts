@@ -1,6 +1,9 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
+
+const log = logger.scope("task-execution");
 
 interface UseTaskExecutionParams {
   taskId: string;
@@ -71,7 +74,7 @@ export function useTaskExecution({
           store.setPlanModePhase(taskId, "planning");
           store.runTask(taskId, task);
         } catch (error) {
-          console.error("Failed to save answers to research.json:", error);
+          log.error("Failed to save answers to research.json:", error);
         }
       }
     },

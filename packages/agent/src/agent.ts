@@ -65,7 +65,11 @@ export class Agent {
       ...defaultMcpServers,
       ...config.mcpServers,
     };
-    this.logger = new Logger({ debug: this.debug, prefix: "[PostHog Agent]" });
+    this.logger = new Logger({
+      debug: this.debug,
+      prefix: "[PostHog Agent]",
+      onLog: config.onLog,
+    });
     this.taskManager = new TaskManager();
     // Hardcode Claude adapter for now - extensible for other providers later
     this.adapter = new ClaudeAdapter();
