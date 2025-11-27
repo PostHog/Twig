@@ -1,11 +1,13 @@
-export const parseRepoKey = (
-  repoKey: string,
-): { organization: string; repository: string } | null => {
-  const [organization, repository] = repoKey.split("/");
-  if (organization && repository) {
-    return { organization, repository };
+export const parseRepository = (
+  repository: string,
+): { organization: string; repoName: string } | null => {
+  const result = repository.split("/");
+
+  if (result.length !== 2) {
+    return null;
   }
-  return null;
+
+  return { organization: result[0], repoName: result[1] };
 };
 
 export const REPO_NOT_IN_INTEGRATION_WARNING =

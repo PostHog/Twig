@@ -1,7 +1,6 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import { Box, Button, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import type { RepositoryConfig } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect, useState } from "react";
@@ -19,7 +18,7 @@ export function TaskInput() {
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  const [detectedRepo, setDetectedRepo] = useState<RepositoryConfig | null>(
+  const [detectedRepository, setDetectedRepository] = useState<string | null>(
     null,
   );
 
@@ -31,10 +30,9 @@ export function TaskInput() {
       try {
         const detected = await window.electronAPI?.detectRepo(newPath);
         if (detected) {
-          setDetectedRepo({
-            organization: detected.organization,
-            repository: detected.repository,
-          });
+          setDetectedRepository(
+            `${detected.organization}/${detected.repository}`,
+          );
           return;
         }
       } catch (error) {
@@ -42,7 +40,7 @@ export function TaskInput() {
       }
     }
 
-    setDetectedRepo(null);
+    setDetectedRepository(null);
   }, []);
 
   useEffect(() => {
@@ -64,7 +62,7 @@ export function TaskInput() {
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editor,
     selectedDirectory,
-    detectedRepo,
+    detectedRepository,
   });
 
   return (
