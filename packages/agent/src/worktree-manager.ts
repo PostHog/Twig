@@ -791,4 +791,57 @@ export class WorktreeManager {
       return null;
     }
   }
+
+  async cleanupOrphanedWorktrees(
+    associatedWorktreePaths: string[],
+  ): Promise<{
+    deleted: string[];
+    errors: Array<{ path: string; error: string }>;
+  }> {
+    this.logger.info("Starting cleanup of orphaned worktrees");
+
+    const allWorktrees = await this.listWorktrees();
+    const deleted: string[] = [];
+    const errors: Array<{ path: string; error: string }> = [];
+
+    const associatedPathsSet = new Set(
+      associatedWorktreePaths.map((p) => path.resolve(p)),
+    );
+
+    for (const worktree of allWorktrees) {
+      const resolvedPath = path.resolve(worktree.worktreePath);
+
+      if (!associatedPathsSet.has(resolvedPath)) {
+        this.logger.info("Found orphaned worktree", {
+          path: worktree.worktreePath,
+        });
+
+        try {
+          await this.deleteWorktree(worktree.worktreePath);
+          deleted.push(worktree.worktreePath);
+          this.logger.info("Deleted orphaned worktree", {
+            path: worktree.worktreePath,
+          });
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          errors.push({
+            path: worktree.worktreePath,
+            error: errorMessage,
+          });
+          this.logger.error("Failed to delete orphaned worktree", {
+            path: worktree.worktreePath,
+            error: errorMessage,
+          });
+        }
+      }
+    }
+
+    this.logger.info("Cleanup completed", {
+      deleted: deleted.length,
+      errors: errors.length,
+    });
+
+    return { deleted, errors };
+  }
 }

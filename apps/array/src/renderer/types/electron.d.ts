@@ -221,6 +221,12 @@ declare global {
       ) => Promise<TaskFolderAssociation | null>;
       removeTaskAssociation: (taskId: string) => Promise<void>;
       clearTaskWorktree: (taskId: string) => Promise<void>;
+      cleanupOrphanedWorktrees: (
+        mainRepoPath: string,
+      ) => Promise<{
+        deleted: string[];
+        errors: Array<{ path: string; error: string }>;
+      }>;
     };
     worktree: {
       create: (mainRepoPath: string) => Promise<{

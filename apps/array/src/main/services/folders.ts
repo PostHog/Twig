@@ -141,6 +141,27 @@ async function clearTaskWorktree(taskId: string): Promise<void> {
   }
 }
 
+async function cleanupOrphanedWorktreesForFolder(
+  mainRepoPath: string,
+): Promise<{
+  deleted: string[];
+  errors: Array<{ path: string; error: string }>;
+}> {
+  const WorktreeManager = (await import("@posthog/agent")).WorktreeManager;
+  const manager = new WorktreeManager({ mainRepoPath });
+
+  const associations = foldersStore.get("taskAssociations", []);
+  const associatedWorktreePaths: string[] = [];
+
+  for (const assoc of associations) {
+    if (assoc.worktree?.worktreePath) {
+      associatedWorktreePaths.push(assoc.worktree.worktreePath);
+    }
+  }
+
+  return await manager.cleanupOrphanedWorktrees(associatedWorktreePaths);
+}
+
 export function registerFoldersIpc(): void {
   ipcMain.handle(
     "get-folders",
@@ -289,6 +310,30 @@ export function registerFoldersIpc(): void {
       } catch (error) {
         console.error(`Failed to clear worktree for ${taskId}:`, error);
         throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "cleanup-orphaned-worktrees",
+    async (
+      _event: IpcMainInvokeEvent,
+      mainRepoPath: string,
+    ): Promise<{
+      deleted: string[];
+      errors: Array<{ path: string; error: string }>;
+    }> => {
+      try {
+        return await cleanupOrphanedWorktreesForFolder(mainRepoPath);
+      } catch (error) {
+        console.error(
+          `Failed to cleanup orphaned worktrees for ${mainRepoPath}:`,
+          error,
+        );
+        return {
+          deleted: [],
+          errors: [{ path: mainRepoPath, error: String(error) }],
+        };
       }
     },
   );

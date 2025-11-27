@@ -436,6 +436,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("remove-task-association", taskId),
     clearTaskWorktree: (taskId: string): Promise<void> =>
       ipcRenderer.invoke("clear-task-worktree", taskId),
+    cleanupOrphanedWorktrees: (
+      mainRepoPath: string,
+    ): Promise<{
+      deleted: string[];
+      errors: Array<{ path: string; error: string }>;
+    }> => ipcRenderer.invoke("cleanup-orphaned-worktrees", mainRepoPath),
   },
   // Worktree API
   worktree: {
