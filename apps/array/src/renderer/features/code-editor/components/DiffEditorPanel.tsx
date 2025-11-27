@@ -4,6 +4,7 @@ import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEdi
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
 
 interface DiffEditorPanelProps {
@@ -17,7 +18,11 @@ export function DiffEditorPanel({
   task,
   filePath,
 }: DiffEditorPanelProps) {
-  const { repoPath } = useTaskData({ taskId, initialTask: task });
+  const taskData = useTaskData({ taskId, initialTask: task });
+  const worktreePath = useWorktreeStore(
+    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  );
+  const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],

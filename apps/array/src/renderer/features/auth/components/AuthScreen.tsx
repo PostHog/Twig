@@ -72,8 +72,8 @@ export function AuthScreen() {
       workspace: string;
     }) => {
       if (!workspace || !workspace.trim()) {
-        setWorkspaceError("Please select a workspace directory");
-        throw new Error("Workspace is required");
+        setWorkspaceError("Please select a clone location");
+        throw new Error("Clone location is required");
       }
 
       // Login with OAuth first
@@ -143,12 +143,12 @@ export function AuthScreen() {
 
                   <Flex direction="column" gap="2">
                     <Text as="label" size="2" weight="medium" color="gray">
-                      Default workspace
+                      Default clone location
                     </Text>
                     <FolderPicker
                       value={workspace}
                       onChange={setWorkspace}
-                      placeholder="~/workspace"
+                      placeholder="~/repos"
                       size="2"
                     />
                     <Text size="1" color="gray">

@@ -69,7 +69,8 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
         <DataList.Item>
           <DataList.Label>Repository</DataList.Label>
           <DataList.Value>
-            {task.repository_config ? (
+            {task.repository_config &&
+            Object.keys(task.repository_config).length > 0 ? (
               <Code size="2" color="gray">
                 {task.repository_config.organization}/
                 {task.repository_config.repository}

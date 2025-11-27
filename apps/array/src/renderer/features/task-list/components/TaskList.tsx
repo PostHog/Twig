@@ -1,17 +1,23 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { TaskFilterClearButton } from "@features/task-list/components/TaskFilterClearButton";
+import { TaskFilterMatchToggle } from "@features/task-list/components/TaskFilterMatchToggle";
 import { TaskListContent } from "@features/task-list/components/TaskListContent";
-import { TaskListHeader } from "@features/task-list/components/TaskListHeader";
+import { TaskListDisplayOptions } from "@features/task-list/components/TaskListDisplayOptions";
+import { TaskListFilter } from "@features/task-list/components/TaskListFilter";
+import { TaskSearch } from "@features/task-list/components/TaskSearch";
 import { useTaskDragDrop } from "@features/task-list/hooks/useTaskDragDrop";
 import { useTaskGrouping } from "@features/task-list/hooks/useTaskGrouping";
 import { useTaskKeyboardNavigation } from "@features/task-list/hooks/useTaskKeyboardNavigation";
 import { useTaskScrolling } from "@features/task-list/hooks/useTaskScrolling";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { filterTasks, useTaskStore } from "@features/tasks/stores/taskStore";
+import { useMeQuery } from "@hooks/useMeQuery";
+import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { useUsers } from "@hooks/useUsers";
-import { Box, Button, Flex, Spinner, Text } from "@radix-ui/themes";
+import { getUserDisplayName, useUsers } from "@hooks/useUsers";
+import { Box, Button, Flex, Separator, Spinner, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 interface TaskListProps {
   onSelectTask: (task: Task) => void;
@@ -21,6 +27,7 @@ export function TaskList({ onSelectTask }: TaskListProps) {
   // Data fetching
   const { data: tasks = [], isLoading, error, refetch } = useTasks();
   const { data: users = [] } = useUsers();
+  const { data: currentUser } = useMeQuery();
 
   // Store state
   const filter = useTaskStore((state) => state.filter);
@@ -88,6 +95,45 @@ export function TaskList({ onSelectTask }: TaskListProps) {
 
   useTaskScrolling(listRef, selectedIndex, filteredTasks.length);
 
+  // Determine view title
+  const viewTitle = useMemo(() => {
+    const creatorFilters = activeFilters.creator || [];
+    const repositoryFilters = activeFilters.repository || [];
+
+    // Check for "My tasks" view
+    if (creatorFilters.length === 1 && currentUser) {
+      const userDisplayName = getUserDisplayName(currentUser);
+      if (creatorFilters[0].value === userDisplayName) {
+        return "My tasks";
+      }
+    }
+
+    // Check for project/repository view
+    if (repositoryFilters.length === 1) {
+      const repoPath = repositoryFilters[0].value;
+      const repoName = repoPath.split("/").pop() || repoPath;
+      return repoName;
+    }
+
+    return "All tasks";
+  }, [activeFilters, currentUser]);
+
+  const totalActiveFilterCount = Object.values(activeFilters).reduce(
+    (sum, filters) => sum + (filters?.length || 0),
+    0,
+  );
+
+  const headerContent = useMemo(
+    () => (
+      <Text size="2" weight="medium">
+        {viewTitle}
+      </Text>
+    ),
+    [viewTitle],
+  );
+
+  useSetHeaderContent(headerContent);
+
   // Status bar
   useStatusBar(
     `${filteredTasks.length} task${filteredTasks.length === 1 ? "" : "s"}`,
@@ -153,13 +199,32 @@ export function TaskList({ onSelectTask }: TaskListProps) {
 
   return (
     <Flex direction="column" height="100%">
-      <TaskListHeader
-        filter={filter}
-        onFilterChange={(newFilter) => {
-          setFilter(newFilter);
-          setSelectedIndex(null);
-        }}
-      />
+      <Box pl="2" pb="2" pt="2" className="border-gray-6 border-b">
+        <Flex gap="2" align="start" justify="between">
+          <Flex align="center" gap="2">
+            <TaskListFilter />
+            {totalActiveFilterCount > 0 && (
+              <Flex gap="2" className="flex-shrink-0">
+                <TaskFilterMatchToggle />
+                {totalActiveFilterCount > 1 && (
+                  <Separator orientation="vertical" />
+                )}
+                <TaskFilterClearButton />
+              </Flex>
+            )}
+          </Flex>
+          <Flex align="center" gap="2">
+            <TaskListDisplayOptions />
+            <TaskSearch
+              value={filter}
+              onChange={(newFilter) => {
+                setFilter(newFilter);
+                setSelectedIndex(null);
+              }}
+            />
+          </Flex>
+        </Flex>
+      </Box>
 
       <Box ref={listRef} flexGrow="1" overflowY="auto">
         <TaskListContent

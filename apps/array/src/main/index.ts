@@ -12,8 +12,8 @@ import {
 } from "electron";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { registerAgentIpc, type TaskController } from "./services/agent.js";
-import { ensureDataDirectory } from "./services/data.js";
 import { registerFoldersIpc } from "./services/folders.js";
+import { registerWorktreeIpc } from "./services/worktree.js";
 import "./services/index.js";
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
 import { registerFsIpc } from "./services/fs.js";
@@ -176,10 +176,9 @@ function createWindow(): void {
   });
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
-  await ensureDataDirectory();
 
   // Initialize PostHog analytics
   initializePostHog();
@@ -214,4 +213,5 @@ registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
 registerFileWatcherIpc(() => mainWindow);
 registerFoldersIpc();
+registerWorktreeIpc();
 registerShellIpc();

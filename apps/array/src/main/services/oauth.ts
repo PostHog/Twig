@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import type { Socket } from "node:net";
-import { ipcMain, safeStorage, shell } from "electron";
+import { ipcMain, shell } from "electron";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
@@ -12,7 +12,6 @@ import type {
   CloudRegion,
   OAuthConfig,
   OAuthTokenResponse,
-  StoredOAuthTokens,
 } from "../../shared/types/oauth";
 
 function generateCodeVerifier(): string {
@@ -234,23 +233,6 @@ async function refreshTokenRequest(
   return response.json();
 }
 
-function encryptTokens(tokens: StoredOAuthTokens): string {
-  const json = JSON.stringify(tokens);
-  const buffer = safeStorage.encryptString(json);
-  return buffer.toString("base64");
-}
-
-function decryptTokens(encrypted: string): StoredOAuthTokens | null {
-  try {
-    const buffer = Buffer.from(encrypted, "base64");
-    const json = safeStorage.decryptString(buffer);
-    return JSON.parse(json);
-  } catch (error) {
-    console.error("Failed to decrypt tokens:", error);
-    return null;
-  }
-}
-
 let activeCloseServer: (() => void) | null = null;
 
 export async function performOAuthFlow(
@@ -332,51 +314,6 @@ export function registerOAuthHandlers(): void {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
-  });
-
-  ipcMain.handle(
-    "oauth:encrypt-tokens",
-    async (_, tokens: StoredOAuthTokens) => {
-      try {
-        const encrypted = encryptTokens(tokens);
-        return {
-          success: true,
-          encrypted,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("oauth:retrieve-tokens", async (_, encrypted: string) => {
-    try {
-      const tokens = decryptTokens(encrypted);
-      if (!tokens) {
-        return {
-          success: false,
-          error: "Failed to decrypt tokens",
-        };
-      }
-      return {
-        success: true,
-        data: tokens,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle("oauth:delete-tokens", async () => {
-    // Nothing to do in main process for deletion
-    // Renderer will handle removing from localStorage
-    return { success: true };
   });
 
   ipcMain.handle(

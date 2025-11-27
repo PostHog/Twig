@@ -1,6 +1,7 @@
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
 
 interface ChangesTabBadgeProps {
@@ -10,13 +11,16 @@ interface ChangesTabBadgeProps {
 
 export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const worktreePath = useWorktreeStore(
+    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  );
+  const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", repoPath],
     queryFn: () => window.electronAPI.getDiffStats(repoPath as string),
     enabled: !!repoPath,
-    staleTime: Infinity,
+    refetchOnMount: "always",
   });
 
   if (!diffStats || diffStats.filesChanged === 0) {

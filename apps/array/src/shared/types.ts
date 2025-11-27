@@ -11,6 +11,21 @@ export interface RegisteredFolder {
   createdAt: string;
 }
 
+export interface WorktreeInfo {
+  worktreePath: string;
+  worktreeName: string;
+  branchName: string;
+  baseBranch: string;
+  createdAt: string;
+}
+
+export interface TaskFolderAssociation {
+  taskId: string;
+  folderId: string;
+  folderPath: string;
+  worktree?: WorktreeInfo;
+}
+
 interface UserBasic {
   id: number;
   uuid: string;

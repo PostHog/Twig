@@ -8,13 +8,11 @@ import type {
   ChangedFile,
   RegisteredFolder,
   TaskArtifact,
+  TaskFolderAssociation,
+  WorktreeInfo,
 } from "@shared/types";
 import "@main/services/types";
-import type {
-  CloudRegion,
-  OAuthTokenResponse,
-  StoredOAuthTokens,
-} from "@shared/types/oauth";
+import type { CloudRegion, OAuthTokenResponse } from "@shared/types/oauth";
 
 declare global {
   interface IElectronAPI {
@@ -27,15 +25,6 @@ declare global {
       data?: OAuthTokenResponse;
       error?: string;
     }>;
-    oauthEncryptTokens: (
-      tokens: StoredOAuthTokens,
-    ) => Promise<{ success: boolean; encrypted?: string; error?: string }>;
-    oauthRetrieveTokens: (encrypted: string) => Promise<{
-      success: boolean;
-      data?: StoredOAuthTokens;
-      error?: string;
-    }>;
-    oauthDeleteTokens: () => Promise<{ success: boolean }>;
     oauthRefreshToken: (
       refreshToken: string,
       region: CloudRegion,
@@ -216,6 +205,57 @@ declare global {
       removeFolder: (folderId: string) => Promise<void>;
       updateFolderAccessed: (folderId: string) => Promise<void>;
       clearAllData: () => Promise<void>;
+      getTaskAssociations: () => Promise<TaskFolderAssociation[]>;
+      getTaskAssociation: (
+        taskId: string,
+      ) => Promise<TaskFolderAssociation | null>;
+      setTaskAssociation: (
+        taskId: string,
+        folderId: string,
+        folderPath: string,
+        worktree?: WorktreeInfo,
+      ) => Promise<TaskFolderAssociation>;
+      updateTaskWorktree: (
+        taskId: string,
+        worktree: WorktreeInfo,
+      ) => Promise<TaskFolderAssociation | null>;
+      removeTaskAssociation: (taskId: string) => Promise<void>;
+      clearTaskWorktree: (taskId: string) => Promise<void>;
+    };
+    worktree: {
+      create: (mainRepoPath: string) => Promise<{
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      }>;
+      delete: (mainRepoPath: string, worktreePath: string) => Promise<void>;
+      getInfo: (
+        mainRepoPath: string,
+        worktreePath: string,
+      ) => Promise<{
+        worktreePath: string;
+        worktreeName: string;
+        branchName: string;
+        baseBranch: string;
+        createdAt: string;
+      } | null>;
+      exists: (mainRepoPath: string, name: string) => Promise<boolean>;
+      list: (mainRepoPath: string) => Promise<
+        Array<{
+          worktreePath: string;
+          worktreeName: string;
+          branchName: string;
+          baseBranch: string;
+          createdAt: string;
+        }>
+      >;
+      isWorktree: (mainRepoPath: string, repoPath: string) => Promise<boolean>;
+      getMainRepoPath: (
+        mainRepoPath: string,
+        worktreePath: string,
+      ) => Promise<string | null>;
     };
   }
 

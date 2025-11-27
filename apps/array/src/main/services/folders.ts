@@ -1,13 +1,11 @@
 import path from "node:path";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
-import type { RegisteredFolder } from "../../shared/types";
-import { clearDataDirectory, readDataFile, writeDataFile } from "./data";
-
-const FOLDERS_FILE = "folders.json";
-
-interface FoldersData {
-  folders: RegisteredFolder[];
-}
+import type {
+  RegisteredFolder,
+  TaskFolderAssociation,
+  WorktreeInfo,
+} from "../../shared/types";
+import { clearAllStoreData, foldersStore } from "./store";
 
 function generateFolderId(): string {
   return `folder_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -18,17 +16,16 @@ function extractFolderName(folderPath: string): string {
 }
 
 async function getFolders(): Promise<RegisteredFolder[]> {
-  const data = await readDataFile<FoldersData>(FOLDERS_FILE);
-  return data?.folders ?? [];
+  return foldersStore.get("folders", []);
 }
 
 async function addFolder(folderPath: string): Promise<RegisteredFolder> {
-  const folders = await getFolders();
+  const folders = foldersStore.get("folders", []);
 
   const existing = folders.find((f) => f.path === folderPath);
   if (existing) {
     existing.lastAccessed = new Date().toISOString();
-    await writeDataFile(FOLDERS_FILE, { folders });
+    foldersStore.set("folders", folders);
     return existing;
   }
 
@@ -41,27 +38,106 @@ async function addFolder(folderPath: string): Promise<RegisteredFolder> {
   };
 
   folders.push(newFolder);
-  await writeDataFile(FOLDERS_FILE, { folders });
+  foldersStore.set("folders", folders);
 
-  console.log(`Added folder: ${folderPath}`);
   return newFolder;
 }
 
 async function removeFolder(folderId: string): Promise<void> {
-  const folders = await getFolders();
-  const filtered = folders.filter((f) => f.id !== folderId);
+  const folders = foldersStore.get("folders", []);
+  const associations = foldersStore.get("taskAssociations", []);
 
-  await writeDataFile(FOLDERS_FILE, { folders: filtered });
+  const filtered = folders.filter((f) => f.id !== folderId);
+  const filteredAssociations = associations.filter(
+    (a) => a.folderId !== folderId,
+  );
+
+  foldersStore.set("folders", filtered);
+  foldersStore.set("taskAssociations", filteredAssociations);
   console.log(`Removed folder with ID: ${folderId}`);
 }
 
 async function updateFolderAccessed(folderId: string): Promise<void> {
-  const folders = await getFolders();
+  const folders = foldersStore.get("folders", []);
   const folder = folders.find((f) => f.id === folderId);
 
   if (folder) {
     folder.lastAccessed = new Date().toISOString();
-    await writeDataFile(FOLDERS_FILE, { folders });
+    foldersStore.set("folders", folders);
+  }
+}
+
+async function getTaskAssociations(): Promise<TaskFolderAssociation[]> {
+  return foldersStore.get("taskAssociations", []);
+}
+
+async function getTaskAssociation(
+  taskId: string,
+): Promise<TaskFolderAssociation | null> {
+  const associations = await getTaskAssociations();
+  return associations.find((a) => a.taskId === taskId) ?? null;
+}
+
+async function setTaskAssociation(
+  taskId: string,
+  folderId: string,
+  folderPath: string,
+  worktree?: WorktreeInfo,
+): Promise<TaskFolderAssociation> {
+  const associations = foldersStore.get("taskAssociations", []);
+
+  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+  const association: TaskFolderAssociation = {
+    taskId,
+    folderId,
+    folderPath,
+    worktree,
+  };
+
+  if (existingIndex >= 0) {
+    associations[existingIndex] = association;
+  } else {
+    associations.push(association);
+  }
+
+  foldersStore.set("taskAssociations", associations);
+  return association;
+}
+
+async function updateTaskWorktree(
+  taskId: string,
+  worktree: WorktreeInfo,
+): Promise<TaskFolderAssociation | null> {
+  const associations = foldersStore.get("taskAssociations", []);
+
+  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+  if (existingIndex < 0) {
+    return null;
+  }
+
+  associations[existingIndex] = {
+    ...associations[existingIndex],
+    worktree,
+  };
+
+  foldersStore.set("taskAssociations", associations);
+  return associations[existingIndex];
+}
+
+async function removeTaskAssociation(taskId: string): Promise<void> {
+  const associations = foldersStore.get("taskAssociations", []);
+  const filtered = associations.filter((a) => a.taskId !== taskId);
+  foldersStore.set("taskAssociations", filtered);
+}
+
+async function clearTaskWorktree(taskId: string): Promise<void> {
+  const associations = foldersStore.get("taskAssociations", []);
+
+  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+  if (existingIndex >= 0) {
+    const { worktree: _, ...rest } = associations[existingIndex];
+    associations[existingIndex] = rest;
+    foldersStore.set("taskAssociations", associations);
   }
 }
 
@@ -120,10 +196,98 @@ export function registerFoldersIpc(): void {
     "clear-all-data",
     async (_event: IpcMainInvokeEvent): Promise<void> => {
       try {
-        await clearDataDirectory();
+        clearAllStoreData();
         console.log("Cleared all application data");
       } catch (error) {
         console.error("Failed to clear all data:", error);
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "get-task-associations",
+    async (_event: IpcMainInvokeEvent): Promise<TaskFolderAssociation[]> => {
+      try {
+        return await getTaskAssociations();
+      } catch (error) {
+        console.error("Failed to get task associations:", error);
+        return [];
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "get-task-association",
+    async (
+      _event: IpcMainInvokeEvent,
+      taskId: string,
+    ): Promise<TaskFolderAssociation | null> => {
+      try {
+        return await getTaskAssociation(taskId);
+      } catch (error) {
+        console.error(`Failed to get task association for ${taskId}:`, error);
+        return null;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "set-task-association",
+    async (
+      _event: IpcMainInvokeEvent,
+      taskId: string,
+      folderId: string,
+      folderPath: string,
+      worktree?: WorktreeInfo,
+    ): Promise<TaskFolderAssociation> => {
+      try {
+        return await setTaskAssociation(taskId, folderId, folderPath, worktree);
+      } catch (error) {
+        console.error(`Failed to set task association for ${taskId}:`, error);
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "update-task-worktree",
+    async (
+      _event: IpcMainInvokeEvent,
+      taskId: string,
+      worktree: WorktreeInfo,
+    ): Promise<TaskFolderAssociation | null> => {
+      try {
+        return await updateTaskWorktree(taskId, worktree);
+      } catch (error) {
+        console.error(`Failed to update worktree for ${taskId}:`, error);
+        return null;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "remove-task-association",
+    async (_event: IpcMainInvokeEvent, taskId: string): Promise<void> => {
+      try {
+        await removeTaskAssociation(taskId);
+      } catch (error) {
+        console.error(
+          `Failed to remove task association for ${taskId}:`,
+          error,
+        );
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "clear-task-worktree",
+    async (_event: IpcMainInvokeEvent, taskId: string): Promise<void> => {
+      try {
+        await clearTaskWorktree(taskId);
+      } catch (error) {
+        console.error(`Failed to clear worktree for ${taskId}:`, error);
         throw error;
       }
     },
