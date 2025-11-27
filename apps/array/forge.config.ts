@@ -198,6 +198,7 @@ const config: ForgeConfig = {
       copyNativeDependency("node-addon-api", buildPath);
       copyNativeDependency("@parcel/watcher", buildPath);
       copyNativeDependency("@parcel/watcher-darwin-arm64", buildPath);
+      copyNativeDependency("file-icon", buildPath);
     },
   },
   publishers: [

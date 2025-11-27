@@ -151,7 +151,7 @@ function SidebarMenuComponent() {
               key={folder.id}
               id={folder.id}
               label={folder.name}
-              icon={<FolderIcon size={14} weight="fill" />}
+              icon={<FolderIcon size={14} weight="regular" />}
               isExpanded={!collapsedSections.has(folder.id)}
               onToggle={() => toggleSection(folder.id)}
               addSpacingBefore={index === 0}
