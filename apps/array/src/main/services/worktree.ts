@@ -50,10 +50,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.getWorktreeInfo(worktreePath);
       } catch (error) {
-        log.error(
-          `Failed to get worktree info for ${worktreePath}:`,
-          error,
-        );
+        log.error(`Failed to get worktree info for ${worktreePath}:`, error);
         return null;
       }
     },
@@ -120,10 +117,7 @@ export function registerWorktreeIpc(): void {
         const manager = new WorktreeManager({ mainRepoPath });
         return await manager.getMainRepoPathFromWorktree(worktreePath);
       } catch (error) {
-        log.error(
-          `Failed to get main repo path from ${worktreePath}:`,
-          error,
-        );
+        log.error(`Failed to get main repo path from ${worktreePath}:`, error);
         return null;
       }
     },

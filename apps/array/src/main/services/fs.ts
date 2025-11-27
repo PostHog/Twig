@@ -429,10 +429,7 @@ export function registerFsIpc(): void {
         const content = await fsPromises.readFile(fullPath, "utf-8");
         return content;
       } catch (error) {
-        log.error(
-          `Failed to read file ${filePath} from ${repoPath}:`,
-          error,
-        );
+        log.error(`Failed to read file ${filePath} from ${repoPath}:`, error);
         return null;
       }
     },

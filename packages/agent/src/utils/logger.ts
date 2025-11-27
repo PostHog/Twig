@@ -71,7 +71,7 @@ export class Logger {
       error instanceof Error
         ? { message: error.message, stack: error.stack }
         : error;
-    
+
     this.emitLog("error", message, data);
   }
 

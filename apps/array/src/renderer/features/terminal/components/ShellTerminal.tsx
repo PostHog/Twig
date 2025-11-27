@@ -124,7 +124,9 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
 
     log.debug(`Restoring state for key: ${persistenceKey}`, savedState);
     if (savedState?.serializedState) {
-      log.debug(`Writing ${savedState.serializedState.length} chars to terminal`);
+      log.debug(
+        `Writing ${savedState.serializedState.length} chars to terminal`,
+      );
       term.write(savedState.serializedState);
       restoredStateLengthRef.current = savedState.serializedState.length;
     } else {
@@ -138,7 +140,9 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
           if (sessionExists) {
             log.debug(`Reconnecting to existing session ${sessionId}`);
           } else {
-            log.debug(`Saved session ${sessionId} no longer exists, creating new one`);
+            log.debug(
+              `Saved session ${sessionId} no longer exists, creating new one`,
+            );
             sessionId = null;
           }
         }
@@ -178,7 +182,9 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       }
       saveTimeoutRef.current = setTimeout(() => {
         const serialized = serialize.serialize();
-        log.debug(`Saving state for key: ${persistenceKey}, ${serialized.length} chars`);
+        log.debug(
+          `Saving state for key: ${persistenceKey}, ${serialized.length} chars`,
+        );
         terminalStore.setSerializedState(persistenceKey, serialized);
       }, 500); // 500ms debounce
     };

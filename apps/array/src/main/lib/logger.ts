@@ -15,10 +15,14 @@ export const logger = {
   scope: (name: string) => {
     const scoped = log.scope(name);
     return {
-      info: (message: string, ...args: unknown[]) => scoped.info(message, ...args),
-      warn: (message: string, ...args: unknown[]) => scoped.warn(message, ...args),
-      error: (message: string, ...args: unknown[]) => scoped.error(message, ...args),
-      debug: (message: string, ...args: unknown[]) => scoped.debug(message, ...args),
+      info: (message: string, ...args: unknown[]) =>
+        scoped.info(message, ...args),
+      warn: (message: string, ...args: unknown[]) =>
+        scoped.warn(message, ...args),
+      error: (message: string, ...args: unknown[]) =>
+        scoped.error(message, ...args),
+      debug: (message: string, ...args: unknown[]) =>
+        scoped.debug(message, ...args),
     };
   },
 };

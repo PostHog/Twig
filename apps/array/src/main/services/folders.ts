@@ -275,10 +275,7 @@ export function registerFoldersIpc(): void {
       try {
         await removeTaskAssociation(taskId);
       } catch (error) {
-        log.error(
-          `Failed to remove task association for ${taskId}:`,
-          error,
-        );
+        log.error(`Failed to remove task association for ${taskId}:`, error);
         throw error;
       }
     },
