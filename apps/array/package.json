@@ -116,8 +116,10 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "ai": "^5.0.75",
+    "chokidar": "^5.0.0",
     "cmdk": "^1.1.1",
     "date-fns": "^3.3.1",
+    "electron-store": "^11.0.0",
     "idb-keyval": "^6.2.2",
     "node-addon-api": "^8.5.0",
     "node-pty": "1.1.0-beta39",
@@ -133,7 +135,6 @@
     "sonner": "^2.0.7",
     "uuid": "^9.0.1",
     "zod": "^4.1.12",
-    "zustand": "^4.5.0",
-    "electron-store": "^11.0.0"
+    "zustand": "^4.5.0"
   }
 }
