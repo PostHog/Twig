@@ -326,7 +326,7 @@ export function registerFoldersIpc(): void {
       try {
         return await cleanupOrphanedWorktreesForFolder(mainRepoPath);
       } catch (error) {
-        console.error(
+        log.error(
           `Failed to cleanup orphaned worktrees for ${mainRepoPath}:`,
           error,
         );

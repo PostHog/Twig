@@ -46,7 +46,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
           get()
             .cleanupOrphanedWorktrees(folder.path)
             .catch((error) => {
-              console.error(
+              log.error(
                 `Failed to cleanup orphaned worktrees for ${folder.path}:`,
                 error,
               );
@@ -131,7 +131,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
             mainRepoPath,
           );
         } catch (error) {
-          console.error("Failed to cleanup orphaned worktrees:", error);
+          log.error("Failed to cleanup orphaned worktrees:", error);
           return {
             deleted: [],
             errors: [{ path: mainRepoPath, error: String(error) }],
