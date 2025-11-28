@@ -5,6 +5,7 @@ import type {
   RegisteredFolder,
   TaskFolderAssociation,
 } from "../../shared/types";
+import { deleteWorktreeIfExists } from "./worktreeUtils";
 
 interface FoldersSchema {
   folders: RegisteredFolder[];
@@ -70,6 +71,17 @@ export const foldersStore = new Store<FoldersSchema>({
   },
 });
 
-export function clearAllStoreData(): void {
+export async function clearAllStoreData(): Promise<void> {
+  // Delete all worktrees before clearing store
+  const associations = foldersStore.get("taskAssociations", []);
+  for (const assoc of associations) {
+    if (assoc.worktree) {
+      await deleteWorktreeIfExists(
+        assoc.folderPath,
+        assoc.worktree.worktreePath,
+      );
+    }
+  }
+
   foldersStore.clear();
 }

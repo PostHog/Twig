@@ -15,8 +15,8 @@ export function CodeMirrorEditor({
 }: CodeMirrorEditorProps) {
   const extensions = useEditorExtensions(filePath, readOnly);
   const options = useMemo(
-    () => ({ doc: content, extensions }),
-    [content, extensions],
+    () => ({ doc: content, extensions, filePath }),
+    [content, extensions, filePath],
   );
   const containerRef = useCodeMirror(options);
 

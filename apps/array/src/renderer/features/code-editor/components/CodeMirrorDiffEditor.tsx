@@ -24,8 +24,9 @@ export function CodeMirrorDiffEditor({
       modified: modifiedContent,
       extensions,
       mode: viewMode,
+      filePath,
     }),
-    [originalContent, modifiedContent, extensions, viewMode],
+    [originalContent, modifiedContent, extensions, viewMode, filePath],
   );
   const containerRef = useCodeMirror(options);
 

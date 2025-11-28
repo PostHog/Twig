@@ -1,6 +1,7 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirrorDiffEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
+import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -10,19 +11,20 @@ import { useQuery } from "@tanstack/react-query";
 interface DiffEditorPanelProps {
   taskId: string;
   task: Task;
-  filePath: string;
+  absolutePath: string;
 }
 
 export function DiffEditorPanel({
   taskId,
   task,
-  filePath,
+  absolutePath,
 }: DiffEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const worktreePath = useWorktreeStore(
     (state) => state.taskWorktrees[taskId]?.worktreePath,
   );
   const repoPath = worktreePath ?? taskData.repoPath;
+  const filePath = getRelativePath(absolutePath, repoPath);
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -72,12 +74,12 @@ export function DiffEditorPanel({
         <CodeMirrorDiffEditor
           originalContent={originalContent ?? ""}
           modifiedContent={modifiedContent ?? ""}
-          filePath={filePath}
+          filePath={absolutePath}
         />
       ) : (
         <CodeMirrorEditor
           content={content ?? ""}
-          filePath={filePath}
+          filePath={absolutePath}
           readOnly
         />
       )}

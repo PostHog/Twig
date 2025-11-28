@@ -80,12 +80,7 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
       className="ml-auto flex shrink-0 bg-transparent text-[10px] text-gray-10"
       style={{ gap: "4px" }}
     >
-      {parts.reduce<React.ReactNode[]>((acc, part, i) => {
-        // biome-ignore lint/suspicious/noArrayIndexKey: Separator keys are stable and order-dependent
-        if (i > 0) acc.push(<span key={`sep-${i}`}>, </span>);
-        acc.push(part);
-        return acc;
-      }, [])}
+      {parts}
     </span>
   );
 }

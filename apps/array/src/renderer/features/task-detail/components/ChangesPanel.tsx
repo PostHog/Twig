@@ -6,6 +6,7 @@ import { Badge, Box, Flex, Text } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 
 interface ChangesPanelProps {
   taskId: string;
@@ -15,6 +16,7 @@ interface ChangesPanelProps {
 interface ChangedFileItemProps {
   file: ChangedFile;
   taskId: string;
+  repoPath: string;
 }
 
 function getStatusIndicator(status: GitFileStatus): {
@@ -36,7 +38,7 @@ function getStatusIndicator(status: GitFileStatus): {
   }
 }
 
-function ChangedFileItem({ file, taskId }: ChangedFileItemProps) {
+function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const fileName = file.path.split("/").pop() || file.path;
   const indicator = getStatusIndicator(file.status);
@@ -45,12 +47,23 @@ function ChangedFileItem({ file, taskId }: ChangedFileItemProps) {
     openDiff(taskId, file.path, file.status);
   };
 
+  const handleContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const fullPath = `${repoPath}/${file.path}`;
+    const result = await window.electronAPI.showFileContextMenu(fullPath);
+
+    if (!result.action) return;
+
+    await handleExternalAppAction(result.action, fullPath, fileName);
+  };
+
   return (
     <Flex
       align="center"
       gap="2"
       py="1"
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       className="hover:bg-gray-2"
       style={{ cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden" }}
     >
@@ -106,7 +119,12 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     <Box height="100%" overflowY="auto" p="4">
       <Flex direction="column" gap="1" px="1">
         {changedFiles.map((file) => (
-          <ChangedFileItem key={file.path} file={file} taskId={taskId} />
+          <ChangedFileItem
+            key={file.path}
+            file={file}
+            taskId={taskId}
+            repoPath={repoPath}
+          />
         ))}
       </Flex>
     </Box>

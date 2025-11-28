@@ -1,13 +1,16 @@
-import { Menu, type MenuItemConstructorOptions } from "electron";
+import { Menu, type MenuItemConstructorOptions, nativeImage } from "electron";
 import { createIpcService } from "../ipc/createIpcService.js";
 import type {
+  ExternalAppContextMenuResult,
   FolderContextMenuResult,
   SplitContextMenuResult,
   TabContextMenuResult,
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
+import { externalAppsStore, getOrRefreshApps } from "./externalApps.js";
 
 export type {
+  ExternalAppContextMenuResult,
   FolderContextMenuAction,
   FolderContextMenuResult,
   SplitContextMenuResult,
@@ -18,12 +21,84 @@ export type {
   TaskContextMenuResult,
 } from "./contextMenu.types.js";
 
+const ICON_SIZE = 16;
+
+function showContextMenu<T>(
+  template: MenuItemConstructorOptions[],
+  defaultResult: T,
+): Promise<T> {
+  return new Promise((resolve) => {
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({
+      callback: () => resolve(defaultResult),
+    });
+  });
+}
+
+async function buildExternalAppsMenuItems(
+  _targetPath: string,
+  resolve: (result: ExternalAppContextMenuResult) => void,
+): Promise<MenuItemConstructorOptions[]> {
+  const apps = await getOrRefreshApps();
+  const prefs = externalAppsStore.get("externalAppsPrefs");
+  const lastUsedAppId = prefs.lastUsedApp;
+
+  // Handle no apps detected
+  if (apps.length === 0) {
+    return [
+      {
+        label: "No external apps detected",
+        enabled: false,
+      },
+    ];
+  }
+
+  // Find last used app or default to first
+  const lastUsedApp = apps.find((app) => app.id === lastUsedAppId) || apps[0];
+
+  const menuItems: MenuItemConstructorOptions[] = [
+    {
+      label: `Open in ${lastUsedApp.name}`,
+      click: () =>
+        resolve({
+          action: { type: "open-in-app", appId: lastUsedApp.id },
+        }),
+    },
+    {
+      label: "Open in",
+      submenu: apps.map((app) => ({
+        label: app.name,
+        icon: app.icon
+          ? nativeImage
+              .createFromDataURL(app.icon)
+              .resize({ width: ICON_SIZE, height: ICON_SIZE })
+          : undefined,
+        click: () =>
+          resolve({
+            action: { type: "open-in-app", appId: app.id },
+          }),
+      })),
+    },
+    {
+      label: "Copy Path",
+      accelerator: "CmdOrCtrl+Shift+C",
+      click: () =>
+        resolve({
+          action: { type: "copy-path" },
+        }),
+    },
+  ];
+
+  return menuItems;
+}
+
 export const showTaskContextMenuService = createIpcService({
   channel: "show-task-context-menu",
   handler: async (
     _event,
     _taskId: string,
     _taskTitle: string,
+    worktreePath?: string,
   ): Promise<TaskContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
@@ -42,10 +117,20 @@ export const showTaskContextMenuService = createIpcService({
         },
       ];
 
-      const menu = Menu.buildFromTemplate(template);
-      menu.popup({
-        callback: () => resolve({ action: null }),
-      });
+      const setupMenu = async () => {
+        if (worktreePath) {
+          template.push({ type: "separator" });
+          const externalAppsItems = await buildExternalAppsMenuItems(
+            worktreePath,
+            resolve,
+          );
+          template.push(...externalAppsItems);
+        }
+
+        showContextMenu(template, { action: null }).then(resolve);
+      };
+
+      setupMenu();
     });
   },
 });
@@ -56,6 +141,7 @@ export const showFolderContextMenuService = createIpcService({
     _event,
     _folderId: string,
     _folderName: string,
+    folderPath?: string,
   ): Promise<FolderContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
@@ -65,17 +151,31 @@ export const showFolderContextMenuService = createIpcService({
         },
       ];
 
-      const menu = Menu.buildFromTemplate(template);
-      menu.popup({
-        callback: () => resolve({ action: null }),
-      });
+      const setupMenu = async () => {
+        if (folderPath) {
+          template.push({ type: "separator" });
+          const externalAppsItems = await buildExternalAppsMenuItems(
+            folderPath,
+            resolve,
+          );
+          template.push(...externalAppsItems);
+        }
+
+        showContextMenu(template, { action: null }).then(resolve);
+      };
+
+      setupMenu();
     });
   },
 });
 
 export const showTabContextMenuService = createIpcService({
   channel: "show-tab-context-menu",
-  handler: async (_event, canClose: boolean): Promise<TabContextMenuResult> => {
+  handler: async (
+    _event,
+    canClose: boolean,
+    filePath?: string,
+  ): Promise<TabContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
         {
@@ -84,7 +184,6 @@ export const showTabContextMenuService = createIpcService({
           enabled: canClose,
           click: () => resolve({ action: "close" }),
         },
-        { type: "separator" },
         {
           label: "Close other tabs",
           click: () => resolve({ action: "close-others" }),
@@ -95,10 +194,20 @@ export const showTabContextMenuService = createIpcService({
         },
       ];
 
-      const menu = Menu.buildFromTemplate(template);
-      menu.popup({
-        callback: () => resolve({ action: null }),
-      });
+      const setupMenu = async () => {
+        if (filePath) {
+          template.push({ type: "separator" });
+          const externalAppsItems = await buildExternalAppsMenuItems(
+            filePath,
+            resolve,
+          );
+          template.push(...externalAppsItems);
+        }
+
+        showContextMenu(template, { action: null }).then(resolve);
+      };
+
+      setupMenu();
     });
   },
 });
@@ -126,10 +235,28 @@ export const showSplitContextMenuService = createIpcService({
         },
       ];
 
-      const menu = Menu.buildFromTemplate(template);
-      menu.popup({
-        callback: () => resolve({ direction: null }),
-      });
+      showContextMenu(template, { direction: null }).then(resolve);
+    });
+  },
+});
+
+export const showFileContextMenuService = createIpcService({
+  channel: "show-file-context-menu",
+  handler: async (
+    _event,
+    filePath: string,
+  ): Promise<ExternalAppContextMenuResult> => {
+    return new Promise((resolve) => {
+      const setupMenu = async () => {
+        const externalAppsItems = await buildExternalAppsMenuItems(
+          filePath,
+          resolve,
+        );
+
+        showContextMenu(externalAppsItems, { action: null }).then(resolve);
+      };
+
+      setupMenu();
     });
   },
 });

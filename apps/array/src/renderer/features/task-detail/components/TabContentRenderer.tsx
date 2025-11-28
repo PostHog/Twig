@@ -1,6 +1,6 @@
 import { CodeEditorPanel } from "@features/code-editor/components/CodeEditorPanel";
 import { DiffEditorPanel } from "@features/code-editor/components/DiffEditorPanel";
-import { parseTabId } from "@features/panels/store/panelStoreHelpers";
+import type { Tab } from "@features/panels/store/panelTypes";
 import { ChangesPanel } from "@features/task-detail/components/ChangesPanel";
 import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
@@ -12,68 +12,73 @@ import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
 import type { Task } from "@shared/types";
 
 interface TabContentRendererProps {
-  tabId: string;
+  tab: Tab;
   taskId: string;
   task: Task;
 }
 
 export function TabContentRenderer({
-  tabId,
+  tab,
   taskId,
   task,
 }: TabContentRendererProps) {
-  if (tabId === "logs") {
-    return <TaskLogsPanel taskId={taskId} task={task} />;
-  }
+  const { data } = tab;
 
-  if (tabId === "shell" || tabId.startsWith("shell-")) {
-    return <TaskShellPanel taskId={taskId} task={task} shellId={tabId} />;
-  }
+  switch (data.type) {
+    case "logs":
+      return <TaskLogsPanel taskId={taskId} task={task} />;
 
-  if (tabId === "details") {
-    return <TaskDetailPanel taskId={taskId} task={task} />;
-  }
+    case "terminal":
+      return (
+        <TaskShellPanel taskId={taskId} task={task} shellId={data.terminalId} />
+      );
 
-  if (tabId === "todo-list") {
-    return <TodoListPanel taskId={taskId} />;
-  }
+    case "file":
+      return (
+        <CodeEditorPanel
+          taskId={taskId}
+          task={task}
+          absolutePath={data.absolutePath}
+        />
+      );
 
-  if (tabId === "files") {
-    return <FileTreePanel taskId={taskId} task={task} />;
-  }
+    case "diff":
+      return (
+        <DiffEditorPanel
+          taskId={taskId}
+          task={task}
+          absolutePath={data.absolutePath}
+        />
+      );
 
-  if (tabId === "artifacts") {
-    return <TaskArtifactsPanel taskId={taskId} task={task} />;
-  }
+    case "artifact":
+      return (
+        <TaskArtifactEditorPanel
+          taskId={taskId}
+          task={task}
+          fileName={data.artifactId}
+        />
+      );
 
-  if (tabId === "changes") {
-    return <ChangesPanel taskId={taskId} task={task} />;
-  }
+    case "other":
+      // Handle system tabs by ID
+      // TODO: These should all have their own type as well
+      switch (tab.id) {
+        case "details":
+          return <TaskDetailPanel taskId={taskId} task={task} />;
+        case "todo-list":
+          return <TodoListPanel taskId={taskId} />;
+        case "files":
+          return <FileTreePanel taskId={taskId} task={task} />;
+        case "artifacts":
+          return <TaskArtifactsPanel taskId={taskId} task={task} />;
+        case "changes":
+          return <ChangesPanel taskId={taskId} task={task} />;
+        default:
+          return <div>Unknown tab: {tab.id}</div>;
+      }
 
-  if (tabId.startsWith("diff-")) {
-    const parsed = parseTabId(tabId);
-    return (
-      <DiffEditorPanel taskId={taskId} task={task} filePath={parsed.value} />
-    );
+    default:
+      return <div>Unknown tab type</div>;
   }
-
-  if (tabId.startsWith("file-")) {
-    const parsed = parseTabId(tabId);
-    return (
-      <CodeEditorPanel taskId={taskId} task={task} filePath={parsed.value} />
-    );
-  }
-
-  if (tabId.startsWith("artifact-")) {
-    const parsed = parseTabId(tabId);
-    return (
-      <TaskArtifactEditorPanel
-        taskId={taskId}
-        task={task}
-        fileName={parsed.value}
-      />
-    );
-  }
-
-  return <div>Unknown tab: {tabId}</div>;
 }

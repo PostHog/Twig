@@ -1,23 +1,29 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
+import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
 
 interface CodeEditorPanelProps {
   taskId: string;
   task: Task;
-  filePath: string;
+  absolutePath: string;
 }
 
 export function CodeEditorPanel({
   taskId,
   task,
-  filePath,
+  absolutePath,
 }: CodeEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const worktreePath = useWorktreeStore(
+    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  );
+  const repoPath = worktreePath ?? taskData.repoPath;
+  const filePath = getRelativePath(absolutePath, repoPath);
 
   const {
     data: fileContent,
@@ -49,7 +55,11 @@ export function CodeEditorPanel({
 
   return (
     <Box height="100%" style={{ overflow: "hidden" }}>
-      <CodeMirrorEditor content={fileContent} filePath={filePath} readOnly />
+      <CodeMirrorEditor
+        content={fileContent}
+        filePath={absolutePath}
+        readOnly
+      />
     </Box>
   );
 }
