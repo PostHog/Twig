@@ -158,6 +158,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 tabId={tab.id}
                 panelId={panelId}
                 label={tab.label}
+                tabData={tab.data}
                 isActive={tab.id === content.activeTabId}
                 index={index}
                 draggable={tab.draggable}

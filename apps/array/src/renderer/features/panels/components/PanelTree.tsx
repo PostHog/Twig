@@ -113,6 +113,7 @@ function compileNode(element: React.ReactElement, path: string): PanelNode {
         tabs.push({
           id: tabId,
           label: label || tabId,
+          data: { type: "other" },
           component,
           closeable,
           onClose,
@@ -126,6 +127,7 @@ function compileNode(element: React.ReactElement, path: string): PanelNode {
         tabs.push({
           id: tabId,
           label: tabId,
+          data: { type: "other" },
           component: child,
         });
       }

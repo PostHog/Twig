@@ -52,7 +52,7 @@ export function SuggestedTasks({ editor }: SuggestedTasksProps) {
               onClick={() =>
                 handleSuggestionClick(suggestion.title, suggestion.prompt)
               }
-              className="group relative flex cursor-pointer items-start gap-2 rounded border border-gray-6 bg-gray-2 p-2 text-left transition-colors hover:border-orange-6 hover:bg-accent-2"
+              className="group relative flex cursor-pointer items-start gap-2 rounded border border-gray-6 bg-gray-2 p-2 text-left transition-colors hover:border-accent-6 hover:bg-accent-2"
             >
               <Flex direction="column" gap="1" style={{ flex: 1 }}>
                 <Text size="1" weight="medium" className="text-gray-12">

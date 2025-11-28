@@ -44,7 +44,7 @@ export function StatusBar({ showKeyHints = true }: StatusBarProps) {
 
       {IS_DEV && (
         <Flex align="center" gap="2">
-          <Badge color="orange" size="1">
+          <Badge size="1">
             <Code size="1" variant="ghost">
               DEV
             </Code>

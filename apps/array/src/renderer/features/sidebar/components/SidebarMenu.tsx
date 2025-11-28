@@ -73,7 +73,8 @@ function SidebarMenuComponent() {
   const handleTaskContextMenu = (taskId: string, e: React.MouseEvent) => {
     const task = taskMap.get(taskId);
     if (task) {
-      showContextMenu(task, e);
+      const worktreePath = taskWorktrees[taskId]?.worktreePath;
+      showContextMenu(task, e, worktreePath);
     }
   };
 
@@ -102,10 +103,17 @@ function SidebarMenuComponent() {
     const result = await window.electronAPI.showFolderContextMenu(
       folderId,
       folder.name,
+      folder.path,
     );
 
     if (result.action === "remove") {
       await removeFolder(folderId);
+    } else if (result.action && typeof result.action === "object") {
+      // Handle external app actions
+      const { handleExternalAppAction } = await import(
+        "@utils/handleExternalAppAction"
+      );
+      await handleExternalAppAction(result.action, folder.path, folder.name);
     }
   };
 

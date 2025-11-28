@@ -119,7 +119,7 @@ export const TaskFileMentionList = forwardRef(
     return (
       <div
         ref={containerRef}
-        className="scrollbar-hide absolute z-[1000] max-h-60 min-w-[300px] overflow-auto rounded border border-orange-6 bg-gray-1 font-mono text-xs shadow-xl"
+        className="scrollbar-hide absolute z-[1000] max-h-60 min-w-[300px] overflow-auto rounded border border-accent-6 bg-gray-1 font-mono text-xs shadow-xl"
       >
         {props.items.map((item, index) => {
           const isSelected = index === selectedIndex;
@@ -136,8 +136,8 @@ export const TaskFileMentionList = forwardRef(
               onMouseEnter={() => setSelectedIndex(index)}
               className={`flex w-full cursor-pointer items-center gap-1 px-2 py-0.5 text-left ${
                 isSelected
-                  ? "bg-orange-3 text-orange-11"
-                  : "text-gray-11 hover:bg-orange-2"
+                  ? "bg-accent-3 text-accent-11"
+                  : "text-gray-11 hover:bg-accent-2"
               }
               `}
             >

@@ -16,6 +16,7 @@ import { IS_DEV } from "@/constants/environment";
 
 const EVENT_COMPONENT_MAP: Record<
   string,
+  // biome-ignore lint/suspicious/noExplicitAny: Components handle type narrowing from AgentEvent union
   React.ComponentType<{ event: any }>
 > = {
   token: TokenView,

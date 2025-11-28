@@ -1,5 +1,7 @@
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { Task } from "@shared/types";
+import { useWorktreeStore } from "@stores/worktreeStore";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import type { SplitDirection } from "../store/panelLayoutStore";
@@ -72,20 +74,46 @@ export function useTabInjection(
   task: Task,
   closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
+  const worktreePath = useWorktreeStore(
+    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  );
+  const taskState = useTaskExecutionStore((state) =>
+    state.getTaskState(taskId),
+  );
+  const repoPath = worktreePath || taskState.repoPath || "";
+
   return useMemo(
     () =>
-      tabs.map((tab) => ({
-        ...tab,
-        component: (
-          <TabContentRenderer tabId={tab.id} taskId={taskId} task={task} />
-        ),
-        onClose: tab.closeable
-          ? () => {
-              closeTab(taskId, panelId, tab.id);
-            }
-          : undefined,
-      })),
-    [tabs, panelId, taskId, task, closeTab],
+      tabs.map((tab) => {
+        // Populate absolute paths for file and diff tabs
+        let updatedData = tab.data;
+        if (tab.data.type === "file" || tab.data.type === "diff") {
+          const absolutePath = `${repoPath}/${tab.data.relativePath}`;
+          updatedData = {
+            ...tab.data,
+            absolutePath,
+            repoPath,
+          };
+        }
+
+        const updatedTab = {
+          ...tab,
+          data: updatedData,
+        };
+
+        return {
+          ...updatedTab,
+          component: (
+            <TabContentRenderer tab={updatedTab} taskId={taskId} task={task} />
+          ),
+          onClose: tab.closeable
+            ? () => {
+                closeTab(taskId, panelId, tab.id);
+              }
+            : undefined,
+        };
+      }),
+    [tabs, panelId, taskId, task, closeTab, repoPath],
   );
 }
 

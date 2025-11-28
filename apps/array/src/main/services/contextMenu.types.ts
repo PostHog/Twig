@@ -1,12 +1,26 @@
-export type TaskContextMenuAction = "rename" | "duplicate" | "delete" | null;
+// External app actions (discriminated union for type safety)
+export type ExternalAppAction =
+  | { type: "open-in-app"; appId: string }
+  | { type: "copy-path" }
+  | null;
 
-export type FolderContextMenuAction = "remove" | null;
+export interface ExternalAppContextMenuResult {
+  action: ExternalAppAction;
+}
+
+export type TaskContextMenuAction =
+  | "rename"
+  | "duplicate"
+  | "delete"
+  | ExternalAppAction;
+
+export type FolderContextMenuAction = "remove" | ExternalAppAction;
 
 export type TabContextMenuAction =
   | "close"
   | "close-others"
   | "close-right"
-  | null;
+  | ExternalAppAction;
 
 export type SplitDirection = "left" | "right" | "up" | "down" | null;
 
@@ -31,6 +45,7 @@ declare global {
     showTaskContextMenu: (
       taskId: string,
       taskTitle: string,
+      worktreePath?: string,
     ) => Promise<TaskContextMenuResult>;
   }
 }
