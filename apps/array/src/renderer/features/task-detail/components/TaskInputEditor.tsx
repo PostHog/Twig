@@ -16,7 +16,7 @@ export function TaskInputEditor({
     <Flex
       direction="column"
       style={{
-        backgroundColor: "rgba(0, 0, 0, 0.3)",
+        backgroundColor: "var(--gray-a1)",
         borderRadius: "var(--radius-2)",
         border: "1px solid var(--gray-a6)",
         position: "relative",

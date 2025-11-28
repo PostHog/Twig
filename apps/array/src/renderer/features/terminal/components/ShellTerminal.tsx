@@ -4,6 +4,7 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { useThemeStore } from "@stores/themeStore";
 import { useEffect, useRef } from "react";
 import { logger } from "@/renderer/lib/logger";
 import { useTerminalStore } from "../stores/terminalStore";
@@ -59,6 +60,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
   const restoredStateLengthRef = useRef<number>(0);
 
   const terminalStore = useTerminalStore();
+  const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const persistenceKey = stateKey || cwd || "default";
 
   useEffect(() => {
@@ -79,14 +81,23 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       cursorBlink: true,
       fontSize: 12,
       fontFamily: "monospace",
-      theme: {
-        background: "transparent",
-        foreground: "#ffffff",
-        cursor: "#BD6C3A",
-        cursorAccent: "#ffffff",
-        selectionBackground: "#532601",
-        selectionForeground: "#ffffff",
-      },
+      theme: isDarkMode
+        ? {
+            background: "transparent",
+            foreground: "#eeeeea",
+            cursor: "#dc9300",
+            cursorAccent: "#eeeeea",
+            selectionBackground: "rgba(255, 203, 129, 0.3)",
+            selectionForeground: "#eeeeea",
+          }
+        : {
+            background: "transparent",
+            foreground: "#1f1f1f",
+            cursor: "#dc9300",
+            cursorAccent: "#1f1f1f",
+            selectionBackground: "rgba(255, 189, 87, 0.4)",
+            selectionForeground: "#1f1f1f",
+          },
       cursorStyle: "block",
       cursorWidth: 8,
       allowProposedApi: true,
@@ -296,13 +307,37 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       hasReceivedDataRef.current = false;
       restoredStateLengthRef.current = 0;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     cwd,
     persistenceKey,
     terminalStore.getTerminalState,
     terminalStore.setSerializedState,
     terminalStore.setSessionId,
+    isDarkMode,
   ]);
+
+  useEffect(() => {
+    if (terminal.current) {
+      terminal.current.options.theme = isDarkMode
+        ? {
+            background: "transparent",
+            foreground: "#eeeeea",
+            cursor: "#dc9300",
+            cursorAccent: "#eeeeea",
+            selectionBackground: "rgba(255, 203, 129, 0.3)",
+            selectionForeground: "#eeeeea",
+          }
+        : {
+            background: "transparent",
+            foreground: "#1f1f1f",
+            cursor: "#dc9300",
+            cursorAccent: "#1f1f1f",
+            selectionBackground: "rgba(255, 189, 87, 0.4)",
+            selectionForeground: "#1f1f1f",
+          };
+    }
+  }, [isDarkMode]);
 
   return (
     <Box

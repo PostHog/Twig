@@ -87,7 +87,7 @@ export function DoneView({ event }: DoneViewProps) {
           )}
           {event.permissionDenials && event.permissionDenials.length > 0 && (
             <Box mt={event.result ? "2" : "0"}>
-              <Code size="1" color="orange" variant="soft">
+              <Code size="1" variant="soft">
                 {event.permissionDenials.length} tool call(s) denied by
                 permissions
               </Code>

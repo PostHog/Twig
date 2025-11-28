@@ -234,7 +234,7 @@ export function LogView({
                 <Box
                   width="8px"
                   height="8px"
-                  className="rounded-full bg-orange-9"
+                  className="rounded-full bg-accent-9"
                 />
                 <Text size="2" color="gray">
                   Idle
