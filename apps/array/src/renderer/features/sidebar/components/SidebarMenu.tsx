@@ -6,10 +6,10 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { FolderIcon } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { useWorktreeStore } from "@renderer/stores/worktreeStore";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { memo } from "react";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { HomeItem } from "./items/HomeItem";
@@ -31,7 +31,7 @@ function SidebarMenuComponent() {
 
   const collapsedSections = useSidebarStore((state) => state.collapsedSections);
   const toggleSection = useSidebarStore((state) => state.toggleSection);
-  const taskWorktrees = useWorktreeStore((state) => state.taskWorktrees);
+  const workspaces = useWorkspaceStore.use.workspaces();
 
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
@@ -73,7 +73,7 @@ function SidebarMenuComponent() {
   const handleTaskContextMenu = (taskId: string, e: React.MouseEvent) => {
     const task = taskMap.get(taskId);
     if (task) {
-      const worktreePath = taskWorktrees[taskId]?.worktreePath;
+      const worktreePath = workspaces[taskId]?.worktreePath;
       showContextMenu(task, e, worktreePath);
     }
   };
@@ -173,8 +173,8 @@ function SidebarMenuComponent() {
                   label={task.title}
                   status={task.status}
                   isActive={sidebarData.activeTaskId === task.id}
-                  worktreeName={taskWorktrees[task.id]?.worktreeName}
-                  worktreePath={taskWorktrees[task.id]?.worktreePath}
+                  worktreeName={workspaces[task.id]?.worktreeName}
+                  worktreePath={workspaces[task.id]?.worktreePath}
                   onClick={() => handleTaskClick(task.id)}
                   onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
                 />

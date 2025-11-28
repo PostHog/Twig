@@ -3,14 +3,16 @@ import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadg
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
+import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
+import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
 import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useMemo } from "react";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskDetailProps {
   task: Task;
@@ -22,8 +24,8 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     initialTask,
   });
 
-  const worktreePath = useWorktreeStore(
-    (state) => state.taskWorktrees[initialTask.id]?.worktreePath,
+  const worktreePath = useWorkspaceStore(
+    (state) => state.workspaces[initialTask.id]?.worktreePath,
   );
   const effectiveRepoPath = worktreePath ?? taskData.repoPath;
 
@@ -53,9 +55,11 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   useBlurOnEscape();
 
   const taskId = taskData.task.id;
+
+  useWorkspaceEvents(taskId);
   const task = taskData.task;
-  const worktreeInfo = useWorktreeStore(
-    (state) => state.taskWorktrees[taskId] ?? null,
+  const workspace = useWorkspaceStore(
+    (state) => state.workspaces[taskId] ?? null,
   );
 
   const headerContent = useMemo(
@@ -70,13 +74,14 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           </Text>
           <ExternalAppsOpener
             targetPath={effectiveRepoPath}
-            label={worktreeInfo?.worktreeName}
+            label={workspace?.worktreeName}
           />
+          <StartWorkspaceButton taskId={taskId} />
         </Flex>
         <ChangesTabBadge taskId={taskId} task={task} />
       </>
     ),
-    [task.slug, task.title, worktreeInfo, taskId, task, effectiveRepoPath],
+    [task.slug, task.title, workspace, taskId, task, effectiveRepoPath],
   );
 
   useSetHeaderContent(headerContent);

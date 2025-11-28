@@ -8,11 +8,14 @@ import type {
 } from "@main/services/contextMenu.types";
 import type {
   ChangedFile,
+  CreateWorkspaceOptions,
   DetectedApplication,
   RegisteredFolder,
+  ScriptExecutionResult,
   TaskArtifact,
-  TaskFolderAssociation,
-  WorktreeInfo,
+  Workspace,
+  WorkspaceInfo,
+  WorkspaceTerminalInfo,
 } from "@shared/types";
 import "@main/services/types";
 import type { CloudRegion, OAuthTokenResponse } from "@shared/types/oauth";
@@ -220,61 +223,10 @@ declare global {
       removeFolder: (folderId: string) => Promise<void>;
       updateFolderAccessed: (folderId: string) => Promise<void>;
       clearAllData: () => Promise<void>;
-      getTaskAssociations: () => Promise<TaskFolderAssociation[]>;
-      getTaskAssociation: (
-        taskId: string,
-      ) => Promise<TaskFolderAssociation | null>;
-      setTaskAssociation: (
-        taskId: string,
-        folderId: string,
-        folderPath: string,
-        worktree?: WorktreeInfo,
-      ) => Promise<TaskFolderAssociation>;
-      updateTaskWorktree: (
-        taskId: string,
-        worktree: WorktreeInfo,
-      ) => Promise<TaskFolderAssociation | null>;
-      removeTaskAssociation: (taskId: string) => Promise<void>;
-      clearTaskWorktree: (taskId: string) => Promise<void>;
       cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
         deleted: string[];
         errors: Array<{ path: string; error: string }>;
       }>;
-    };
-    worktree: {
-      create: (mainRepoPath: string) => Promise<{
-        worktreePath: string;
-        worktreeName: string;
-        branchName: string;
-        baseBranch: string;
-        createdAt: string;
-      }>;
-      delete: (mainRepoPath: string, worktreePath: string) => Promise<void>;
-      getInfo: (
-        mainRepoPath: string,
-        worktreePath: string,
-      ) => Promise<{
-        worktreePath: string;
-        worktreeName: string;
-        branchName: string;
-        baseBranch: string;
-        createdAt: string;
-      } | null>;
-      exists: (mainRepoPath: string, name: string) => Promise<boolean>;
-      list: (mainRepoPath: string) => Promise<
-        Array<{
-          worktreePath: string;
-          worktreeName: string;
-          branchName: string;
-          baseBranch: string;
-          createdAt: string;
-        }>
-      >;
-      isWorktree: (mainRepoPath: string, repoPath: string) => Promise<boolean>;
-      getMainRepoPath: (
-        mainRepoPath: string,
-        worktreePath: string,
-      ) => Promise<string | null>;
     };
     externalApps: {
       getDetectedApps: () => Promise<DetectedApplication[]>;
@@ -287,6 +239,37 @@ declare global {
         lastUsedApp?: string;
       }>;
       copyPath: (path: string) => Promise<void>;
+    };
+    workspace: {
+      create: (options: CreateWorkspaceOptions) => Promise<WorkspaceInfo>;
+      delete: (taskId: string, mainRepoPath: string) => Promise<void>;
+      verify: (taskId: string) => Promise<boolean>;
+      getInfo: (taskId: string) => Promise<WorkspaceInfo | null>;
+      getAll: () => Promise<Record<string, Workspace>>;
+      runStart: (
+        taskId: string,
+        worktreePath: string,
+        worktreeName: string,
+      ) => Promise<ScriptExecutionResult>;
+      isRunning: (taskId: string) => Promise<boolean>;
+      getTerminals: (taskId: string) => Promise<WorkspaceTerminalInfo[]>;
+      onTerminalCreated: (
+        listener: (data: WorkspaceTerminalInfo & { taskId: string }) => void,
+      ) => () => void;
+      onError: (
+        listener: (data: { taskId: string; message: string }) => void,
+      ) => () => void;
+      onWarning: (
+        listener: (data: {
+          taskId: string;
+          title: string;
+          message: string;
+        }) => void,
+      ) => () => void;
+    };
+    settings: {
+      getWorktreeLocation: () => Promise<string>;
+      setWorktreeLocation: (location: string) => Promise<void>;
     };
   }
 

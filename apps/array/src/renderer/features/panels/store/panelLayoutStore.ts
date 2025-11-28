@@ -87,6 +87,12 @@ export interface PanelLayoutStore {
   updateTabLabel: (taskId: string, tabId: string, label: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
   addTerminalTab: (taskId: string, panelId: string) => void;
+  addWorkspaceTerminalTab: (
+    taskId: string,
+    sessionId: string,
+    command: string,
+    scriptType: "init" | "start",
+  ) => void;
   clearAllLayouts: () => void;
 }
 
@@ -683,6 +689,49 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                   component: null,
                   draggable: true,
                   closeable: true,
+                });
+              },
+            );
+
+            return { panelTree: updatedTree };
+          }),
+        );
+      },
+
+      addWorkspaceTerminalTab: (taskId, sessionId, command, scriptType) => {
+        const tabId = `workspace-terminal-${sessionId}`;
+        const label =
+          scriptType === "init" ? `Init: ${command}` : `Start: ${command}`;
+
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const existingTab = findTabInTree(layout.panelTree, tabId);
+            if (existingTab) {
+              const updatedTree = updateTreeNode(
+                layout.panelTree,
+                existingTab.panelId,
+                (panel) => setActiveTabInPanel(panel, tabId),
+              );
+              return { panelTree: updatedTree };
+            }
+
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              DEFAULT_PANEL_IDS.MAIN_PANEL,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+                return addTabToPanel(panel, {
+                  id: tabId,
+                  label,
+                  data: {
+                    type: "workspace-terminal",
+                    sessionId,
+                    command,
+                    scriptType,
+                  },
+                  component: null,
+                  draggable: true,
+                  closeable: false,
                 });
               },
             );

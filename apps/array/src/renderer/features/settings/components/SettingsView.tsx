@@ -21,7 +21,8 @@ import {
 } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -62,6 +63,29 @@ export function SettingsView() {
 
   const { data: currentUser } = useMeQuery();
   const { data: project } = useProjectQuery();
+
+  const { data: worktreeLocation } = useQuery({
+    queryKey: ["settings", "worktreeLocation"],
+    queryFn: () => window.electronAPI.settings.getWorktreeLocation(),
+  });
+
+  const [localWorktreeLocation, setLocalWorktreeLocation] =
+    useState<string>("");
+
+  useEffect(() => {
+    if (worktreeLocation) {
+      setLocalWorktreeLocation(worktreeLocation);
+    }
+  }, [worktreeLocation]);
+
+  const handleWorktreeLocationChange = async (newLocation: string) => {
+    setLocalWorktreeLocation(newLocation);
+    try {
+      await window.electronAPI.settings.setWorktreeLocation(newLocation);
+    } catch (error) {
+      log.error("Failed to set worktree location:", error);
+    }
+  };
 
   const reauthMutation = useMutation({
     mutationFn: async (region: CloudRegion) => {
@@ -196,6 +220,32 @@ export function SettingsView() {
                   <Text size="1" color="gray">
                     Default directory where repositories will be cloned. This
                     should be the folder where you usually store your projects.
+                  </Text>
+                </Flex>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          {/* Workspace Storage Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Workspace storage</Heading>
+            <Card>
+              <Flex direction="column" gap="3">
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Workspace location
+                  </Text>
+                  <FolderPicker
+                    value={localWorktreeLocation}
+                    onChange={handleWorktreeLocationChange}
+                    placeholder="~/.array"
+                    size="1"
+                  />
+                  <Text size="1" color="gray">
+                    Directory where isolated workspaces are created for each
+                    task. Workspaces are organized by repository name.
                   </Text>
                 </Flex>
               </Flex>

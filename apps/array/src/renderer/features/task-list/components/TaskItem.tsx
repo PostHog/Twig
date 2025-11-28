@@ -4,9 +4,12 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { GitPullRequest } from "@phosphor-icons/react";
 import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { memo } from "react";
+import {
+  selectWorktreeName,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskItemProps {
   task: Task;
@@ -27,9 +30,7 @@ function TaskItemComponent({
   const selectedIndex = useTaskStore((state) => state.selectedIndex);
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
-  const worktreeName = useWorktreeStore(
-    (state) => state.taskWorktrees[task.id]?.worktreeName ?? null,
-  );
+  const worktreeName = useWorkspaceStore(selectWorktreeName(task.id));
   const createdAt = new Date(task.created_at);
   const hoursSinceCreated = differenceInHours(new Date(), createdAt);
   const timeDisplay =

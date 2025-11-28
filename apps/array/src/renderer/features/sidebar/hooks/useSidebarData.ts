@@ -4,12 +4,8 @@ import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { useTaskAssociationStore } from "@renderer/stores/taskAssociationStore";
-import type {
-  RegisteredFolder,
-  Task,
-  TaskFolderAssociation,
-} from "@shared/types";
+import type { RegisteredFolder, Task, Workspace } from "@shared/types";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import type { TaskStatus } from "../types";
 
 export interface TaskView {
@@ -76,14 +72,14 @@ function buildRepositoryMap(tasks: Task[]): Repository[] {
 function groupTasksByFolder(
   tasks: Task[],
   folders: RegisteredFolder[],
-  taskAssociations: Record<string, TaskFolderAssociation>,
+  workspaces: Record<string, Workspace>,
 ): Map<string, Task[]> {
   const tasksByFolder = new Map<string, Task[]>();
 
   for (const task of tasks) {
-    const association = taskAssociations[task.id];
-    if (association) {
-      const folder = folders.find((f) => f.id === association.folderId);
+    const workspace = workspaces[task.id];
+    if (workspace) {
+      const folder = folders.find((f) => f.id === workspace.folderId);
       if (folder) {
         if (!tasksByFolder.has(folder.id)) {
           tasksByFolder.set(folder.id, []);
@@ -159,7 +155,7 @@ export function useSidebarData({
 }: UseSidebarDataProps): SidebarData {
   const { data: allTasks = [], isLoading } = useTasks();
   const { folders } = useRegisteredFoldersStore();
-  const associations = useTaskAssociationStore((state) => state.associations);
+  const workspaces = useWorkspaceStore.use.workspaces();
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
   const isHomeActive = activeView.type === "task-input";
@@ -171,7 +167,7 @@ export function useSidebarData({
   const activeRepository = getActiveRepository(activeFilters);
 
   const sortedFolders = sortByCreatedAt(folders);
-  const tasksByFolder = groupTasksByFolder(allTasks, folders, associations);
+  const tasksByFolder = groupTasksByFolder(allTasks, folders, workspaces);
 
   const activeTaskId =
     activeView.type === "task-detail" && activeView.data

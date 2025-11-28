@@ -4,8 +4,11 @@ import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
 import { useTerminalStore } from "@features/terminal/stores/terminalStore";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useEffect } from "react";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskShellPanelProps {
   taskId: string;
@@ -18,9 +21,7 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
   const stateKey = shellId ? `${taskId}-${shellId}` : taskId;
   const tabId = shellId || "shell";
 
-  const worktreePath = useWorktreeStore((state) =>
-    state.getWorktreePathForTask(taskId),
-  );
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId)) ?? null;
 
   const processName = useTerminalStore(
     (state) => state.terminalStates[stateKey]?.processName,

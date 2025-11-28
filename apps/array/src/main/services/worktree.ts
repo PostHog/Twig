@@ -1,125 +1,74 @@
 import type { WorktreeInfo } from "@posthog/agent";
 import { WorktreeManager } from "@posthog/agent";
-import { type IpcMainInvokeEvent, ipcMain } from "electron";
-import { logger } from "../lib/logger";
+import { createIpcHandler } from "../lib/ipcHandler";
+import { getWorktreeLocation } from "./settingsStore";
 
-const log = logger.scope("worktree");
+const handle = createIpcHandler("worktree");
+
+function createWorktreeManager(mainRepoPath: string): WorktreeManager {
+  const worktreeBasePath = getWorktreeLocation();
+  return new WorktreeManager({ mainRepoPath, worktreeBasePath });
+}
 
 export function registerWorktreeIpc(): void {
-  ipcMain.handle(
+  handle<[string], WorktreeInfo>(
     "worktree-create",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-    ): Promise<WorktreeInfo> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.createWorktree();
-      } catch (error) {
-        log.error(`Failed to create worktree in ${mainRepoPath}:`, error);
-        throw error;
-      }
+    async (_event, mainRepoPath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.createWorktree();
     },
   );
 
-  ipcMain.handle(
+  handle<[string, string], void>(
     "worktree-delete",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<void> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        await manager.deleteWorktree(worktreePath);
-      } catch (error) {
-        log.error(`Failed to delete worktree ${worktreePath}:`, error);
-        throw error;
-      }
+    async (_event, mainRepoPath, worktreePath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      await manager.deleteWorktree(worktreePath);
     },
   );
 
-  ipcMain.handle(
+  handle<[string, string], WorktreeInfo | null>(
     "worktree-get-info",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<WorktreeInfo | null> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.getWorktreeInfo(worktreePath);
-      } catch (error) {
-        log.error(`Failed to get worktree info for ${worktreePath}:`, error);
-        return null;
-      }
+    async (_event, mainRepoPath, worktreePath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.getWorktreeInfo(worktreePath);
     },
+    { rethrow: false, fallback: null },
   );
 
-  ipcMain.handle(
+  handle<[string, string], boolean>(
     "worktree-exists",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-      name: string,
-    ): Promise<boolean> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.worktreeExists(name);
-      } catch (error) {
-        log.error(`Failed to check worktree exists ${name}:`, error);
-        return false;
-      }
+    async (_event, mainRepoPath, name) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.worktreeExists(name);
     },
+    { rethrow: false, fallback: false },
   );
 
-  ipcMain.handle(
+  handle<[string], WorktreeInfo[]>(
     "worktree-list",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-    ): Promise<WorktreeInfo[]> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.listWorktrees();
-      } catch (error) {
-        log.error(`Failed to list worktrees in ${mainRepoPath}:`, error);
-        return [];
-      }
+    async (_event, mainRepoPath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.listWorktrees();
     },
+    { rethrow: false, fallback: [] },
   );
 
-  ipcMain.handle(
+  handle<[string, string], boolean>(
     "worktree-is-worktree",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-      repoPath: string,
-    ): Promise<boolean> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.isWorktree(repoPath);
-      } catch (error) {
-        log.error(`Failed to check if ${repoPath} is a worktree:`, error);
-        return false;
-      }
+    async (_event, mainRepoPath, repoPath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.isWorktree(repoPath);
     },
+    { rethrow: false, fallback: false },
   );
 
-  ipcMain.handle(
+  handle<[string, string], string | null>(
     "worktree-get-main-repo",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<string | null> => {
-      try {
-        const manager = new WorktreeManager({ mainRepoPath });
-        return await manager.getMainRepoPathFromWorktree(worktreePath);
-      } catch (error) {
-        log.error(`Failed to get main repo path from ${worktreePath}:`, error);
-        return null;
-      }
+    async (_event, mainRepoPath, worktreePath) => {
+      const manager = createWorktreeManager(mainRepoPath);
+      return manager.getMainRepoPathFromWorktree(worktreePath);
     },
+    { rethrow: false, fallback: null },
   );
 }

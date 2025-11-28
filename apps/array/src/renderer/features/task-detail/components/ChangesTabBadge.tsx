@@ -1,8 +1,11 @@
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesTabBadgeProps {
   taskId: string;
@@ -11,9 +14,7 @@ interface ChangesTabBadgeProps {
 
 export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorktreeStore(
-    (state) => state.taskWorktrees[taskId]?.worktreePath,
-  );
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: diffStats } = useQuery({

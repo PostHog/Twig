@@ -15,6 +15,8 @@ import "./oauth.js";
 import "./os.js";
 import "./posthog-analytics.js";
 import "./posthog.js";
+import "./settings.js";
+import "./settingsStore.js";
 import "./shell.js";
 import "./store.js";
 import "./transcription-prompts.js";

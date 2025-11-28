@@ -55,16 +55,9 @@ export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
   try {
-    // Check if it's a git work tree
     await execAsync("git rev-parse --is-inside-work-tree", {
       cwd: directoryPath,
     });
-
-    // Also check if there's at least one commit (not an empty/cloning repo)
-    await execAsync("git rev-parse HEAD", {
-      cwd: directoryPath,
-    });
-
     return true;
   } catch {
     return false;

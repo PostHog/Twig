@@ -1,10 +1,10 @@
-import { CheckIcon, InfoIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, InfoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { Card, Flex, Spinner, Text } from "@radix-ui/themes";
 import { toast as sonnerToast } from "sonner";
 
 interface ToastProps {
   id: string | number;
-  type: "loading" | "success" | "error" | "info";
+  type: "loading" | "success" | "error" | "info" | "warning";
   title: string;
   description?: string;
 }
@@ -22,6 +22,8 @@ function ToastComponent(props: ToastProps) {
         return <XIcon size={16} weight="bold" color="var(--red-9)" />;
       case "info":
         return <InfoIcon size={16} weight="bold" color="var(--blue-9)" />;
+      case "warning":
+        return <WarningIcon size={16} weight="bold" color="var(--amber-9)" />;
     }
   };
 
@@ -106,5 +108,22 @@ export const toast = {
         description={description}
       />
     ));
+  },
+
+  warning: (
+    title: string,
+    options?: { description?: string; id?: string | number; duration?: number },
+  ) => {
+    return sonnerToast.custom(
+      (id) => (
+        <ToastComponent
+          id={id}
+          type="warning"
+          title={title}
+          description={options?.description}
+        />
+      ),
+      { id: options?.id, duration: options?.duration },
+    );
   },
 };

@@ -13,15 +13,17 @@ import type {
   QuestionAnswer,
   Task,
   TaskRun,
+  Workspace,
 } from "@shared/types";
+import { randomSuffix } from "@shared/utils/id";
 import { cloneStore } from "@stores/cloneStore";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import type {
   ExecutionMode as AnalyticsExecutionMode,
   ExecutionType,
@@ -354,18 +356,8 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
       },
 
-      setRepoPath: async (taskId: string, repoPath: string | null) => {
+      setRepoPath: (taskId: string, repoPath: string | null) => {
         get().updateTaskState(taskId, { repoPath });
-
-        if (repoPath) {
-          try {
-            await useTaskDirectoryStore
-              .getState()
-              .setTaskDirectory(taskId, repoPath);
-          } catch (error) {
-            log.error("Failed to persist task directory:", error);
-          }
-        }
       },
 
       setCurrentTaskId: (taskId: string, currentTaskId: string | null) => {
@@ -730,7 +722,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             );
             await store.setRepoPath(taskId, derivedPath);
 
-            const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            const cloneId = `clone-${Date.now()}-${randomSuffix(7)}`;
             cloneStore.getState().startClone(cloneId, repoConfig, derivedPath);
 
             try {
@@ -796,61 +788,66 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         const permissionMode = "acceptEdits";
 
-        // For local mode, ensure we have a worktree
+        // For local mode, ensure we have a workspace (worktree + scripts)
         let workingPath = effectiveRepoPath;
-        const worktreeStore = useWorktreeStore.getState();
-        let worktreeInfo = worktreeStore.getWorktree(taskId);
+        const workspaceStore = useWorkspaceStore.getState();
+        let workspace: Workspace | undefined =
+          workspaceStore.workspaces[taskId];
 
-        // Verify that stored worktree still exists
-        if (worktreeInfo) {
-          const worktreeExists = await window.electronAPI?.worktree.exists(
-            effectiveRepoPath,
-            worktreeInfo.worktreeName,
-          );
-          if (!worktreeExists) {
-            // Worktree was deleted externally, clear the stored info
-            await worktreeStore.clearWorktree(taskId);
-            worktreeInfo = null;
+        // Verify that stored workspace still exists
+        if (workspace) {
+          const workspaceExists = await workspaceStore.verifyWorkspace(taskId);
+          if (!workspaceExists) {
+            workspace = undefined;
             store.addLog(taskId, {
               type: "token",
               ts: Date.now(),
-              content: `Worktree was removed externally, recreating...`,
+              content: `Workspace was removed externally, recreating...`,
             });
           }
         }
 
-        if (!worktreeInfo) {
-          // Create a new worktree for this task
+        if (!workspace) {
+          // Create a new workspace (worktree + init/start scripts) for this task
           store.addLog(taskId, {
             type: "token",
             ts: Date.now(),
-            content: `Creating worktree for task...`,
+            content: `Creating workspace for task...`,
           });
 
           try {
-            worktreeInfo =
-              await window.electronAPI?.worktree.create(effectiveRepoPath);
-            if (worktreeInfo) {
-              await worktreeStore.setWorktree(taskId, worktreeInfo);
-              store.addLog(taskId, {
-                type: "token",
-                ts: Date.now(),
-                content: `Created worktree: ${worktreeInfo.worktreeName}`,
-              });
-            }
+            const registeredFolders =
+              (await window.electronAPI?.folders.getFolders()) ?? [];
+            const folder = registeredFolders.find(
+              (f) => f.path === effectiveRepoPath,
+            );
+            const folderId = folder?.id ?? taskId;
+
+            workspace = await workspaceStore.createWorkspace({
+              taskId,
+              mainRepoPath: effectiveRepoPath,
+              folderId,
+              folderPath: effectiveRepoPath,
+            });
+
+            store.addLog(taskId, {
+              type: "token",
+              ts: Date.now(),
+              content: `Created workspace: ${workspace.worktreeName}`,
+            });
           } catch (error) {
             store.addLog(taskId, {
               type: "error",
               ts: Date.now(),
-              message: `Failed to create worktree: ${error instanceof Error ? error.message : "Unknown error"}. Running in main repo instead.`,
+              message: `Failed to create workspace: ${error instanceof Error ? error.message : "Unknown error"}. Running in main repo instead.`,
             });
-            // Continue with main repo if worktree creation fails
+            // Continue with main repo if workspace creation fails
           }
         }
 
         // Use worktree path if available, otherwise fall back to main repo
-        if (worktreeInfo) {
-          workingPath = worktreeInfo.worktreePath;
+        if (workspace) {
+          workingPath = workspace.worktreePath;
         }
 
         store.setProgress(taskId, null);
@@ -872,12 +869,12 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             ts: startTs,
             content: `Working directory: ${workingPath}`,
           },
-          ...(worktreeInfo
+          ...(workspace
             ? [
                 {
                   type: "token" as const,
                   ts: startTs,
-                  content: `Worktree: ${worktreeInfo.worktreeName} (branch: ${worktreeInfo.branchName})`,
+                  content: `Workspace: ${workspace.worktreeName} (branch: ${workspace.branchName})`,
                 },
               ]
             : []),
