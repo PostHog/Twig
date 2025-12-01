@@ -39,29 +39,19 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     }
 
     // Fall back to deriving from workspace + repository (legacy behavior)
-    if (
-      !task.repository_config ||
-      !defaultWorkspace ||
-      !task.repository_config.repository
-    )
-      return null;
+    if (!task.repository || !defaultWorkspace) return null;
     const expandedWorkspace = expandTildePath(defaultWorkspace);
-    return `${expandedWorkspace}/${task.repository_config.repository}`;
-  }, [taskState.repoPath, task.repository_config, defaultWorkspace]);
+    return `${expandedWorkspace}/${task.repository.split("/")[1]}`;
+  }, [taskState.repoPath, task.repository, defaultWorkspace]);
 
   const isCloning = cloneStore((state) =>
-    task.repository_config
-      ? state.isCloning(
-          `${task.repository_config.organization}/${task.repository_config.repository}`,
-        )
-      : false,
+    task.repository ? state.isCloning(task.repository) : false,
   );
 
   const cloneProgress = cloneStore(
     (state) => {
-      if (!task.repository_config) return null;
-      const repoKey = `${task.repository_config.organization}/${task.repository_config.repository}`;
-      const cloneOp = state.getCloneForRepo(repoKey);
+      if (!task.repository) return null;
+      const cloneOp = state.getCloneForRepo(task.repository);
       if (!cloneOp?.latestMessage) return null;
 
       const percentMatch = cloneOp.latestMessage.match(/(\d+)%/);

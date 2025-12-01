@@ -31,7 +31,7 @@
     "build": "pnpm exec rimraf dist && pnpm exec rollup -c && pnpm exec tsc --project tsconfig.build.json --emitDeclarationOnly",
     "dev": "pnpm exec rollup -c --watch",
     "typecheck": "pnpm exec tsc --noEmit",
-    "example": "pnpm run example-usage.ts",
+    "example": "tsx example.ts",
     "prepublishOnly": "pnpm run build"
   },
   "engines": {
@@ -47,12 +47,14 @@
     "rollup": "^4.24.0",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-typescript2": "^0.36.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.5.0"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.47",
     "dotenv": "^17.2.3",
-    "yoga-wasm-web": "^0.3.3"
+    "yoga-wasm-web": "^0.3.3",
+    "zod": "^4.1.12"
   },
   "files": [
     "dist/**/*",

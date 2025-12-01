@@ -16,7 +16,7 @@ const log = logger.scope("agent");
 const onAgentLog: OnLogCallback = (level, scope, message, data) => {
   const scopedLog = logger.scope(scope);
   if (data !== undefined) {
-    scopedLog[level](message, data);
+    scopedLog[level as keyof typeof scopedLog](message, data);
   } else {
     scopedLog[level](message);
   }
@@ -24,6 +24,7 @@ const onAgentLog: OnLogCallback = (level, scope, message, data) => {
 
 interface AgentStartParams {
   taskId: string;
+  taskRunId: string;
   repoPath: string;
   apiKey: string;
   apiHost: string;
@@ -48,9 +49,11 @@ export interface TaskController {
 function getClaudeCliPath(): string {
   const appPath = app.getAppPath();
 
-  return app.isPackaged
+  const claudeCliPath = app.isPackaged
     ? join(`${appPath}.unpacked`, ".vite/build/claude-cli/cli.js")
     : join(appPath, ".vite/build/claude-cli/cli.js");
+
+  return claudeCliPath;
 }
 
 function resolvePermissionMode(
@@ -77,6 +80,7 @@ export function registerAgentIpc(
       _event: IpcMainInvokeEvent,
       {
         taskId: posthogTaskId,
+        taskRunId,
         repoPath,
         apiKey,
         apiHost,
@@ -84,7 +88,7 @@ export function registerAgentIpc(
         permissionMode,
         autoProgress,
         model,
-        runMode,
+        runMode: _runMode, // TODO: Add support for cloud runs
         createPR,
       }: AgentStartParams,
     ): Promise<{ taskId: string; channel: string }> => {
@@ -154,7 +158,7 @@ export function registerAgentIpc(
         posthogApiKey: apiKey,
         posthogApiUrl: apiHost,
         posthogProjectId: projectId,
-        debug: true,
+        debug: !app.isPackaged,
         onLog: onAgentLog,
       });
 
@@ -183,6 +187,12 @@ export function registerAgentIpc(
             ) {
               // Store the current run ID
               controllerEntry.currentRunId = latestRun.id;
+
+              log.debug("Task progress poll", {
+                runId: latestRun.id,
+                status: latestRun.status,
+                hasLogUrl: !!latestRun.log_url,
+              });
 
               emitToRenderer({
                 type: "progress",
@@ -243,11 +253,12 @@ export function registerAgentIpc(
           };
 
           const mcpOverrides = {};
+          const claudeCliPath = getClaudeCliPath();
 
-          await agent.runTask(posthogTaskId, {
+          await agent.runTask(posthogTaskId, taskRunId, {
             repositoryPath: repoPath,
             permissionMode: resolvedPermission,
-            isCloudMode: runMode === "cloud",
+            isCloudMode: false,
             autoProgress: autoProgress ?? true,
             createPR: createPR ?? true,
             queryOverrides: {
@@ -256,8 +267,7 @@ export function registerAgentIpc(
               stderr: forwardClaudeStderr,
               env: envOverrides,
               mcpServers: mcpOverrides,
-              pathToClaudeCodeExecutable: getClaudeCliPath(),
-              // Still pass this, but the PATH hack above is the real fix
+              pathToClaudeCodeExecutable: claudeCliPath,
               nodePath: process.execPath,
             },
           });

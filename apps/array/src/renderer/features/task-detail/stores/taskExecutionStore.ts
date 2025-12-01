@@ -8,7 +8,6 @@ import { queryClient } from "@renderer/lib/queryClient";
 import type {
   ClarifyingQuestion,
   ExecutionMode,
-  LogEntry,
   PlanModePhase,
   QuestionAnswer,
   Task,
@@ -27,6 +26,7 @@ import type {
   ExecutionType,
 } from "@/types/analytics";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+import { createConsoleEvent, emitEventsToS3 } from "../utils/eventEmitter";
 
 const log = logger.scope("task-execution-store");
 
@@ -61,8 +61,6 @@ interface TodoList {
 const createProgressSignature = (progress: TaskRun): string =>
   [progress.status ?? "", progress.updated_at ?? ""].join("|");
 
-const getRepoKey = (org: string, repo: string) => `${org}/${repo}`;
-
 const derivePath = (workspace: string, repo: string) =>
   `${expandTildePath(workspace)}/${repo}`;
 
@@ -83,75 +81,14 @@ const toClarifyingQuestions = (
     requiresInput: hasCustomOption(q.options),
   }));
 };
-/**
- * Convert S3 LogEntry to AgentEvent
- */
-function logEntryToAgentEvent(entry: LogEntry): AgentEvent | null {
-  try {
-    const baseTs = Date.now();
-
-    if (entry.type === "token") {
-      return {
-        type: "token",
-        ts: baseTs,
-        content: entry.message,
-      } as AgentEvent;
-    }
-
-    if (entry.type === "info") {
-      return {
-        type: "token",
-        ts: baseTs,
-        content: entry.message,
-      } as AgentEvent;
-    }
-
-    if (entry.message) {
-      try {
-        const parsed = JSON.parse(entry.message);
-        return {
-          ...parsed,
-          type: entry.type as unknown as AgentEvent["type"],
-          ts: parsed.ts || baseTs,
-        } as AgentEvent;
-      } catch {
-        return {
-          type: entry.type as unknown as AgentEvent["type"],
-          ts: baseTs,
-          message: entry.message,
-        } as AgentEvent;
-      }
-    }
-
-    return null;
-  } catch (err) {
-    log.warn("Failed to convert log entry to agent event", err, entry);
-    return null;
-  }
-}
 
 /**
- * Fetch logs from S3 log URL via main process to avoid CORS issues
- * Always fetches and returns the entire log file
+ * Fetch logs from S3 log URL via main process
+ * Main process handles parsing and validation
  */
 async function fetchLogsFromS3Url(logUrl: string): Promise<AgentEvent[]> {
   try {
-    const content = await window.electronAPI?.fetchS3Logs(logUrl);
-
-    if (!content || !content.trim()) {
-      return [];
-    }
-
-    const logEntries = content
-      .trim()
-      .split("\n")
-      .map((line: string) => JSON.parse(line) as LogEntry);
-
-    const events = logEntries
-      .map((entry: LogEntry) => logEntryToAgentEvent(entry))
-      .filter((event): event is AgentEvent => event !== null);
-
-    return events;
+    return (await window.electronAPI?.fetchS3Logs(logUrl)) ?? [];
   } catch (err) {
     log.warn("Failed to fetch task logs from S3", err);
     return [];
@@ -199,10 +136,8 @@ interface TaskExecutionState {
   repoExists: boolean | null;
   currentTaskId: string | null;
   runMode: "local" | "cloud";
-  unsubscribe: (() => void) | null;
   progress: TaskRun | null;
   progressSignature: string | null;
-  // S3 log polling fields
   logPoller: ReturnType<typeof setInterval> | null;
   // Plan mode fields
   executionMode: ExecutionMode;
@@ -225,12 +160,10 @@ interface TaskExecutionStore {
     updates: Partial<TaskExecutionState>,
   ) => void;
   setRunning: (taskId: string, isRunning: boolean) => void;
-  addLog: (taskId: string, log: AgentEvent) => void;
   setLogs: (taskId: string, logs: AgentEvent[]) => void;
   setRepoPath: (taskId: string, repoPath: string | null) => void;
   setCurrentTaskId: (taskId: string, currentTaskId: string | null) => void;
   setRunMode: (taskId: string, runMode: "local" | "cloud") => void;
-  setUnsubscribe: (taskId: string, unsubscribe: (() => void) | null) => void;
   setProgress: (taskId: string, progress: TaskRun | null) => void;
   clearTaskState: (taskId: string) => void;
 
@@ -243,9 +176,9 @@ interface TaskExecutionStore {
   cancelTask: (taskId: string) => Promise<void>;
   clearTaskLogs: (taskId: string) => void;
 
-  // Event subscription management
-  subscribeToAgentEvents: (taskId: string, channel: string) => void;
-  unsubscribeFromAgentEvents: (taskId: string) => void;
+  // Log polling (S3 is source of truth)
+  startLogPolling: (taskId: string, logUrl: string) => void;
+  stopLogPolling: (taskId: string) => void;
 
   // Plan mode actions
   setExecutionMode: (taskId: string, mode: ExecutionMode) => void;
@@ -276,7 +209,6 @@ const defaultTaskState: TaskExecutionState = {
   repoExists: null,
   currentTaskId: null,
   runMode: "local",
-  unsubscribe: null,
   progress: null,
   progressSignature: null,
   logPoller: null,
@@ -320,16 +252,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
       setRunning: (taskId: string, isRunning: boolean) => {
         get().updateTaskState(taskId, { isRunning });
-      },
-
-      addLog: (taskId: string, log: AgentEvent) => {
-        const store = get();
-        const currentState = store.getTaskState(taskId);
-        store.updateTaskState(taskId, {
-          logs: [...currentState.logs, log],
-        });
-        // Process logs for artifacts after adding
-        store.processLogsForArtifacts(taskId);
       },
 
       setLogs: (taskId: string, logs: AgentEvent[]) => {
@@ -377,10 +299,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         useSettingsStore.getState().setLastUsedRunMode(runMode);
       },
 
-      setUnsubscribe: (taskId: string, unsubscribe: (() => void) | null) => {
-        get().updateTaskState(taskId, { unsubscribe });
-      },
-
       setProgress: (taskId: string, progress: TaskRun | null) => {
         get().updateTaskState(taskId, {
           progress,
@@ -393,9 +311,6 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       clearTaskState: (taskId: string) => {
         const state = get();
         const taskState = state.taskStates[taskId];
-        if (taskState?.unsubscribe) {
-          taskState.unsubscribe();
-        }
         if (taskState?.logPoller) {
           clearInterval(taskState.logPoller);
         }
@@ -406,153 +321,61 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         });
       },
 
-      subscribeToAgentEvents: (taskId: string, channel: string) => {
+      startLogPolling: (taskId: string, logUrl: string) => {
         const store = get();
 
         const existingState = store.taskStates[taskId];
-        if (existingState?.unsubscribe) {
-          existingState.unsubscribe();
-        }
         if (existingState?.logPoller) {
           clearInterval(existingState.logPoller);
         }
 
-        store.updateTaskState(taskId, { logPoller: null });
+        const poll = async () => {
+          const currentStore = get();
+          const state = currentStore.getTaskState(taskId);
 
-        // Create new subscription that listens only to progress events
-        const unsubscribeFn = window.electronAPI?.onAgentEvent(
-          channel,
-          (ev: AgentEvent | { type: "progress"; progress: TaskRun }) => {
-            const currentStore = get();
-
-            if (ev?.type === "progress" && "progress" in ev) {
-              const newProgress = ev.progress;
-              const oldProgress = currentStore.getTaskState(taskId).progress;
-              const oldSig = oldProgress
-                ? createProgressSignature(oldProgress)
-                : null;
-              const newSig = createProgressSignature(newProgress);
-
-              currentStore.setProgress(taskId, newProgress);
-
-              if (oldSig !== newSig) {
-                currentStore.addLog(taskId, {
-                  type: "progress",
-                  ts: Date.now(),
-                  progress: newProgress,
-                } as unknown as AgentEvent);
-              }
-
-              if (newProgress.log_url) {
-                const currentState = currentStore.getTaskState(taskId);
-
-                // Don't start polling if task is already complete
-                if (
-                  newProgress.status === "completed" ||
-                  newProgress.status === "failed"
-                ) {
-                  // Stop any existing poller
-                  if (currentState.logPoller) {
-                    clearInterval(currentState.logPoller);
-                    currentStore.updateTaskState(taskId, { logPoller: null });
-                  }
-
-                  // Do one final fetch to get all logs
-                  if (newProgress.log_url) {
-                    fetchLogsFromS3Url(newProgress.log_url)
-                      .then((allEvents) => {
-                        if (allEvents.length > 0) {
-                          const store = get();
-                          const hasDone = allEvents.some(
-                            (event) => event.type === "done",
-                          );
-                          if (hasDone) {
-                            store.setRunning(taskId, false);
-                            store.checkPlanCompletion(taskId);
-                          }
-                          store.setLogs(taskId, allEvents);
-                        }
-                      })
-                      .catch((err) =>
-                        log.warn("Failed to fetch final logs", err),
-                      );
-                  }
-                  return;
-                }
-
-                if (!currentState.logPoller) {
-                  const pollLogs = async () => {
-                    const state = get().getTaskState(taskId);
-                    const progress = state.progress;
-
-                    if (
-                      !progress?.log_url ||
-                      progress.status === "completed" ||
-                      progress.status === "failed"
-                    ) {
-                      if (state.logPoller) {
-                        clearInterval(state.logPoller);
-                        get().updateTaskState(taskId, { logPoller: null });
-                      }
-                      return;
-                    }
-
-                    const allEvents = await fetchLogsFromS3Url(
-                      progress.log_url,
-                    );
-
-                    if (allEvents.length > 0) {
-                      const store = get();
-
-                      const hasError = allEvents.some(
-                        (event) => event.type === "error",
-                      );
-                      const hasDone = allEvents.some(
-                        (event) => event.type === "done",
-                      );
-
-                      if (hasError || hasDone) {
-                        store.setRunning(taskId, false);
-                        if (hasDone) {
-                          const currentState = store.getTaskState(taskId);
-                          if (currentState.logPoller) {
-                            clearInterval(currentState.logPoller);
-                            store.updateTaskState(taskId, { logPoller: null });
-                          }
-                        }
-                        store.checkPlanCompletion(taskId);
-                      }
-
-                      store.setLogs(taskId, allEvents);
-                    }
-                  };
-
-                  void pollLogs();
-
-                  const poller = setInterval(() => {
-                    void pollLogs();
-                  }, 2000);
-
-                  currentStore.updateTaskState(taskId, { logPoller: poller });
-                }
-              }
-
-              return;
+          // Stop polling if not running
+          if (!state.isRunning) {
+            if (state.logPoller) {
+              clearInterval(state.logPoller);
+              currentStore.updateTaskState(taskId, { logPoller: null });
             }
-          },
-        );
+            return;
+          }
 
-        // Store the unsubscribe function
-        store.setUnsubscribe(taskId, unsubscribeFn);
+          try {
+            const allEvents = await fetchLogsFromS3Url(logUrl);
+
+            if (allEvents.length > 0) {
+              currentStore.setLogs(taskId, allEvents);
+
+              const hasDone = allEvents.some((event) => event.type === "done");
+              const hasError = allEvents.some(
+                (event) => event.type === "error",
+              );
+
+              if (hasDone || hasError) {
+                currentStore.setRunning(taskId, false);
+                currentStore.checkPlanCompletion(taskId);
+                if (state.logPoller) {
+                  clearInterval(state.logPoller);
+                  currentStore.updateTaskState(taskId, { logPoller: null });
+                }
+              }
+            }
+          } catch (error) {
+            log.warn("Failed to poll logs", { taskId, error });
+          }
+        };
+
+        // Poll immediately, then every 500ms
+        void poll();
+        const poller = setInterval(() => void poll(), 500);
+        store.updateTaskState(taskId, { logPoller: poller });
       },
 
-      unsubscribeFromAgentEvents: (taskId: string) => {
+      stopLogPolling: (taskId: string) => {
         const state = get();
         const taskState = state.taskStates[taskId];
-        if (taskState?.unsubscribe) {
-          taskState.unsubscribe();
-          get().setUnsubscribe(taskId, null);
-        }
         if (taskState?.logPoller) {
           clearInterval(taskState.logPoller);
           get().updateTaskState(taskId, { logPoller: null });
@@ -581,30 +404,31 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         const projectId = authState.projectId;
 
         if (!apiKey) {
-          store.addLog(taskId, {
+          await window.electronAPI.showMessageBox({
             type: "error",
-            ts: Date.now(),
-            message:
-              "No PostHog API key found. Sign in to PostHog to run tasks.",
+            title: "Authentication required",
+            message: "No PostHog API key found",
+            detail: "Sign in to PostHog to run tasks.",
           });
           return;
         }
 
         if (!apiHost) {
-          store.addLog(taskId, {
+          await window.electronAPI.showMessageBox({
             type: "error",
-            ts: Date.now(),
-            message:
-              "No PostHog API host found. Please check your region settings.",
+            title: "Configuration error",
+            message: "No PostHog API host found",
+            detail: "Please check your region settings.",
           });
           return;
         }
 
         if (!projectId) {
-          store.addLog(taskId, {
+          await window.electronAPI.showMessageBox({
             type: "error",
-            ts: Date.now(),
-            message: "No PostHog project ID found. Please check your settings.",
+            title: "Configuration error",
+            message: "No PostHog project ID found",
+            detail: "Please check your settings.",
           });
           return;
         }
@@ -622,58 +446,79 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           execution_mode: executionMode,
         });
 
-        // Handle cloud mode - run task via API
+        // Handle cloud mode - run task via API (cloud backend manages S3 logs)
         if (currentTaskState.runMode === "cloud") {
           const { client } = useAuthStore.getState();
           store.setProgress(taskId, null);
           store.setRunning(taskId, true);
-          const startTs = Date.now();
-          store.setLogs(taskId, [
-            {
-              type: "token",
-              ts: startTs,
-              content: `Starting task run in cloud...`,
-            },
-          ]);
+          store.setLogs(taskId, []);
 
           try {
             if (!client) {
               throw new Error("API client not available");
             }
-            await client.runTask(taskId);
-            store.addLog(taskId, {
-              type: "token",
-              ts: Date.now(),
-              content: "Task started in cloud successfully",
-            });
+
+            await client.runTaskInCloud(taskId);
             store.setRunning(taskId, false);
           } catch (error) {
-            store.addLog(taskId, {
+            log.error("Error starting cloud task", error);
+            await window.electronAPI.showMessageBox({
               type: "error",
-              ts: Date.now(),
-              message: `Error starting cloud task: ${error instanceof Error ? error.message : "Unknown error"}`,
+              title: "Cloud task error",
+              message: "Error starting cloud task",
+              detail: error instanceof Error ? error.message : "Unknown error",
             });
             store.setRunning(taskId, false);
           }
           return;
         }
 
-        // Handle local mode - run task via electron agent
-        // Ensure repo path is set
-        const effectiveRepoPath = taskState.repoPath;
+        // Handle local mode - Create task run FIRST, all logs go to S3
+        const permissionMode = "acceptEdits";
+
+        store.setProgress(taskId, null);
+        store.setRunning(taskId, true);
+        store.setLogs(taskId, []);
+
+        const { client } = useAuthStore.getState();
+        if (!client) {
+          store.setRunning(taskId, false);
+          return;
+        }
+
+        let taskRun: TaskRun | null = null;
+        try {
+          taskRun = await client.createTaskRun(task.id);
+        } catch (error) {
+          log.error("Failed to create task run", error);
+          store.setRunning(taskId, false);
+          return;
+        }
+
+        if (!taskRun?.id) {
+          log.error("Task run created without ID");
+          store.setRunning(taskId, false);
+          return;
+        }
+
+        const taskRunId = taskRun.id;
+
+        // Now handle repo path selection (all logs go to S3)
+        let effectiveRepoPath = taskState.repoPath;
 
         if (!effectiveRepoPath) {
-          // Prompt user to select directory or clone
-          const hasRepo = !!task.repository_config;
-          const repoConfig = task.repository_config;
+          const hasRepo = !!task.repository;
+
+          void emitEventsToS3(task.id, taskRunId, [
+            createConsoleEvent("info", "Waiting for directory selection..."),
+          ]);
 
           const result = await window.electronAPI.showMessageBox({
             type: "question",
             title: "Select working directory",
-            message:
-              hasRepo && repoConfig
-                ? `Do you have ${repoConfig.organization}/${repoConfig.repository} locally?`
-                : "Select a working directory for this task",
+            message: hasRepo
+              ? `Do you have ${task.repository} locally?`
+              : "Select a working directory for this task",
             detail: hasRepo
               ? "If you have the repository locally, we'll use that. Otherwise, we can clone it for you."
               : "Choose a directory where the task will run.",
@@ -685,100 +530,109 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           });
 
           if (result.response === (hasRepo ? 2 : 1)) {
-            // User cancelled
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent("info", "Task cancelled by user"),
+            ]);
+            store.setRunning(taskId, false);
             return;
           }
 
           if (result.response === 0) {
-            // User has repo locally or wants to select directory
             const selectedPath = await window.electronAPI.selectDirectory();
 
             if (!selectedPath) {
-              // User cancelled directory selection
+              void emitEventsToS3(task.id, taskRunId, [
+                createConsoleEvent("info", "Task cancelled by user"),
+              ]);
+              store.setRunning(taskId, false);
               return;
             }
 
-            // Set the repo path and revalidate
             await store.setRepoPath(taskId, selectedPath);
-            await store.revalidateRepo(taskId);
+            effectiveRepoPath = selectedPath;
 
-            // Retry running the task with the new path (skip initialization)
-            return store.runTask(taskId, task, true);
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent("info", `Selected directory: ${selectedPath}`),
+            ]);
           }
 
-          if (result.response === 1 && hasRepo && repoConfig) {
-            // User wants to clone - trigger clone and retry
+          if (result.response === 1 && hasRepo && task.repository) {
             const { repositoryWorkspaceStore } = await import(
               "@stores/repositoryWorkspaceStore"
             );
 
-            // Derive default path from clone location
             const { defaultWorkspace } = useAuthStore.getState();
             if (!defaultWorkspace) {
-              store.addLog(taskId, {
-                type: "error",
-                ts: Date.now(),
-                message:
+              void emitEventsToS3(task.id, taskRunId, [
+                createConsoleEvent(
+                  "error",
                   "No clone location configured. Please configure a clone location in settings.",
-              });
+                ),
+              ]);
+              store.setRunning(taskId, false);
               return;
             }
 
             const derivedPath = derivePath(
               defaultWorkspace,
-              repoConfig.repository,
+              task.repository.split("/")[1],
             );
             await store.setRepoPath(taskId, derivedPath);
 
             const cloneId = `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-            cloneStore.getState().startClone(cloneId, repoConfig, derivedPath);
+            cloneStore
+              .getState()
+              .startClone(cloneId, task.repository, derivedPath);
+
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent(
+                "info",
+                `Cloning ${task.repository}... Click Run again after the clone completes.`,
+              ),
+            ]);
 
             try {
               await repositoryWorkspaceStore
                 .getState()
-                .selectRepository(repoConfig, cloneId);
-
-              // Wait for clone to complete, then retry run
-              // The clone progress will show in the UI via TaskActions
-              // We return here and let the user manually retry after clone completes
-              store.addLog(taskId, {
-                type: "token",
-                ts: Date.now(),
-                content: `Cloning ${repoConfig.organization}/${repoConfig.repository}... Click Run again after the clone completes.`,
-              });
-              return;
+                .selectRepository(task.repository, cloneId);
             } catch (error) {
-              store.addLog(taskId, {
-                type: "error",
-                ts: Date.now(),
-                message: `Failed to clone repository: ${error instanceof Error ? error.message : "Unknown error"}`,
-              });
-              return;
+              void emitEventsToS3(task.id, taskRunId, [
+                createConsoleEvent(
+                  "error",
+                  `Failed to clone repository: ${error instanceof Error ? error.message : "Unknown error"}`,
+                ),
+              ]);
             }
-          }
-
-          return;
-        }
-
-        // Check if repository is currently being cloned
-        if (task.repository_config) {
-          const repoKey = getRepoKey(
-            task.repository_config.organization,
-            task.repository_config.repository,
-          );
-          const { isCloning } = cloneStore.getState();
-
-          if (isCloning(repoKey)) {
-            store.addLog(taskId, {
-              type: "error",
-              ts: Date.now(),
-              message: `Repository ${repoKey} is currently being cloned. Please wait for the clone to complete before running this task.`,
-            });
+            store.setRunning(taskId, false);
             return;
           }
         }
 
-        // Quick validation without logging errors (we'll handle it gracefully)
+        if (!effectiveRepoPath) {
+          void emitEventsToS3(task.id, taskRunId, [
+            createConsoleEvent("error", "No repository path available"),
+          ]);
+          store.setRunning(taskId, false);
+          return;
+        }
+
+        // Check if repository is currently being cloned
+        if (task.repository) {
+          const { isCloning } = cloneStore.getState();
+
+          if (isCloning(task.repository)) {
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent(
+                "info",
+                `Repository ${task.repository} is currently being cloned. Please wait for the clone to complete.`,
+              ),
+            ]);
+            store.setRunning(taskId, false);
+            return;
+          }
+        }
+
+        // Validate repo
         const canWrite =
           await window.electronAPI?.checkWriteAccess(effectiveRepoPath);
         const isRepo = canWrite
@@ -786,107 +640,90 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           : false;
 
         if (!canWrite || !isRepo) {
-          // Repository path is invalid - clear it and show the prompt again
-          // Don't log errors, just gracefully re-prompt the user
+          void emitEventsToS3(task.id, taskRunId, [
+            createConsoleEvent(
+              "error",
+              `Invalid repository path: ${effectiveRepoPath}. Please select a valid git repository.`,
+            ),
+          ]);
           await store.setRepoPath(taskId, null);
-
-          // Recursively call runTask to trigger the prompt flow (skip initialization)
-          return store.runTask(taskId, task, true);
+          store.setRunning(taskId, false);
+          return;
         }
 
-        const permissionMode = "acceptEdits";
-
-        // For local mode, ensure we have a worktree
+        // Set up worktree
         let workingPath = effectiveRepoPath;
         const worktreeStore = useWorktreeStore.getState();
         let worktreeInfo = worktreeStore.getWorktree(taskId);
 
-        // Verify that stored worktree still exists
         if (worktreeInfo) {
           const worktreeExists = await window.electronAPI?.worktree.exists(
             effectiveRepoPath,
             worktreeInfo.worktreeName,
           );
           if (!worktreeExists) {
-            // Worktree was deleted externally, clear the stored info
             await worktreeStore.clearWorktree(taskId);
             worktreeInfo = null;
-            store.addLog(taskId, {
-              type: "token",
-              ts: Date.now(),
-              content: `Worktree was removed externally, recreating...`,
-            });
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent(
+                "info",
+                "Worktree was removed externally, recreating...",
+              ),
+            ]);
           }
         }
 
         if (!worktreeInfo) {
-          // Create a new worktree for this task
-          store.addLog(taskId, {
-            type: "token",
-            ts: Date.now(),
-            content: `Creating worktree for task...`,
-          });
+          void emitEventsToS3(task.id, taskRunId, [
+            createConsoleEvent("info", "Creating worktree for task..."),
+          ]);
 
           try {
             worktreeInfo =
               await window.electronAPI?.worktree.create(effectiveRepoPath);
             if (worktreeInfo) {
               await worktreeStore.setWorktree(taskId, worktreeInfo);
-              store.addLog(taskId, {
-                type: "token",
-                ts: Date.now(),
-                content: `Created worktree: ${worktreeInfo.worktreeName}`,
-              });
+              void emitEventsToS3(task.id, taskRunId, [
+                createConsoleEvent(
+                  "info",
+                  `Created worktree: ${worktreeInfo.worktreeName}`,
+                ),
+              ]);
             }
           } catch (error) {
-            store.addLog(taskId, {
-              type: "error",
-              ts: Date.now(),
-              message: `Failed to create worktree: ${error instanceof Error ? error.message : "Unknown error"}. Running in main repo instead.`,
-            });
-            // Continue with main repo if worktree creation fails
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent(
+                "warn",
+                `Failed to create worktree: ${error instanceof Error ? error.message : "Unknown error"}. Running in main repo instead.`,
+              ),
+            ]);
           }
         }
 
-        // Use worktree path if available, otherwise fall back to main repo
         if (worktreeInfo) {
           workingPath = worktreeInfo.worktreePath;
         }
 
-        store.setProgress(taskId, null);
-        store.setRunning(taskId, true);
-        const startTs = Date.now();
-        store.setLogs(taskId, [
-          {
-            type: "token",
-            ts: startTs,
-            content: `Starting task run...`,
-          },
-          {
-            type: "token",
-            ts: startTs,
-            content: `Permission mode: ${permissionMode}`,
-          },
-          {
-            type: "token",
-            ts: startTs,
-            content: `Working directory: ${workingPath}`,
-          },
-          ...(worktreeInfo
-            ? [
-                {
-                  type: "token" as const,
-                  ts: startTs,
-                  content: `Worktree: ${worktreeInfo.worktreeName} (branch: ${worktreeInfo.branchName})`,
-                },
-              ]
-            : []),
-        ]);
-
         try {
+          const setupEvents: AgentEvent[] = [
+            createConsoleEvent("info", "Starting task run..."),
+            createConsoleEvent("info", `Permission mode: ${permissionMode}`),
+            createConsoleEvent("info", `Working directory: ${workingPath}`),
+          ];
+          if (worktreeInfo) {
+            setupEvents.push(
+              createConsoleEvent(
+                "info",
+                `Worktree: ${worktreeInfo.worktreeName} (branch: ${worktreeInfo.branchName})`,
+              ),
+            );
+          }
+          void emitEventsToS3(task.id, taskRunId, setupEvents);
+
           const { createPR } = useSettingsStore.getState();
           const result = await window.electronAPI?.agentStart({
             taskId: task.id,
+            taskRunId,
             repoPath: workingPath,
             apiKey,
             apiHost,
@@ -898,26 +735,24 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             createPR,
           });
           if (!result) {
-            store.addLog(taskId, {
-              type: "error",
-              ts: Date.now(),
-              message: "Failed to start agent: electronAPI not available",
-            });
+            void emitEventsToS3(task.id, taskRunId, [
+              createConsoleEvent(
+                "error",
+                "Failed to start agent: electronAPI not available",
+              ),
+            ]);
             store.setRunning(taskId, false);
             return;
           }
-          const { taskId: executionTaskId, channel } = result;
+          const { taskId: executionTaskId } = result;
 
           store.setCurrentTaskId(taskId, executionTaskId);
-
-          // Subscribe to streaming events using store-managed subscription
-          store.subscribeToAgentEvents(taskId, channel);
+          store.startLogPolling(taskId, taskRun.log_url);
         } catch (error) {
-          store.addLog(taskId, {
-            type: "error",
-            ts: Date.now(),
-            message: `Error starting agent: ${error instanceof Error ? error.message : "Unknown error"}`,
-          });
+          const errorMessage = `Error starting agent: ${error instanceof Error ? error.message : "Unknown error"}`;
+          void emitEventsToS3(task.id, taskRunId, [
+            createConsoleEvent("error", errorMessage),
+          ]);
           store.setRunning(taskId, false);
         }
       },
@@ -934,14 +769,16 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           // Ignore cancellation errors
         }
 
-        store.addLog(taskId, {
-          type: "token",
-          ts: Date.now(),
-          content: "Run cancelled",
-        });
+        // Emit cancellation event to S3 if we have a task run
+        const taskRunId = taskState.progress?.id;
+        if (taskRunId) {
+          void emitEventsToS3(taskId, taskRunId, [
+            createConsoleEvent("info", "Run cancelled"),
+          ]);
+        }
 
         store.setRunning(taskId, false);
-        store.unsubscribeFromAgentEvents(taskId);
+        store.stopLogPolling(taskId);
       },
 
       clearTaskLogs: (taskId: string) => {
@@ -997,47 +834,31 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         if (taskState.repoPath) {
           // Even if repoPath is already set, ensure workspace store is in sync
-          if (task.repository_config) {
+          if (task.repository) {
             const currentWorkspaceRepo =
               repositoryWorkspaceStore.getState().selectedRepository;
-            const taskRepoKey =
-              task.repository_config.organization &&
-              task.repository_config.repository
-                ? `${task.repository_config.organization}/${task.repository_config.repository}`
-                : null;
-            const workspaceRepoKey =
-              currentWorkspaceRepo?.organization &&
-              currentWorkspaceRepo?.repository
-                ? `${currentWorkspaceRepo.organization}/${currentWorkspaceRepo.repository}`
-                : null;
 
-            if (taskRepoKey && taskRepoKey !== workspaceRepoKey) {
+            if (task.repository !== currentWorkspaceRepo) {
               repositoryWorkspaceStore
                 .getState()
-                .selectRepository(task.repository_config);
+                .selectRepository(task.repository);
             }
           }
           return;
         }
 
         // 1. Check taskDirectoryStore first
-        const repoKey =
-          task.repository_config?.organization &&
-          task.repository_config?.repository
-            ? `${task.repository_config.organization}/${task.repository_config.repository}`
-            : undefined;
-
         const storedDirectory = useTaskDirectoryStore
           .getState()
-          .getTaskDirectory(taskId, repoKey);
+          .getTaskDirectory(taskId, task.repository ?? undefined);
         if (storedDirectory) {
           void store.setRepoPath(taskId, storedDirectory);
 
           // Update workspace store with task's repository
-          if (task.repository_config) {
+          if (task.repository) {
             repositoryWorkspaceStore
               .getState()
-              .selectRepository(task.repository_config);
+              .selectRepository(task.repository);
           }
 
           // Validate repo exists
@@ -1053,22 +874,19 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         }
 
         // 2. Fallback to deriving from workspace (existing logic)
-        if (!task.repository_config || !task.repository_config.repository)
-          return;
+        if (!task.repository) return;
 
         const { defaultWorkspace } = useAuthStore.getState();
         if (!defaultWorkspace) return;
 
         const path = derivePath(
           defaultWorkspace,
-          task.repository_config.repository,
+          task.repository.split("/")[1],
         );
         void store.setRepoPath(taskId, path);
 
         // Update workspace store with task's repository
-        repositoryWorkspaceStore
-          .getState()
-          .selectRepository(task.repository_config);
+        repositoryWorkspaceStore.getState().selectRepository(task.repository);
 
         // Validate repo exists
         window.electronAPI
@@ -1187,12 +1005,12 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
     }),
     {
       name: "task-execution-storage",
-      // Don't persist unsubscribe functions and pollers as they can't be serialized
+      // Don't persist pollers as they can't be serialized
       partialize: (state) => ({
         taskStates: Object.fromEntries(
           Object.entries(state.taskStates).map(([taskId, taskState]) => [
             taskId,
-            { ...taskState, unsubscribe: null, logPoller: null },
+            { ...taskState, logPoller: null },
           ]),
         ),
       }),

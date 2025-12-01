@@ -1,10 +1,16 @@
+import { app } from "electron";
 import log from "electron-log/main";
 
 // Initialize IPC transport to forward main process logs to renderer dev tools
 log.initialize();
 
-log.transports.file.level = "info";
-log.transports.console.level = "info";
+// Set levels - use debug in dev (check NODE_ENV since app.isPackaged may not be ready)
+const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+const level = isDev ? "debug" : "info";
+log.transports.file.level = level;
+log.transports.console.level = level;
+// IPC transport needs level set separately
+log.transports.ipc.level = level;
 
 export const logger = {
   info: (message: string, ...args: unknown[]) => log.info(message, ...args),

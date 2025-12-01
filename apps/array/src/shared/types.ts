@@ -1,8 +1,3 @@
-export interface RepositoryConfig {
-  organization: string;
-  repository: string;
-}
-
 export interface RegisteredFolder {
   id: string;
   path: string;
@@ -46,20 +41,10 @@ export interface Task {
   updated_at: string;
   created_by?: UserBasic | null;
   origin_product: string;
-  status?: string;
-  repository_config?: RepositoryConfig;
-  tags?: string[];
-
-  // DEPRECATED: These fields have been moved to TaskRun
-  github_branch?: string | null;
-  github_pr_url?: string | null;
+  repository?: string | null; // Format: "organization/repository" (e.g., "posthog/posthog-js")
+  github_integration?: number | null;
+  json_schema?: Record<string, unknown> | null;
   latest_run?: TaskRun;
-}
-
-export interface LogEntry {
-  type: string; // e.g., "info", "warning", "error", "success", "debug"
-  message: string;
-  [key: string]: unknown; // Allow additional fields
 }
 
 export interface TaskRun {
@@ -67,8 +52,16 @@ export interface TaskRun {
   task: string; // Task ID
   team: number;
   branch: string | null;
-  status: "started" | "in_progress" | "completed" | "failed";
-  log_url?: string;
+  stage?: string | null; // Current stage (e.g., 'research', 'plan', 'build')
+  environment?: "local" | "cloud";
+  status:
+    | "not_started"
+    | "queued"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  log_url: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)

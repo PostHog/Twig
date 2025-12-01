@@ -21,7 +21,7 @@ declare global {
   interface IElectronAPI {
     storeApiKey: (apiKey: string) => Promise<string>;
     retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
-    fetchS3Logs: (logUrl: string) => Promise<string>;
+    fetchS3Logs: (logUrl: string) => Promise<AgentEvent[]>;
     // OAuth API
     oauthStartFlow: (region: CloudRegion) => Promise<{
       success: boolean;
@@ -93,6 +93,7 @@ declare global {
     clearRepoFileCache: (repoPath: string) => Promise<void>;
     agentStart: (params: {
       taskId: string;
+      taskRunId: string;
       repoPath: string;
       apiKey: string;
       apiHost: string;

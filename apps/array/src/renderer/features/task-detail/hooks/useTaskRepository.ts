@@ -11,15 +11,13 @@ export function useTaskRepository({
   isCloning,
 }: UseTaskRepositoryParams) {
   const handleClone = async () => {
-    if (!task.repository_config) return;
-    await repositoryWorkspaceStore
-      .getState()
-      .selectRepository(task.repository_config);
+    if (!task.repository) return;
+    await repositoryWorkspaceStore.getState().selectRepository(task.repository);
   };
 
   return {
     clone: handleClone,
     isCloning,
-    hasRepositoryConfig: !!task.repository_config,
+    hasRepository: !!task.repository,
   };
 }

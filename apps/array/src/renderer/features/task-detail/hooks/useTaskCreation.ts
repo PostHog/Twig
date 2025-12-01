@@ -75,23 +75,18 @@ export function useTaskCreation({
     }
 
     // Detect repo config fresh at submit time to avoid stale closure issues
-    let repositoryConfig:
-      | { organization: string; repository: string }
-      | undefined;
+    let repository: string | undefined;
     if (selectedDirectory) {
       const detected = await window.electronAPI.detectRepo(selectedDirectory);
       if (detected) {
-        repositoryConfig = {
-          organization: detected.organization,
-          repository: detected.repository,
-        };
+        repository = `${detected.organization}/${detected.repository}`;
       }
     }
 
     createTask(
       {
         description: content,
-        repositoryConfig,
+        repository,
         autoRun: autoRunTasks,
         createdFrom: "cli",
       },

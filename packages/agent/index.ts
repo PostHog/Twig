@@ -32,17 +32,41 @@ export type {
 export type {
   AgentConfig,
   AgentEvent,
+  // Individual event types for creating events
+  ArtifactEvent,
+  CompactBoundaryEvent,
+  ConsoleEvent,
+  ContentBlockStartEvent,
+  ContentBlockStopEvent,
+  DoneEvent,
+  ErrorEvent,
   ExecutionResult,
+  InitEvent,
   LogLevel as LogLevelType,
   McpServerConfig,
+  MessageDeltaEvent,
+  MessageStartEvent,
+  MessageStopEvent,
+  MetricEvent,
   OnLogCallback,
+  RawSDKEvent,
   ResearchEvaluation,
+  StatusEvent,
   SupportingFile,
   Task,
   TaskRun,
+  TokenEvent,
+  ToolCallEvent,
+  ToolResultEvent,
+  UserMessageEvent,
   WorktreeInfo,
 } from "./src/types.js";
-export { PermissionMode } from "./src/types.js";
+export {
+  AgentEventSchema,
+  PermissionMode,
+  parseAgentEvent,
+  parseAgentEvents,
+} from "./src/types.js";
 export type { LoggerConfig } from "./src/utils/logger.js";
 export {
   Logger,

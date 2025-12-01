@@ -1,5 +1,6 @@
 import { ArtifactView } from "@features/logs/components/ArtifactView";
 import { BaseLogEntry } from "@features/logs/components/BaseLogEntry";
+import { ConsoleView } from "@features/logs/components/ConsoleView";
 import { DoneView } from "@features/logs/components/DoneView";
 import { ErrorView } from "@features/logs/components/ErrorView";
 import { InitView } from "@features/logs/components/InitView";
@@ -28,6 +29,7 @@ const EVENT_COMPONENT_MAP: Record<
   artifact: ArtifactView,
   metric: MetricEventView,
   progress: ProgressView,
+  console: ConsoleView,
 };
 
 const SKIP_EVENTS = [
