@@ -1,6 +1,7 @@
 {
   "name": "@posthog/agent",
   "version": "1.25.0",
+  "repository": "https://github.com/PostHog/array",
   "description": "TypeScript agent framework wrapping Claude Agent SDK with Git-based task execution for PostHog",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -23,10 +24,6 @@
   ],
   "author": "PostHog",
   "license": "SEE LICENSE IN LICENSE",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/PostHog/posthog-agent"
-  },
   "scripts": {
     "build": "pnpm exec rimraf dist && pnpm exec rollup -c && pnpm exec tsc --project tsconfig.build.json --emitDeclarationOnly",
     "dev": "pnpm exec rollup -c --watch",
