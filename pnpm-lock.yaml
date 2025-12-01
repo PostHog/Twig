@@ -345,6 +345,9 @@ importers:
       yoga-wasm-web:
         specifier: ^0.3.3
         version: 0.3.3
+      zod:
+        specifier: ^4.1.12
+        version: 4.1.12
     devDependencies:
       '@changesets/cli':
         specifier: ^2.27.8
