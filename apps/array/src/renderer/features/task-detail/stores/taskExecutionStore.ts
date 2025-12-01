@@ -458,8 +458,18 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
               throw new Error("API client not available");
             }
 
-            await client.runTaskInCloud(taskId);
-            store.setRunning(taskId, false);
+            const updatedTask = await client.runTaskInCloud(taskId);
+
+            // Get the latest run from the returned task
+            const latestRun = updatedTask.latest_run;
+
+            if (!latestRun) {
+              throw new Error("No task run returned from cloud run");
+            }
+
+            // Store the progress and start polling logs
+            store.setProgress(taskId, latestRun);
+            store.startLogPolling(taskId, latestRun.log_url);
           } catch (error) {
             log.error("Error starting cloud task", error);
             await window.electronAPI.showMessageBox({
