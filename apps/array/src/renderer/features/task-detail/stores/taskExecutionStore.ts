@@ -462,7 +462,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
             // Get the latest run from the returned task
             const latestRun = updatedTask.latest_run;
-            
+
             if (!latestRun) {
               throw new Error("No task run returned from cloud run");
             }
