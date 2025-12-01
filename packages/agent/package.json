@@ -51,8 +51,13 @@
     "typescript": "^5.5.0"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.47",
+    "@agentclientprotocol/sdk": "^0.5.1",
+    "@anthropic-ai/claude-agent-sdk": "^0.1.55",
+    "@anthropic-ai/sdk": "^0.71.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "diff": "^8.0.2",
     "dotenv": "^17.2.3",
+    "uuid": "13.0.0",
     "yoga-wasm-web": "^0.3.3",
     "zod": "^4.1.12"
   },

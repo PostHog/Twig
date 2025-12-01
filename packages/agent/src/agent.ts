@@ -1,5 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { ClaudeAdapter } from "./adapters/claude/claude-adapter.js";
+// @ts-expect-error
+import { ClaudeAdapter } from "./adapters/claude-legacy/claude-adapter.js";
 import type { ProviderAdapter } from "./adapters/types.js";
 import { PostHogFileManager } from "./file-manager.js";
 import { GitManager } from "./git-manager.js";
