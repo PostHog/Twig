@@ -12,11 +12,6 @@ export const AgentMethod = {
   },
 } as const;
 
-/**
- * Client methods - implemented by the client, called by the agent.
- *
- * These are callbacks/handlers your Electron app must provide.
- */
 export const ClientMethod = {
   Session: {
     Update: "session/update",
