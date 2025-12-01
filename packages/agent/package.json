@@ -40,6 +40,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.8",
     "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@types/bun": "latest",
     "minimatch": "^10.0.3",

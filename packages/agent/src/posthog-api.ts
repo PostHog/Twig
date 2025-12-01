@@ -1,7 +1,7 @@
 import type {
-  AgentEvent,
   PostHogAPIConfig,
   PostHogResource,
+  StoredEntry,
   Task,
   TaskArtifactUploadPayload,
   TaskRun,
@@ -211,7 +211,7 @@ export class PostHogAPIClient {
   async appendTaskRunLog(
     taskId: string,
     runId: string,
-    entries: AgentEvent[],
+    entries: StoredEntry[],
   ): Promise<TaskRun> {
     const teamId = this.getTeamId();
     return this.apiRequest<TaskRun>(
@@ -247,9 +247,9 @@ export class PostHogAPIClient {
   /**
    * Fetch logs from S3 using presigned URL from TaskRun
    * @param taskRun - The task run containing the log_url
-   * @returns Array of agent events, or empty array if no logs available
+   * @returns Array of stored entries, or empty array if no logs available
    */
-  async fetchTaskRunLogs(taskRun: TaskRun): Promise<AgentEvent[]> {
+  async fetchTaskRunLogs(taskRun: TaskRun): Promise<StoredEntry[]> {
     if (!taskRun.log_url) {
       return [];
     }
@@ -273,7 +273,7 @@ export class PostHogAPIClient {
       return content
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as AgentEvent);
+        .map((line) => JSON.parse(line) as StoredEntry);
     } catch (error) {
       throw new Error(
         `Failed to fetch task run logs: ${error instanceof Error ? error.message : String(error)}`,

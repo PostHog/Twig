@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { POSTHOG_NOTIFICATIONS } from "../../acp-extensions.js";
 import { EXECUTION_SYSTEM_PROMPT } from "../../agents/execution.js";
 import { TodoManager } from "../../todo-manager.js";
 import { PermissionMode } from "../../types.js";
@@ -11,10 +12,10 @@ export const buildStep: WorkflowStepRunner = async ({ step, context }) => {
     options,
     logger,
     promptBuilder,
-    adapter,
+    sessionId,
     mcpServers,
     gitManager,
-    emitEvent,
+    sendNotification,
   } = context;
 
   const stepLogger = logger.child("BuildStep");
@@ -33,7 +34,10 @@ export const buildStep: WorkflowStepRunner = async ({ step, context }) => {
   }
 
   stepLogger.info("Starting build phase", { taskId: task.id });
-  emitEvent(adapter.createStatusEvent("phase_start", { phase: "build" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_START, {
+    sessionId,
+    phase: "build",
+  });
 
   const executionPrompt = await promptBuilder.buildExecutionPrompt(task, cwd);
   const fullPrompt = `${EXECUTION_SYSTEM_PROMPT}\n\n${executionPrompt}`;
@@ -89,18 +93,16 @@ export const buildStep: WorkflowStepRunner = async ({ step, context }) => {
 
   try {
     for await (const message of response) {
-      emitEvent(adapter.createRawSDKEvent(message));
-      const transformedEvents = adapter.transform(message);
-      for (const event of transformedEvents) {
-        emitEvent(event);
-      }
-
       const todoList = await todoManager.checkAndPersistFromMessage(
         message,
         task.id,
       );
       if (todoList) {
-        emitEvent(adapter.createArtifactEvent("todos", todoList));
+        await sendNotification(POSTHOG_NOTIFICATIONS.ARTIFACT, {
+          sessionId,
+          kind: "todos",
+          content: todoList,
+        });
       }
     }
   } catch (error) {
@@ -125,6 +127,9 @@ export const buildStep: WorkflowStepRunner = async ({ step, context }) => {
     });
   }
 
-  emitEvent(adapter.createStatusEvent("phase_complete", { phase: "build" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+    sessionId,
+    phase: "build",
+  });
   return { status: "completed" };
 };

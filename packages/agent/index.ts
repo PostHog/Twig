@@ -1,17 +1,22 @@
 // Main entry point - re-exports from src
 
+// ACP connection utilities
+export type {
+  AcpConnectionConfig,
+  InProcessAcpConnection,
+} from "./src/adapters/claude/claude.js";
+export { createAcpConnection } from "./src/adapters/claude/claude.js";
+
 // Session persistence
 export type { SessionPersistenceConfig } from "./src/session-store.js";
 export { SessionStore } from "./src/session-store.js";
-// TODO: Refactor - legacy adapter removed
-// export { ClaudeAdapter } from "./src/adapters/claude-legacy/claude-adapter.js";
-// export type { ProviderAdapter } from "./src/adapters/types.js";
-// export { Agent } from "./src/agent.js";
-export type { TodoItem, TodoList } from "./src/todo-manager.js";
+
 // Todo management
+export type { TodoItem, TodoList } from "./src/todo-manager.js";
 export { TodoManager } from "./src/todo-manager.js";
-export { ToolRegistry } from "./src/tools/registry.js";
+
 // Tool types
+export { ToolRegistry } from "./src/tools/registry.js";
 export type {
   BashOutputTool,
   BashTool,
@@ -32,49 +37,46 @@ export type {
   WebSearchTool,
   WriteTool,
 } from "./src/tools/types.js";
+
+// Core types
 export type {
   AgentConfig,
-  AgentEvent,
-  // Individual event types for creating events
-  ArtifactEvent,
-  CompactBoundaryEvent,
-  ConsoleEvent,
-  ContentBlockStartEvent,
-  ContentBlockStopEvent,
-  DoneEvent,
-  ErrorEvent,
   ExecutionResult,
-  InitEvent,
   LogLevel as LogLevelType,
   McpServerConfig,
-  MessageDeltaEvent,
-  MessageStartEvent,
-  MessageStopEvent,
-  MetricEvent,
   OnLogCallback,
-  RawSDKEvent,
   ResearchEvaluation,
-  StatusEvent,
+  SessionNotification,
+  StoredEntry,
+  StoredNotification,
+  StoredSessionNotification,
   SupportingFile,
   Task,
   TaskRun,
-  TokenEvent,
-  ToolCallEvent,
-  ToolResultEvent,
-  UserMessageEvent,
   WorktreeInfo,
 } from "./src/types.js";
-export {
-  AgentEventSchema,
-  PermissionMode,
-  parseAgentEvent,
-  parseAgentEvents,
-} from "./src/types.js";
+export { PermissionMode } from "./src/types.js";
+
+// ACP extensions (PostHog-specific notification types)
+export { POSTHOG_NOTIFICATIONS } from "./src/acp-extensions.js";
+export type {
+  ArtifactNotificationPayload,
+  BranchCreatedPayload,
+  ConsoleNotificationPayload,
+  ErrorNotificationPayload,
+  PhaseNotificationPayload,
+  PostHogNotificationPayload,
+  PostHogNotificationType,
+  PrCreatedPayload,
+  RunStartedPayload,
+  SdkSessionPayload,
+  TaskCompletePayload,
+} from "./src/acp-extensions.js";
+
+// Logging
 export type { LoggerConfig } from "./src/utils/logger.js";
-export {
-  Logger,
-  LogLevel,
-} from "./src/utils/logger.js";
-export type { WorktreeConfig } from "./src/worktree-manager.js";
+export { Logger, LogLevel } from "./src/utils/logger.js";
+
 // Worktree management
+export type { WorktreeConfig } from "./src/worktree-manager.js";
 export { WorktreeManager } from "./src/worktree-manager.js";

@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import "dotenv/config";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as readline from "node:readline/promises";
-import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -20,8 +19,10 @@ import {
   type WriteTextFileRequest,
   type WriteTextFileResponse,
 } from "@agentclientprotocol/sdk";
+import { Agent } from "./src/agent.js";
 import { PostHogAPIClient } from "./src/posthog-api.js";
 import type { SessionPersistenceConfig } from "./src/session-store.js";
+import { Logger } from "./src/utils/logger.js";
 
 // PostHog configuration - set via env vars
 const POSTHOG_CONFIG = {
@@ -29,6 +30,8 @@ const POSTHOG_CONFIG = {
   apiKey: process.env.POSTHOG_API_KEY || "",
   projectId: parseInt(process.env.POSTHOG_PROJECT_ID || "0", 10),
 };
+
+const logger = new Logger({ debug: true, prefix: "[example-client]" });
 
 // Simple file-based storage for session -> persistence mapping
 const SESSION_STORE_PATH = join(
@@ -111,6 +114,9 @@ class ExampleClient implements Client {
           console.log(`[${update.content.type}]`);
         }
         break;
+      case "user_message_chunk":
+        // Skip rendering user messages live - the user already sees what they typed
+        break;
       case "tool_call":
         console.log(`\n🔧 ${update.title} (${update.status})`);
         break;
@@ -120,9 +126,12 @@ class ExampleClient implements Client {
         );
         break;
       case "plan":
-      case "agent_thought_chunk":
-      case "user_message_chunk":
         console.log(`[${update.sessionUpdate}]`);
+        break;
+      case "agent_thought_chunk":
+        if (update.content.type === "text") {
+          process.stdout.write(`💭 ${update.content.text}`);
+        }
         break;
       default:
         break;
@@ -142,7 +151,7 @@ class ExampleClient implements Client {
       case "user_message_chunk":
         if (update.content.type === "text") {
           process.stdout.write(
-            `\n${dim}💬 You: ${update.content.text}${reset}`,
+            `\n${dim}💬 You: ${update.content.text}${reset}\n`,
           );
         }
         break;
@@ -219,10 +228,6 @@ async function prompt(message: string): Promise<string> {
 }
 
 async function main() {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const agentPath = join(__dirname, "agent.ts");
-
   // Check for session ID argument: npx tsx example-client.ts [sessionId]
   const existingSessionId = process.argv[2];
 
@@ -286,28 +291,33 @@ async function main() {
     console.log("   Starting fresh without persistence...\n");
   }
 
-  // Spawn the agent as a subprocess using tsx
-  // Pass PostHog config as env vars so agent can create its own SessionStore
-  const agentProcess = spawn("npx", ["tsx", agentPath], {
-    stdio: ["pipe", "pipe", "inherit"],
-    env: {
-      ...process.env,
-      POSTHOG_API_URL: POSTHOG_CONFIG.apiUrl,
-      POSTHOG_API_KEY: POSTHOG_CONFIG.apiKey,
-      POSTHOG_PROJECT_ID: String(POSTHOG_CONFIG.projectId),
+  // Create Agent and get in-process ACP connection
+  const agent = new Agent({
+    workingDirectory: process.cwd(),
+    debug: true,
+    onLog: (level, scope, message, data) => {
+      logger.log(level, message, data, scope);
     },
+    ...(POSTHOG_CONFIG.apiUrl && { posthogApiUrl: POSTHOG_CONFIG.apiUrl }),
+    ...(POSTHOG_CONFIG.apiKey && { posthogApiKey: POSTHOG_CONFIG.apiKey }),
+    ...(POSTHOG_CONFIG.projectId && { posthogProjectId: POSTHOG_CONFIG.projectId }),
   });
 
-  // Create streams to communicate with the agent
-  const input = Writable.toWeb(agentProcess.stdin!);
-  const output = Readable.toWeb(
-    agentProcess.stdout!,
-  ) as unknown as ReadableStream<Uint8Array>;
+  if (!persistence) {
+    logger.error("PostHog configuration required for runTaskV2");
+    process.exit(1);
+  }
 
-  // Create the client connection
+  const { clientStreams } = await agent.runTaskV2(
+    persistence.taskId,
+    persistence.runId,
+    { skipGitBranch: true },
+  );
+
+  // Create the client connection using the in-memory streams
   const client = new ExampleClient();
-  const stream = ndJsonStream(input, output);
-  const connection = new ClientSideConnection((_agent) => client, stream);
+  const clientStream = ndJsonStream(clientStreams.writable, clientStreams.readable);
+  const connection = new ClientSideConnection((_agent) => client, clientStream);
 
   try {
     // Initialize the connection
@@ -414,7 +424,6 @@ async function main() {
   } catch (error) {
     console.error("[Client] Error:", error);
   } finally {
-    agentProcess.kill();
     process.exit(0);
   }
 }

@@ -3,7 +3,42 @@ import type {
   CanUseTool,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
-export type { CanUseTool, PermissionResult };
+import type { SessionNotification } from "@agentclientprotocol/sdk";
+export type { CanUseTool, PermissionResult, SessionNotification };
+
+/**
+ * Stored custom notification following ACP extensibility model.
+ * Custom notifications use underscore-prefixed methods (e.g., `_posthog/phase_start`).
+ * See: https://agentclientprotocol.com/docs/extensibility
+ */
+export interface StoredNotification {
+  type: "notification";
+  /** When this notification was stored */
+  timestamp: string;
+  /** JSON-RPC 2.0 notification (no id field = notification, not request) */
+  notification: {
+    jsonrpc: "2.0";
+    method: string;
+    params?: Record<string, unknown>;
+  };
+}
+
+/**
+ * Stored ACP session notification (from the ACP SDK).
+ * These are session updates like tool_call, agent_message_chunk, etc.
+ */
+export interface StoredSessionNotification {
+  type: "acp_session_notification";
+  /** When this notification was stored */
+  timestamp: string;
+  /** The ACP session notification */
+  notification: SessionNotification;
+}
+
+/**
+ * Union type for all stored log entries.
+ */
+export type StoredEntry = StoredNotification | StoredSessionNotification;
 
 // PostHog Task model (matches Array's OpenAPI schema)
 export interface Task {
@@ -116,55 +151,8 @@ export interface TaskExecutionOptions {
   // Fine-grained permission control (only applied to build phase)
   // See: https://docs.claude.com/en/api/agent-sdk/permissions
   canUseTool?: CanUseTool;
+  skipGitBranch?: boolean; // Skip creating a task-specific git branch
 }
-
-export type {
-  AgentEvent,
-  ArtifactEvent,
-  CompactBoundaryEvent,
-  ConsoleEvent,
-  ContentBlockStartEvent,
-  ContentBlockStopEvent,
-  DoneEvent,
-  ErrorEvent,
-  InitEvent,
-  MessageDeltaEvent,
-  MessageStartEvent,
-  MessageStopEvent,
-  MetricEvent,
-  RawSDKEvent,
-  StatusEvent,
-  TokenEvent,
-  ToolCallEvent,
-  ToolResultEvent,
-  UserMessageEvent,
-} from "./schemas.js";
-// Re-export event types and schemas from schemas.ts
-export {
-  AgentEventSchema,
-  ArtifactEventSchema,
-  CompactBoundaryEventSchema,
-  ConsoleEventSchema,
-  ContentBlockStartEventSchema,
-  ContentBlockStopEventSchema,
-  DoneEventSchema,
-  ErrorEventSchema,
-  InitEventSchema,
-  MessageDeltaEventSchema,
-  MessageStartEventSchema,
-  MessageStopEventSchema,
-  MetricEventSchema,
-  parseAgentEvent,
-  parseAgentEvents,
-  RawSDKEventSchema,
-  StatusEventSchema,
-  TokenEventSchema,
-  ToolCallEventSchema,
-  ToolResultEventSchema,
-  UserMessageEventSchema,
-} from "./schemas.js";
-
-import type { AgentEvent } from "./schemas.js";
 
 export interface ExecutionResult {
   // biome-ignore lint/suspicious/noExplicitAny: Results array contains varying SDK response types
@@ -217,12 +205,11 @@ export type OnLogCallback = (
 
 export interface AgentConfig {
   workingDirectory?: string;
-  onEvent?: (event: AgentEvent) => void;
 
-  // PostHog API configuration
-  posthogApiUrl: string;
-  posthogApiKey: string;
-  posthogProjectId: number;
+  // PostHog API configuration (optional - enables PostHog integration when provided)
+  posthogApiUrl?: string;
+  posthogApiKey?: string;
+  posthogProjectId?: number;
 
   // PostHog MCP configuration
   posthogMcpUrl?: string;

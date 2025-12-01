@@ -12,14 +12,14 @@ export const finalizeStep: WorkflowStepRunner = async ({ step, context }) => {
     fileManager,
     gitManager,
     posthogAPI,
-    progressReporter,
+    runId,
   } = context;
 
   const stepLogger = logger.child("FinalizeStep");
   const artifacts = await fileManager.collectTaskArtifacts(task.id);
   let uploadedArtifacts: TaskRunArtifact[] | undefined;
 
-  if (artifacts.length && posthogAPI && progressReporter.runId) {
+  if (artifacts.length && posthogAPI && runId) {
     try {
       const payload = artifacts.map((artifact) => ({
         name: artifact.name,
@@ -29,7 +29,7 @@ export const finalizeStep: WorkflowStepRunner = async ({ step, context }) => {
       }));
       uploadedArtifacts = await posthogAPI.uploadTaskArtifacts(
         task.id,
-        progressReporter.runId,
+        runId,
         payload,
       );
       stepLogger.info("Uploaded task artifacts to PostHog", {
@@ -46,7 +46,7 @@ export const finalizeStep: WorkflowStepRunner = async ({ step, context }) => {
     stepLogger.debug("Skipping artifact upload", {
       hasArtifacts: artifacts.length > 0,
       hasPostHogApi: Boolean(posthogAPI),
-      runId: progressReporter.runId,
+      runId,
     });
   }
 

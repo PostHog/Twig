@@ -63,10 +63,9 @@ import {
   toolUpdateFromToolResult,
 } from "./tools.js";
 import {
-  nodeToWebReadable,
-  nodeToWebWritable,
-  Pushable,
-  unreachable,
+  createBidirectionalStreams, Pushable,
+  type StreamPair,
+  unreachable
 } from "./utils.js";
 
 type Session = {
@@ -180,7 +179,7 @@ export class ClaudeAcpAgent implements Agent {
     // In-memory (always)
     this.sessions[sessionId]?.notificationHistory.push(notification);
     // Persist via store (if registered)
-    this.sessionStore?.append(sessionId, notification);
+    this.sessionStore?.appendSessionNotification(sessionId, notification);
   }
 
   async initialize(request: InitializeRequest): Promise<InitializeResponse> {
@@ -466,6 +465,19 @@ export class ClaudeAcpAgent implements Agent {
 
     const { query, input } = this.sessions[params.sessionId];
 
+    // Capture and store user message for replay
+    for (const chunk of params.prompt) {
+      const userNotification: SessionNotification = {
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: "user_message_chunk",
+          content: chunk,
+        },
+      };
+      await this.client.sessionUpdate(userNotification);
+      this.appendNotification(params.sessionId, userNotification);
+    }
+
     input.push(promptToClaude(params));
     while (true) {
       const { value: message, done } = await query.next();
@@ -475,6 +487,8 @@ export class ClaudeAcpAgent implements Agent {
         }
         break;
       }
+      this.logger.debug("SDK message received", { type: message.type, subtype: (message as any).subtype });
+
       switch (message.type) {
         case "system":
           switch (message.subtype) {
@@ -541,6 +555,7 @@ export class ClaudeAcpAgent implements Agent {
           break;
         }
         case "stream_event": {
+          this.logger.debug("Stream event", { eventType: message.event?.type });
           for (const notification of streamEventToAcpNotifications(
             message,
             params.sessionId,
@@ -599,13 +614,9 @@ export class ClaudeAcpAgent implements Agent {
             throw RequestError.authRequired();
           }
 
-          const content =
-            message.type === "assistant"
-              ? // Handled by stream events above
-                message.message.content.filter(
-                  (item) => !["text", "thinking"].includes(item.type),
-                )
-              : message.message.content;
+          // For assistant messages, text/thinking are normally streamed via stream_event.
+          // But some gateways (like LiteLLM) don't stream, so we process all content.
+          const content = message.message.content;
 
           for (const notification of toAcpNotifications(
             content,
@@ -710,7 +721,7 @@ export class ClaudeAcpAgent implements Agent {
     let loadedHistory: SessionNotification[] = [];
     if (!this.sessions[sessionId] && persistence?.logUrl && this.sessionStore) {
       try {
-        loadedHistory = await this.sessionStore.load(persistence.logUrl);
+        loadedHistory = await this.sessionStore.loadSessionNotifications(persistence.logUrl);
       } catch (error) {
         this.logger.error("Failed to load session from S3:", error);
       }
@@ -1362,15 +1373,16 @@ export function streamEventToAcpNotifications(
   }
 }
 
-export function runAcp() {
-  const input = nodeToWebWritable(process.stdout);
-  const output = nodeToWebReadable(
-    process.stdin,
-  ) as unknown as ReadableStream<Uint8Array>;
+export type AcpConnectionConfig = {
+  sessionStore?: SessionStore;
+};
 
-  // Create SessionStore if PostHog env vars are provided
-  // This will move somewhere else later.
-  let sessionStore: SessionStore | undefined;
+export type InProcessAcpConnection = {
+  agentConnection: AgentSideConnection;
+  clientStreams: StreamPair;
+};
+
+function createSessionStoreFromEnv(): SessionStore | undefined {
   const apiUrl = process.env.POSTHOG_API_URL;
   const apiKey = process.env.POSTHOG_API_KEY;
   const projectId = process.env.POSTHOG_PROJECT_ID;
@@ -1381,12 +1393,40 @@ export function runAcp() {
       apiKey,
       projectId: parseInt(projectId, 10),
     });
-    sessionStore = new SessionStore(posthogClient);
+    return new SessionStore(posthogClient);
   }
-
-  const stream = ndJsonStream(input, output);
-  new AgentSideConnection(
-    (client) => new ClaudeAcpAgent(client, sessionStore),
-    stream,
-  );
+  return undefined;
 }
+
+export function createAcpConnection(
+  config: AcpConnectionConfig = {},
+): InProcessAcpConnection {
+  const streams = createBidirectionalStreams();
+  const sessionStore = config.sessionStore ?? createSessionStoreFromEnv();
+
+  const agentStream = ndJsonStream(streams.agent.writable, streams.agent.readable);
+  const agentConnection = new AgentSideConnection(
+    (client) => new ClaudeAcpAgent(client, sessionStore),
+    agentStream,
+  );
+
+  return {
+    agentConnection,
+    clientStreams: streams.client,
+  };
+}
+
+// export function runAcp(): AgentSideConnection {
+//   const input = nodeToWebWritable(process.stdout);
+//   const output = nodeToWebReadable(
+//     process.stdin,
+//   ) as unknown as ReadableStream<Uint8Array>;
+
+//   const sessionStore = createSessionStoreFromEnv();
+
+//   const stream = ndJsonStream(input, output);
+//   return new AgentSideConnection(
+//     (client) => new ClaudeAcpAgent(client, sessionStore),
+//     stream,
+//   );
+// }

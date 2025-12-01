@@ -90,12 +90,6 @@ async function testAgent() {
     posthogProjectId: process.env.POSTHOG_PROJECT_ID
       ? parseInt(process.env.POSTHOG_PROJECT_ID, 10)
       : 1,
-    onEvent: (event) => {
-      if (event.type === "token") {
-        return;
-      }
-      console.log(`[event:${event.type}]`, event);
-    },
     debug: true,
   });
 
