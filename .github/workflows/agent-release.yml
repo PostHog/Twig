@@ -59,5 +59,3 @@ jobs:
       - name: Publish the package to npm registry
         working-directory: packages/agent
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
