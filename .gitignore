@@ -34,3 +34,6 @@ AGENTS.md
 **.car
 
 .envrc
+
+# Session store used for example-client.ts
+.session-store.json

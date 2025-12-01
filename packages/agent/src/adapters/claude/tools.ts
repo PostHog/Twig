@@ -582,7 +582,9 @@ export const registerHookCallback = (
 
 /* A callback for Claude Code that is called when receiving a PostToolUse hook */
 export const createPostToolUseHook =
-  (logger: Logger = new Logger({ prefix: "[createPostToolUseHook]" })): HookCallback =>
+  (
+    logger: Logger = new Logger({ prefix: "[createPostToolUseHook]" }),
+  ): HookCallback =>
   async (
     input: HookInput,
     toolUseID: string | undefined,
