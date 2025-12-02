@@ -4,6 +4,7 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { Task } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { expandTildePath } from "@utils/path";
+import { getTaskRepository } from "@utils/repository";
 import { useEffect, useMemo } from "react";
 
 interface UseTaskDataParams {
@@ -14,7 +15,6 @@ interface UseTaskDataParams {
 export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
   const { data: tasks = [] } = useTasks();
   const { defaultWorkspace } = useAuthStore();
-  const getTaskState = useTaskExecutionStore((state) => state.getTaskState);
   const initializeRepoPath = useTaskExecutionStore(
     (state) => state.initializeRepoPath,
   );
@@ -29,29 +29,37 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     initializeRepoPath(taskId, task);
   }, [initializeRepoPath, taskId, task]);
 
-  const taskState = getTaskState(taskId);
+  // Subscribe to specific fields reactively to avoid unnecessary rerenders
+  const repoPath = useTaskExecutionStore(
+    (state) => state.taskStates[taskId]?.repoPath ?? null,
+  );
+  const repoExists = useTaskExecutionStore(
+    (state) => state.taskStates[taskId]?.repoExists ?? null,
+  );
 
-  // Use the stored repoPath from taskState if available, otherwise fall back to derived path
+  const repository = getTaskRepository(task);
+
+  // Use the stored repoPath if available, otherwise fall back to derived path
   const derivedPath = useMemo(() => {
     // Prioritize the stored repoPath
-    if (taskState.repoPath) {
-      return taskState.repoPath;
+    if (repoPath) {
+      return repoPath;
     }
 
     // Fall back to deriving from workspace + repository (legacy behavior)
-    if (!task.repository || !defaultWorkspace) return null;
+    if (!repository || !defaultWorkspace) return null;
     const expandedWorkspace = expandTildePath(defaultWorkspace);
-    return `${expandedWorkspace}/${task.repository.split("/")[1]}`;
-  }, [taskState.repoPath, task.repository, defaultWorkspace]);
+    return `${expandedWorkspace}/${repository.split("/")[1]}`;
+  }, [repoPath, repository, defaultWorkspace]);
 
   const isCloning = cloneStore((state) =>
-    task.repository ? state.isCloning(task.repository) : false,
+    repository ? state.isCloning(repository) : false,
   );
 
   const cloneProgress = cloneStore(
     (state) => {
-      if (!task.repository) return null;
-      const cloneOp = state.getCloneForRepo(task.repository);
+      if (!repository) return null;
+      const cloneOp = state.getCloneForRepo(repository);
       if (!cloneOp?.latestMessage) return null;
 
       const percentMatch = cloneOp.latestMessage.match(/(\d+)%/);
@@ -67,8 +75,8 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
 
   return {
     task,
-    repoPath: taskState.repoPath,
-    repoExists: taskState.repoExists,
+    repoPath,
+    repoExists,
     derivedPath,
     isCloning,
     cloneProgress,

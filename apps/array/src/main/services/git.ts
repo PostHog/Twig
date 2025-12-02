@@ -439,8 +439,8 @@ export function registerGitIpc(
       }
 
       const matches =
-        detected.organization === expectedOrg &&
-        detected.repository === expectedRepo;
+        detected.organization.toLowerCase() === expectedOrg.toLowerCase() &&
+        detected.repository.toLowerCase() === expectedRepo.toLowerCase();
 
       return {
         valid: matches,
@@ -610,6 +610,16 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<DiffStats> => {
       return getDiffStats(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-current-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string | undefined> => {
+      return getCurrentBranch(directoryPath);
     },
   );
 }

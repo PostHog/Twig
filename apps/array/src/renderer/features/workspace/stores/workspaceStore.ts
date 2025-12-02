@@ -1,8 +1,10 @@
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type {
   CreateWorkspaceOptions,
   ScriptExecutionResult,
   Workspace,
   WorkspaceInfo,
+  WorkspaceMode,
   WorkspaceTerminalInfo,
 } from "@shared/types";
 import type { StoreApi, UseBoundStore } from "zustand";
@@ -39,6 +41,12 @@ interface WorkspaceState {
   deleteWorkspace: (taskId: string, mainRepoPath: string) => Promise<void>;
   verifyWorkspace: (taskId: string) => Promise<boolean>;
 
+  ensureWorkspace: (
+    taskId: string,
+    repoPath: string,
+    mode?: WorkspaceMode,
+  ) => Promise<Workspace>;
+
   // Operations
   runStartScripts: (taskId: string) => Promise<ScriptExecutionResult>;
   isWorkspaceRunning: (taskId: string) => Promise<boolean>;
@@ -66,11 +74,12 @@ function workspaceInfoToWorkspace(
     taskId: info.taskId,
     folderId,
     folderPath,
-    worktreePath: info.worktree.worktreePath,
-    worktreeName: info.worktree.worktreeName,
-    branchName: info.worktree.branchName,
-    baseBranch: info.worktree.baseBranch,
-    createdAt: info.worktree.createdAt,
+    mode: info.mode,
+    worktreePath: info.worktree?.worktreePath ?? null,
+    worktreeName: info.worktree?.worktreeName ?? null,
+    branchName: info.worktree?.branchName ?? null,
+    baseBranch: info.worktree?.baseBranch ?? null,
+    createdAt: info.worktree?.createdAt ?? new Date().toISOString(),
     terminalSessionIds: info.terminalSessionIds,
     hasStartScripts: info.hasStartScripts,
   };
@@ -153,6 +162,90 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       return exists ?? false;
     },
 
+    ensureWorkspace: async (
+      taskId: string,
+      repoPath: string,
+      mode: WorkspaceMode = "worktree",
+    ) => {
+      // Return existing workspace if it exists
+      const existing = get().workspaces[taskId];
+      if (existing) {
+        return existing;
+      }
+
+      // Atomically check if creating and set if not - this prevents race conditions
+      let wasAlreadyCreating = false;
+      set((state) => {
+        if (state.isCreating[taskId]) {
+          wasAlreadyCreating = true;
+          return state; // No change
+        }
+        // Set creating flag atomically with the check
+        return {
+          ...state,
+          isCreating: { ...state.isCreating, [taskId]: true },
+        };
+      });
+
+      if (wasAlreadyCreating) {
+        // Wait for creation to complete and return the workspace
+        return new Promise((resolve, reject) => {
+          const checkInterval = setInterval(() => {
+            const current = get();
+            if (!current.isCreating[taskId]) {
+              clearInterval(checkInterval);
+              const workspace = current.workspaces[taskId];
+              if (workspace) {
+                resolve(workspace);
+              } else {
+                reject(new Error("Workspace creation failed"));
+              }
+            }
+          }, 100);
+        });
+      }
+
+      try {
+        // Ensure folder is registered
+        const { getFolderByPath, addFolder } =
+          useRegisteredFoldersStore.getState();
+        let folder = getFolderByPath(repoPath);
+        if (!folder) {
+          folder = await addFolder(repoPath);
+        }
+
+        const workspaceInfo = await window.electronAPI?.workspace.create({
+          taskId,
+          mainRepoPath: repoPath,
+          folderId: folder.id,
+          folderPath: repoPath,
+          mode,
+        });
+
+        if (!workspaceInfo) {
+          throw new Error("Failed to create workspace");
+        }
+
+        const workspace = workspaceInfoToWorkspace(
+          workspaceInfo,
+          folder.id,
+          repoPath,
+        );
+
+        set((state) => ({
+          workspaces: { ...state.workspaces, [taskId]: workspace },
+          isCreating: { ...state.isCreating, [taskId]: false },
+        }));
+
+        return workspace;
+      } catch (error) {
+        set((state) => ({
+          isCreating: { ...state.isCreating, [taskId]: false },
+        }));
+        throw error;
+      }
+    },
+
     runStartScripts: async (taskId: string) => {
       const workspace = get().workspaces[taskId];
       if (!workspace) {
@@ -163,10 +256,15 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
         };
       }
 
+      // Use worktreePath for worktree mode, folderPath for root mode
+      const scriptPath = workspace.worktreePath ?? workspace.folderPath;
+      const scriptName =
+        workspace.worktreeName ?? workspace.folderPath.split("/").pop() ?? "";
+
       const result = await window.electronAPI?.workspace.runStart(
         taskId,
-        workspace.worktreePath,
-        workspace.worktreeName,
+        scriptPath,
+        scriptName,
       );
       return (
         result ?? {
@@ -194,7 +292,10 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     },
 
     getWorktreePath: (taskId: string) => {
-      return get().workspaces[taskId]?.worktreePath ?? null;
+      const workspace = get().workspaces[taskId];
+      if (!workspace) return null;
+      // In root mode, return folderPath; in worktree mode, return worktreePath
+      return workspace.worktreePath ?? workspace.folderPath;
     },
 
     getWorktreeName: (taskId: string) => {
@@ -235,8 +336,13 @@ export const useWorkspaceStore = createSelectors(useWorkspaceStoreBase);
 export const selectWorkspace = (taskId: string) => (state: WorkspaceState) =>
   state.workspaces[taskId];
 
-export const selectWorktreePath = (taskId: string) => (state: WorkspaceState) =>
-  state.workspaces[taskId]?.worktreePath;
+export const selectWorktreePath =
+  (taskId: string) => (state: WorkspaceState) => {
+    const workspace = state.workspaces[taskId];
+    if (!workspace) return undefined;
+    // In root mode, return folderPath; in worktree mode, return worktreePath
+    return workspace.worktreePath ?? workspace.folderPath;
+  };
 
 export const selectWorktreeName = (taskId: string) => (state: WorkspaceState) =>
   state.workspaces[taskId]?.worktreeName;

@@ -73,8 +73,9 @@ function SidebarMenuComponent() {
   const handleTaskContextMenu = (taskId: string, e: React.MouseEvent) => {
     const task = taskMap.get(taskId);
     if (task) {
-      const worktreePath = workspaces[taskId]?.worktreePath;
-      showContextMenu(task, e, worktreePath);
+      const workspace = workspaces[taskId];
+      const effectivePath = workspace?.worktreePath ?? workspace?.folderPath;
+      showContextMenu(task, e, effectivePath ?? undefined);
     }
   };
 
@@ -173,8 +174,11 @@ function SidebarMenuComponent() {
                   label={task.title}
                   status={task.status}
                   isActive={sidebarData.activeTaskId === task.id}
-                  worktreeName={workspaces[task.id]?.worktreeName}
-                  worktreePath={workspaces[task.id]?.worktreePath}
+                  worktreeName={workspaces[task.id]?.worktreeName ?? undefined}
+                  worktreePath={
+                    workspaces[task.id]?.worktreePath ??
+                    workspaces[task.id]?.folderPath
+                  }
                   onClick={() => handleTaskClick(task.id)}
                   onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
                 />

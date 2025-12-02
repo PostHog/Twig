@@ -64,22 +64,24 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   const headerContent = useMemo(
     () => (
-      <>
-        <Flex align="center" gap="2">
+      <Flex align="center" justify="between" gap="2" width="100%">
+        <Flex align="center" gap="2" minWidth="0">
           <Code size="2" color="gray" variant="ghost" style={{ flexShrink: 0 }}>
             {task.slug}
           </Code>
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
-          <ExternalAppsOpener
-            targetPath={effectiveRepoPath}
-            label={workspace?.worktreeName}
-          />
           <StartWorkspaceButton taskId={taskId} />
         </Flex>
-        <ChangesTabBadge taskId={taskId} task={task} />
-      </>
+        <Flex align="center" gap="2" flexShrink="0">
+          <ChangesTabBadge taskId={taskId} task={task} />
+          <ExternalAppsOpener
+            targetPath={effectiveRepoPath}
+            label={workspace?.worktreeName ?? undefined}
+          />
+        </Flex>
+      </Flex>
     ),
     [task.slug, task.title, workspace, taskId, task, effectiveRepoPath],
   );

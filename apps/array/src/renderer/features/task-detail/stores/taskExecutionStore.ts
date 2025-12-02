@@ -4,6 +4,7 @@ import type { Task } from "@shared/types";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { expandTildePath } from "@utils/path";
+import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -84,18 +85,18 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       },
 
       initializeRepoPath: (taskId: string, task: Task) => {
+        const repository = getTaskRepository(task);
+
         const store = get();
         const taskState = store.getTaskState(taskId);
 
         if (taskState.repoPath) {
-          if (task.repository) {
+          if (repository) {
             const currentWorkspaceRepo =
               repositoryWorkspaceStore.getState().selectedRepository;
 
-            if (task.repository !== currentWorkspaceRepo) {
-              repositoryWorkspaceStore
-                .getState()
-                .selectRepository(task.repository);
+            if (repository !== currentWorkspaceRepo) {
+              repositoryWorkspaceStore.getState().selectRepository(repository);
             }
           }
           return;
@@ -103,14 +104,12 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
 
         const storedDirectory = useTaskDirectoryStore
           .getState()
-          .getTaskDirectory(taskId, task.repository ?? undefined);
+          .getTaskDirectory(taskId, repository ?? undefined);
         if (storedDirectory) {
           void store.setRepoPath(taskId, storedDirectory);
 
-          if (task.repository) {
-            repositoryWorkspaceStore
-              .getState()
-              .selectRepository(task.repository);
+          if (repository) {
+            repositoryWorkspaceStore.getState().selectRepository(repository);
           }
 
           window.electronAPI
@@ -124,18 +123,21 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
           return;
         }
 
-        if (!task.repository) return;
+        if (!repository) {
+          return;
+        }
 
         const { defaultWorkspace } = useAuthStore.getState();
-        if (!defaultWorkspace) return;
 
-        const path = derivePath(
-          defaultWorkspace,
-          task.repository.split("/")[1],
-        );
+        if (!defaultWorkspace) {
+          return;
+        }
+
+        const path = derivePath(defaultWorkspace, repository.split("/")[1]);
+
         void store.setRepoPath(taskId, path);
 
-        repositoryWorkspaceStore.getState().selectRepository(task.repository);
+        repositoryWorkspaceStore.getState().selectRepository(repository);
 
         window.electronAPI
           ?.validateRepo(path)

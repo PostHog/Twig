@@ -14,10 +14,13 @@ export interface WorktreeInfo {
   createdAt: string;
 }
 
+export type WorkspaceMode = "worktree" | "root";
+
 export interface TaskFolderAssociation {
   taskId: string;
   folderId: string;
   folderPath: string;
+  mode: WorkspaceMode;
   worktree?: WorktreeInfo;
 }
 
@@ -32,7 +35,8 @@ export interface ArrayConfig {
 
 export interface WorkspaceInfo {
   taskId: string;
-  worktree: WorktreeInfo;
+  mode: WorkspaceMode;
+  worktree: WorktreeInfo | null;
   terminalSessionIds: string[];
   hasStartScripts?: boolean;
 }
@@ -41,10 +45,11 @@ export interface Workspace {
   taskId: string;
   folderId: string;
   folderPath: string;
-  worktreePath: string;
-  worktreeName: string;
-  branchName: string;
-  baseBranch: string;
+  mode: WorkspaceMode;
+  worktreePath: string | null;
+  worktreeName: string | null;
+  branchName: string | null;
+  baseBranch: string | null;
   createdAt: string;
   terminalSessionIds: string[];
   hasStartScripts?: boolean;
@@ -64,6 +69,7 @@ export interface CreateWorkspaceOptions {
   mainRepoPath: string;
   folderId: string;
   folderPath: string;
+  mode: WorkspaceMode;
 }
 
 export interface ScriptExecutionResult {

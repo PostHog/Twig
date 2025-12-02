@@ -186,6 +186,7 @@ declare global {
       linesAdded: number;
       linesRemoved: number;
     }>;
+    getCurrentBranch: (repoPath: string) => Promise<string | undefined>;
     listDirectory: (
       dirPath: string,
     ) => Promise<

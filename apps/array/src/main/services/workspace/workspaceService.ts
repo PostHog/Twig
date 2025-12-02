@@ -82,10 +82,99 @@ export class WorkspaceService {
   async createWorkspace(
     options: CreateWorkspaceOptions,
   ): Promise<WorkspaceInfo> {
-    const { taskId, mainRepoPath, folderId, folderPath } = options;
-    log.info(`Creating workspace for task ${taskId} in ${mainRepoPath}`);
+    const { taskId, mainRepoPath, folderId, folderPath, mode } = options;
+    log.info(
+      `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode})`,
+    );
 
-    // Create worktree using configured location
+    // Root mode: skip worktree creation entirely
+    if (mode === "root") {
+      // Save task association without worktree
+      const associations = getTaskAssociations();
+      const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+      const association: TaskFolderAssociation = {
+        taskId,
+        folderId,
+        folderPath,
+        mode,
+      };
+
+      if (existingIndex >= 0) {
+        associations[existingIndex] = association;
+      } else {
+        associations.push(association);
+      }
+      foldersStore.set("taskAssociations", associations);
+
+      // Load config and run scripts from main repo
+      const { config } = await loadConfig(
+        folderPath,
+        path.basename(folderPath),
+      );
+      let terminalSessionIds: string[] = [];
+
+      // Run init scripts
+      const initScripts = normalizeScripts(config?.scripts?.init);
+      if (initScripts.length > 0) {
+        log.info(
+          `Running ${initScripts.length} init script(s) for task ${taskId} (root mode)`,
+        );
+        const initResult = await this.scriptRunner.executeScriptsWithTerminal(
+          taskId,
+          initScripts,
+          "init",
+          folderPath,
+          { failFast: true },
+        );
+        terminalSessionIds = initResult.terminalSessionIds;
+
+        if (!initResult.success) {
+          log.error(`Init scripts failed for task ${taskId}`);
+          throw new Error(
+            `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
+          );
+        }
+      }
+
+      // Run start scripts
+      const startScripts = normalizeScripts(config?.scripts?.start);
+      if (startScripts.length > 0) {
+        log.info(
+          `Running ${startScripts.length} start script(s) for task ${taskId} (root mode)`,
+        );
+        const startResult = await this.scriptRunner.executeScriptsWithTerminal(
+          taskId,
+          startScripts,
+          "start",
+          folderPath,
+          { failFast: false },
+        );
+        terminalSessionIds = [
+          ...terminalSessionIds,
+          ...startResult.terminalSessionIds,
+        ];
+
+        if (!startResult.success) {
+          log.warn(
+            `Some start scripts failed for task ${taskId}: ${startResult.errors?.join(", ")}`,
+          );
+          this.emitWorkspaceError(
+            taskId,
+            `Start scripts failed: ${startResult.errors?.join(", ")}`,
+          );
+        }
+      }
+
+      return {
+        taskId,
+        mode,
+        worktree: null,
+        terminalSessionIds,
+        hasStartScripts: startScripts.length > 0,
+      };
+    }
+
+    // Worktree mode: create isolated worktree
     const worktreeBasePath = getWorktreeLocation();
     const worktreeManager = new WorktreeManager({
       mainRepoPath,
@@ -126,6 +215,7 @@ export class WorkspaceService {
       taskId,
       folderId,
       folderPath,
+      mode,
       worktree,
     };
 
@@ -204,6 +294,7 @@ export class WorkspaceService {
 
     return {
       taskId,
+      mode,
       worktree,
       terminalSessionIds,
       hasStartScripts: startScripts.length > 0,
@@ -214,56 +305,82 @@ export class WorkspaceService {
     log.info(`Deleting workspace for task ${taskId}`);
 
     const association = findTaskAssociation(taskId);
-    if (!association?.worktree) {
+    if (!association) {
       log.warn(`No workspace found for task ${taskId}`);
       return;
     }
 
-    const worktreePath = association.worktree.worktreePath;
-    const worktreeName = association.worktree.worktreeName;
     const folderId = association.folderId;
     const folderPath = association.folderPath;
+    const isWorktreeMode =
+      association.mode === "worktree" && association.worktree;
+
+    // Determine script execution path
+    const scriptPath = isWorktreeMode
+      ? association.worktree?.worktreePath
+      : folderPath;
+    const scriptName = isWorktreeMode
+      ? association.worktree?.worktreeName
+      : path.basename(folderPath);
 
     // Load config and run destroy scripts (silent)
-    const { config } = await loadConfig(worktreePath, worktreeName);
-    const destroyScripts = normalizeScripts(config?.scripts?.destroy);
+    if (scriptPath && scriptName) {
+      const { config } = await loadConfig(scriptPath, scriptName);
+      const destroyScripts = normalizeScripts(config?.scripts?.destroy);
 
-    if (destroyScripts.length > 0) {
-      log.info(
-        `Running ${destroyScripts.length} destroy script(s) for task ${taskId}`,
-      );
-      const destroyResult = await this.scriptRunner.executeScriptsSilent(
-        destroyScripts,
-        worktreePath,
-      );
+      if (destroyScripts.length > 0) {
+        log.info(
+          `Running ${destroyScripts.length} destroy script(s) for task ${taskId}`,
+        );
+        const destroyResult = await this.scriptRunner.executeScriptsSilent(
+          destroyScripts,
+          scriptPath,
+        );
 
-      if (!destroyResult.success) {
-        log.warn(
-          `Some destroy scripts failed for task ${taskId}: ${destroyResult.errors.join(", ")}`,
-        );
-        this.emitWorkspaceError(
-          taskId,
-          `Destroy scripts failed: ${destroyResult.errors.join(", ")}`,
-        );
+        if (!destroyResult.success) {
+          log.warn(
+            `Some destroy scripts failed for task ${taskId}: ${destroyResult.errors.join(", ")}`,
+          );
+          this.emitWorkspaceError(
+            taskId,
+            `Destroy scripts failed: ${destroyResult.errors.join(", ")}`,
+          );
+        }
       }
     }
 
     // Cleanup terminal sessions
     cleanupWorkspaceSessions(taskId);
 
-    // Delete worktree
-    await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
+    // Only delete worktree if in worktree mode
+    if (isWorktreeMode && association.worktree?.worktreePath) {
+      await this.cleanupWorktree(
+        taskId,
+        mainRepoPath,
+        association.worktree.worktreePath,
+      );
 
-    // Check if any other workspaces remain for this folder
-    const otherWorkspacesForFolder = getTaskAssociations().filter(
-      (a) => a.folderId === folderId && a.worktree,
-    );
+      // Check if any other workspaces remain for this folder
+      const otherWorkspacesForFolder = getTaskAssociations().filter(
+        (a) => a.folderId === folderId && a.worktree,
+      );
 
-    if (otherWorkspacesForFolder.length === 0) {
-      await this.cleanupRepoWorktreeFolder(folderPath);
+      if (otherWorkspacesForFolder.length === 0) {
+        await this.cleanupRepoWorktreeFolder(folderPath);
+      }
+    } else {
+      // Root mode: just remove the association
+      this.removeTaskAssociation(taskId);
     }
 
     log.info(`Workspace deleted for task ${taskId}`);
+  }
+
+  private removeTaskAssociation(taskId: string): void {
+    const associations = getTaskAssociations().filter(
+      (a) => a.taskId !== taskId,
+    );
+    foldersStore.set("taskAssociations", associations);
   }
 
   private async cleanupRepoWorktreeFolder(folderPath: string): Promise<void> {
@@ -288,7 +405,24 @@ export class WorkspaceService {
 
   async verifyWorkspaceExists(taskId: string): Promise<boolean> {
     const association = findTaskAssociation(taskId);
-    if (!association?.worktree) {
+    if (!association) {
+      return false;
+    }
+
+    // Root mode: check if folder still exists
+    if (association.mode === "root") {
+      const exists = fs.existsSync(association.folderPath);
+      if (!exists) {
+        log.info(
+          `Folder for task ${taskId} no longer exists, removing association`,
+        );
+        this.removeTaskAssociation(taskId);
+      }
+      return exists;
+    }
+
+    // Worktree mode: check if worktree exists
+    if (!association.worktree) {
       return false;
     }
 
@@ -337,13 +471,14 @@ export class WorkspaceService {
 
   getWorkspaceInfo(taskId: string): WorkspaceInfo | null {
     const association = findTaskAssociation(taskId);
-    if (!association?.worktree) {
+    if (!association) {
       return null;
     }
 
     return {
       taskId,
-      worktree: association.worktree,
+      mode: association.mode,
+      worktree: association.worktree ?? null,
       terminalSessionIds: this.scriptRunner.getTaskSessions(taskId),
     };
   }
@@ -372,26 +507,33 @@ export class WorkspaceService {
     const workspaces: Record<string, Workspace> = {};
 
     for (const assoc of associations) {
-      if (assoc.worktree) {
-        const { config } = await loadConfig(
-          assoc.worktree.worktreePath,
-          assoc.worktree.worktreeName,
-        );
-        const startScripts = normalizeScripts(config?.scripts?.start);
+      const isWorktreeMode = assoc.mode === "worktree" && assoc.worktree;
+      const configPath = isWorktreeMode
+        ? assoc.worktree?.worktreePath
+        : assoc.folderPath;
+      const configName = isWorktreeMode
+        ? assoc.worktree?.worktreeName
+        : path.basename(assoc.folderPath);
 
-        workspaces[assoc.taskId] = {
-          taskId: assoc.taskId,
-          folderId: assoc.folderId,
-          folderPath: assoc.folderPath,
-          worktreePath: assoc.worktree.worktreePath,
-          worktreeName: assoc.worktree.worktreeName,
-          branchName: assoc.worktree.branchName,
-          baseBranch: assoc.worktree.baseBranch,
-          createdAt: assoc.worktree.createdAt,
-          terminalSessionIds: this.scriptRunner.getTaskSessions(assoc.taskId),
-          hasStartScripts: startScripts.length > 0,
-        };
+      let startScripts: string[] = [];
+      if (configPath && configName) {
+        const { config } = await loadConfig(configPath, configName);
+        startScripts = normalizeScripts(config?.scripts?.start);
       }
+
+      workspaces[assoc.taskId] = {
+        taskId: assoc.taskId,
+        folderId: assoc.folderId,
+        folderPath: assoc.folderPath,
+        mode: assoc.mode,
+        worktreePath: assoc.worktree?.worktreePath ?? null,
+        worktreeName: assoc.worktree?.worktreeName ?? null,
+        branchName: assoc.worktree?.branchName ?? null,
+        baseBranch: assoc.worktree?.baseBranch ?? null,
+        createdAt: assoc.worktree?.createdAt ?? new Date().toISOString(),
+        terminalSessionIds: this.scriptRunner.getTaskSessions(assoc.taskId),
+        hasStartScripts: startScripts.length > 0,
+      };
     }
 
     return workspaces;

@@ -30,7 +30,11 @@ export function useTasks(filters?: { repository?: string }) {
 export function useCreateTask() {
   const queryClient = useQueryClient();
 
-  return useAuthenticatedMutation(
+  const invalidateTasks = () => {
+    queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+  };
+
+  const mutation = useAuthenticatedMutation(
     (
       client,
       {
@@ -49,9 +53,6 @@ export function useCreateTask() {
       }) as unknown as Promise<Task>,
     {
       onSuccess: (_task, variables) => {
-        queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-
-        // Track task creation
         track(ANALYTICS_EVENTS.TASK_CREATED, {
           auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
@@ -60,6 +61,8 @@ export function useCreateTask() {
       },
     },
   );
+
+  return { ...mutation, invalidateTasks };
 }
 
 export function useUpdateTask() {

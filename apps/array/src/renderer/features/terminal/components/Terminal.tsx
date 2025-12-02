@@ -115,6 +115,10 @@ export function Terminal({
     }
 
     let isMounted = true;
+    log.debug(
+      "[TERMINAL DEBUG] Creating new XTerm instance for sessionId:",
+      sessionId,
+    );
 
     const term = new XTerm({
       cursorBlink: true,
@@ -229,6 +233,7 @@ export function Terminal({
     initializeSession();
 
     return () => {
+      log.debug("[TERMINAL DEBUG] Cleanup running for sessionId:", sessionId);
       isMounted = false;
 
       if (saveTimeoutRef.current) {
@@ -256,11 +261,11 @@ export function Terminal({
     cwd,
     createSession,
     persistState,
-    initialState,
     onReady,
     onExit,
     onStateChange,
     isDarkMode,
+    initialState,
   ]);
 
   // Update theme when it changes

@@ -266,6 +266,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     linesAdded: number;
     linesRemoved: number;
   }> => ipcRenderer.invoke("get-diff-stats", repoPath),
+  getCurrentBranch: (repoPath: string): Promise<string | undefined> =>
+    ipcRenderer.invoke("get-current-branch", repoPath),
   listDirectory: (
     dirPath: string,
   ): Promise<

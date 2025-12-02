@@ -6,7 +6,10 @@ import { filtersMatch } from "@lib/filters";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RegisteredFolder, Task, Workspace } from "@shared/types";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { parseRepository } from "@/renderer/utils/repository";
+import {
+  getTaskRepository,
+  parseRepository,
+} from "@/renderer/utils/repository";
 import type { TaskStatus } from "../types";
 
 export interface TaskView {
@@ -59,11 +62,12 @@ interface UseSidebarDataProps {
 function buildRepositoryMap(tasks: Task[]): Repository[] {
   const repositoryMap = new Map<string, Repository>();
   for (const task of tasks) {
-    if (task.repository) {
-      const parsed = parseRepository(task.repository);
+    const repository = getTaskRepository(task);
+    if (repository) {
+      const parsed = parseRepository(repository);
       if (parsed) {
-        repositoryMap.set(task.repository, {
-          fullPath: task.repository,
+        repositoryMap.set(repository, {
+          fullPath: repository,
           name: parsed.repoName,
         });
       }

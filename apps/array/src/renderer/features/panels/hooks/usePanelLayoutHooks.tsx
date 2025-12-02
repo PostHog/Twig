@@ -78,10 +78,10 @@ export function useTabInjection(
   closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId),
+  const storedRepoPath = useTaskExecutionStore(
+    (state) => state.taskStates[taskId]?.repoPath ?? null,
   );
-  const repoPath = worktreePath || taskState.repoPath || "";
+  const repoPath = worktreePath || storedRepoPath || "";
 
   return useMemo(
     () =>

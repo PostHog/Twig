@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { secureRandomString } from "@/renderer/utils/random";
 import { useTerminalStore } from "../stores/terminalStore";
 import { Terminal } from "./Terminal";
@@ -9,25 +9,30 @@ interface ShellTerminalProps {
 }
 
 export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
-  const terminalStore = useTerminalStore();
   const persistenceKey = stateKey || cwd || "default";
+  const renderCount = useRef(0);
+  renderCount.current++;
 
-  const savedState = terminalStore.getTerminalState(persistenceKey);
+  const savedState = useTerminalStore(
+    (state) => state.terminalStates[persistenceKey],
+  );
 
   const sessionId = useMemo(() => {
     if (savedState?.sessionId) {
       return savedState.sessionId;
     }
     const newId = `shell-${Date.now()}-${secureRandomString(7)}`;
-    terminalStore.setSessionId(persistenceKey, newId);
+    useTerminalStore.getState().setSessionId(persistenceKey, newId);
     return newId;
-  }, [savedState?.sessionId, persistenceKey, terminalStore]);
+  }, [savedState?.sessionId, persistenceKey]);
 
   const handleStateChange = useCallback(
     (serializedState: string) => {
-      terminalStore.setSerializedState(persistenceKey, serializedState);
+      useTerminalStore
+        .getState()
+        .setSerializedState(persistenceKey, serializedState);
     },
-    [persistenceKey, terminalStore],
+    [persistenceKey],
   );
 
   return (
