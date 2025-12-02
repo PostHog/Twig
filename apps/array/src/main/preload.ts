@@ -128,10 +128,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("clear-repo-file-cache", repoPath),
   agentStart: async (
     params: AgentStartParams,
-  ): Promise<{ taskId: string; channel: string }> =>
+  ): Promise<{ sessionId: string; channel: string }> =>
     ipcRenderer.invoke("agent-start", params),
-  agentCancel: async (taskId: string): Promise<boolean> =>
-    ipcRenderer.invoke("agent-cancel", taskId),
+  agentPrompt: async (
+    sessionId: string,
+    text: string,
+  ): Promise<{ stopReason: string }> =>
+    ipcRenderer.invoke("agent-prompt", sessionId, text),
+  agentCancel: async (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke("agent-cancel", sessionId),
+  agentListSessions: async (
+    taskId?: string,
+  ): Promise<
+    Array<{
+      sessionId: string;
+      acpSessionId: string;
+      channel: string;
+      taskId: string;
+    }>
+  > => ipcRenderer.invoke("agent-list-sessions", taskId),
+  agentLoadSession: async (sessionId: string, cwd: string): Promise<boolean> =>
+    ipcRenderer.invoke("agent-load-session", sessionId, cwd),
+  agentReconnect: async (params: {
+    taskId: string;
+    taskRunId: string;
+    repoPath: string;
+    apiKey: string;
+    apiHost: string;
+    projectId: number;
+    logUrl?: string;
+  }): Promise<{ sessionId: string; channel: string } | null> =>
+    ipcRenderer.invoke("agent-reconnect", params),
   onAgentEvent: (
     channel: string,
     listener: (payload: unknown) => void,

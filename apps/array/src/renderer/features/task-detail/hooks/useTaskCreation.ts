@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { tiptapToMarkdown } from "@features/editor/utils/tiptap-converter";
+import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
@@ -23,15 +24,13 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-/**
- * Hook to manage task creation and submission
- * Handles:
- * - Task creation with repo config
- * - Directory persistence
- * - Navigation to new task
- * - Auto-run logic
- * - Draft cleanup
- */
+async function startAgentSession(task: Task, repoPath: string): Promise<void> {
+  await useSessionStore.getState().connectToTask({
+    taskId: task.id,
+    repoPath,
+  });
+}
+
 export function useTaskCreation({
   editor,
   selectedDirectory,
@@ -39,12 +38,8 @@ export function useTaskCreation({
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
   const { client, isAuthenticated } = useAuthStore();
-  const {
-    setRepoPath: saveRepoPath,
-    setRunMode,
-    runTask,
-  } = useTaskExecutionStore();
-  const { autoRunTasks, defaultRunMode, lastUsedRunMode } = useSettingsStore();
+  const { setRepoPath: saveRepoPath } = useTaskExecutionStore();
+  const { autoRunTasks } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
 
   const canSubmit =
@@ -56,7 +51,6 @@ export function useTaskCreation({
     !editor.isEmpty;
 
   const handleSubmit = useCallback(async () => {
-    // TRICKY: This needs to be redefined in the callback due to a weird issue where the callback uses a stale version of canSubmit, even if its a dependency
     const canSubmit =
       !!editor &&
       isAuthenticated &&
@@ -74,7 +68,6 @@ export function useTaskCreation({
       return;
     }
 
-    // Detect repo config fresh at submit time to avoid stale closure issues
     let repository: string | undefined;
     if (selectedDirectory) {
       const detected = await window.electronAPI.detectRepo(selectedDirectory);
@@ -100,17 +93,8 @@ export function useTaskCreation({
           editor.commands.clearContent();
           clearDraft();
 
-          if (autoRunTasks) {
-            let runMode: "local" | "cloud" = "local";
-
-            if (defaultRunMode === "cloud") {
-              runMode = "cloud";
-            } else if (defaultRunMode === "last_used") {
-              runMode = lastUsedRunMode;
-            }
-
-            setRunMode(newTask.id, runMode);
-            runTask(newTask.id, newTask);
+          if (autoRunTasks && selectedDirectory) {
+            await startAgentSession(newTask, selectedDirectory);
           }
         },
         onError: (error) => {
@@ -125,10 +109,6 @@ export function useTaskCreation({
     saveRepoPath,
     navigateToTask,
     autoRunTasks,
-    defaultRunMode,
-    lastUsedRunMode,
-    setRunMode,
-    runTask,
     clearDraft,
     isCreatingTask,
     client,

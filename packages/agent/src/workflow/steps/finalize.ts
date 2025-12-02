@@ -6,14 +6,7 @@ import { finalizeStepGitActions } from "../utils.js";
 const MAX_SNIPPET_LENGTH = 1200;
 
 export const finalizeStep: WorkflowStepRunner = async ({ step, context }) => {
-  const {
-    task,
-    logger,
-    fileManager,
-    gitManager,
-    posthogAPI,
-    runId,
-  } = context;
+  const { task, logger, fileManager, gitManager, posthogAPI, runId } = context;
 
   const stepLogger = logger.child("FinalizeStep");
   const artifacts = await fileManager.collectTaskArtifacts(task.id);

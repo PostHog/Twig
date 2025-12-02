@@ -1,13 +1,11 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { LogView } from "@features/logs/components/LogView";
+import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import { InteractiveTerminal } from "@features/terminal/components/InteractiveTerminal";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
-import type { QuestionAnswer, Task } from "@shared/types";
-import { useCallback } from "react";
+import type { Task } from "@shared/types";
+import { useCallback, useEffect, useRef } from "react";
 
 const log = logger.scope("task-logs-panel");
 
@@ -20,73 +18,76 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const repoPath = taskData.repoPath;
 
-  const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId),
+  // Get session state from store
+  const session = useSessionStore((state) => state.getSessionForTask(taskId));
+  const connectToTask = useSessionStore((state) => state.connectToTask);
+  const disconnectFromTask = useSessionStore(
+    (state) => state.disconnectFromTask,
   );
+  const sendPrompt = useSessionStore((state) => state.sendPrompt);
 
-  const execution = useTaskExecution({
-    taskId,
-    task,
-    repoPath: taskData.repoPath ?? null,
-  });
+  const isRunning =
+    session?.status === "connected" || session?.status === "connecting";
 
-  const onAnswersComplete = useCallback(
-    (answers: QuestionAnswer[]) => {
-      for (const answer of answers) {
-        useTaskExecutionStore.getState().addQuestionAnswer(taskId, answer);
-      }
-      if (repoPath) {
-        window.electronAPI
-          ?.saveQuestionAnswers(repoPath, taskId, answers)
-          .then(() => {
-            useTaskExecutionStore
-              .getState()
-              .setPlanModePhase(taskId, "planning");
-            useTaskExecutionStore.getState().runTask(taskId, task);
-          })
-          .catch((error) => {
-            log.error("Failed to save answers to research.json:", error);
-          });
+  // Auto-reconnect on mount if there's a previous run
+  const hasAttemptedConnect = useRef(false);
+  useEffect(() => {
+    if (hasAttemptedConnect.current) return;
+    if (!repoPath) return;
+    if (session) return; // Already have a session
+    if (!task.latest_run?.id || !task.latest_run?.log_url) return;
+
+    hasAttemptedConnect.current = true;
+
+    connectToTask({
+      taskId: task.id,
+      repoPath,
+      latestRunId: task.latest_run.id,
+      latestRunLogUrl: task.latest_run.log_url,
+    });
+  }, [task.id, task.latest_run, repoPath, session, connectToTask]);
+
+  const handleStartSession = useCallback(async () => {
+    if (!repoPath) {
+      log.error("No repo path available");
+      return;
+    }
+
+    await connectToTask({
+      taskId: task.id,
+      repoPath,
+      latestRunId: task.latest_run?.id,
+      latestRunLogUrl: task.latest_run?.log_url,
+    });
+  }, [repoPath, task.id, task.latest_run, connectToTask]);
+
+  const handleSendPrompt = useCallback(
+    async (text: string) => {
+      try {
+        const result = await sendPrompt(taskId, text);
+        log.info("Prompt completed", { stopReason: result.stopReason });
+      } catch (error) {
+        log.error("Failed to send prompt", error);
       }
     },
-    [taskId, task, repoPath],
+    [taskId, sendPrompt],
   );
 
-  const onClearLogs = useCallback(() => {
-    useTaskExecutionStore.getState().clearTaskLogs(taskId);
-  }, [taskId]);
-
-  // Show interactive questions when in questions phase
-  if (
-    taskState.planModePhase === "questions" &&
-    taskState.clarifyingQuestions.length > 0
-  ) {
-    return (
-      <BackgroundWrapper>
-        <Box height="100%" width="100%">
-          <InteractiveTerminal
-            questions={taskState.clarifyingQuestions}
-            answers={taskState.questionAnswers}
-            onAnswersComplete={onAnswersComplete}
-          />
-        </Box>
-      </BackgroundWrapper>
-    );
-  }
+  const handleCancelSession = useCallback(async () => {
+    await disconnectFromTask(taskId);
+    log.info("Agent session cancelled");
+  }, [taskId, disconnectFromTask]);
 
   return (
     <BackgroundWrapper>
       <Box height="100%" width="100%">
         <LogView
-          logs={taskState.logs}
-          isRunning={taskState.isRunning}
-          onClearLogs={onClearLogs}
-          runMode={execution.state.runMode}
-          cloneProgress={taskData.cloneProgress}
-          isCloning={taskData.isCloning}
-          onRunTask={execution.actions.run}
-          onCancelTask={execution.actions.cancel}
-          onRunModeChange={execution.actions.onRunModeChange}
+          events={session?.events ?? []}
+          sessionId={session?.taskRunId ?? null}
+          isRunning={isRunning}
+          onSendPrompt={handleSendPrompt}
+          onCancelSession={handleCancelSession}
+          onStartSession={handleStartSession}
         />
       </Box>
     </BackgroundWrapper>

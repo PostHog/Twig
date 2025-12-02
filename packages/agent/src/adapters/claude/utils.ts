@@ -179,7 +179,7 @@ export function createBidirectionalStreams(): BidirectionalStreamPair {
     close() {
       clientToAgentPushable.end();
     },
-  }) as unknown as globalThis.WritableStream<Uint8Array>;
+  }) as globalThis.WritableStream<Uint8Array>;
 
   const agentToClientWritable = new WritableStream<Uint8Array>({
     write(chunk) {
@@ -188,7 +188,7 @@ export function createBidirectionalStreams(): BidirectionalStreamPair {
     close() {
       agentToClientPushable.end();
     },
-  }) as unknown as globalThis.WritableStream<Uint8Array>;
+  }) as globalThis.WritableStream<Uint8Array>;
 
   return {
     client: {

@@ -50,10 +50,6 @@ export function registerShellIpc(): void {
           workingDir = homeDir;
         }
 
-        log.info(
-          `Creating shell session ${sessionId}: shell=${shell}, cwd=${workingDir}`,
-        );
-
         // Build environment with proper locale settings for macOS
         const env = { ...process.env } as Record<string, string>;
 

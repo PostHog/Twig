@@ -300,7 +300,9 @@ async function main() {
     },
     ...(POSTHOG_CONFIG.apiUrl && { posthogApiUrl: POSTHOG_CONFIG.apiUrl }),
     ...(POSTHOG_CONFIG.apiKey && { posthogApiKey: POSTHOG_CONFIG.apiKey }),
-    ...(POSTHOG_CONFIG.projectId && { posthogProjectId: POSTHOG_CONFIG.projectId }),
+    ...(POSTHOG_CONFIG.projectId && {
+      posthogProjectId: POSTHOG_CONFIG.projectId,
+    }),
   });
 
   if (!persistence) {
@@ -316,7 +318,10 @@ async function main() {
 
   // Create the client connection using the in-memory streams
   const client = new ExampleClient();
-  const clientStream = ndJsonStream(clientStreams.writable, clientStreams.readable);
+  const clientStream = ndJsonStream(
+    clientStreams.writable,
+    clientStreams.readable,
+  );
   const connection = new ClientSideConnection((_agent) => client, clientStream);
 
   try {

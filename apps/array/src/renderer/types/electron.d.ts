@@ -104,11 +104,33 @@ declare global {
       executionMode?: "plan";
       runMode?: "local" | "cloud";
       createPR?: boolean;
-    }) => Promise<{ taskId: string; channel: string }>;
-    agentCancel: (taskId: string) => Promise<boolean>;
+    }) => Promise<{ sessionId: string; channel: string }>;
+    agentPrompt: (
+      sessionId: string,
+      text: string,
+    ) => Promise<{ stopReason: string }>;
+    agentCancel: (sessionId: string) => Promise<boolean>;
+    agentListSessions: (taskId?: string) => Promise<
+      Array<{
+        sessionId: string;
+        acpSessionId: string;
+        channel: string;
+        taskId: string;
+      }>
+    >;
+    agentLoadSession: (sessionId: string, cwd: string) => Promise<boolean>;
+    agentReconnect: (params: {
+      taskId: string;
+      taskRunId: string;
+      repoPath: string;
+      apiKey: string;
+      apiHost: string;
+      projectId: number;
+      logUrl?: string;
+    }) => Promise<{ sessionId: string; channel: string } | null>;
     onAgentEvent: (
       channel: string,
-      listener: (event: AgentEvent) => void,
+      listener: (event: unknown) => void,
     ) => () => void;
     // Task artifact operations
     readPlanFile: (repoPath: string, taskId: string) => Promise<string | null>;

@@ -1,3 +1,10 @@
+/**
+ * The claude adapter has been based on the original claude-code-acp adapter,
+ * and could use some cleanup.
+ *
+ * https://github.com/zed-industries/claude-code-acp
+ */
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -46,12 +53,12 @@ import type {
   BetaRawContentBlockDelta,
 } from "@anthropic-ai/sdk/resources/beta.mjs";
 import { v7 as uuidv7 } from "uuid";
-import { PostHogAPIClient } from "@/posthog-api.js";
-import {
-  type SessionPersistenceConfig,
+import type {
+  SessionPersistenceConfig,
   SessionStore,
 } from "@/session-store.js";
 import { Logger } from "@/utils/logger.js";
+import { createTappedWritableStream } from "@/utils/tapped-stream.js";
 import packageJson from "../../../package.json" with { type: "json" };
 import { createMcpServer, EDIT_TOOL_NAMES, toolNames } from "./mcp-server.js";
 import {
@@ -63,10 +70,30 @@ import {
   toolUpdateFromToolResult,
 } from "./tools.js";
 import {
-  createBidirectionalStreams, Pushable,
+  createBidirectionalStreams,
+  Pushable,
   type StreamPair,
-  unreachable
+  unreachable,
 } from "./utils.js";
+
+/**
+ * Clears the statsig cache to work around a claude-agent-sdk bug where cached
+ * tool definitions include input_examples which causes API errors.
+ * See: https://github.com/anthropics/claude-code/issues/11678
+ */
+function clearStatsigCache(): void {
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+  const statsigPath = path.join(configDir, "statsig");
+
+  try {
+    if (fs.existsSync(statsigPath)) {
+      fs.rmSync(statsigPath, { recursive: true, force: true });
+    }
+  } catch {
+    // Ignore errors - cache clearing is best-effort
+  }
+}
 
 type Session = {
   query: Query;
@@ -176,10 +203,8 @@ export class ClaudeAcpAgent implements Agent {
     sessionId: string,
     notification: SessionNotification,
   ): void {
-    // In-memory (always)
+    // In-memory only - S3 persistence is now automatic via tapped stream
     this.sessions[sessionId]?.notificationHistory.push(notification);
-    // Persist via store (if registered)
-    this.sessionStore?.appendSessionNotification(sessionId, notification);
   }
 
   async initialize(request: InitializeRequest): Promise<InitializeResponse> {
@@ -217,6 +242,11 @@ export class ClaudeAcpAgent implements Agent {
           sse: true,
         },
         loadSession: true,
+        _meta: {
+          posthog: {
+            resumeSession: true,
+          },
+        },
       },
       agentInfo: {
         name: packageJson.name,
@@ -234,7 +264,10 @@ export class ClaudeAcpAgent implements Agent {
       throw RequestError.authRequired();
     }
 
-    const sessionId = uuidv7();
+    // Allow caller to specify sessionId via _meta (e.g. taskRunId in our case)
+    const sessionId =
+      (params._meta as { sessionId?: string } | undefined)?.sessionId ||
+      uuidv7();
     const input = new Pushable<SDKUserMessage>();
 
     const mcpServers: Record<string, McpServerConfig> = {};
@@ -385,6 +418,9 @@ export class ClaudeAcpAgent implements Agent {
       throw new Error("Cancelled");
     }
 
+    // Clear statsig cache before creating query to avoid input_examples bug
+    clearStatsigCache();
+
     const q = query({
       prompt: input,
       options,
@@ -487,7 +523,10 @@ export class ClaudeAcpAgent implements Agent {
         }
         break;
       }
-      this.logger.debug("SDK message received", { type: message.type, subtype: (message as any).subtype });
+      this.logger.debug("SDK message received", {
+        type: message.type,
+        subtype: (message as any).subtype,
+      });
 
       switch (message.type) {
         case "system":
@@ -708,137 +747,12 @@ export class ClaudeAcpAgent implements Agent {
     return response;
   }
 
+  /**
+   * Load session delegates to resumeSession since we have no need to replay history.
+   * Client is responsible for fetching and rendering history from S3.
+   */
   async loadSession(params: LoadSessionRequest): Promise<LoadSessionResponse> {
-    const { sessionId } = params;
-
-    // Extract persistence config and SDK session ID from _meta
-    const persistence = params._meta?.persistence as
-      | SessionPersistenceConfig
-      | undefined;
-    const sdkSessionId = params._meta?.sdkSessionId as string | undefined;
-
-    // Try to load history from S3 if session not in memory
-    let loadedHistory: SessionNotification[] = [];
-    if (!this.sessions[sessionId] && persistence?.logUrl && this.sessionStore) {
-      try {
-        loadedHistory = await this.sessionStore.loadSessionNotifications(persistence.logUrl);
-      } catch (error) {
-        this.logger.error("Failed to load session from S3:", error);
-      }
-    }
-
-    if (!this.sessions[sessionId]) {
-      const input = new Pushable<SDKUserMessage>();
-
-      const mcpServers: Record<string, McpServerConfig> = {};
-      if (Array.isArray(params.mcpServers)) {
-        for (const server of params.mcpServers) {
-          if ("type" in server) {
-            mcpServers[server.name] = {
-              type: server.type,
-              url: server.url,
-              headers: server.headers
-                ? Object.fromEntries(
-                    server.headers.map((e) => [e.name, e.value]),
-                  )
-                : undefined,
-            };
-          } else {
-            mcpServers[server.name] = {
-              type: "stdio",
-              command: server.command,
-              args: server.args,
-              env: server.env
-                ? Object.fromEntries(server.env.map((e) => [e.name, e.value]))
-                : undefined,
-            };
-          }
-        }
-      }
-
-      const server = createMcpServer(this, sessionId, this.clientCapabilities);
-      mcpServers.acp = {
-        type: "sdk",
-        name: "acp",
-        instance: server,
-      };
-
-      const permissionMode = "default";
-
-      const options: Options = {
-        cwd: params.cwd,
-        includePartialMessages: true,
-        mcpServers,
-        systemPrompt: { type: "preset", preset: "claude_code" },
-        settingSources: ["user", "project", "local"],
-        allowDangerouslySkipPermissions: !IS_ROOT,
-        permissionMode,
-        canUseTool: this.canUseTool(sessionId),
-        stderr: (err) => this.logger.error(err),
-        executable: process.execPath as any,
-        ...(process.env.CLAUDE_CODE_EXECUTABLE && {
-          pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
-        }),
-        // Resume from SDK session if available
-        ...(sdkSessionId && { resume: sdkSessionId }),
-        hooks: {
-          PostToolUse: [
-            {
-              hooks: [createPostToolUseHook(this.logger)],
-            },
-          ],
-        },
-      };
-
-      const q = query({
-        prompt: input,
-        options,
-      });
-
-      const availableCommands = await getAvailableSlashCommands(q);
-
-      const newSession = this.createSession(
-        sessionId,
-        q,
-        input,
-        permissionMode,
-      );
-
-      // Populate with history loaded from S3
-      if (loadedHistory.length > 0) {
-        newSession.notificationHistory = loadedHistory;
-      }
-
-      // Store SDK session ID if resuming
-      if (sdkSessionId) {
-        newSession.sdkSessionId = sdkSessionId;
-      }
-
-      // Register for future persistence
-      if (persistence && this.sessionStore) {
-        this.sessionStore.register(sessionId, persistence);
-      }
-
-      setTimeout(() => {
-        this.client.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "available_commands_update",
-            availableCommands,
-          },
-        });
-      }, 0);
-    }
-
-    // Replay conversation history to client
-    const session = this.sessions[sessionId];
-    if (session) {
-      for (const notification of session.notificationHistory) {
-        await this.client.sessionUpdate(notification);
-      }
-    }
-
-    return {};
+    return this.resumeSession(params);
   }
 
   canUseTool(sessionId: string): CanUseTool {
@@ -989,6 +903,143 @@ export class ClaudeAcpAgent implements Agent {
         };
       }
     };
+  }
+
+  /**
+   * Handle custom extension methods.
+   * Per ACP spec, extension methods start with underscore.
+   */
+  async extMethod(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    if (method === "_posthog/session/resume") {
+      await this.resumeSession(params as unknown as LoadSessionRequest);
+      return {};
+    }
+
+    throw RequestError.methodNotFound(method);
+  }
+
+  /**
+   * Resume a session without replaying history.
+   * Client is responsible for fetching and rendering history from S3.
+   * This basically implemetns the ACP session/resume RFD:
+   * https://agentclientprotocol.com/rfds/session-resume
+   */
+  async resumeSession(
+    params: LoadSessionRequest,
+  ): Promise<LoadSessionResponse> {
+    const { sessionId } = params;
+
+    // Extract persistence config and SDK session ID from _meta
+    const persistence = params._meta?.persistence as
+      | SessionPersistenceConfig
+      | undefined;
+    const sdkSessionId = params._meta?.sdkSessionId as string | undefined;
+
+    if (!this.sessions[sessionId]) {
+      const input = new Pushable<SDKUserMessage>();
+
+      const mcpServers: Record<string, McpServerConfig> = {};
+      if (Array.isArray(params.mcpServers)) {
+        for (const server of params.mcpServers) {
+          if ("type" in server) {
+            mcpServers[server.name] = {
+              type: server.type,
+              url: server.url,
+              headers: server.headers
+                ? Object.fromEntries(
+                    server.headers.map((e) => [e.name, e.value]),
+                  )
+                : undefined,
+            };
+          } else {
+            mcpServers[server.name] = {
+              type: "stdio",
+              command: server.command,
+              args: server.args,
+              env: server.env
+                ? Object.fromEntries(server.env.map((e) => [e.name, e.value]))
+                : undefined,
+            };
+          }
+        }
+      }
+
+      const server = createMcpServer(this, sessionId, this.clientCapabilities);
+      mcpServers.acp = {
+        type: "sdk",
+        name: "acp",
+        instance: server,
+      };
+
+      const permissionMode = "default";
+
+      const options: Options = {
+        cwd: params.cwd,
+        includePartialMessages: true,
+        mcpServers,
+        systemPrompt: { type: "preset", preset: "claude_code" },
+        settingSources: ["user", "project", "local"],
+        allowDangerouslySkipPermissions: !IS_ROOT,
+        permissionMode,
+        canUseTool: this.canUseTool(sessionId),
+        stderr: (err) => this.logger.error(err),
+        executable: process.execPath as any,
+        ...(process.env.CLAUDE_CODE_EXECUTABLE && {
+          pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
+        }),
+        // Resume from SDK session if available
+        ...(sdkSessionId && { resume: sdkSessionId }),
+        hooks: {
+          PostToolUse: [
+            {
+              hooks: [createPostToolUseHook(this.logger)],
+            },
+          ],
+        },
+      };
+
+      // Clear statsig cache before creating query to avoid input_examples bug
+      clearStatsigCache();
+
+      const q = query({
+        prompt: input,
+        options,
+      });
+
+      const availableCommands = await getAvailableSlashCommands(q);
+
+      const newSession = this.createSession(
+        sessionId,
+        q,
+        input,
+        permissionMode,
+      );
+
+      // Store SDK session ID if resuming
+      if (sdkSessionId) {
+        newSession.sdkSessionId = sdkSessionId;
+      }
+
+      // Register for future persistence
+      if (persistence && this.sessionStore) {
+        this.sessionStore.register(sessionId, persistence);
+      }
+
+      setTimeout(() => {
+        this.client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands,
+          },
+        });
+      }, 0);
+    }
+
+    return {};
   }
 }
 
@@ -1375,6 +1426,8 @@ export function streamEventToAcpNotifications(
 
 export type AcpConnectionConfig = {
   sessionStore?: SessionStore;
+  sessionId?: string;
+  taskId?: string;
 };
 
 export type InProcessAcpConnection = {
@@ -1382,29 +1435,54 @@ export type InProcessAcpConnection = {
   clientStreams: StreamPair;
 };
 
-function createSessionStoreFromEnv(): SessionStore | undefined {
-  const apiUrl = process.env.POSTHOG_API_URL;
-  const apiKey = process.env.POSTHOG_API_KEY;
-  const projectId = process.env.POSTHOG_PROJECT_ID;
-
-  if (apiUrl && apiKey && projectId) {
-    const posthogClient = new PostHogAPIClient({
-      apiUrl,
-      apiKey,
-      projectId: parseInt(projectId, 10),
-    });
-    return new SessionStore(posthogClient);
-  }
-  return undefined;
-}
-
 export function createAcpConnection(
   config: AcpConnectionConfig = {},
 ): InProcessAcpConnection {
+  const logger = new Logger({ debug: true, prefix: "[AcpConnection]" });
   const streams = createBidirectionalStreams();
-  const sessionStore = config.sessionStore ?? createSessionStoreFromEnv();
 
-  const agentStream = ndJsonStream(streams.agent.writable, streams.agent.readable);
+  const { sessionStore } = config;
+
+  // Tap both streams for automatic persistence
+  // All messages (bidirectional) will be persisted as they flow through
+  let agentWritable = streams.agent.writable;
+  let clientWritable = streams.client.writable;
+
+  if (config.sessionId && sessionStore) {
+    // Register session for persistence BEFORE tapping streams
+    // This ensures all messages from the start get persisted
+    if (!sessionStore.isRegistered(config.sessionId)) {
+      sessionStore.register(config.sessionId, {
+        taskId: config.taskId ?? config.sessionId,
+        runId: config.sessionId,
+        logUrl: "", // Will be updated when we get the real logUrl
+      });
+    }
+
+    // Tap agent→client stream
+    agentWritable = createTappedWritableStream(streams.agent.writable, {
+      onMessage: (line) => {
+        sessionStore.appendRawLine(config.sessionId!, line);
+      },
+      logger,
+    });
+
+    // Tap client→agent stream
+    clientWritable = createTappedWritableStream(streams.client.writable, {
+      onMessage: (line) => {
+        sessionStore.appendRawLine(config.sessionId!, line);
+      },
+      logger,
+    });
+  } else {
+    logger.info("Tapped streams NOT enabled", {
+      hasSessionId: !!config.sessionId,
+      hasSessionStore: !!sessionStore,
+    });
+  }
+
+  const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
+
   const agentConnection = new AgentSideConnection(
     (client) => new ClaudeAcpAgent(client, sessionStore),
     agentStream,
@@ -1412,21 +1490,9 @@ export function createAcpConnection(
 
   return {
     agentConnection,
-    clientStreams: streams.client,
+    clientStreams: {
+      readable: streams.client.readable,
+      writable: clientWritable,
+    },
   };
 }
-
-// export function runAcp(): AgentSideConnection {
-//   const input = nodeToWebWritable(process.stdout);
-//   const output = nodeToWebReadable(
-//     process.stdin,
-//   ) as unknown as ReadableStream<Uint8Array>;
-
-//   const sessionStore = createSessionStoreFromEnv();
-
-//   const stream = ndJsonStream(input, output);
-//   return new AgentSideConnection(
-//     (client) => new ClaudeAcpAgent(client, sessionStore),
-//     stream,
-//   );
-// }

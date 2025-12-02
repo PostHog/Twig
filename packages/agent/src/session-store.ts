@@ -1,11 +1,5 @@
-import type { SessionNotification } from "@agentclientprotocol/sdk";
 import type { PostHogAPIClient, TaskRunUpdate } from "./posthog-api.js";
-import type {
-  StoredEntry,
-  StoredNotification,
-  StoredSessionNotification,
-  TaskRun,
-} from "./types.js";
+import type { StoredNotification, TaskRun } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export interface SessionPersistenceConfig {
@@ -17,16 +11,17 @@ export interface SessionPersistenceConfig {
 
 export class SessionStore {
   private posthogAPI?: PostHogAPIClient;
-  private pendingNotifications: Map<string, StoredEntry[]> = new Map();
+  private pendingEntries: Map<string, StoredNotification[]> = new Map();
   private flushTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private configs: Map<string, SessionPersistenceConfig> = new Map();
   private logger: Logger;
 
   constructor(posthogAPI?: PostHogAPIClient, logger?: Logger) {
     this.posthogAPI = posthogAPI;
-    this.logger = logger ?? new Logger({ debug: false, prefix: "[SessionStore]" });
+    this.logger =
+      logger ?? new Logger({ debug: false, prefix: "[SessionStore]" });
 
-    // Flush all pending notifications on process exit
+    // Flush all pending on process exit
     const flushAllAndExit = async () => {
       const flushPromises: Promise<void>[] = [];
       for (const sessionId of this.configs.keys()) {
@@ -52,7 +47,7 @@ export class SessionStore {
     this.configs.set(sessionId, config);
   }
 
-  /** Unregister and flush pending notifications */
+  /** Unregister and flush pending */
   async unregister(sessionId: string): Promise<void> {
     await this.flush(sessionId);
     this.configs.delete(sessionId);
@@ -64,76 +59,45 @@ export class SessionStore {
   }
 
   /**
-   * Add a custom notification following ACP extensibility model.
-   * Method names should start with underscore (e.g., `_posthog/phase_start`).
+   * Append a raw JSON-RPC line for persistence.
+   * Parses and wraps as StoredNotification for the API.
    */
-  addNotification(
-    sessionId: string,
-    method: string,
-    params: Record<string, unknown>,
-  ): void {
+  appendRawLine(sessionId: string, line: string): void {
     const config = this.configs.get(sessionId);
     if (!config) {
-      this.logger.error(`Session ${sessionId} not registered for persistence`);
       return;
     }
 
-    const notification: StoredNotification = {
-      type: "notification",
-      timestamp: new Date().toISOString(),
-      notification: {
-        jsonrpc: "2.0",
-        method,
-        params,
-      },
-    };
+    try {
+      const message = JSON.parse(line);
+      const entry: StoredNotification = {
+        type: "notification",
+        timestamp: new Date().toISOString(),
+        notification: message,
+      };
 
-    const pending = this.pendingNotifications.get(sessionId) ?? [];
-    pending.push(notification);
-    this.pendingNotifications.set(sessionId, pending);
+      const pending = this.pendingEntries.get(sessionId) ?? [];
+      pending.push(entry);
+      this.pendingEntries.set(sessionId, pending);
 
-    this.scheduleFlush(sessionId);
-  }
-
-  /**
-   * Append an ACP session notification for persistence.
-   * Used to store session updates like tool_call, agent_message_chunk, etc.
-   */
-  appendSessionNotification(
-    sessionId: string,
-    notification: SessionNotification,
-  ): void {
-    const config = this.configs.get(sessionId);
-    if (!config) {
-      // Session not registered for persistence, silently skip
-      return;
+      this.scheduleFlush(sessionId);
+    } catch {
+      this.logger.warn("Failed to parse raw line for persistence", {
+        sessionId,
+        lineLength: line.length,
+      });
     }
-
-    const entry: StoredSessionNotification = {
-      type: "acp_session_notification",
-      timestamp: new Date().toISOString(),
-      notification,
-    };
-
-    const pending = this.pendingNotifications.get(sessionId) ?? [];
-    pending.push(entry);
-    this.pendingNotifications.set(sessionId, pending);
-
-    this.scheduleFlush(sessionId);
   }
 
-  /** Load entries from S3 */
-  async load(logUrl: string): Promise<StoredEntry[]> {
+  /** Load raw JSON-RPC messages from S3 */
+  async load(logUrl: string): Promise<unknown[]> {
     const response = await fetch(logUrl);
 
-    // Handle S3 errors (e.g., file doesn't exist yet)
     if (!response.ok) {
-      // 404/NoSuchKey is expected for new sessions with no logs yet
       return [];
     }
 
     const content = await response.text();
-
     if (!content.trim()) return [];
 
     return content
@@ -146,32 +110,17 @@ export class SessionStore {
           return null;
         }
       })
-      .filter(
-        (entry): entry is StoredEntry =>
-          entry?.type === "notification" ||
-          entry?.type === "acp_session_notification",
-      );
+      .filter((entry): entry is unknown => entry !== null);
   }
 
-  /** Load and extract SessionNotifications from S3 */
-  async loadSessionNotifications(logUrl: string): Promise<SessionNotification[]> {
-    const entries = await this.load(logUrl);
-    return entries
-      .filter(
-        (entry): entry is StoredSessionNotification =>
-          entry.type === "acp_session_notification",
-      )
-      .map((entry) => entry.notification);
-  }
-
-  /** Force flush pending notifications */
+  /** Force flush pending entries */
   async flush(sessionId: string): Promise<void> {
     const config = this.configs.get(sessionId);
-    const pending = this.pendingNotifications.get(sessionId);
+    const pending = this.pendingEntries.get(sessionId);
 
     if (!config || !pending?.length) return;
 
-    this.pendingNotifications.delete(sessionId);
+    this.pendingEntries.delete(sessionId);
     const timeout = this.flushTimeouts.get(sessionId);
     if (timeout) {
       clearTimeout(timeout);
@@ -184,9 +133,13 @@ export class SessionStore {
     }
 
     try {
-      await this.posthogAPI.appendTaskRunLog(config.taskId, config.runId, pending);
+      await this.posthogAPI.appendTaskRunLog(
+        config.taskId,
+        config.runId,
+        pending,
+      );
     } catch (error) {
-      this.logger.error("Failed to persist session notifications:", error);
+      this.logger.error("Failed to persist session logs:", error);
     }
   }
 
@@ -212,7 +165,9 @@ export class SessionStore {
     runId: string,
   ): Promise<TaskRun | undefined> {
     if (!this.posthogAPI) {
-      this.logger.debug("No PostHog API configured, registering session without persistence");
+      this.logger.debug(
+        "No PostHog API configured, registering session without persistence",
+      );
       this.register(sessionId, {
         taskId,
         runId,
@@ -231,29 +186,19 @@ export class SessionStore {
 
     await this.updateTaskRun(sessionId, { status: "in_progress" });
 
-    this.logger.info("Session started for persistence", {
-      sessionId,
-      taskId,
-      runId,
-      logUrl: taskRun.log_url,
-    });
-
     return taskRun;
   }
 
   /**
    * Mark a session as completed.
-   * Flushes pending notifications and updates task run status.
    */
   async complete(sessionId: string): Promise<void> {
     await this.flush(sessionId);
     await this.updateTaskRun(sessionId, { status: "completed" });
-    this.logger.info("Session completed", { sessionId });
   }
 
   /**
    * Mark a session as failed.
-   * Flushes pending notifications and updates task run status with error.
    */
   async fail(sessionId: string, error: Error | string): Promise<void> {
     await this.flush(sessionId);

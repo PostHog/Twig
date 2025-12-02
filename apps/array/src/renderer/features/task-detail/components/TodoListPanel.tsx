@@ -1,28 +1,18 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
-import { useEffect } from "react";
+
+interface TodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+}
 
 interface TodoListPanelProps {
   taskId: string;
 }
 
-export function TodoListPanel({ taskId }: TodoListPanelProps) {
-  const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId),
-  );
-  const checkTodosUpdate = useTaskExecutionStore(
-    (state) => state.checkTodosUpdate,
-  );
-
-  // Load todos from file on mount and when task changes
-  useEffect(() => {
-    if (taskState.repoPath) {
-      checkTodosUpdate(taskId);
-    }
-  }, [taskId, taskState.repoPath, checkTodosUpdate]);
-
-  const todos = taskState.todos?.items || [];
+export function TodoListPanel({ taskId: _taskId }: TodoListPanelProps) {
+  // TODO: Migrate to read todos from sessionStore events
+  const todos: TodoItem[] = [];
 
   if (todos.length === 0) {
     return <PanelMessage>No todos yet</PanelMessage>;
