@@ -6,6 +6,7 @@ import type {
   TaskContextMenuResult,
 } from "@main/services/contextMenu.types";
 import type { AgentEvent } from "@posthog/agent";
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type {
   ChangedFile,
   CreateWorkspaceOptions,
@@ -115,7 +116,7 @@ declare global {
     }) => Promise<{ sessionId: string; channel: string }>;
     agentPrompt: (
       sessionId: string,
-      text: string,
+      prompt: ContentBlock[],
     ) => Promise<{ stopReason: string }>;
     agentCancel: (sessionId: string) => Promise<boolean>;
     agentListSessions: (taskId?: string) => Promise<

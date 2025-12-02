@@ -1,5 +1,10 @@
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { tiptapToMarkdown } from "@features/editor/utils/tiptap-converter";
+import {
+  buildPromptBlocks,
+  extractFileMentions,
+  tiptapToMarkdown,
+} from "@features/editor/utils/tiptap-converter";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
@@ -26,10 +31,15 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-async function startAgentSession(task: Task, repoPath: string): Promise<void> {
+async function startAgentSession(
+  task: Task,
+  repoPath: string,
+  initialPrompt?: ContentBlock[],
+): Promise<void> {
   await useSessionStore.getState().connectToTask({
     taskId: task.id,
     repoPath,
+    initialPrompt,
   });
 }
 
@@ -71,10 +81,14 @@ export function useTaskCreation({
       return;
     }
 
-    const content = tiptapToMarkdown(editor.getJSON()).trim();
+    const editorJson = editor.getJSON();
+    const content = tiptapToMarkdown(editorJson).trim();
     if (!content) {
       return;
     }
+
+    // Extract file mentions for building prompt content blocks
+    const filePaths = extractFileMentions(editorJson);
 
     let repository: string | undefined;
     if (selectedDirectory) {
@@ -118,7 +132,13 @@ export function useTaskCreation({
           clearDraft();
 
           if (autoRunTasks && agentCwd) {
-            await startAgentSession(newTask, agentCwd);
+            // Build content blocks with file contents for the initial prompt
+            const promptBlocks = await buildPromptBlocks(
+              content,
+              filePaths,
+              agentCwd,
+            );
+            await startAgentSession(newTask, agentCwd, promptBlocks);
           }
         },
         onError: (error) => {
@@ -139,6 +159,7 @@ export function useTaskCreation({
     client,
     isAuthenticated,
     invalidateTasks,
+    saveWorkspaceMode,
   ]);
 
   return {

@@ -1,3 +1,4 @@
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type { AgentEvent } from "@posthog/agent";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import type {
@@ -157,9 +158,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("agent-start", params),
   agentPrompt: async (
     sessionId: string,
-    text: string,
+    prompt: ContentBlock[],
   ): Promise<{ stopReason: string }> =>
-    ipcRenderer.invoke("agent-prompt", sessionId, text),
+    ipcRenderer.invoke("agent-prompt", sessionId, prompt),
   agentCancel: async (sessionId: string): Promise<boolean> =>
     ipcRenderer.invoke("agent-cancel", sessionId),
   agentListSessions: async (

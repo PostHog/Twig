@@ -490,3 +490,98 @@ function parseInlineContent(text: string): JSONContent[] {
   flushText();
   return nodes.length > 0 ? nodes : [{ type: "text", text: "" }];
 }
+
+/**
+ * Extract file paths from file mentions in TipTap JSON
+ */
+export function extractFileMentions(json: JSONContent): string[] {
+  const filePaths: string[] = [];
+
+  function traverse(node: JSONContent) {
+    if (node.type === "mention" && node.attrs?.type === "file") {
+      const filePath = node.attrs.id;
+      if (filePath && !filePaths.includes(filePath)) {
+        filePaths.push(filePath);
+      }
+    }
+    if (node.content) {
+      for (const child of node.content) {
+        traverse(child);
+      }
+    }
+  }
+
+  traverse(json);
+  return filePaths;
+}
+
+function getMimeType(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ts: "text/typescript",
+    tsx: "text/typescript",
+    js: "text/javascript",
+    jsx: "text/javascript",
+    json: "application/json",
+    md: "text/markdown",
+    py: "text/x-python",
+    css: "text/css",
+    html: "text/html",
+    yml: "text/yaml",
+    yaml: "text/yaml",
+  };
+  return mimeTypes[ext ?? ""] ?? "text/plain";
+}
+
+/**
+ * Build ContentBlock array from text content and file mentions.
+ * Reads file contents and creates EmbeddedResource blocks for each.
+ */
+export async function buildPromptBlocks(
+  textContent: string,
+  filePaths: string[],
+  repoPath: string,
+): Promise<
+  Array<
+    | { type: "text"; text: string }
+    | {
+        type: "resource";
+        resource: { uri: string; mimeType: string; text: string };
+      }
+  >
+> {
+  const blocks: Array<
+    | { type: "text"; text: string }
+    | {
+        type: "resource";
+        resource: { uri: string; mimeType: string; text: string };
+      }
+  > = [];
+
+  // Add text content (with <file> tags still in it for reference)
+  blocks.push({ type: "text", text: textContent });
+
+  // Add EmbeddedResource for each file mention
+  for (const relativePath of filePaths) {
+    try {
+      const fileContent = await window.electronAPI.readRepoFile(
+        repoPath,
+        relativePath,
+      );
+      if (fileContent) {
+        blocks.push({
+          type: "resource",
+          resource: {
+            uri: `file://${repoPath}/${relativePath}`,
+            mimeType: getMimeType(relativePath),
+            text: fileContent,
+          },
+        });
+      }
+    } catch {
+      // Skip files that can't be read
+    }
+  }
+
+  return blocks;
+}

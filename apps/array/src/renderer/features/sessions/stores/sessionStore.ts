@@ -1,4 +1,7 @@
-import type { SessionNotification } from "@agentclientprotocol/sdk";
+import type {
+  ContentBlock,
+  SessionNotification,
+} from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { logger } from "@renderer/lib/logger";
 import { create } from "zustand";
@@ -29,6 +32,7 @@ export interface AgentSession {
   events: SessionEvent[];
   startedAt: number;
   status: "connecting" | "connected" | "disconnected" | "error";
+  isPromptPending: boolean;
 }
 
 interface ConnectParams {
@@ -36,6 +40,7 @@ interface ConnectParams {
   repoPath: string;
   latestRunId?: string;
   latestRunLogUrl?: string;
+  initialPrompt?: ContentBlock[];
 }
 
 // Track subscriptions outside store (not serializable)
@@ -51,8 +56,11 @@ interface SessionStore {
   // Disconnect from a task's session
   disconnectFromTask: (taskId: string) => Promise<void>;
 
-  // Send prompt to active session
-  sendPrompt: (taskId: string, text: string) => Promise<{ stopReason: string }>;
+  // Send prompt to active session (text or content blocks)
+  sendPrompt: (
+    taskId: string,
+    prompt: string | ContentBlock[],
+  ) => Promise<{ stopReason: string }>;
 
   // Internal: subscribe to IPC events
   _subscribeToChannel: (
@@ -71,7 +79,13 @@ interface SessionStore {
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: {},
 
-  connectToTask: async ({ taskId, repoPath, latestRunId, latestRunLogUrl }) => {
+  connectToTask: async ({
+    taskId,
+    repoPath,
+    latestRunId,
+    latestRunLogUrl,
+    initialPrompt,
+  }) => {
     // Prevent duplicate connection attempts
     if (connectAttempts.has(taskId)) {
       log.info("Connection already in progress", { taskId });
@@ -160,6 +174,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               events: historicalEvents,
               startedAt: Date.now(),
               status: "connecting",
+              isPromptPending: false,
             },
           },
         }));
@@ -234,12 +249,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               events: [],
               startedAt: Date.now(),
               status: "connected",
+              isPromptPending: false,
             },
           },
         }));
 
         get()._subscribeToChannel(taskRun.id, taskId, result.channel);
         log.info("Started new session", { taskId, taskRunId: taskRun.id });
+
+        if (initialPrompt && initialPrompt.length > 0) {
+          try {
+            await get().sendPrompt(taskId, initialPrompt);
+          } catch (promptError) {
+            log.error("Failed to send initial prompt", promptError);
+          }
+        }
       }
     } catch (error) {
       log.error("Failed to connect to task", error);
@@ -273,12 +297,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     log.info("Disconnected from task", { taskId });
   },
 
-  sendPrompt: async (taskId, text) => {
+  sendPrompt: async (taskId, prompt) => {
     const session = get().getSessionForTask(taskId);
     if (!session) {
       throw new Error("No active session for task");
     }
-    return window.electronAPI.agentPrompt(session.taskRunId, text);
+
+    // Set pending state
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [session.taskRunId]: {
+          ...state.sessions[session.taskRunId],
+          isPromptPending: true,
+        },
+      },
+    }));
+
+    try {
+      // Convert text to ContentBlock array if needed
+      const blocks: ContentBlock[] =
+        typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
+      return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
+    } finally {
+      // Clear pending state
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [session.taskRunId]: {
+            ...state.sessions[session.taskRunId],
+            isPromptPending: false,
+          },
+        },
+      }));
+    }
   },
 
   _subscribeToChannel: (taskRunId, _taskId, channel) => {
