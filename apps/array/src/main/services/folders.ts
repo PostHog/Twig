@@ -1,19 +1,24 @@
+import { exec } from "node:child_process";
 import path from "node:path";
+import { promisify } from "node:util";
 import { WorktreeManager } from "@posthog/agent";
-import { type IpcMainInvokeEvent, ipcMain } from "electron";
-import type {
-  RegisteredFolder,
-  TaskFolderAssociation,
-  WorktreeInfo,
-} from "../../shared/types";
+import { type BrowserWindow, dialog } from "electron";
+import type { RegisteredFolder } from "../../shared/types";
+import { generateId } from "../../shared/utils/id";
+import { createIpcHandler } from "../lib/ipcHandler";
 import { logger } from "../lib/logger";
+import { isGitRepository } from "./git";
+import { getWorktreeLocation } from "./settingsStore";
 import { clearAllStoreData, foldersStore } from "./store";
 import { deleteWorktreeIfExists } from "./worktreeUtils";
 
+const execAsync = promisify(exec);
+
 const log = logger.scope("folders");
+const handle = createIpcHandler("folders");
 
 function generateFolderId(): string {
-  return `folder_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return generateId("folder", 7);
 }
 
 function extractFolderName(folderPath: string): string {
@@ -85,104 +90,14 @@ async function updateFolderAccessed(folderId: string): Promise<void> {
   }
 }
 
-async function getTaskAssociations(): Promise<TaskFolderAssociation[]> {
-  return foldersStore.get("taskAssociations", []);
-}
-
-async function getTaskAssociation(
-  taskId: string,
-): Promise<TaskFolderAssociation | null> {
-  const associations = await getTaskAssociations();
-  return associations.find((a) => a.taskId === taskId) ?? null;
-}
-
-async function setTaskAssociation(
-  taskId: string,
-  folderId: string,
-  folderPath: string,
-  worktree?: WorktreeInfo,
-): Promise<TaskFolderAssociation> {
-  const associations = foldersStore.get("taskAssociations", []);
-
-  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
-  const association: TaskFolderAssociation = {
-    taskId,
-    folderId,
-    folderPath,
-    worktree,
-  };
-
-  if (existingIndex >= 0) {
-    associations[existingIndex] = association;
-  } else {
-    associations.push(association);
-  }
-
-  foldersStore.set("taskAssociations", associations);
-  return association;
-}
-
-async function updateTaskWorktree(
-  taskId: string,
-  worktree: WorktreeInfo,
-): Promise<TaskFolderAssociation | null> {
-  const associations = foldersStore.get("taskAssociations", []);
-
-  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
-  if (existingIndex < 0) {
-    return null;
-  }
-
-  associations[existingIndex] = {
-    ...associations[existingIndex],
-    worktree,
-  };
-
-  foldersStore.set("taskAssociations", associations);
-  return associations[existingIndex];
-}
-
-async function removeTaskAssociation(taskId: string): Promise<void> {
-  const associations = foldersStore.get("taskAssociations", []);
-
-  // Delete worktree if it exists
-  const assoc = associations.find((a) => a.taskId === taskId);
-  if (assoc?.worktree) {
-    await deleteWorktreeIfExists(assoc.folderPath, assoc.worktree.worktreePath);
-  }
-
-  const filtered = associations.filter((a) => a.taskId !== taskId);
-  foldersStore.set("taskAssociations", filtered);
-}
-
-async function clearTaskWorktree(taskId: string): Promise<void> {
-  const associations = foldersStore.get("taskAssociations", []);
-
-  const existingIndex = associations.findIndex((a) => a.taskId === taskId);
-  if (existingIndex >= 0) {
-    const assoc = associations[existingIndex];
-
-    // Delete worktree if it exists
-    if (assoc.worktree) {
-      await deleteWorktreeIfExists(
-        assoc.folderPath,
-        assoc.worktree.worktreePath,
-      );
-    }
-
-    const { worktree: _, ...rest } = assoc;
-    associations[existingIndex] = rest;
-    foldersStore.set("taskAssociations", associations);
-  }
-}
-
 async function cleanupOrphanedWorktreesForFolder(
   mainRepoPath: string,
 ): Promise<{
   deleted: string[];
   errors: Array<{ path: string; error: string }>;
 }> {
-  const manager = new WorktreeManager({ mainRepoPath });
+  const worktreeBasePath = getWorktreeLocation();
+  const manager = new WorktreeManager({ mainRepoPath, worktreeBasePath });
 
   const associations = foldersStore.get("taskAssociations", []);
   const associatedWorktreePaths: string[] = [];
@@ -196,176 +111,71 @@ async function cleanupOrphanedWorktreesForFolder(
   return await manager.cleanupOrphanedWorktrees(associatedWorktreePaths);
 }
 
-export function registerFoldersIpc(): void {
-  ipcMain.handle(
-    "get-folders",
-    async (_event: IpcMainInvokeEvent): Promise<RegisteredFolder[]> => {
-      try {
-        return await getFolders();
-      } catch (error) {
-        log.error("Failed to get folders:", error);
-        return [];
+export function registerFoldersIpc(
+  getMainWindow: () => BrowserWindow | null,
+): void {
+  handle("get-folders", async () => getFolders(), {
+    rethrow: false,
+    fallback: [],
+  });
+
+  handle("add-folder", async (_event, folderPath: string) => {
+    const isRepo = await isGitRepository(folderPath);
+
+    if (!isRepo) {
+      const win = getMainWindow();
+      if (!win) {
+        throw new Error("This folder is not a git repository");
       }
-    },
+
+      const result = await dialog.showMessageBox(win, {
+        type: "question",
+        title: "Initialize Git Repository",
+        message: "This folder is not a git repository",
+        detail: `Would you like to initialize git in "${path.basename(folderPath)}"?`,
+        buttons: ["Initialize Git", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (result.response === 1) {
+        throw new Error("Folder must be a git repository");
+      }
+
+      await execAsync("git init", { cwd: folderPath });
+      await execAsync('git commit --allow-empty -m "Initial commit"', {
+        cwd: folderPath,
+      });
+    }
+
+    return addFolder(folderPath);
+  });
+
+  handle("remove-folder", async (_event, folderId: string) =>
+    removeFolder(folderId),
   );
 
-  ipcMain.handle(
-    "add-folder",
-    async (
-      _event: IpcMainInvokeEvent,
-      folderPath: string,
-    ): Promise<RegisteredFolder> => {
-      try {
-        return await addFolder(folderPath);
-      } catch (error) {
-        log.error(`Failed to add folder ${folderPath}:`, error);
-        throw error;
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "remove-folder",
-    async (_event: IpcMainInvokeEvent, folderId: string): Promise<void> => {
-      try {
-        await removeFolder(folderId);
-      } catch (error) {
-        log.error(`Failed to remove folder ${folderId}:`, error);
-        throw error;
-      }
-    },
-  );
-
-  ipcMain.handle(
+  handle(
     "update-folder-accessed",
-    async (_event: IpcMainInvokeEvent, folderId: string): Promise<void> => {
-      try {
-        await updateFolderAccessed(folderId);
-      } catch (error) {
-        log.error(`Failed to update folder with ID: ${folderId}:`, error);
-      }
-    },
+    async (_event, folderId: string) => updateFolderAccessed(folderId),
+    { rethrow: false },
   );
 
-  ipcMain.handle(
-    "clear-all-data",
-    async (_event: IpcMainInvokeEvent): Promise<void> => {
-      try {
-        await clearAllStoreData();
-        log.info("Cleared all application data");
-      } catch (error) {
-        log.error("Failed to clear all data:", error);
-        throw error;
-      }
-    },
-  );
+  handle("clear-all-data", async () => {
+    await clearAllStoreData();
+    log.info("Cleared all application data");
+  });
 
-  ipcMain.handle(
-    "get-task-associations",
-    async (_event: IpcMainInvokeEvent): Promise<TaskFolderAssociation[]> => {
-      try {
-        return await getTaskAssociations();
-      } catch (error) {
-        log.error("Failed to get task associations:", error);
-        return [];
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "get-task-association",
-    async (
-      _event: IpcMainInvokeEvent,
-      taskId: string,
-    ): Promise<TaskFolderAssociation | null> => {
-      try {
-        return await getTaskAssociation(taskId);
-      } catch (error) {
-        log.error(`Failed to get task association for ${taskId}:`, error);
-        return null;
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "set-task-association",
-    async (
-      _event: IpcMainInvokeEvent,
-      taskId: string,
-      folderId: string,
-      folderPath: string,
-      worktree?: WorktreeInfo,
-    ): Promise<TaskFolderAssociation> => {
-      try {
-        return await setTaskAssociation(taskId, folderId, folderPath, worktree);
-      } catch (error) {
-        log.error(`Failed to set task association for ${taskId}:`, error);
-        throw error;
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "update-task-worktree",
-    async (
-      _event: IpcMainInvokeEvent,
-      taskId: string,
-      worktree: WorktreeInfo,
-    ): Promise<TaskFolderAssociation | null> => {
-      try {
-        return await updateTaskWorktree(taskId, worktree);
-      } catch (error) {
-        log.error(`Failed to update worktree for ${taskId}:`, error);
-        return null;
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "remove-task-association",
-    async (_event: IpcMainInvokeEvent, taskId: string): Promise<void> => {
-      try {
-        await removeTaskAssociation(taskId);
-      } catch (error) {
-        log.error(`Failed to remove task association for ${taskId}:`, error);
-        throw error;
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "clear-task-worktree",
-    async (_event: IpcMainInvokeEvent, taskId: string): Promise<void> => {
-      try {
-        await clearTaskWorktree(taskId);
-      } catch (error) {
-        log.error(`Failed to clear worktree for ${taskId}:`, error);
-        throw error;
-      }
-    },
-  );
-
-  ipcMain.handle(
+  handle(
     "cleanup-orphaned-worktrees",
-    async (
-      _event: IpcMainInvokeEvent,
-      mainRepoPath: string,
-    ): Promise<{
-      deleted: string[];
-      errors: Array<{ path: string; error: string }>;
-    }> => {
-      try {
-        return await cleanupOrphanedWorktreesForFolder(mainRepoPath);
-      } catch (error) {
-        log.error(
-          `Failed to cleanup orphaned worktrees for ${mainRepoPath}:`,
-          error,
-        );
-        return {
-          deleted: [],
-          errors: [{ path: mainRepoPath, error: String(error) }],
-        };
-      }
+    async (_event, mainRepoPath: string) =>
+      cleanupOrphanedWorktreesForFolder(mainRepoPath),
+    {
+      rethrow: false,
+      fallback: {
+        deleted: [],
+        errors: [{ path: "unknown", error: "Handler failed" }],
+      },
     },
   );
 }

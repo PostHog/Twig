@@ -6,6 +6,7 @@ import type {
 } from "@features/tasks/stores/taskStore.types";
 import { getUserDisplayName } from "@hooks/useUsers";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 import { getTaskStatus } from "./taskSorting";
 
 function applyOperator(
@@ -26,7 +27,7 @@ function getTaskValue(task: Task, category: FilterCategory): string {
         ? getUserDisplayName(task.created_by)
         : "No Creator";
     case "repository":
-      return task.repository ?? "No Repository Connected";
+      return getTaskRepository(task) ?? "No Repository Connected";
     case "created_at":
       return task.created_at;
   }

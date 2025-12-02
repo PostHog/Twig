@@ -28,6 +28,12 @@ export type TabData =
       cwd: string;
     }
   | {
+      type: "workspace-terminal";
+      sessionId: string;
+      command: string;
+      scriptType: "init" | "start";
+    }
+  | {
       type: "artifact";
       artifactId: string;
     }

@@ -1,215 +1,102 @@
-import { Command } from "@features/command/components/Command";
-import { useFolderPickerStore } from "@features/folder-picker/stores/folderPickerStore";
-import { Folder as FolderIcon } from "@phosphor-icons/react";
-import { ChevronDownIcon } from "@radix-ui/react-icons";
 import {
-  Box,
-  Button,
-  Flex,
-  IconButton,
-  Popover,
-  Text,
-  TextField,
-} from "@radix-ui/themes";
+  Folder as FolderIcon,
+  FolderOpen,
+  GitBranchIcon,
+} from "@phosphor-icons/react";
+import { ChevronDownIcon } from "@radix-ui/react-icons";
+import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
+import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 
 interface FolderPickerProps {
   value: string;
   onChange: (path: string) => void;
   placeholder?: string;
-  size?: "1" | "2" | "3";
+  size?: Responsive<"1" | "2">;
 }
-
-const HOTKEYS = {
-  ARROW_UP: "arrowup",
-  ARROW_DOWN: "arrowdown",
-  ENTER: "enter",
-  ESCAPE: "escape",
-} as const;
-
-const MAX_RECENT_ITEMS = 5;
-const SEARCH_DEBOUNCE_MS = 100;
-const MAX_LIST_HEIGHT = "300px";
-
-const displayRepoName = (path: string): string => {
-  // Extract just the last segment (repository/directory name)
-  const segments = path.split("/");
-  return segments[segments.length - 1] || path;
-};
-
-const displayPath = (path: string): string => {
-  // Show full path with ~ for home directory
-  const homePattern = /^\/Users\/[^/]+|^\/home\/[^/]+/;
-  const match = path.match(homePattern);
-  return match ? path.replace(match[0], "~") : path;
-};
 
 export function FolderPicker({
   value,
   onChange,
   placeholder = "Select folder...",
-  size = "2",
+  size = "1",
 }: FolderPickerProps) {
-  const [open, setOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
-  const [directoryPreview, setDirectoryPreview] = useState<string[]>([]);
-  const [recentPreview, setRecentPreview] = useState<string[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  const { addRecentDirectory } = useFolderPickerStore();
-  const { folders, addFolder, updateLastAccessed } =
-    useRegisteredFoldersStore();
-
-  const registeredFolderPaths = useMemo(
-    () => folders.map((f) => f.path),
-    [folders],
+  const recentFolders = useRegisteredFoldersStore((state) =>
+    state.getRecentFolders(),
   );
-
-  const displayValue = value ? displayRepoName(value) : placeholder;
-  const totalItems = recentPreview.length + directoryPreview.length;
-
-  useHotkeys(
-    Object.values(HOTKEYS).join(","),
-    (ev, handler) => {
-      const key = handler.keys?.join("");
-
-      if (key === HOTKEYS.ARROW_UP || key === HOTKEYS.ARROW_DOWN) {
-        ev.preventDefault();
-        if (totalItems > 0) {
-          const direction = key === HOTKEYS.ARROW_UP ? -1 : 1;
-          setSelectedIndex(
-            (selectedIndex + direction + totalItems) % totalItems,
-          );
-        }
-        return;
-      }
-
-      if (key === HOTKEYS.ENTER) {
-        ev.preventDefault();
-        if (totalItems > 0) {
-          const selectedPath =
-            selectedIndex < recentPreview.length
-              ? recentPreview[selectedIndex]
-              : directoryPreview[selectedIndex - recentPreview.length];
-
-          if (selectedPath) {
-            handleSelect(selectedPath);
-          }
-        }
-        return;
-      }
-
-      if (key === HOTKEYS.ESCAPE) {
-        ev.stopPropagation();
-        setOpen(false);
-      }
-    },
-    { enabled: open, enableOnFormTags: true },
+  const displayValue = useRegisteredFoldersStore((state) =>
+    state.getFolderDisplayName(value),
   );
-
-  useEffect(() => {
-    if (!open) {
-      setSearchValue("");
-      setDirectoryPreview([]);
-      setRecentPreview([]);
-      setIsSearching(false);
-      return;
-    }
-
-    if (!searchValue.trim()) {
-      setRecentPreview(registeredFolderPaths.slice(0, MAX_RECENT_ITEMS));
-      setDirectoryPreview([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const results = await window.electronAPI.searchDirectories(searchValue);
-        setDirectoryPreview(results);
-
-        const searchLower = searchValue.toLowerCase();
-        const filtered = registeredFolderPaths
-          .filter((dir) => dir.toLowerCase().includes(searchLower))
-          .slice(0, MAX_RECENT_ITEMS);
-        setRecentPreview(filtered);
-      } finally {
-        setIsSearching(false);
-      }
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [searchValue, registeredFolderPaths, open]);
+  const addFolder = useRegisteredFoldersStore((state) => state.addFolder);
+  const updateLastAccessed = useRegisteredFoldersStore(
+    (state) => state.updateLastAccessed,
+  );
+  const getFolderByPath = useRegisteredFoldersStore(
+    (state) => state.getFolderByPath,
+  );
 
   const handleSelect = async (path: string) => {
     onChange(path);
-    addRecentDirectory(path);
-
-    const existingFolder = folders.find((f) => f.path === path);
-    if (existingFolder) {
-      await updateLastAccessed(existingFolder.id);
-    } else {
-      await addFolder(path);
-    }
-
-    setSearchValue("");
-    setOpen(false);
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(e.target.value);
-    setSelectedIndex(0);
-  };
-
-  const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
-    if (!newOpen) {
-      setSearchValue("");
-      setSelectedIndex(0);
+    const folder = getFolderByPath(path);
+    if (folder) {
+      updateLastAccessed(folder.id);
     }
   };
 
-  const handleOpenNativeFileFinder = async () => {
-    const selectedPath = await window.electronAPI.selectDirectory();
+  const handleOpenFilePicker = async () => {
+    const selectedPath = await window.electronAPI?.selectDirectory();
     if (selectedPath) {
-      await handleSelect(selectedPath);
+      await addFolder(selectedPath);
+      onChange(selectedPath);
     }
   };
 
-  const renderItem = (path: string, itemIndex: number) => (
-    <Command.Item
-      key={path}
-      className={selectedIndex === itemIndex ? "!bg-accent-3" : ""}
-      onSelect={() => handleSelect(path)}
-    >
-      <Text
-        size="1"
-        style={{
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
+  // If no folders, render as a plain button that directly opens file picker
+  if (recentFolders.length === 0) {
+    return (
+      <Button
+        color="gray"
+        variant="outline"
+        size={size}
+        onClick={handleOpenFilePicker}
       >
-        {displayPath(path)}
-      </Text>
-    </Command.Item>
-  );
+        <Flex justify="between" align="center" gap="2" width="100%">
+          <Flex
+            align="center"
+            gap="2"
+            width="250px"
+            style={{ minWidth: 0, flex: 1 }}
+          >
+            <FolderIcon size={16} weight="regular" style={{ flexShrink: 0 }} />
+            <Text
+              size={size}
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              truncate
+            >
+              {displayValue || placeholder}
+            </Text>
+          </Flex>
+          <ChevronDownIcon style={{ flexShrink: 0 }} />
+        </Flex>
+      </Button>
+    );
+  }
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
-      <Popover.Trigger>
-        <Button
-          variant="outline"
-          size={size}
-          color="gray"
-          style={{ width: "100%" }}
-        >
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        <Button color="gray" variant="outline" size={size}>
           <Flex justify="between" align="center" gap="2" width="100%">
-            <Flex align="center" gap="2" style={{ minWidth: 0, flex: 1 }}>
+            <Flex
+              align="center"
+              gap="2"
+              width="250px"
+              style={{ minWidth: 0, flex: 1 }}
+            >
               <FolderIcon
                 size={16}
                 weight="regular"
@@ -222,75 +109,48 @@ export function FolderPicker({
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
+                truncate
               >
-                {displayValue}
+                {displayValue || placeholder}
               </Text>
             </Flex>
             <ChevronDownIcon style={{ flexShrink: 0 }} />
           </Flex>
         </Button>
-      </Popover.Trigger>
+      </DropdownMenu.Trigger>
 
-      <Popover.Content
-        side="bottom"
+      <DropdownMenu.Content
         align="start"
-        avoidCollisions={false}
-        style={{ padding: 0, width: "var(--radix-popover-trigger-width)" }}
-        onOpenAutoFocus={() => {
-          setTimeout(() => searchInputRef.current?.focus(), 0);
-        }}
+        style={{ minWidth: "var(--radix-dropdown-menu-trigger-width)" }}
+        size={size}
       >
-        <Command.Root shouldFilter={false}>
-          <Box p="2" style={{ borderBottom: "1px solid var(--gray-a5)" }}>
-            <TextField.Root
-              ref={searchInputRef}
-              placeholder="Search folders..."
-              value={searchValue}
-              onChange={handleSearchChange}
-              size={size}
-            >
-              <TextField.Slot side="right" style={{ paddingRight: 0 }}>
-                <IconButton
-                  size="1"
-                  onClick={handleOpenNativeFileFinder}
-                  type="button"
-                  style={{ cursor: "pointer" }}
-                >
-                  <FolderIcon size={12} weight="fill" />
-                </IconButton>
-              </TextField.Slot>
-            </TextField.Root>
-          </Box>
+        <DropdownMenu.Label>
+          <Text size={size}>Recent</Text>
+        </DropdownMenu.Label>
 
-          <Command.List
-            style={{ maxHeight: MAX_LIST_HEIGHT, overflowY: "auto" }}
+        {recentFolders.map((folder) => (
+          <DropdownMenu.Item
+            key={folder.id}
+            onSelect={() => handleSelect(folder.path)}
           >
-            {totalItems === 0 && (
-              <Command.Empty>
-                <Box p="4">
-                  <Text size="2" color="gray">
-                    {isSearching ? "Searching..." : "No folders found"}
-                  </Text>
-                </Box>
-              </Command.Empty>
-            )}
+            <Flex py="0" align="center" gap="2">
+              <GitBranchIcon size={12} />
+              <Flex direction="row" gap="1">
+                <Text size={size}>{folder.name}</Text>
+              </Flex>
+            </Flex>
+          </DropdownMenu.Item>
+        ))}
 
-            {recentPreview.length > 0 && (
-              <Command.Group>
-                {recentPreview.map((path, idx) => renderItem(path, idx))}
-              </Command.Group>
-            )}
+        <DropdownMenu.Separator />
 
-            {directoryPreview.length > 0 && (
-              <Command.Group heading="Paths">
-                {directoryPreview.map((path, idx) =>
-                  renderItem(path, recentPreview.length + idx),
-                )}
-              </Command.Group>
-            )}
-          </Command.List>
-        </Command.Root>
-      </Popover.Content>
-    </Popover.Root>
+        <DropdownMenu.Item onSelect={handleOpenFilePicker}>
+          <Flex align="center" gap="2">
+            <FolderOpen size={12} />
+            <Text size={size}>Open folder...</Text>
+          </Flex>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
   );
 }

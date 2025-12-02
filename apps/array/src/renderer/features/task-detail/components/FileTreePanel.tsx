@@ -7,6 +7,10 @@ import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useEffect, useState } from "react";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface FileTreePanelProps {
   taskId: string;
@@ -95,7 +99,8 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
 
 export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const repoPath = worktreePath ?? taskData.repoPath;
   const queryClient = useQueryClient();
 
   const {

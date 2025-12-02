@@ -55,16 +55,9 @@ export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
   try {
-    // Check if it's a git work tree
     await execAsync("git rev-parse --is-inside-work-tree", {
       cwd: directoryPath,
     });
-
-    // Also check if there's at least one commit (not an empty/cloning repo)
-    await execAsync("git rev-parse HEAD", {
-      cwd: directoryPath,
-    });
-
     return true;
   } catch {
     return false;
@@ -446,8 +439,8 @@ export function registerGitIpc(
       }
 
       const matches =
-        detected.organization === expectedOrg &&
-        detected.repository === expectedRepo;
+        detected.organization.toLowerCase() === expectedOrg.toLowerCase() &&
+        detected.repository.toLowerCase() === expectedRepo.toLowerCase();
 
       return {
         valid: matches,
@@ -617,6 +610,16 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<DiffStats> => {
       return getDiffStats(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-current-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string | undefined> => {
+      return getCurrentBranch(directoryPath);
     },
   );
 }

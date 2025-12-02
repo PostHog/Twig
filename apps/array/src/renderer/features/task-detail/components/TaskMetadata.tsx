@@ -13,6 +13,7 @@ import {
   Tooltip,
 } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 import { format, formatDistanceToNow } from "date-fns";
 import type React from "react";
 
@@ -69,9 +70,9 @@ export const TaskMetadata: React.FC<TaskMetadataProps> = ({
         <DataList.Item>
           <DataList.Label>Repository</DataList.Label>
           <DataList.Value>
-            {task.repository ? (
+            {getTaskRepository(task) ? (
               <Code size="2" color="gray">
-                {task.repository}
+                {getTaskRepository(task)}
               </Code>
             ) : (
               <Text size="2" color="gray">

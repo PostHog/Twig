@@ -7,6 +7,16 @@ import { useQuery } from "@tanstack/react-query";
 import type { TaskStatus } from "../../types";
 import { SidebarItem } from "../SidebarItem";
 
+function useCurrentBranch(repoPath?: string, worktreeName?: string) {
+  return useQuery({
+    queryKey: ["current-branch", repoPath],
+    queryFn: () => window.electronAPI.getCurrentBranch(repoPath!),
+    enabled: !!repoPath && !worktreeName,
+    staleTime: 3000,
+    refetchInterval: 3000,
+  });
+}
+
 interface TaskItemProps {
   id: string;
   label: string;
@@ -94,12 +104,15 @@ export function TaskItem({
   onClick,
   onContextMenu,
 }: TaskItemProps) {
+  const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
+  const subtitle = worktreeName ?? currentBranch;
+
   return (
     <SidebarItem
       depth={0}
       icon={getStatusIcon(status)}
       label={label}
-      subtitle={worktreeName}
+      subtitle={subtitle}
       isActive={isActive}
       onClick={onClick}
       onContextMenu={onContextMenu}

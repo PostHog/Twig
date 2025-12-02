@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   type Client,
   ClientSideConnection,
+  type ContentBlock,
   ndJsonStream,
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
@@ -252,7 +253,7 @@ export class SessionManager {
 
   async prompt(
     taskRunId: string,
-    text: string,
+    prompt: ContentBlock[],
   ): Promise<{ stopReason: string }> {
     const session = this.sessions.get(taskRunId);
     if (!session) {
@@ -263,7 +264,7 @@ export class SessionManager {
 
     const result = await session.connection.prompt({
       sessionId: taskRunId, // Use taskRunId as ACP sessionId
-      prompt: [{ type: "text", text }],
+      prompt,
     });
 
     return { stopReason: result.stopReason };
@@ -499,8 +500,12 @@ export function registerAgentIpc(
 
   ipcMain.handle(
     "agent-prompt",
-    async (_event: IpcMainInvokeEvent, sessionId: string, text: string) => {
-      return sessionManager.prompt(sessionId, text);
+    async (
+      _event: IpcMainInvokeEvent,
+      sessionId: string,
+      prompt: ContentBlock[],
+    ) => {
+      return sessionManager.prompt(sessionId, prompt);
     },
   );
 

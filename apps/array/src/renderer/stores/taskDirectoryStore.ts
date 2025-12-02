@@ -1,16 +1,14 @@
+import { omitKey } from "@utils/object";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { useRegisteredFoldersStore } from "./registeredFoldersStore";
-import { useTaskAssociationStore } from "./taskAssociationStore";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskDirectoryState {
   repoDirectories: Record<string, string>;
   lastUsedDirectory: string | null;
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
-  setTaskDirectory: (taskId: string, directory: string) => Promise<void>;
   setRepoDirectory: (repoKey: string, directory: string) => void;
-  clearTaskDirectory: (taskId: string) => Promise<void>;
   clearRepoDirectory: (repoKey: string) => void;
 }
 
@@ -25,11 +23,10 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
       lastUsedDirectory: null,
 
       getTaskDirectory: (taskId: string, repoKey?: string) => {
-        const taskAssocStore = useTaskAssociationStore.getState();
-
-        const taskDir = taskAssocStore.getTaskDirectory(taskId);
-        if (taskDir) {
-          return expandTildePath(taskDir);
+        const workspaceStore = useWorkspaceStore.getState();
+        const folderPath = workspaceStore.getFolderPath(taskId);
+        if (folderPath) {
+          return expandTildePath(folderPath);
         }
 
         if (repoKey) {
@@ -42,39 +39,20 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
         return null;
       },
 
-      setTaskDirectory: async (taskId: string, directory: string) => {
-        set({ lastUsedDirectory: directory });
-
-        const foldersStore = useRegisteredFoldersStore.getState();
-        let folder = foldersStore.getFolderByPath(directory);
-
-        if (!folder) {
-          folder = await foldersStore.addFolder(directory);
-        }
-
-        await useTaskAssociationStore
-          .getState()
-          .setAssociation(taskId, folder.id, directory);
-      },
-
       setRepoDirectory: (repoKey: string, directory: string) => {
         set((state) => ({
           repoDirectories: {
             ...state.repoDirectories,
             [repoKey]: directory,
           },
+          lastUsedDirectory: directory,
         }));
       },
 
-      clearTaskDirectory: async (taskId: string) => {
-        await useTaskAssociationStore.getState().removeAssociation(taskId);
-      },
-
       clearRepoDirectory: (repoKey: string) => {
-        set((state) => {
-          const { [repoKey]: _, ...rest } = state.repoDirectories;
-          return { repoDirectories: rest };
-        });
+        set((state) => ({
+          repoDirectories: omitKey(state.repoDirectories, repoKey),
+        }));
       },
     }),
     {

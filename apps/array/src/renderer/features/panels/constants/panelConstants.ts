@@ -22,7 +22,6 @@ export const DEFAULT_PANEL_IDS = {
 export const DEFAULT_TAB_IDS = {
   LOGS: "logs",
   SHELL: "shell",
-  DETAILS: "details",
   FILES: "files",
   TODO_LIST: "todo-list",
   ARTIFACTS: "artifacts",

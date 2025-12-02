@@ -4,6 +4,7 @@ import {
   TASK_STATUS_ORDER,
 } from "@features/tasks/stores/taskStore.types";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 
 export function getTaskStatus(task: Task): string {
   const hasPR = task.latest_run?.output?.pr_url;
@@ -45,8 +46,8 @@ export function sortTasks(
         compareResult = a.title.localeCompare(b.title);
         break;
       case "repository": {
-        const repoA = a.repository ? a.repository : "";
-        const repoB = b.repository ? b.repository : "";
+        const repoA = getTaskRepository(a) ?? "";
+        const repoB = getTaskRepository(b) ?? "";
         compareResult = repoA.localeCompare(repoB);
         break;
       }

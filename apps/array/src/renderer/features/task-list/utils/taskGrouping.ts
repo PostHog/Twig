@@ -5,6 +5,7 @@ import {
 } from "@features/tasks/stores/taskStore.types";
 import { getUserDisplayName } from "@hooks/useUsers";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 
 export function getTaskGrouping(
   filteredTasks: Task[],
@@ -27,7 +28,7 @@ export function getTaskGrouping(
       case "source":
         return task.origin_product;
       case "repository":
-        return task.repository ?? "No Repository Connected";
+        return getTaskRepository(task) ?? "No Repository Connected";
       default:
         return "All Tasks";
     }

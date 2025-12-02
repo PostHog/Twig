@@ -1,7 +1,8 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { Box, Button, Flex } from "@radix-ui/themes";
+import { Box, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useEffect, useState } from "react";
@@ -21,6 +22,7 @@ export function TaskInput() {
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("worktree");
 
   useEffect(() => {
     if (view.folderId) {
@@ -44,6 +46,7 @@ export function TaskInput() {
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editor,
     selectedDirectory,
+    workspaceMode,
   });
 
   return (
@@ -95,7 +98,7 @@ export function TaskInput() {
           zIndex: 1,
         }}
       >
-        <Box className="w-1/2 pr-2">
+        <Box>
           <FolderPicker
             value={selectedDirectory}
             onChange={handleDirectoryChange}
@@ -104,19 +107,15 @@ export function TaskInput() {
           />
         </Box>
 
-        <TaskInputEditor editor={editor} isCreatingTask={isCreatingTask} />
-
-        <Flex justify="end" mt="3">
-          <Button
-            size="1"
-            variant={canSubmit ? "solid" : "outline"}
-            onClick={handleSubmit}
-            disabled={!canSubmit || isCreatingTask}
-            loading={isCreatingTask}
-          >
-            Create task
-          </Button>
-        </Flex>
+        <TaskInputEditor
+          editor={editor}
+          isCreatingTask={isCreatingTask}
+          workspaceMode={workspaceMode}
+          onWorkspaceModeChange={setWorkspaceMode}
+          canSubmit={canSubmit}
+          onSubmit={handleSubmit}
+          hasDirectory={!!selectedDirectory}
+        />
 
         <SuggestedTasks editor={editor} />
       </Flex>

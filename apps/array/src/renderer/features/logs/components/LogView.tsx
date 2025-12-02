@@ -24,6 +24,7 @@ interface LogViewProps {
   events: SessionEvent[];
   sessionId: string | null;
   isRunning: boolean;
+  isPromptPending?: boolean;
   onSendPrompt?: (text: string) => Promise<void>;
   onCancelSession?: () => void;
   onStartSession?: () => void;
@@ -59,12 +60,12 @@ export function LogView({
   events,
   sessionId,
   isRunning,
+  isPromptPending = false,
   onSendPrompt,
   onCancelSession,
   onStartSession,
 }: LogViewProps) {
   const [inputValue, setInputValue] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const [showRawLogs, setShowRawLogs] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,18 +76,16 @@ export function LogView({
 
   const handleSend = useCallback(async () => {
     const text = inputValue.trim();
-    if (!text || !onSendPrompt || isSending) return;
+    if (!text || !onSendPrompt || isPromptPending) return;
 
-    setIsSending(true);
     setInputValue("");
 
     try {
       await onSendPrompt(text);
     } finally {
-      setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [inputValue, onSendPrompt, isSending]);
+  }, [inputValue, onSendPrompt, isPromptPending]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -259,7 +258,7 @@ export function LogView({
               {item.text}
             </Code>
           ))}
-          {isSending && (
+          {isPromptPending && (
             <Code size="2" variant="ghost" className="block text-gray-9">
               Thinking...
             </Code>
@@ -278,7 +277,7 @@ export function LogView({
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
-                disabled={isSending || !isRunning}
+                disabled={isPromptPending || !isRunning}
                 rows={2}
                 style={{ resize: "none" }}
               />
@@ -287,7 +286,7 @@ export function LogView({
               <IconButton
                 size="3"
                 onClick={handleSend}
-                disabled={!inputValue.trim() || isSending || !isRunning}
+                disabled={!inputValue.trim() || isPromptPending || !isRunning}
               >
                 <SendIcon size={20} />
               </IconButton>

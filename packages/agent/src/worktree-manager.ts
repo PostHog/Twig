@@ -1,4 +1,5 @@
 import { exec, execFile } from "node:child_process";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -10,6 +11,7 @@ const execFileAsync = promisify(execFile);
 
 export interface WorktreeConfig {
   mainRepoPath: string;
+  worktreeBasePath?: string;
   logger?: Logger;
 }
 
@@ -493,13 +495,21 @@ const WORKTREE_FOLDER_NAME = ".array";
 
 export class WorktreeManager {
   private mainRepoPath: string;
+  private worktreeBasePath: string | null;
+  private repoName: string;
   private logger: Logger;
 
   constructor(config: WorktreeConfig) {
     this.mainRepoPath = config.mainRepoPath;
+    this.worktreeBasePath = config.worktreeBasePath || null;
+    this.repoName = path.basename(config.mainRepoPath);
     this.logger =
       config.logger ||
       new Logger({ debug: false, prefix: "[WorktreeManager]" });
+  }
+
+  private usesExternalPath(): boolean {
+    return this.worktreeBasePath !== null;
   }
 
   private async runGitCommand(command: string): Promise<string> {
@@ -514,7 +524,7 @@ export class WorktreeManager {
   }
 
   private randomElement<T>(array: T[]): T {
-    return array[Math.floor(Math.random() * array.length)];
+    return array[crypto.randomInt(array.length)];
   }
 
   generateWorktreeName(): string {
@@ -525,6 +535,9 @@ export class WorktreeManager {
   }
 
   private getWorktreeFolderPath(): string {
+    if (this.worktreeBasePath) {
+      return path.join(this.worktreeBasePath, this.repoName);
+    }
     return path.join(this.mainRepoPath, WORKTREE_FOLDER_NAME);
   }
 
@@ -616,8 +629,16 @@ export class WorktreeManager {
   }
 
   async createWorktree(): Promise<WorktreeInfo> {
-    // Ensure the .array folder is ignored
-    await this.ensureArrayDirIgnored();
+    // Only modify .git/info/exclude when using in-repo storage
+    if (!this.usesExternalPath()) {
+      await this.ensureArrayDirIgnored();
+    }
+
+    // Ensure the worktree folder exists when using external path
+    if (this.usesExternalPath()) {
+      const folderPath = this.getWorktreeFolderPath();
+      await fs.mkdir(folderPath, { recursive: true });
+    }
 
     // Generate unique worktree name
     const worktreeName = await this.generateUniqueWorktreeName();
@@ -630,14 +651,22 @@ export class WorktreeManager {
       worktreePath,
       branchName,
       baseBranch,
+      external: this.usesExternalPath(),
     });
 
     // Create the worktree with a new branch
-    // Using relative path from repo root for git worktree command
-    const relativePath = `${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-    await this.runGitCommand(
-      `worktree add -b "${branchName}" "./${relativePath}" "${baseBranch}"`,
-    );
+    if (this.usesExternalPath()) {
+      // Use absolute path for external worktrees
+      await this.runGitCommand(
+        `worktree add -b "${branchName}" "${worktreePath}" "${baseBranch}"`,
+      );
+    } else {
+      // Use relative path from repo root for in-repo worktrees
+      const relativePath = `${WORKTREE_FOLDER_NAME}/${worktreeName}`;
+      await this.runGitCommand(
+        `worktree add -b "${branchName}" "./${relativePath}" "${baseBranch}"`,
+      );
+    }
 
     const createdAt = new Date().toISOString();
 
@@ -721,6 +750,7 @@ export class WorktreeManager {
   private parseWorktreeList(output: string): WorktreeInfo[] {
     const worktrees: WorktreeInfo[] = [];
     const entries = output.split("\n\n").filter((e) => e.trim());
+    const worktreeFolderPath = this.getWorktreeFolderPath();
 
     for (const entry of entries) {
       const lines = entry.split("\n");
@@ -735,15 +765,24 @@ export class WorktreeManager {
         }
       }
 
-      // Only include worktrees in our .array folder
-      if (worktreePath?.includes(`/${WORKTREE_FOLDER_NAME}/`) && branchName) {
+      // Include worktrees that:
+      // 1. Are in our worktree folder (external or in-repo)
+      // 2. Have a posthog/ branch prefix (our naming convention)
+      const isInWorktreeFolder = worktreePath?.startsWith(worktreeFolderPath);
+      const isPosthogBranch = branchName?.startsWith("posthog/");
+
+      if (
+        worktreePath &&
+        branchName &&
+        (isInWorktreeFolder || isPosthogBranch)
+      ) {
         const worktreeName = path.basename(worktreePath);
         worktrees.push({
           worktreePath,
           worktreeName,
           branchName,
-          baseBranch: "", // We don't store this in git, would need to track separately
-          createdAt: "", // We don't store this in git, would need to track separately
+          baseBranch: "",
+          createdAt: "",
         });
       }
     }

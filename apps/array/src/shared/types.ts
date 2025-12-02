@@ -14,11 +14,68 @@ export interface WorktreeInfo {
   createdAt: string;
 }
 
+export type WorkspaceMode = "worktree" | "root";
+
 export interface TaskFolderAssociation {
   taskId: string;
   folderId: string;
   folderPath: string;
+  mode: WorkspaceMode;
   worktree?: WorktreeInfo;
+}
+
+// Workspace types for array.json configuration
+export interface ArrayConfig {
+  scripts?: {
+    init?: string | string[];
+    start?: string | string[];
+    destroy?: string | string[];
+  };
+}
+
+export interface WorkspaceInfo {
+  taskId: string;
+  mode: WorkspaceMode;
+  worktree: WorktreeInfo | null;
+  terminalSessionIds: string[];
+  hasStartScripts?: boolean;
+}
+
+export interface Workspace {
+  taskId: string;
+  folderId: string;
+  folderPath: string;
+  mode: WorkspaceMode;
+  worktreePath: string | null;
+  worktreeName: string | null;
+  branchName: string | null;
+  baseBranch: string | null;
+  createdAt: string;
+  terminalSessionIds: string[];
+  hasStartScripts?: boolean;
+}
+
+export interface WorkspaceTerminalInfo {
+  sessionId: string;
+  scriptType: "init" | "start";
+  command: string;
+  label: string;
+  status: "running" | "completed" | "failed";
+  exitCode?: number;
+}
+
+export interface CreateWorkspaceOptions {
+  taskId: string;
+  mainRepoPath: string;
+  folderId: string;
+  folderPath: string;
+  mode: WorkspaceMode;
+}
+
+export interface ScriptExecutionResult {
+  success: boolean;
+  terminalSessionIds: string[];
+  errors?: string[];
 }
 
 interface UserBasic {

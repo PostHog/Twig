@@ -15,6 +15,8 @@ import "./os.js";
 import "./posthog-analytics.js";
 import "./posthog.js";
 import "./session-manager.js";
+import "./settings.js";
+import "./settingsStore.js";
 import "./shell.js";
 import "./store.js";
 import "./transcription-prompts.js";

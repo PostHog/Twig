@@ -62,7 +62,7 @@ class FileService {
     try {
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
       return entries
-        .filter((entry) => !entry.name.startsWith(".") || entry.name === ".git")
+        .filter((entry) => !entry.name.startsWith("."))
         .map((entry) => ({
           name: entry.name,
           path: path.join(dirPath, entry.name),

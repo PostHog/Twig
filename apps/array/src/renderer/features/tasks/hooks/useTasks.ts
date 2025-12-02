@@ -4,8 +4,8 @@ import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("tasks");
@@ -30,7 +30,11 @@ export function useTasks(filters?: { repository?: string }) {
 export function useCreateTask() {
   const queryClient = useQueryClient();
 
-  return useAuthenticatedMutation(
+  const invalidateTasks = () => {
+    queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+  };
+
+  const mutation = useAuthenticatedMutation(
     (
       client,
       {
@@ -49,9 +53,6 @@ export function useCreateTask() {
       }) as unknown as Promise<Task>,
     {
       onSuccess: (_task, variables) => {
-        queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-
-        // Track task creation
         track(ANALYTICS_EVENTS.TASK_CREATED, {
           auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
@@ -60,6 +61,8 @@ export function useCreateTask() {
       },
     },
   );
+
+  return { ...mutation, invalidateTasks };
 }
 
 export function useUpdateTask() {
@@ -94,33 +97,15 @@ export function useDeleteTask() {
 
   return useAuthenticatedMutation(
     async (client, taskId: string) => {
-      // Clean up worktree before deleting task
-      const worktreeStore = useWorktreeStore.getState();
-      const worktreeInfo = worktreeStore.getWorktree(taskId);
+      const workspaceStore = useWorkspaceStore.getState();
+      const workspace = workspaceStore.workspaces[taskId];
 
-      if (worktreeInfo) {
-        const taskExecutionStore = useTaskExecutionStore.getState();
-        const taskState = taskExecutionStore.getTaskState(taskId);
-        const repoPath = taskState.repoPath;
-
-        if (repoPath) {
-          try {
-            await window.electronAPI?.worktree.delete(
-              repoPath,
-              worktreeInfo.worktreePath,
-            );
-          } catch (error) {
-            log.error("Failed to delete worktree:", error);
-          }
+      if (workspace) {
+        try {
+          await workspaceStore.deleteWorkspace(taskId, workspace.folderPath);
+        } catch (error) {
+          log.error("Failed to delete workspace:", error);
         }
-        await worktreeStore.clearWorktree(taskId);
-      }
-
-      // Clean up task association from electron-store
-      try {
-        await window.electronAPI?.folders.removeTaskAssociation(taskId);
-      } catch (error) {
-        log.error("Failed to remove task association:", error);
       }
 
       return client.deleteTask(taskId);

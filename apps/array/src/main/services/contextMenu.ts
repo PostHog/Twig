@@ -1,4 +1,9 @@
-import { Menu, type MenuItemConstructorOptions, nativeImage } from "electron";
+import {
+  dialog,
+  Menu,
+  type MenuItemConstructorOptions,
+  nativeImage,
+} from "electron";
 import { createIpcService } from "../ipc/createIpcService.js";
 import type {
   ExternalAppContextMenuResult,
@@ -97,7 +102,7 @@ export const showTaskContextMenuService = createIpcService({
   handler: async (
     _event,
     _taskId: string,
-    _taskTitle: string,
+    taskTitle: string,
     worktreePath?: string,
   ): Promise<TaskContextMenuResult> => {
     return new Promise((resolve) => {
@@ -113,7 +118,25 @@ export const showTaskContextMenuService = createIpcService({
         { type: "separator" },
         {
           label: "Delete",
-          click: () => resolve({ action: "delete" }),
+          click: async () => {
+            const result = await dialog.showMessageBox({
+              type: "question",
+              title: "Delete Task",
+              message: `Delete "${taskTitle}"?`,
+              detail: worktreePath
+                ? "This will permanently delete the task and its associated worktree."
+                : "This will permanently delete the task.",
+              buttons: ["Cancel", "Delete"],
+              defaultId: 1,
+              cancelId: 0,
+            });
+
+            if (result.response === 1) {
+              resolve({ action: "delete" });
+            } else {
+              resolve({ action: null });
+            }
+          },
         },
       ];
 
@@ -140,14 +163,31 @@ export const showFolderContextMenuService = createIpcService({
   handler: async (
     _event,
     _folderId: string,
-    _folderName: string,
+    folderName: string,
     folderPath?: string,
   ): Promise<FolderContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Remove folder",
-          click: () => resolve({ action: "remove" }),
+          click: async () => {
+            const result = await dialog.showMessageBox({
+              type: "question",
+              title: "Remove Folder",
+              message: `Remove "${folderName}" from Array?`,
+              detail:
+                "This will clean up any worktrees but keep your folder and tasks intact.",
+              buttons: ["Cancel", "Remove"],
+              defaultId: 1,
+              cancelId: 0,
+            });
+
+            if (result.response === 1) {
+              resolve({ action: "remove" });
+            } else {
+              resolve({ action: null });
+            }
+          },
         },
       ];
 

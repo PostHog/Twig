@@ -1,6 +1,7 @@
 import type { FilterCategory } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 
 export interface FilterOption {
   label: string;
@@ -71,8 +72,9 @@ export function getFilterCategories(tasks: Task[]): FilterCategoryConfig[] {
       creatorSet.add("No Creator");
     }
 
-    if (task.repository) {
-      repoSet.add(task.repository);
+    const repo = getTaskRepository(task);
+    if (repo) {
+      repoSet.add(repo);
     } else {
       repoSet.add("No Repository Connected");
     }

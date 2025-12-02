@@ -38,8 +38,10 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
+import { registerSettingsIpc } from "./services/settings.js";
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
+import { registerWorkspaceIpc } from "./services/workspace/index.js";
 import { registerWorktreeIpc } from "./services/worktree.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -244,7 +246,9 @@ registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
 registerFileWatcherIpc(() => mainWindow);
-registerFoldersIpc();
+registerFoldersIpc(() => mainWindow);
 registerWorktreeIpc();
 registerShellIpc();
 registerExternalAppsIpc();
+registerWorkspaceIpc(() => mainWindow);
+registerSettingsIpc();

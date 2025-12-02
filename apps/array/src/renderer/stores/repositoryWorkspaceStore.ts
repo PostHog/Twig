@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { logger } from "@renderer/lib/logger";
+import { randomSuffix } from "@shared/utils/id";
 import { cloneStore } from "@stores/cloneStore";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
@@ -121,8 +122,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
         }
 
         const cloneId =
-          existingCloneId ||
-          `clone-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          existingCloneId || `clone-${Date.now()}-${randomSuffix(7)}`;
 
         if (!existingCloneId) {
           cloneStore.getState().startClone(cloneId, repository, targetPath);

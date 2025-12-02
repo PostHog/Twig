@@ -1,9 +1,12 @@
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import type { Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode, Tab } from "../store/panelTypes";
@@ -74,13 +77,11 @@ export function useTabInjection(
   task: Task,
   closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
-  const worktreePath = useWorktreeStore(
-    (state) => state.taskWorktrees[taskId]?.worktreePath,
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const storedRepoPath = useTaskExecutionStore(
+    (state) => state.taskStates[taskId]?.repoPath ?? null,
   );
-  const taskState = useTaskExecutionStore((state) =>
-    state.getTaskState(taskId),
-  );
-  const repoPath = worktreePath || taskState.repoPath || "";
+  const repoPath = worktreePath || storedRepoPath || "";
 
   return useMemo(
     () =>

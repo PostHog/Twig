@@ -2,6 +2,10 @@ import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { LogView } from "@features/logs/components/LogView";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@features/workspace/stores/workspaceStore";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
@@ -16,7 +20,8 @@ interface TaskLogsPanelProps {
 
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const repoPath = taskData.repoPath;
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const repoPath = worktreePath ?? taskData.repoPath;
 
   // Get session state from store
   const session = useSessionStore((state) => state.getSessionForTask(taskId));
@@ -85,6 +90,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           events={session?.events ?? []}
           sessionId={session?.taskRunId ?? null}
           isRunning={isRunning}
+          isPromptPending={session?.isPromptPending}
           onSendPrompt={handleSendPrompt}
           onCancelSession={handleCancelSession}
           onStartSession={handleStartSession}

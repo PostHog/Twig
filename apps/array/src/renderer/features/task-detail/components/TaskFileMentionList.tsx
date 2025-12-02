@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import "@radix-ui/themes/styles.css";
 
 interface TaskFileMentionListProps {
   items: MentionItem[];
@@ -119,7 +118,13 @@ export const TaskFileMentionList = forwardRef(
     return (
       <div
         ref={containerRef}
-        className="scrollbar-hide absolute z-[1000] max-h-60 min-w-[300px] overflow-auto rounded border border-accent-6 bg-gray-1 font-mono text-xs shadow-xl"
+        className="scrollbar-hide absolute z-[1000] max-h-60 min-w-[300px] overflow-auto rounded font-mono text-xs shadow-xl"
+        style={{
+          backgroundColor: "var(--slate-1)",
+          borderWidth: "1px",
+          borderStyle: "solid",
+          borderColor: "var(--orange-6)",
+        }}
       >
         {props.items.map((item, index) => {
           const isSelected = index === selectedIndex;
@@ -134,12 +139,11 @@ export const TaskFileMentionList = forwardRef(
               }}
               onClick={() => selectItem(index)}
               onMouseEnter={() => setSelectedIndex(index)}
-              className={`flex w-full cursor-pointer items-center gap-1 px-2 py-0.5 text-left ${
-                isSelected
-                  ? "bg-accent-3 text-accent-11"
-                  : "text-gray-11 hover:bg-accent-2"
-              }
-              `}
+              className="flex w-full cursor-pointer items-center gap-1 px-2 py-0.5 text-left"
+              style={{
+                backgroundColor: isSelected ? "var(--orange-a3)" : undefined,
+                color: isSelected ? "var(--orange-11)" : "var(--slate-11)",
+              }}
             >
               <span
                 className={`overflow-hidden text-ellipsis whitespace-nowrap font-mono ${

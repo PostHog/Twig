@@ -4,9 +4,12 @@ import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FileIcon } from "@phosphor-icons/react";
 import { Badge, Box, Flex, Text } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
-import { useWorktreeStore } from "@stores/worktreeStore";
 import { useQuery } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
+import {
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesPanelProps {
   taskId: string;
@@ -91,9 +94,7 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
 
 export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorktreeStore(
-    (state) => state.taskWorktrees[taskId]?.worktreePath,
-  );
+  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: changedFiles = [], isLoading } = useQuery({

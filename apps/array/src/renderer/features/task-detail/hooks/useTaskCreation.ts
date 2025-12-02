@@ -1,12 +1,18 @@
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { tiptapToMarkdown } from "@features/editor/utils/tiptap-converter";
+import {
+  buildPromptBlocks,
+  extractFileMentions,
+  tiptapToMarkdown,
+} from "@features/editor/utils/tiptap-converter";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
-import type { Task } from "@shared/types";
+import type { Task, WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
 import { useCallback } from "react";
@@ -16,6 +22,7 @@ const log = logger.scope("task-creation");
 interface UseTaskCreationOptions {
   editor: Editor | null;
   selectedDirectory: string;
+  workspaceMode: WorkspaceMode;
 }
 
 interface UseTaskCreationReturn {
@@ -24,21 +31,32 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-async function startAgentSession(task: Task, repoPath: string): Promise<void> {
+async function startAgentSession(
+  task: Task,
+  repoPath: string,
+  initialPrompt?: ContentBlock[],
+): Promise<void> {
   await useSessionStore.getState().connectToTask({
     taskId: task.id,
     repoPath,
+    initialPrompt,
   });
 }
 
 export function useTaskCreation({
   editor,
   selectedDirectory,
+  workspaceMode,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
-  const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
+  const {
+    mutate: createTask,
+    isPending: isCreatingTask,
+    invalidateTasks,
+  } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
   const { client, isAuthenticated } = useAuthStore();
-  const { setRepoPath: saveRepoPath } = useTaskExecutionStore();
+  const { setRepoPath: saveRepoPath, setWorkspaceMode: saveWorkspaceMode } =
+    useTaskExecutionStore();
   const { autoRunTasks } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
 
@@ -63,10 +81,14 @@ export function useTaskCreation({
       return;
     }
 
-    const content = tiptapToMarkdown(editor.getJSON()).trim();
+    const editorJson = editor.getJSON();
+    const content = tiptapToMarkdown(editorJson).trim();
     if (!content) {
       return;
     }
+
+    // Extract file mentions for building prompt content blocks
+    const filePaths = extractFileMentions(editorJson);
 
     let repository: string | undefined;
     if (selectedDirectory) {
@@ -85,16 +107,38 @@ export function useTaskCreation({
       },
       {
         onSuccess: async (newTask: Task) => {
+          let agentCwd = selectedDirectory;
+
           if (selectedDirectory) {
             await saveRepoPath(newTask.id, selectedDirectory);
+            saveWorkspaceMode(newTask.id, workspaceMode);
+
+            try {
+              const workspace = await useWorkspaceStore
+                .getState()
+                .ensureWorkspace(newTask.id, selectedDirectory, workspaceMode);
+              agentCwd = workspace.worktreePath ?? workspace.folderPath;
+            } catch (error) {
+              log.error("Failed to create workspace for task:", error);
+            }
           }
+
+          // Invalidate tasks AFTER workspace is ready to avoid race condition
+          // where sidebar re-renders before workspace exists
+          invalidateTasks();
 
           navigateToTask(newTask);
           editor.commands.clearContent();
           clearDraft();
 
-          if (autoRunTasks && selectedDirectory) {
-            await startAgentSession(newTask, selectedDirectory);
+          if (autoRunTasks && agentCwd) {
+            // Build content blocks with file contents for the initial prompt
+            const promptBlocks = await buildPromptBlocks(
+              content,
+              filePaths,
+              agentCwd,
+            );
+            await startAgentSession(newTask, agentCwd, promptBlocks);
           }
         },
         onError: (error) => {
@@ -105,6 +149,7 @@ export function useTaskCreation({
   }, [
     editor,
     selectedDirectory,
+    workspaceMode,
     createTask,
     saveRepoPath,
     navigateToTask,
@@ -113,6 +158,8 @@ export function useTaskCreation({
     isCreatingTask,
     client,
     isAuthenticated,
+    invalidateTasks,
+    saveWorkspaceMode,
   ]);
 
   return {
