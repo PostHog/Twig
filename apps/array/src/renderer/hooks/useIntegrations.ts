@@ -2,7 +2,6 @@ import {
   useIntegrationSelectors,
   useIntegrationStore,
 } from "@features/integrations/stores/integrationStore";
-import type { RepositoryConfig } from "@shared/types";
 import { useEffect } from "react";
 import { useAuthenticatedQuery } from "./useAuthenticatedQuery";
 
@@ -43,9 +42,7 @@ function useRepositories(integrationId?: number) {
     integrationKeys.repositories(integrationId),
     async (client) => {
       if (!integrationId) return [];
-      return (await client.getGithubRepositories(
-        integrationId,
-      )) as RepositoryConfig[];
+      return await client.getGithubRepositories(integrationId);
     },
   );
 

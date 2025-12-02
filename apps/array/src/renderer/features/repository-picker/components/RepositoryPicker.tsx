@@ -4,15 +4,14 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Box, Button, Flex, Popover, Text, TextField } from "@radix-ui/themes";
 import { useRepositoryIntegration } from "@renderer/hooks/useIntegrations";
 import { track } from "@renderer/lib/analytics";
-import type { RepositoryConfig } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
 import { useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 interface RepositoryPickerProps {
-  value: RepositoryConfig | null;
-  onChange: (repo: RepositoryConfig) => void;
+  value: string | null;
+  onChange: (repo: string) => void;
   placeholder?: string;
   size?: "1" | "2" | "3";
 }
@@ -39,7 +38,7 @@ export function RepositoryPicker({
   const { repositories, githubIntegration } = useRepositoryIntegration();
   const { isCloning } = cloneStore();
 
-  const displayValue = value ? `${value.repository}` : placeholder;
+  const displayValue = value ?? placeholder;
 
   // Compute filtered repositories
   const filteredRepos = useMemo(() => {
@@ -47,10 +46,8 @@ export function RepositoryPicker({
     if (!searchValue.trim()) return repositories;
 
     const searchLower = searchValue.toLowerCase();
-    return repositories.filter(
-      (repo) =>
-        repo.repository.toLowerCase().includes(searchLower) ||
-        repo.organization.toLowerCase().includes(searchLower),
+    return repositories.filter((repository) =>
+      repository.toLowerCase().includes(searchLower),
     );
   }, [open, searchValue, repositories]);
 
@@ -88,7 +85,7 @@ export function RepositoryPicker({
     { enabled: open, enableOnFormTags: true },
   );
 
-  const handleSelect = (repo: RepositoryConfig) => {
+  const handleSelect = (repo: string) => {
     onChange(repo);
     setSearchValue("");
     setOpen(false);
@@ -113,22 +110,23 @@ export function RepositoryPicker({
     }
   };
 
-  const renderItem = (repo: RepositoryConfig) => {
-    const repoKey = `${repo.organization}/${repo.repository}`;
-    const cloning = isCloning(repoKey);
+  const renderItem = (repository: string) => {
+    const cloning = isCloning(repository);
+
+    const [organization, repoName] = repository.split("/");
 
     return (
       <Command.Item
-        key={repoKey}
-        onSelect={() => handleSelect(repo)}
+        key={repository}
+        onSelect={() => handleSelect(repository)}
         disabled={cloning}
       >
         <Flex direction="row" gap="4" align="center">
           <Text size="1" color={cloning ? "gray" : undefined}>
-            {repo.repository}
+            {organization}
           </Text>
           <Text size="1" color="gray" className="text-gray-9">
-            {repo.organization}
+            {repoName}
           </Text>
           {cloning && (
             <Text size="1" color="amber">

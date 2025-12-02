@@ -1,13 +1,39 @@
 // import and export to keep a single type file
+
+import type { SessionNotification } from "@agentclientprotocol/sdk";
 import type {
   CanUseTool,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
-export type { CanUseTool, PermissionResult };
+export type { CanUseTool, PermissionResult, SessionNotification };
+
+/**
+ * Stored custom notification following ACP extensibility model.
+ * Custom notifications use underscore-prefixed methods (e.g., `_posthog/phase_start`).
+ * See: https://agentclientprotocol.com/docs/extensibility
+ */
+export interface StoredNotification {
+  type: "notification";
+  /** When this notification was stored */
+  timestamp: string;
+  /** JSON-RPC 2.0 notification (no id field = notification, not request) */
+  notification: {
+    jsonrpc: "2.0";
+    method: string;
+    params?: Record<string, unknown>;
+  };
+}
+
+/**
+ * Type alias for stored log entries.
+ */
+export type StoredEntry = StoredNotification;
 
 // PostHog Task model (matches Array's OpenAPI schema)
 export interface Task {
   id: string;
+  task_number?: number;
+  slug?: string;
   title: string;
   description: string;
   origin_product:
@@ -16,28 +42,22 @@ export interface Task {
     | "user_created"
     | "support_queue"
     | "session_summaries";
-  position?: number;
   github_integration?: number | null;
-  repository_config?: unknown; // JSONField
-  repository_list: string;
-  primary_repository: string;
+  repository: string; // Format: "organization/repository" (e.g., "posthog/posthog-js")
+  json_schema?: Record<string, unknown> | null; // JSON schema for task output validation
   created_at: string;
   updated_at: string;
-
-  // DEPRECATED: These fields have been moved to TaskRun
-  // Use task.latest_run instead
-  current_stage?: string | null;
-  github_branch?: string | null;
-  github_pr_url?: string | null;
+  created_by?: {
+    id: number;
+    uuid: string;
+    distinct_id: string;
+    first_name: string;
+    email: string;
+  };
   latest_run?: TaskRun;
 }
 
 // Log entry structure for TaskRun.log
-export interface LogEntry {
-  type: string; // e.g., "info", "warning", "error", "success", "debug"
-  message: string;
-  [key: string]: unknown; // Allow additional fields
-}
 
 export type ArtifactType =
   | "plan"
@@ -55,14 +75,26 @@ export interface TaskRunArtifact {
   uploaded_at?: string;
 }
 
+export type TaskRunStatus =
+  | "not_started"
+  | "queued"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type TaskRunEnvironment = "local" | "cloud";
+
 // TaskRun model - represents individual execution runs of tasks
 export interface TaskRun {
   id: string;
   task: string; // Task ID
   team: number;
   branch: string | null;
-  status: "started" | "in_progress" | "completed" | "failed";
-  log_url?: string; // Presigned S3 URL for log access (valid for 1 hour)
+  stage: string | null; // Current stage (e.g., 'research', 'plan', 'build')
+  environment: TaskRunEnvironment;
+  status: TaskRunStatus;
+  log_url: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)
   state: Record<string, unknown>; // Intermediate run state (defaults to {}, never null)
@@ -108,194 +140,8 @@ export interface TaskExecutionOptions {
   // Fine-grained permission control (only applied to build phase)
   // See: https://docs.claude.com/en/api/agent-sdk/permissions
   canUseTool?: CanUseTool;
+  skipGitBranch?: boolean; // Skip creating a task-specific git branch
 }
-
-// Base event with timestamp
-interface BaseEvent {
-  ts: number;
-}
-
-// Streaming content events
-export interface TokenEvent extends BaseEvent {
-  type: "token";
-  content: string;
-  contentType?: "text" | "thinking" | "tool_input";
-}
-
-export interface ContentBlockStartEvent extends BaseEvent {
-  type: "content_block_start";
-  index: number;
-  contentType: "text" | "tool_use" | "thinking";
-  toolName?: string;
-  toolId?: string;
-}
-
-export interface ContentBlockStopEvent extends BaseEvent {
-  type: "content_block_stop";
-  index: number;
-}
-
-// Tool events
-export interface ToolCallEvent extends BaseEvent {
-  type: "tool_call";
-  toolName: string;
-  callId: string;
-  args: Record<string, unknown>;
-  parentToolUseId?: string | null; // For nested tool calls (subagents)
-  // Tool metadata (enriched by adapter for UI consumption)
-  tool?: import("./tools/types.js").Tool;
-  category?: import("./tools/types.js").ToolCategory;
-}
-
-export interface ToolResultEvent extends BaseEvent {
-  type: "tool_result";
-  toolName: string;
-  callId: string;
-  result: unknown;
-  isError?: boolean; // Whether the tool execution failed
-  parentToolUseId?: string | null; // For nested tool calls (subagents)
-  // Tool metadata (enriched by adapter for UI consumption)
-  tool?: import("./tools/types.js").Tool;
-  category?: import("./tools/types.js").ToolCategory;
-}
-
-// Message lifecycle events
-export interface MessageStartEvent extends BaseEvent {
-  type: "message_start";
-  messageId?: string;
-  model?: string;
-}
-
-export interface MessageDeltaEvent extends BaseEvent {
-  type: "message_delta";
-  stopReason?: string;
-  stopSequence?: string;
-  usage?: {
-    outputTokens: number;
-  };
-}
-
-export interface MessageStopEvent extends BaseEvent {
-  type: "message_stop";
-}
-
-// User message events
-export interface UserMessageEvent extends BaseEvent {
-  type: "user_message";
-  content: string;
-  isSynthetic?: boolean;
-}
-
-// System events
-export interface StatusEvent extends BaseEvent {
-  type: "status";
-  phase: string;
-  // Common optional fields (varies by phase):
-  kind?: string; // Kind of status (plan, implementation)
-  branch?: string; // Git branch name
-  prUrl?: string; // Pull request URL
-  taskId?: string; // Task identifier
-  messageId?: string; // Claude message ID
-  model?: string; // Model name
-  [key: string]: unknown; // Allow additional fields
-}
-
-export interface InitEvent extends BaseEvent {
-  type: "init";
-  model: string;
-  tools: string[];
-  permissionMode: string;
-  cwd: string;
-  apiKeySource: string;
-  agents?: string[];
-  slashCommands?: string[];
-  outputStyle?: string;
-  mcpServers?: Array<{ name: string; status: string }>;
-}
-
-export interface CompactBoundaryEvent extends BaseEvent {
-  type: "compact_boundary";
-  trigger: "manual" | "auto";
-  preTokens: number;
-}
-
-// Result events
-export interface DoneEvent extends BaseEvent {
-  type: "done";
-  result?: string; // Final summary text from Claude
-  durationMs?: number;
-  durationApiMs?: number; // API-only duration (excluding local processing)
-  numTurns?: number;
-  totalCostUsd?: number;
-  usage?: unknown;
-  modelUsage?: {
-    // Per-model usage breakdown
-    [modelName: string]: {
-      inputTokens: number;
-      outputTokens: number;
-      cacheReadInputTokens: number;
-      cacheCreationInputTokens: number;
-      webSearchRequests: number;
-      costUSD: number;
-      contextWindow: number;
-    };
-  };
-  permissionDenials?: Array<{
-    // Tools that were denied by permissions
-    tool_name: string;
-    tool_use_id: string;
-    tool_input: Record<string, unknown>;
-  }>;
-}
-
-export interface ErrorEvent extends BaseEvent {
-  type: "error";
-  message: string;
-  error?: unknown;
-  errorType?: string;
-  context?: Record<string, unknown>; // Partial error context for debugging
-  sdkError?: unknown; // Original SDK error object
-}
-
-// Metric and artifact events (general purpose, not tool-specific)
-export interface MetricEvent extends BaseEvent {
-  type: "metric";
-  key: string;
-  value: number;
-  unit?: string;
-}
-
-export interface ArtifactEvent extends BaseEvent {
-  type: "artifact";
-  kind: string;
-  // biome-ignore lint/suspicious/noExplicitAny: Artifact content can be any JSON-serializable value
-  content: any;
-}
-
-export interface RawSDKEvent extends BaseEvent {
-  type: "raw_sdk_event";
-  // biome-ignore lint/suspicious/noExplicitAny: SDK messages have dynamic structure for debugging
-  sdkMessage: any;
-}
-
-export type AgentEvent =
-  | TokenEvent
-  | ContentBlockStartEvent
-  | ContentBlockStopEvent
-  | ToolCallEvent
-  | ToolResultEvent
-  | MessageStartEvent
-  | MessageDeltaEvent
-  | MessageStopEvent
-  | UserMessageEvent
-  | StatusEvent
-  | InitEvent
-  | CompactBoundaryEvent
-  | DoneEvent
-  | ErrorEvent
-  | MetricEvent
-  | ArtifactEvent
-  | RawSDKEvent;
 
 export interface ExecutionResult {
   // biome-ignore lint/suspicious/noExplicitAny: Results array contains varying SDK response types
@@ -348,12 +194,11 @@ export type OnLogCallback = (
 
 export interface AgentConfig {
   workingDirectory?: string;
-  onEvent?: (event: AgentEvent) => void;
 
-  // PostHog API configuration
-  posthogApiUrl: string;
-  posthogApiKey: string;
-  posthogProjectId: number;
+  // PostHog API configuration (optional - enables PostHog integration when provided)
+  posthogApiUrl?: string;
+  posthogApiKey?: string;
+  posthogProjectId?: number;
 
   // PostHog MCP configuration
   posthogMcpUrl?: string;

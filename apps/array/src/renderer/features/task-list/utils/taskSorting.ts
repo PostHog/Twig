@@ -45,12 +45,8 @@ export function sortTasks(
         compareResult = a.title.localeCompare(b.title);
         break;
       case "repository": {
-        const repoA = a.repository_config
-          ? `${a.repository_config.organization}/${a.repository_config.repository}`
-          : "";
-        const repoB = b.repository_config
-          ? `${b.repository_config.organization}/${b.repository_config.repository}`
-          : "";
+        const repoA = a.repository ? a.repository : "";
+        const repoB = b.repository ? b.repository : "";
         compareResult = repoA.localeCompare(repoB);
         break;
       }

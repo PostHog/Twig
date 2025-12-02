@@ -1,19 +1,12 @@
-import { LogEventRenderer } from "@features/logs/components/LogEventRenderer";
-import { TodoGroupView } from "@features/logs/components/TodoGroupView";
-import {
-  useLogsSelectors,
-  useLogsStore,
-} from "@features/logs/stores/logsStore";
+import type { SessionNotification } from "@agentclientprotocol/sdk";
+import type { SessionEvent } from "@features/sessions/stores/sessionStore";
 import { useAutoScroll } from "@hooks/useAutoScroll";
 import {
-  CaretDown as CaretDownIcon,
-  CaretUp as CaretUpIcon,
+  Code as CodeIcon,
   Copy as CopyIcon,
-  Play as PlayIcon,
+  PaperPlaneRight as SendIcon,
   Stop as StopIcon,
-  Trash as TrashIcon,
 } from "@phosphor-icons/react";
-import type { AgentEvent } from "@posthog/agent";
 import {
   Box,
   Button,
@@ -21,57 +14,141 @@ import {
   Flex,
   Heading,
   IconButton,
-  SegmentedControl,
   Text,
+  TextArea,
   Tooltip,
 } from "@radix-ui/themes";
-import { useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 
 interface LogViewProps {
-  logs: AgentEvent[];
+  events: SessionEvent[];
+  sessionId: string | null;
   isRunning: boolean;
-  onClearLogs?: () => void;
-  runMode?: "local" | "cloud";
-  cloneProgress?: { message: string; percent: number } | null;
-  isCloning?: boolean;
-  onRunTask?: () => void;
-  onCancelTask?: () => void;
-  onRunModeChange?: (mode: "local" | "cloud") => void;
+  onSendPrompt?: (text: string) => Promise<void>;
+  onCancelSession?: () => void;
+  onStartSession?: () => void;
+}
+
+function renderNotification(notification: SessionNotification): string {
+  const update = notification.update;
+  switch (update.sessionUpdate) {
+    case "user_message_chunk":
+      return update.content.type === "text"
+        ? `You: ${update.content.text}`
+        : `You: [${update.content.type}]`;
+    case "agent_message_chunk":
+      return update.content.type === "text"
+        ? update.content.text
+        : `[${update.content.type}]`;
+    case "tool_call":
+      return `\n🔧 ${update.title} (${update.status})`;
+    case "tool_call_update":
+      return `   └─ ${update.status}`;
+    case "agent_thought_chunk":
+      return update.content.type === "text" ? `💭 ${update.content.text}` : "";
+    case "plan":
+      return `📋 Plan: ${JSON.stringify(update)}`;
+    case "available_commands_update":
+      return "";
+    default:
+      return `[session_update: ${update.sessionUpdate}]`;
+  }
 }
 
 export function LogView({
-  logs,
+  events,
+  sessionId,
   isRunning,
-  onClearLogs,
-  runMode,
-  cloneProgress,
-  isCloning,
-  onRunTask,
-  onCancelTask,
-  onRunModeChange,
+  onSendPrompt,
+  onCancelSession,
+  onStartSession,
 }: LogViewProps) {
-  const viewMode = useLogsStore((state) => state.viewMode);
-  const highlightedIndex = useLogsStore((state) => state.highlightedIndex);
-  const expandAll = useLogsStore((state) => state.expandAll);
-  const setViewMode = useLogsStore((state) => state.setViewMode);
-  const setHighlightedIndex = useLogsStore(
-    (state) => state.setHighlightedIndex,
-  );
-  const setExpandAll = useLogsStore((state) => state.setExpandAll);
-  const setLogs = useLogsStore((state) => state.setLogs);
+  const [inputValue, setInputValue] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [showRawLogs, setShowRawLogs] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { scrollRef } = useAutoScroll({
-    contentLength: logs.length,
-    viewMode,
+    contentLength: events.length,
+    viewMode: showRawLogs ? "raw" : "pretty",
   });
 
-  useEffect(() => {
-    setLogs(logs);
-  }, [logs, setLogs]);
+  const handleSend = useCallback(async () => {
+    const text = inputValue.trim();
+    if (!text || !onSendPrompt || isSending) return;
 
-  const { processedLogs } = useLogsSelectors();
+    setIsSending(true);
+    setInputValue("");
 
-  if (logs.length === 0 && !isRunning) {
+    try {
+      await onSendPrompt(text);
+    } finally {
+      setIsSending(false);
+      inputRef.current?.focus();
+    }
+  }, [inputValue, onSendPrompt, isSending]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend],
+  );
+
+  const handleCopyLogs = () => {
+    const logsText = events
+      .map((event) => {
+        if (event.type === "session_update") {
+          return renderNotification(event.notification);
+        }
+        if (event.type === "acp_message") {
+          return `[${event.direction}] ${JSON.stringify(event.message)}`;
+        }
+        return JSON.stringify(event);
+      })
+      .join("\n");
+    navigator.clipboard.writeText(logsText);
+  };
+
+  // Build rendered output from events (filter out raw acp_message unless showRawLogs is true)
+  const renderedOutput: Array<{
+    key: string;
+    text: string;
+    isUserMessage?: boolean;
+    isRaw?: boolean;
+    rawDirection?: "client" | "agent";
+  }> = [];
+
+  for (let idx = 0; idx < events.length; idx++) {
+    const event = events[idx];
+
+    if (event.type === "acp_message") {
+      if (showRawLogs) {
+        renderedOutput.push({
+          key: `${event.ts}-${idx}`,
+          text: `[${event.direction}] ${JSON.stringify(event.message)}`,
+          isRaw: true,
+          rawDirection: event.direction,
+        });
+      }
+      continue;
+    }
+
+    if (event.type === "session_update") {
+      renderedOutput.push({
+        key: `${event.ts}-${idx}`,
+        text: renderNotification(event.notification),
+        isUserMessage:
+          event.notification.update.sessionUpdate === "user_message_chunk",
+      });
+    }
+  }
+
+  // Show start session prompt when no session
+  if (!sessionId && !isRunning) {
     return (
       <Flex
         direction="column"
@@ -80,62 +157,38 @@ export function LogView({
         height="100%"
         p="8"
       >
-        <Flex direction="column" align="center" gap="2">
-          <Text color="gray">No activity yet</Text>
+        <Flex direction="column" align="center" gap="4">
+          <Text color="gray">No active session</Text>
+          {onStartSession && (
+            <Button size="2" onClick={onStartSession}>
+              Start Agent Session
+            </Button>
+          )}
         </Flex>
       </Flex>
     );
   }
 
-  const handleCopyLogs = () => {
-    const logsText = logs
-      .map((log) => JSON.stringify(log, null, 2))
-      .join("\n\n");
-    navigator.clipboard.writeText(logsText);
-  };
-
-  const handleJumpToRaw = (index: number) => {
-    setViewMode("raw");
-    setHighlightedIndex(index);
-    // Small delay to ensure the view has switched before scrolling
-    setTimeout(() => {
-      const element = document.getElementById(`log-${index}`);
-      if (element && scrollRef.current) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 100);
-  };
-
   return (
     <Flex direction="column" height="100%">
+      {/* Header */}
       <Box p="4" className="border-gray-6 border-b">
         <Flex align="center" justify="between">
-          <Heading size="3">Activity Log</Heading>
+          <Heading size="3">Agent Chat</Heading>
           <Flex align="center" gap="3">
-            {viewMode === "pretty" && (
-              <>
-                <Tooltip content="Collapse all">
-                  <IconButton
-                    size="2"
-                    variant="ghost"
-                    color="gray"
-                    onClick={() => setExpandAll(false)}
-                  >
-                    <CaretUpIcon size={16} />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip content="Expand all">
-                  <IconButton
-                    size="2"
-                    variant="ghost"
-                    color="gray"
-                    onClick={() => setExpandAll(true)}
-                  >
-                    <CaretDownIcon size={16} />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
+            <Tooltip
+              content={showRawLogs ? "Show pretty view" : "Show raw ACP logs"}
+            >
+              <IconButton
+                size="2"
+                variant={showRawLogs ? "solid" : "ghost"}
+                color="gray"
+                onClick={() => setShowRawLogs(!showRawLogs)}
+              >
+                <CodeIcon size={16} />
+              </IconButton>
+            </Tooltip>
+
             <Tooltip content="Copy logs">
               <IconButton
                 size="2"
@@ -146,78 +199,17 @@ export function LogView({
                 <CopyIcon size={16} />
               </IconButton>
             </Tooltip>
-            {onClearLogs && (
-              <Tooltip content="Clear logs">
-                <IconButton
-                  size="2"
-                  variant="ghost"
-                  color="red"
-                  onClick={onClearLogs}
-                >
-                  <TrashIcon size={16} />
-                </IconButton>
+
+            {isRunning && onCancelSession && (
+              <Tooltip content="Cancel session">
+                <Button size="2" color="red" onClick={onCancelSession}>
+                  <StopIcon size={16} weight="fill" />
+                  Cancel
+                </Button>
               </Tooltip>
             )}
-            <SegmentedControl.Root
-              value={viewMode}
-              onValueChange={(value) => setViewMode(value as "pretty" | "raw")}
-            >
-              <SegmentedControl.Item value="pretty">
-                Formatted
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="raw">Raw</SegmentedControl.Item>
-            </SegmentedControl.Root>
 
-            {/* Run/Cancel Buttons */}
-            {onRunTask && (
-              <>
-                {!isRunning ? (
-                  <Tooltip
-                    content={
-                      runMode === "cloud" ? "Run on cloud" : "Run locally"
-                    }
-                  >
-                    <Button size="2" onClick={onRunTask} disabled={isCloning}>
-                      <PlayIcon size={16} weight="fill" />
-                      {isCloning
-                        ? `Cloning${cloneProgress?.percent ? ` (${cloneProgress.percent}%)` : ""}...`
-                        : runMode === "cloud"
-                          ? "Run (Cloud)"
-                          : "Run (Local)"}
-                    </Button>
-                  </Tooltip>
-                ) : (
-                  onCancelTask && (
-                    <Tooltip content="Cancel task">
-                      <Button size="2" color="red" onClick={onCancelTask}>
-                        <StopIcon size={16} weight="fill" />
-                        Cancel
-                      </Button>
-                    </Tooltip>
-                  )
-                )}
-
-                {/* Run Mode Toggle */}
-                {!isRunning && onRunModeChange && runMode && (
-                  <SegmentedControl.Root
-                    value={runMode}
-                    onValueChange={(value) =>
-                      onRunModeChange(value as "local" | "cloud")
-                    }
-                    size="1"
-                  >
-                    <SegmentedControl.Item value="local">
-                      Local
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="cloud">
-                      Cloud
-                    </SegmentedControl.Item>
-                  </SegmentedControl.Root>
-                )}
-              </>
-            )}
-
-            {isRunning && (
+            {isRunning ? (
               <Flex align="center" gap="2">
                 <Box
                   width="8px"
@@ -228,83 +220,81 @@ export function LogView({
                   Running
                 </Text>
               </Flex>
-            )}
-            {!isRunning && logs.length > 0 && (
-              <Flex align="center" gap="2">
-                <Box
-                  width="8px"
-                  height="8px"
-                  className="rounded-full bg-accent-9"
-                />
-                <Text size="2" color="gray">
-                  Idle
-                </Text>
-              </Flex>
+            ) : (
+              events.length > 0 && (
+                <Flex align="center" gap="2">
+                  <Box
+                    width="8px"
+                    height="8px"
+                    className="rounded-full bg-accent-9"
+                  />
+                  <Text size="2" color="gray">
+                    Idle
+                  </Text>
+                </Flex>
+              )
             )}
           </Flex>
         </Flex>
       </Box>
+
+      {/* Chat output */}
       <Box ref={scrollRef} flexGrow="1" overflowY="auto" p="4">
-        {viewMode === "pretty" ? (
-          <Box className="space-y-2">
-            {processedLogs.map((processed, idx) => {
-              if (processed.type === "todo_group") {
-                const key = `todo-${processed.timestamp}-${idx}`;
-                return (
-                  <TodoGroupView
-                    key={key}
-                    todo={processed.todo}
-                    allTodos={processed.allTodos}
-                    toolCalls={processed.toolCalls}
-                    timestamp={processed.timestamp}
-                    todoWriteIndex={processed.todoWriteIndex}
-                    onJumpToRaw={handleJumpToRaw}
-                    forceExpanded={expandAll}
-                  />
-                );
-              } else {
-                const key = `${processed.event.type}-${processed.event.ts}-${processed.index}`;
-                return (
-                  <LogEventRenderer
-                    key={key}
-                    event={processed.event}
-                    index={processed.index}
-                    toolResult={processed.toolResult}
-                    onJumpToRaw={handleJumpToRaw}
-                    forceExpanded={expandAll}
-                  />
-                );
-              }
-            })}
-          </Box>
-        ) : (
-          <Box>
-            {logs.map((log, index) => {
-              const timestamp = new Date(log.ts).toLocaleTimeString("en-US", {
-                hour12: false,
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              });
-              const isHighlighted = highlightedIndex === index;
-              return (
-                <Code
-                  key={`${log.ts}-${index}`}
-                  id={`log-${index}`}
-                  size="1"
-                  variant="ghost"
-                  className={`block whitespace-pre-wrap font-mono ${
-                    isHighlighted ? "bg-yellow-3" : ""
-                  }`}
-                  style={{ marginBottom: "1rem" }}
-                >
-                  [{timestamp}] {JSON.stringify(log, null, 2)}
-                </Code>
-              );
-            })}
-          </Box>
-        )}
+        <Box className="space-y-1 font-mono text-sm">
+          {renderedOutput.map((item) => (
+            <Code
+              key={item.key}
+              size="2"
+              variant="ghost"
+              className={`block whitespace-pre-wrap ${
+                item.rawDirection === "client"
+                  ? "text-cyan-11"
+                  : item.rawDirection === "agent"
+                    ? "text-orange-11"
+                    : item.isUserMessage
+                      ? "text-blue-11"
+                      : ""
+              }`}
+            >
+              {item.text}
+            </Code>
+          ))}
+          {isSending && (
+            <Code size="2" variant="ghost" className="block text-gray-9">
+              Thinking...
+            </Code>
+          )}
+        </Box>
       </Box>
+
+      {/* Input area */}
+      {sessionId && (
+        <Box p="4" className="border-gray-6 border-t">
+          <Flex gap="2" align="end">
+            <Box flexGrow="1">
+              <TextArea
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message..."
+                disabled={isSending || !isRunning}
+                rows={2}
+                style={{ resize: "none" }}
+              />
+            </Box>
+            <Tooltip content="Send message (Enter)">
+              <IconButton
+                size="3"
+                onClick={handleSend}
+                disabled={!inputValue.trim() || isSending || !isRunning}
+              >
+                <SendIcon size={20} />
+              </IconButton>
+            </Tooltip>
+          </Flex>
+        </Box>
+      )}
     </Flex>
   );
 }

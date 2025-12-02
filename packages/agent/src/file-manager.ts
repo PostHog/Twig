@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { extname, join } from "node:path";
+import z from "zod";
 import type { ResearchEvaluation, SupportingFile } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
@@ -194,27 +195,35 @@ export class PostHogFileManager {
     }
   }
 
-  async writeTodos(taskId: string, data: any): Promise<void> {
+  async writeTodos(taskId: string, data: unknown): Promise<void> {
+    const todos = z.object({
+      metadata: z.object({
+        total: z.number(),
+        completed: z.number(),
+      }),
+    });
+
+    const validatedData = todos.parse(data);
     this.logger.debug("Writing todos", {
       taskId,
-      total: data.metadata?.total ?? 0,
-      completed: data.metadata?.completed ?? 0,
+      total: validatedData.metadata?.total ?? 0,
+      completed: validatedData.metadata?.completed ?? 0,
     });
 
     await this.writeTaskFile(taskId, {
       name: "todos.json",
-      content: JSON.stringify(data, null, 2),
+      content: JSON.stringify(validatedData, null, 2),
       type: "artifact",
     });
 
     this.logger.info("Todos file written", {
       taskId,
-      total: data.metadata?.total ?? 0,
-      completed: data.metadata?.completed ?? 0,
+      total: validatedData.metadata?.total ?? 0,
+      completed: validatedData.metadata?.completed ?? 0,
     });
   }
 
-  async readTodos(taskId: string): Promise<any | null> {
+  async readTodos(taskId: string): Promise<unknown | null> {
     try {
       const content = await this.readTaskFile(taskId, "todos.json");
       return content ? JSON.parse(content) : null;

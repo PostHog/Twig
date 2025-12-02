@@ -1,5 +1,3 @@
-import type { RepositoryConfig } from "@shared/types";
-import { formatRepoKey } from "@utils/repository";
 import { create } from "zustand";
 
 export interface Integration {
@@ -10,9 +8,9 @@ export interface Integration {
 
 interface IntegrationStore {
   integrations: Integration[];
-  repositories: RepositoryConfig[];
+  repositories: string[];
   setIntegrations: (integrations: Integration[]) => void;
-  setRepositories: (repositories: RepositoryConfig[]) => void;
+  setRepositories: (repositories: string[]) => void;
 }
 
 interface IntegrationSelectors {
@@ -35,9 +33,7 @@ export const useIntegrationSelectors = (): IntegrationSelectors => {
 
   const isRepoInIntegration = (repoKey: string) => {
     if (!repoKey) return true;
-    return repositories.some(
-      (r) => formatRepoKey(r.organization, r.repository) === repoKey,
-    );
+    return repositories.some((r) => r === repoKey.toLowerCase());
   };
 
   return {

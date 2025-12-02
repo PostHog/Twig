@@ -87,6 +87,15 @@ export class Logger {
     this.emitLog("debug", message, data);
   }
 
+  log(level: LogLevelType, message: string, data?: unknown, scope?: string) {
+    const originalScope = this.scope;
+    if (scope) {
+      this.scope = scope;
+    }
+    this.emitLog(level, message, data);
+    this.scope = originalScope;
+  }
+
   /**
    * Create a child logger with additional prefix and scope
    */

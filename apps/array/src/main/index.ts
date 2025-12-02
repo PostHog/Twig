@@ -12,7 +12,14 @@ import {
 } from "electron";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
-import { registerAgentIpc, type TaskController } from "./services/agent.js";
+import {
+  cleanupAgentSessions,
+  registerAgentIpc,
+} from "./services/session-manager.js";
+
+// Legacy type kept for backwards compatibility with taskControllers map
+type TaskController = unknown;
+
 import { setupAgentHotReload } from "./services/dev-reload.js";
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
 import { registerFoldersIpc } from "./services/folders.js";
@@ -210,6 +217,14 @@ app.on("window-all-closed", async () => {
     await shutdownPostHog();
     app.quit();
   }
+});
+
+app.on("before-quit", async (event) => {
+  event.preventDefault();
+  await cleanupAgentSessions();
+  trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
+  await shutdownPostHog();
+  app.exit(0);
 });
 
 app.on("activate", () => {

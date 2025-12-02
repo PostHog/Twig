@@ -68,8 +68,8 @@ jobs:
     if: needs.determine-version.outputs.should_publish == 'true'
     runs-on: macos-latest
     env:
-      GH_TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
+      GH_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
+      GITHUB_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
       NODE_ENV: production
       APP_VERSION: ${{ needs.determine-version.outputs.version }}
       APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}

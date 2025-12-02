@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { POSTHOG_NOTIFICATIONS } from "../../acp-extensions.js";
 import { PLANNING_SYSTEM_PROMPT } from "../../agents/planning.js";
 import { TodoManager } from "../../todo-manager.js";
 import type { WorkflowStepRunner } from "../types.js";
@@ -14,9 +15,9 @@ export const planStep: WorkflowStepRunner = async ({ step, context }) => {
     fileManager,
     gitManager,
     promptBuilder,
-    adapter,
+    sessionId,
     mcpServers,
-    emitEvent,
+    sendNotification,
   } = context;
 
   const stepLogger = logger.child("PlanStep");
@@ -32,16 +33,18 @@ export const planStep: WorkflowStepRunner = async ({ step, context }) => {
     stepLogger.info("Waiting for answered research questions", {
       taskId: task.id,
     });
-    emitEvent(
-      adapter.createStatusEvent("phase_complete", {
-        phase: "research_questions",
-      }),
-    );
+    await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+      sessionId,
+      phase: "research_questions",
+    });
     return { status: "skipped", halt: true };
   }
 
   stepLogger.info("Starting planning phase", { taskId: task.id });
-  emitEvent(adapter.createStatusEvent("phase_start", { phase: "planning" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_START, {
+    sessionId,
+    phase: "planning",
+  });
   let researchContext = "";
   if (researchData) {
     researchContext += `## Research Context\n\n${researchData.context}\n\n`;
@@ -112,18 +115,16 @@ export const planStep: WorkflowStepRunner = async ({ step, context }) => {
   let planContent = "";
   try {
     for await (const message of response) {
-      emitEvent(adapter.createRawSDKEvent(message));
-      const transformedEvents = adapter.transform(message);
-      for (const event of transformedEvents) {
-        emitEvent(event);
-      }
-
       const todoList = await todoManager.checkAndPersistFromMessage(
         message,
         task.id,
       );
       if (todoList) {
-        emitEvent(adapter.createArtifactEvent("todos", todoList));
+        await sendNotification(POSTHOG_NOTIFICATIONS.ARTIFACT, {
+          sessionId,
+          kind: "todos",
+          content: todoList,
+        });
       }
 
       // Extract text content for plan
@@ -151,12 +152,16 @@ export const planStep: WorkflowStepRunner = async ({ step, context }) => {
   });
 
   if (!isCloudMode) {
-    emitEvent(
-      adapter.createStatusEvent("phase_complete", { phase: "planning" }),
-    );
+    await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+      sessionId,
+      phase: "planning",
+    });
     return { status: "completed", halt: true };
   }
 
-  emitEvent(adapter.createStatusEvent("phase_complete", { phase: "planning" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+    sessionId,
+    phase: "planning",
+  });
   return { status: "completed" };
 };

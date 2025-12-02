@@ -75,11 +75,7 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
         "./registeredFoldersStore"
       );
 
-      const repoKey =
-        task.repository_config?.organization &&
-        task.repository_config?.repository
-          ? `${task.repository_config.organization}/${task.repository_config.repository}`
-          : undefined;
+      const repoKey = task.repository ?? undefined;
 
       const directory = useTaskDirectoryStore
         .getState()

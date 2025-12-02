@@ -27,10 +27,7 @@ export function getTaskGrouping(
       case "source":
         return task.origin_product;
       case "repository":
-        return task.repository_config?.organization &&
-          task.repository_config?.repository
-          ? `${task.repository_config.organization}/${task.repository_config.repository}`
-          : "No Repository Connected";
+        return task.repository ?? "No Repository Connected";
       default:
         return "All Tasks";
     }

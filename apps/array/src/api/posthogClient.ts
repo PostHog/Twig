@@ -1,5 +1,6 @@
+import type { AgentEvent } from "@posthog/agent";
 import { logger } from "@renderer/lib/logger";
-import type { LogEntry, RepositoryConfig, Task, TaskRun } from "@shared/types";
+import type { Task, TaskRun } from "@shared/types";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
 
@@ -60,15 +61,14 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(repositoryOrg?: string, repositoryName?: string) {
+  async getTasks(repository?: string) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
     };
 
-    if (repositoryOrg && repositoryName) {
-      params.repository_config__organization = repositoryOrg;
-      params.repository_config__repository = repositoryName;
+    if (repository) {
+      params.repository = repository;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {
@@ -84,24 +84,25 @@ export class PostHogAPIClient {
     const data = await this.api.get(`/api/projects/{project_id}/tasks/{id}/`, {
       path: { project_id: teamId.toString(), id: taskId },
     });
-    return data;
+    return data as unknown as Task;
   }
 
   async createTask(
-    description: string,
-    repositoryConfig?: { organization: string; repository: string },
+    options: Pick<Task, "description"> &
+      Partial<
+        Pick<Task, "title" | "repository" | "json_schema" | "origin_product">
+      > & {
+        github_integration?: number | null;
+      },
   ) {
     const teamId = await this.getTeamId();
 
-    const payload = {
-      description,
-      origin_product: "user_created" as const,
-      ...(repositoryConfig && { repository_config: repositoryConfig }),
-    };
-
     const data = await this.api.post(`/api/projects/{project_id}/tasks/`, {
       path: { project_id: teamId.toString() },
-      body: payload as unknown as Schemas.Task,
+      body: {
+        origin_product: "user_created",
+        ...options,
+      } as unknown as Schemas.Task,
     });
 
     return data;
@@ -129,14 +130,17 @@ export class PostHogAPIClient {
 
   async duplicateTask(taskId: string) {
     const task = await this.getTask(taskId);
-    return this.createTask(
-      task.description ?? "",
-      //@ts-expect-error
-      task.repository_config as RepositoryConfig | undefined,
-    );
+    return this.createTask({
+      description: task.description ?? "",
+      title: task.title,
+      repository: task.repository,
+      json_schema: task.json_schema,
+      origin_product: task.origin_product,
+      github_integration: task.github_integration,
+    });
   }
 
-  async runTask(taskId: string) {
+  async runTaskInCloud(taskId: string): Promise<Task> {
     const teamId = await this.getTeamId();
 
     const data = await this.api.post(
@@ -146,7 +150,7 @@ export class PostHogAPIClient {
       },
     );
 
-    return data;
+    return data as unknown as Task;
   }
 
   async listTaskRuns(taskId: string): Promise<TaskRun[]> {
@@ -168,7 +172,7 @@ export class PostHogAPIClient {
     return data.results ?? data ?? [];
   }
 
-  async getTaskRun(taskId: string, runId: string) {
+  async getTaskRun(taskId: string, runId: string): Promise<TaskRun> {
     const teamId = await this.getTeamId();
     const url = new URL(
       `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/`,
@@ -186,7 +190,71 @@ export class PostHogAPIClient {
     return await response.json();
   }
 
-  async getTaskLogs(taskId: string): Promise<LogEntry[]> {
+  async createTaskRun(taskId: string): Promise<TaskRun> {
+    const teamId = await this.getTeamId();
+    const data = await this.api.post(
+      `/api/projects/{project_id}/tasks/{task_id}/runs/`,
+      {
+        path: { project_id: teamId.toString(), task_id: taskId },
+        //@ts-expect-error the generated client does not infer the request type unless explicitly specified on the viewset
+        body: {
+          environment: "local" as const,
+        },
+      },
+    );
+    return data as unknown as TaskRun;
+  }
+
+  async updateTaskRun(
+    taskId: string,
+    runId: string,
+    updates: Partial<
+      Pick<
+        TaskRun,
+        "status" | "branch" | "stage" | "error_message" | "output" | "state"
+      >
+    >,
+  ): Promise<TaskRun> {
+    const teamId = await this.getTeamId();
+    const data = await this.api.patch(
+      `/api/projects/{project_id}/tasks/{task_id}/runs/{id}/`,
+      {
+        path: {
+          project_id: teamId.toString(),
+          task_id: taskId,
+          id: runId,
+        },
+        body: updates,
+      },
+    );
+    return data as unknown as TaskRun;
+  }
+
+  /**
+   * Append events to a task run's S3 log file
+   */
+  async appendTaskRunLog(
+    taskId: string,
+    runId: string,
+    entries: AgentEvent[],
+  ): Promise<void> {
+    const teamId = await this.getTeamId();
+    const url = `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/append_log/`;
+    const response = await this.api.fetcher.fetch({
+      method: "post",
+      url: new URL(url),
+      path: url,
+      overrides: {
+        body: JSON.stringify({ entries }),
+        headers: { "Content-Type": "application/json" },
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to append log: ${response.statusText}`);
+    }
+  }
+
+  async getTaskLogs(taskId: string): Promise<AgentEvent[]> {
     try {
       const task = (await this.getTask(taskId)) as unknown as Task;
       const logUrl = task?.latest_run?.log_url;
@@ -212,7 +280,7 @@ export class PostHogAPIClient {
       return content
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as LogEntry);
+        .map((line) => JSON.parse(line) as AgentEvent);
     } catch (err) {
       log.warn("Failed to fetch task logs from latest run", err);
       return [];
@@ -238,7 +306,9 @@ export class PostHogAPIClient {
     return data.results ?? data ?? [];
   }
 
-  async getGithubRepositories(integrationId: string | number) {
+  async getGithubRepositories(
+    integrationId: string | number,
+  ): Promise<string[]> {
     const teamId = await this.getTeamId();
     const url = new URL(
       `${this.api.baseUrl}/api/environments/${teamId}/integrations/${integrationId}/github_repos/`,
@@ -271,10 +341,10 @@ export class PostHogAPIClient {
       "unknown";
 
     const repoNames = data.repositories ?? data.results ?? data ?? [];
-    return repoNames.map((repoName: string) => ({
-      organization,
-      repository: repoName,
-    }));
+    return repoNames.map(
+      (repoName: string) =>
+        `${organization.toLowerCase()}/${repoName.toLowerCase()}` as string,
+    );
   }
 
   async getAgents() {

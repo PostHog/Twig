@@ -1,7 +1,7 @@
 import type {
-  LogEntry,
   PostHogAPIConfig,
   PostHogResource,
+  StoredEntry,
   Task,
   TaskArtifactUploadPayload,
   TaskRun,
@@ -16,14 +16,15 @@ interface PostHogApiResponse<T> {
   previous?: string | null;
 }
 
-export interface TaskRunUpdate {
-  status?: TaskRun["status"];
-  branch?: string | null;
-  current_stage?: string | null;
-  error_message?: string | null;
-  output?: Record<string, unknown> | null;
-  state?: Record<string, unknown>;
-}
+export type TaskRunUpdate = Partial<
+  Pick<
+    TaskRun,
+    "status" | "branch" | "stage" | "error_message" | "output" | "state"
+  >
+>;
+
+export type TaskCreatePayload = Pick<Task, "description"> &
+  Partial<Pick<Task, "title" | "repository" | "origin_product">>;
 
 export class PostHogAPIClient {
   private config: PostHogAPIConfig;
@@ -125,6 +126,17 @@ export class PostHogAPIClient {
     });
   }
 
+  async createTask(payload: TaskCreatePayload): Promise<Task> {
+    const teamId = this.getTeamId();
+    return this.apiRequest<Task>(`/api/projects/${teamId}/tasks/`, {
+      method: "POST",
+      body: JSON.stringify({
+        origin_product: "user_created",
+        ...payload,
+      }),
+    });
+  }
+
   // TaskRun methods
   async listTaskRuns(taskId: string): Promise<TaskRun[]> {
     const teamId = this.getTeamId();
@@ -146,7 +158,13 @@ export class PostHogAPIClient {
     payload?: Partial<
       Omit<
         TaskRun,
-        "id" | "task" | "team" | "created_at" | "updated_at" | "completed_at"
+        | "id"
+        | "task"
+        | "team"
+        | "created_at"
+        | "updated_at"
+        | "completed_at"
+        | "artifacts"
       >
     >,
   ): Promise<TaskRun> {
@@ -193,7 +211,7 @@ export class PostHogAPIClient {
   async appendTaskRunLog(
     taskId: string,
     runId: string,
-    entries: LogEntry[],
+    entries: StoredEntry[],
   ): Promise<TaskRun> {
     const teamId = this.getTeamId();
     return this.apiRequest<TaskRun>(
@@ -229,9 +247,9 @@ export class PostHogAPIClient {
   /**
    * Fetch logs from S3 using presigned URL from TaskRun
    * @param taskRun - The task run containing the log_url
-   * @returns Array of log entries, or empty array if no logs available
+   * @returns Array of stored entries, or empty array if no logs available
    */
-  async fetchTaskRunLogs(taskRun: TaskRun): Promise<LogEntry[]> {
+  async fetchTaskRunLogs(taskRun: TaskRun): Promise<StoredEntry[]> {
     if (!taskRun.log_url) {
       return [];
     }
@@ -255,7 +273,7 @@ export class PostHogAPIClient {
       return content
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as LogEntry);
+        .map((line) => JSON.parse(line) as StoredEntry);
     } catch (error) {
       throw new Error(
         `Failed to fetch task run logs: ${error instanceof Error ? error.message : String(error)}`,

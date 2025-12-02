@@ -1,6 +1,7 @@
 import { builtinModules } from "node:module";
 import path from "node:path";
 import commonjs from "@rollup/plugin-commonjs";
+import json from "@rollup/plugin-json";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import { defineConfig } from "rollup";
 import copy from "rollup-plugin-copy";
@@ -31,6 +32,7 @@ export default defineConfig({
     nodeResolve({
       extensions: [".ts", ".js", ".json"],
     }),
+    json(),
     commonjs(),
     typescript({
       tsconfig: path.resolve("tsconfig.rollup.json"),

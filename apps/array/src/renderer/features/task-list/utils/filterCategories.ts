@@ -71,13 +71,8 @@ export function getFilterCategories(tasks: Task[]): FilterCategoryConfig[] {
       creatorSet.add("No Creator");
     }
 
-    if (
-      task.repository_config?.organization &&
-      task.repository_config?.repository
-    ) {
-      repoSet.add(
-        `${task.repository_config.organization}/${task.repository_config.repository}`,
-      );
+    if (task.repository) {
+      repoSet.add(task.repository);
     } else {
       repoSet.add("No Repository Connected");
     }

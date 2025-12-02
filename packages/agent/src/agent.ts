@@ -1,42 +1,38 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import { ClaudeAdapter } from "./adapters/claude/claude-adapter.js";
-import type { ProviderAdapter } from "./adapters/types.js";
+import { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
+import {
+  createAcpConnection,
+  type InProcessAcpConnection,
+} from "./adapters/claude/claude.js";
 import { PostHogFileManager } from "./file-manager.js";
 import { GitManager } from "./git-manager.js";
 import { PostHogAPIClient } from "./posthog-api.js";
 import { PromptBuilder } from "./prompt-builder.js";
+import { SessionStore } from "./session-store.js";
 import { TaskManager } from "./task-manager.js";
-import { TaskProgressReporter } from "./task-progress-reporter.js";
 import { TemplateManager } from "./template-manager.js";
-import type {
-  AgentConfig,
-  CanUseTool,
-  ExecutionResult,
-  Task,
-} from "./types.js";
+import type { AgentConfig, CanUseTool, Task } from "./types.js";
 import { Logger } from "./utils/logger.js";
 import { TASK_WORKFLOW } from "./workflow/config.js";
-import type { WorkflowRuntime } from "./workflow/types.js";
+import type { SendNotification, WorkflowRuntime } from "./workflow/types.js";
 
 export class Agent {
   private workingDirectory: string;
-  private onEvent?: (event: any) => void;
   private taskManager: TaskManager;
   private posthogAPI?: PostHogAPIClient;
   private fileManager: PostHogFileManager;
   private gitManager: GitManager;
   private templateManager: TemplateManager;
-  private adapter: ProviderAdapter;
   private logger: Logger;
-  private progressReporter: TaskProgressReporter;
+  private acpConnection?: InProcessAcpConnection;
   private promptBuilder: PromptBuilder;
   private mcpServers?: Record<string, any>;
   private canUseTool?: CanUseTool;
+  private currentRunId?: string;
+  private sessionStore?: SessionStore;
   public debug: boolean;
 
   constructor(config: AgentConfig) {
     this.workingDirectory = config.workingDirectory || process.cwd();
-    this.onEvent = config.onEvent;
     this.canUseTool = config.canUseTool;
     this.debug = config.debug || false;
 
@@ -71,8 +67,6 @@ export class Agent {
       onLog: config.onLog,
     });
     this.taskManager = new TaskManager();
-    // Hardcode Claude adapter for now - extensible for other providers later
-    this.adapter = new ClaudeAdapter();
 
     this.fileManager = new PostHogFileManager(
       this.workingDirectory,
@@ -81,16 +75,25 @@ export class Agent {
     this.gitManager = new GitManager({
       repositoryPath: this.workingDirectory,
       logger: this.logger.child("GitManager"),
-      // TODO: Add author config from environment or config
     });
     this.templateManager = new TemplateManager();
 
-    if (config.posthogApiUrl && config.posthogApiKey) {
+    if (
+      config.posthogApiUrl &&
+      config.posthogApiKey &&
+      config.posthogProjectId
+    ) {
       this.posthogAPI = new PostHogAPIClient({
         apiUrl: config.posthogApiUrl,
         apiKey: config.posthogApiKey,
         projectId: config.posthogProjectId,
       });
+
+      // Create SessionStore from the API client for ACP connection
+      this.sessionStore = new SessionStore(
+        this.posthogAPI,
+        this.logger.child("SessionStore"),
+      );
     }
 
     this.promptBuilder = new PromptBuilder({
@@ -99,10 +102,6 @@ export class Agent {
       posthogClient: this.posthogAPI,
       logger: this.logger.child("PromptBuilder"),
     });
-    this.progressReporter = new TaskProgressReporter(
-      this.posthogAPI,
-      this.logger,
-    );
   }
 
   /**
@@ -124,54 +123,68 @@ export class Agent {
     try {
       const gatewayUrl = this.posthogAPI.getLlmGatewayUrl();
       const apiKey = this.posthogAPI.getApiKey();
-
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
       this.ensureOpenAIGatewayEnv(gatewayUrl, apiKey);
-
-      this.logger.debug("Configured LLM gateway", { gatewayUrl });
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;
     }
   }
 
+  private getOrCreateConnection(): InProcessAcpConnection {
+    if (!this.acpConnection) {
+      this.acpConnection = createAcpConnection({
+        sessionStore: this.sessionStore,
+      });
+    }
+    return this.acpConnection;
+  }
+
   // Adaptive task execution orchestrated via workflow steps
   async runTask(
-    taskOrId: Task | string,
+    taskId: string,
+    taskRunId: string,
     options: import("./types.js").TaskExecutionOptions = {},
   ): Promise<void> {
-    await this._configureLlmGateway();
+    // await this._configureLlmGateway();
 
-    const task =
-      typeof taskOrId === "string" ? await this.fetchTask(taskOrId) : taskOrId;
+    const task = await this.fetchTask(taskId);
     const cwd = options.repositoryPath || this.workingDirectory;
     const isCloudMode = options.isCloudMode ?? false;
     const taskSlug = (task as any).slug || task.id;
 
+    // Use taskRunId as sessionId - they are the same identifier
+    this.currentRunId = taskRunId;
+
     this.logger.info("Starting adaptive task execution", {
       taskId: task.id,
       taskSlug,
+      taskRunId,
       isCloudMode,
     });
 
-    // Initialize progress reporter for task run tracking (needed for PR attachment)
-    await this.progressReporter.start(task.id, {
-      totalSteps: TASK_WORKFLOW.length,
-    });
-    this.emitEvent(
-      this.adapter.createStatusEvent("run_started", {
-        runId: this.progressReporter.runId,
-      }),
-    );
+    const connection = this.getOrCreateConnection();
 
-    await this.prepareTaskBranch(taskSlug, isCloudMode);
+    // Create sendNotification using ACP connection's extNotification
+    const sendNotification: SendNotification = async (method, params) => {
+      this.logger.debug(`Notification: ${method}`, params);
+      await connection.agentConnection.extNotification?.(method, params);
+    };
+
+    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
+      sessionId: taskRunId,
+      runId: taskRunId,
+    });
+
+    await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
 
     let taskError: Error | undefined;
     try {
       const workflowContext: WorkflowRuntime = {
         task,
         taskSlug,
+        runId: taskRunId,
         cwd,
         isCloudMode,
         options,
@@ -179,11 +192,11 @@ export class Agent {
         fileManager: this.fileManager,
         gitManager: this.gitManager,
         promptBuilder: this.promptBuilder,
-        progressReporter: this.progressReporter,
-        adapter: this.adapter,
+        connection: connection.agentConnection,
+        sessionId: taskRunId,
+        sendNotification,
         mcpServers: this.mcpServers,
         posthogAPI: this.posthogAPI,
-        emitEvent: (event: any) => this.emitEvent(event),
         stepResults: {},
       };
 
@@ -196,83 +209,95 @@ export class Agent {
 
       const shouldCreatePR = options.createPR ?? isCloudMode;
       if (shouldCreatePR) {
-        await this.ensurePullRequest(task, workflowContext.stepResults);
+        await this.ensurePullRequest(
+          task,
+          workflowContext.stepResults,
+          sendNotification,
+        );
       }
 
       this.logger.info("Task execution complete", { taskId: task.id });
-      this.emitEvent(
-        this.adapter.createStatusEvent("task_complete", { taskId: task.id }),
-      );
+      await sendNotification(POSTHOG_NOTIFICATIONS.TASK_COMPLETE, {
+        sessionId: taskRunId,
+        taskId: task.id,
+      });
     } catch (error) {
       taskError = error instanceof Error ? error : new Error(String(error));
       this.logger.error("Task execution failed", {
         taskId: task.id,
         error: taskError.message,
       });
-    } finally {
-      if (taskError) {
-        await this.progressReporter.fail(taskError);
-        // biome-ignore lint/correctness/noUnsafeFinally: we actually want to throw the error
-        throw taskError;
-      } else {
-        await this.progressReporter.complete();
-      }
+      await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
+        sessionId: taskRunId,
+        message: taskError.message,
+      });
+      throw taskError;
     }
   }
 
-  // Direct prompt execution - still supported for low-level usage
-  async run(
-    prompt: string,
-    options: {
-      repositoryPath?: string;
-      permissionMode?: import("./types.js").PermissionMode;
-      queryOverrides?: Record<string, any>;
-      canUseTool?: CanUseTool;
-    } = {},
-  ): Promise<ExecutionResult> {
+  /**
+   * Creates an in-process ACP connection for client communication.
+   * Sets up git branch for the task, configures LLM gateway.
+   * The client handles all prompting/querying via the returned streams.
+   *
+   * @returns InProcessAcpConnection with clientStreams for the client to use
+   */
+  async runTaskV2(
+    taskId: string,
+    taskRunId: string,
+    options: import("./types.js").TaskExecutionOptions = {},
+  ): Promise<InProcessAcpConnection> {
     await this._configureLlmGateway();
-    const baseOptions: Record<string, any> = {
-      model: "claude-sonnet-4-5-20250929",
-      cwd: options.repositoryPath || this.workingDirectory,
-      permissionMode: (options.permissionMode as any) || "default",
-      settingSources: ["local"],
-      mcpServers: this.mcpServers,
-    };
 
-    // Add canUseTool hook if provided (options take precedence over instance config)
-    const canUseTool = options.canUseTool || this.canUseTool;
-    if (canUseTool) {
-      baseOptions.canUseTool = canUseTool;
-    }
+    const task = await this.fetchTask(taskId);
+    const taskSlug = (task as any).slug || task.id;
+    const isCloudMode = options.isCloudMode ?? false;
+    const _cwd = options.repositoryPath || this.workingDirectory;
 
-    const response = query({
-      prompt,
-      options: { ...baseOptions, ...(options.queryOverrides || {}) },
+    // Use taskRunId as sessionId - they are the same identifier
+    this.currentRunId = taskRunId;
+
+    this.acpConnection = createAcpConnection({
+      sessionStore: this.sessionStore,
+      sessionId: taskRunId,
+      taskId: task.id,
     });
 
-    const results = [];
-    try {
-      for await (const message of response) {
-        this.logger.debug("Received message in direct run", message);
-        // Emit raw SDK event
-        this.emitEvent(this.adapter.createRawSDKEvent(message));
-        const transformedEvents = this.adapter.transform(message);
-        for (const event of transformedEvents) {
-          this.emitEvent(event);
-        }
-        results.push(message);
+    const sendNotification: SendNotification = async (method, params) => {
+      this.logger.debug(`Notification: ${method}`, params);
+      await this.acpConnection?.agentConnection.extNotification?.(
+        method,
+        params,
+      );
+    };
+
+    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
+      sessionId: taskRunId,
+      runId: taskRunId,
+    });
+
+    if (!options.skipGitBranch) {
+      try {
+        await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.error("Failed to prepare task branch", {
+          error: errorMessage,
+        });
+        await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
+          sessionId: taskRunId,
+          message: errorMessage,
+        });
+        throw error;
       }
-    } catch (error) {
-      this.logger.error("Error during direct run", error);
-      throw error;
     }
 
-    return { results };
+    return this.acpConnection;
   }
 
   // PostHog task operations
   async fetchTask(taskId: string): Promise<Task> {
-    this.logger.debug("Fetching task from PostHog", { taskId });
     if (!this.posthogAPI) {
       const error = new Error(
         "PostHog API not configured. Provide posthogApiUrl and posthogApiKey in constructor.",
@@ -287,105 +312,11 @@ export class Agent {
     return this.posthogAPI;
   }
 
-  async listTasks(filters?: {
-    repository?: string;
-    organization?: string;
-    origin_product?: string;
-  }): Promise<Task[]> {
-    if (!this.posthogAPI) {
-      throw new Error(
-        "PostHog API not configured. Provide posthogApiUrl and posthogApiKey in constructor.",
-      );
-    }
-    return this.posthogAPI.listTasks(filters);
-  }
-
-  // File system operations for task artifacts
-  async writeTaskFile(
-    taskId: string,
-    fileName: string,
-    content: string,
-    type: "plan" | "context" | "reference" | "output" = "reference",
-  ): Promise<void> {
-    this.logger.debug("Writing task file", {
-      taskId,
-      fileName,
-      type,
-      contentLength: content.length,
-    });
-    await this.fileManager.writeTaskFile(taskId, {
-      name: fileName,
-      content,
-      type,
-    });
-  }
-
-  async readTaskFile(taskId: string, fileName: string): Promise<string | null> {
-    this.logger.debug("Reading task file", { taskId, fileName });
-    return await this.fileManager.readTaskFile(taskId, fileName);
-  }
-
   async getTaskFiles(taskId: string): Promise<any[]> {
     this.logger.debug("Getting task files", { taskId });
     const files = await this.fileManager.getTaskFiles(taskId);
     this.logger.debug("Found task files", { taskId, fileCount: files.length });
     return files;
-  }
-
-  async writePlan(taskId: string, plan: string): Promise<void> {
-    this.logger.info("Writing plan", { taskId, planLength: plan.length });
-    await this.fileManager.writePlan(taskId, plan);
-  }
-
-  async readPlan(taskId: string): Promise<string | null> {
-    this.logger.debug("Reading plan", { taskId });
-    return await this.fileManager.readPlan(taskId);
-  }
-
-  // Git operations for task execution
-  async createPlanningBranch(taskId: string): Promise<string> {
-    this.logger.info("Creating planning branch", { taskId });
-    const branchName = await this.gitManager.createTaskPlanningBranch(taskId);
-    this.logger.debug("Planning branch created", { taskId, branchName });
-    return branchName;
-  }
-
-  async commitPlan(taskId: string, taskTitle: string): Promise<string> {
-    this.logger.info("Committing plan", { taskId, taskTitle });
-    const commitHash = await this.gitManager.commitPlan(taskId, taskTitle);
-    this.logger.debug("Plan committed", { taskId, commitHash });
-    return commitHash;
-  }
-
-  async createImplementationBranch(
-    taskId: string,
-    planningBranchName?: string,
-  ): Promise<string> {
-    this.logger.info("Creating implementation branch", {
-      taskId,
-      fromBranch: planningBranchName,
-    });
-    const branchName = await this.gitManager.createTaskImplementationBranch(
-      taskId,
-      planningBranchName,
-    );
-    this.logger.debug("Implementation branch created", { taskId, branchName });
-    return branchName;
-  }
-
-  async commitImplementation(
-    taskId: string,
-    taskTitle: string,
-    planSummary?: string,
-  ): Promise<string> {
-    this.logger.info("Committing implementation", { taskId, taskTitle });
-    const commitHash = await this.gitManager.commitImplementation(
-      taskId,
-      taskTitle,
-      planSummary,
-    );
-    this.logger.debug("Implementation committed", { taskId, commitHash });
-    return commitHash;
   }
 
   async createPullRequest(
@@ -428,7 +359,7 @@ Generated by PostHog Agent`;
   ): Promise<void> {
     this.logger.info("Attaching PR to task run", { taskId, prUrl, branchName });
 
-    if (!this.posthogAPI || !this.progressReporter.runId) {
+    if (!this.posthogAPI || !this.currentRunId) {
       const error = new Error(
         "PostHog API not configured or no active run. Cannot attach PR to task.",
       );
@@ -443,14 +374,10 @@ Generated by PostHog Agent`;
       updates.branch = branchName;
     }
 
-    await this.posthogAPI.updateTaskRun(
-      taskId,
-      this.progressReporter.runId,
-      updates,
-    );
+    await this.posthogAPI.updateTaskRun(taskId, this.currentRunId, updates);
     this.logger.debug("PR attached to task run", {
       taskId,
-      runId: this.progressReporter.runId,
+      runId: this.currentRunId,
       prUrl,
     });
   }
@@ -458,7 +385,7 @@ Generated by PostHog Agent`;
   async updateTaskBranch(taskId: string, branchName: string): Promise<void> {
     this.logger.info("Updating task run branch", { taskId, branchName });
 
-    if (!this.posthogAPI || !this.progressReporter.runId) {
+    if (!this.posthogAPI || !this.currentRunId) {
       const error = new Error(
         "PostHog API not configured or no active run. Cannot update branch.",
       );
@@ -466,12 +393,12 @@ Generated by PostHog Agent`;
       throw error;
     }
 
-    await this.posthogAPI.updateTaskRun(taskId, this.progressReporter.runId, {
+    await this.posthogAPI.updateTaskRun(taskId, this.currentRunId, {
       branch: branchName,
     });
     this.logger.debug("Task run branch updated", {
       taskId,
-      runId: this.progressReporter.runId,
+      runId: this.currentRunId,
       branchName,
     });
   }
@@ -500,6 +427,7 @@ Generated by PostHog Agent`;
   private async prepareTaskBranch(
     taskSlug: string,
     isCloudMode: boolean,
+    sendNotification: SendNotification,
   ): Promise<void> {
     if (await this.gitManager.hasChanges()) {
       throw new Error(
@@ -515,11 +443,9 @@ Generated by PostHog Agent`;
       this.logger.info("Running in worktree, using existing branch", {
         branch: currentBranch,
       });
-      this.emitEvent(
-        this.adapter.createStatusEvent("branch_created", {
-          branch: currentBranch,
-        }),
-      );
+      await sendNotification(POSTHOG_NOTIFICATIONS.BRANCH_CREATED, {
+        branch: currentBranch,
+      });
       return;
     }
 
@@ -528,11 +454,9 @@ Generated by PostHog Agent`;
     const existingBranch = await this.gitManager.getTaskBranch(taskSlug);
     if (!existingBranch) {
       const branchName = await this.gitManager.createTaskBranch(taskSlug);
-      this.emitEvent(
-        this.adapter.createStatusEvent("branch_created", {
-          branch: branchName,
-        }),
-      );
+      await sendNotification(POSTHOG_NOTIFICATIONS.BRANCH_CREATED, {
+        branch: branchName,
+      });
 
       await this.gitManager.addAllPostHogFiles();
 
@@ -572,6 +496,7 @@ Generated by PostHog Agent`;
   private async ensurePullRequest(
     task: Task,
     stepResults: Record<string, any>,
+    sendNotification: SendNotification,
   ): Promise<void> {
     const latestRun = task.latest_run;
     const existingPr =
@@ -608,7 +533,7 @@ Generated by PostHog Agent`;
       prBody,
     );
 
-    this.emitEvent(this.adapter.createStatusEvent("pr_created", { prUrl }));
+    await sendNotification(POSTHOG_NOTIFICATIONS.PR_CREATED, { prUrl });
 
     try {
       await this.attachPullRequestToTask(task.id, prUrl, branchName);
@@ -621,22 +546,6 @@ Generated by PostHog Agent`;
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }
-
-  private emitEvent(event: any): void {
-    if (this.debug && event.type !== "token") {
-      // Log all events except tokens (too verbose)
-      this.logger.debug("Emitting event", { type: event.type, ts: event.ts });
-    }
-    const persistPromise = this.progressReporter.recordEvent(event);
-    if (persistPromise && typeof persistPromise.then === "function") {
-      persistPromise.catch((error: Error) =>
-        this.logger.debug("Failed to persist agent event", {
-          message: error.message,
-        }),
-      );
-    }
-    this.onEvent?.(event);
   }
 }
 

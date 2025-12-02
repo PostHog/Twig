@@ -255,8 +255,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if (task.primary_repository) {
-      prompt += `<repository>${task.primary_repository}</repository>\n`;
+    if (task.repository) {
+      prompt += `<repository>${task.repository}</repository>\n`;
     }
     prompt += "</task>\n";
 
@@ -318,8 +318,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if (task.primary_repository) {
-      prompt += `<repository>${task.primary_repository}</repository>\n`;
+    if (task.repository) {
+      prompt += `<repository>${task.repository}</repository>\n`;
     }
     prompt += "</task>\n";
 
@@ -367,7 +367,7 @@ export class PromptBuilder {
       task_title: task.title,
       task_description: processedDescription,
       date: new Date().toISOString().split("T")[0],
-      repository: task.primary_repository || "",
+      repository: task.repository || "",
     };
 
     const planTemplate = await this.generatePlanTemplate(templateVariables);
@@ -399,8 +399,8 @@ export class PromptBuilder {
     prompt += `<title>${task.title}</title>\n`;
     prompt += `<description>${processedDescription}</description>\n`;
 
-    if (task.primary_repository) {
-      prompt += `<repository>${task.primary_repository}</repository>\n`;
+    if (task.repository) {
+      prompt += `<repository>${task.repository}</repository>\n`;
     }
     prompt += "</task>\n";
 

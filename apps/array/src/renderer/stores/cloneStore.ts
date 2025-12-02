@@ -1,5 +1,4 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import type { RepositoryConfig } from "@shared/types";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { create } from "zustand";
 
@@ -7,7 +6,7 @@ type CloneStatus = "cloning" | "complete" | "error";
 
 interface CloneOperation {
   cloneId: string;
-  repository: RepositoryConfig;
+  repository: string;
   targetPath: string;
   status: CloneStatus;
   latestMessage?: string;
@@ -17,11 +16,7 @@ interface CloneOperation {
 
 interface CloneStore {
   operations: Record<string, CloneOperation>;
-  startClone: (
-    cloneId: string,
-    repository: RepositoryConfig,
-    targetPath: string,
-  ) => void;
+  startClone: (cloneId: string, repository: string, targetPath: string) => void;
   updateClone: (cloneId: string, status: CloneStatus, message: string) => void;
   removeClone: (cloneId: string) => void;
   isCloning: (repoKey: string) => boolean;
@@ -30,9 +25,6 @@ interface CloneStore {
 
 const REMOVE_DELAY_SUCCESS_MS = 3000;
 const REMOVE_DELAY_ERROR_MS = 5000;
-
-const getRepoKey = (repo: RepositoryConfig) =>
-  `${repo.organization}/${repo.repository}`;
 
 export const cloneStore = create<CloneStore>((set, get) => {
   const updateTaskRepoExists = (targetPath: string, exists: boolean) => {
@@ -53,7 +45,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
       updateTaskRepoExists(operation.targetPath, true);
 
       // Save repo → directory mapping for future tasks
-      const repoKey = `${operation.repository.organization}/${operation.repository.repository}`;
+      const repoKey = operation.repository;
       useTaskDirectoryStore
         .getState()
         .setRepoDirectory(repoKey, operation.targetPath);
@@ -78,8 +70,6 @@ export const cloneStore = create<CloneStore>((set, get) => {
     operations: {},
 
     startClone: (cloneId, repository, targetPath) => {
-      const repoKey = getRepoKey(repository);
-
       const unsubscribe = window.electronAPI.onCloneProgress(
         cloneId,
         (event) => {
@@ -89,9 +79,9 @@ export const cloneStore = create<CloneStore>((set, get) => {
           if (!operation) return;
 
           if (event.status === "complete") {
-            handleComplete(cloneId, repoKey);
+            handleComplete(cloneId, repository);
           } else if (event.status === "error") {
-            handleError(cloneId, repoKey, event.message);
+            handleError(cloneId, repository, event.message);
           }
         },
       );
@@ -104,7 +94,7 @@ export const cloneStore = create<CloneStore>((set, get) => {
             repository,
             targetPath,
             status: "cloning",
-            latestMessage: `Cloning ${repoKey}...`,
+            latestMessage: `Cloning ${repository}...`,
             unsubscribe,
           },
         },
@@ -140,15 +130,14 @@ export const cloneStore = create<CloneStore>((set, get) => {
       });
     },
 
-    isCloning: (repoKey) =>
+    isCloning: (repository) =>
       Object.values(get().operations).some(
-        (op) =>
-          op.status === "cloning" && getRepoKey(op.repository) === repoKey,
+        (op) => op.status === "cloning" && op.repository === repository,
       ),
 
-    getCloneForRepo: (repoKey) =>
+    getCloneForRepo: (repository) =>
       Object.values(get().operations).find(
-        (op) => getRepoKey(op.repository) === repoKey,
+        (op) => op.repository === repository,
       ) ?? null,
   };
 });

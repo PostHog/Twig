@@ -1,7 +1,5 @@
-import { TaskActions } from "@features/task-detail/components/TaskActions";
 import { TaskMetadata } from "@features/task-detail/components/TaskMetadata";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useTaskRepository } from "@features/task-detail/hooks/useTaskRepository";
 import { Box, Flex, TextArea } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -17,13 +15,7 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
     initialTask: task,
   });
 
-  const execution = useTaskExecution({
-    taskId: taskData.task.id,
-    task: taskData.task,
-    repoPath: taskData.repoPath,
-  });
-
-  const repository = useTaskRepository({
+  useTaskRepository({
     task: taskData.task,
     isCloning: taskData.isCloning,
   });
@@ -42,27 +34,7 @@ export function TaskDetailPanel({ taskId, task }: TaskDetailPanelProps) {
             <Box className="border-gray-6 border-t" mt="4" />
           </Flex>
 
-          <TaskMetadata
-            task={taskData.task}
-            progress={
-              execution.state.progress
-                ? { status: execution.state.progress.status }
-                : undefined
-            }
-          />
-        </Flex>
-
-        <Flex direction="column" gap="3" mt="4">
-          <TaskActions
-            isRunning={execution.state.isRunning}
-            isCloningRepo={repository.isCloning}
-            cloneProgress={taskData.cloneProgress}
-            runMode={execution.state.runMode}
-            hasRepositoryConfig={!!taskData.task.repository_config}
-            onRunTask={execution.actions.run}
-            onCancel={execution.actions.cancel}
-            onRunModeChange={execution.actions.onRunModeChange}
-          />
+          <TaskMetadata task={taskData.task} />
         </Flex>
       </Box>
     </Box>

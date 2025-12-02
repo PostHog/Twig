@@ -167,15 +167,14 @@ function TaskItemComponent({
             )}
           </Flex>
 
-          {task.repository_config && (
+          {task.repository && (
             <Text
               size="1"
               color="gray"
               className="whitespace-nowrap"
               style={{ flexShrink: 0 }}
             >
-              {task.repository_config.organization}/
-              {task.repository_config.repository}
+              {task.repository}
             </Text>
           )}
 
