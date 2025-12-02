@@ -1,5 +1,8 @@
 // Main entry point - re-exports from src
 
+// Session persistence
+export type { SessionPersistenceConfig } from "./src/session-store.js";
+export { SessionStore } from "./src/session-store.js";
 // TODO: Refactor - legacy adapter removed
 // export { ClaudeAdapter } from "./src/adapters/claude-legacy/claude-adapter.js";
 // export type { ProviderAdapter } from "./src/adapters/types.js";

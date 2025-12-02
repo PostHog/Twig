@@ -10,6 +10,8 @@ import {
   type ClientCapabilities,
   type InitializeRequest,
   type InitializeResponse,
+  type LoadSessionRequest,
+  type LoadSessionResponse,
   type NewSessionRequest,
   type NewSessionResponse,
   ndJsonStream,
@@ -20,12 +22,13 @@ import {
   RequestError,
   type SessionModelState,
   type SessionNotification,
-  type SetSessionModelRequest, type SetSessionModeRequest,
+  type SetSessionModelRequest,
+  type SetSessionModeRequest,
   type SetSessionModeResponse,
   type TerminalHandle,
   type TerminalOutputResponse,
   type WriteTextFileRequest,
-  type WriteTextFileResponse
+  type WriteTextFileResponse,
 } from "@agentclientprotocol/sdk";
 import {
   type CanUseTool,
@@ -43,6 +46,11 @@ import type {
   BetaRawContentBlockDelta,
 } from "@anthropic-ai/sdk/resources/beta.mjs";
 import { v7 as uuidv7 } from "uuid";
+import { PostHogAPIClient } from "@/posthog-api.js";
+import {
+  type SessionPersistenceConfig,
+  SessionStore,
+} from "@/session-store.js";
 import { Logger } from "@/utils/logger.js";
 import packageJson from "../../../package.json" with { type: "json" };
 import { createMcpServer, EDIT_TOOL_NAMES, toolNames } from "./mcp-server.js";
@@ -66,6 +74,8 @@ type Session = {
   input: Pushable<SDKUserMessage>;
   cancelled: boolean;
   permissionMode: PermissionMode;
+  notificationHistory: SessionNotification[];
+  sdkSessionId?: string;
 };
 
 type BackgroundTerminal =
@@ -136,12 +146,41 @@ export class ClaudeAcpAgent implements Agent {
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
   logger: Logger = new Logger({ debug: false, prefix: "[ClaudeAcpAgent]" });
+  sessionStore?: SessionStore;
 
-  constructor(client: AgentSideConnection) {
+  constructor(client: AgentSideConnection, sessionStore?: SessionStore) {
     this.sessions = {};
     this.client = client;
     this.toolUseCache = {};
     this.fileContentCache = {};
+    this.sessionStore = sessionStore;
+  }
+
+  createSession(
+    sessionId: string,
+    q: Query,
+    input: Pushable<SDKUserMessage>,
+    permissionMode: PermissionMode,
+  ): Session {
+    const session: Session = {
+      query: q,
+      input,
+      cancelled: false,
+      permissionMode,
+      notificationHistory: [],
+    };
+    this.sessions[sessionId] = session;
+    return session;
+  }
+
+  appendNotification(
+    sessionId: string,
+    notification: SessionNotification,
+  ): void {
+    // In-memory (always)
+    this.sessions[sessionId]?.notificationHistory.push(notification);
+    // Persist via store (if registered)
+    this.sessionStore?.append(sessionId, notification);
   }
 
   async initialize(request: InitializeRequest): Promise<InitializeResponse> {
@@ -178,6 +217,7 @@ export class ClaudeAcpAgent implements Agent {
           http: true,
           sse: true,
         },
+        loadSession: true,
       },
       agentInfo: {
         name: packageJson.name,
@@ -351,12 +391,15 @@ export class ClaudeAcpAgent implements Agent {
       options,
     });
 
-    this.sessions[sessionId] = {
-      query: q,
-      input: input,
-      cancelled: false,
-      permissionMode,
-    };
+    this.createSession(sessionId, q, input, permissionMode);
+
+    // Register for S3 persistence if config provided
+    const persistence = params._meta?.persistence as
+      | SessionPersistenceConfig
+      | undefined;
+    if (persistence && this.sessionStore) {
+      this.sessionStore.register(sessionId, persistence);
+    }
 
     const availableCommands = await getAvailableSlashCommands(q);
     const models = await getAvailableModels(q);
@@ -436,6 +479,17 @@ export class ClaudeAcpAgent implements Agent {
         case "system":
           switch (message.subtype) {
             case "init":
+              // Capture SDK session ID and notify client for persistence
+              if (message.session_id) {
+                const session = this.sessions[params.sessionId];
+                if (session && !session.sdkSessionId) {
+                  session.sdkSessionId = message.session_id;
+                  this.client.extNotification("_posthog/sdk_session", {
+                    sessionId: params.sessionId,
+                    sdkSessionId: message.session_id,
+                  });
+                }
+              }
               break;
             case "compact_boundary":
             case "hook_response":
@@ -496,6 +550,7 @@ export class ClaudeAcpAgent implements Agent {
             this.logger,
           )) {
             await this.client.sessionUpdate(notification);
+            this.appendNotification(params.sessionId, notification);
           }
           break;
         }
@@ -562,6 +617,7 @@ export class ClaudeAcpAgent implements Agent {
             this.logger,
           )) {
             await this.client.sessionUpdate(notification);
+            this.appendNotification(params.sessionId, notification);
           }
           break;
         }
@@ -585,9 +641,7 @@ export class ClaudeAcpAgent implements Agent {
     await this.sessions[params.sessionId].query.interrupt();
   }
 
-  async setSessionModel(
-    params: SetSessionModelRequest,
-  ) {
+  async setSessionModel(params: SetSessionModelRequest) {
     if (!this.sessions[params.sessionId]) {
       throw new Error("Session not found");
     }
@@ -641,6 +695,139 @@ export class ClaudeAcpAgent implements Agent {
     const response = await this.client.writeTextFile(params);
     this.fileContentCache[params.path] = params.content;
     return response;
+  }
+
+  async loadSession(params: LoadSessionRequest): Promise<LoadSessionResponse> {
+    const { sessionId } = params;
+
+    // Extract persistence config and SDK session ID from _meta
+    const persistence = params._meta?.persistence as
+      | SessionPersistenceConfig
+      | undefined;
+    const sdkSessionId = params._meta?.sdkSessionId as string | undefined;
+
+    // Try to load history from S3 if session not in memory
+    let loadedHistory: SessionNotification[] = [];
+    if (!this.sessions[sessionId] && persistence?.logUrl && this.sessionStore) {
+      try {
+        loadedHistory = await this.sessionStore.load(persistence.logUrl);
+      } catch (error) {
+        this.logger.error("Failed to load session from S3:", error);
+      }
+    }
+
+    if (!this.sessions[sessionId]) {
+      const input = new Pushable<SDKUserMessage>();
+
+      const mcpServers: Record<string, McpServerConfig> = {};
+      if (Array.isArray(params.mcpServers)) {
+        for (const server of params.mcpServers) {
+          if ("type" in server) {
+            mcpServers[server.name] = {
+              type: server.type,
+              url: server.url,
+              headers: server.headers
+                ? Object.fromEntries(
+                    server.headers.map((e) => [e.name, e.value]),
+                  )
+                : undefined,
+            };
+          } else {
+            mcpServers[server.name] = {
+              type: "stdio",
+              command: server.command,
+              args: server.args,
+              env: server.env
+                ? Object.fromEntries(server.env.map((e) => [e.name, e.value]))
+                : undefined,
+            };
+          }
+        }
+      }
+
+      const server = createMcpServer(this, sessionId, this.clientCapabilities);
+      mcpServers.acp = {
+        type: "sdk",
+        name: "acp",
+        instance: server,
+      };
+
+      const permissionMode = "default";
+
+      const options: Options = {
+        cwd: params.cwd,
+        includePartialMessages: true,
+        mcpServers,
+        systemPrompt: { type: "preset", preset: "claude_code" },
+        settingSources: ["user", "project", "local"],
+        allowDangerouslySkipPermissions: !IS_ROOT,
+        permissionMode,
+        canUseTool: this.canUseTool(sessionId),
+        stderr: (err) => this.logger.error(err),
+        executable: process.execPath as any,
+        ...(process.env.CLAUDE_CODE_EXECUTABLE && {
+          pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
+        }),
+        // Resume from SDK session if available
+        ...(sdkSessionId && { resume: sdkSessionId }),
+        hooks: {
+          PostToolUse: [
+            {
+              hooks: [createPostToolUseHook(this.logger)],
+            },
+          ],
+        },
+      };
+
+      const q = query({
+        prompt: input,
+        options,
+      });
+
+      const availableCommands = await getAvailableSlashCommands(q);
+
+      const newSession = this.createSession(
+        sessionId,
+        q,
+        input,
+        permissionMode,
+      );
+
+      // Populate with history loaded from S3
+      if (loadedHistory.length > 0) {
+        newSession.notificationHistory = loadedHistory;
+      }
+
+      // Store SDK session ID if resuming
+      if (sdkSessionId) {
+        newSession.sdkSessionId = sdkSessionId;
+      }
+
+      // Register for future persistence
+      if (persistence && this.sessionStore) {
+        this.sessionStore.register(sessionId, persistence);
+      }
+
+      setTimeout(() => {
+        this.client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands,
+          },
+        });
+      }, 0);
+    }
+
+    // Replay conversation history to client
+    const session = this.sessions[sessionId];
+    if (session) {
+      for (const notification of session.notificationHistory) {
+        await this.client.sessionUpdate(notification);
+      }
+    }
+
+    return {};
   }
 
   canUseTool(sessionId: string): CanUseTool {
@@ -1181,6 +1368,25 @@ export function runAcp() {
     process.stdin,
   ) as unknown as ReadableStream<Uint8Array>;
 
+  // Create SessionStore if PostHog env vars are provided
+  // This will move somewhere else later.
+  let sessionStore: SessionStore | undefined;
+  const apiUrl = process.env.POSTHOG_API_URL;
+  const apiKey = process.env.POSTHOG_API_KEY;
+  const projectId = process.env.POSTHOG_PROJECT_ID;
+
+  if (apiUrl && apiKey && projectId) {
+    const posthogClient = new PostHogAPIClient({
+      apiUrl,
+      apiKey,
+      projectId: parseInt(projectId, 10),
+    });
+    sessionStore = new SessionStore(posthogClient);
+  }
+
   const stream = ndJsonStream(input, output);
-  new AgentSideConnection((client) => new ClaudeAcpAgent(client), stream);
+  new AgentSideConnection(
+    (client) => new ClaudeAcpAgent(client, sessionStore),
+    stream,
+  );
 }

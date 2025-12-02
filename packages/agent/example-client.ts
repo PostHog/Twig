@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as readline from "node:readline/promises";
 import { Readable, Writable } from "node:stream";
@@ -19,8 +20,47 @@ import {
   type WriteTextFileRequest,
   type WriteTextFileResponse,
 } from "@agentclientprotocol/sdk";
+import { PostHogAPIClient } from "./src/posthog-api.js";
+import type { SessionPersistenceConfig } from "./src/session-store.js";
+
+// PostHog configuration - set via env vars
+const POSTHOG_CONFIG = {
+  apiUrl: process.env.POSTHOG_API_URL || "",
+  apiKey: process.env.POSTHOG_API_KEY || "",
+  projectId: parseInt(process.env.POSTHOG_PROJECT_ID || "0", 10),
+};
+
+// Simple file-based storage for session -> persistence mapping
+const SESSION_STORE_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  ".session-store.json",
+);
+
+interface SessionMapping {
+  [sessionId: string]: SessionPersistenceConfig;
+}
+
+function loadSessionMappings(): SessionMapping {
+  if (existsSync(SESSION_STORE_PATH)) {
+    return JSON.parse(readFileSync(SESSION_STORE_PATH, "utf-8"));
+  }
+  return {};
+}
+
+function saveSessionMapping(
+  sessionId: string,
+  config: SessionPersistenceConfig,
+): void {
+  const mappings = loadSessionMappings();
+  mappings[sessionId] = config;
+  writeFileSync(SESSION_STORE_PATH, JSON.stringify(mappings, null, 2));
+}
 
 class ExampleClient implements Client {
+  isReplaying = false;
+  replayCount = 0;
+  currentSessionId?: string;
+
   async requestPermission(
     params: RequestPermissionRequest,
   ): Promise<RequestPermissionResponse> {
@@ -57,6 +97,12 @@ class ExampleClient implements Client {
   async sessionUpdate(params: SessionNotification): Promise<void> {
     const update = params.update;
 
+    if (this.isReplaying) {
+      this.replayCount++;
+      this.renderReplayUpdate(update);
+      return;
+    }
+
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text") {
@@ -77,6 +123,41 @@ class ExampleClient implements Client {
       case "agent_thought_chunk":
       case "user_message_chunk":
         console.log(`[${update.sessionUpdate}]`);
+        break;
+      default:
+        break;
+    }
+  }
+
+  renderReplayUpdate(update: SessionNotification["update"]): void {
+    const dim = "\x1b[2m";
+    const reset = "\x1b[0m";
+
+    switch (update.sessionUpdate) {
+      case "agent_message_chunk":
+        if (update.content.type === "text") {
+          process.stdout.write(`${dim}${update.content.text}${reset}`);
+        }
+        break;
+      case "user_message_chunk":
+        if (update.content.type === "text") {
+          process.stdout.write(
+            `\n${dim}💬 You: ${update.content.text}${reset}`,
+          );
+        }
+        break;
+      case "tool_call":
+        console.log(`${dim}🔧 ${update.title} (${update.status})${reset}`);
+        break;
+      case "tool_call_update":
+        if (update.status === "completed" || update.status === "failed") {
+          console.log(`${dim}   └─ ${update.status}${reset}`);
+        }
+        break;
+      case "agent_thought_chunk":
+        if (update.content.type === "text") {
+          process.stdout.write(`${dim}💭 ${update.content.text}${reset}`);
+        }
         break;
       default:
         break;
@@ -106,6 +187,35 @@ class ExampleClient implements Client {
       content: "Mock file content",
     };
   }
+
+  async extNotification(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<void> {
+    if (method === "_posthog/sdk_session") {
+      const { sessionId, sdkSessionId } = params as {
+        sessionId: string;
+        sdkSessionId: string;
+      };
+      // Update the session mapping with the SDK session ID
+      const mappings = loadSessionMappings();
+      if (mappings[sessionId]) {
+        mappings[sessionId].sdkSessionId = sdkSessionId;
+        writeFileSync(SESSION_STORE_PATH, JSON.stringify(mappings, null, 2));
+        console.log(`   🔗 SDK session ID stored: ${sdkSessionId}`);
+      }
+    }
+  }
+}
+
+async function prompt(message: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await rl.question(message);
+  rl.close();
+  return answer.trim();
 }
 
 async function main() {
@@ -113,9 +223,79 @@ async function main() {
   const __dirname = dirname(__filename);
   const agentPath = join(__dirname, "agent.ts");
 
+  // Check for session ID argument: npx tsx example-client.ts [sessionId]
+  const existingSessionId = process.argv[2];
+
+  // Load existing session mappings
+  const sessionMappings = loadSessionMappings();
+
+  // Check if we're reloading an existing session
+  let persistence: SessionPersistenceConfig | undefined;
+
+  if (existingSessionId && sessionMappings[existingSessionId]) {
+    // Use existing persistence config
+    persistence = sessionMappings[existingSessionId];
+    console.log(`🔗 Loading existing session: ${existingSessionId}`);
+    console.log(`   📋 Task: ${persistence.taskId}`);
+    console.log(`   🏃 Run: ${persistence.runId}`);
+    if (persistence.sdkSessionId) {
+      console.log(
+        `   🧠 SDK Session: ${persistence.sdkSessionId} (context will be restored)`,
+      );
+    }
+  } else if (!existingSessionId) {
+    // Create new Task/TaskRun for new sessions (only if PostHog is configured)
+    if (
+      POSTHOG_CONFIG.apiUrl &&
+      POSTHOG_CONFIG.apiKey &&
+      POSTHOG_CONFIG.projectId
+    ) {
+      console.log("🔗 Connecting to PostHog...");
+      const posthogClient = new PostHogAPIClient(POSTHOG_CONFIG);
+
+      try {
+        // Create a task for this session
+        const task = await posthogClient.createTask({
+          title: `ACP Session ${new Date().toISOString()}`,
+          description: "Session created by example-client",
+        });
+        console.log(`📋 Created task: ${task.id}`);
+
+        // Create a task run
+        const taskRun = await posthogClient.createTaskRun(task.id);
+        console.log(`🏃 Created task run: ${taskRun.id}`);
+        console.log(`📦 Log URL: ${taskRun.log_url}`);
+
+        persistence = {
+          taskId: task.id,
+          runId: taskRun.id,
+          logUrl: taskRun.log_url,
+        };
+      } catch (error) {
+        console.error("❌ Failed to create Task/TaskRun:", error);
+        console.log("   Continuing without S3 persistence...\n");
+      }
+    } else {
+      console.log(
+        "ℹ️  PostHog not configured (set POSTHOG_API_URL, POSTHOG_API_KEY, POSTHOG_PROJECT_ID)",
+      );
+      console.log("   Running without persistence...\n");
+    }
+  } else {
+    console.log(`⚠️  Session ${existingSessionId} not found in local store`);
+    console.log("   Starting fresh without persistence...\n");
+  }
+
   // Spawn the agent as a subprocess using tsx
+  // Pass PostHog config as env vars so agent can create its own SessionStore
   const agentProcess = spawn("npx", ["tsx", agentPath], {
     stdio: ["pipe", "pipe", "inherit"],
+    env: {
+      ...process.env,
+      POSTHOG_API_URL: POSTHOG_CONFIG.apiUrl,
+      POSTHOG_API_KEY: POSTHOG_CONFIG.apiKey,
+      POSTHOG_PROJECT_ID: String(POSTHOG_CONFIG.projectId),
+    },
   });
 
   // Create streams to communicate with the agent
@@ -144,28 +324,93 @@ async function main() {
     console.log(
       `✅ Connected to agent (protocol v${initResult.protocolVersion})`,
     );
+    console.log(
+      `   Load session supported: ${initResult.agentCapabilities?.loadSession ?? false}`,
+    );
 
-    // Create a new session
-    const sessionResult = await connection.newSession({
-      cwd: process.cwd(),
-      mcpServers: [],
-    });
+    let sessionId: string;
 
-    console.log(`📝 Created session: ${sessionResult.sessionId}`);
-    console.log(`💬 User: Hello, agent!\n`);
+    if (existingSessionId) {
+      // Load existing session
+      console.log(`\n🔄 Loading session: ${existingSessionId}`);
+      console.log(`${"─".repeat(50)}`);
+      console.log(`📜 Conversation history:\n`);
 
-    // Send a test prompt
-    const promptResult = await connection.prompt({
-      sessionId: sessionResult.sessionId,
-      prompt: [
-        {
-          type: "text",
-          text: "Hello, agent!",
-        },
-      ],
-    });
+      client.isReplaying = true;
+      client.replayCount = 0;
 
-    console.log(`\n\n✅ Agent completed with: ${promptResult.stopReason}`);
+      await connection.loadSession({
+        sessionId: existingSessionId,
+        cwd: process.cwd(),
+        mcpServers: [],
+        _meta: persistence
+          ? { persistence, sdkSessionId: persistence.sdkSessionId }
+          : undefined,
+      });
+
+      client.isReplaying = false;
+      sessionId = existingSessionId;
+
+      console.log(`\n${"─".repeat(50)}`);
+      console.log(`✅ Replayed ${client.replayCount} events from history\n`);
+    } else {
+      // Create a new session
+      const sessionResult = await connection.newSession({
+        cwd: process.cwd(),
+        mcpServers: [],
+        _meta: persistence ? { persistence } : undefined,
+      });
+
+      sessionId = sessionResult.sessionId;
+      console.log(`📝 Created session: ${sessionId}`);
+      if (persistence) {
+        // Save the mapping so we can reload later
+        saveSessionMapping(sessionId, persistence);
+        console.log(
+          `   📦 S3 persistence enabled (task: ${persistence.taskId})`,
+        );
+      }
+      console.log(
+        `   (Run with session ID to reload: npx tsx example-client.ts ${sessionId})\n`,
+      );
+    }
+
+    // Interactive prompt loop
+    while (true) {
+      const userInput = await prompt("\n💬 You: ");
+
+      if (
+        userInput.toLowerCase() === "/quit" ||
+        userInput.toLowerCase() === "/exit"
+      ) {
+        console.log("\n👋 Goodbye!");
+        break;
+      }
+
+      if (userInput.toLowerCase() === "/session") {
+        console.log(`\n📝 Current session ID: ${sessionId}`);
+        console.log(`   Reload with: npx tsx example-client.ts ${sessionId}`);
+        continue;
+      }
+
+      if (!userInput) {
+        continue;
+      }
+
+      console.log("");
+
+      const promptResult = await connection.prompt({
+        sessionId,
+        prompt: [
+          {
+            type: "text",
+            text: userInput,
+          },
+        ],
+      });
+
+      console.log(`\n\n✅ Agent completed with: ${promptResult.stopReason}`);
+    }
   } catch (error) {
     console.error("[Client] Error:", error);
   } finally {
