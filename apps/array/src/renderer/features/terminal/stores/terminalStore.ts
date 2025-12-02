@@ -132,5 +132,7 @@ export const useTerminalStore = create<TerminalStoreState>()(
 
 // Subscribe to manager events for auto-persistence
 terminalManager.on("stateChange", ({ persistenceKey, serializedState }) => {
-  useTerminalStore.getState().setSerializedState(persistenceKey, serializedState);
+  useTerminalStore
+    .getState()
+    .setSerializedState(persistenceKey, serializedState);
 });

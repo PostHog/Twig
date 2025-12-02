@@ -47,8 +47,16 @@ export interface CreateOptions {
 }
 
 type ReadyPayload = { sessionId: string; persistenceKey: string };
-type ExitPayload = { sessionId: string; persistenceKey: string; exitCode?: number };
-type StateChangePayload = { sessionId: string; persistenceKey: string; serializedState: string };
+type ExitPayload = {
+  sessionId: string;
+  persistenceKey: string;
+  exitCode?: number;
+};
+type StateChangePayload = {
+  sessionId: string;
+  persistenceKey: string;
+  serializedState: string;
+};
 
 type EventPayloadMap = {
   ready: ReadyPayload;
@@ -215,7 +223,10 @@ class TerminalManagerImpl {
         instance.fitAddon.fit();
       }
 
-      this.emit("ready", { sessionId, persistenceKey: instance.persistenceKey });
+      this.emit("ready", {
+        sessionId,
+        persistenceKey: instance.persistenceKey,
+      });
     } catch (error) {
       log.error("Failed to initialize session:", sessionId, error);
       instance.term.writeln(

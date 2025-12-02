@@ -54,14 +54,20 @@ export function FolderPicker({
   // If no folders, render as a plain button that directly opens file picker
   if (recentFolders.length === 0) {
     return (
-      <Button color="gray" variant="outline" size={size} onClick={handleOpenFilePicker}>
+      <Button
+        color="gray"
+        variant="outline"
+        size={size}
+        onClick={handleOpenFilePicker}
+      >
         <Flex justify="between" align="center" gap="2" width="100%">
-          <Flex align="center" gap="2" width="250px" style={{ minWidth: 0, flex: 1 }}>
-            <FolderIcon
-              size={16}
-              weight="regular"
-              style={{ flexShrink: 0 }}
-            />
+          <Flex
+            align="center"
+            gap="2"
+            width="250px"
+            style={{ minWidth: 0, flex: 1 }}
+          >
+            <FolderIcon size={16} weight="regular" style={{ flexShrink: 0 }} />
             <Text
               size={size}
               style={{
@@ -85,7 +91,12 @@ export function FolderPicker({
       <DropdownMenu.Trigger>
         <Button color="gray" variant="outline" size={size}>
           <Flex justify="between" align="center" gap="2" width="100%">
-            <Flex align="center" gap="2" width="250px" style={{ minWidth: 0, flex: 1 }}>
+            <Flex
+              align="center"
+              gap="2"
+              width="250px"
+              style={{ minWidth: 0, flex: 1 }}
+            >
               <FolderIcon
                 size={16}
                 weight="regular"

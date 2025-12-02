@@ -60,11 +60,14 @@ export function Terminal({
       }
     });
 
-    const offExit = terminalManager.on("exit", ({ sessionId: id, exitCode }) => {
-      if (id === sessionId) {
-        onExit?.(exitCode);
-      }
-    });
+    const offExit = terminalManager.on(
+      "exit",
+      ({ sessionId: id, exitCode }) => {
+        if (id === sessionId) {
+          onExit?.(exitCode);
+        }
+      },
+    );
 
     return () => {
       offReady();
