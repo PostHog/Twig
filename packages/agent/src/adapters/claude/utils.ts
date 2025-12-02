@@ -139,6 +139,69 @@ export function applyEnvironmentSettings(settings: ManagedSettings): void {
   }
 }
 
+export type StreamPair = {
+  readable: globalThis.ReadableStream<Uint8Array>;
+  writable: globalThis.WritableStream<Uint8Array>;
+};
+
+export type BidirectionalStreamPair = {
+  client: StreamPair;
+  agent: StreamPair;
+};
+
+function pushableToReadableStream(
+  pushable: Pushable<Uint8Array>,
+): globalThis.ReadableStream<Uint8Array> {
+  const iterator = pushable[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { value, done } = await iterator.next();
+      if (done) {
+        controller.close();
+      } else {
+        controller.enqueue(value);
+      }
+    },
+  }) as unknown as globalThis.ReadableStream<Uint8Array>;
+}
+
+export function createBidirectionalStreams(): BidirectionalStreamPair {
+  const clientToAgentPushable = new Pushable<Uint8Array>();
+  const agentToClientPushable = new Pushable<Uint8Array>();
+
+  const clientToAgentReadable = pushableToReadableStream(clientToAgentPushable);
+  const agentToClientReadable = pushableToReadableStream(agentToClientPushable);
+
+  const clientToAgentWritable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      clientToAgentPushable.push(chunk);
+    },
+    close() {
+      clientToAgentPushable.end();
+    },
+  }) as unknown as globalThis.WritableStream<Uint8Array>;
+
+  const agentToClientWritable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      agentToClientPushable.push(chunk);
+    },
+    close() {
+      agentToClientPushable.end();
+    },
+  }) as unknown as globalThis.WritableStream<Uint8Array>;
+
+  return {
+    client: {
+      readable: agentToClientReadable,
+      writable: clientToAgentWritable,
+    },
+    agent: {
+      readable: clientToAgentReadable,
+      writable: agentToClientWritable,
+    },
+  };
+}
+
 export interface ExtractLinesResult {
   content: string;
   wasLimited: boolean;

@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { POSTHOG_NOTIFICATIONS } from "../../acp-extensions.js";
 import { RESEARCH_SYSTEM_PROMPT } from "../../agents/research.js";
 import type { ResearchEvaluation } from "../../types.js";
 import type { WorkflowStepRunner } from "../types.js";
@@ -14,9 +15,9 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
     fileManager,
     gitManager,
     promptBuilder,
-    adapter,
+    sessionId,
     mcpServers,
-    emitEvent,
+    sendNotification,
   } = context;
 
   const stepLogger = logger.child("ResearchStep");
@@ -36,18 +37,18 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
         questionCount: existingResearch.questions.length,
       });
 
-      emitEvent({
-        type: "artifact",
-        ts: Date.now(),
+      await sendNotification(POSTHOG_NOTIFICATIONS.ARTIFACT, {
+        sessionId,
         kind: "research_questions",
         content: existingResearch.questions,
       });
 
       // In local mode, halt to allow user to answer
       if (!isCloudMode) {
-        emitEvent(
-          adapter.createStatusEvent("phase_complete", { phase: "research" }),
-        );
+        await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+          sessionId,
+          phase: "research",
+        });
         return { status: "skipped", halt: true };
       }
     }
@@ -56,7 +57,10 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
   }
 
   stepLogger.info("Starting research phase", { taskId: task.id });
-  emitEvent(adapter.createStatusEvent("phase_start", { phase: "research" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_START, {
+    sessionId,
+    phase: "research",
+  });
 
   const researchPrompt = await promptBuilder.buildResearchPrompt(task, cwd);
   const fullPrompt = `${RESEARCH_SYSTEM_PROMPT}\n\n${researchPrompt}`;
@@ -89,11 +93,7 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
   let jsonContent = "";
   try {
     for await (const message of response) {
-      emitEvent(adapter.createRawSDKEvent(message));
-      const transformedEvents = adapter.transform(message);
-      for (const event of transformedEvents) {
-        emitEvent(event);
-      }
+      // Extract text content from assistant messages
       if (message.type === "assistant" && message.message?.content) {
         for (const c of message.message.content) {
           if (c.type === "text" && c.text) {
@@ -109,9 +109,8 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
 
   if (!jsonContent.trim()) {
     stepLogger.error("No JSON output from research agent", { taskId: task.id });
-    emitEvent({
-      type: "error",
-      ts: Date.now(),
+    await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
+      sessionId,
       message: "Research agent returned no output",
     });
     return { status: "completed", halt: true };
@@ -137,9 +136,8 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
       error: error instanceof Error ? error.message : String(error),
       content: jsonContent.substring(0, 500),
     });
-    emitEvent({
-      type: "error",
-      ts: Date.now(),
+    await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
+      sessionId,
       message: `Failed to parse research JSON: ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -161,9 +159,8 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
     hasQuestions: !!evaluation.questions,
   });
 
-  emitEvent({
-    type: "artifact",
-    ts: Date.now(),
+  await sendNotification(POSTHOG_NOTIFICATIONS.ARTIFACT, {
+    sessionId,
     kind: "research_evaluation",
     content: evaluation,
   });
@@ -185,9 +182,8 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
       questionCount: evaluation.questions.length,
     });
 
-    emitEvent({
-      type: "artifact",
-      ts: Date.now(),
+    await sendNotification(POSTHOG_NOTIFICATIONS.ARTIFACT, {
+      sessionId,
       kind: "research_questions",
       content: evaluation.questions,
     });
@@ -200,9 +196,10 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
 
   // In local mode, always halt after research for user review
   if (!isCloudMode) {
-    emitEvent(
-      adapter.createStatusEvent("phase_complete", { phase: "research" }),
-    );
+    await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+      sessionId,
+      phase: "research",
+    });
     return { status: "completed", halt: true };
   }
 
@@ -210,13 +207,17 @@ export const researchStep: WorkflowStepRunner = async ({ step, context }) => {
   const researchData = await fileManager.readResearch(task.id);
   if (researchData?.questions && !researchData.answered) {
     // Questions need answering - halt for user input in cloud mode too
-    emitEvent(
-      adapter.createStatusEvent("phase_complete", { phase: "research" }),
-    );
+    await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+      sessionId,
+      phase: "research",
+    });
     return { status: "completed", halt: true };
   }
 
   // No questions or questions already answered - proceed to planning
-  emitEvent(adapter.createStatusEvent("phase_complete", { phase: "research" }));
+  await sendNotification(POSTHOG_NOTIFICATIONS.PHASE_COMPLETE, {
+    sessionId,
+    phase: "research",
+  });
   return { status: "completed" };
 };
