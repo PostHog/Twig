@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type {
   ClientCapabilities,
   TerminalOutputResponse,
@@ -719,7 +720,7 @@ export function replaceAndCalculateLocation(
   let currentContent = fileContent;
 
   // Use unique markers to track where replacements happen
-  const markerPrefix = `__REPLACE_MARKER_${Math.random().toString(36).substr(2, 9)}_`;
+  const markerPrefix = `__REPLACE_MARKER_${randomBytes(5).toString("hex")}_`;
   let markerCounter = 0;
   const markers: string[] = [];
 

@@ -1,4 +1,5 @@
 import { exec, execFile } from "node:child_process";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -523,7 +524,7 @@ export class WorktreeManager {
   }
 
   private randomElement<T>(array: T[]): T {
-    return array[Math.floor(Math.random() * array.length)];
+    return array[crypto.randomInt(array.length)];
   }
 
   generateWorktreeName(): string {
