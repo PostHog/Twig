@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import type { Task } from "@shared/types";
+import type { Task, WorkspaceMode } from "@shared/types";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { expandTildePath } from "@utils/path";
@@ -15,6 +15,7 @@ interface TaskExecutionState {
   repoPath: string | null;
   repoExists: boolean | null;
   runMode: "local" | "cloud";
+  workspaceMode: WorkspaceMode;
 }
 
 interface TaskExecutionStore {
@@ -27,6 +28,7 @@ interface TaskExecutionStore {
   ) => void;
   setRepoPath: (taskId: string, repoPath: string | null) => void;
   setRunMode: (taskId: string, runMode: "local" | "cloud") => void;
+  setWorkspaceMode: (taskId: string, workspaceMode: WorkspaceMode) => void;
   clearTaskState: (taskId: string) => void;
 
   initializeRepoPath: (taskId: string, task: Task) => void;
@@ -37,6 +39,7 @@ const defaultTaskState: TaskExecutionState = {
   repoPath: null,
   repoExists: null,
   runMode: "local",
+  workspaceMode: "worktree",
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(
@@ -74,6 +77,10 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
       setRunMode: (taskId: string, runMode: "local" | "cloud") => {
         get().updateTaskState(taskId, { runMode });
         useSettingsStore.getState().setLastUsedRunMode(runMode);
+      },
+
+      setWorkspaceMode: (taskId: string, workspaceMode: WorkspaceMode) => {
+        get().updateTaskState(taskId, { workspaceMode });
       },
 
       clearTaskState: (taskId: string) => {

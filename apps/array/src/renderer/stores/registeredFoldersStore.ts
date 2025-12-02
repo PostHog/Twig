@@ -12,6 +12,8 @@ interface RegisteredFoldersState {
   removeFolder: (folderId: string) => Promise<void>;
   updateLastAccessed: (folderId: string) => Promise<void>;
   getFolderByPath: (path: string) => RegisteredFolder | undefined;
+  getRecentFolders: (limit?: number) => RegisteredFolder[];
+  getFolderDisplayName: (path: string) => string | null;
   cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
     deleted: string[];
     errors: Array<{ path: string; error: string }>;
@@ -123,6 +125,22 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       getFolderByPath: (path: string) => {
         return get().folders.find((f) => f.path === path);
+      },
+
+      getRecentFolders: (limit = 5) => {
+        return [...get().folders]
+          .sort(
+            (a, b) =>
+              new Date(b.lastAccessed).getTime() -
+              new Date(a.lastAccessed).getTime(),
+          )
+          .slice(0, limit);
+      },
+
+      getFolderDisplayName: (path: string) => {
+        if (!path) return null;
+        const folder = get().folders.find((f) => f.path === path);
+        return folder?.name ?? path.split("/").pop() ?? null;
       },
 
       cleanupOrphanedWorktrees: async (mainRepoPath: string) => {

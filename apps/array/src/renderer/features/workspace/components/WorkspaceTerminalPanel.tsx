@@ -50,7 +50,11 @@ export function WorkspaceTerminalPanel({
         </Text>
       </Flex>
       <Box style={{ flex: 1 }}>
-        <Terminal sessionId={sessionId} onExit={handleExit} />
+        <Terminal
+          sessionId={sessionId}
+          persistenceKey={sessionId}
+          onExit={handleExit}
+        />
       </Box>
     </Box>
   );

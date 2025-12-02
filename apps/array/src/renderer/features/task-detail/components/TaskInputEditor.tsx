@@ -107,8 +107,8 @@ export function TaskInputEditor({
         <Tooltip
           content={
             isWorktreeMode
-              ? "Isolated worktree: work in a separate directory with its own branch"
-              : "Root mode: work directly in the main repo on the current branch"
+              ? "Work in a separate directory with its own branch"
+              : "Work directly in the selected folder"
           }
         >
           <IconButton

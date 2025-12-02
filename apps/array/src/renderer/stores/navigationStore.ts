@@ -1,4 +1,5 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
@@ -97,9 +98,12 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
       if (directory) {
         try {
           await useRegisteredFoldersStore.getState().addFolder(directory);
+          const storedMode = useTaskExecutionStore
+            .getState()
+            .getTaskState(task.id).workspaceMode;
           await useWorkspaceStore
             .getState()
-            .ensureWorkspace(task.id, directory);
+            .ensureWorkspace(task.id, directory, storedMode);
         } catch (error) {
           log.error("Failed to auto-register folder on task open:", error);
         }

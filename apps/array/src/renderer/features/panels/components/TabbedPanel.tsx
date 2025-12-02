@@ -71,11 +71,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
 }) => {
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
 
-  const prevActiveTabId = useRef(content.activeTabId);
-  if (prevActiveTabId.current !== content.activeTabId) {
-    prevActiveTabId.current = content.activeTabId;
-  }
-
   const handleSplitClick = async () => {
     const result = await window.electronAPI.showSplitContextMenu();
     if (result.direction) {

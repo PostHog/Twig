@@ -1,0 +1,474 @@
+import { FitAddon } from "@xterm/addon-fit";
+import { SerializeAddon } from "@xterm/addon-serialize";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Terminal as XTerm } from "@xterm/xterm";
+import { logger } from "@/renderer/lib/logger";
+
+const log = logger.scope("terminal-manager");
+
+// Hidden container to park detached terminals so they survive React unmounts
+let parkingContainer: HTMLElement | null = null;
+
+function getParkingContainer(): HTMLElement {
+  if (!parkingContainer) {
+    parkingContainer = document.createElement("div");
+    parkingContainer.id = "terminal-parking";
+    parkingContainer.style.position = "absolute";
+    parkingContainer.style.visibility = "hidden";
+    parkingContainer.style.pointerEvents = "none";
+    parkingContainer.style.width = "0";
+    parkingContainer.style.height = "0";
+    parkingContainer.style.overflow = "hidden";
+    document.body.appendChild(parkingContainer);
+  }
+  return parkingContainer;
+}
+
+export interface TerminalInstance {
+  term: XTerm;
+  fitAddon: FitAddon;
+  serializeAddon: SerializeAddon;
+  attachedElement: HTMLElement | null;
+  terminalElement: HTMLElement | null; // The xterm's own DOM element
+  isReady: boolean;
+  hasOpened: boolean; // Track if term.open() was called
+  ipcCleanups: Array<() => void>;
+  resizeObserver: ResizeObserver | null;
+  saveTimeout: number | null;
+  persistenceKey: string;
+  cwd?: string;
+}
+
+export interface CreateOptions {
+  sessionId: string;
+  persistenceKey: string;
+  cwd?: string;
+  initialState?: string;
+}
+
+type ReadyPayload = { sessionId: string; persistenceKey: string };
+type ExitPayload = { sessionId: string; persistenceKey: string; exitCode?: number };
+type StateChangePayload = { sessionId: string; persistenceKey: string; serializedState: string };
+
+type EventPayloadMap = {
+  ready: ReadyPayload;
+  exit: ExitPayload;
+  stateChange: StateChangePayload;
+};
+
+type EventType = keyof EventPayloadMap;
+type Listener<T extends EventType> = (payload: EventPayloadMap[T]) => void;
+
+function getTerminalTheme(isDarkMode: boolean) {
+  return isDarkMode
+    ? {
+        background: "transparent",
+        foreground: "#eeeeea",
+        cursor: "#dc9300",
+        cursorAccent: "#eeeeea",
+        selectionBackground: "rgba(255, 203, 129, 0.3)",
+        selectionForeground: "#eeeeea",
+      }
+    : {
+        background: "transparent",
+        foreground: "#1f1f1f",
+        cursor: "#dc9300",
+        cursorAccent: "#1f1f1f",
+        selectionBackground: "rgba(255, 189, 87, 0.4)",
+        selectionForeground: "#1f1f1f",
+      };
+}
+
+function loadAddons(term: XTerm) {
+  const fit = new FitAddon();
+  const serialize = new SerializeAddon();
+
+  const activateLink = (event: MouseEvent, uri: string) => {
+    const isMac = /Mac/.test(navigator.platform);
+    const hasModifier = isMac ? event.metaKey : event.ctrlKey;
+
+    if (hasModifier) {
+      window.electronAPI?.openExternal(uri).catch((error: Error) => {
+        log.error("Failed to open link:", uri, error);
+      });
+    }
+  };
+
+  const webLinks = new WebLinksAddon(activateLink);
+
+  term.loadAddon(fit);
+  term.loadAddon(serialize);
+  term.loadAddon(webLinks);
+
+  return { fit, serialize };
+}
+
+function attachKeyHandlers(term: XTerm) {
+  term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+    const isMac = /Mac/.test(navigator.platform);
+    const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
+
+    // Cmd+K to clear
+    if (event.key === "k" && cmdOrCtrl && event.type === "keydown") {
+      event.preventDefault();
+      term.clear();
+      return false;
+    }
+
+    // Let Cmd+W bubble up for tab closing
+    if (event.key === "w" && cmdOrCtrl) {
+      return false;
+    }
+
+    // Let Cmd+1-9 bubble up for tab switching
+    if (cmdOrCtrl && event.key >= "1" && event.key <= "9") {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+class TerminalManagerImpl {
+  private instances = new Map<string, TerminalInstance>();
+  private listeners = new Map<EventType, Set<Listener<EventType>>>();
+  private isDarkMode = true;
+
+  has(sessionId: string): boolean {
+    return this.instances.has(sessionId);
+  }
+
+  get(sessionId: string): TerminalInstance | undefined {
+    return this.instances.get(sessionId);
+  }
+
+  create(options: CreateOptions): TerminalInstance {
+    const { sessionId, persistenceKey, cwd, initialState } = options;
+
+    const existing = this.instances.get(sessionId);
+    if (existing) {
+      log.debug("Session already exists:", sessionId);
+      return existing;
+    }
+
+    log.info("Creating terminal instance:", sessionId);
+
+    const term = new XTerm({
+      cursorBlink: true,
+      fontSize: 12,
+      fontFamily: "monospace",
+      theme: getTerminalTheme(this.isDarkMode),
+      cursorStyle: "block",
+      cursorWidth: 8,
+      allowProposedApi: true,
+    });
+
+    const { fit, serialize } = loadAddons(term);
+    attachKeyHandlers(term);
+
+    const instance: TerminalInstance = {
+      term,
+      fitAddon: fit,
+      serializeAddon: serialize,
+      attachedElement: null,
+      terminalElement: null,
+      isReady: false,
+      hasOpened: false,
+      ipcCleanups: [],
+      resizeObserver: null,
+      saveTimeout: null,
+      persistenceKey,
+      cwd,
+    };
+
+    // Write initial state if provided (before opening)
+    if (initialState) {
+      term.write(initialState);
+    }
+
+    // Setup IPC listeners
+    this.setupIPC(sessionId, instance);
+
+    // Initialize shell session
+    this.initializeSession(sessionId, instance, cwd);
+
+    this.instances.set(sessionId, instance);
+    return instance;
+  }
+
+  private async initializeSession(
+    sessionId: string,
+    instance: TerminalInstance,
+    cwd?: string,
+  ): Promise<void> {
+    try {
+      const sessionExists = await window.electronAPI?.shellCheck(sessionId);
+      if (!sessionExists) {
+        await window.electronAPI?.shellCreate(sessionId, cwd);
+      }
+
+      instance.isReady = true;
+      log.info("Shell session ready:", sessionId);
+
+      // Fit if attached
+      if (instance.attachedElement) {
+        instance.fitAddon.fit();
+      }
+
+      this.emit("ready", { sessionId, persistenceKey: instance.persistenceKey });
+    } catch (error) {
+      log.error("Failed to initialize session:", sessionId, error);
+      instance.term.writeln(
+        `\r\n\x1b[31mFailed to create shell: ${(error as Error).message}\x1b[0m\r\n`,
+      );
+    }
+  }
+
+  private setupIPC(sessionId: string, instance: TerminalInstance): void {
+    const { term } = instance;
+
+    // Receive data from shell
+    const unsubscribeData = window.electronAPI?.onShellData(
+      sessionId,
+      (data: string) => {
+        term.write(data);
+        this.scheduleSave(sessionId, instance);
+      },
+    );
+    if (unsubscribeData) {
+      instance.ipcCleanups.push(unsubscribeData);
+    }
+
+    // Handle shell exit
+    const unsubscribeExit = window.electronAPI?.onShellExit(sessionId, () => {
+      term.writeln("\r\n\x1b[33mProcess exited\x1b[0m\r\n");
+      this.emit("exit", { sessionId, persistenceKey: instance.persistenceKey });
+    });
+    if (unsubscribeExit) {
+      instance.ipcCleanups.push(unsubscribeExit);
+    }
+
+    // Send user input to shell
+    const disposable = term.onData((data: string) => {
+      window.electronAPI?.shellWrite(sessionId, data).catch((error: Error) => {
+        log.error("Failed to write to shell:", error);
+      });
+      this.scheduleSave(sessionId, instance);
+    });
+    instance.ipcCleanups.push(() => disposable.dispose());
+  }
+
+  private scheduleSave(sessionId: string, instance: TerminalInstance): void {
+    if (instance.saveTimeout) {
+      clearTimeout(instance.saveTimeout);
+    }
+
+    instance.saveTimeout = window.setTimeout(() => {
+      const serialized = instance.serializeAddon.serialize();
+      this.emit("stateChange", {
+        sessionId,
+        persistenceKey: instance.persistenceKey,
+        serializedState: serialized,
+      });
+    }, 500);
+  }
+
+  attach(sessionId: string, element: HTMLElement): void {
+    const instance = this.instances.get(sessionId);
+    if (!instance) {
+      log.error("Cannot attach: instance not found:", sessionId);
+      return;
+    }
+
+    // Already attached to this element
+    if (instance.attachedElement === element) {
+      return;
+    }
+
+    // Detach resize observer from previous element if any
+    if (instance.resizeObserver) {
+      instance.resizeObserver.disconnect();
+      instance.resizeObserver = null;
+    }
+
+    log.debug("Attaching terminal to DOM:", sessionId);
+    instance.attachedElement = element;
+
+    if (!instance.hasOpened) {
+      // First time: call open() which creates the DOM elements
+      instance.term.open(element);
+      instance.hasOpened = true;
+      // Save reference to xterm's container element
+      instance.terminalElement = element.querySelector(".xterm") as HTMLElement;
+    } else if (instance.terminalElement) {
+      // Re-attaching: move the existing terminal element to new container
+      element.appendChild(instance.terminalElement);
+    }
+
+    // Setup resize observer
+    const handleResize = () => {
+      if (instance.fitAddon) {
+        instance.fitAddon.fit();
+
+        if (instance.isReady) {
+          window.electronAPI
+            ?.shellResize(sessionId, instance.term.cols, instance.term.rows)
+            .catch((error: Error) => {
+              log.error("Failed to resize shell:", error);
+            });
+        }
+      }
+    };
+
+    instance.resizeObserver = new ResizeObserver(handleResize);
+    instance.resizeObserver.observe(element);
+
+    // Fit after attach
+    setTimeout(() => {
+      instance.fitAddon.fit();
+    }, 0);
+  }
+
+  detach(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (!instance || !instance.attachedElement) {
+      return;
+    }
+
+    log.debug("Detaching terminal from DOM:", sessionId);
+
+    // Disconnect resize observer
+    if (instance.resizeObserver) {
+      instance.resizeObserver.disconnect();
+      instance.resizeObserver = null;
+    }
+
+    // Save state before detaching
+    const serialized = instance.serializeAddon.serialize();
+    this.emit("stateChange", {
+      sessionId,
+      persistenceKey: instance.persistenceKey,
+      serializedState: serialized,
+    });
+
+    // Move terminal element to parking container to survive React unmount
+    if (instance.terminalElement) {
+      getParkingContainer().appendChild(instance.terminalElement);
+    }
+
+    instance.attachedElement = null;
+  }
+
+  destroy(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (!instance) {
+      return;
+    }
+
+    log.info("Destroying terminal instance:", sessionId);
+
+    // Detach if attached
+    if (instance.attachedElement) {
+      this.detach(sessionId);
+    }
+
+    // Clear save timeout
+    if (instance.saveTimeout) {
+      clearTimeout(instance.saveTimeout);
+    }
+
+    // Cleanup IPC subscriptions
+    for (const cleanup of instance.ipcCleanups) {
+      cleanup();
+    }
+
+    // Dispose terminal
+    instance.term.dispose();
+
+    this.instances.delete(sessionId);
+  }
+
+  focus(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (instance) {
+      instance.term.focus();
+    }
+  }
+
+  clear(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (instance) {
+      instance.term.clear();
+    }
+  }
+
+  serialize(sessionId: string): string | null {
+    const instance = this.instances.get(sessionId);
+    if (!instance) {
+      return null;
+    }
+    return instance.serializeAddon.serialize();
+  }
+
+  setTheme(isDarkMode: boolean): void {
+    if (this.isDarkMode === isDarkMode) {
+      return;
+    }
+
+    this.isDarkMode = isDarkMode;
+    const theme = getTerminalTheme(isDarkMode);
+
+    for (const instance of this.instances.values()) {
+      instance.term.options.theme = theme;
+    }
+  }
+
+  on<T extends EventType>(event: T, listener: Listener<T>): () => void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+
+    const listeners = this.listeners.get(event)!;
+    listeners.add(listener as Listener<EventType>);
+
+    return () => {
+      listeners.delete(listener as Listener<EventType>);
+    };
+  }
+
+  private emit<T extends EventType>(
+    event: T,
+    payload: EventPayloadMap[T],
+  ): void {
+    const listeners = this.listeners.get(event);
+    if (listeners) {
+      for (const listener of listeners) {
+        try {
+          listener(payload);
+        } catch (error) {
+          log.error("Event listener error:", event, error);
+        }
+      }
+    }
+  }
+
+  destroyByPrefix(prefix: string): void {
+    for (const sessionId of this.instances.keys()) {
+      if (sessionId.startsWith(prefix)) {
+        this.destroy(sessionId);
+      }
+    }
+  }
+
+  getSessionsByPrefix(prefix: string): string[] {
+    const result: string[] = [];
+    for (const sessionId of this.instances.keys()) {
+      if (sessionId.startsWith(prefix)) {
+        result.push(sessionId);
+      }
+    }
+    return result;
+  }
+}
+
+export const terminalManager = new TerminalManagerImpl();

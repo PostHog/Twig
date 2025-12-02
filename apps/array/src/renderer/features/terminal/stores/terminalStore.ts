@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { terminalManager } from "../services/TerminalManager";
 
 interface TerminalState {
   serializedState: string | null;
@@ -128,3 +129,8 @@ export const useTerminalStore = create<TerminalStoreState>()(
     },
   ),
 );
+
+// Subscribe to manager events for auto-persistence
+terminalManager.on("stateChange", ({ persistenceKey, serializedState }) => {
+  useTerminalStore.getState().setSerializedState(persistenceKey, serializedState);
+});

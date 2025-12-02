@@ -5,7 +5,6 @@ import { ChangesPanel } from "@features/task-detail/components/ChangesPanel";
 import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
-import { TaskDetailPanel } from "@features/task-detail/components/TaskDetailPanel";
 import { TaskLogsPanel } from "@features/task-detail/components/TaskLogsPanel";
 import { TaskShellPanel } from "@features/task-detail/components/TaskShellPanel";
 import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
@@ -74,8 +73,6 @@ export function TabContentRenderer({
       // Handle system tabs by ID
       // TODO: These should all have their own type as well
       switch (tab.id) {
-        case "details":
-          return <TaskDetailPanel taskId={taskId} task={task} />;
         case "todo-list":
           return <TodoListPanel taskId={taskId} />;
         case "files":

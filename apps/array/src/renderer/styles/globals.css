@@ -85,14 +85,18 @@ body {
 .file-mention-item {
   padding: var(--space-2);
   cursor: pointer;
-  background-color: white;
+  background-color: var(--gray-1);
   border-radius: var(--radius-2);
   transition: background-color 0.1s ease;
 }
 
+.file-mention-item:hover {
+  background-color: var(--accent-a2);
+}
+
 .file-mention-item.is-selected {
-  background-color: white;
-  color: var(--gray-3);
+  background-color: var(--accent-a3);
+  color: var(--accent-11);
 }
 
 /* Rich text editor styles */
@@ -682,4 +686,11 @@ body {
   --terminal-cursor-accent: #eeeeea;
   --terminal-selection-bg: rgba(255, 203, 129, 0.3);
   --terminal-selection-fg: #eeeeea;
+}
+
+/* Buttons should have pointer cursor */
+button,
+[type="button"],
+[role="button"] {
+  cursor: pointer;
 }

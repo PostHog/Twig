@@ -45,7 +45,8 @@ export function useTaskCreation({
   } = useCreateTask();
   const { navigateToTask } = useNavigationStore();
   const { client, isAuthenticated } = useAuthStore();
-  const { setRepoPath: saveRepoPath } = useTaskExecutionStore();
+  const { setRepoPath: saveRepoPath, setWorkspaceMode: saveWorkspaceMode } =
+    useTaskExecutionStore();
   const { autoRunTasks } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
 
@@ -96,6 +97,7 @@ export function useTaskCreation({
 
           if (selectedDirectory) {
             await saveRepoPath(newTask.id, selectedDirectory);
+            saveWorkspaceMode(newTask.id, workspaceMode);
 
             try {
               const workspace = await useWorkspaceStore

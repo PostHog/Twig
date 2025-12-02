@@ -65,3 +65,64 @@ array-monorepo/
 ├── pnpm-workspace.yaml # Workspace configuration
 └── package.json        # Root package.json
 ```
+
+## Workspace Configuration (array.json)
+
+Array supports per-repository configuration through an `array.json` file. This lets you define scripts that run automatically when workspaces are created or destroyed.
+
+### File Locations
+
+Array searches for configuration in this order:
+
+1. `.array/{workspace-name}/array.json` - Workspace-specific config
+2. `array.json` - Repository root config
+
+### Schema
+
+```json
+{
+  "scripts": {
+    "init": "npm install",
+    "start": ["npm run server", "npm run client"],
+    "destroy": "docker-compose down"
+  }
+}
+```
+
+| Script | When it runs | Behavior |
+|--------|--------------|----------|
+| `init` | Workspace creation | Runs first, fails fast (stops on error) |
+| `start` | After init completes | Continues even if scripts fail |
+| `destroy` | Workspace deletion | Runs silently before cleanup |
+
+Each script can be a single command string or an array of commands. Commands run sequentially in dedicated terminal sessions.
+
+### Examples
+
+Install dependencies on workspace creation:
+```json
+{
+  "scripts": {
+    "init": "pnpm install"
+  }
+}
+```
+
+Start development servers:
+```json
+{
+  "scripts": {
+    "init": ["pnpm install", "pnpm run build"],
+    "start": ["pnpm run dev", "pnpm run storybook"]
+  }
+}
+```
+
+Clean up Docker containers:
+```json
+{
+  "scripts": {
+    "destroy": "docker-compose down -v"
+  }
+}
+```

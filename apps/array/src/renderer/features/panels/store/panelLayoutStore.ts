@@ -191,14 +191,6 @@ function createDefaultPanelTree(): PanelNode {
                   closeable: false,
                   draggable: false,
                 },
-                {
-                  id: DEFAULT_TAB_IDS.DETAILS,
-                  label: "Details",
-                  data: { type: "other" },
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
               ],
               activeTabId: DEFAULT_TAB_IDS.TODO_LIST,
               showTabs: true,
@@ -748,7 +740,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 4,
+      version: 5,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

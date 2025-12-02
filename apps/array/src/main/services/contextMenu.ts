@@ -163,14 +163,31 @@ export const showFolderContextMenuService = createIpcService({
   handler: async (
     _event,
     _folderId: string,
-    _folderName: string,
+    folderName: string,
     folderPath?: string,
   ): Promise<FolderContextMenuResult> => {
     return new Promise((resolve) => {
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Remove folder",
-          click: () => resolve({ action: "remove" }),
+          click: async () => {
+            const result = await dialog.showMessageBox({
+              type: "question",
+              title: "Remove Folder",
+              message: `Remove "${folderName}" from Array?`,
+              detail:
+                "This will clean up any worktrees but keep your folder and tasks intact.",
+              buttons: ["Cancel", "Remove"],
+              defaultId: 1,
+              cancelId: 0,
+            });
+
+            if (result.response === 1) {
+              resolve({ action: "remove" });
+            } else {
+              resolve({ action: null });
+            }
+          },
         },
       ];
 
