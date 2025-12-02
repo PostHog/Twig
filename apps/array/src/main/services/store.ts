@@ -1,5 +1,5 @@
 import path from "node:path";
-import { app } from "electron";
+import { app, ipcMain } from "electron";
 import Store from "electron-store";
 import type {
   RegisteredFolder,
@@ -10,6 +10,10 @@ import { deleteWorktreeIfExists } from "./worktreeUtils";
 interface FoldersSchema {
   folders: RegisteredFolder[];
   taskAssociations: TaskFolderAssociation[];
+}
+
+interface RendererStoreSchema {
+  [key: string]: string;
 }
 
 const schema = {
@@ -84,4 +88,31 @@ export async function clearAllStoreData(): Promise<void> {
   }
 
   foldersStore.clear();
+  rendererStore.clear();
 }
+
+export const rendererStore = new Store<RendererStoreSchema>({
+  name: "renderer-storage",
+  cwd: getStorePath(),
+});
+
+ipcMain.handle(
+  "renderer-store:get",
+  (_event, key: string): string | null => {
+    if (rendererStore.has(key)) {
+      return rendererStore.get(key) as string;
+    }
+    return null;
+  },
+);
+
+ipcMain.handle(
+  "renderer-store:set",
+  (_event, key: string, value: string): void => {
+    rendererStore.set(key, value);
+  },
+);
+
+ipcMain.handle("renderer-store:remove", (_event, key: string): void => {
+  rendererStore.delete(key);
+});

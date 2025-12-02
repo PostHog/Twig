@@ -1,5 +1,6 @@
 import { PostHogAPIClient } from "@api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import type { CloudRegion } from "@shared/types/oauth";
@@ -371,6 +372,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "mission-control-auth",
+      storage: electronStorage,
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
         storedTokens: state.storedTokens,
