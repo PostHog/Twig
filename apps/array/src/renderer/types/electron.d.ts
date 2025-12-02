@@ -1,4 +1,3 @@
-import type { AgentEvent } from "@posthog/agent";
 import type {
   ExternalAppContextMenuResult,
   FolderContextMenuResult,
@@ -6,6 +5,7 @@ import type {
   TabContextMenuResult,
   TaskContextMenuResult,
 } from "@main/services/contextMenu.types";
+import type { AgentEvent } from "@posthog/agent";
 import type {
   ChangedFile,
   DetectedApplication,
@@ -22,6 +22,11 @@ declare global {
     storeApiKey: (apiKey: string) => Promise<string>;
     retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
     fetchS3Logs: (logUrl: string) => Promise<AgentEvent[]>;
+    rendererStore: {
+      getItem: (key: string) => Promise<string | null>;
+      setItem: (key: string, value: string) => Promise<void>;
+      removeItem: (key: string) => Promise<void>;
+    };
     // OAuth API
     oauthStartFlow: (region: CloudRegion) => Promise<{
       success: boolean;

@@ -194,6 +194,9 @@ importers:
       node-addon-api:
         specifier: ^8.5.0
         version: 8.5.0
+      node-machine-id:
+        specifier: ^1.1.12
+        version: 1.1.12
       node-pty:
         specifier: 1.1.0-beta39
         version: 1.1.0-beta39
@@ -5162,6 +5165,9 @@ packages:
     resolution: {integrity: sha512-ra7Kvlhxn5V9Slyus0ygMa2h+UqExPqUIkfk7Pc8QTLT956JLSy51uWFwHtIYy0vI8cB4BDhc/S03+880My/LQ==}
     engines: {node: ^18.17.0 || >=20.5.0}
     hasBin: true
+
+  node-machine-id@1.1.12:
+    resolution: {integrity: sha512-QNABxbrPa3qEIfrE6GOJ7BYIuignnJw7iQ2YPbc3Nla1HzRJjXzZOiikfF8m7eAMfichLt3M4VgLOetqgDmgGQ==}
 
   node-pty@1.1.0-beta39:
     resolution: {integrity: sha512-1xnN2dbS0QngT4xenpS/6Q77QtaDQo5vE6f4slATgZsFIv3NP4ObE7vAjYnZtMFG5OEh3jyDRZc+hy1DjDF7dg==}
@@ -12298,6 +12304,8 @@ snapshots:
       which: 5.0.0
     transitivePeerDependencies:
       - supports-color
+
+  node-machine-id@1.1.12: {}
 
   node-pty@1.1.0-beta39:
     dependencies:
