@@ -1,11 +1,61 @@
+import crypto from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { app, ipcMain } from "electron";
 import Store from "electron-store";
+import { machineIdSync } from "node-machine-id";
 import type {
   RegisteredFolder,
   TaskFolderAssociation,
 } from "../../shared/types";
 import { deleteWorktreeIfExists } from "./worktreeUtils";
+
+// Key derived from hardware UUID - data only decryptable on this machine
+// No keychain prompts, prevents token theft via cloud sync/backups
+const APP_SALT = "array-v1";
+const ENCRYPTION_VERSION = 1;
+
+function getMachineKey(): Buffer {
+  const machineId = machineIdSync();
+  const identifier = [machineId, os.platform(), os.arch()].join("|");
+  return crypto.scryptSync(identifier, APP_SALT, 32);
+}
+
+function encrypt(plaintext: string): string {
+  const key = getMachineKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    v: ENCRYPTION_VERSION,
+    iv: iv.toString("base64"),
+    data: encrypted.toString("base64"),
+    tag: authTag.toString("base64"),
+  });
+}
+
+function decrypt(encryptedJson: string): string | null {
+  try {
+    const { iv, data, tag } = JSON.parse(encryptedJson);
+    const key = getMachineKey();
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(iv, "base64"),
+    );
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+
+    return decipher.update(data, "base64", "utf8") + decipher.final("utf8");
+  } catch {
+    return null;
+  }
+}
 
 interface FoldersSchema {
   folders: RegisteredFolder[];
@@ -96,20 +146,19 @@ export const rendererStore = new Store<RendererStoreSchema>({
   cwd: getStorePath(),
 });
 
-ipcMain.handle(
-  "renderer-store:get",
-  (_event, key: string): string | null => {
-    if (rendererStore.has(key)) {
-      return rendererStore.get(key) as string;
-    }
+// IPC handlers for renderer storage with machine-key encryption
+ipcMain.handle("renderer-store:get", (_event, key: string): string | null => {
+  if (!rendererStore.has(key)) {
     return null;
-  },
-);
+  }
+  const encrypted = rendererStore.get(key) as string;
+  return decrypt(encrypted);
+});
 
 ipcMain.handle(
   "renderer-store:set",
   (_event, key: string, value: string): void => {
-    rendererStore.set(key, value);
+    rendererStore.set(key, encrypt(value));
   },
 );
 

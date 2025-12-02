@@ -239,6 +239,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initializeOAuth: async () => {
+        // Wait for zustand hydration from async storage
+        if (!useAuthStore.persist.hasHydrated()) {
+          await new Promise<void>((resolve) => {
+            useAuthStore.persist.onFinishHydration(() => resolve());
+          });
+        }
+
         const state = get();
 
         if (state.storedTokens) {
@@ -371,7 +378,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "mission-control-auth",
+      name: "array-auth",
       storage: electronStorage,
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
