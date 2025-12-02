@@ -209,7 +209,7 @@ export const useAuthStore = create<AuthState>()(
         const state = get();
 
         if (refreshTimeoutId) {
-          clearTimeout(refreshTimeoutId);
+          window.clearTimeout(refreshTimeoutId);
           refreshTimeoutId = null;
         }
 
@@ -221,7 +221,7 @@ export const useAuthStore = create<AuthState>()(
           state.tokenExpiry - Date.now() - TOKEN_REFRESH_BUFFER_MS;
 
         if (timeUntilRefresh > 0) {
-          refreshTimeoutId = setTimeout(() => {
+          refreshTimeoutId = window.setTimeout(() => {
             get()
               .refreshAccessToken()
               .catch((error) => {
@@ -262,8 +262,14 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          const apiHost = getCloudUrlFromRegion(tokens.cloudRegion);
-          const projectId = tokens.scopedTeams?.[0];
+          // Re-fetch tokens after potential refresh to get updated values
+          const currentTokens = get().storedTokens;
+          if (!currentTokens) {
+            return false;
+          }
+
+          const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
+          const projectId = currentTokens.scopedTeams?.[0];
 
           if (!projectId) {
             log.error("No project ID found in stored tokens");
@@ -272,7 +278,7 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const client = new PostHogAPIClient(
-            tokens.accessToken,
+            currentTokens.accessToken,
             apiHost,
             async () => {
               await get().refreshAccessToken();
@@ -349,7 +355,7 @@ export const useAuthStore = create<AuthState>()(
         resetUser();
 
         if (refreshTimeoutId) {
-          clearTimeout(refreshTimeoutId);
+          window.clearTimeout(refreshTimeoutId);
           refreshTimeoutId = null;
         }
 

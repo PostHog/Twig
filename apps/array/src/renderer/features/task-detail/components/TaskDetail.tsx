@@ -1,8 +1,8 @@
 import { PanelLayout } from "@features/panels";
+import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { useTaskExecution } from "@features/task-detail/hooks/useTaskExecution";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -29,14 +29,14 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   useFileWatcher(effectiveRepoPath, taskData.task.id);
 
-  const execution = useTaskExecution({
-    taskId: taskData.task.id,
-    task: taskData.task,
-    repoPath: taskData.repoPath,
-  });
+  const session = useSessionStore((state) =>
+    state.getSessionForTask(taskData.task.id),
+  );
+  const isRunning =
+    session?.status === "connected" || session?.status === "connecting";
 
   useStatusBar(
-    execution.state.isRunning ? "Agent running..." : "Task details",
+    isRunning ? "Agent running..." : "Task details",
     [
       {
         keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],

@@ -46,6 +46,11 @@ export function registerPosthogIpc(): void {
         log.debug("Fetching S3 logs from:", logUrl);
         const response = await fetch(logUrl);
 
+        // 404 is expected for new task runs - file doesn't exist yet
+        if (response.status === 404) {
+          return [];
+        }
+
         if (!response.ok) {
           throw new Error(
             `Failed to fetch logs: ${response.status} ${response.statusText}`,

@@ -1,20 +1,43 @@
 // Main entry point - re-exports from src
 
+export type {
+  ArtifactNotificationPayload,
+  BranchCreatedPayload,
+  ConsoleNotificationPayload,
+  ErrorNotificationPayload,
+  PhaseNotificationPayload,
+  PostHogNotificationPayload,
+  PostHogNotificationType,
+  PrCreatedPayload,
+  RunStartedPayload,
+  SdkSessionPayload,
+  TaskCompletePayload,
+} from "./src/acp-extensions.js";
+// ACP extensions (PostHog-specific notification types)
+export { POSTHOG_NOTIFICATIONS } from "./src/acp-extensions.js";
 // ACP connection utilities
 export type {
   AcpConnectionConfig,
   InProcessAcpConnection,
 } from "./src/adapters/claude/claude.js";
 export { createAcpConnection } from "./src/adapters/claude/claude.js";
-
+// Agent class
+export { Agent } from "./src/agent.js";
+// Event schemas (legacy - for backwards compatibility)
+export type {
+  AgentEvent,
+  ConsoleEvent,
+  ErrorEvent,
+  StatusEvent,
+  TokenEvent,
+} from "./src/schemas.js";
+export { parseAgentEvent, parseAgentEvents } from "./src/schemas.js";
 // Session persistence
 export type { SessionPersistenceConfig } from "./src/session-store.js";
 export { SessionStore } from "./src/session-store.js";
-
 // Todo management
 export type { TodoItem, TodoList } from "./src/todo-manager.js";
 export { TodoManager } from "./src/todo-manager.js";
-
 // Tool types
 export { ToolRegistry } from "./src/tools/registry.js";
 export type {
@@ -37,7 +60,6 @@ export type {
   WebSearchTool,
   WriteTool,
 } from "./src/tools/types.js";
-
 // Core types
 export type {
   AgentConfig,
@@ -49,29 +71,12 @@ export type {
   SessionNotification,
   StoredEntry,
   StoredNotification,
-  StoredSessionNotification,
   SupportingFile,
   Task,
   TaskRun,
   WorktreeInfo,
 } from "./src/types.js";
 export { PermissionMode } from "./src/types.js";
-
-// ACP extensions (PostHog-specific notification types)
-export { POSTHOG_NOTIFICATIONS } from "./src/acp-extensions.js";
-export type {
-  ArtifactNotificationPayload,
-  BranchCreatedPayload,
-  ConsoleNotificationPayload,
-  ErrorNotificationPayload,
-  PhaseNotificationPayload,
-  PostHogNotificationPayload,
-  PostHogNotificationType,
-  PrCreatedPayload,
-  RunStartedPayload,
-  SdkSessionPayload,
-  TaskCompletePayload,
-} from "./src/acp-extensions.js";
 
 // Logging
 export type { LoggerConfig } from "./src/utils/logger.js";

@@ -1,9 +1,10 @@
 // import and export to keep a single type file
+
+import type { SessionNotification } from "@agentclientprotocol/sdk";
 import type {
   CanUseTool,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { SessionNotification } from "@agentclientprotocol/sdk";
 export type { CanUseTool, PermissionResult, SessionNotification };
 
 /**
@@ -24,21 +25,9 @@ export interface StoredNotification {
 }
 
 /**
- * Stored ACP session notification (from the ACP SDK).
- * These are session updates like tool_call, agent_message_chunk, etc.
+ * Type alias for stored log entries.
  */
-export interface StoredSessionNotification {
-  type: "acp_session_notification";
-  /** When this notification was stored */
-  timestamp: string;
-  /** The ACP session notification */
-  notification: SessionNotification;
-}
-
-/**
- * Union type for all stored log entries.
- */
-export type StoredEntry = StoredNotification | StoredSessionNotification;
+export type StoredEntry = StoredNotification;
 
 // PostHog Task model (matches Array's OpenAPI schema)
 export interface Task {

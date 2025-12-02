@@ -133,11 +133,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
     fitAddon.current = fit;
     serializeAddon.current = serialize;
 
-    log.debug(`Restoring state for key: ${persistenceKey}`, savedState);
     if (savedState?.serializedState) {
-      log.debug(
-        `Writing ${savedState.serializedState.length} chars to terminal`,
-      );
       term.write(savedState.serializedState);
       restoredStateLengthRef.current = savedState.serializedState.length;
     } else {
@@ -148,19 +144,13 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       try {
         if (sessionId) {
           const sessionExists = await window.electronAPI?.shellCheck(sessionId);
-          if (sessionExists) {
-            log.debug(`Reconnecting to existing session ${sessionId}`);
-          } else {
-            log.debug(
-              `Saved session ${sessionId} no longer exists, creating new one`,
-            );
+          if (!sessionExists) {
             sessionId = null;
           }
         }
 
         if (!sessionId) {
           sessionId = `shell-${Date.now()}-${secureRandomString(7)}`;
-          log.debug(`Creating new session ${sessionId}`);
           terminalStore.setSessionId(persistenceKey, sessionId);
         }
 
@@ -189,13 +179,10 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
 
     const saveTerminalState = () => {
       if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+        window.clearTimeout(saveTimeoutRef.current);
       }
-      saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = window.setTimeout(() => {
         const serialized = serialize.serialize();
-        log.debug(
-          `Saving state for key: ${persistenceKey}, ${serialized.length} chars`,
-        );
         terminalStore.setSerializedState(persistenceKey, serialized);
       }, 500); // 500ms debounce
     };
@@ -274,7 +261,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       isMounted = false;
 
       if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+        window.clearTimeout(saveTimeoutRef.current);
       }
 
       const serialized = serialize.serialize();
@@ -284,14 +271,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
           serialized.length >= restoredStateLengthRef.current);
 
       if (shouldSave) {
-        log.debug(
-          `Cleanup: Saving final state for key: ${persistenceKey}, ${serialized.length} chars (hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
-        );
         terminalStore.setSerializedState(persistenceKey, serialized);
-      } else {
-        log.debug(
-          `Cleanup: Not saving for key: ${persistenceKey}, ${serialized.length} chars (would lose data - hasReceivedData: ${hasReceivedDataRef.current}, restored: ${restoredStateLengthRef.current})`,
-        );
       }
 
       window.removeEventListener("resize", handleResize);
