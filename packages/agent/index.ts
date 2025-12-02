@@ -1,9 +1,9 @@
 // Main entry point - re-exports from src
 
-export { ClaudeAdapter } from "./src/adapters/claude/claude-adapter.js";
-// Provider adapter types
-export type { ProviderAdapter } from "./src/adapters/types.js";
-export { Agent } from "./src/agent.js";
+// TODO: Refactor - legacy adapter removed
+// export { ClaudeAdapter } from "./src/adapters/claude-legacy/claude-adapter.js";
+// export type { ProviderAdapter } from "./src/adapters/types.js";
+// export { Agent } from "./src/agent.js";
 export type { TodoItem, TodoList } from "./src/todo-manager.js";
 // Todo management
 export { TodoManager } from "./src/todo-manager.js";
