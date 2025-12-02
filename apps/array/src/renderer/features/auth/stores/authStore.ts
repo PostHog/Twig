@@ -1,5 +1,6 @@
 import { PostHogAPIClient } from "@api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import type { CloudRegion } from "@shared/types/oauth";
@@ -238,6 +239,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initializeOAuth: async () => {
+        // Wait for zustand hydration from async storage
+        if (!useAuthStore.persist.hasHydrated()) {
+          await new Promise<void>((resolve) => {
+            useAuthStore.persist.onFinishHydration(() => resolve());
+          });
+        }
+
         const state = get();
 
         if (state.storedTokens) {
@@ -376,7 +384,8 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "mission-control-auth",
+      name: "array-auth",
+      storage: electronStorage,
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
         storedTokens: state.storedTokens,
