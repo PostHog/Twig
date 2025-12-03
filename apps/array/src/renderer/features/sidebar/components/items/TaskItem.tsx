@@ -1,12 +1,8 @@
-import {
-  CheckCircleIcon,
-  CircleIcon,
-  Cloud,
-  XCircleIcon,
-} from "@phosphor-icons/react";
+import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
+import { Cloud, GitBranch as GitBranchIcon } from "@phosphor-icons/react";
+import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
-import type { TaskStatus } from "../../types";
 import { SidebarItem } from "../SidebarItem";
 
 function useCurrentBranch(repoPath?: string, worktreeName?: string) {
@@ -22,36 +18,15 @@ function useCurrentBranch(repoPath?: string, worktreeName?: string) {
 interface TaskItemProps {
   id: string;
   label: string;
-  status: TaskStatus;
   isActive: boolean;
   worktreeName?: string;
   worktreePath?: string;
   workspaceMode?: WorkspaceMode;
+  lastActivityAt?: number;
+  isGenerating?: boolean;
+  isUnread?: boolean;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-}
-
-function getStatusIcon(status: TaskStatus) {
-  if (status === "in_progress" || status === "started") {
-    return (
-      <CircleIcon size={12} weight="fill" style={{ color: "var(--blue-9)" }} />
-    );
-  }
-  if (status === "completed") {
-    return (
-      <CheckCircleIcon
-        size={12}
-        weight="fill"
-        style={{ color: "var(--green-9)" }}
-      />
-    );
-  }
-  if (status === "failed") {
-    return (
-      <XCircleIcon size={12} weight="fill" style={{ color: "var(--red-9)" }} />
-    );
-  }
-  return <CircleIcon size={12} style={{ color: "var(--gray-8)" }} />;
 }
 
 interface DiffStatsDisplayProps {
@@ -90,7 +65,7 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
 
   return (
     <span
-      className="ml-auto flex shrink-0 bg-transparent text-[10px] text-gray-10"
+      className="flex shrink-0 items-center rounded border border-gray-6 bg-gray-2 px-1 text-[10px] text-gray-11"
       style={{ gap: "4px" }}
     >
       {parts}
@@ -100,18 +75,27 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
 
 export function TaskItem({
   label,
-  status,
   isActive,
   worktreeName,
   worktreePath,
   workspaceMode,
+  lastActivityAt,
+  isGenerating,
+  isUnread,
   onClick,
   onContextMenu,
 }: TaskItemProps) {
   const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
 
   const isCloudTask = workspaceMode === "cloud";
-  const subtitle = isCloudTask ? (
+
+  const activityText = isGenerating
+    ? "Generating..."
+    : lastActivityAt
+      ? formatRelativeTime(lastActivityAt)
+      : undefined;
+
+  const baseSubtitle = isCloudTask ? (
     <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
       <Cloud size={10} />
       <span>Cloud</span>
@@ -120,10 +104,29 @@ export function TaskItem({
     (worktreeName ?? currentBranch)
   );
 
+  const subtitle = activityText ? (
+    <span>
+      {baseSubtitle && <>{baseSubtitle} · </>}
+      {activityText}
+    </span>
+  ) : (
+    baseSubtitle
+  );
+
+  const icon = isGenerating ? (
+    <DotsCircleSpinner size={12} className="text-accent-11" />
+  ) : isUnread ? (
+    <span className="flex h-[12px] w-[12px] items-center justify-center text-[8px] text-green-11">
+      ■
+    </span>
+  ) : (
+    <GitBranchIcon size={12} />
+  );
+
   return (
     <SidebarItem
       depth={0}
-      icon={getStatusIcon(status)}
+      icon={icon}
       label={label}
       subtitle={subtitle}
       isActive={isActive}
