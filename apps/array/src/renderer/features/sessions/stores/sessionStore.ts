@@ -124,11 +124,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           latestRunId,
           logUrl: latestRunLogUrl,
         });
-        const { notifications, rawEntries } =
+        const { notifications, rawEntries, sdkSessionId } =
           await fetchSessionLogs(latestRunLogUrl);
         log.info("Loaded historical logs", {
           notifications: notifications.length,
           rawEntries: rawEntries.length,
+          sdkSessionId,
         });
 
         // 2. Convert to SessionEvent format - interleave raw and parsed by order
@@ -189,6 +190,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           apiHost,
           projectId,
           logUrl: latestRunLogUrl,
+          sdkSessionId,
         });
 
         if (result) {

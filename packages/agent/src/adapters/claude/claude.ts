@@ -171,7 +171,7 @@ export class ClaudeAcpAgent implements Agent {
   fileContentCache: { [key: string]: string };
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
-  logger: Logger = new Logger({ debug: false, prefix: "[ClaudeAcpAgent]" });
+  logger: Logger = new Logger({ debug: true, prefix: "[ClaudeAcpAgent]" });
   sessionStore?: SessionStore;
 
   constructor(client: AgentSideConnection, sessionStore?: SessionStore) {
@@ -934,6 +934,7 @@ export class ClaudeAcpAgent implements Agent {
   async resumeSession(
     params: LoadSessionRequest,
   ): Promise<LoadSessionResponse> {
+    this.logger.info("[RESUME] Resuming session", { params });
     const { sessionId } = params;
 
     // Extract persistence config and SDK session ID from _meta
@@ -980,6 +981,11 @@ export class ClaudeAcpAgent implements Agent {
 
       const permissionMode = "default";
 
+      this.logger.info("Resuming session", {
+        cwd: params.cwd,
+        sdkSessionId,
+        persistence,
+      });
       const options: Options = {
         cwd: params.cwd,
         includePartialMessages: true,

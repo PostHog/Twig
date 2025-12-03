@@ -16,6 +16,7 @@ export interface StoredLogEntry {
 export interface ParsedSessionLogs {
   notifications: SessionNotification[];
   rawEntries: StoredLogEntry[];
+  sdkSessionId?: string;
 }
 
 /**
@@ -36,6 +37,7 @@ export async function fetchSessionLogs(
 
     const notifications: SessionNotification[] = [];
     const rawEntries: StoredLogEntry[] = [];
+    let sdkSessionId: string | undefined;
 
     for (const line of content.trim().split("\n")) {
       try {
@@ -71,12 +73,26 @@ export async function fetchSessionLogs(
         ) {
           notifications.push(stored.notification.params as SessionNotification);
         }
+
+        // Extract SDK session ID from _posthog/sdk_session notification
+        if (
+          stored.type === "notification" &&
+          stored.notification?.method?.endsWith("posthog/sdk_session") &&
+          stored.notification?.params
+        ) {
+          const params = stored.notification.params as {
+            sdkSessionId?: string;
+          };
+          if (params.sdkSessionId) {
+            sdkSessionId = params.sdkSessionId;
+          }
+        }
       } catch {
         // Skip malformed lines
       }
     }
 
-    return { notifications, rawEntries };
+    return { notifications, rawEntries, sdkSessionId };
   } catch {
     // Network error or other failure
     return { notifications: [], rawEntries: [] };
