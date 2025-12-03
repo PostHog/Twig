@@ -3,7 +3,7 @@ import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutio
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
-import type { Task } from "@shared/types";
+import type { Task, WorkspaceMode } from "@shared/types";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { expandTildePath } from "@utils/path";
@@ -98,12 +98,18 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
       if (directory) {
         try {
           await useRegisteredFoldersStore.getState().addFolder(directory);
-          const storedMode = useTaskExecutionStore
+
+          let workspaceMode: WorkspaceMode = useTaskExecutionStore
             .getState()
             .getTaskState(task.id).workspaceMode;
+
+          if (task.latest_run?.environment === "cloud") {
+            workspaceMode = "cloud";
+          }
+
           await useWorkspaceStore
             .getState()
-            .ensureWorkspace(task.id, directory, storedMode);
+            .ensureWorkspace(task.id, directory, workspaceMode);
         } catch (error) {
           log.error("Failed to auto-register folder on task open:", error);
         }

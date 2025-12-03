@@ -59,8 +59,6 @@ export async function loadConfig(
     return { config: null, source: null };
   }
 
-  // No config found
-  log.debug(`No array.json config found for workspace ${worktreeName}`);
   return { config: null, source: null };
 }
 

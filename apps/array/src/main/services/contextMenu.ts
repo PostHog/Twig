@@ -106,19 +106,30 @@ export const showTaskContextMenuService = createIpcService({
     worktreePath?: string,
   ): Promise<TaskContextMenuResult> => {
     return new Promise((resolve) => {
+      let pendingDialog = false;
+      let resolved = false;
+
+      const safeResolve = (result: TaskContextMenuResult) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(result);
+        }
+      };
+
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Rename",
-          click: () => resolve({ action: "rename" }),
+          click: () => safeResolve({ action: "rename" }),
         },
         {
           label: "Duplicate",
-          click: () => resolve({ action: "duplicate" }),
+          click: () => safeResolve({ action: "duplicate" }),
         },
         { type: "separator" },
         {
           label: "Delete",
           click: async () => {
+            pendingDialog = true;
             const result = await dialog.showMessageBox({
               type: "question",
               title: "Delete Task",
@@ -132,9 +143,9 @@ export const showTaskContextMenuService = createIpcService({
             });
 
             if (result.response === 1) {
-              resolve({ action: "delete" });
+              safeResolve({ action: "delete" });
             } else {
-              resolve({ action: null });
+              safeResolve({ action: null });
             }
           },
         },
@@ -145,12 +156,19 @@ export const showTaskContextMenuService = createIpcService({
           template.push({ type: "separator" });
           const externalAppsItems = await buildExternalAppsMenuItems(
             worktreePath,
-            resolve,
+            safeResolve,
           );
           template.push(...externalAppsItems);
         }
 
-        showContextMenu(template, { action: null }).then(resolve);
+        const menu = Menu.buildFromTemplate(template);
+        menu.popup({
+          callback: () => {
+            if (!pendingDialog) {
+              safeResolve({ action: null });
+            }
+          },
+        });
       };
 
       setupMenu();
@@ -167,10 +185,21 @@ export const showFolderContextMenuService = createIpcService({
     folderPath?: string,
   ): Promise<FolderContextMenuResult> => {
     return new Promise((resolve) => {
+      let pendingDialog = false;
+      let resolved = false;
+
+      const safeResolve = (result: FolderContextMenuResult) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(result);
+        }
+      };
+
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Remove folder",
           click: async () => {
+            pendingDialog = true;
             const result = await dialog.showMessageBox({
               type: "question",
               title: "Remove Folder",
@@ -183,9 +212,9 @@ export const showFolderContextMenuService = createIpcService({
             });
 
             if (result.response === 1) {
-              resolve({ action: "remove" });
+              safeResolve({ action: "remove" });
             } else {
-              resolve({ action: null });
+              safeResolve({ action: null });
             }
           },
         },
@@ -196,12 +225,19 @@ export const showFolderContextMenuService = createIpcService({
           template.push({ type: "separator" });
           const externalAppsItems = await buildExternalAppsMenuItems(
             folderPath,
-            resolve,
+            safeResolve,
           );
           template.push(...externalAppsItems);
         }
 
-        showContextMenu(template, { action: null }).then(resolve);
+        const menu = Menu.buildFromTemplate(template);
+        menu.popup({
+          callback: () => {
+            if (!pendingDialog) {
+              safeResolve({ action: null });
+            }
+          },
+        });
       };
 
       setupMenu();
