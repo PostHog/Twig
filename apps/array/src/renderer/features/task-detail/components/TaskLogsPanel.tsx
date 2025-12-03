@@ -32,37 +32,35 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
 
-  // Auto-reconnect on mount if there's a previous run
+  // Auto-connect on mount
   const hasAttemptedConnect = useRef(false);
   useEffect(() => {
     if (hasAttemptedConnect.current) return;
     if (!repoPath) return;
-    if (session) return; // Already have a session
-    if (!task.latest_run?.id || !task.latest_run?.log_url) return;
+    if (session) return;
 
     hasAttemptedConnect.current = true;
+
+    const isNewSession = !task.latest_run?.id;
 
     connectToTask({
       taskId: task.id,
       repoPath,
-      latestRunId: task.latest_run.id,
-      latestRunLogUrl: task.latest_run.log_url,
-    });
-  }, [task.id, task.latest_run, repoPath, session, connectToTask]);
-
-  const handleStartSession = useCallback(async () => {
-    if (!repoPath) {
-      log.error("No repo path available");
-      return;
-    }
-
-    await connectToTask({
-      taskId: task.id,
-      repoPath,
       latestRunId: task.latest_run?.id,
       latestRunLogUrl: task.latest_run?.log_url,
+      initialPrompt:
+        isNewSession && task.description
+          ? [{ type: "text", text: task.description }]
+          : undefined,
     });
-  }, [repoPath, task.id, task.latest_run, connectToTask]);
+  }, [
+    task.id,
+    task.description,
+    task.latest_run,
+    repoPath,
+    session,
+    connectToTask,
+  ]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -91,7 +89,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           isPromptPending={session?.isPromptPending}
           onSendPrompt={handleSendPrompt}
           onCancelPrompt={handleCancelPrompt}
-          onStartSession={handleStartSession}
         />
       </Box>
     </BackgroundWrapper>
