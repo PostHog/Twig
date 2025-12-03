@@ -6,7 +6,7 @@ interface SidebarItemProps {
   depth: number;
   icon?: React.ReactNode;
   label: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   isActive?: boolean;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;

@@ -1,4 +1,5 @@
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
+import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
@@ -32,6 +33,7 @@ function SidebarMenuComponent() {
   const collapsedSections = useSidebarStore((state) => state.collapsedSections);
   const toggleSection = useSidebarStore((state) => state.toggleSection);
   const workspaces = useWorkspaceStore.use.workspaces();
+  const taskStates = useTaskExecutionStore((state) => state.taskStates);
 
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
@@ -179,6 +181,7 @@ function SidebarMenuComponent() {
                     workspaces[task.id]?.worktreePath ??
                     workspaces[task.id]?.folderPath
                   }
+                  workspaceMode={taskStates[task.id]?.workspaceMode}
                   onClick={() => handleTaskClick(task.id)}
                   onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
                 />
