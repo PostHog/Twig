@@ -119,6 +119,7 @@ declare global {
       prompt: ContentBlock[],
     ) => Promise<{ stopReason: string }>;
     agentCancel: (sessionId: string) => Promise<boolean>;
+    agentCancelPrompt: (sessionId: string) => Promise<boolean>;
     agentListSessions: (taskId?: string) => Promise<
       Array<{
         sessionId: string;

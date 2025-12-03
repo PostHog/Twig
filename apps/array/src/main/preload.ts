@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("agent-prompt", sessionId, prompt),
   agentCancel: async (sessionId: string): Promise<boolean> =>
     ipcRenderer.invoke("agent-cancel", sessionId),
+  agentCancelPrompt: async (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke("agent-cancel-prompt", sessionId),
   agentListSessions: async (
     taskId?: string,
   ): Promise<

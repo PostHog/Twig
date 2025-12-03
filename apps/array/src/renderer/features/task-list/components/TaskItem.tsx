@@ -1,7 +1,7 @@
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
-import { GitPullRequest } from "@phosphor-icons/react";
+import { Cloud, GitPullRequest } from "@phosphor-icons/react";
 import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
@@ -42,6 +42,7 @@ function TaskItemComponent({
   const prUrl = task.latest_run?.output?.pr_url as string | undefined;
   const hasPR = !!prUrl;
   const status = hasPR ? "completed" : task.latest_run?.status || "backlog";
+  const isCloudTask = task.latest_run?.environment === "cloud";
 
   const handleOpenPR = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,6 +129,18 @@ function TaskItemComponent({
             >
               {task.title}
             </Text>
+            {isCloudTask && (
+              <Flex
+                align="center"
+                gap="1"
+                style={{ flexShrink: 0, opacity: 0.7 }}
+              >
+                <Cloud size={12} className="text-gray-10" />
+                <Text size="1" color="gray">
+                  Cloud
+                </Text>
+              </Flex>
+            )}
             {worktreeName && (
               <Text
                 size="1"

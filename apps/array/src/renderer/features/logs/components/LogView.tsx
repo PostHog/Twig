@@ -1,7 +1,10 @@
 import type { SessionNotification } from "@agentclientprotocol/sdk";
 import type { SessionEvent } from "@features/sessions/stores/sessionStore";
 import { useAutoScroll } from "@hooks/useAutoScroll";
-import { PaperPlaneRight as SendIcon } from "@phosphor-icons/react";
+import {
+  PaperPlaneRight as SendIcon,
+  Stop as StopIcon,
+} from "@phosphor-icons/react";
 import {
   Box,
   Button,
@@ -21,6 +24,7 @@ interface LogViewProps {
   isRunning: boolean;
   isPromptPending?: boolean;
   onSendPrompt?: (text: string) => Promise<void>;
+  onCancelPrompt?: () => void;
   onStartSession?: () => void;
 }
 
@@ -56,6 +60,7 @@ export function LogView({
   isRunning,
   isPromptPending = false,
   onSendPrompt,
+  onCancelPrompt,
   onStartSession,
 }: LogViewProps) {
   const [inputValue, setInputValue] = useState("");
@@ -86,8 +91,12 @@ export function LogView({
         e.preventDefault();
         handleSend();
       }
+      if (e.key === "Escape" && isPromptPending && onCancelPrompt) {
+        e.preventDefault();
+        onCancelPrompt();
+      }
     },
-    [handleSend],
+    [handleSend, isPromptPending, onCancelPrompt],
   );
 
   // Build rendered output from events (filter out raw acp_message unless showRawLogs is true)
@@ -205,15 +214,23 @@ export function LogView({
                 style={{ resize: "none" }}
               />
             </Box>
-            <Tooltip content="Send message (Enter)">
-              <IconButton
-                size="3"
-                onClick={handleSend}
-                disabled={!inputValue.trim() || isPromptPending || !isRunning}
-              >
-                <SendIcon size={20} />
-              </IconButton>
-            </Tooltip>
+            {isPromptPending ? (
+              <Tooltip content="Cancel (Esc)">
+                <IconButton size="3" color="red" onClick={onCancelPrompt}>
+                  <StopIcon size={20} weight="fill" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip content="Send message (Enter)">
+                <IconButton
+                  size="3"
+                  onClick={handleSend}
+                  disabled={!inputValue.trim() || !isRunning}
+                >
+                  <SendIcon size={20} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Flex>
         </Box>
       )}
