@@ -643,7 +643,7 @@ export class WorktreeManager {
     // Generate unique worktree name
     const worktreeName = await this.generateUniqueWorktreeName();
     const worktreePath = this.getWorktreePath(worktreeName);
-    const branchName = `posthog/${worktreeName}`;
+    const branchName = `array/${worktreeName}`;
     const baseBranch = await this.getDefaultBranch();
 
     this.logger.info("Creating worktree", {
@@ -769,13 +769,10 @@ export class WorktreeManager {
       // 1. Are in our worktree folder (external or in-repo)
       // 2. Have a posthog/ branch prefix (our naming convention)
       const isInWorktreeFolder = worktreePath?.startsWith(worktreeFolderPath);
-      const isPosthogBranch = branchName?.startsWith("posthog/");
+      const isArrayBranch =
+        branchName?.startsWith("array/") || branchName?.startsWith("posthog/");
 
-      if (
-        worktreePath &&
-        branchName &&
-        (isInWorktreeFolder || isPosthogBranch)
-      ) {
+      if (worktreePath && branchName && (isInWorktreeFolder || isArrayBranch)) {
         const worktreeName = path.basename(worktreePath);
         worktrees.push({
           worktreePath,

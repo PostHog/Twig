@@ -9,6 +9,7 @@ export interface TerminalProps {
   persistenceKey: string;
   cwd?: string;
   initialState?: string;
+  taskId?: string;
   onReady?: () => void;
   onExit?: (exitCode?: number) => void;
 }
@@ -18,6 +19,7 @@ export function Terminal({
   persistenceKey,
   cwd,
   initialState,
+  taskId,
   onReady,
   onExit,
 }: TerminalProps) {
@@ -32,9 +34,10 @@ export function Terminal({
         persistenceKey,
         cwd,
         initialState,
+        taskId,
       });
     }
-  }, [sessionId, persistenceKey, cwd, initialState]);
+  }, [sessionId, persistenceKey, cwd, initialState, taskId]);
 
   // Attach/detach from DOM
   useEffect(() => {
