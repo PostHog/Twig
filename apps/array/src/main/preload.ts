@@ -306,7 +306,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     sessionId: string,
     cwd?: string,
     taskId?: string,
-  ): Promise<void> => ipcRenderer.invoke("shell:create", sessionId, cwd, taskId),
+  ): Promise<void> =>
+    ipcRenderer.invoke("shell:create", sessionId, cwd, taskId),
   shellWrite: (sessionId: string, data: string): Promise<void> =>
     ipcRenderer.invoke("shell:write", sessionId, data),
   shellResize: (sessionId: string, cols: number, rows: number): Promise<void> =>

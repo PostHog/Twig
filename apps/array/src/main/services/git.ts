@@ -90,7 +90,9 @@ export const getCurrentBranch = async (
   }
 };
 
-export const getDefaultBranch = async (directoryPath: string): Promise<string> => {
+export const getDefaultBranch = async (
+  directoryPath: string,
+): Promise<string> => {
   try {
     // Try to get the default branch from origin
     const { stdout } = await execAsync(

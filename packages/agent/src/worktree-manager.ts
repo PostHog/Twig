@@ -772,11 +772,7 @@ export class WorktreeManager {
       const isArrayBranch =
         branchName?.startsWith("array/") || branchName?.startsWith("posthog/");
 
-      if (
-        worktreePath &&
-        branchName &&
-        (isInWorktreeFolder || isArrayBranch)
-      ) {
+      if (worktreePath && branchName && (isInWorktreeFolder || isArrayBranch)) {
         const worktreeName = path.basename(worktreePath);
         worktrees.push({
           worktreePath,
