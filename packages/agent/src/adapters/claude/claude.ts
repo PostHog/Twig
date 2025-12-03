@@ -341,9 +341,13 @@ export class ClaudeAcpAgent implements Agent {
       allowDangerouslySkipPermissions: !IS_ROOT,
       permissionMode,
       canUseTool: this.canUseTool(sessionId),
-      // note: although not documented by the types, passing an absolute path
-      // here works to find zed's managed node version.
-      executable: process.execPath as any,
+      // Use "node" to resolve via PATH where a symlink to Electron exists.
+      // This avoids launching the Electron binary directly from the app bundle,
+      // which can cause dock icons to appear on macOS even with ELECTRON_RUN_AS_NODE.
+      executable: "node",
+      // Prevent spawned Electron processes from showing in dock/tray.
+      // Must merge with process.env since SDK replaces rather than merges.
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
       ...(process.env.CLAUDE_CODE_EXECUTABLE && {
         pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
       }),
@@ -986,7 +990,13 @@ export class ClaudeAcpAgent implements Agent {
         permissionMode,
         canUseTool: this.canUseTool(sessionId),
         stderr: (err) => this.logger.error(err),
-        executable: process.execPath as any,
+        // Use "node" to resolve via PATH where a symlink to Electron exists.
+        // This avoids launching the Electron binary directly from the app bundle,
+        // which can cause dock icons to appear on macOS even with ELECTRON_RUN_AS_NODE.
+        executable: "node",
+        // Prevent spawned Electron processes from showing in dock/tray.
+        // Must merge with process.env since SDK replaces rather than merges.
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
         ...(process.env.CLAUDE_CODE_EXECUTABLE && {
           pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
         }),
