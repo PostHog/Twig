@@ -7,11 +7,11 @@ import {
 } from "@phosphor-icons/react";
 import {
   Box,
-  Button,
   Code,
   ContextMenu,
   Flex,
   IconButton,
+  Spinner,
   Text,
   TextArea,
   Tooltip,
@@ -25,7 +25,6 @@ interface LogViewProps {
   isPromptPending?: boolean;
   onSendPrompt?: (text: string) => Promise<void>;
   onCancelPrompt?: () => void;
-  onStartSession?: () => void;
 }
 
 function renderNotification(notification: SessionNotification): string {
@@ -61,7 +60,6 @@ export function LogView({
   isPromptPending = false,
   onSendPrompt,
   onCancelPrompt,
-  onStartSession,
 }: LogViewProps) {
   const [inputValue, setInputValue] = useState("");
   const [showRawLogs, setShowRawLogs] = useState(false);
@@ -133,7 +131,7 @@ export function LogView({
     }
   }
 
-  // Show start session prompt when no session
+  // Show initializing state when no session yet
   if (!sessionId && !isRunning) {
     return (
       <Flex
@@ -141,16 +139,10 @@ export function LogView({
         align="center"
         justify="center"
         height="100%"
-        p="8"
+        gap="3"
       >
-        <Flex direction="column" align="center" gap="4">
-          <Text color="gray">No active session</Text>
-          {onStartSession && (
-            <Button size="2" onClick={onStartSession}>
-              Start Agent Session
-            </Button>
-          )}
-        </Flex>
+        <Spinner size="3" />
+        <Text color="gray">Initializing session...</Text>
       </Flex>
     );
   }
