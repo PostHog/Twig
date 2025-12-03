@@ -26,6 +26,7 @@ interface LogViewProps {
   isRunning: boolean;
   isPromptPending?: boolean;
   onSendPrompt?: (text: string) => Promise<void>;
+  onCancelPrompt?: () => void;
   onCancelSession?: () => void;
   onStartSession?: () => void;
 }
@@ -62,6 +63,7 @@ export function LogView({
   isRunning,
   isPromptPending = false,
   onSendPrompt,
+  onCancelPrompt,
   onCancelSession,
   onStartSession,
 }: LogViewProps) {
@@ -93,8 +95,12 @@ export function LogView({
         e.preventDefault();
         handleSend();
       }
+      if (e.key === "Escape" && isPromptPending && onCancelPrompt) {
+        e.preventDefault();
+        onCancelPrompt();
+      }
     },
-    [handleSend],
+    [handleSend, isPromptPending, onCancelPrompt],
   );
 
   const handleCopyLogs = () => {
@@ -282,15 +288,23 @@ export function LogView({
                 style={{ resize: "none" }}
               />
             </Box>
-            <Tooltip content="Send message (Enter)">
-              <IconButton
-                size="3"
-                onClick={handleSend}
-                disabled={!inputValue.trim() || isPromptPending || !isRunning}
-              >
-                <SendIcon size={20} />
-              </IconButton>
-            </Tooltip>
+            {isPromptPending ? (
+              <Tooltip content="Cancel (Esc)">
+                <IconButton size="3" color="red" onClick={onCancelPrompt}>
+                  <StopIcon size={20} weight="fill" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip content="Send message (Enter)">
+                <IconButton
+                  size="3"
+                  onClick={handleSend}
+                  disabled={!inputValue.trim() || !isRunning}
+                >
+                  <SendIcon size={20} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Flex>
         </Box>
       )}

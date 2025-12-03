@@ -284,6 +284,19 @@ export class SessionManager {
     }
   }
 
+  async cancelPrompt(taskRunId: string): Promise<boolean> {
+    const session = this.sessions.get(taskRunId);
+    if (!session) return false;
+
+    try {
+      await session.connection.cancel({ sessionId: taskRunId });
+      return true;
+    } catch (err) {
+      log.error("Failed to cancel prompt", { taskRunId, err });
+      return false;
+    }
+  }
+
   getSession(taskRunId: string): ManagedSession | undefined {
     return this.sessions.get(taskRunId);
   }
@@ -513,6 +526,13 @@ export function registerAgentIpc(
     "agent-cancel",
     async (_event: IpcMainInvokeEvent, sessionId: string) => {
       return sessionManager.cancelSession(sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "agent-cancel-prompt",
+    async (_event: IpcMainInvokeEvent, sessionId: string) => {
+      return sessionManager.cancelPrompt(sessionId);
     },
   );
 

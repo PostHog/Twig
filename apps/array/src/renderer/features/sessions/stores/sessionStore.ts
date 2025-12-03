@@ -62,6 +62,9 @@ interface SessionStore {
     prompt: string | ContentBlock[],
   ) => Promise<{ stopReason: string }>;
 
+  // Cancel ongoing prompt without terminating session
+  cancelPrompt: (taskId: string) => Promise<boolean>;
+
   // Internal: subscribe to IPC events
   _subscribeToChannel: (
     taskRunId: string,
@@ -330,6 +333,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
         },
       }));
+    }
+  },
+
+  cancelPrompt: async (taskId) => {
+    const session = get().getSessionForTask(taskId);
+    if (!session) return false;
+
+    try {
+      return await window.electronAPI.agentCancelPrompt(session.taskRunId);
+    } catch (error) {
+      log.error("Failed to cancel prompt", error);
+      return false;
     }
   },
 
