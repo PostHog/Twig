@@ -1,15 +1,18 @@
 import { ArrowUpIcon, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import type { WorkspaceMode } from "@shared/types";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
+import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
+
+type LocalWorkspaceMode = "worktree" | "root";
 
 interface TaskInputEditorProps {
   editor: Editor | null;
   isCreatingTask: boolean;
-  workspaceMode: WorkspaceMode;
-  onWorkspaceModeChange: (mode: WorkspaceMode) => void;
+  runMode: RunMode;
+  localWorkspaceMode: LocalWorkspaceMode;
+  onLocalWorkspaceModeChange: (mode: LocalWorkspaceMode) => void;
   canSubmit: boolean;
   onSubmit: () => void;
   hasDirectory: boolean;
@@ -18,13 +21,15 @@ interface TaskInputEditorProps {
 export function TaskInputEditor({
   editor,
   isCreatingTask,
-  workspaceMode,
-  onWorkspaceModeChange,
+  runMode,
+  localWorkspaceMode,
+  onLocalWorkspaceModeChange,
   canSubmit,
   onSubmit,
   hasDirectory,
 }: TaskInputEditorProps) {
-  const isWorktreeMode = workspaceMode === "worktree";
+  const isWorktreeMode = localWorkspaceMode === "worktree";
+  const isCloudMode = runMode === "cloud";
 
   const getSubmitTooltip = () => {
     if (canSubmit) return "Create task";
@@ -104,29 +109,33 @@ export function TaskInputEditor({
       </Flex>
 
       <Flex justify="end" align="center" gap="4" px="3" pb="3">
-        <Tooltip
-          content={
-            isWorktreeMode
-              ? "Work in a separate directory with its own branch"
-              : "Work directly in the selected folder"
-          }
-        >
-          <IconButton
-            size="1"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              onWorkspaceModeChange(isWorktreeMode ? "root" : "worktree");
-            }}
-            className="worktree-toggle-button"
-            data-active={isWorktreeMode}
+        {!isCloudMode && (
+          <Tooltip
+            content={
+              isWorktreeMode
+                ? "Work in a separate directory with its own branch"
+                : "Work directly in the selected folder"
+            }
           >
-            <GitBranchIcon
-              size={16}
-              weight={isWorktreeMode ? "fill" : "regular"}
-            />
-          </IconButton>
-        </Tooltip>
+            <IconButton
+              size="1"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLocalWorkspaceModeChange(
+                  isWorktreeMode ? "root" : "worktree",
+                );
+              }}
+              className="worktree-toggle-button"
+              data-active={isWorktreeMode}
+            >
+              <GitBranchIcon
+                size={16}
+                weight={isWorktreeMode ? "fill" : "regular"}
+              />
+            </IconButton>
+          </Tooltip>
+        )}
 
         <Tooltip content={getSubmitTooltip()}>
           <IconButton

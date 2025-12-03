@@ -14,7 +14,7 @@ export interface WorktreeInfo {
   createdAt: string;
 }
 
-export type WorkspaceMode = "worktree" | "root";
+export type WorkspaceMode = "worktree" | "root" | "cloud";
 
 export interface TaskFolderAssociation {
   taskId: string;

@@ -107,38 +107,71 @@ export function useTaskCreation({
       },
       {
         onSuccess: async (newTask: Task) => {
-          let agentCwd = selectedDirectory;
+          // Save workspace mode preference
+          saveWorkspaceMode(newTask.id, workspaceMode);
+          useSettingsStore.getState().setLastUsedWorkspaceMode(workspaceMode);
 
-          if (selectedDirectory) {
-            await saveRepoPath(newTask.id, selectedDirectory);
-            saveWorkspaceMode(newTask.id, workspaceMode);
-
-            try {
-              const workspace = await useWorkspaceStore
-                .getState()
-                .ensureWorkspace(newTask.id, selectedDirectory, workspaceMode);
-              agentCwd = workspace.worktreePath ?? workspace.folderPath;
-            } catch (error) {
-              log.error("Failed to create workspace for task:", error);
-            }
+          // Also save the run mode and local workspace mode separately for UI
+          if (workspaceMode === "cloud") {
+            useSettingsStore.getState().setLastUsedRunMode("cloud");
+          } else {
+            useSettingsStore.getState().setLastUsedRunMode("local");
+            useSettingsStore
+              .getState()
+              .setLastUsedLocalWorkspaceMode(workspaceMode);
           }
 
-          // Invalidate tasks AFTER workspace is ready to avoid race condition
-          // where sidebar re-renders before workspace exists
-          invalidateTasks();
+          if (workspaceMode === "cloud") {
+            // Cloud execution - no local workspace needed
+            try {
+              await client.runTaskInCloud(newTask.id);
+              log.info("Started cloud task", { taskId: newTask.id });
+            } catch (error) {
+              log.error("Failed to start cloud task:", error);
+            }
 
-          navigateToTask(newTask);
-          editor.commands.clearContent();
-          clearDraft();
+            invalidateTasks();
+            navigateToTask(newTask);
+            editor.commands.clearContent();
+            clearDraft();
+          } else {
+            // Local execution (worktree or root)
+            let agentCwd = selectedDirectory;
 
-          if (autoRunTasks && agentCwd) {
-            // Build content blocks with file contents for the initial prompt
-            const promptBlocks = await buildPromptBlocks(
-              content,
-              filePaths,
-              agentCwd,
-            );
-            await startAgentSession(newTask, agentCwd, promptBlocks);
+            if (selectedDirectory) {
+              await saveRepoPath(newTask.id, selectedDirectory);
+
+              try {
+                const workspace = await useWorkspaceStore
+                  .getState()
+                  .ensureWorkspace(
+                    newTask.id,
+                    selectedDirectory,
+                    workspaceMode,
+                  );
+                agentCwd = workspace.worktreePath ?? workspace.folderPath;
+              } catch (error) {
+                log.error("Failed to create workspace for task:", error);
+              }
+            }
+
+            // Invalidate tasks AFTER workspace is ready to avoid race condition
+            // where sidebar re-renders before workspace exists
+            invalidateTasks();
+
+            navigateToTask(newTask);
+            editor.commands.clearContent();
+            clearDraft();
+
+            if (autoRunTasks && agentCwd) {
+              // Build content blocks with file contents for the initial prompt
+              const promptBlocks = await buildPromptBlocks(
+                content,
+                filePaths,
+                agentCwd,
+              );
+              await startAgentSession(newTask, agentCwd, promptBlocks);
+            }
           }
         },
         onError: (error) => {

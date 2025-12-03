@@ -1,8 +1,10 @@
 import {
   CheckCircleIcon,
   CircleIcon,
+  Cloud,
   XCircleIcon,
 } from "@phosphor-icons/react";
+import type { WorkspaceMode } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import type { TaskStatus } from "../../types";
 import { SidebarItem } from "../SidebarItem";
@@ -24,6 +26,7 @@ interface TaskItemProps {
   isActive: boolean;
   worktreeName?: string;
   worktreePath?: string;
+  workspaceMode?: WorkspaceMode;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
@@ -101,11 +104,21 @@ export function TaskItem({
   isActive,
   worktreeName,
   worktreePath,
+  workspaceMode,
   onClick,
   onContextMenu,
 }: TaskItemProps) {
   const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
-  const subtitle = worktreeName ?? currentBranch;
+
+  const isCloudTask = workspaceMode === "cloud";
+  const subtitle = isCloudTask ? (
+    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      <Cloud size={10} />
+      <span>Cloud</span>
+    </span>
+  ) : (
+    (worktreeName ?? currentBranch)
+  );
 
   return (
     <SidebarItem
@@ -117,7 +130,7 @@ export function TaskItem({
       onClick={onClick}
       onContextMenu={onContextMenu}
       endContent={
-        worktreePath ? (
+        !isCloudTask && worktreePath ? (
           <DiffStatsDisplay worktreePath={worktreePath} />
         ) : undefined
       }

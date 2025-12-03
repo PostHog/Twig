@@ -167,6 +167,11 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       repoPath: string,
       mode: WorkspaceMode = "worktree",
     ) => {
+      // Cloud tasks don't need local workspaces
+      if (mode === "cloud") {
+        return null as unknown as Workspace;
+      }
+
       // Return existing workspace if it exists
       const existing = get().workspaces[taskId];
       if (existing) {

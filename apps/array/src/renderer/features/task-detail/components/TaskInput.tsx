@@ -1,6 +1,7 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { Box, Flex } from "@radix-ui/themes";
+import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -8,10 +9,13 @@ import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useEffect, useState } from "react";
 import { useEditorSetup } from "../hooks/useEditorSetup";
 import { useTaskCreation } from "../hooks/useTaskCreation";
+import { type RunMode, RunModeSelect } from "./RunModeSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 
 const DOT_FILL = "var(--gray-6)";
+
+type LocalWorkspaceMode = "worktree" | "root";
 
 export function TaskInput() {
   useSetHeaderContent(null);
@@ -19,10 +23,14 @@ export function TaskInput() {
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
   const { folders } = useRegisteredFoldersStore();
+  const { lastUsedRunMode, lastUsedLocalWorkspaceMode } = useSettingsStore();
+
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("worktree");
+  const [runMode, setRunMode] = useState<RunMode>(lastUsedRunMode);
+  const [localWorkspaceMode, setLocalWorkspaceMode] =
+    useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
 
   useEffect(() => {
     if (view.folderId) {
@@ -43,10 +51,14 @@ export function TaskInput() {
     repoPath: selectedDirectory,
   });
 
+  // Compute the effective workspace mode for task creation
+  const effectiveWorkspaceMode: WorkspaceMode =
+    runMode === "cloud" ? "cloud" : localWorkspaceMode;
+
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editor,
     selectedDirectory,
-    workspaceMode,
+    workspaceMode: effectiveWorkspaceMode,
   });
 
   return (
@@ -98,20 +110,22 @@ export function TaskInput() {
           zIndex: 1,
         }}
       >
-        <Box>
+        <Flex gap="2" align="center">
           <FolderPicker
             value={selectedDirectory}
             onChange={handleDirectoryChange}
             placeholder="Select working directory..."
             size="1"
           />
-        </Box>
+          <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
+        </Flex>
 
         <TaskInputEditor
           editor={editor}
           isCreatingTask={isCreatingTask}
-          workspaceMode={workspaceMode}
-          onWorkspaceModeChange={setWorkspaceMode}
+          runMode={runMode}
+          localWorkspaceMode={localWorkspaceMode}
+          onLocalWorkspaceModeChange={setLocalWorkspaceMode}
           canSubmit={canSubmit}
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}
