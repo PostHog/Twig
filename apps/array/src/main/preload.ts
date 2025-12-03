@@ -185,6 +185,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     apiHost: string;
     projectId: number;
     logUrl?: string;
+    sdkSessionId?: string;
   }): Promise<{ sessionId: string; channel: string } | null> =>
     ipcRenderer.invoke("agent-reconnect", params),
   onAgentEvent: (
@@ -303,9 +304,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     createVoidIpcListener("updates:ready", listener),
   installUpdate: (): Promise<{ installed: boolean }> =>
     ipcRenderer.invoke("updates:install"),
-  // Shell API
-  shellCreate: (sessionId: string, cwd?: string): Promise<void> =>
-    ipcRenderer.invoke("shell:create", sessionId, cwd),
+  shellCreate: (
+    sessionId: string,
+    cwd?: string,
+    taskId?: string,
+  ): Promise<void> =>
+    ipcRenderer.invoke("shell:create", sessionId, cwd, taskId),
   shellWrite: (sessionId: string, data: string): Promise<void> =>
     ipcRenderer.invoke("shell:write", sessionId, data),
   shellResize: (sessionId: string, cols: number, rows: number): Promise<void> =>

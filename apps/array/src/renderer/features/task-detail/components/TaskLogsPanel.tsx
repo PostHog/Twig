@@ -26,9 +26,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   // Get session state from store
   const session = useSessionStore((state) => state.getSessionForTask(taskId));
   const connectToTask = useSessionStore((state) => state.connectToTask);
-  const disconnectFromTask = useSessionStore(
-    (state) => state.disconnectFromTask,
-  );
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const cancelPrompt = useSessionStore((state) => state.cancelPrompt);
 
@@ -79,11 +76,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     [taskId, sendPrompt],
   );
 
-  const handleCancelSession = useCallback(async () => {
-    await disconnectFromTask(taskId);
-    log.info("Agent session cancelled");
-  }, [taskId, disconnectFromTask]);
-
   const handleCancelPrompt = useCallback(async () => {
     const result = await cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
@@ -99,7 +91,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           isPromptPending={session?.isPromptPending}
           onSendPrompt={handleSendPrompt}
           onCancelPrompt={handleCancelPrompt}
-          onCancelSession={handleCancelSession}
           onStartSession={handleStartSession}
         />
       </Box>

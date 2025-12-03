@@ -6,9 +6,10 @@ import { Terminal } from "./Terminal";
 interface ShellTerminalProps {
   cwd?: string;
   stateKey?: string;
+  taskId?: string;
 }
 
-export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
+export function ShellTerminal({ cwd, stateKey, taskId }: ShellTerminalProps) {
   const persistenceKey = stateKey || cwd || "default";
 
   const savedState = useTerminalStore(
@@ -30,6 +31,7 @@ export function ShellTerminal({ cwd, stateKey }: ShellTerminalProps) {
       persistenceKey={persistenceKey}
       cwd={cwd}
       initialState={savedState?.serializedState ?? undefined}
+      taskId={taskId}
     />
   );
 }

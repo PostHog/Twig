@@ -122,6 +122,7 @@ export interface SessionConfig {
   repoPath: string;
   credentials: PostHogCredentials;
   logUrl?: string; // For reconnection from S3
+  sdkSessionId?: string; // SDK session ID for resuming Claude Code context
 }
 
 export interface ManagedSession {
@@ -171,7 +172,8 @@ export class SessionManager {
     config: SessionConfig,
     isReconnect: boolean,
   ): Promise<ManagedSession | null> {
-    const { taskId, taskRunId, repoPath, credentials, logUrl } = config;
+    const { taskId, taskRunId, repoPath, credentials, logUrl, sdkSessionId } =
+      config;
 
     const existing = this.sessions.get(taskRunId);
     if (existing) {
@@ -214,9 +216,12 @@ export class SessionManager {
           sessionId: taskRunId,
           cwd: repoPath,
           mcpServers: [],
-          _meta: logUrl
-            ? { persistence: { taskId, runId: taskRunId, logUrl } }
-            : undefined,
+          _meta: {
+            ...(logUrl && {
+              persistence: { taskId, runId: taskRunId, logUrl },
+            }),
+            ...(sdkSessionId && { sdkSessionId }),
+          },
         });
       } else {
         await connection.newSession({
@@ -452,6 +457,7 @@ interface AgentSessionParams {
   apiHost: string;
   projectId: number;
   logUrl?: string;
+  sdkSessionId?: string;
 }
 
 type SessionResponse = { sessionId: string; channel: string };
@@ -480,6 +486,7 @@ function toSessionConfig(params: AgentSessionParams): SessionConfig {
       projectId: params.projectId,
     },
     logUrl: params.logUrl,
+    sdkSessionId: params.sdkSessionId,
   };
 }
 

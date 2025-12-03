@@ -77,7 +77,7 @@ export const getRemoteUrl = async (
   }
 };
 
-const getCurrentBranch = async (
+export const getCurrentBranch = async (
   directoryPath: string,
 ): Promise<string | undefined> => {
   try {
@@ -90,7 +90,9 @@ const getCurrentBranch = async (
   }
 };
 
-const getDefaultBranch = async (directoryPath: string): Promise<string> => {
+export const getDefaultBranch = async (
+  directoryPath: string,
+): Promise<string> => {
   try {
     // Try to get the default branch from origin
     const { stdout } = await execAsync(

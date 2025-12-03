@@ -137,6 +137,7 @@ declare global {
       apiHost: string;
       projectId: number;
       logUrl?: string;
+      sdkSessionId?: string;
     }) => Promise<{ sessionId: string; channel: string } | null>;
     onAgentEvent: (
       channel: string,
@@ -215,7 +216,11 @@ declare global {
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
     // Shell API
-    shellCreate: (sessionId: string, cwd?: string) => Promise<void>;
+    shellCreate: (
+      sessionId: string,
+      cwd?: string,
+      taskId?: string,
+    ) => Promise<void>;
     shellWrite: (sessionId: string, data: string) => Promise<void>;
     shellResize: (
       sessionId: string,
