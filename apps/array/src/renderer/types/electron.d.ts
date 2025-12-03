@@ -136,6 +136,7 @@ declare global {
       apiHost: string;
       projectId: number;
       logUrl?: string;
+      sdkSessionId?: string;
     }) => Promise<{ sessionId: string; channel: string } | null>;
     onAgentEvent: (
       channel: string,

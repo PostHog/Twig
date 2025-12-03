@@ -183,6 +183,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     apiHost: string;
     projectId: number;
     logUrl?: string;
+    sdkSessionId?: string;
   }): Promise<{ sessionId: string; channel: string } | null> =>
     ipcRenderer.invoke("agent-reconnect", params),
   onAgentEvent: (
