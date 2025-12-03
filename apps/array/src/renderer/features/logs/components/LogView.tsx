@@ -1,18 +1,13 @@
 import type { SessionNotification } from "@agentclientprotocol/sdk";
 import type { SessionEvent } from "@features/sessions/stores/sessionStore";
 import { useAutoScroll } from "@hooks/useAutoScroll";
-import {
-  Code as CodeIcon,
-  Copy as CopyIcon,
-  PaperPlaneRight as SendIcon,
-  Stop as StopIcon,
-} from "@phosphor-icons/react";
+import { PaperPlaneRight as SendIcon } from "@phosphor-icons/react";
 import {
   Box,
   Button,
   Code,
+  ContextMenu,
   Flex,
-  Heading,
   IconButton,
   Text,
   TextArea,
@@ -26,7 +21,6 @@ interface LogViewProps {
   isRunning: boolean;
   isPromptPending?: boolean;
   onSendPrompt?: (text: string) => Promise<void>;
-  onCancelSession?: () => void;
   onStartSession?: () => void;
 }
 
@@ -62,7 +56,6 @@ export function LogView({
   isRunning,
   isPromptPending = false,
   onSendPrompt,
-  onCancelSession,
   onStartSession,
 }: LogViewProps) {
   const [inputValue, setInputValue] = useState("");
@@ -96,21 +89,6 @@ export function LogView({
     },
     [handleSend],
   );
-
-  const handleCopyLogs = () => {
-    const logsText = events
-      .map((event) => {
-        if (event.type === "session_update") {
-          return renderNotification(event.notification);
-        }
-        if (event.type === "acp_message") {
-          return `[${event.direction}] ${JSON.stringify(event.message)}`;
-        }
-        return JSON.stringify(event);
-      })
-      .join("\n");
-    navigator.clipboard.writeText(logsText);
-  };
 
   // Build rendered output from events (filter out raw acp_message unless showRawLogs is true)
   const renderedOutput: Array<{
@@ -170,101 +148,46 @@ export function LogView({
 
   return (
     <Flex direction="column" height="100%">
-      {/* Header */}
-      <Box p="4" className="border-gray-6 border-b">
-        <Flex align="center" justify="between">
-          <Heading size="3">Agent Chat</Heading>
-          <Flex align="center" gap="3">
-            <Tooltip
-              content={showRawLogs ? "Show pretty view" : "Show raw ACP logs"}
-            >
-              <IconButton
-                size="2"
-                variant={showRawLogs ? "solid" : "ghost"}
-                color="gray"
-                onClick={() => setShowRawLogs(!showRawLogs)}
-              >
-                <CodeIcon size={16} />
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip content="Copy logs">
-              <IconButton
-                size="2"
-                variant="ghost"
-                color="gray"
-                onClick={handleCopyLogs}
-              >
-                <CopyIcon size={16} />
-              </IconButton>
-            </Tooltip>
-
-            {isRunning && onCancelSession && (
-              <Tooltip content="Cancel session">
-                <Button size="2" color="red" onClick={onCancelSession}>
-                  <StopIcon size={16} weight="fill" />
-                  Cancel
-                </Button>
-              </Tooltip>
-            )}
-
-            {isRunning ? (
-              <Flex align="center" gap="2">
-                <Box
-                  width="8px"
-                  height="8px"
-                  className="animate-pulse rounded-full bg-green-9"
-                />
-                <Text size="2" color="gray">
-                  Running
-                </Text>
-              </Flex>
-            ) : (
-              events.length > 0 && (
-                <Flex align="center" gap="2">
-                  <Box
-                    width="8px"
-                    height="8px"
-                    className="rounded-full bg-accent-9"
-                  />
-                  <Text size="2" color="gray">
-                    Idle
-                  </Text>
-                </Flex>
-              )
-            )}
-          </Flex>
-        </Flex>
-      </Box>
-
       {/* Chat output */}
-      <Box ref={scrollRef} flexGrow="1" overflowY="auto" p="4">
-        <Box className="space-y-1 font-mono text-sm">
-          {renderedOutput.map((item) => (
-            <Code
-              key={item.key}
-              size="2"
-              variant="ghost"
-              className={`block whitespace-pre-wrap ${
-                item.rawDirection === "client"
-                  ? "text-cyan-11"
-                  : item.rawDirection === "agent"
-                    ? "text-orange-11"
-                    : item.isUserMessage
-                      ? "text-blue-11"
-                      : ""
-              }`}
-            >
-              {item.text}
-            </Code>
-          ))}
-          {isPromptPending && (
-            <Code size="2" variant="ghost" className="block text-gray-9">
-              Thinking...
-            </Code>
-          )}
-        </Box>
-      </Box>
+      <ContextMenu.Root>
+        <ContextMenu.Trigger>
+          <Box ref={scrollRef} flexGrow="1" overflowY="auto" p="4">
+            <Box className="space-y-1 font-mono text-sm">
+              {renderedOutput.map((item) => (
+                <Code
+                  key={item.key}
+                  size="2"
+                  variant="ghost"
+                  className={`block whitespace-pre-wrap ${
+                    item.rawDirection === "client"
+                      ? "text-cyan-11"
+                      : item.rawDirection === "agent"
+                        ? "text-orange-11"
+                        : item.isUserMessage
+                          ? "text-blue-11"
+                          : ""
+                  }`}
+                >
+                  {item.text}
+                </Code>
+              ))}
+              {isPromptPending && (
+                <Code size="2" variant="ghost" className="block text-gray-9">
+                  Thinking...
+                </Code>
+              )}
+            </Box>
+          </Box>
+        </ContextMenu.Trigger>
+        <ContextMenu.Content>
+          <ContextMenu.CheckboxItem
+            checked={showRawLogs}
+            onCheckedChange={setShowRawLogs}
+          >
+            Show raw ACP logs
+          </ContextMenu.CheckboxItem>
+        </ContextMenu.Content>
+      </ContextMenu.Root>
 
       {/* Input area */}
       {sessionId && (
