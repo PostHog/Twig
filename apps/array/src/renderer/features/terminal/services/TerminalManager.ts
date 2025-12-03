@@ -37,6 +37,7 @@ export interface TerminalInstance {
   saveTimeout: number | null;
   persistenceKey: string;
   cwd?: string;
+  taskId?: string;
 }
 
 export interface CreateOptions {
@@ -44,6 +45,7 @@ export interface CreateOptions {
   persistenceKey: string;
   cwd?: string;
   initialState?: string;
+  taskId?: string;
 }
 
 type ReadyPayload = { sessionId: string; persistenceKey: string };
@@ -151,7 +153,7 @@ class TerminalManagerImpl {
   }
 
   create(options: CreateOptions): TerminalInstance {
-    const { sessionId, persistenceKey, cwd, initialState } = options;
+    const { sessionId, persistenceKey, cwd, initialState, taskId } = options;
 
     const existing = this.instances.get(sessionId);
     if (existing) {
@@ -187,6 +189,7 @@ class TerminalManagerImpl {
       saveTimeout: null,
       persistenceKey,
       cwd,
+      taskId,
     };
 
     // Write initial state if provided (before opening)
@@ -198,7 +201,7 @@ class TerminalManagerImpl {
     this.setupIPC(sessionId, instance);
 
     // Initialize shell session
-    this.initializeSession(sessionId, instance, cwd);
+    this.initializeSession(sessionId, instance, cwd, taskId);
 
     this.instances.set(sessionId, instance);
     return instance;
@@ -208,11 +211,12 @@ class TerminalManagerImpl {
     sessionId: string,
     instance: TerminalInstance,
     cwd?: string,
+    taskId?: string,
   ): Promise<void> {
     try {
       const sessionExists = await window.electronAPI?.shellCheck(sessionId);
       if (!sessionExists) {
-        await window.electronAPI?.shellCreate(sessionId, cwd);
+        await window.electronAPI?.shellCreate(sessionId, cwd, taskId);
       }
 
       instance.isReady = true;

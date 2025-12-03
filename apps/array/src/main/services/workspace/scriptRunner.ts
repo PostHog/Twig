@@ -33,7 +33,7 @@ export class ScriptRunner {
     scripts: string | string[],
     scriptType: "init" | "start",
     cwd: string,
-    options: { failFast?: boolean } = {},
+    options: { failFast?: boolean; workspaceEnv?: Record<string, string> } = {},
   ): Promise<ScriptExecutionResult> {
     const commands = Array.isArray(scripts) ? scripts : [scripts];
     const terminalSessionIds: string[] = [];
@@ -67,6 +67,7 @@ export class ScriptRunner {
           webContents: mainWindow.webContents,
           cwd,
           initialCommand: command,
+          additionalEnv: options.workspaceEnv,
         });
 
         terminalSessionIds.push(sessionId);
@@ -112,14 +113,19 @@ export class ScriptRunner {
   async executeScriptsSilent(
     scripts: string | string[],
     cwd: string,
+    workspaceEnv?: Record<string, string>,
   ): Promise<{ success: boolean; errors: string[] }> {
     const commands = Array.isArray(scripts) ? scripts : [scripts];
     const errors: string[] = [];
 
+    const execEnv = workspaceEnv
+      ? { ...process.env, ...workspaceEnv }
+      : undefined;
+
     for (const command of commands) {
       log.info(`Running destroy script silently: ${command}`);
       try {
-        await execAsync(command, { cwd, timeout: 60000 });
+        await execAsync(command, { cwd, timeout: 60000, env: execEnv });
         log.info(`Destroy script completed: ${command}`);
       } catch (error) {
         const errorMessage =

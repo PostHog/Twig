@@ -45,7 +45,7 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
 
   return (
     <Box height="100%">
-      <ShellTerminal cwd={effectiveCwd} stateKey={stateKey} />
+      <ShellTerminal cwd={effectiveCwd} stateKey={stateKey} taskId={taskId} />
     </Box>
   );
 }

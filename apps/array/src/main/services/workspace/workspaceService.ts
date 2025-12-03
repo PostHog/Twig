@@ -19,6 +19,7 @@ import { foldersStore } from "../store";
 import { deleteWorktreeIfExists } from "../worktreeUtils";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
+import { buildWorkspaceEnv } from "./workspaceEnv";
 
 const execAsync = promisify(exec);
 
@@ -139,6 +140,14 @@ export class WorkspaceService {
       );
       let terminalSessionIds: string[] = [];
 
+      const workspaceEnv = await buildWorkspaceEnv({
+        taskId,
+        folderPath,
+        worktreePath: null,
+        worktreeName: null,
+        mode,
+      });
+
       // Run init scripts
       const initScripts = normalizeScripts(config?.scripts?.init);
       if (initScripts.length > 0) {
@@ -150,7 +159,7 @@ export class WorkspaceService {
           initScripts,
           "init",
           folderPath,
-          { failFast: true },
+          { failFast: true, workspaceEnv },
         );
         terminalSessionIds = initResult.terminalSessionIds;
 
@@ -173,7 +182,7 @@ export class WorkspaceService {
           startScripts,
           "start",
           folderPath,
-          { failFast: false },
+          { failFast: false, workspaceEnv },
         );
         terminalSessionIds = [
           ...terminalSessionIds,
@@ -261,6 +270,14 @@ export class WorkspaceService {
 
     let terminalSessionIds: string[] = [];
 
+    const workspaceEnv = await buildWorkspaceEnv({
+      taskId,
+      folderPath,
+      worktreePath: worktree.worktreePath,
+      worktreeName: worktree.worktreeName,
+      mode,
+    });
+
     if (initScripts.length > 0) {
       log.info(
         `Running ${initScripts.length} init script(s) for task ${taskId}`,
@@ -270,7 +287,7 @@ export class WorkspaceService {
         initScripts,
         "init",
         worktree.worktreePath,
-        { failFast: true },
+        { failFast: true, workspaceEnv },
       );
 
       terminalSessionIds = initResult.terminalSessionIds;
@@ -298,7 +315,7 @@ export class WorkspaceService {
         startScripts,
         "start",
         worktree.worktreePath,
-        { failFast: false },
+        { failFast: false, workspaceEnv },
       );
 
       terminalSessionIds = [
@@ -365,9 +382,19 @@ export class WorkspaceService {
         log.info(
           `Running ${destroyScripts.length} destroy script(s) for task ${taskId}`,
         );
+
+        const workspaceEnv = await buildWorkspaceEnv({
+          taskId,
+          folderPath,
+          worktreePath: association.worktree?.worktreePath ?? null,
+          worktreeName: association.worktree?.worktreeName ?? null,
+          mode: association.mode,
+        });
+
         const destroyResult = await this.scriptRunner.executeScriptsSilent(
           destroyScripts,
           scriptPath,
+          workspaceEnv,
         );
 
         if (!destroyResult.success) {
@@ -489,12 +516,21 @@ export class WorkspaceService {
       return { success: true, terminalSessionIds: [] };
     }
 
+    const association = findTaskAssociation(taskId);
+    const workspaceEnv = await buildWorkspaceEnv({
+      taskId,
+      folderPath: association?.folderPath ?? worktreePath,
+      worktreePath,
+      worktreeName,
+      mode: association?.mode ?? "worktree",
+    });
+
     const result = await this.scriptRunner.executeScriptsWithTerminal(
       taskId,
       startScripts,
       "start",
       worktreePath,
-      { failFast: false },
+      { failFast: false, workspaceEnv },
     );
 
     if (!result.success) {

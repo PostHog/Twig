@@ -126,3 +126,42 @@ Clean up Docker containers:
   }
 }
 ```
+
+## Workspace Environment Variables
+
+Array automatically sets environment variables in all workspace terminals and scripts. These are available in `init`, `start`, and `destroy` scripts, as well as any terminal sessions opened within a workspace.
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ARRAY_WORKSPACE_NAME` | Worktree name, or folder name in root mode | `my-feature-branch` |
+| `ARRAY_WORKSPACE_PATH` | Absolute path to the workspace | `/Users/dev/.array/worktrees/repo/my-feature` |
+| `ARRAY_ROOT_PATH` | Absolute path to the repository root | `/Users/dev/repos/my-project` |
+| `ARRAY_DEFAULT_BRANCH` | Default branch detected from git | `main` |
+| `ARRAY_WORKSPACE_BRANCH` | Initial branch when workspace was created | `array/my-feature` |
+| `ARRAY_WORKSPACE_PORTS` | Comma-separated list of allocated ports | `50000,50001,...,50019` |
+| `ARRAY_WORKSPACE_PORTS_RANGE` | Number of ports allocated | `20` |
+| `ARRAY_WORKSPACE_PORTS_START` | First port in the range | `50000` |
+| `ARRAY_WORKSPACE_PORTS_END` | Last port in the range | `50019` |
+
+Note: `ARRAY_WORKSPACE_BRANCH` reflects the branch at workspace creation time. If you or the agent checks out a different branch, this variable will still show the original branch name.
+
+### Port Allocation
+
+Each workspace is assigned a unique range of 20 ports starting from port 50000. The allocation is deterministic based on the task ID, so the same workspace always receives the same ports across restarts.
+
+### Usage Examples
+
+Use ports in your start scripts:
+```json
+{
+  "scripts": {
+    "start": "npm run dev -- --port $ARRAY_WORKSPACE_PORTS_START"
+  }
+}
+```
+
+Reference the workspace path:
+```bash
+echo "Working in: $ARRAY_WORKSPACE_NAME"
+echo "Root repo: $ARRAY_ROOT_PATH"
+```

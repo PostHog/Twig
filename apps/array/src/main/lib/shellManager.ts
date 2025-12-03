@@ -21,7 +21,9 @@ function getDefaultShell(): string {
   return process.env.SHELL || "/bin/bash";
 }
 
-function buildShellEnv(): Record<string, string> {
+function buildShellEnv(
+  additionalEnv?: Record<string, string>,
+): Record<string, string> {
   const env = { ...process.env } as Record<string, string>;
 
   if (os.platform() === "darwin" && !process.env.LC_ALL) {
@@ -38,6 +40,10 @@ function buildShellEnv(): Record<string, string> {
   env.COLORTERM = "truecolor";
   env.FORCE_COLOR = "3";
 
+  if (additionalEnv) {
+    Object.assign(env, additionalEnv);
+  }
+
   return env;
 }
 
@@ -46,13 +52,15 @@ export interface CreateSessionOptions {
   webContents: WebContents;
   cwd?: string;
   initialCommand?: string;
+  additionalEnv?: Record<string, string>;
 }
 
 class ShellManagerImpl {
   private sessions = new Map<string, ShellSession>();
 
   createSession(options: CreateSessionOptions): ShellSession {
-    const { sessionId, webContents, cwd, initialCommand } = options;
+    const { sessionId, webContents, cwd, initialCommand, additionalEnv } =
+      options;
 
     const existing = this.sessions.get(sessionId);
     if (existing) {
@@ -74,7 +82,7 @@ class ShellManagerImpl {
       `Creating shell session ${sessionId}: shell=${shell}, cwd=${workingDir}`,
     );
 
-    const env = buildShellEnv();
+    const env = buildShellEnv(additionalEnv);
     const ptyProcess = pty.spawn(shell, ["-l"], {
       name: "xterm-256color",
       cols: 80,
