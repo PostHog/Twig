@@ -91,7 +91,6 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       const workspaces = await window.electronAPI?.workspace.getAll();
       if (workspaces) {
         set({ workspaces, isLoaded: true });
-        log.info(`Loaded ${Object.keys(workspaces).length} workspace(s)`);
       } else {
         set({ workspaces: {}, isLoaded: true });
       }
@@ -167,15 +166,49 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       repoPath: string,
       mode: WorkspaceMode = "worktree",
     ) => {
-      // Cloud tasks don't need local workspaces
-      if (mode === "cloud") {
-        return null as unknown as Workspace;
-      }
-
       // Return existing workspace if it exists
       const existing = get().workspaces[taskId];
       if (existing) {
         return existing;
+      }
+
+      // For cloud tasks, create a minimal workspace entry (no local worktree)
+      if (mode === "cloud") {
+        const { getFolderByPath, addFolder } =
+          useRegisteredFoldersStore.getState();
+        let folder = getFolderByPath(repoPath);
+        if (!folder) {
+          folder = await addFolder(repoPath);
+        }
+
+        const cloudWorkspace: Workspace = {
+          taskId,
+          folderId: folder.id,
+          folderPath: repoPath,
+          mode: "cloud",
+          worktreePath: null,
+          worktreeName: null,
+          branchName: null,
+          baseBranch: null,
+          createdAt: new Date().toISOString(),
+          terminalSessionIds: [],
+          hasStartScripts: false,
+        };
+
+        set((state) => ({
+          workspaces: { ...state.workspaces, [taskId]: cloudWorkspace },
+        }));
+
+        // Persist cloud workspace to main process
+        await window.electronAPI?.workspace.create({
+          taskId,
+          mainRepoPath: repoPath,
+          folderId: folder.id,
+          folderPath: repoPath,
+          mode: "cloud",
+        });
+
+        return cloudWorkspace;
       }
 
       // Atomically check if creating and set if not - this prevents race conditions

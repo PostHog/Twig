@@ -122,7 +122,16 @@ export function useTaskCreation({
           }
 
           if (workspaceMode === "cloud") {
-            // Cloud execution - no local workspace needed
+            if (selectedDirectory) {
+              try {
+                await useWorkspaceStore
+                  .getState()
+                  .ensureWorkspace(newTask.id, selectedDirectory, "cloud");
+              } catch (error) {
+                log.error("Failed to create cloud workspace:", error);
+              }
+            }
+
             try {
               await client.runTaskInCloud(newTask.id);
               log.info("Started cloud task", { taskId: newTask.id });

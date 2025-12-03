@@ -87,6 +87,32 @@ export class WorkspaceService {
       `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode})`,
     );
 
+    if (mode === "cloud") {
+      const associations = getTaskAssociations();
+      const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+      const association: TaskFolderAssociation = {
+        taskId,
+        folderId,
+        folderPath,
+        mode,
+      };
+
+      if (existingIndex >= 0) {
+        associations[existingIndex] = association;
+      } else {
+        associations.push(association);
+      }
+      foldersStore.set("taskAssociations", associations);
+
+      return {
+        taskId,
+        mode,
+        worktree: null,
+        terminalSessionIds: [],
+        hasStartScripts: false,
+      };
+    }
+
     // Root mode: skip worktree creation entirely
     if (mode === "root") {
       // Save task association without worktree
@@ -310,6 +336,13 @@ export class WorkspaceService {
       return;
     }
 
+    // Cloud mode: just remove the association, no local cleanup needed
+    if (association.mode === "cloud") {
+      this.removeTaskAssociation(taskId);
+      log.info(`Cloud workspace deleted for task ${taskId}`);
+      return;
+    }
+
     const folderId = association.folderId;
     const folderPath = association.folderPath;
     const isWorktreeMode =
@@ -407,6 +440,11 @@ export class WorkspaceService {
     const association = findTaskAssociation(taskId);
     if (!association) {
       return false;
+    }
+
+    // Cloud mode: always exists (no local files to verify)
+    if (association.mode === "cloud") {
+      return true;
     }
 
     // Root mode: check if folder still exists
