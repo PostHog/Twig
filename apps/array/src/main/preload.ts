@@ -278,6 +278,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }> => ipcRenderer.invoke("get-diff-stats", repoPath),
   getCurrentBranch: (repoPath: string): Promise<string | undefined> =>
     ipcRenderer.invoke("get-current-branch", repoPath),
+  discardFileChanges: (
+    repoPath: string,
+    filePath: string,
+    fileStatus: string,
+  ): Promise<void> =>
+    ipcRenderer.invoke("discard-file-changes", repoPath, filePath, fileStatus),
   listDirectory: (
     dirPath: string,
   ): Promise<

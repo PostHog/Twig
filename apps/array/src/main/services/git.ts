@@ -289,6 +289,39 @@ export interface DiffStats {
   linesRemoved: number;
 }
 
+const discardFileChanges = async (
+  directoryPath: string,
+  filePath: string,
+  fileStatus: GitFileStatus,
+): Promise<void> => {
+  switch (fileStatus) {
+    case "modified":
+    case "deleted":
+      await execAsync(`git checkout HEAD -- "${filePath}"`, {
+        cwd: directoryPath,
+      });
+      break;
+    case "added":
+      await execAsync(`git rm -f "${filePath}"`, {
+        cwd: directoryPath,
+      });
+      break;
+    case "untracked":
+      await execAsync(`git clean -f -- "${filePath}"`, {
+        cwd: directoryPath,
+      });
+      break;
+    case "renamed":
+      // TODO: Restore the original file?
+      await execAsync(`git checkout HEAD -- "${filePath}"`, {
+        cwd: directoryPath,
+      });
+      break;
+    default:
+      throw new Error(`Unknown file status: ${fileStatus}`);
+  }
+};
+
 const getDiffStats = async (directoryPath: string): Promise<DiffStats> => {
   try {
     // git diff --numstat HEAD shows: added\tremoved\tfilename
@@ -685,6 +718,18 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<string | undefined> => {
       return getCurrentBranch(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "discard-file-changes",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      filePath: string,
+      fileStatus: GitFileStatus,
+    ): Promise<void> => {
+      return discardFileChanges(directoryPath, filePath, fileStatus);
     },
   );
 }

@@ -1,10 +1,10 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FileIcon } from "@phosphor-icons/react";
-import { Badge, Box, Flex, Text } from "@radix-ui/themes";
+import { ArrowCounterClockwiseIcon, FileIcon } from "@phosphor-icons/react";
+import { Badge, Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import {
   selectWorktreePath,
@@ -43,6 +43,7 @@ function getStatusIndicator(status: GitFileStatus): {
 
 function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const queryClient = useQueryClient();
   const fileName = file.path.split("/").pop() || file.path;
   const indicator = getStatusIndicator(file.status);
 
@@ -60,14 +61,31 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
     await handleExternalAppAction(result.action, fullPath, fileName);
   };
 
+  const handleDiscard = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await window.electronAPI.discardFileChanges(
+        repoPath,
+        file.path,
+        file.status,
+      );
+      // Invalidate the changed files query to refresh the list
+      queryClient.invalidateQueries({
+        queryKey: ["changed-files-head", repoPath],
+      });
+    } catch (_error) {}
+  };
+
   return (
     <Flex
       align="center"
       gap="2"
       py="1"
+      pl="1"
+      pr="2"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className="hover:bg-gray-2"
+      className="group hover:bg-gray-2"
       style={{ cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden" }}
     >
       <Badge size="1" color={indicator.color} style={{ flexShrink: 0 }}>
@@ -84,10 +102,23 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
           userSelect: "none",
           overflow: "hidden",
           textOverflow: "ellipsis",
+          flex: 1,
         }}
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
+      <Tooltip content="Discard changes">
+        <IconButton
+          size="1"
+          variant="ghost"
+          color="gray"
+          onClick={handleDiscard}
+          className="opacity-0 group-hover:opacity-100"
+          style={{ flexShrink: 0 }}
+        >
+          <ArrowCounterClockwiseIcon size={12} />
+        </IconButton>
+      </Tooltip>
     </Flex>
   );
 }
