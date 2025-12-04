@@ -37,3 +37,11 @@
   height: 0;
   pointer-events: none;
 }
+
+.cli-file-mention {
+  background-color: var(--accent-a3);
+  color: var(--accent-11);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 500;
+}

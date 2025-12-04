@@ -135,10 +135,10 @@ export function AuthScreen() {
                     >
                       <Select.Trigger />
                       <Select.Content>
-                        <Select.Item value="us">🇺🇸 US Cloud</Select.Item>
-                        <Select.Item value="eu">🇪🇺 EU Cloud</Select.Item>
+                        <Select.Item value="us">US Cloud</Select.Item>
+                        <Select.Item value="eu">EU Cloud</Select.Item>
                         {IS_DEV && (
-                          <Select.Item value="dev">🔧 Development</Select.Item>
+                          <Select.Item value="dev">Development</Select.Item>
                         )}
                       </Select.Content>
                     </Select.Root>

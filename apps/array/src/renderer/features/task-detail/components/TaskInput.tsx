@@ -28,7 +28,9 @@ export function TaskInput() {
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  const [runMode, setRunMode] = useState<RunMode>(lastUsedRunMode);
+  const [runMode, setRunMode] = useState<RunMode>(
+    import.meta.env.DEV ? lastUsedRunMode : "cloud",
+  );
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
 
@@ -117,7 +119,9 @@ export function TaskInput() {
             placeholder="Select working directory..."
             size="1"
           />
-          <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
+          {import.meta.env.DEV && (
+            <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
+          )}
         </Flex>
 
         <TaskInputEditor

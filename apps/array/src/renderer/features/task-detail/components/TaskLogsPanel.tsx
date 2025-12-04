@@ -1,5 +1,5 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
-import { LogView } from "@features/logs/components/LogView";
+import { SessionView } from "@features/sessions/components/SessionView";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
@@ -90,13 +90,14 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   return (
     <BackgroundWrapper>
       <Box height="100%" width="100%">
-        <LogView
+        <SessionView
           events={session?.events ?? []}
           sessionId={session?.taskRunId ?? null}
           isRunning={isRunning}
           isPromptPending={session?.isPromptPending}
           onSendPrompt={handleSendPrompt}
           onCancelPrompt={handleCancelPrompt}
+          repoPath={repoPath}
         />
       </Box>
     </BackgroundWrapper>
