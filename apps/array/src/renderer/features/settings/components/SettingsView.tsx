@@ -21,6 +21,7 @@ import {
 } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
+import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useThemeStore } from "../../../stores/themeStore";
@@ -60,6 +61,12 @@ export function SettingsView() {
     setDefaultRunMode,
     setCreatePR,
   } = useSettingsStore();
+  const terminalLayoutMode = useTerminalLayoutStore(
+    (state) => state.terminalLayoutMode,
+  );
+  const setTerminalLayout = useTerminalLayoutStore(
+    (state) => state.setTerminalLayout,
+  );
 
   const { data: currentUser } = useMeQuery();
   const { data: project } = useProjectQuery();
@@ -121,15 +128,40 @@ export function SettingsView() {
           <Flex direction="column" gap="3">
             <Heading size="3">Appearance</Heading>
             <Card>
-              <Flex align="center" justify="between">
-                <Text size="1" weight="medium">
-                  Dark mode
-                </Text>
-                <Switch
-                  checked={isDarkMode}
-                  onCheckedChange={toggleDarkMode}
-                  size="1"
-                />
+              <Flex direction="column" gap="4">
+                <Flex align="center" justify="between">
+                  <Text size="1" weight="medium">
+                    Dark mode
+                  </Text>
+                  <Switch
+                    checked={isDarkMode}
+                    onCheckedChange={toggleDarkMode}
+                    size="1"
+                  />
+                </Flex>
+
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Terminal layout
+                  </Text>
+                  <Select.Root
+                    value={terminalLayoutMode}
+                    onValueChange={(value) =>
+                      setTerminalLayout(value as "split" | "tabbed")
+                    }
+                    size="1"
+                  >
+                    <Select.Trigger />
+                    <Select.Content>
+                      <Select.Item value="split">Split pane</Select.Item>
+                      <Select.Item value="tabbed">Tabbed</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                  <Text size="1" color="gray">
+                    Split pane shows the terminal in a separate pane beneath the
+                    logs. Tabbed shows the terminal as a tab alongside logs.
+                  </Text>
+                </Flex>
               </Flex>
             </Card>
           </Flex>

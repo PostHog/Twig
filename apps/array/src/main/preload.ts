@@ -478,5 +478,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("settings:get-worktree-location"),
     setWorktreeLocation: (location: string): Promise<void> =>
       ipcRenderer.invoke("settings:set-worktree-location", location),
+    getTerminalLayout: (): Promise<"split" | "tabbed"> =>
+      ipcRenderer.invoke("settings:get-terminal-layout"),
+    setTerminalLayout: (mode: "split" | "tabbed"): Promise<void> =>
+      ipcRenderer.invoke("settings:set-terminal-layout", mode),
   },
 });
