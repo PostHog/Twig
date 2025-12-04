@@ -434,4 +434,31 @@ export function registerFsIpc(): void {
       }
     },
   );
+
+  ipcMain.handle(
+    "write-repo-file",
+    async (
+      _event: IpcMainInvokeEvent,
+      repoPath: string,
+      filePath: string,
+      content: string,
+    ): Promise<void> => {
+      try {
+        const fullPath = path.join(repoPath, filePath);
+        const resolvedPath = path.resolve(fullPath);
+        const resolvedRepo = path.resolve(repoPath);
+        if (!resolvedPath.startsWith(resolvedRepo)) {
+          throw new Error("Access denied: path outside repository");
+        }
+
+        await fsPromises.writeFile(fullPath, content, "utf-8");
+        log.debug(`Wrote file ${filePath} to ${repoPath}`);
+
+        repoFileCache.delete(repoPath);
+      } catch (error) {
+        log.error(`Failed to write file ${filePath} to ${repoPath}:`, error);
+        throw error;
+      }
+    },
+  );
 }

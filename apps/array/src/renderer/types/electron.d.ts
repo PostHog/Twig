@@ -179,6 +179,11 @@ declare global {
       repoPath: string,
       filePath: string,
     ) => Promise<string | null>;
+    writeRepoFile: (
+      repoPath: string,
+      filePath: string,
+      content: string,
+    ) => Promise<void>;
     getChangedFilesHead: (repoPath: string) => Promise<ChangedFile[]>;
     getFileAtHead: (
       repoPath: string,

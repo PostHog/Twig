@@ -257,6 +257,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("save-question-answers", repoPath, taskId, answers),
   readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("read-repo-file", repoPath, filePath),
+  writeRepoFile: (
+    repoPath: string,
+    filePath: string,
+    content: string,
+  ): Promise<void> =>
+    ipcRenderer.invoke("write-repo-file", repoPath, filePath, content),
   getChangedFilesHead: (
     repoPath: string,
   ): Promise<Array<{ path: string; status: string; originalPath?: string }>> =>

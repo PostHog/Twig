@@ -9,12 +9,14 @@ interface CodeMirrorDiffEditorProps {
   originalContent: string;
   modifiedContent: string;
   filePath?: string;
+  onContentChange?: (content: string) => void;
 }
 
 export function CodeMirrorDiffEditor({
   originalContent,
   modifiedContent,
   filePath,
+  onContentChange,
 }: CodeMirrorDiffEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const extensions = useEditorExtensions(filePath, true);
@@ -25,8 +27,16 @@ export function CodeMirrorDiffEditor({
       extensions,
       mode: viewMode,
       filePath,
+      onContentChange,
     }),
-    [originalContent, modifiedContent, extensions, viewMode, filePath],
+    [
+      originalContent,
+      modifiedContent,
+      extensions,
+      viewMode,
+      filePath,
+      onContentChange,
+    ],
   );
   const containerRef = useCodeMirror(options);
 

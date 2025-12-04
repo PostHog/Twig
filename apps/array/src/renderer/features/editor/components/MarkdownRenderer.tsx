@@ -34,22 +34,22 @@ const fontStyle = {
 
 const components: Components = {
   h1: ({ children }) => (
-    <Heading as="h1" size="5" mb="3" color="gray" highContrast>
+    <Heading as="h1" size="4" mb="3" color="gray" highContrast>
       {children}
     </Heading>
   ),
   h2: ({ children }) => (
-    <Heading as="h2" size="4" mb="3" color="gray" highContrast>
+    <Heading as="h2" size="3" mb="3" color="gray" highContrast>
       {children}
     </Heading>
   ),
   h3: ({ children }) => (
-    <Heading as="h3" size="3" mb="2" color="gray" highContrast>
+    <Heading as="h3" size="2" mb="2" color="gray" highContrast>
       {children}
     </Heading>
   ),
   h4: ({ children }) => (
-    <Heading as="h4" size="3" mb="2" color="gray" highContrast>
+    <Heading as="h4" size="2" mb="2" color="gray" highContrast>
       {children}
     </Heading>
   ),
