@@ -306,6 +306,8 @@ declare global {
     settings: {
       getWorktreeLocation: () => Promise<string>;
       setWorktreeLocation: (location: string) => Promise<void>;
+      getTerminalLayout: () => Promise<"split" | "tabbed">;
+      setTerminalLayout: (mode: "split" | "tabbed") => Promise<void>;
     };
   }
 

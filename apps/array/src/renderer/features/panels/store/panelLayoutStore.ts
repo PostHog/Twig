@@ -44,7 +44,10 @@ export interface PanelLayoutStore {
   taskLayouts: Record<string, TaskLayout>;
 
   getLayout: (taskId: string) => TaskLayout | null;
-  initializeTask: (taskId: string) => void;
+  initializeTask: (
+    taskId: string,
+    terminalLayoutMode?: "split" | "tabbed",
+  ) => void;
   openFile: (taskId: string, filePath: string) => void;
   openArtifact: (taskId: string, fileName: string) => void;
   openDiff: (taskId: string, filePath: string, status?: string) => void;
@@ -96,108 +99,131 @@ export interface PanelLayoutStore {
   clearAllLayouts: () => void;
 }
 
-function createDefaultPanelTree(): PanelNode {
+function createDefaultPanelTree(
+  terminalLayoutMode: "split" | "tabbed" = "split",
+): PanelNode {
+  const logsPanel: PanelNode = {
+    type: "leaf",
+    id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+    content: {
+      id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+      tabs: [
+        {
+          id: DEFAULT_TAB_IDS.LOGS,
+          label: "Logs",
+          data: { type: "logs" },
+          component: null,
+          closeable: false,
+          draggable: true,
+        },
+      ],
+      activeTabId: DEFAULT_TAB_IDS.LOGS,
+      showTabs: true,
+      droppable: true,
+    },
+  };
+
+  const terminalPanel: PanelNode = {
+    type: "leaf",
+    id: "terminal-panel",
+    content: {
+      id: "terminal-panel",
+      tabs: [
+        {
+          id: DEFAULT_TAB_IDS.SHELL,
+          label: "Terminal",
+          data: {
+            type: "terminal",
+            terminalId: DEFAULT_TAB_IDS.SHELL,
+            cwd: "",
+          },
+          component: null,
+          closeable: true,
+          draggable: true,
+        },
+      ],
+      activeTabId: DEFAULT_TAB_IDS.SHELL,
+      showTabs: true,
+      droppable: true,
+    },
+  };
+
+  const leftPanel: PanelNode =
+    terminalLayoutMode === "split"
+      ? {
+          type: "group",
+          id: "left-group",
+          direction: "vertical",
+          sizes: [70, 30],
+          children: [logsPanel, terminalPanel],
+        }
+      : {
+          type: "leaf",
+          id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+          content: {
+            id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+            tabs: [
+              {
+                id: DEFAULT_TAB_IDS.LOGS,
+                label: "Logs",
+                data: { type: "logs" },
+                component: null,
+                closeable: false,
+                draggable: true,
+              },
+              {
+                id: DEFAULT_TAB_IDS.SHELL,
+                label: "Terminal",
+                data: {
+                  type: "terminal",
+                  terminalId: DEFAULT_TAB_IDS.SHELL,
+                  cwd: "",
+                },
+                component: null,
+                closeable: true,
+                draggable: true,
+              },
+            ],
+            activeTabId: DEFAULT_TAB_IDS.LOGS,
+            showTabs: true,
+            droppable: true,
+          },
+        };
+
   return {
     type: "group",
     id: DEFAULT_PANEL_IDS.ROOT,
     direction: "horizontal",
     sizes: [...PANEL_SIZES.DEFAULT_SPLIT],
     children: [
+      leftPanel,
       {
         type: "leaf",
-        id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+        id: DEFAULT_PANEL_IDS.TOP_RIGHT,
         content: {
-          id: DEFAULT_PANEL_IDS.MAIN_PANEL,
+          id: DEFAULT_PANEL_IDS.TOP_RIGHT,
           tabs: [
             {
-              id: DEFAULT_TAB_IDS.LOGS,
-              label: "Logs",
-              data: { type: "logs" },
+              id: DEFAULT_TAB_IDS.CHANGES,
+              label: "Changes",
+              data: { type: "other" },
               component: null,
               closeable: false,
-              draggable: true,
+              draggable: false,
             },
             {
-              id: DEFAULT_TAB_IDS.SHELL,
-              label: "Terminal",
-              data: {
-                type: "terminal",
-                terminalId: DEFAULT_TAB_IDS.SHELL,
-                cwd: "",
-              },
+              id: DEFAULT_TAB_IDS.FILES,
+              label: "Files",
+              data: { type: "other" },
               component: null,
-              closeable: true,
-              draggable: true,
+              closeable: false,
+              draggable: false,
             },
           ],
-          activeTabId: DEFAULT_TAB_IDS.LOGS,
+          activeTabId: DEFAULT_TAB_IDS.CHANGES,
           showTabs: true,
-          droppable: true,
+          droppable: false,
         },
-      },
-      {
-        type: "group",
-        id: DEFAULT_PANEL_IDS.RIGHT_GROUP,
-        direction: "vertical",
-        sizes: [...PANEL_SIZES.EVEN_SPLIT],
-        children: [
-          {
-            type: "leaf",
-            id: DEFAULT_PANEL_IDS.TOP_RIGHT,
-            content: {
-              id: DEFAULT_PANEL_IDS.TOP_RIGHT,
-              tabs: [
-                {
-                  id: DEFAULT_TAB_IDS.FILES,
-                  label: "Files",
-                  data: { type: "other" },
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-                {
-                  id: DEFAULT_TAB_IDS.CHANGES,
-                  label: "Changes",
-                  data: { type: "other" },
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-              ],
-              activeTabId: DEFAULT_TAB_IDS.FILES,
-              showTabs: true,
-              droppable: false,
-            },
-          },
-          {
-            type: "leaf",
-            id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
-            content: {
-              id: DEFAULT_PANEL_IDS.BOTTOM_RIGHT,
-              tabs: [
-                {
-                  id: DEFAULT_TAB_IDS.TODO_LIST,
-                  label: "Todo list",
-                  data: { type: "other" },
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-                {
-                  id: DEFAULT_TAB_IDS.ARTIFACTS,
-                  label: "Artifacts",
-                  data: { type: "other" },
-                  component: null,
-                  closeable: false,
-                  draggable: false,
-                },
-              ],
-              activeTabId: DEFAULT_TAB_IDS.TODO_LIST,
-              showTabs: true,
-              droppable: false,
-            },
-          },
-        ],
       },
     ],
   };
@@ -254,12 +280,12 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         return get().taskLayouts[taskId] || null;
       },
 
-      initializeTask: (taskId) => {
+      initializeTask: (taskId, terminalLayoutMode = "split") => {
         set((state) => ({
           taskLayouts: {
             ...state.taskLayouts,
             [taskId]: {
-              panelTree: createDefaultPanelTree(),
+              panelTree: createDefaultPanelTree(terminalLayoutMode),
               openFiles: [],
               openArtifacts: [],
               draggingTabId: null,
@@ -740,7 +766,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 5,
+      version: 7,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

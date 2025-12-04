@@ -165,3 +165,16 @@ ipcMain.handle(
 ipcMain.handle("renderer-store:remove", (_event, key: string): void => {
   rendererStore.delete(key);
 });
+
+ipcMain.handle("settings:get-terminal-layout", (): string => {
+  const encrypted = rendererStore.get("terminal-layout-mode");
+  if (!encrypted) {
+    return "split";
+  }
+  const decrypted = decrypt(encrypted as string);
+  return decrypted || "split";
+});
+
+ipcMain.handle("settings:set-terminal-layout", (_event, mode: string): void => {
+  rendererStore.set("terminal-layout-mode", encrypt(mode));
+});

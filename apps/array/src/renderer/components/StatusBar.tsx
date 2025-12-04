@@ -1,5 +1,7 @@
 import { StatusBarMenu } from "@components/StatusBarMenu";
-import { Badge, Box, Code, Flex, Kbd } from "@radix-ui/themes";
+import { GearIcon } from "@radix-ui/react-icons";
+import { Badge, Box, Code, Flex, IconButton, Kbd } from "@radix-ui/themes";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useStatusBarStore } from "@stores/statusBarStore";
 
 import { IS_DEV } from "@/constants/environment";
@@ -10,6 +12,7 @@ interface StatusBarProps {
 
 export function StatusBar({ showKeyHints = true }: StatusBarProps) {
   const { statusText, keyHints } = useStatusBarStore();
+  const { toggleSettings } = useNavigationStore();
 
   return (
     <Box className="flex flex-row items-center justify-between border-gray-6 border-t bg-gray-2 px-4 py-2">
@@ -42,15 +45,24 @@ export function StatusBar({ showKeyHints = true }: StatusBarProps) {
         </Flex>
       )}
 
-      {IS_DEV && (
-        <Flex align="center" gap="2">
+      <Flex align="center" gap="2">
+        <IconButton
+          size="1"
+          variant="ghost"
+          color="gray"
+          onClick={toggleSettings}
+          title="Settings"
+        >
+          <GearIcon />
+        </IconButton>
+        {IS_DEV && (
           <Badge size="1">
             <Code size="1" variant="ghost">
               DEV
             </Code>
           </Badge>
-        </Flex>
-      )}
+        )}
+      </Flex>
     </Box>
   );
 }
