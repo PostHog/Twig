@@ -1,16 +1,22 @@
 import type { Schemas } from "@api/generated";
+import {
+  type AgentSession,
+  useSessionStore,
+} from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RegisteredFolder, Task, Workspace } from "@shared/types";
+import { useEffect } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
   getTaskRepository,
   parseRepository,
 } from "@/renderer/utils/repository";
-import type { TaskStatus } from "../types";
+import { useSidebarStore } from "../stores/sidebarStore";
+import { useTaskViewedStore } from "../stores/taskViewedStore";
 
 export interface TaskView {
   id: string;
@@ -33,7 +39,9 @@ export interface FolderData {
 export interface TaskData {
   id: string;
   title: string;
-  status: TaskStatus;
+  lastActivityAt?: number;
+  isGenerating?: boolean;
+  isUnread?: boolean;
 }
 
 export interface SidebarData {
@@ -101,17 +109,25 @@ function groupTasksByFolder(
   return tasksByFolder;
 }
 
-function sortByCreatedAt(folders: RegisteredFolder[]): RegisteredFolder[] {
-  return [...folders].sort(
+function sortFoldersByOrder(
+  folders: RegisteredFolder[],
+  order: string[],
+): RegisteredFolder[] {
+  const folderMap = new Map(folders.map((f) => [f.id, f]));
+  const result: RegisteredFolder[] = [];
+
+  for (const id of order) {
+    const folder = folderMap.get(id);
+    if (folder) {
+      result.push(folder);
+      folderMap.delete(id);
+    }
+  }
+  // Add any remaining folders not in the order (sorted by createdAt as fallback)
+  const remaining = Array.from(folderMap.values()).sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
-}
-
-function sortByUpdatedAt(tasks: Task[]): Task[] {
-  return [...tasks].sort(
-    (a, b) =>
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-  );
+  return [...result, ...remaining];
 }
 
 function createTaskViews(currentUser: Schemas.User | undefined): TaskView[] {
@@ -165,6 +181,11 @@ export function useSidebarData({
   const { data: allTasks = [], isLoading } = useTasks();
   const { folders } = useRegisteredFoldersStore();
   const workspaces = useWorkspaceStore.use.workspaces();
+  const sessions = useSessionStore((state) => state.sessions);
+  const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
+  const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
+  const folderOrder = useSidebarStore((state) => state.folderOrder);
+  const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
   const isHomeActive = activeView.type === "task-input";
@@ -175,7 +196,14 @@ export function useSidebarData({
   const repositories = buildRepositoryMap(allTasks);
   const activeRepository = getActiveRepository(activeFilters);
 
-  const sortedFolders = sortByCreatedAt(folders);
+  // Sync folder order when folders change
+  const folderIds = folders.map((f) => f.id);
+  useEffect(() => {
+    syncFolderOrder(folderIds);
+  }, [syncFolderOrder, folderIds]);
+
+  // Sort folders by persisted order
+  const sortedFolders = sortFoldersByOrder(folders, folderOrder);
   const tasksByFolder = groupTasksByFolder(allTasks, folders, workspaces);
 
   const activeTaskId =
@@ -183,19 +211,51 @@ export function useSidebarData({
       ? activeView.data.id
       : null;
 
+  const getSessionForTask = (taskId: string): AgentSession | undefined => {
+    return Object.values(sessions).find((s) => s.taskId === taskId);
+  };
+
   const folderData: FolderData[] = sortedFolders.map((folder) => {
     const folderTasks = tasksByFolder.get(folder.id) || [];
-    const sortedTasks = sortByUpdatedAt(folderTasks);
+
+    const tasksWithActivity = folderTasks.map((task) => {
+      const session = getSessionForTask(task.id);
+      // Use max of task.updated_at and local activity timestamp for accurate ordering
+      const apiUpdatedAt = new Date(task.updated_at).getTime();
+      const localActivity = localActivityAt[task.id];
+      const lastActivityAt = localActivity
+        ? Math.max(apiUpdatedAt, localActivity)
+        : apiUpdatedAt;
+      return {
+        task,
+        lastActivityAt,
+        isGenerating: session?.isPromptPending ?? false,
+      };
+    });
+
+    tasksWithActivity.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 
     return {
       id: folder.id,
       name: folder.name,
       path: folder.path,
-      tasks: sortedTasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: (task.latest_run?.status || "pending") as TaskStatus,
-      })),
+      tasks: tasksWithActivity.map(({ task, lastActivityAt, isGenerating }) => {
+        const taskLastViewedAt = lastViewedAt[task.id];
+        const isCurrentlyViewing = activeTaskId === task.id;
+        // Only show unread if: user has viewed it before AND there's new activity since
+        const isUnread =
+          !isCurrentlyViewing &&
+          taskLastViewedAt !== undefined &&
+          lastActivityAt > taskLastViewedAt;
+
+        return {
+          id: task.id,
+          title: task.title,
+          lastActivityAt,
+          isGenerating,
+          isUnread,
+        };
+      }),
     };
   });
 

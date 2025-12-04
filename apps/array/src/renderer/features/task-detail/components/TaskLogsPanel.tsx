@@ -1,6 +1,7 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { LogView } from "@features/logs/components/LogView";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
   selectWorktreePath,
@@ -28,6 +29,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const connectToTask = useSessionStore((state) => state.connectToTask);
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const cancelPrompt = useSessionStore((state) => state.cancelPrompt);
+  const markActivity = useTaskViewedStore((state) => state.markActivity);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -42,16 +44,20 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     hasAttemptedConnect.current = true;
 
     const isNewSession = !task.latest_run?.id;
+    const hasInitialPrompt = isNewSession && task.description;
+
+    if (hasInitialPrompt) {
+      markActivity(task.id);
+    }
 
     connectToTask({
       taskId: task.id,
       repoPath,
       latestRunId: task.latest_run?.id,
       latestRunLogUrl: task.latest_run?.log_url,
-      initialPrompt:
-        isNewSession && task.description
-          ? [{ type: "text", text: task.description }]
-          : undefined,
+      initialPrompt: hasInitialPrompt
+        ? [{ type: "text", text: task.description }]
+        : undefined,
     });
   }, [
     task.id,
@@ -60,18 +66,20 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     repoPath,
     session,
     connectToTask,
+    markActivity,
   ]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
       try {
+        markActivity(taskId);
         const result = await sendPrompt(taskId, text);
         log.info("Prompt completed", { stopReason: result.stopReason });
       } catch (error) {
         log.error("Failed to send prompt", error);
       }
     },
-    [taskId, sendPrompt],
+    [taskId, sendPrompt, markActivity],
   );
 
   const handleCancelPrompt = useCallback(async () => {

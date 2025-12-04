@@ -1,6 +1,6 @@
 import type { SidebarItemAction } from "../types";
 
-const INDENT_SIZE = 12;
+const INDENT_SIZE = 8;
 
 interface SidebarItemProps {
   depth: number;
@@ -27,27 +27,36 @@ export function SidebarItem({
   return (
     <button
       type="button"
-      className="focus-visible:-outline-offset-2 flex w-full cursor-pointer items-center border-0 bg-transparent px-2 py-1 text-left font-mono text-[12px] text-gray-11 transition-colors hover:bg-gray-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-8 data-[active]:bg-gray-3"
+      className="group focus-visible:-outline-offset-2 flex w-full cursor-pointer items-start border-transparent border-y bg-transparent px-2 py-1 text-left font-mono text-[12px] text-gray-11 transition-colors hover:bg-gray-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-8 data-[active]:border-accent-8 data-[active]:bg-accent-4 data-[active]:text-gray-12"
       data-active={isActive || undefined}
       style={{
         paddingLeft: `${depth * INDENT_SIZE + 8}px`,
-        gap: "6px",
+        gap: "4px",
       }}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      {icon && <span className="flex shrink-0 items-center">{icon}</span>}
+      {icon && (
+        <span
+          className="flex shrink-0 items-center text-gray-10 group-data-[active]:text-gray-11"
+          style={{ height: "18px" }}
+        >
+          {icon}
+        </span>
+      )}
       <span className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-          {label}
+        <span className="flex items-center gap-1" style={{ height: "18px" }}>
+          <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+            {label}
+          </span>
+          {endContent}
         </span>
         {subtitle && (
-          <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-gray-10">
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-gray-10 group-data-[active]:text-gray-11">
             {subtitle}
           </span>
         )}
       </span>
-      {endContent}
     </button>
   );
 }
