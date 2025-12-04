@@ -100,6 +100,8 @@ export function TaskInputEditor({
                 flex: 1,
                 position: "relative",
                 minWidth: 0,
+                maxHeight: "200px",
+                overflowY: "auto",
               }}
             >
               <EditorContent editor={editor} />

@@ -62,16 +62,20 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     (state) => state.workspaces[taskId] ?? null,
   );
 
+  const branchName = workspace?.branchName;
+
   const headerContent = useMemo(
     () => (
       <Flex align="center" justify="between" gap="2" width="100%">
         <Flex align="center" gap="2" minWidth="0">
-          <Code size="2" color="gray" variant="ghost" style={{ flexShrink: 0 }}>
-            {task.slug}
-          </Code>
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
+          {branchName && (
+            <Code size="1" color="gray" variant="ghost">
+              {branchName}
+            </Code>
+          )}
           <StartWorkspaceButton taskId={taskId} />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
@@ -83,7 +87,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         </Flex>
       </Flex>
     ),
-    [task.slug, task.title, workspace, taskId, task, effectiveRepoPath],
+    [task.title, branchName, workspace, taskId, task, effectiveRepoPath],
   );
 
   useSetHeaderContent(headerContent);

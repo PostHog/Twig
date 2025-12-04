@@ -4,17 +4,108 @@
 
 @font-face {
   font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Light.woff2")
+    format("woff2");
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-LightItalic.woff2")
+    format("woff2");
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
   src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Regular.woff2")
     format("woff2");
   font-weight: 400;
   font-style: normal;
 }
 
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Italic.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Medium.woff2")
+    format("woff2");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-MediumItalic.woff2")
+    format("woff2");
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-SemiBold.woff2")
+    format("woff2");
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-SemiBoldItalic.woff2")
+    format("woff2");
+  font-weight: 600;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Bold.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-BoldItalic.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: italic;
+}
+
 .radix-themes {
+  /* Font families */
   --default-font-family:
+    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  --heading-font-family:
     "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
   --code-font-family:
     "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  --strong-font-family:
+    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  --em-font-family:
+    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  --quote-font-family:
+    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+
+  /* Font weights - mapped to JetBrains Mono weights */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+
+  /* Custom font sizes (extending Radix scale) */
+  --font-size-1-5: calc(13px * var(--scaling));
+  --line-height-1-5: calc(16px * var(--scaling));
 }
 
 body {

@@ -1,0 +1,561 @@
+import type { SessionNotification, ToolKind } from "@agentclientprotocol/sdk";
+import { Divider } from "@components/Divider";
+import { Copy, MagnifyingGlass } from "@phosphor-icons/react";
+import {
+  Box,
+  Code,
+  ContextMenu,
+  Flex,
+  IconButton,
+  Text,
+  TextField,
+} from "@radix-ui/themes";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { SessionEvent } from "../stores/sessionStore";
+import { useSessionViewStore } from "../stores/sessionViewStore";
+import { AgentMessage } from "./AgentMessage";
+import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
+import { MessageEditor } from "./MessageEditor";
+import { ToolCallBlock } from "./ToolCallBlock";
+import { TurnCollapsible } from "./TurnCollapsible";
+import { UserMessage } from "./UserMessage";
+import { VirtualizedList } from "./VirtualizedList";
+
+function RawLogEntry({
+  event,
+  index,
+  onCopy,
+}: {
+  event: SessionEvent;
+  index: number;
+  onCopy: (text: string) => void;
+}) {
+  const json = JSON.stringify(event, null, 2);
+  return (
+    <Box className="relative rounded p-2">
+      <Flex justify="between" align="center" mb="1">
+        <Text size="1" color="gray">
+          Event #{index}
+        </Text>
+        <IconButton
+          size="1"
+          variant="ghost"
+          color="gray"
+          onClick={() => onCopy(json)}
+        >
+          <Copy size={12} />
+        </IconButton>
+      </Flex>
+      <Code
+        size="1"
+        className="block overflow-x-auto whitespace-pre"
+        style={{
+          fontSize: "var(--font-size-1)",
+          lineHeight: "var(--line-height-1)",
+        }}
+      >
+        {json}
+      </Code>
+    </Box>
+  );
+}
+
+interface SessionViewProps {
+  events: SessionEvent[];
+  sessionId: string | null;
+  isRunning: boolean;
+  isPromptPending?: boolean;
+  onSendPrompt: (text: string) => void;
+  onCancelPrompt: () => void;
+  repoPath?: string | null;
+}
+
+interface ToolData {
+  toolName: string;
+  toolCallId: string;
+  kind?: ToolKind;
+  status: "pending" | "running" | "completed" | "error";
+  args?: Record<string, unknown>;
+  result?: unknown;
+}
+
+interface ParsedMessage {
+  id: string;
+  type: "user" | "agent" | "tool";
+  content: string;
+  toolData?: ToolData;
+  eventIndex?: number;
+}
+
+type ParseResult =
+  | { type: "user"; content: string }
+  | { type: "agent"; content: string }
+  | { type: "tool"; toolData: ToolData }
+  | { type: "tool_update"; toolData: ToolData }
+  | null;
+
+function parseSessionNotification(
+  notification: SessionNotification,
+): ParseResult {
+  const { update } = notification;
+
+  switch (update.sessionUpdate) {
+    case "user_message_chunk":
+    case "agent_message_chunk": {
+      if (update.content.type === "text") {
+        return {
+          type:
+            update.sessionUpdate === "user_message_chunk" ? "user" : "agent",
+          content: update.content.text,
+        };
+      }
+      return null;
+    }
+    case "tool_call": {
+      // Bypass TypeScript's discriminated union - access kind directly from raw object
+      const rawUpdate = update as unknown as Record<string, unknown>;
+      return {
+        type: "tool",
+        toolData: {
+          toolName: update.title,
+          toolCallId: update.toolCallId,
+          kind: rawUpdate.kind as ToolKind | undefined,
+          status: mapToolStatus(update.status),
+          args: update.rawInput,
+        },
+      };
+    }
+    case "tool_call_update": {
+      const rawUpdate = update as unknown as Record<string, unknown>;
+      return {
+        type: "tool_update",
+        toolData: {
+          toolName: update.title ?? "Unknown Tool",
+          toolCallId: update.toolCallId,
+          kind: rawUpdate.kind as ToolKind | undefined,
+          status: mapToolStatus(update.status),
+          args: update.rawInput ?? undefined,
+          result: update.rawOutput,
+        },
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+function mapToolStatus(
+  status?: "pending" | "in_progress" | "completed" | "failed" | null,
+): ToolData["status"] {
+  switch (status) {
+    case "pending":
+      return "pending";
+    case "in_progress":
+      return "running";
+    case "completed":
+      return "completed";
+    case "failed":
+      return "error";
+    default:
+      return "pending";
+  }
+}
+
+function processEvents(events: SessionEvent[]): ParsedMessage[] {
+  const messages: ParsedMessage[] = [];
+  let currentAgentText = "";
+  let agentMessageKey = 0;
+  let agentStartEventIndex = 0;
+  const toolCalls = new Map<
+    string,
+    { toolData: ParsedMessage["toolData"]; eventIndex: number }
+  >();
+
+  const flushAgentMessage = (_eventIndex: number) => {
+    if (currentAgentText) {
+      messages.push({
+        id: `agent-${agentMessageKey}`,
+        type: "agent",
+        content: currentAgentText,
+        eventIndex: agentStartEventIndex,
+      });
+      currentAgentText = "";
+      agentMessageKey++;
+    }
+  };
+
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    if (event.type === "session_update") {
+      const parsed = parseSessionNotification(event.notification);
+      if (!parsed) continue;
+
+      switch (parsed.type) {
+        case "user": {
+          flushAgentMessage(i);
+          messages.push({
+            id: `user-${event.ts}`,
+            type: "user",
+            content: parsed.content,
+            eventIndex: i,
+          });
+          break;
+        }
+        case "agent": {
+          if (!currentAgentText) {
+            agentStartEventIndex = i;
+          }
+          currentAgentText += parsed.content;
+          break;
+        }
+        case "tool": {
+          flushAgentMessage(i);
+          toolCalls.set(parsed.toolData.toolCallId, {
+            toolData: parsed.toolData,
+            eventIndex: i,
+          });
+          messages.push({
+            id: `tool-${parsed.toolData.toolCallId}`,
+            type: "tool",
+            content: "",
+            toolData: parsed.toolData,
+            eventIndex: i,
+          });
+          break;
+        }
+        case "tool_update": {
+          const existing = toolCalls.get(parsed.toolData.toolCallId);
+          if (existing) {
+            existing.toolData!.status = parsed.toolData.status;
+            existing.toolData!.result = parsed.toolData.result;
+            if (parsed.toolData.kind) {
+              existing.toolData!.kind = parsed.toolData.kind;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  flushAgentMessage(events.length - 1);
+
+  return messages;
+}
+
+interface ConversationTurn {
+  id: string;
+  userMessage: ParsedMessage;
+  agentResponses: ParsedMessage[];
+  isComplete: boolean;
+}
+
+function groupMessagesIntoTurns(
+  messages: ParsedMessage[],
+  isPromptPending: boolean,
+): ConversationTurn[] {
+  const turns: ConversationTurn[] = [];
+  let currentTurn: ConversationTurn | null = null;
+
+  for (const message of messages) {
+    if (message.type === "user") {
+      if (currentTurn) {
+        currentTurn.isComplete = true;
+        turns.push(currentTurn);
+      }
+      currentTurn = {
+        id: message.id,
+        userMessage: message,
+        agentResponses: [],
+        isComplete: false,
+      };
+    } else if (currentTurn) {
+      currentTurn.agentResponses.push(message);
+    }
+  }
+
+  if (currentTurn) {
+    currentTurn.isComplete = !isPromptPending;
+    turns.push(currentTurn);
+  }
+
+  return turns;
+}
+
+export function SessionView({
+  events,
+  sessionId,
+  isRunning,
+  isPromptPending,
+  onSendPrompt,
+  onCancelPrompt,
+  repoPath,
+}: SessionViewProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    showRawLogs,
+    setShowRawLogs,
+    searchQuery,
+    setSearchQuery,
+    showSearch,
+    openSearch,
+    closeSearch,
+    toggleSearch,
+    lastGenerationDuration,
+    startGeneration,
+    endGeneration,
+  } = useSessionViewStore();
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+  }, []);
+
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return events.map((event, index) => ({ event, originalIndex: index }));
+    }
+    const query = searchQuery.toLowerCase();
+    return events
+      .map((event, index) => ({ event, originalIndex: index }))
+      .filter(({ event }) =>
+        JSON.stringify(event).toLowerCase().includes(query),
+      );
+  }, [events, searchQuery]);
+
+  const copyAllLogs = useCallback(() => {
+    const logsToExport = filteredEvents.map(({ event }) => event);
+    const allLogs = JSON.stringify(logsToExport, null, 2);
+    navigator.clipboard.writeText(allLogs);
+  }, [filteredEvents]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f" && showRawLogs) {
+        e.preventDefault();
+        openSearch();
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+      }
+      if (e.key === "Escape" && showSearch) {
+        closeSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showRawLogs, showSearch, openSearch, closeSearch]);
+
+  const messages = useMemo(() => processEvents(events), [events]);
+  const turns = useMemo(
+    () => groupMessagesIntoTurns(messages, isPromptPending ?? false),
+    [messages, isPromptPending],
+  );
+
+  useEffect(() => {
+    if (isPromptPending) {
+      startGeneration();
+    } else {
+      endGeneration();
+    }
+  }, [isPromptPending, startGeneration, endGeneration]);
+
+  const renderMessage = useCallback((message: ParsedMessage) => {
+    switch (message.type) {
+      case "agent":
+        return <AgentMessage key={message.id} content={message.content} />;
+      case "tool":
+        return message.toolData ? (
+          <ToolCallBlock
+            key={message.id}
+            toolName={message.toolData.toolName}
+            kind={message.toolData.kind}
+            status={message.toolData.status}
+            args={message.toolData.args}
+            result={message.toolData.result}
+          />
+        ) : null;
+      default:
+        return null;
+    }
+  }, []);
+
+  const getLastAgentMessage = useCallback((responses: ParsedMessage[]) => {
+    for (let i = responses.length - 1; i >= 0; i--) {
+      if (responses[i].type === "agent") {
+        return responses[i];
+      }
+    }
+    return null;
+  }, []);
+
+  const renderTurn = useCallback(
+    (turn: ConversationTurn) => {
+      const lastAgentMessage = getLastAgentMessage(turn.agentResponses);
+      const collapsibleMessages =
+        turn.isComplete && lastAgentMessage
+          ? turn.agentResponses.filter((m) => m.id !== lastAgentMessage.id)
+          : [];
+      const shouldCollapse = turn.isComplete && collapsibleMessages.length > 0;
+
+      return (
+        <Box className="flex flex-col gap-2">
+          <UserMessage content={turn.userMessage.content} />
+          {shouldCollapse ? (
+            <>
+              <TurnCollapsible messages={collapsibleMessages} />
+              {lastAgentMessage && renderMessage(lastAgentMessage)}
+            </>
+          ) : (
+            turn.agentResponses.map(renderMessage)
+          )}
+        </Box>
+      );
+    },
+    [renderMessage, getLastAgentMessage],
+  );
+
+  const renderRawLogEntry = useCallback(
+    (
+      { event, originalIndex }: { event: SessionEvent; originalIndex: number },
+      index: number,
+    ) => (
+      <Box>
+        <RawLogEntry
+          event={event}
+          index={originalIndex}
+          onCopy={copyToClipboard}
+        />
+        {index < filteredEvents.length - 1 && <Divider size="1" />}
+      </Box>
+    ),
+    [copyToClipboard, filteredEvents.length],
+  );
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      if (text.trim()) {
+        onSendPrompt(text);
+      }
+    },
+    [onSendPrompt],
+  );
+
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger>
+        <Flex direction="column" height="100%">
+          {showRawLogs ? (
+            <Flex direction="column" className="flex-1 overflow-hidden">
+              <Box className="p-4 pb-2">
+                <Flex direction="column" gap="2">
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium" color="gray">
+                      Raw Logs ({filteredEvents.length}
+                      {searchQuery && ` of ${events.length}`} events)
+                    </Text>
+                    <Flex gap="1">
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="gray"
+                        onClick={() => {
+                          toggleSearch();
+                          if (!showSearch) {
+                            setTimeout(
+                              () => searchInputRef.current?.focus(),
+                              0,
+                            );
+                          }
+                        }}
+                      >
+                        <MagnifyingGlass size={12} />
+                      </IconButton>
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="gray"
+                        onClick={copyAllLogs}
+                      >
+                        <Copy size={12} />
+                      </IconButton>
+                    </Flex>
+                  </Flex>
+                  {showSearch && (
+                    <TextField.Root
+                      ref={searchInputRef}
+                      size="1"
+                      placeholder="Search logs... (Esc to close)"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    >
+                      <TextField.Slot>
+                        <MagnifyingGlass size={12} />
+                      </TextField.Slot>
+                    </TextField.Root>
+                  )}
+                </Flex>
+              </Box>
+              <VirtualizedList
+                items={filteredEvents}
+                estimateSize={150}
+                getItemKey={({ originalIndex }) => originalIndex}
+                renderItem={renderRawLogEntry}
+                className="flex-1 px-4"
+              />
+            </Flex>
+          ) : (
+            <VirtualizedList
+              items={turns}
+              estimateSize={100}
+              getItemKey={(turn) => turn.id}
+              renderItem={renderTurn}
+              autoScrollToBottom
+              className="flex-1 p-4"
+              gap={8}
+              footer={
+                <>
+                  {isPromptPending && (
+                    <Box className="py-2">
+                      <GeneratingIndicator />
+                    </Box>
+                  )}
+                  {!isPromptPending && lastGenerationDuration !== null && (
+                    <Box className="pb-2">
+                      <Text
+                        size="1"
+                        color="gray"
+                        style={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        Generated in {formatDuration(lastGenerationDuration)}
+                      </Text>
+                    </Box>
+                  )}
+                </>
+              }
+            />
+          )}
+
+          <Box className="border-gray-6 border-t p-3">
+            <MessageEditor
+              sessionId={sessionId ?? "default"}
+              placeholder="Type a message... @ to mention files"
+              repoPath={repoPath}
+              disabled={!isRunning}
+              isLoading={isPromptPending}
+              onSubmit={handleSubmit}
+              onCancel={onCancelPrompt}
+            />
+          </Box>
+        </Flex>
+      </ContextMenu.Trigger>
+      <ContextMenu.Content>
+        <ContextMenu.CheckboxItem
+          checked={showRawLogs}
+          onCheckedChange={setShowRawLogs}
+        >
+          Show raw logs
+        </ContextMenu.CheckboxItem>
+      </ContextMenu.Content>
+    </ContextMenu.Root>
+  );
+}

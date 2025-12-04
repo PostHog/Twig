@@ -65,7 +65,7 @@ export function useEditorSetup({
         name: "submitOnEnter",
         addKeyboardShortcuts() {
           return {
-            "Mod-Enter": () => {
+            Enter: () => {
               if (!this.editor.state.selection.$from.parent.textContent) {
                 return false;
               }

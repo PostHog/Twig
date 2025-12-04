@@ -12,6 +12,31 @@ const log = logger.scope("git");
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
 
+const getAllFilesInDirectory = async (
+  directoryPath: string,
+  basePath: string,
+): Promise<string[]> => {
+  const files: string[] = [];
+  const entries = await fsPromises.readdir(path.join(directoryPath, basePath), {
+    withFileTypes: true,
+  });
+
+  for (const entry of entries) {
+    const relativePath = path.join(basePath, entry.name);
+    if (entry.isDirectory()) {
+      const subFiles = await getAllFilesInDirectory(
+        directoryPath,
+        relativePath,
+      );
+      files.push(...subFiles);
+    } else {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
+};
+
 const CLONE_MAX_BUFFER = 10 * 1024 * 1024;
 
 export interface GitHubRepo {
@@ -215,7 +240,25 @@ const getChangedFilesAgainstHead = async (
 
       // Only add untracked files not already seen
       if (statusCode === "??" && !seenPaths.has(filePath)) {
-        files.push({ path: filePath, status: "untracked" });
+        // Check if it's a directory (git shows directories with trailing /)
+        if (filePath.endsWith("/")) {
+          const dirPath = filePath.slice(0, -1);
+          try {
+            const dirFiles = await getAllFilesInDirectory(
+              directoryPath,
+              dirPath,
+            );
+            for (const file of dirFiles) {
+              if (!seenPaths.has(file)) {
+                files.push({ path: file, status: "untracked" });
+              }
+            }
+          } catch {
+            // Directory might not exist or be inaccessible
+          }
+        } else {
+          files.push({ path: filePath, status: "untracked" });
+        }
       }
     }
 
@@ -274,20 +317,40 @@ const getDiffStats = async (directoryPath: string): Promise<DiffStats> => {
       cwd: directoryPath,
     });
 
+    const countLinesInFile = async (filePath: string): Promise<number> => {
+      try {
+        const { stdout: wcOutput } = await execAsync(`wc -l < "${filePath}"`, {
+          cwd: directoryPath,
+        });
+        return parseInt(wcOutput.trim(), 10) || 0;
+      } catch {
+        return 0;
+      }
+    };
+
     for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
       const statusCode = line.substring(0, 2);
       if (statusCode === "??") {
-        filesChanged++;
-        // Count lines in untracked file
         const filePath = line.substring(3);
-        try {
-          const { stdout: wcOutput } = await execAsync(
-            `wc -l < "${filePath}"`,
-            { cwd: directoryPath },
-          );
-          linesAdded += parseInt(wcOutput.trim(), 10) || 0;
-        } catch {
-          // File might be binary or inaccessible
+
+        // Check if it's a directory (git shows directories with trailing /)
+        if (filePath.endsWith("/")) {
+          const dirPath = filePath.slice(0, -1);
+          try {
+            const dirFiles = await getAllFilesInDirectory(
+              directoryPath,
+              dirPath,
+            );
+            for (const file of dirFiles) {
+              filesChanged++;
+              linesAdded += await countLinesInFile(file);
+            }
+          } catch {
+            // Directory might not exist or be inaccessible
+          }
+        } else {
+          filesChanged++;
+          linesAdded += await countLinesInFile(filePath);
         }
       }
     }
