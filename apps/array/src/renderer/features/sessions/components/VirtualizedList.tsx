@@ -1,5 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 interface VirtualizedListProps<T> {
   items: T[];
@@ -26,6 +32,7 @@ export function VirtualizedList<T>({
 }: VirtualizedListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const isInitialMountRef = useRef(true);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -53,11 +60,44 @@ export function VirtualizedList<T>({
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  useEffect(() => {
-    if (autoScrollToBottom && isAtBottomRef.current && items.length > 0) {
-      virtualizer.scrollToIndex(items.length - 1, { align: "end" });
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !autoScrollToBottom || items.length === 0) {
+      return;
     }
-  }, [autoScrollToBottom, items.length, virtualizer]);
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }, [autoScrollToBottom, items.length]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (
+      !el ||
+      !autoScrollToBottom ||
+      items.length === 0 ||
+      isInitialMountRef.current
+    ) {
+      return;
+    }
+
+    if (!isAtBottomRef.current) {
+      return;
+    }
+
+    const scrollToBottom = () => {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToBottom);
+    });
+  }, [autoScrollToBottom, items]);
 
   if (items.length === 0) {
     return null;

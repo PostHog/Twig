@@ -6,7 +6,7 @@ import {
 } from "@codemirror/view";
 import { useThemeStore } from "@stores/themeStore";
 import { useMemo } from "react";
-import { oneDark, oneLight } from "../theme/editorTheme";
+import { mergeViewTheme, oneDark, oneLight } from "../theme/editorTheme";
 import { getLanguageExtension } from "../utils/languages";
 
 export function useEditorExtensions(filePath?: string, readOnly = false) {
@@ -20,6 +20,7 @@ export function useEditorExtensions(filePath?: string, readOnly = false) {
       lineNumbers(),
       highlightActiveLineGutter(),
       theme,
+      mergeViewTheme,
       EditorView.editable.of(!readOnly),
       ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ...(languageExtension ? [languageExtension] : []),

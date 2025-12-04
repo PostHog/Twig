@@ -5,7 +5,8 @@ import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -26,6 +27,7 @@ export function DiffEditorPanel({
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
+  const queryClient = useQueryClient();
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -56,6 +58,24 @@ export function DiffEditorPanel({
     staleTime: Infinity,
   });
 
+  const handleContentChange = useCallback(
+    async (newContent: string) => {
+      if (!repoPath) return;
+
+      try {
+        await window.electronAPI.writeRepoFile(repoPath, filePath, newContent);
+
+        queryClient.invalidateQueries({
+          queryKey: ["repo-file", repoPath, filePath],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["changed-files-head", repoPath],
+        });
+      } catch (_error) {}
+    },
+    [repoPath, filePath, queryClient],
+  );
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
@@ -76,6 +96,7 @@ export function DiffEditorPanel({
           originalContent={originalContent ?? ""}
           modifiedContent={modifiedContent ?? ""}
           filePath={absolutePath}
+          onContentChange={handleContentChange}
         />
       ) : (
         <CodeMirrorEditor
