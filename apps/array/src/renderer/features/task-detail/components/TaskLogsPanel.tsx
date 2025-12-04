@@ -24,7 +24,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
-  // Get session state from store
   const session = useSessionStore((state) => state.getSessionForTask(taskId));
   const connectToTask = useSessionStore((state) => state.connectToTask);
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
@@ -34,7 +33,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
 
-  // Auto-connect on mount
   const hasAttemptedConnect = useRef(false);
   useEffect(() => {
     if (hasAttemptedConnect.current) return;
@@ -51,23 +49,13 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     }
 
     connectToTask({
-      taskId: task.id,
+      task,
       repoPath,
-      latestRunId: task.latest_run?.id,
-      latestRunLogUrl: task.latest_run?.log_url,
       initialPrompt: hasInitialPrompt
         ? [{ type: "text", text: task.description }]
         : undefined,
     });
-  }, [
-    task.id,
-    task.description,
-    task.latest_run,
-    repoPath,
-    session,
-    connectToTask,
-    markActivity,
-  ]);
+  }, [task, repoPath, session, connectToTask, markActivity]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {

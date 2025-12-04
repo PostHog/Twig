@@ -37,7 +37,7 @@ async function startAgentSession(
   initialPrompt?: ContentBlock[],
 ): Promise<void> {
   await useSessionStore.getState().connectToTask({
-    taskId: task.id,
+    task,
     repoPath,
     initialPrompt,
   });
@@ -133,14 +133,15 @@ export function useTaskCreation({
             }
 
             try {
-              await client.runTaskInCloud(newTask.id);
+              const updatedTask = await client.runTaskInCloud(newTask.id);
               log.info("Started cloud task", { taskId: newTask.id });
+              invalidateTasks();
+              navigateToTask(updatedTask);
             } catch (error) {
               log.error("Failed to start cloud task:", error);
+              invalidateTasks();
+              navigateToTask(newTask);
             }
-
-            invalidateTasks();
-            navigateToTask(newTask);
             editor.commands.clearContent();
             clearDraft();
           } else {
