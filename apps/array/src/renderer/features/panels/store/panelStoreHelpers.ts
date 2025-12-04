@@ -289,3 +289,20 @@ export function applyCleanupWithFallback(
 ): PanelNode {
   return cleanedTree || originalTree;
 }
+
+// Tab active state utilities
+function isTabActiveInTree(tree: PanelNode, tabId: string): boolean {
+  if (tree.type === "leaf") {
+    return tree.content.activeTabId === tabId;
+  }
+  return tree.children.some((child) => isTabActiveInTree(child, tabId));
+}
+
+export function isDiffTabActiveInTree(
+  tree: PanelNode,
+  filePath: string,
+  status?: string,
+): boolean {
+  const tabId = createDiffTabId(filePath, status);
+  return isTabActiveInTree(tree, tabId);
+}

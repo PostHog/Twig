@@ -1,5 +1,5 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
-import { usePanelLayoutStore } from "@features/panels";
+import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { ArrowCounterClockwiseIcon, FileIcon } from "@phosphor-icons/react";
 import { Badge, Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -20,6 +20,7 @@ interface ChangedFileItemProps {
   file: ChangedFile;
   taskId: string;
   repoPath: string;
+  isActive: boolean;
 }
 
 function getStatusIndicator(status: GitFileStatus): {
@@ -41,7 +42,12 @@ function getStatusIndicator(status: GitFileStatus): {
   }
 }
 
-function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
+function ChangedFileItem({
+  file,
+  taskId,
+  repoPath,
+  isActive,
+}: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const queryClient = useQueryClient();
   const fileName = file.path.split("/").pop() || file.path;
@@ -85,7 +91,7 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
       pr="2"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className="group hover:bg-gray-2"
+      className={`group ${isActive ? "bg-gray-3" : "hover:bg-gray-2"}`}
       style={{ cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden" }}
     >
       <Badge size="1" color={indicator.color} style={{ flexShrink: 0 }}>
@@ -113,7 +119,7 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
           variant="ghost"
           color="gray"
           onClick={handleDiscard}
-          className="opacity-0 group-hover:opacity-100"
+          className={isActive ? "" : "opacity-0 group-hover:opacity-100"}
           style={{ flexShrink: 0 }}
         >
           <ArrowCounterClockwiseIcon size={12} />
@@ -127,6 +133,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
+  const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -134,6 +141,11 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     enabled: !!repoPath,
     refetchOnMount: "always",
   });
+
+  const isFileActive = (file: ChangedFile): boolean => {
+    if (!layout) return false;
+    return isDiffTabActiveInTree(layout.panelTree, file.path, file.status);
+  };
 
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
@@ -156,6 +168,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
             file={file}
             taskId={taskId}
             repoPath={repoPath}
+            isActive={isFileActive(file)}
           />
         ))}
       </Flex>
