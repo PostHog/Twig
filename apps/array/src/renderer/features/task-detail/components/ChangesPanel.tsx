@@ -5,6 +5,7 @@ import { ArrowCounterClockwiseIcon, FileIcon } from "@phosphor-icons/react";
 import { Badge, Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import {
   selectWorktreePath,
@@ -42,6 +43,44 @@ function getStatusIndicator(status: GitFileStatus): {
   }
 }
 
+function getDiscardInfo(
+  file: ChangedFile,
+  fileName: string,
+): { message: string; action: string } {
+  switch (file.status) {
+    case "modified":
+      return {
+        message: `Are you sure you want to discard changes in '${fileName}'?`,
+        action: "Discard File",
+      };
+    case "deleted":
+      return {
+        message: `Are you sure you want to restore '${fileName}'?`,
+        action: "Restore File",
+      };
+    case "added":
+      return {
+        message: `Are you sure you want to remove '${fileName}'?`,
+        action: "Remove File",
+      };
+    case "untracked":
+      return {
+        message: `Are you sure you want to delete '${fileName}'?`,
+        action: "Delete File",
+      };
+    case "renamed":
+      return {
+        message: `Are you sure you want to undo the rename of '${fileName}'?`,
+        action: "Undo Rename File",
+      };
+    default:
+      return {
+        message: `Are you sure you want to discard changes in '${fileName}'?`,
+        action: "Discard File",
+      };
+  }
+}
+
 function ChangedFileItem({
   file,
   taskId,
@@ -69,6 +108,20 @@ function ChangedFileItem({
 
   const handleDiscard = async (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    const { message, action } = getDiscardInfo(file, fileName);
+
+    const result = await showMessageBox({
+      type: "warning",
+      title: "Discard changes",
+      message,
+      buttons: ["Cancel", action],
+      defaultId: 0,
+      cancelId: 0,
+    });
+
+    if (result.response !== 1) return;
+
     try {
       await window.electronAPI.discardFileChanges(
         repoPath,
