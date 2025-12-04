@@ -88,6 +88,9 @@ function ChangedFileItem({
   isActive,
 }: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const closeDiffTabsForFile = usePanelLayoutStore(
+    (state) => state.closeDiffTabsForFile,
+  );
   const queryClient = useQueryClient();
   const fileName = file.path.split("/").pop() || file.path;
   const indicator = getStatusIndicator(file.status);
@@ -107,7 +110,7 @@ function ChangedFileItem({
   };
 
   const handleDiscard = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.preventDefault();
 
     const { message, action } = getDiscardInfo(file, fileName);
 
@@ -128,7 +131,9 @@ function ChangedFileItem({
         file.path,
         file.status,
       );
-      // Invalidate the changed files query to refresh the list
+
+      closeDiffTabsForFile(taskId, file.path);
+
       queryClient.invalidateQueries({
         queryKey: ["changed-files-head", repoPath],
       });

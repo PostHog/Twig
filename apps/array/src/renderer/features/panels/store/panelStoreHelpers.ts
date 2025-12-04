@@ -29,6 +29,17 @@ export function createDiffTabId(filePath: string, status?: string): string {
   return `diff-${filePath}`;
 }
 
+export function getDiffTabIdsForFile(filePath: string): string[] {
+  return [
+    createDiffTabId(filePath),
+    createDiffTabId(filePath, "modified"),
+    createDiffTabId(filePath, "deleted"),
+    createDiffTabId(filePath, "added"),
+    createDiffTabId(filePath, "untracked"),
+    createDiffTabId(filePath, "renamed"),
+  ];
+}
+
 export function parseTabId(tabId: string): ParsedTabId & { status?: string } {
   if (tabId.startsWith("file-")) {
     return { type: "file", value: tabId.slice(5) };
