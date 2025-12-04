@@ -1,4 +1,3 @@
-import { useAuthStore } from "@features/auth/stores/authStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
@@ -6,7 +5,6 @@ import { logger } from "@renderer/lib/logger";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { expandTildePath } from "@utils/path";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
@@ -77,23 +75,9 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
       });
 
       const repoKey = getTaskRepository(task) ?? undefined;
-      let directory = useTaskDirectoryStore
+      const directory = useTaskDirectoryStore
         .getState()
         .getTaskDirectory(task.id, repoKey);
-
-      // If no directory found, try to derive from defaultWorkspace
-      if (!directory && repoKey) {
-        const { defaultWorkspace } = useAuthStore.getState();
-        if (defaultWorkspace) {
-          const repoName = repoKey.split("/")[1];
-          const derivedPath = `${expandTildePath(defaultWorkspace)}/${repoName}`;
-          // Validate that this path exists
-          const exists = await window.electronAPI?.validateRepo(derivedPath);
-          if (exists) {
-            directory = derivedPath;
-          }
-        }
-      }
 
       if (directory) {
         try {

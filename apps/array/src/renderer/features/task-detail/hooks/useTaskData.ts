@@ -1,9 +1,7 @@
-import { useAuthStore } from "@features/auth/stores/authStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { Task } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
-import { expandTildePath } from "@utils/path";
 import { getTaskRepository } from "@utils/repository";
 import { useEffect, useMemo } from "react";
 
@@ -14,7 +12,6 @@ interface UseTaskDataParams {
 
 export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
   const { data: tasks = [] } = useTasks();
-  const { defaultWorkspace } = useAuthStore();
   const initializeRepoPath = useTaskExecutionStore(
     (state) => state.initializeRepoPath,
   );
@@ -39,18 +36,10 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
 
   const repository = getTaskRepository(task);
 
-  // Use the stored repoPath if available, otherwise fall back to derived path
+  // Use the stored repoPath
   const derivedPath = useMemo(() => {
-    // Prioritize the stored repoPath
-    if (repoPath) {
-      return repoPath;
-    }
-
-    // Fall back to deriving from workspace + repository (legacy behavior)
-    if (!repository || !defaultWorkspace) return null;
-    const expandedWorkspace = expandTildePath(defaultWorkspace);
-    return `${expandedWorkspace}/${repository.split("/")[1]}`;
-  }, [repoPath, repository, defaultWorkspace]);
+    return repoPath;
+  }, [repoPath]);
 
   const isCloning = cloneStore((state) =>
     repository ? state.isCloning(repository) : false,
@@ -80,6 +69,5 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     derivedPath,
     isCloning,
     cloneProgress,
-    defaultWorkspace,
   };
 }
