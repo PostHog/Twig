@@ -1,4 +1,4 @@
-import { type ChildProcess, exec } from "node:child_process";
+import { type ChildProcess, exec, execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 const log = logger.scope("git");
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
 const getAllFilesInDirectory = async (
@@ -297,23 +298,23 @@ const discardFileChanges = async (
   switch (fileStatus) {
     case "modified":
     case "deleted":
-      await execAsync(`git checkout HEAD -- "${filePath}"`, {
+      await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
         cwd: directoryPath,
       });
       break;
     case "added":
-      await execAsync(`git rm -f "${filePath}"`, {
+      await execFileAsync("git", ["rm", "-f", filePath], {
         cwd: directoryPath,
       });
       break;
     case "untracked":
-      await execAsync(`git clean -f -- "${filePath}"`, {
+      await execFileAsync("git", ["clean", "-f", "--", filePath], {
         cwd: directoryPath,
       });
       break;
     case "renamed":
       // TODO: Restore the original file?
-      await execAsync(`git checkout HEAD -- "${filePath}"`, {
+      await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
         cwd: directoryPath,
       });
       break;

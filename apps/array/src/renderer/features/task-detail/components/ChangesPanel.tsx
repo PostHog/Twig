@@ -125,19 +125,17 @@ function ChangedFileItem({
 
     if (result.response !== 1) return;
 
-    try {
-      await window.electronAPI.discardFileChanges(
-        repoPath,
-        file.path,
-        file.status,
-      );
+    await window.electronAPI.discardFileChanges(
+      repoPath,
+      file.path,
+      file.status,
+    );
 
-      closeDiffTabsForFile(taskId, file.path);
+    closeDiffTabsForFile(taskId, file.path);
 
-      queryClient.invalidateQueries({
-        queryKey: ["changed-files-head", repoPath],
-      });
-    } catch (_error) {}
+    queryClient.invalidateQueries({
+      queryKey: ["changed-files-head", repoPath],
+    });
   };
 
   return (
