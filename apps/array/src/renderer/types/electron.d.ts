@@ -195,6 +195,11 @@ declare global {
       linesRemoved: number;
     }>;
     getCurrentBranch: (repoPath: string) => Promise<string | undefined>;
+    discardFileChanges: (
+      repoPath: string,
+      filePath: string,
+      fileStatus: string,
+    ) => Promise<void>;
     listDirectory: (
       dirPath: string,
     ) => Promise<

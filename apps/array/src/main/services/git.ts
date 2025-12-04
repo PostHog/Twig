@@ -1,4 +1,4 @@
-import { type ChildProcess, exec } from "node:child_process";
+import { type ChildProcess, exec, execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 const log = logger.scope("git");
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
 const getAllFilesInDirectory = async (
@@ -288,6 +289,39 @@ export interface DiffStats {
   linesAdded: number;
   linesRemoved: number;
 }
+
+const discardFileChanges = async (
+  directoryPath: string,
+  filePath: string,
+  fileStatus: GitFileStatus,
+): Promise<void> => {
+  switch (fileStatus) {
+    case "modified":
+    case "deleted":
+      await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
+        cwd: directoryPath,
+      });
+      break;
+    case "added":
+      await execFileAsync("git", ["rm", "-f", filePath], {
+        cwd: directoryPath,
+      });
+      break;
+    case "untracked":
+      await execFileAsync("git", ["clean", "-f", "--", filePath], {
+        cwd: directoryPath,
+      });
+      break;
+    case "renamed":
+      // TODO: Restore the original file?
+      await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
+        cwd: directoryPath,
+      });
+      break;
+    default:
+      throw new Error(`Unknown file status: ${fileStatus}`);
+  }
+};
 
 const getDiffStats = async (directoryPath: string): Promise<DiffStats> => {
   try {
@@ -685,6 +719,18 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<string | undefined> => {
       return getCurrentBranch(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "discard-file-changes",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      filePath: string,
+      fileStatus: GitFileStatus,
+    ): Promise<void> => {
+      return discardFileChanges(directoryPath, filePath, fileStatus);
     },
   );
 }

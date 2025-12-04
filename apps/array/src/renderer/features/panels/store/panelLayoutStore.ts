@@ -12,6 +12,7 @@ import {
   createDiffTabId,
   createFileTabId,
   generatePanelId,
+  getDiffTabIdsForFile,
   getLeafPanel,
   getSplitConfig,
   selectNextTabAfterClose,
@@ -55,6 +56,7 @@ export interface PanelLayoutStore {
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsForFile: (taskId: string, filePath: string) => void;
+  closeDiffTabsForFile: (taskId: string, filePath: string) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
     taskId: string,
@@ -428,13 +430,22 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
         const tabIds = [
           createFileTabId(filePath),
-          createDiffTabId(filePath),
-          createDiffTabId(filePath, "modified"),
-          createDiffTabId(filePath, "deleted"),
-          createDiffTabId(filePath, "added"),
-          createDiffTabId(filePath, "untracked"),
-          createDiffTabId(filePath, "renamed"),
+          ...getDiffTabIdsForFile(filePath),
         ];
+
+        for (const tabId of tabIds) {
+          const tabLocation = findTabInTree(layout.panelTree, tabId);
+          if (tabLocation) {
+            get().closeTab(taskId, tabLocation.panelId, tabId);
+          }
+        }
+      },
+
+      closeDiffTabsForFile: (taskId, filePath) => {
+        const layout = get().taskLayouts[taskId];
+        if (!layout) return;
+
+        const tabIds = getDiffTabIdsForFile(filePath);
 
         for (const tabId of tabIds) {
           const tabLocation = findTabInTree(layout.panelTree, tabId);

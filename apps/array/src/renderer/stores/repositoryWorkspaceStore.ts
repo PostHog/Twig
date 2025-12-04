@@ -2,6 +2,7 @@ import { useAuthStore } from "@features/auth/stores/authStore";
 import { logger } from "@renderer/lib/logger";
 import { randomSuffix } from "@shared/utils/id";
 import { cloneStore } from "@stores/cloneStore";
+import { showMessageBox } from "@utils/dialog";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -54,7 +55,7 @@ const validateRepository = async (
 };
 
 const showError = async (title: string, message: string, detail?: string) => {
-  await window.electronAPI.showMessageBox({
+  await showMessageBox({
     type: "error",
     title,
     message,
@@ -137,7 +138,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
         detected: string,
       ): Promise<boolean> => {
         const [, repoName] = repository.split("/");
-        const result = await window.electronAPI.showMessageBox({
+        const result = await showMessageBox({
           type: "error",
           title: "Repository mismatch",
           message: `Folder '${repoName}' exists but contains a different repository`,
@@ -198,7 +199,7 @@ export const repositoryWorkspaceStore = create<RepositoryWorkspaceState>()(
 
           // Skip check if cloneId provided (clone state already created by caller)
           if (!existingCloneId && isCloning(repository)) {
-            await window.electronAPI.showMessageBox({
+            await showMessageBox({
               type: "warning",
               title: "Repository cloning",
               message: `${repository} is currently being cloned`,

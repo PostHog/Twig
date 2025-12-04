@@ -1,10 +1,11 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
-import { usePanelLayoutStore } from "@features/panels";
+import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FileIcon } from "@phosphor-icons/react";
-import { Badge, Box, Flex, Text } from "@radix-ui/themes";
+import { ArrowCounterClockwiseIcon, FileIcon } from "@phosphor-icons/react";
+import { Badge, Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import {
   selectWorktreePath,
@@ -20,6 +21,7 @@ interface ChangedFileItemProps {
   file: ChangedFile;
   taskId: string;
   repoPath: string;
+  isActive: boolean;
 }
 
 function getStatusIndicator(status: GitFileStatus): {
@@ -41,8 +43,55 @@ function getStatusIndicator(status: GitFileStatus): {
   }
 }
 
-function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
+function getDiscardInfo(
+  file: ChangedFile,
+  fileName: string,
+): { message: string; action: string } {
+  switch (file.status) {
+    case "modified":
+      return {
+        message: `Are you sure you want to discard changes in '${fileName}'?`,
+        action: "Discard File",
+      };
+    case "deleted":
+      return {
+        message: `Are you sure you want to restore '${fileName}'?`,
+        action: "Restore File",
+      };
+    case "added":
+      return {
+        message: `Are you sure you want to remove '${fileName}'?`,
+        action: "Remove File",
+      };
+    case "untracked":
+      return {
+        message: `Are you sure you want to delete '${fileName}'?`,
+        action: "Delete File",
+      };
+    case "renamed":
+      return {
+        message: `Are you sure you want to undo the rename of '${fileName}'?`,
+        action: "Undo Rename File",
+      };
+    default:
+      return {
+        message: `Are you sure you want to discard changes in '${fileName}'?`,
+        action: "Discard File",
+      };
+  }
+}
+
+function ChangedFileItem({
+  file,
+  taskId,
+  repoPath,
+  isActive,
+}: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const closeDiffTabsForFile = usePanelLayoutStore(
+    (state) => state.closeDiffTabsForFile,
+  );
+  const queryClient = useQueryClient();
   const fileName = file.path.split("/").pop() || file.path;
   const indicator = getStatusIndicator(file.status);
 
@@ -60,14 +109,45 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
     await handleExternalAppAction(result.action, fullPath, fileName);
   };
 
+  const handleDiscard = async (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    const { message, action } = getDiscardInfo(file, fileName);
+
+    const result = await showMessageBox({
+      type: "warning",
+      title: "Discard changes",
+      message,
+      buttons: ["Cancel", action],
+      defaultId: 0,
+      cancelId: 0,
+    });
+
+    if (result.response !== 1) return;
+
+    await window.electronAPI.discardFileChanges(
+      repoPath,
+      file.path,
+      file.status,
+    );
+
+    closeDiffTabsForFile(taskId, file.path);
+
+    queryClient.invalidateQueries({
+      queryKey: ["changed-files-head", repoPath],
+    });
+  };
+
   return (
     <Flex
       align="center"
       gap="2"
       py="1"
+      pl="1"
+      pr="2"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className="hover:bg-gray-2"
+      className={`group ${isActive ? "bg-gray-3" : "hover:bg-gray-2"}`}
       style={{ cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden" }}
     >
       <Badge size="1" color={indicator.color} style={{ flexShrink: 0 }}>
@@ -84,10 +164,23 @@ function ChangedFileItem({ file, taskId, repoPath }: ChangedFileItemProps) {
           userSelect: "none",
           overflow: "hidden",
           textOverflow: "ellipsis",
+          flex: 1,
         }}
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
+      <Tooltip content="Discard changes">
+        <IconButton
+          size="1"
+          variant="ghost"
+          color="gray"
+          onClick={handleDiscard}
+          className={isActive ? "" : "opacity-0 group-hover:opacity-100"}
+          style={{ flexShrink: 0 }}
+        >
+          <ArrowCounterClockwiseIcon size={12} />
+        </IconButton>
+      </Tooltip>
     </Flex>
   );
 }
@@ -96,6 +189,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
+  const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -103,6 +197,11 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     enabled: !!repoPath,
     refetchOnMount: "always",
   });
+
+  const isFileActive = (file: ChangedFile): boolean => {
+    if (!layout) return false;
+    return isDiffTabActiveInTree(layout.panelTree, file.path, file.status);
+  };
 
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
@@ -125,6 +224,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
             file={file}
             taskId={taskId}
             repoPath={repoPath}
+            isActive={isFileActive(file)}
           />
         ))}
       </Flex>

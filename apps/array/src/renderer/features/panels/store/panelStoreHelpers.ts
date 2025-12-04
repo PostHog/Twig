@@ -29,6 +29,17 @@ export function createDiffTabId(filePath: string, status?: string): string {
   return `diff-${filePath}`;
 }
 
+export function getDiffTabIdsForFile(filePath: string): string[] {
+  return [
+    createDiffTabId(filePath),
+    createDiffTabId(filePath, "modified"),
+    createDiffTabId(filePath, "deleted"),
+    createDiffTabId(filePath, "added"),
+    createDiffTabId(filePath, "untracked"),
+    createDiffTabId(filePath, "renamed"),
+  ];
+}
+
 export function parseTabId(tabId: string): ParsedTabId & { status?: string } {
   if (tabId.startsWith("file-")) {
     return { type: "file", value: tabId.slice(5) };
@@ -288,4 +299,21 @@ export function applyCleanupWithFallback(
   originalTree: PanelNode,
 ): PanelNode {
   return cleanedTree || originalTree;
+}
+
+// Tab active state utilities
+function isTabActiveInTree(tree: PanelNode, tabId: string): boolean {
+  if (tree.type === "leaf") {
+    return tree.content.activeTabId === tabId;
+  }
+  return tree.children.some((child) => isTabActiveInTree(child, tabId));
+}
+
+export function isDiffTabActiveInTree(
+  tree: PanelNode,
+  filePath: string,
+  status?: string,
+): boolean {
+  const tabId = createDiffTabId(filePath, status);
+  return isTabActiveInTree(tree, tabId);
 }
