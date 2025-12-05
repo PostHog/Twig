@@ -5,6 +5,7 @@ node_modules/
 dist/
 release/
 .vite/
+.turbo/
 out/
 *.log
 
@@ -26,6 +27,7 @@ Thumbs.db
 *.tmp
 *.temp
 *.tgz
+.agent-trigger
 
 AGENTS.md
 .claude/

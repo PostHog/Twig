@@ -54,7 +54,6 @@ function copyAgentTemplates(): Plugin {
 
       mkdirSync(join(__dirname, ".vite/build/templates"), { recursive: true });
       copyFileSync(templateSrc, templateDest);
-      console.log("Copied agent templates to build directory");
     },
   };
 }
@@ -102,22 +101,21 @@ function copyClaudeExecutable(): Plugin {
           existsSync(join(candidate.path, "cli.js")) &&
           existsSync(join(candidate.path, "yoga.wasm"))
         ) {
-          console.log(
-            `[copy-claude-executable] Found pre-built artifacts at ${candidate.path}`,
-          );
+          // console.log(
+          //   `[copy-claude-executable] Found pre-built artifacts at ${candidate.path}`,
+          // );
           const files = ["cli.js", "package.json", "yoga.wasm"];
           for (const file of files) {
             copyFileSync(join(candidate.path, file), join(destDir, file));
           }
-          console.log("Copied Claude CLI to claude-cli/ subdirectory");
           return;
         }
       }
 
       // Fallback: Assemble from individual source packages (Development Workspace)
-      console.log(
-        "[copy-claude-executable] Pre-built artifacts not found. Attempting to assemble from workspace sources...",
-      );
+      // console.log(
+      //   "[copy-claude-executable] Pre-built artifacts not found. Attempting to assemble from workspace sources...",
+      // );
 
       const rootNodeModules = join(__dirname, "../../node_modules");
       const sdkDir = join(rootNodeModules, "@anthropic-ai/claude-agent-sdk");
@@ -165,14 +163,20 @@ export default defineConfig({
       "@api": path.resolve(__dirname, "./src/api"),
     },
   },
+  cacheDir: ".vite/cache",
   build: {
     target: "node18",
-    minify: false, // Disable minification to prevent variable name conflicts
+    minify: false,
+    reportCompressedSize: false,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
     rollupOptions: {
       external: ["node-pty", "@parcel/watcher", "file-icon"],
+      onwarn(warning, warn) {
+        if (warning.code === "UNUSED_EXTERNAL_IMPORT") return;
+        warn(warning);
+      },
     },
   },
 });
