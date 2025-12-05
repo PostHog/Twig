@@ -311,6 +311,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     createVoidIpcListener("new-task", listener),
   onResetLayout: (listener: () => void): (() => void) =>
     createVoidIpcListener("reset-layout", listener),
+  onClearStorage: (listener: () => void): (() => void) =>
+    createVoidIpcListener("clear-storage", listener),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
   onUpdateReady: (listener: () => void): (() => void) =>
     createVoidIpcListener("updates:ready", listener),

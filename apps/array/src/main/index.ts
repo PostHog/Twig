@@ -139,6 +139,18 @@ function createWindow(): void {
             mainWindow?.webContents.send("new-task");
           },
         },
+        { type: "separator" },
+        {
+          label: "Developer",
+          submenu: [
+            {
+              label: "Clear application storage",
+              click: () => {
+                mainWindow?.webContents.send("clear-storage");
+              },
+            },
+          ],
+        },
       ],
     },
     {
