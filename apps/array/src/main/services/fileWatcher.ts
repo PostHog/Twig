@@ -210,14 +210,19 @@ class FileService {
 
   private emit(channel: string, data: unknown): void {
     try {
-      if (
-        this.mainWindow &&
-        !this.mainWindow.isDestroyed() &&
-        this.mainWindow.webContents &&
-        !this.mainWindow.webContents.isDestroyed()
-      ) {
-        this.mainWindow.webContents.send(channel, data);
-      }
+      const win = this.mainWindow;
+      if (!win) return;
+
+      // Check if window is destroyed before accessing webContents
+      if (typeof win.isDestroyed === "function" && win.isDestroyed()) return;
+
+      const wc = win.webContents;
+      if (!wc) return;
+
+      // Check if webContents is destroyed before sending
+      if (typeof wc.isDestroyed === "function" && wc.isDestroyed()) return;
+
+      wc.send(channel, data);
     } catch {
       // Window or webContents was destroyed, ignore
     }

@@ -103,12 +103,24 @@ class ShellManagerImpl {
     });
 
     ptyProcess.onData((data: string) => {
-      webContents.send(`shell:data:${sessionId}`, data);
+      try {
+        if (!webContents.isDestroyed()) {
+          webContents.send(`shell:data:${sessionId}`, data);
+        }
+      } catch {
+        // webContents was destroyed, ignore
+      }
     });
 
     ptyProcess.onExit(({ exitCode }) => {
       log.info(`Shell session ${sessionId} exited with code ${exitCode}`);
-      webContents.send(`shell:exit:${sessionId}`, { exitCode });
+      try {
+        if (!webContents.isDestroyed()) {
+          webContents.send(`shell:exit:${sessionId}`, { exitCode });
+        }
+      } catch {
+        // webContents was destroyed, ignore
+      }
       this.sessions.delete(sessionId);
       resolveExit({ exitCode });
     });

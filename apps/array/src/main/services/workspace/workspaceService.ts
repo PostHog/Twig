@@ -643,9 +643,17 @@ export class WorkspaceService {
   }
 
   private emitWorkspaceError(taskId: string, message: string): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send("workspace:error", { taskId, message });
+    try {
+      const mainWindow = this.getMainWindow();
+      if (
+        mainWindow &&
+        !mainWindow.isDestroyed() &&
+        !mainWindow.webContents.isDestroyed()
+      ) {
+        mainWindow.webContents.send("workspace:error", { taskId, message });
+      }
+    } catch {
+      // Window or webContents was destroyed, ignore
     }
   }
 
@@ -654,13 +662,21 @@ export class WorkspaceService {
     title: string,
     message: string,
   ): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send("workspace:warning", {
-        taskId,
-        title,
-        message,
-      });
+    try {
+      const mainWindow = this.getMainWindow();
+      if (
+        mainWindow &&
+        !mainWindow.isDestroyed() &&
+        !mainWindow.webContents.isDestroyed()
+      ) {
+        mainWindow.webContents.send("workspace:warning", {
+          taskId,
+          title,
+          message,
+        });
+      }
+    } catch {
+      // Window or webContents was destroyed, ignore
     }
   }
 }

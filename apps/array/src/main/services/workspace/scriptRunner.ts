@@ -162,12 +162,20 @@ export class ScriptRunner {
   private emitTerminalCreated(
     info: WorkspaceTerminalInfo & { taskId: string },
   ): void {
-    const mainWindow = this.getMainWindow();
-    if (!mainWindow) {
-      log.warn("No main window available to emit terminal created event");
-      return;
+    try {
+      const mainWindow = this.getMainWindow();
+      if (
+        !mainWindow ||
+        mainWindow.isDestroyed() ||
+        mainWindow.webContents.isDestroyed()
+      ) {
+        log.warn("No main window available to emit terminal created event");
+        return;
+      }
+      mainWindow.webContents.send("workspace:terminal-created", info);
+    } catch {
+      // Window or webContents was destroyed, ignore
     }
-    mainWindow.webContents.send("workspace:terminal-created", info);
   }
 }
 

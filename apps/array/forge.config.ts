@@ -7,6 +7,14 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { PublisherGithub } from "@electron-forge/publisher-github";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 
+// DEBUG: Log ARRAY_* env vars when forge config is loaded
+console.log("[forge.config.ts] ARRAY_* env vars:");
+for (const [key, value] of Object.entries(process.env)) {
+  if (key.startsWith("ARRAY_")) {
+    console.log(`  ${key}=${value}`);
+  }
+}
+
 const appleCodesignIdentity = process.env.APPLE_CODESIGN_IDENTITY;
 const appleTeamId = process.env.APPLE_TEAM_ID;
 const appleId = process.env.APPLE_ID;

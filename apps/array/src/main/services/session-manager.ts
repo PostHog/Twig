@@ -385,9 +385,13 @@ export class SessionManager {
     clientStreams: { readable: ReadableStream; writable: WritableStream },
   ): ClientSideConnection {
     const emitToRenderer = (payload: unknown) => {
-      const win = this.getMainWindow();
-      if (win && !win.isDestroyed()) {
-        win.webContents.send(channel, payload);
+      try {
+        const win = this.getMainWindow();
+        if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+          win.webContents.send(channel, payload);
+        }
+      } catch {
+        // Window or webContents was destroyed, ignore
       }
     };
 

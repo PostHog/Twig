@@ -10,6 +10,15 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
+
+// DEBUG: Log all ARRAY_* env vars at startup
+console.log("[DEBUG] Main process env vars:");
+for (const [key, value] of Object.entries(process.env)) {
+  if (key.startsWith("ARRAY_")) {
+    console.log(`  ${key}=${value}`);
+  }
+}
+
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import {
