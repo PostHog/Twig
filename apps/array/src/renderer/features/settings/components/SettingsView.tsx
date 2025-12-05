@@ -19,6 +19,7 @@ import {
   Switch,
   Text,
 } from "@radix-ui/themes";
+import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
@@ -302,24 +303,7 @@ export function SettingsView() {
                   variant="soft"
                   color="red"
                   size="1"
-                  onClick={() => {
-                    const confirmed = window.confirm(
-                      "Are you sure you want to clear all application storage?\n\nThis will remove:\n• All registered folders\n• UI state (sidebar preferences, etc.)\n• Task directory mappings\n\nYour files will not be deleted from your computer.",
-                    );
-
-                    if (confirmed) {
-                      window.electronAPI.folders
-                        .clearAllData()
-                        .then(() => {
-                          localStorage.clear();
-                          window.location.reload();
-                        })
-                        .catch((error: unknown) => {
-                          log.error("Failed to clear storage:", error);
-                          alert("Failed to clear storage. Please try again.");
-                        });
-                    }
-                  }}
+                  onClick={clearApplicationStorage}
                   style={{ alignSelf: "flex-start" }}
                 >
                   Clear all data

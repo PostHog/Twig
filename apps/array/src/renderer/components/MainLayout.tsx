@@ -16,6 +16,7 @@ import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { TaskList } from "@features/task-list/components/TaskList";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
+import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useState } from "react";
@@ -50,6 +51,10 @@ export function MainLayout() {
     window.location.reload();
   }, [clearAllLayouts]);
 
+  const handleClearStorage = useCallback(() => {
+    clearApplicationStorage();
+  }, []);
+
   useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
     enabled: !commandMenuOpen,
   });
@@ -79,12 +84,22 @@ export function MainLayout() {
       handleResetLayout();
     });
 
+    const unsubscribeClearStorage = window.electronAPI?.onClearStorage(() => {
+      handleClearStorage();
+    });
+
     return () => {
       unsubscribeSettings?.();
       unsubscribeNewTask?.();
       unsubscribeResetLayout?.();
+      unsubscribeClearStorage?.();
     };
-  }, [handleOpenSettings, handleFocusTaskMode, handleResetLayout]);
+  }, [
+    handleOpenSettings,
+    handleFocusTaskMode,
+    handleResetLayout,
+    handleClearStorage,
+  ]);
 
   useEffect(() => {
     const handleMouseButton = (event: MouseEvent) => {

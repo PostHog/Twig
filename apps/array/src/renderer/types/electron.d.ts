@@ -221,6 +221,7 @@ declare global {
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
     onResetLayout: (listener: () => void) => () => void;
+    onClearStorage: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
