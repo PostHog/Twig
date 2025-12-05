@@ -186,10 +186,12 @@ function ChangedFileItem({
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
+
       {hasLineStats && (
         <Flex
           align="center"
           gap="1"
+          className="group-hover:hidden"
           style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
         >
           {(file.linesAdded ?? 0) > 0 && (
@@ -200,6 +202,33 @@ function ChangedFileItem({
           )}
         </Flex>
       )}
+
+      <Flex
+        align="center"
+        gap="1"
+        className="hidden group-hover:flex"
+        style={{ flexShrink: 0 }}
+      >
+        <Tooltip content="Discard changes">
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={handleDiscard}
+            style={{
+              flexShrink: 0,
+              width: "18px",
+              height: "18px",
+              padding: 0,
+              marginLeft: "2px",
+              marginRight: "2px",
+            }}
+          >
+            <ArrowCounterClockwiseIcon size={12} />
+          </IconButton>
+        </Tooltip>
+      </Flex>
+
       <Badge
         size="1"
         color={indicator.color}
@@ -207,18 +236,6 @@ function ChangedFileItem({
       >
         {indicator.label}
       </Badge>
-      <Tooltip content="Discard changes">
-        <IconButton
-          size="1"
-          variant="ghost"
-          color="gray"
-          onClick={handleDiscard}
-          className={isActive ? "" : "opacity-0 group-hover:opacity-100"}
-          style={{ flexShrink: 0, width: "20px", height: "20px" }}
-        >
-          <ArrowCounterClockwiseIcon size={12} />
-        </IconButton>
-      </Tooltip>
     </Flex>
   );
 }
