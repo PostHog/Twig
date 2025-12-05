@@ -1,3 +1,4 @@
+/// <reference path="../../../types/electron.d.ts" />
 import type { SessionNotification } from "@agentclientprotocol/sdk";
 
 export interface StoredLogEntry {
@@ -26,14 +27,16 @@ export interface ParsedSessionLogs {
 export async function fetchSessionLogs(
   logUrl: string,
 ): Promise<ParsedSessionLogs> {
-  if (!logUrl) return { notifications: [], rawEntries: [] };
+  if (!logUrl) {
+    return { notifications: [], rawEntries: [] };
+  }
 
   try {
-    const response = await fetch(logUrl);
-    if (!response.ok) return { notifications: [], rawEntries: [] };
+    const content = await window.electronAPI.fetchS3Logs(logUrl);
 
-    const content = await response.text();
-    if (!content.trim()) return { notifications: [], rawEntries: [] };
+    if (!content?.trim()) {
+      return { notifications: [], rawEntries: [] };
+    }
 
     const notifications: SessionNotification[] = [];
     const rawEntries: StoredLogEntry[] = [];
@@ -47,7 +50,6 @@ export async function fetchSessionLogs(
         // - Request (has id + method) = client → agent
         // - Response (has id + result/error) = agent → client
         // - Notification (has method, no id) = agent → client
-        // TODO: Check if this is correct.
         const msg = stored.notification;
         if (msg) {
           const hasId = msg.id !== undefined;
@@ -94,7 +96,6 @@ export async function fetchSessionLogs(
 
     return { notifications, rawEntries, sdkSessionId };
   } catch {
-    // Network error or other failure
     return { notifications: [], rawEntries: [] };
   }
 }
