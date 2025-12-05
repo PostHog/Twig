@@ -3,8 +3,14 @@ import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
+import {
+  RightSidebar,
+  RightSidebarContent,
+  useRightSidebarStore,
+} from "@features/right-sidebar";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
+import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { TaskList } from "@features/task-list/components/TaskList";
@@ -26,6 +32,9 @@ export function MainLayout() {
     goForward,
   } = useNavigationStore();
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
+  const toggleLeftSidebar = useSidebarStore((state) => state.setOpen);
+  const leftSidebarOpen = useSidebarStore((state) => state.open);
+  const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
   useIntegrations();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
 
@@ -55,6 +64,8 @@ export function MainLayout() {
   useHotkeys("mod+,", () => handleOpenSettings());
   useHotkeys("mod+[", () => goBack());
   useHotkeys("mod+]", () => goForward());
+  useHotkeys("mod+b", () => toggleLeftSidebar(!leftSidebarOpen));
+  useHotkeys("mod+shift+b", () => toggleRightSidebar());
 
   useEffect(() => {
     const unsubscribeSettings = window.electronAPI?.onOpenSettings(() => {
@@ -99,6 +110,12 @@ export function MainLayout() {
 
           {view.type === "settings" && <SettingsView />}
         </Box>
+
+        {view.type === "task-detail" && view.data && (
+          <RightSidebar>
+            <RightSidebarContent taskId={view.data.id} task={view.data} />
+          </RightSidebar>
+        )}
       </Flex>
 
       <StatusBar />
