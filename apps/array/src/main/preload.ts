@@ -1,5 +1,4 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import type { AgentEvent } from "@posthog/agent";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import type {
   CreateWorkspaceOptions,
@@ -69,7 +68,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("store-api-key", apiKey),
   retrieveApiKey: (encryptedKey: string): Promise<string | null> =>
     ipcRenderer.invoke("retrieve-api-key", encryptedKey),
-  fetchS3Logs: (logUrl: string): Promise<AgentEvent[]> =>
+  fetchS3Logs: (logUrl: string): Promise<string | null> =>
     ipcRenderer.invoke("fetch-s3-logs", logUrl),
   rendererStore: {
     getItem: (key: string): Promise<string | null> =>
