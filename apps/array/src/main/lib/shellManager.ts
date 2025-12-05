@@ -83,7 +83,12 @@ class ShellManagerImpl {
     );
 
     const env = buildShellEnv(additionalEnv);
-    const ptyProcess = pty.spawn(shell, ["-l"], {
+
+    // If there's an initial command, spawn shell with -c to run it directly (no echo)
+    // Otherwise spawn an interactive login shell
+    const shellArgs = initialCommand ? ["-c", initialCommand] : ["-l"];
+
+    const ptyProcess = pty.spawn(shell, shellArgs, {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
@@ -108,12 +113,6 @@ class ShellManagerImpl {
       resolveExit({ exitCode });
     });
 
-    if (initialCommand) {
-      setTimeout(() => {
-        ptyProcess.write(`${initialCommand}\n`);
-      }, 100);
-    }
-
     const session: ShellSession = {
       pty: ptyProcess,
       webContents,
@@ -136,7 +135,7 @@ class ShellManagerImpl {
   write(sessionId: string, data: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Shell session ${sessionId} not found`);
+      return;
     }
     session.pty.write(data);
   }
@@ -144,7 +143,7 @@ class ShellManagerImpl {
   resize(sessionId: string, cols: number, rows: number): void {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Shell session ${sessionId} not found`);
+      return;
     }
     session.pty.resize(cols, rows);
   }
@@ -178,6 +177,21 @@ class ShellManagerImpl {
       if (sessionId.startsWith(prefix)) {
         this.destroy(sessionId);
       }
+    }
+  }
+
+  destroyByWebContents(webContents: WebContents): void {
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.webContents === webContents) {
+        log.info(`Destroying shell session ${sessionId} (webContents reload)`);
+        this.destroy(sessionId);
+      }
+    }
+  }
+
+  destroyAll(): void {
+    for (const sessionId of this.sessions.keys()) {
+      this.destroy(sessionId);
     }
   }
 }

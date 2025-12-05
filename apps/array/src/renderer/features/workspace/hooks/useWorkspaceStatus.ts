@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import {
   selectIsCreating,
   selectWorkspace,
@@ -11,6 +11,7 @@ interface WorkspaceStatus {
   isRunning: boolean;
   isCreating: boolean;
   isCheckingStatus: boolean;
+  refreshStatus: () => void;
 }
 
 export function useWorkspaceStatus(taskId: string): WorkspaceStatus {
@@ -20,31 +21,16 @@ export function useWorkspaceStatus(taskId: string): WorkspaceStatus {
     s.areTerminalsRunning(taskId),
   );
 
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
-  const [isRunning, setIsRunning] = useState(terminalsRunning);
-
-  const checkStatus = useCallback(async () => {
-    setIsCheckingStatus(true);
-    try {
-      const running = await window.electronAPI?.workspace.isRunning(taskId);
-      setIsRunning(running ?? false);
-    } catch {
-      setIsRunning(false);
-    } finally {
-      setIsCheckingStatus(false);
-    }
-  }, [taskId]);
-
-  useEffect(() => {
-    if (workspace) {
-      checkStatus();
-    }
-  }, [workspace, checkStatus]);
+  const refreshStatus = useCallback(() => {
+    // Status is now derived directly from the terminal store
+    // This is kept for API compatibility
+  }, []);
 
   return {
     hasWorkspace: !!workspace,
-    isRunning: isRunning || terminalsRunning,
+    isRunning: terminalsRunning,
     isCreating,
-    isCheckingStatus,
+    isCheckingStatus: false,
+    refreshStatus,
   };
 }

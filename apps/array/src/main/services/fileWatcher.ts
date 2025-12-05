@@ -209,7 +209,18 @@ class FileService {
   }
 
   private emit(channel: string, data: unknown): void {
-    this.mainWindow?.webContents.send(channel, data);
+    try {
+      if (
+        this.mainWindow &&
+        !this.mainWindow.isDestroyed() &&
+        this.mainWindow.webContents &&
+        !this.mainWindow.webContents.isDestroyed()
+      ) {
+        this.mainWindow.webContents.send(channel, data);
+      }
+    } catch {
+      // Window or webContents was destroyed, ignore
+    }
   }
 }
 

@@ -34,13 +34,7 @@ export function TabContentRenderer({
       );
 
     case "workspace-terminal":
-      return (
-        <WorkspaceTerminalPanel
-          sessionId={data.sessionId}
-          command={data.command}
-          scriptType={data.scriptType}
-        />
-      );
+      return <WorkspaceTerminalPanel sessionId={data.sessionId} />;
 
     case "file":
       return (

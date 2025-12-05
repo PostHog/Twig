@@ -75,6 +75,19 @@ export function registerWorkspaceIpc(
     async () => workspaceService?.getAllWorkspaces() ?? {},
     { rethrow: false, fallback: {} },
   );
+
+  handle<[string], void>("workspace:stop", (_event, taskId) =>
+    getService().stopWorkspace(taskId),
+  );
+
+  handle<[string], ScriptExecutionResult>(
+    "workspace:restart",
+    async (_event, taskId) => getService().restartWorkspace(taskId),
+    {
+      rethrow: false,
+      fallback: { success: false, terminalSessionIds: [], errors: ["Failed"] },
+    },
+  );
 }
 
 export { loadConfig, normalizeScripts } from "./configLoader";

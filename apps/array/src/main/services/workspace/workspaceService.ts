@@ -133,80 +133,38 @@ export class WorkspaceService {
       }
       foldersStore.set("taskAssociations", associations);
 
-      // Load config and run scripts from main repo
+      // Load config to check for scripts
       const { config } = await loadConfig(
         folderPath,
         path.basename(folderPath),
       );
-      let terminalSessionIds: string[] = [];
-
-      const workspaceEnv = await buildWorkspaceEnv({
-        taskId,
-        folderPath,
-        worktreePath: null,
-        worktreeName: null,
-        mode,
-      });
-
-      // Run init scripts
       const initScripts = normalizeScripts(config?.scripts?.init);
-      if (initScripts.length > 0) {
-        log.info(
-          `Running ${initScripts.length} init script(s) for task ${taskId} (root mode)`,
-        );
-        const initResult = await this.scriptRunner.executeScriptsWithTerminal(
-          taskId,
-          initScripts,
-          "init",
-          folderPath,
-          { failFast: true, workspaceEnv },
-        );
-        terminalSessionIds = initResult.terminalSessionIds;
-
-        if (!initResult.success) {
-          log.error(`Init scripts failed for task ${taskId}`);
-          throw new Error(
-            `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
-          );
-        }
-      }
-
-      // Run start scripts
       const startScripts = normalizeScripts(config?.scripts?.start);
-      if (startScripts.length > 0) {
-        log.info(
-          `Running ${startScripts.length} start script(s) for task ${taskId} (root mode)`,
-        );
-        const startResult = await this.scriptRunner.executeScriptsWithTerminal(
-          taskId,
-          startScripts,
-          "start",
-          folderPath,
-          { failFast: false, workspaceEnv },
-        );
-        terminalSessionIds = [
-          ...terminalSessionIds,
-          ...startResult.terminalSessionIds,
-        ];
 
-        if (!startResult.success) {
-          log.warn(
-            `Some start scripts failed for task ${taskId}: ${startResult.errors?.join(", ")}`,
-          );
-          this.emitWorkspaceError(
-            taskId,
-            `Start scripts failed: ${startResult.errors?.join(", ")}`,
-          );
-        }
-      }
-
-      return {
+      // Return immediately so UI can navigate to task detail
+      const result: WorkspaceInfo = {
         taskId,
         mode,
         worktree: null,
-        terminalSessionIds,
+        terminalSessionIds: [],
         hasStartScripts: startScripts.length > 0,
       };
+
+      // Run scripts asynchronously in background
+      this.runWorkspaceScriptsAsync(
+        taskId,
+        folderPath,
+        path.basename(folderPath),
+        null,
+        null,
+        mode,
+        initScripts,
+        startScripts,
+      ).catch((error) => {
+        log.error(`Error running workspace scripts for task ${taskId}:`, error);
+      });
+
+      return result;
     }
 
     // Worktree mode: create isolated worktree
@@ -261,87 +219,39 @@ export class WorkspaceService {
     }
     foldersStore.set("taskAssociations", associations);
 
-    // Load config and run init scripts
+    // Load config to check for scripts
     const { config } = await loadConfig(
       worktree.worktreePath,
       worktree.worktreeName,
+      folderPath,
     );
     const initScripts = normalizeScripts(config?.scripts?.init);
-
-    let terminalSessionIds: string[] = [];
-
-    const workspaceEnv = await buildWorkspaceEnv({
-      taskId,
-      folderPath,
-      worktreePath: worktree.worktreePath,
-      worktreeName: worktree.worktreeName,
-      mode,
-    });
-
-    if (initScripts.length > 0) {
-      log.info(
-        `Running ${initScripts.length} init script(s) for task ${taskId}`,
-      );
-      const initResult = await this.scriptRunner.executeScriptsWithTerminal(
-        taskId,
-        initScripts,
-        "init",
-        worktree.worktreePath,
-        { failFast: true, workspaceEnv },
-      );
-
-      terminalSessionIds = initResult.terminalSessionIds;
-
-      if (!initResult.success) {
-        // Cleanup on init failure
-        log.error(
-          `Init scripts failed for task ${taskId}, cleaning up worktree`,
-        );
-        await this.cleanupWorktree(taskId, mainRepoPath, worktree.worktreePath);
-        throw new Error(
-          `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
-        );
-      }
-    }
-
-    // Run start scripts (don't fail on error, just notify)
     const startScripts = normalizeScripts(config?.scripts?.start);
-    if (startScripts.length > 0) {
-      log.info(
-        `Running ${startScripts.length} start script(s) for task ${taskId}`,
-      );
-      const startResult = await this.scriptRunner.executeScriptsWithTerminal(
-        taskId,
-        startScripts,
-        "start",
-        worktree.worktreePath,
-        { failFast: false, workspaceEnv },
-      );
 
-      terminalSessionIds = [
-        ...terminalSessionIds,
-        ...startResult.terminalSessionIds,
-      ];
-
-      if (!startResult.success) {
-        log.warn(
-          `Some start scripts failed for task ${taskId}: ${startResult.errors?.join(", ")}`,
-        );
-        // Emit error to renderer for toast notification
-        this.emitWorkspaceError(
-          taskId,
-          `Start scripts failed: ${startResult.errors?.join(", ")}`,
-        );
-      }
-    }
-
-    return {
+    // Return immediately so UI can navigate to task detail
+    const result: WorkspaceInfo = {
       taskId,
       mode,
       worktree,
-      terminalSessionIds,
+      terminalSessionIds: [],
       hasStartScripts: startScripts.length > 0,
     };
+
+    // Run scripts asynchronously in background
+    this.runWorkspaceScriptsAsync(
+      taskId,
+      folderPath,
+      worktree.worktreeName,
+      worktree.worktreePath,
+      mainRepoPath,
+      mode,
+      initScripts,
+      startScripts,
+    ).catch((error) => {
+      log.error(`Error running workspace scripts for task ${taskId}:`, error);
+    });
+
+    return result;
   }
 
   async deleteWorkspace(taskId: string, mainRepoPath: string): Promise<void> {
@@ -375,7 +285,7 @@ export class WorkspaceService {
 
     // Load config and run destroy scripts (silent)
     if (scriptPath && scriptName) {
-      const { config } = await loadConfig(scriptPath, scriptName);
+      const { config } = await loadConfig(scriptPath, scriptName, folderPath);
       const destroyScripts = normalizeScripts(config?.scripts?.destroy);
 
       if (destroyScripts.length > 0) {
@@ -509,14 +419,17 @@ export class WorkspaceService {
   ): Promise<ScriptExecutionResult> {
     log.info(`Running start scripts for task ${taskId}`);
 
-    const { config } = await loadConfig(worktreePath, worktreeName);
+    const association = findTaskAssociation(taskId);
+    const { config } = await loadConfig(
+      worktreePath,
+      worktreeName,
+      association?.folderPath,
+    );
     const startScripts = normalizeScripts(config?.scripts?.start);
 
     if (startScripts.length === 0) {
       return { success: true, terminalSessionIds: [] };
     }
-
-    const association = findTaskAssociation(taskId);
     const workspaceEnv = await buildWorkspaceEnv({
       taskId,
       folderPath: association?.folderPath ?? worktreePath,
@@ -591,7 +504,11 @@ export class WorkspaceService {
 
       let startScripts: string[] = [];
       if (configPath && configName) {
-        const { config } = await loadConfig(configPath, configName);
+        const { config } = await loadConfig(
+          configPath,
+          configName,
+          assoc.folderPath,
+        );
         startScripts = normalizeScripts(config?.scripts?.start);
       }
 
@@ -611,6 +528,104 @@ export class WorkspaceService {
     }
 
     return workspaces;
+  }
+
+  stopWorkspace(taskId: string): void {
+    log.info(`Stopping workspace for task: ${taskId}`);
+    cleanupWorkspaceSessions(taskId);
+  }
+
+  async restartWorkspace(taskId: string): Promise<ScriptExecutionResult> {
+    log.info(`Restarting workspace for task: ${taskId}`);
+
+    this.stopWorkspace(taskId);
+
+    const association = findTaskAssociation(taskId);
+    if (!association) {
+      return {
+        success: false,
+        terminalSessionIds: [],
+        errors: ["No workspace association found"],
+      };
+    }
+
+    const worktreePath =
+      association.worktree?.worktreePath ?? association.folderPath;
+    const worktreeName =
+      association.worktree?.worktreeName ??
+      path.basename(association.folderPath);
+
+    return this.runStartScripts(taskId, worktreePath, worktreeName);
+  }
+
+  private async runWorkspaceScriptsAsync(
+    taskId: string,
+    folderPath: string,
+    worktreeName: string,
+    worktreePath: string | null,
+    mainRepoPath: string | null,
+    mode: "root" | "worktree",
+    initScripts: string[],
+    startScripts: string[],
+  ): Promise<void> {
+    log.info(
+      `runWorkspaceScriptsAsync started for task ${taskId}: init=${initScripts.length}, start=${startScripts.length}`,
+    );
+    const scriptPath = worktreePath ?? folderPath;
+
+    const workspaceEnv = await buildWorkspaceEnv({
+      taskId,
+      folderPath,
+      worktreePath,
+      worktreeName,
+      mode,
+    });
+
+    // Combine init and start scripts into a single command
+    // Init scripts are joined with && so they fail fast
+    // Start scripts run after init completes
+    const allCommands: string[] = [];
+    if (initScripts.length > 0) {
+      allCommands.push(...initScripts);
+    }
+    if (startScripts.length > 0) {
+      allCommands.push(...startScripts);
+    }
+
+    if (allCommands.length === 0) {
+      log.info(`No scripts to run for task ${taskId}`);
+      return;
+    }
+
+    // Join all commands with && so they run sequentially and stop on failure
+    const combinedCommand = allCommands.join(" && ");
+    log.info(
+      `Running combined workspace script for task ${taskId}: ${combinedCommand}`,
+    );
+
+    const result = await this.scriptRunner.executeScriptsWithTerminal(
+      taskId,
+      [combinedCommand],
+      "start",
+      scriptPath,
+      { failFast: false, workspaceEnv },
+    );
+
+    if (!result.success) {
+      log.warn(
+        `Workspace scripts failed for task ${taskId}: ${result.errors?.join(", ")}`,
+      );
+      this.emitWorkspaceError(
+        taskId,
+        `Workspace scripts failed: ${result.errors?.join(", ")}`,
+      );
+      // Cleanup worktree on failure (worktree mode only)
+      if (worktreePath && mainRepoPath) {
+        await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
+      }
+    }
+
+    log.info(`runWorkspaceScriptsAsync finished for task ${taskId}`);
   }
 
   private async cleanupWorktree(

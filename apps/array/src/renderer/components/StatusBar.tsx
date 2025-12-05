@@ -3,6 +3,7 @@ import { GearIcon } from "@radix-ui/react-icons";
 import { Badge, Box, Code, Flex, IconButton, Kbd } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useStatusBarStore } from "@stores/statusBarStore";
+import { useEffect, useState } from "react";
 
 import { IS_DEV } from "@/constants/environment";
 
@@ -13,6 +14,11 @@ interface StatusBarProps {
 export function StatusBar({ showKeyHints = true }: StatusBarProps) {
   const { statusText, keyHints } = useStatusBarStore();
   const { toggleSettings } = useNavigationStore();
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.electronAPI?.getWorkspaceName().then(setWorkspaceName);
+  }, []);
 
   return (
     <Box className="flex flex-row items-center justify-between border-gray-6 border-t bg-gray-2 px-4 py-2">
@@ -59,6 +65,13 @@ export function StatusBar({ showKeyHints = true }: StatusBarProps) {
           <Badge size="1">
             <Code size="1" variant="ghost">
               DEV
+            </Code>
+          </Badge>
+        )}
+        {workspaceName && (
+          <Badge size="1" color="blue">
+            <Code size="1" variant="ghost">
+              {workspaceName}
             </Code>
           </Badge>
         )}

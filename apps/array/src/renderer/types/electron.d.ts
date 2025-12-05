@@ -223,6 +223,7 @@ declare global {
     onResetLayout: (listener: () => void) => () => void;
     onClearStorage: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
+    getWorkspaceName: () => Promise<string | null>;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
     // Shell API
@@ -300,6 +301,8 @@ declare global {
       ) => Promise<ScriptExecutionResult>;
       isRunning: (taskId: string) => Promise<boolean>;
       getTerminals: (taskId: string) => Promise<WorkspaceTerminalInfo[]>;
+      stop: (taskId: string) => Promise<void>;
+      restart: (taskId: string) => Promise<ScriptExecutionResult>;
       onTerminalCreated: (
         listener: (data: WorkspaceTerminalInfo & { taskId: string }) => void,
       ) => () => void;

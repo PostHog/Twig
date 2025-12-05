@@ -313,6 +313,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onClearStorage: (listener: () => void): (() => void) =>
     createVoidIpcListener("clear-storage", listener),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
+  getWorkspaceName: (): Promise<string | null> =>
+    ipcRenderer.invoke("app:get-workspace-name"),
   onUpdateReady: (listener: () => void): (() => void) =>
     createVoidIpcListener("updates:ready", listener),
   installUpdate: (): Promise<{ installed: boolean }> =>
@@ -465,6 +467,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("workspace:is-running", taskId),
     getTerminals: (taskId: string): Promise<WorkspaceTerminalInfo[]> =>
       ipcRenderer.invoke("workspace:get-terminals", taskId),
+    stop: (taskId: string): Promise<void> =>
+      ipcRenderer.invoke("workspace:stop", taskId),
+    restart: (taskId: string): Promise<ScriptExecutionResult> =>
+      ipcRenderer.invoke("workspace:restart", taskId),
     onTerminalCreated: (
       listener: IpcEventListener<WorkspaceTerminalInfo & { taskId: string }>,
     ): (() => void) =>

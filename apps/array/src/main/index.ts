@@ -20,6 +20,7 @@ import {
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
 
+import { shellManager } from "./lib/shellManager.js";
 import { setupAgentHotReload } from "./services/dev-reload.js";
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
 import { registerFoldersIpc } from "./services/folders.js";
@@ -57,8 +58,15 @@ const taskControllers = new Map<string, TaskController>();
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
 
-// Set app name to ensure consistent userData path across platforms
-app.setName("Array");
+// Set app name based on workspace (for unique userData paths per workspace)
+const workspaceName = process.env.ARRAY_WORKSPACE_NAME;
+const appName = workspaceName ? `Array (${workspaceName})` : "Array";
+app.setName(appName);
+
+// Use workspace-specific data directory if provided
+if (process.env.ARRAY_WORKSPACE_DATA_DIR) {
+  app.setPath("userData", process.env.ARRAY_WORKSPACE_DATA_DIR);
+}
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
@@ -87,6 +95,8 @@ function setupExternalLinkHandlers(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  const windowTitle = workspaceName ? `Array (${workspaceName})` : "Array";
+
   mainWindow = new BrowserWindow({
     width: 900,
     height: 600,
@@ -94,6 +104,7 @@ function createWindow(): void {
     minHeight: 600,
     backgroundColor: "#0a0a0a",
     titleBarStyle: "hiddenInset",
+    title: windowTitle,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -110,6 +121,13 @@ function createWindow(): void {
   });
 
   setupExternalLinkHandlers(mainWindow);
+
+  // Kill all shell sessions when renderer reloads (dev hot reload or CMD R)
+  mainWindow.webContents.on("did-start-loading", () => {
+    if (mainWindow?.webContents) {
+      shellManager.destroyByWebContents(mainWindow.webContents);
+    }
+  });
 
   // Set up menu for keyboard shortcuts
   const template: MenuItemConstructorOptions[] = [
@@ -249,6 +267,10 @@ app.on("activate", () => {
 registerAutoUpdater(() => mainWindow);
 
 ipcMain.handle("app:get-version", () => app.getVersion());
+ipcMain.handle(
+  "app:get-workspace-name",
+  () => process.env.ARRAY_WORKSPACE_NAME || null,
+);
 
 // Register IPC handlers via services
 registerPosthogIpc();

@@ -8,6 +8,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  cacheDir: process.env.VITE_CACHE_DIR || "node_modules/.vite",
+  server: {
+    port: process.env.VITE_DEV_SERVER_PORT
+      ? Number.parseInt(process.env.VITE_DEV_SERVER_PORT, 10)
+      : undefined,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

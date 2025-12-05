@@ -222,9 +222,15 @@ class TerminalManagerImpl {
       instance.isReady = true;
       log.info("Shell session ready:", sessionId);
 
-      // Fit if attached
+      // Fit and resize if attached
       if (instance.attachedElement) {
         instance.fitAddon.fit();
+        // Send resize to pty to match the rendered size
+        window.electronAPI
+          ?.shellResize(sessionId, instance.term.cols, instance.term.rows)
+          .catch((error: Error) => {
+            log.error("Failed to resize shell after ready:", error);
+          });
       }
 
       this.emit("ready", {
@@ -256,7 +262,6 @@ class TerminalManagerImpl {
 
     // Handle shell exit
     const unsubscribeExit = window.electronAPI?.onShellExit(sessionId, () => {
-      term.writeln("\r\n\x1b[33mProcess exited\x1b[0m\r\n");
       this.emit("exit", { sessionId, persistenceKey: instance.persistenceKey });
     });
     if (unsubscribeExit) {
@@ -338,9 +343,16 @@ class TerminalManagerImpl {
     instance.resizeObserver = new ResizeObserver(handleResize);
     instance.resizeObserver.observe(element);
 
-    // Fit after attach
+    // Fit after attach and resize pty if ready
     setTimeout(() => {
       instance.fitAddon.fit();
+      if (instance.isReady) {
+        window.electronAPI
+          ?.shellResize(sessionId, instance.term.cols, instance.term.rows)
+          .catch((error: Error) => {
+            log.error("Failed to resize shell after attach:", error);
+          });
+      }
     }, 0);
   }
 

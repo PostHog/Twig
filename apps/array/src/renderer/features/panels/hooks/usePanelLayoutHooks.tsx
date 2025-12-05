@@ -109,6 +109,9 @@ export function useTabInjection(
           ),
           onClose: tab.closeable
             ? () => {
+                if (tab.data.type === "workspace-terminal") {
+                  window.electronAPI?.shellDestroy(tab.data.sessionId);
+                }
                 closeTab(taskId, panelId, tab.id);
               }
             : undefined,

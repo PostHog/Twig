@@ -23,7 +23,6 @@ function Tab({ label, isActive, onClick }: TabProps) {
     <Box
       onClick={onClick}
       px="3"
-      py="2"
       style={{
         cursor: "pointer",
         borderBottom: isActive
@@ -31,10 +30,11 @@ function Tab({ label, isActive, onClick }: TabProps) {
           : "2px solid transparent",
         color: isActive ? "var(--gray-12)" : "var(--gray-11)",
         userSelect: "none",
+        height: "32px",
       }}
       className={isActive ? "" : "hover:bg-gray-2"}
     >
-      <Text size="2" weight={isActive ? "medium" : "regular"}>
+      <Text size="1" weight={isActive ? "medium" : "regular"}>
         {label}
       </Text>
     </Box>

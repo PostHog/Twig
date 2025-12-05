@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "init": "pnpm install",
+    "start": "$ARRAY_ROOT_PATH/scripts/start.sh"
+  }
+}

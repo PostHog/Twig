@@ -49,6 +49,7 @@ interface WorkspaceState {
 
   // Operations
   runStartScripts: (taskId: string) => Promise<ScriptExecutionResult>;
+  stopWorkspace: (taskId: string) => Promise<void>;
   isWorkspaceRunning: (taskId: string) => Promise<boolean>;
   getWorkspaceTerminals: (taskId: string) => Promise<WorkspaceTerminalInfo[]>;
 
@@ -311,6 +312,10 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           errors: ["API not available"],
         }
       );
+    },
+
+    stopWorkspace: async (taskId: string) => {
+      await window.electronAPI?.workspace.stop(taskId);
     },
 
     isWorkspaceRunning: async (taskId: string) => {

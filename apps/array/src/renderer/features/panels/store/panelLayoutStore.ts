@@ -126,9 +126,9 @@ function createDefaultPanelTree(
 
   const terminalPanel: PanelNode = {
     type: "leaf",
-    id: "terminal-panel",
+    id: DEFAULT_PANEL_IDS.TERMINAL_PANEL,
     content: {
-      id: "terminal-panel",
+      id: DEFAULT_PANEL_IDS.TERMINAL_PANEL,
       tabs: [
         {
           id: DEFAULT_TAB_IDS.SHELL,
@@ -723,7 +723,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                   },
                   component: null,
                   draggable: true,
-                  closeable: false,
+                  closeable: true,
                 });
               },
             );

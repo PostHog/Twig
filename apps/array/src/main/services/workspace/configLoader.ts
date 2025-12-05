@@ -19,10 +19,12 @@ export interface LoadConfigResult {
 export async function loadConfig(
   worktreePath: string,
   worktreeName: string,
+  mainRepoPath?: string,
 ): Promise<LoadConfigResult> {
   // Search order:
-  // 1. .array/{WORKSPACE_NAME}/array.json (workspace-specific)
-  // 2. {repo-root}/array.json (repository root)
+  // 1. .array/{WORKSPACE_NAME}/array.json (workspace-specific in worktree)
+  // 2. {worktree}/array.json (worktree root)
+  // 3. {main-repo}/array.json (original repo root, for uncommitted configs)
 
   const workspaceConfigPath = path.join(
     worktreePath,
@@ -32,6 +34,9 @@ export async function loadConfig(
   );
 
   const repoConfigPath = path.join(worktreePath, "array.json");
+  const mainRepoConfigPath = mainRepoPath
+    ? path.join(mainRepoPath, "array.json")
+    : null;
 
   // Try workspace-specific config first
   const workspaceResult = await tryLoadConfig(workspaceConfigPath);
@@ -46,7 +51,7 @@ export async function loadConfig(
     return { config: null, source: null };
   }
 
-  // Try repo root config
+  // Try repo root config (worktree path)
   const repoResult = await tryLoadConfig(repoConfigPath);
   if (repoResult.config) {
     log.info(`Loaded config from repo root: ${repoConfigPath}`);
@@ -57,6 +62,21 @@ export async function loadConfig(
       `Invalid config at ${repoConfigPath}: ${repoResult.errors.join(", ")}`,
     );
     return { config: null, source: null };
+  }
+
+  // Try main repo root config (for uncommitted configs in worktree scenarios)
+  if (mainRepoConfigPath && mainRepoConfigPath !== repoConfigPath) {
+    const mainRepoResult = await tryLoadConfig(mainRepoConfigPath);
+    if (mainRepoResult.config) {
+      log.info(`Loaded config from main repo: ${mainRepoConfigPath}`);
+      return { config: mainRepoResult.config, source: "repo" };
+    }
+    if (mainRepoResult.errors) {
+      log.warn(
+        `Invalid config at ${mainRepoConfigPath}: ${mainRepoResult.errors.join(", ")}`,
+      );
+      return { config: null, source: null };
+    }
   }
 
   return { config: null, source: null };

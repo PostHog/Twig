@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+cd "$ARRAY_WORKSPACE_PATH"
+ARRAY_APP_IDENTIFIER="com.posthog.array.$ARRAY_WORKSPACE_NAME"
+WORKSPACE_DATA_DIR="$HOME/Library/Application Support/$ARRAY_APP_IDENTIFIER"
+
+if [ ! -d "$WORKSPACE_DATA_DIR" ]; then
+    echo "Creating data directory: $WORKSPACE_DATA_DIR"
+    mkdir -p "$WORKSPACE_DATA_DIR"
+fi
+
+# Create workspace-specific Vite cache directory. Maybe we can do without this.
+VITE_CACHE_DIR="$WORKSPACE_DATA_DIR/vite-cache"
+mkdir -p "$VITE_CACHE_DIR"
+
+# Maybe we should export these instead
+ARRAY_WORKSPACE_NAME="$ARRAY_WORKSPACE_NAME" \
+ARRAY_WORKSPACE_PATH="$ARRAY_WORKSPACE_PATH" \
+ARRAY_ROOT_PATH="$ARRAY_ROOT_PATH" \
+ARRAY_APP_IDENTIFIER="$ARRAY_APP_IDENTIFIER" \
+ARRAY_WORKSPACE_DATA_DIR="$WORKSPACE_DATA_DIR" \
+VITE_DEV_SERVER_PORT="$ARRAY_WORKSPACE_PORTS_START" \
+VITE_CACHE_DIR="$VITE_CACHE_DIR" \
+pnpm dev

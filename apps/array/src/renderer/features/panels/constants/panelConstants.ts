@@ -14,6 +14,7 @@ export const UI_SIZES = {
 export const DEFAULT_PANEL_IDS = {
   ROOT: "root",
   MAIN_PANEL: "main-panel",
+  TERMINAL_PANEL: "terminal-panel",
   RIGHT_GROUP: "right-group",
   TOP_RIGHT: "top-right",
   BOTTOM_RIGHT: "bottom-right",

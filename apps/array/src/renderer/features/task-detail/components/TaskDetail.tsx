@@ -2,7 +2,7 @@ import { PanelLayout } from "@features/panels";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
+import { WorkspaceControls } from "@features/workspace/components/WorkspaceControls";
 import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
@@ -75,7 +75,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
               {branchName}
             </Code>
           )}
-          <StartWorkspaceButton taskId={taskId} />
+          <WorkspaceControls taskId={taskId} />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
           <ExternalAppsOpener
