@@ -1,5 +1,5 @@
 import { Bug, Info, Warning, XCircle } from "@phosphor-icons/react";
-import { Badge, Box, Flex, Text } from "@radix-ui/themes";
+import { Badge, Flex, Text } from "@radix-ui/themes";
 
 interface ConsoleMessageProps {
   level: "info" | "debug" | "warn" | "error";

@@ -15,7 +15,7 @@ interface ToolData {
 
 interface ParsedMessage {
   id: string;
-  type: "user" | "agent" | "tool";
+  type: "user" | "agent" | "tool" | "console";
   content: string;
   toolData?: ToolData;
 }

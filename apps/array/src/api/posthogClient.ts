@@ -1,3 +1,4 @@
+import type { StoredLogEntry } from "@features/sessions/utils/parseSessionLogs";
 import type { AgentEvent } from "@posthog/agent";
 import { logger } from "@renderer/lib/logger";
 import type { Task, TaskRun } from "@shared/types";
@@ -236,7 +237,7 @@ export class PostHogAPIClient {
   async appendTaskRunLog(
     taskId: string,
     runId: string,
-    entries: AgentEvent[],
+    entries: StoredLogEntry[],
   ): Promise<void> {
     const teamId = await this.getTeamId();
     const url = `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/append_log/`;
@@ -246,7 +247,6 @@ export class PostHogAPIClient {
       path: url,
       overrides: {
         body: JSON.stringify({ entries }),
-        headers: { "Content-Type": "application/json" },
       },
     });
     if (!response.ok) {

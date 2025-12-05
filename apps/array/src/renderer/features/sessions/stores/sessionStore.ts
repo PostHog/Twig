@@ -41,7 +41,9 @@ function convertRawEntriesToEvents(
   }
 
   for (const entry of rawEntries) {
-    const ts = entry.timestamp ? new Date(entry.timestamp).getTime() : Date.now();
+    const ts = entry.timestamp
+      ? new Date(entry.timestamp).getTime()
+      : Date.now();
 
     events.push({
       type: "acp_message",
@@ -92,6 +94,7 @@ export interface AgentSession {
   isPromptPending: boolean;
   isCloud: boolean;
   logUrl?: string;
+  processedLineCount?: number;
 }
 
 interface ConnectParams {
@@ -216,6 +219,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               isPromptPending: false,
               isCloud: true,
               logUrl: latestRunLogUrl,
+              processedLineCount: rawEntries.length,
             },
           },
         }));
@@ -393,7 +397,62 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       throw new Error("No active session for task");
     }
 
-    // Set pending state
+    const blocks: ContentBlock[] =
+      typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
+
+    if (session.isCloud) {
+      // Cloud: send via S3 log - cloud runner polls and picks up
+      // No pending state needed since we just append to log
+      const authState = useAuthStore.getState();
+      const { client } = authState;
+      if (!client) {
+        throw new Error("API client not available");
+      }
+
+      const notification: StoredLogEntry = {
+        type: "notification" as const,
+        timestamp: new Date().toISOString(),
+        direction: "client" as const,
+        notification: {
+          method: "session/update" as const,
+          params: {
+            update: {
+              sessionUpdate: "user_message_chunk",
+              content: blocks[0],
+            },
+          },
+        },
+      };
+
+      await client.appendTaskRunLog(taskId, session.taskRunId, [notification]);
+      log.info("Sent cloud message via S3", {
+        taskId,
+        runId: session.taskRunId,
+      });
+
+      // Optimistically add user message to local state immediately
+      const ts = Date.now();
+      const userEvent: SessionEvent = {
+        type: "session_update",
+        ts,
+        notification: notification.notification?.params as SessionNotification,
+      };
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [session.taskRunId]: {
+            ...state.sessions[session.taskRunId],
+            events: [...state.sessions[session.taskRunId].events, userEvent],
+            processedLineCount:
+              (state.sessions[session.taskRunId].processedLineCount ?? 0) + 1,
+          },
+        },
+      }));
+
+      return { stopReason: "pending" };
+    }
+
+    // Local: set pending state and send via IPC
     set((state) => ({
       sessions: {
         ...state.sessions,
@@ -405,39 +464,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }));
 
     try {
-      // Convert text to ContentBlock array if needed
-      const blocks: ContentBlock[] =
-        typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
-
-      if (session.isCloud) {
-        // Cloud: send via S3 log - cloud runner polls and picks up
-        const authState = useAuthStore.getState();
-        const { client } = authState;
-        if (!client) {
-          throw new Error("API client not available");
-        }
-
-        const notification = {
-          type: "notification" as const,
-          timestamp: new Date().toISOString(),
-          notification: {
-            method: "sessionUpdate",
-            params: {
-              sessionUpdate: "user_message",
-              content: blocks,
-            },
-          },
-        };
-
-        await client.appendTaskRunLog(taskId, session.taskRunId, [notification]);
-        log.info("Sent cloud message via S3", { taskId, runId: session.taskRunId });
-        return { stopReason: "pending" };
-      }
-
-      // Local: send via IPC directly to running agent
       return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
     } finally {
-      // Clear pending state
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -520,10 +548,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const text = await response.text();
         const lines = text.trim().split("\n").filter(Boolean);
 
-        // Only process new entries
-        const currentEventCount = session.events.length;
-        if (lines.length > currentEventCount) {
-          const newLines = lines.slice(currentEventCount);
+        // Only process new entries (track by line count, not event count)
+        const processedCount = session.processedLineCount ?? 0;
+        if (lines.length > processedCount) {
+          const newLines = lines.slice(processedCount);
           for (const line of newLines) {
             try {
               const entry = JSON.parse(line);
@@ -531,18 +559,44 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ? new Date(entry.timestamp).getTime()
                 : Date.now();
 
-              const event: SessionEvent = {
+              // Create acp_message for raw log entry
+              const acpEvent: SessionEvent = {
                 type: "acp_message",
                 direction: entry.direction ?? "agent",
                 ts,
                 message: entry.notification,
               };
+              get()._handleEvent(taskRunId, acpEvent);
 
-              get()._handleEvent(taskRunId, event);
+              // Also create session_update event for session/update notifications
+              if (
+                entry.type === "notification" &&
+                entry.notification?.method === "session/update" &&
+                entry.notification?.params
+              ) {
+                const sessionUpdateEvent: SessionEvent = {
+                  type: "session_update",
+                  ts,
+                  notification: entry.notification
+                    .params as SessionNotification,
+                };
+                get()._handleEvent(taskRunId, sessionUpdateEvent);
+              }
             } catch {
               // Skip invalid JSON
             }
           }
+
+          // Update processed line count
+          set((state) => ({
+            sessions: {
+              ...state.sessions,
+              [taskRunId]: {
+                ...state.sessions[taskRunId],
+                processedLineCount: lines.length,
+              },
+            },
+          }));
         }
       } catch (err) {
         log.warn("Cloud polling error", { error: err });

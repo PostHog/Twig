@@ -106,6 +106,9 @@ function parseSessionNotification(
   notification: SessionNotification,
 ): ParseResult {
   const { update } = notification;
+  if (!update?.sessionUpdate) {
+    return null;
+  }
 
   switch (update.sessionUpdate) {
     case "user_message_chunk":
@@ -225,7 +228,7 @@ class MessageBuilder {
     if (toolData.kind) existing.toolData.kind = toolData.kind;
   }
 
-  addConsole(consoleData: ConsoleData, ts: number, eventIndex: number): void {
+  addConsole(consoleData: ConsoleData, _ts: number, eventIndex: number): void {
     this.flushAgentText();
     this.messages.push({
       id: `console-${eventIndex}`,
