@@ -101,9 +101,6 @@ function copyClaudeExecutable(): Plugin {
           existsSync(join(candidate.path, "cli.js")) &&
           existsSync(join(candidate.path, "yoga.wasm"))
         ) {
-          // console.log(
-          //   `[copy-claude-executable] Found pre-built artifacts at ${candidate.path}`,
-          // );
           const files = ["cli.js", "package.json", "yoga.wasm"];
           for (const file of files) {
             copyFileSync(join(candidate.path, file), join(destDir, file));
@@ -111,11 +108,6 @@ function copyClaudeExecutable(): Plugin {
           return;
         }
       }
-
-      // Fallback: Assemble from individual source packages (Development Workspace)
-      // console.log(
-      //   "[copy-claude-executable] Pre-built artifacts not found. Attempting to assemble from workspace sources...",
-      // );
 
       const rootNodeModules = join(__dirname, "../../node_modules");
       const sdkDir = join(rootNodeModules, "@anthropic-ai/claude-agent-sdk");
