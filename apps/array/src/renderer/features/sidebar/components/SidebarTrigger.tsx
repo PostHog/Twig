@@ -4,14 +4,13 @@ import type React from "react";
 import { useSidebarStore } from "../stores/sidebarStore";
 
 export const SidebarTrigger: React.FC = () => {
-  const open = useSidebarStore((state) => state.open);
-  const setOpen = useSidebarStore((state) => state.setOpen);
+  const toggle = useSidebarStore((state) => state.toggle);
 
   return (
     <IconButton
       variant="ghost"
       color="gray"
-      onClick={() => setOpen(!open)}
+      onClick={toggle}
       className="no-drag"
     >
       <SidebarSimpleIcon size={16} />

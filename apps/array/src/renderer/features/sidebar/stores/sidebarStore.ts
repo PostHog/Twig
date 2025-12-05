@@ -11,6 +11,7 @@ interface SidebarStoreState {
 
 interface SidebarStoreActions {
   setOpen: (open: boolean) => void;
+  toggle: () => void;
   setWidth: (width: number) => void;
   setIsResizing: (isResizing: boolean) => void;
   toggleSection: (sectionId: string) => void;
@@ -30,6 +31,7 @@ export const useSidebarStore = create<SidebarStore>()(
       collapsedSections: new Set<string>(),
       folderOrder: [],
       setOpen: (open) => set({ open }),
+      toggle: () => set((state) => ({ open: !state.open })),
       setWidth: (width) => set({ width }),
       setIsResizing: (isResizing) => set({ isResizing }),
       toggleSection: (sectionId) =>

@@ -6,11 +6,9 @@ import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadg
 import { Box, Flex } from "@radix-ui/themes";
 import { useHeaderStore } from "@stores/headerStore";
 import { useNavigationStore } from "@stores/navigationStore";
-import { useEffect } from "react";
 
 const HEADER_HEIGHT = 40;
 const COLLAPSED_WIDTH = 110;
-const MIN_WIDTH = 140;
 
 export function HeaderRow() {
   const content = useHeaderStore((state) => state.content);
@@ -18,14 +16,12 @@ export function HeaderRow() {
   const sidebarOpen = useSidebarStore((state) => state.open);
   const sidebarWidth = useSidebarStore((state) => state.width);
   const isResizing = useSidebarStore((state) => state.isResizing);
-  const setWidth = useSidebarStore((state) => state.setWidth);
   const setIsResizing = useSidebarStore((state) => state.setIsResizing);
   const rightSidebarOpen = useRightSidebarStore((state) => state.open);
   const rightSidebarWidth = useRightSidebarStore((state) => state.width);
   const rightSidebarIsResizing = useRightSidebarStore(
     (state) => state.isResizing,
   );
-  const setRightSidebarWidth = useRightSidebarStore((state) => state.setWidth);
   const setRightSidebarIsResizing = useRightSidebarStore(
     (state) => state.setIsResizing,
   );
@@ -45,63 +41,6 @@ export function HeaderRow() {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
-
-  // Left sidebar resize handler
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-
-      const maxWidth = window.innerWidth * 0.5;
-      const newWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, e.clientX));
-      setWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      if (isResizing) {
-        setIsResizing(false);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [setWidth, isResizing, setIsResizing]);
-
-  // Right sidebar resize handler
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!rightSidebarIsResizing) return;
-
-      const maxWidth = window.innerWidth * 0.5;
-      const newWidth = Math.max(
-        MIN_WIDTH,
-        Math.min(maxWidth, window.innerWidth - e.clientX),
-      );
-      setRightSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      if (rightSidebarIsResizing) {
-        setRightSidebarIsResizing(false);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [setRightSidebarWidth, rightSidebarIsResizing, setRightSidebarIsResizing]);
 
   return (
     <Flex
