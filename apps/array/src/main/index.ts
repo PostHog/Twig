@@ -11,14 +11,21 @@ import {
   shell,
 } from "electron";
 
-// DEBUG: Log all ARRAY_* env vars at startup
-console.log("[DEBUG] Main process env vars:");
-for (const [key, value] of Object.entries(process.env)) {
-  if (key.startsWith("ARRAY_")) {
-    console.log(`  ${key}=${value}`);
-  }
+// IMPORTANT: Set app paths BEFORE importing any services that use app.getPath()
+// This ensures stores and other services use the workspace-specific directory
+const workspaceName = process.env.ARRAY_WORKSPACE_NAME;
+const appName = workspaceName ? `Array (${workspaceName})` : "Array";
+app.setName(appName);
+
+if (process.env.ARRAY_WORKSPACE_DATA_DIR) {
+  app.setPath("userData", process.env.ARRAY_WORKSPACE_DATA_DIR);
 }
 
+// Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
+// instead of ::1. This matches how the renderer already reaches the PostHog API.
+dns.setDefaultResultOrder("ipv4first");
+
+// Now safe to import services that depend on app.getPath("userData")
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import {
@@ -61,20 +68,6 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
 const taskControllers = new Map<string, TaskController>();
-
-// Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
-// instead of ::1. This matches how the renderer already reaches the PostHog API.
-dns.setDefaultResultOrder("ipv4first");
-
-// Set app name based on workspace (for unique userData paths per workspace)
-const workspaceName = process.env.ARRAY_WORKSPACE_NAME;
-const appName = workspaceName ? `Array (${workspaceName})` : "Array";
-app.setName(appName);
-
-// Use workspace-specific data directory if provided
-if (process.env.ARRAY_WORKSPACE_DATA_DIR) {
-  app.setPath("userData", process.env.ARRAY_WORKSPACE_DATA_DIR);
-}
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
