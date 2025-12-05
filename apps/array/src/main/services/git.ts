@@ -16,7 +16,11 @@ const fsPromises = fs.promises;
 const countFileLines = async (filePath: string): Promise<number> => {
   try {
     const content = await fsPromises.readFile(filePath, "utf-8");
-    return content.split("\n").length;
+    if (!content) return 0;
+
+    // Match git line counting: do not count trailing newline as extra line
+    const lines = content.split("\n");
+    return lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
   } catch {
     return 0;
   }
