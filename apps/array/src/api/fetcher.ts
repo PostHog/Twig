@@ -10,6 +10,7 @@ export const buildApiFetcher: (config: {
   ): Promise<Response> => {
     const headers = new Headers();
     headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Content-Type", "application/json");
 
     if (input.urlSearchParams) {
       input.url.search = input.urlSearchParams.toString();
@@ -20,10 +21,6 @@ export const buildApiFetcher: (config: {
     )
       ? JSON.stringify(input.parameters?.body)
       : undefined;
-
-    if (body) {
-      headers.set("Content-Type", "application/json");
-    }
 
     if (input.parameters?.header) {
       for (const [key, value] of Object.entries(input.parameters.header)) {

@@ -4,11 +4,70 @@ import type {
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { logger } from "@renderer/lib/logger";
+import type { Task } from "@shared/types";
 import { create } from "zustand";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { fetchSessionLogs } from "../utils/parseSessionLogs";
+import {
+  fetchSessionLogs,
+  type StoredLogEntry,
+} from "../utils/parseSessionLogs";
 
 const log = logger.scope("session-store");
+
+const CLOUD_POLLING_INTERVAL_MS = 500;
+
+function convertRawEntriesToEvents(
+  rawEntries: StoredLogEntry[],
+  notifications: SessionNotification[],
+  taskDescription?: string,
+): SessionEvent[] {
+  const events: SessionEvent[] = [];
+  let notificationIdx = 0;
+
+  if (taskDescription) {
+    const startTs = rawEntries[0]?.timestamp
+      ? new Date(rawEntries[0].timestamp).getTime() - 1
+      : Date.now();
+    events.push({
+      type: "session_update",
+      ts: startTs,
+      notification: {
+        update: {
+          sessionUpdate: "user_message_chunk",
+          content: { type: "text", text: taskDescription },
+        },
+      } as SessionNotification,
+    });
+  }
+
+  for (const entry of rawEntries) {
+    const ts = entry.timestamp
+      ? new Date(entry.timestamp).getTime()
+      : Date.now();
+
+    events.push({
+      type: "acp_message",
+      direction: entry.direction ?? "agent",
+      ts,
+      message: entry.notification,
+    });
+
+    if (
+      entry.type === "notification" &&
+      entry.notification?.method === "session/update" &&
+      notificationIdx < notifications.length
+    ) {
+      events.push({
+        type: "session_update",
+        ts,
+        notification: notifications[notificationIdx],
+      });
+      notificationIdx++;
+    }
+  }
+
+  return events;
+}
 
 export interface AcpMessage {
   type: "acp_message";
@@ -33,19 +92,21 @@ export interface AgentSession {
   startedAt: number;
   status: "connecting" | "connected" | "disconnected" | "error";
   isPromptPending: boolean;
+  isCloud: boolean;
+  logUrl?: string;
+  processedLineCount?: number;
 }
 
 interface ConnectParams {
-  taskId: string;
+  task: Task;
   repoPath: string;
-  latestRunId?: string;
-  latestRunLogUrl?: string;
   initialPrompt?: ContentBlock[];
 }
 
 // Track subscriptions outside store (not serializable)
 const subscriptions = new Map<string, () => void>();
 const connectAttempts = new Set<string>();
+const cloudPollers = new Map<string, NodeJS.Timeout>();
 
 interface SessionStore {
   sessions: Record<string, AgentSession>;
@@ -75,6 +136,10 @@ interface SessionStore {
   // Internal: handle incoming event
   _handleEvent: (taskRunId: string, event: SessionEvent) => void;
 
+  // Internal: start/stop cloud S3 polling
+  _startCloudPolling: (taskRunId: string, logUrl: string) => void;
+  _stopCloudPolling: (taskRunId: string) => void;
+
   // Selectors
   getSessionForTask: (taskId: string) => AgentSession | undefined;
 }
@@ -82,20 +147,18 @@ interface SessionStore {
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: {},
 
-  connectToTask: async ({
-    taskId,
-    repoPath,
-    latestRunId,
-    latestRunLogUrl,
-    initialPrompt,
-  }) => {
-    // Prevent duplicate connection attempts
+  connectToTask: async ({ task, repoPath, initialPrompt }) => {
+    const taskId = task.id;
+    const latestRunId = task.latest_run?.id;
+    const latestRunLogUrl = task.latest_run?.log_url;
+    const isCloud = task.latest_run?.environment === "cloud";
+    const taskDescription = task.description;
+
     if (connectAttempts.has(taskId)) {
       log.info("Connection already in progress", { taskId });
       return;
     }
 
-    // Already have a session for this task
     const existing = get().getSessionForTask(taskId);
     if (existing && existing.status === "connected") {
       log.info("Already connected to task", { taskId });
@@ -117,16 +180,63 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return;
       }
 
-      // Decide: reconnect to existing run or start new
+      if (isCloud) {
+        if (!latestRunId || !latestRunLogUrl) {
+          log.info("Cloud task has no run yet, nothing to display", { taskId });
+          return;
+        }
+
+        const channel = `agent-event:${latestRunId}`;
+        log.info("Fetching cloud session history from S3", {
+          taskId,
+          latestRunId,
+          logUrl: latestRunLogUrl,
+        });
+
+        const { notifications, rawEntries } =
+          await fetchSessionLogs(latestRunLogUrl);
+        log.info("Loaded cloud historical logs", {
+          notifications: notifications.length,
+          rawEntries: rawEntries.length,
+        });
+
+        const historicalEvents = convertRawEntriesToEvents(
+          rawEntries,
+          notifications,
+          taskDescription,
+        );
+
+        set((state) => ({
+          sessions: {
+            ...state.sessions,
+            [latestRunId]: {
+              taskRunId: latestRunId,
+              taskId,
+              channel,
+              events: historicalEvents,
+              startedAt: Date.now(),
+              status: "connected",
+              isPromptPending: false,
+              isCloud: true,
+              logUrl: latestRunLogUrl,
+              processedLineCount: rawEntries.length,
+            },
+          },
+        }));
+
+        get()._startCloudPolling(latestRunId, latestRunLogUrl);
+        log.info("Connected to cloud session", { taskId, latestRunId });
+        return;
+      }
+
       if (latestRunId && latestRunLogUrl) {
         const channel = `agent-event:${latestRunId}`;
-
-        // 1. Fetch historical events from S3 BEFORE connecting
         log.info("Fetching session history from S3", {
           taskId,
           latestRunId,
           logUrl: latestRunLogUrl,
         });
+
         const { notifications, rawEntries, sdkSessionId } =
           await fetchSessionLogs(latestRunLogUrl);
         log.info("Loaded historical logs", {
@@ -135,39 +245,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sdkSessionId,
         });
 
-        // 2. Convert to SessionEvent format - interleave raw and parsed by order
-        const historicalEvents: SessionEvent[] = [];
-        let notificationIdx = 0;
+        const historicalEvents = convertRawEntriesToEvents(
+          rawEntries,
+          notifications,
+        );
 
-        for (const entry of rawEntries) {
-          const ts = entry.timestamp
-            ? new Date(entry.timestamp).getTime()
-            : Date.now();
-
-          // Add raw entry
-          historicalEvents.push({
-            type: "acp_message",
-            direction: entry.direction ?? "agent",
-            ts,
-            message: entry.notification,
-          });
-
-          // If this raw entry is a session/update, also add the parsed notification
-          if (
-            entry.type === "notification" &&
-            entry.notification?.method === "session/update" &&
-            notificationIdx < notifications.length
-          ) {
-            historicalEvents.push({
-              type: "session_update",
-              ts,
-              notification: notifications[notificationIdx],
-            });
-            notificationIdx++;
-          }
-        }
-
-        // 3. Set up session with pre-populated history
         set((state) => ({
           sessions: {
             ...state.sessions,
@@ -179,6 +261,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               startedAt: Date.now(),
               status: "connecting",
               isPromptPending: false,
+              isCloud: false,
+              logUrl: latestRunLogUrl,
             },
           },
         }));
@@ -221,7 +305,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       } else {
         log.info("Starting new session", { taskId });
 
-        // Create task run via API
         const { client } = authState;
         if (!client) {
           log.error("API client not available");
@@ -243,7 +326,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           projectId,
         });
 
-        // Set up session
         set((state) => ({
           sessions: {
             ...state.sessions,
@@ -255,6 +337,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               startedAt: Date.now(),
               status: "connected",
               isPromptPending: false,
+              isCloud: false,
             },
           },
         }));
@@ -281,17 +364,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const session = get().getSessionForTask(taskId);
     if (!session) return;
 
-    try {
-      await window.electronAPI.agentCancel(session.taskRunId);
-    } catch (error) {
-      log.error("Failed to cancel session", error);
-    }
+    if (session.isCloud) {
+      // Cloud: stop S3 polling
+      get()._stopCloudPolling(session.taskRunId);
+    } else {
+      // Local: cancel the local agent session
+      try {
+        await window.electronAPI.agentCancel(session.taskRunId);
+      } catch (error) {
+        log.error("Failed to cancel session", error);
+      }
 
-    // Cleanup subscription
-    const cleanup = subscriptions.get(session.taskRunId);
-    if (cleanup) {
-      cleanup();
-      subscriptions.delete(session.taskRunId);
+      // Cleanup IPC subscription
+      const cleanup = subscriptions.get(session.taskRunId);
+      if (cleanup) {
+        cleanup();
+        subscriptions.delete(session.taskRunId);
+      }
     }
 
     set((state) => {
@@ -308,7 +397,62 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       throw new Error("No active session for task");
     }
 
-    // Set pending state
+    const blocks: ContentBlock[] =
+      typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
+
+    if (session.isCloud) {
+      // Cloud: send via S3 log - cloud runner polls and picks up
+      // No pending state needed since we just append to log
+      const authState = useAuthStore.getState();
+      const { client } = authState;
+      if (!client) {
+        throw new Error("API client not available");
+      }
+
+      const notification: StoredLogEntry = {
+        type: "notification" as const,
+        timestamp: new Date().toISOString(),
+        direction: "client" as const,
+        notification: {
+          method: "session/update" as const,
+          params: {
+            update: {
+              sessionUpdate: "user_message_chunk",
+              content: blocks[0],
+            },
+          },
+        },
+      };
+
+      await client.appendTaskRunLog(taskId, session.taskRunId, [notification]);
+      log.info("Sent cloud message via S3", {
+        taskId,
+        runId: session.taskRunId,
+      });
+
+      // Optimistically add user message to local state immediately
+      const ts = Date.now();
+      const userEvent: SessionEvent = {
+        type: "session_update",
+        ts,
+        notification: notification.notification?.params as SessionNotification,
+      };
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [session.taskRunId]: {
+            ...state.sessions[session.taskRunId],
+            events: [...state.sessions[session.taskRunId].events, userEvent],
+            processedLineCount:
+              (state.sessions[session.taskRunId].processedLineCount ?? 0) + 1,
+          },
+        },
+      }));
+
+      return { stopReason: "pending" };
+    }
+
+    // Local: set pending state and send via IPC
     set((state) => ({
       sessions: {
         ...state.sessions,
@@ -320,12 +464,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }));
 
     try {
-      // Convert text to ContentBlock array if needed
-      const blocks: ContentBlock[] =
-        typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
       return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
     } finally {
-      // Clear pending state
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -380,6 +520,102 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         },
       };
     });
+  },
+
+  _startCloudPolling: (taskRunId, logUrl) => {
+    if (cloudPollers.has(taskRunId)) return;
+
+    log.info("Starting cloud S3 polling", { taskRunId });
+
+    const pollS3 = async () => {
+      try {
+        const session = get().sessions[taskRunId];
+        if (!session) {
+          get()._stopCloudPolling(taskRunId);
+          return;
+        }
+
+        const response = await fetch(logUrl);
+        if (!response.ok) {
+          if (response.status === 404) {
+            // No logs yet - this is normal for a new run
+            return;
+          }
+          log.warn("Failed to fetch S3 logs", { status: response.status });
+          return;
+        }
+
+        const text = await response.text();
+        const lines = text.trim().split("\n").filter(Boolean);
+
+        // Only process new entries (track by line count, not event count)
+        const processedCount = session.processedLineCount ?? 0;
+        if (lines.length > processedCount) {
+          const newLines = lines.slice(processedCount);
+          for (const line of newLines) {
+            try {
+              const entry = JSON.parse(line);
+              const ts = entry.timestamp
+                ? new Date(entry.timestamp).getTime()
+                : Date.now();
+
+              // Create acp_message for raw log entry
+              const acpEvent: SessionEvent = {
+                type: "acp_message",
+                direction: entry.direction ?? "agent",
+                ts,
+                message: entry.notification,
+              };
+              get()._handleEvent(taskRunId, acpEvent);
+
+              // Also create session_update event for session/update notifications
+              if (
+                entry.type === "notification" &&
+                entry.notification?.method === "session/update" &&
+                entry.notification?.params
+              ) {
+                const sessionUpdateEvent: SessionEvent = {
+                  type: "session_update",
+                  ts,
+                  notification: entry.notification
+                    .params as SessionNotification,
+                };
+                get()._handleEvent(taskRunId, sessionUpdateEvent);
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+
+          // Update processed line count
+          set((state) => ({
+            sessions: {
+              ...state.sessions,
+              [taskRunId]: {
+                ...state.sessions[taskRunId],
+                processedLineCount: lines.length,
+              },
+            },
+          }));
+        }
+      } catch (err) {
+        log.warn("Cloud polling error", { error: err });
+      }
+    };
+
+    // Poll immediately, then every 2 seconds
+    pollS3();
+    const interval = setInterval(pollS3, CLOUD_POLLING_INTERVAL_MS);
+    cloudPollers.set(taskRunId, interval);
+  },
+
+  _stopCloudPolling: (taskRunId) => {
+    const interval = cloudPollers.get(taskRunId);
+    if (interval) {
+      clearInterval(interval);
+      cloudPollers.delete(taskRunId);
+      log.info("Stopped cloud S3 polling", { taskRunId });
+    }
   },
 
   getSessionForTask: (taskId) => {

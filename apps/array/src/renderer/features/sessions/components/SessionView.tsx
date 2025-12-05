@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { SessionEvent } from "../stores/sessionStore";
 import { useSessionViewStore } from "../stores/sessionViewStore";
 import { AgentMessage } from "./AgentMessage";
+import { ConsoleMessage } from "./ConsoleMessage";
 import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
 import { MessageEditor } from "./MessageEditor";
 import { ToolCallBlock } from "./ToolCallBlock";
@@ -79,11 +80,18 @@ interface ToolData {
   result?: unknown;
 }
 
+interface ConsoleData {
+  level: "info" | "debug" | "warn" | "error";
+  message: string;
+  timestamp?: string;
+}
+
 interface ParsedMessage {
   id: string;
-  type: "user" | "agent" | "tool";
+  type: "user" | "agent" | "tool" | "console";
   content: string;
   toolData?: ToolData;
+  consoleData?: ConsoleData;
   eventIndex?: number;
 }
 
@@ -98,6 +106,9 @@ function parseSessionNotification(
   notification: SessionNotification,
 ): ParseResult {
   const { update } = notification;
+  if (!update?.sessionUpdate) {
+    return null;
+  }
 
   switch (update.sessionUpdate) {
     case "user_message_chunk":
@@ -161,86 +172,132 @@ function mapToolStatus(
   }
 }
 
-function processEvents(events: SessionEvent[]): ParsedMessage[] {
-  const messages: ParsedMessage[] = [];
-  let currentAgentText = "";
-  let agentMessageKey = 0;
-  let agentStartEventIndex = 0;
-  const toolCalls = new Map<
-    string,
-    { toolData: ParsedMessage["toolData"]; eventIndex: number }
-  >();
+class MessageBuilder {
+  private messages: ParsedMessage[] = [];
+  private pendingAgentText = "";
+  private agentStartIndex = 0;
+  private agentMessageCount = 0;
+  private toolMessages = new Map<string, ParsedMessage>();
 
-  const flushAgentMessage = (_eventIndex: number) => {
-    if (currentAgentText) {
-      messages.push({
-        id: `agent-${agentMessageKey}`,
-        type: "agent",
-        content: currentAgentText,
-        eventIndex: agentStartEventIndex,
-      });
-      currentAgentText = "";
-      agentMessageKey++;
+  flushAgentText(): void {
+    if (!this.pendingAgentText) return;
+    this.messages.push({
+      id: `agent-${this.agentMessageCount++}`,
+      type: "agent",
+      content: this.pendingAgentText,
+      eventIndex: this.agentStartIndex,
+    });
+    this.pendingAgentText = "";
+  }
+
+  addUser(content: string, ts: number, eventIndex: number): void {
+    this.flushAgentText();
+    this.messages.push({
+      id: `user-${ts}`,
+      type: "user",
+      content,
+      eventIndex,
+    });
+  }
+
+  addAgentChunk(content: string, eventIndex: number): void {
+    if (!this.pendingAgentText) {
+      this.agentStartIndex = eventIndex;
     }
+    this.pendingAgentText += content;
+  }
+
+  addTool(toolData: ToolData, eventIndex: number): void {
+    this.flushAgentText();
+    const msg: ParsedMessage = {
+      id: `tool-${toolData.toolCallId}`,
+      type: "tool",
+      content: "",
+      toolData,
+      eventIndex,
+    };
+    this.toolMessages.set(toolData.toolCallId, msg);
+    this.messages.push(msg);
+  }
+
+  updateTool(toolData: ToolData): void {
+    const existing = this.toolMessages.get(toolData.toolCallId);
+    if (!existing?.toolData) return;
+    existing.toolData.status = toolData.status;
+    existing.toolData.result = toolData.result;
+    if (toolData.kind) existing.toolData.kind = toolData.kind;
+  }
+
+  addConsole(consoleData: ConsoleData, _ts: number, eventIndex: number): void {
+    this.flushAgentText();
+    this.messages.push({
+      id: `console-${eventIndex}`,
+      type: "console",
+      content: consoleData.message,
+      consoleData,
+      eventIndex,
+    });
+  }
+
+  build(): ParsedMessage[] {
+    this.flushAgentText();
+    return this.messages;
+  }
+}
+
+function tryParseConsoleMessage(
+  event: SessionEvent,
+): { level: ConsoleData["level"]; message: string } | null {
+  if (event.type !== "acp_message") return null;
+  const msg = event.message as {
+    method?: string;
+    params?: { level?: string; message?: string };
   };
+  if (msg?.method !== "_posthog/console" || !msg.params?.message) return null;
+  return {
+    level: (msg.params.level ?? "info") as ConsoleData["level"],
+    message: msg.params.message,
+  };
+}
+
+function processEvents(events: SessionEvent[]): ParsedMessage[] {
+  const builder = new MessageBuilder();
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i];
-    if (event.type === "session_update") {
-      const parsed = parseSessionNotification(event.notification);
-      if (!parsed) continue;
 
-      switch (parsed.type) {
-        case "user": {
-          flushAgentMessage(i);
-          messages.push({
-            id: `user-${event.ts}`,
-            type: "user",
-            content: parsed.content,
-            eventIndex: i,
-          });
-          break;
-        }
-        case "agent": {
-          if (!currentAgentText) {
-            agentStartEventIndex = i;
-          }
-          currentAgentText += parsed.content;
-          break;
-        }
-        case "tool": {
-          flushAgentMessage(i);
-          toolCalls.set(parsed.toolData.toolCallId, {
-            toolData: parsed.toolData,
-            eventIndex: i,
-          });
-          messages.push({
-            id: `tool-${parsed.toolData.toolCallId}`,
-            type: "tool",
-            content: "",
-            toolData: parsed.toolData,
-            eventIndex: i,
-          });
-          break;
-        }
-        case "tool_update": {
-          const existing = toolCalls.get(parsed.toolData.toolCallId);
-          if (existing) {
-            existing.toolData!.status = parsed.toolData.status;
-            existing.toolData!.result = parsed.toolData.result;
-            if (parsed.toolData.kind) {
-              existing.toolData!.kind = parsed.toolData.kind;
-            }
-          }
-          break;
-        }
-      }
+    const consoleMsg = tryParseConsoleMessage(event);
+    if (consoleMsg) {
+      builder.addConsole(
+        { ...consoleMsg, timestamp: new Date(event.ts).toISOString() },
+        event.ts,
+        i,
+      );
+      continue;
+    }
+
+    if (event.type !== "session_update") continue;
+
+    const parsed = parseSessionNotification(event.notification);
+    if (!parsed) continue;
+
+    switch (parsed.type) {
+      case "user":
+        builder.addUser(parsed.content, event.ts, i);
+        break;
+      case "agent":
+        builder.addAgentChunk(parsed.content, i);
+        break;
+      case "tool":
+        builder.addTool(parsed.toolData, i);
+        break;
+      case "tool_update":
+        builder.updateTool(parsed.toolData);
+        break;
     }
   }
 
-  flushAgentMessage(events.length - 1);
-
-  return messages;
+  return builder.build();
 }
 
 interface ConversationTurn {
@@ -374,6 +431,15 @@ export function SessionView({
     switch (message.type) {
       case "agent":
         return <AgentMessage key={message.id} content={message.content} />;
+      case "console":
+        return message.consoleData ? (
+          <ConsoleMessage
+            key={message.id}
+            level={message.consoleData.level}
+            message={message.consoleData.message}
+            timestamp={message.consoleData.timestamp}
+          />
+        ) : null;
       case "tool":
         return message.toolData ? (
           <ToolCallBlock

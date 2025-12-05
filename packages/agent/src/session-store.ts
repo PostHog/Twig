@@ -90,7 +90,7 @@ export class SessionStore {
   }
 
   /** Load raw JSON-RPC messages from S3 */
-  async load(logUrl: string): Promise<unknown[]> {
+  async load(logUrl: string): Promise<StoredNotification[]> {
     const response = await fetch(logUrl);
 
     if (!response.ok) {
@@ -105,12 +105,27 @@ export class SessionStore {
       .split("\n")
       .map((line) => {
         try {
-          return JSON.parse(line);
+          return JSON.parse(line) as StoredNotification;
         } catch {
           return null;
         }
       })
-      .filter((entry): entry is unknown => entry !== null);
+      .filter((entry): entry is StoredNotification => entry !== null);
+  }
+
+  /**
+   * Poll S3 for new entries since last check.
+   * Used for interrupt handling in cloud mode.
+   */
+  async pollForNewEntries(
+    sessionId: string,
+    lastKnownCount: number,
+  ): Promise<StoredNotification[]> {
+    const config = this.configs.get(sessionId);
+    if (!config?.logUrl) return [];
+
+    const entries = await this.load(config.logUrl);
+    return entries.slice(lastKnownCount);
   }
 
   /** Force flush pending entries */
