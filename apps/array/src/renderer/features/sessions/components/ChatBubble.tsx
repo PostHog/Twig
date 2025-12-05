@@ -11,8 +11,11 @@ export function ChatBubble({ variant, children }: ChatBubbleProps) {
 
   return (
     <Box
-      className={`mr-auto max-w-[95%] py-1 xl:max-w-[60%] [&>*:last-child]:mb-0 ${isUser ? "mt-4 rounded-xl rounded-bl-sm bg-gray-2 px-3 py-2" : ""}
-      `}
+      className={`max-w-[95%] xl:max-w-[60%] [&>*:last-child]:mb-0 ${
+        isUser
+          ? "ml-auto rounded-xl rounded-br-sm bg-accent-4 px-3 py-2"
+          : "mr-auto"
+      }`}
     >
       {children}
     </Box>
