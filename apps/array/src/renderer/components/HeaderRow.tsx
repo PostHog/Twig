@@ -13,10 +13,12 @@ const COLLAPSED_WIDTH = 110;
 export function HeaderRow() {
   const content = useHeaderStore((state) => state.content);
   const view = useNavigationStore((state) => state.view);
+
   const sidebarOpen = useSidebarStore((state) => state.open);
   const sidebarWidth = useSidebarStore((state) => state.width);
   const isResizing = useSidebarStore((state) => state.isResizing);
   const setIsResizing = useSidebarStore((state) => state.setIsResizing);
+
   const rightSidebarOpen = useRightSidebarStore((state) => state.open);
   const rightSidebarWidth = useRightSidebarStore((state) => state.width);
   const rightSidebarIsResizing = useRightSidebarStore(
@@ -28,14 +30,14 @@ export function HeaderRow() {
 
   const showRightSidebarSection = view.type === "task-detail";
 
-  const handleLeftMouseDown = (e: React.MouseEvent) => {
+  const handleLeftSidebarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
 
-  const handleRightMouseDown = (e: React.MouseEvent) => {
+  const handleRightSidebarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setRightSidebarIsResizing(true);
     document.body.style.cursor = "col-resize";
@@ -69,7 +71,7 @@ export function HeaderRow() {
         <SidebarTrigger />
         {sidebarOpen && (
           <Box
-            onMouseDown={handleLeftMouseDown}
+            onMouseDown={handleLeftSidebarMouseDown}
             className="no-drag"
             style={{
               position: "absolute",
@@ -122,7 +124,7 @@ export function HeaderRow() {
           )}
           {rightSidebarOpen && (
             <Box
-              onMouseDown={handleRightMouseDown}
+              onMouseDown={handleRightSidebarMouseDown}
               className="no-drag"
               style={{
                 position: "absolute",

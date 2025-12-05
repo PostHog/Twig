@@ -32,8 +32,7 @@ export function MainLayout() {
     goForward,
   } = useNavigationStore();
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
-  const toggleLeftSidebar = useSidebarStore((state) => state.setOpen);
-  const leftSidebarOpen = useSidebarStore((state) => state.open);
+  const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
   useIntegrations();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
@@ -64,7 +63,7 @@ export function MainLayout() {
   useHotkeys("mod+,", () => handleOpenSettings());
   useHotkeys("mod+[", () => goBack());
   useHotkeys("mod+]", () => goForward());
-  useHotkeys("mod+b", () => toggleLeftSidebar(!leftSidebarOpen));
+  useHotkeys("mod+b", () => toggleLeftSidebar());
   useHotkeys("mod+shift+b", () => toggleRightSidebar());
 
   useEffect(() => {
