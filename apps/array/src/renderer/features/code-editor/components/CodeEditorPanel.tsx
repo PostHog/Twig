@@ -50,8 +50,13 @@ export function CodeEditorPanel({
     return <PanelMessage>Loading file...</PanelMessage>;
   }
 
-  if (error || !fileContent) {
+  if (error || fileContent == null) {
     return <PanelMessage>Failed to load file</PanelMessage>;
+  }
+
+  // If we ever allow editing in the CodeMirrorEditor, this can be removed
+  if (fileContent.length === 0) {
+    return <PanelMessage>File is empty</PanelMessage>;
   }
 
   return (
