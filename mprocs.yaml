@@ -1,13 +1,12 @@
 procs:
-  agent:
-    cmd: ["pnpm", "--filter", "agent", "run", "dev"]
-    cwd: .
-    color: magenta
-
   array:
     cmd: ["pnpm", "--filter", "array", "run", "start"]
     cwd: .
     color: blue
-    autorestart: true
     depends_on:
       - agent
+
+  agent:
+    cmd: ["pnpm", "--filter", "agent", "run", "dev"]
+    cwd: .
+    color: magenta

@@ -20,7 +20,6 @@ import {
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
 
-import { setupAgentHotReload } from "./services/dev-reload.js";
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
 import { registerFoldersIpc } from "./services/folders.js";
 import { registerFsIpc } from "./services/fs.js";
@@ -216,11 +215,6 @@ app.whenReady().then(() => {
   getOrRefreshApps().catch(() => {
     // Silently fail, will retry on first use
   });
-
-  // Dev mode: Watch agent package and restart via mprocs
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    setupAgentHotReload();
-  }
 });
 
 app.on("window-all-closed", async () => {

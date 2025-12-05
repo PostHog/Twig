@@ -15,8 +15,6 @@ if [ ! -f "$SOURCE_PNG" ]; then
   exit 1
 fi
 
-echo "Creating iconset from $SOURCE_PNG..."
-
 mkdir -p "$ICONSET_DIR"
 
 # Scale factor for macOS icon guidelines: 832/1024 = 13/16 = 0.8125

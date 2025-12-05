@@ -13,8 +13,8 @@
     "dev:agent": "pnpm --filter agent dev",
     "dev:array": "pnpm --filter array dev",
     "start": "pnpm --filter array start",
-    "build": "pnpm --filter agent build && pnpm --filter array build",
-    "typecheck": "pnpm --filter agent build && pnpm --filter agent typecheck && pnpm --filter array typecheck",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
     "lint": "biome check --write --unsafe",
     "format": "biome format --write",
     "test": "pnpm -r test",
@@ -33,7 +33,8 @@
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
     "husky": "^9.1.7",
-    "lint-staged": "^15.5.2"
+    "lint-staged": "^15.5.2",
+    "turbo": "^2.6.2"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
