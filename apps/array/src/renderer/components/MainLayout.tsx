@@ -76,6 +76,25 @@ export function MainLayout() {
     };
   }, [handleOpenSettings, handleFocusTaskMode, handleResetLayout]);
 
+  useEffect(() => {
+    const handleMouseButton = (event: MouseEvent) => {
+      if (event.button === 3) {
+        // Button 3 = back
+        event.preventDefault();
+        goBack();
+      } else if (event.button === 4) {
+        // Button 4 = forward
+        event.preventDefault();
+        goForward();
+      }
+    };
+
+    window.addEventListener("mouseup", handleMouseButton);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseButton);
+    };
+  }, [goBack, goForward]);
+
   const handleSelectTask = (task: Task) => {
     navigateToTask(task);
   };

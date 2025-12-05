@@ -336,14 +336,25 @@ export function SessionView({
         openSearch();
         setTimeout(() => searchInputRef.current?.focus(), 0);
       }
-      if (e.key === "Escape" && showSearch) {
-        closeSearch();
+      if (e.key === "Escape") {
+        if (showSearch) {
+          closeSearch();
+        } else if (isPromptPending) {
+          onCancelPrompt();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showRawLogs, showSearch, openSearch, closeSearch]);
+  }, [
+    showRawLogs,
+    showSearch,
+    openSearch,
+    closeSearch,
+    isPromptPending,
+    onCancelPrompt,
+  ]);
 
   const messages = useMemo(() => processEvents(events), [events]);
   const turns = useMemo(
