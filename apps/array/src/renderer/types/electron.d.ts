@@ -5,7 +5,6 @@ import type {
   TabContextMenuResult,
   TaskContextMenuResult,
 } from "@main/services/contextMenu.types";
-import type { AgentEvent } from "@posthog/agent";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type {
   ChangedFile,
@@ -25,7 +24,7 @@ declare global {
   interface IElectronAPI {
     storeApiKey: (apiKey: string) => Promise<string>;
     retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
-    fetchS3Logs: (logUrl: string) => Promise<AgentEvent[]>;
+    fetchS3Logs: (logUrl: string) => Promise<string | null>;
     rendererStore: {
       getItem: (key: string) => Promise<string | null>;
       setItem: (key: string, value: string) => Promise<void>;

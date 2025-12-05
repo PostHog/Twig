@@ -1,4 +1,3 @@
-import { type AgentEvent, parseAgentEvents } from "@posthog/agent";
 import { type IpcMainInvokeEvent, ipcMain, safeStorage } from "electron";
 import { logger } from "../lib/logger";
 
@@ -35,50 +34,34 @@ export function registerPosthogIpc(): void {
     },
   );
 
-  // Fetch and parse S3 logs
   ipcMain.handle(
     "fetch-s3-logs",
     async (
       _event: IpcMainInvokeEvent,
       logUrl: string,
-    ): Promise<AgentEvent[]> => {
+    ): Promise<string | null> => {
       try {
         log.debug("Fetching S3 logs from:", logUrl);
         const response = await fetch(logUrl);
 
         // 404 is expected for new task runs - file doesn't exist yet
         if (response.status === 404) {
-          return [];
+          return null;
         }
 
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch logs: ${response.status} ${response.statusText}`,
+          log.warn(
+            "Failed to fetch S3 logs:",
+            response.status,
+            response.statusText,
           );
+          return null;
         }
 
-        const content = await response.text();
-
-        if (!content.trim()) {
-          return [];
-        }
-
-        const rawEntries = content
-          .trim()
-          .split("\n")
-          .map((line) => {
-            try {
-              return JSON.parse(line);
-            } catch {
-              return null;
-            }
-          })
-          .filter(Boolean);
-
-        return parseAgentEvents(rawEntries);
+        return await response.text();
       } catch (error) {
         log.error("Failed to fetch S3 logs:", error);
-        throw error;
+        return null;
       }
     },
   );
