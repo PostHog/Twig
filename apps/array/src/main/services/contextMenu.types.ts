@@ -2,6 +2,7 @@
 export type ExternalAppAction =
   | { type: "open-in-app"; appId: string }
   | { type: "copy-path" }
+  | { type: "collapse-all" }
   | null;
 
 export interface ExternalAppContextMenuResult {

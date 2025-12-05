@@ -262,6 +262,7 @@ declare global {
     showSplitContextMenu: () => Promise<SplitContextMenuResult>;
     showFileContextMenu: (
       filePath: string,
+      options?: { showCollapseAll?: boolean },
     ) => Promise<ExternalAppContextMenuResult>;
     folders: {
       getFolders: () => Promise<RegisteredFolder[]>;

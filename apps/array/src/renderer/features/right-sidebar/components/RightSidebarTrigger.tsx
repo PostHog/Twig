@@ -1,10 +1,10 @@
 import { SidebarSimpleIcon } from "@phosphor-icons/react";
 import { IconButton } from "@radix-ui/themes";
 import type React from "react";
-import { useSidebarStore } from "../stores/sidebarStore";
+import { useRightSidebarStore } from "../stores/rightSidebarStore";
 
-export const SidebarTrigger: React.FC = () => {
-  const toggle = useSidebarStore((state) => state.toggle);
+export const RightSidebarTrigger: React.FC = () => {
+  const toggle = useRightSidebarStore((state) => state.toggle);
 
   return (
     <IconButton
@@ -12,6 +12,7 @@ export const SidebarTrigger: React.FC = () => {
       color="gray"
       onClick={toggle}
       className="no-drag"
+      style={{ transform: "scaleX(-1)" }}
     >
       <SidebarSimpleIcon size={16} />
     </IconButton>

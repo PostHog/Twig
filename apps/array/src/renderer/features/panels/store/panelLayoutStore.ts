@@ -3,7 +3,6 @@ import { createWithEqualityFn } from "zustand/traditional";
 import {
   DEFAULT_PANEL_IDS,
   DEFAULT_TAB_IDS,
-  PANEL_SIZES,
 } from "../constants/panelConstants";
 import {
   addNewTabToPanel,
@@ -150,7 +149,7 @@ function createDefaultPanelTree(
     },
   };
 
-  const leftPanel: PanelNode =
+  const centerPanel: PanelNode =
     terminalLayoutMode === "split"
       ? {
           type: "group",
@@ -192,43 +191,7 @@ function createDefaultPanelTree(
           },
         };
 
-  return {
-    type: "group",
-    id: DEFAULT_PANEL_IDS.ROOT,
-    direction: "horizontal",
-    sizes: [...PANEL_SIZES.DEFAULT_SPLIT],
-    children: [
-      leftPanel,
-      {
-        type: "leaf",
-        id: DEFAULT_PANEL_IDS.TOP_RIGHT,
-        content: {
-          id: DEFAULT_PANEL_IDS.TOP_RIGHT,
-          tabs: [
-            {
-              id: DEFAULT_TAB_IDS.CHANGES,
-              label: "Changes",
-              data: { type: "other" },
-              component: null,
-              closeable: false,
-              draggable: false,
-            },
-            {
-              id: DEFAULT_TAB_IDS.FILES,
-              label: "Files",
-              data: { type: "other" },
-              component: null,
-              closeable: false,
-              draggable: false,
-            },
-          ],
-          activeTabId: DEFAULT_TAB_IDS.CHANGES,
-          showTabs: true,
-          droppable: false,
-        },
-      },
-    ],
-  };
+  return centerPanel;
 }
 
 function openTab(
@@ -777,7 +740,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 7,
+      version: 8,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

@@ -370,8 +370,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("show-split-context-menu"),
   showFileContextMenu: (
     filePath: string,
+    options?: { showCollapseAll?: boolean },
   ): Promise<ExternalAppContextMenuResult> =>
-    ipcRenderer.invoke("show-file-context-menu", filePath),
+    ipcRenderer.invoke("show-file-context-menu", filePath, options),
   folders: {
     getFolders: (): Promise<RegisteredFolder[]> =>
       ipcRenderer.invoke("get-folders"),

@@ -153,7 +153,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
             size="1"
             variant="ghost"
             color={isActive ? undefined : "gray"}
-            className="opacity-0 transition-opacity group-hover:opacity-100"
+            className={`transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
             aria-label="Close tab"
             onClick={(e) => {
               e.stopPropagation();
