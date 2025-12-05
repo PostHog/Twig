@@ -124,7 +124,11 @@ class FileService {
 
         for (const event of events) {
           state.pendingDirs.add(path.dirname(event.path));
-          if (event.type === "update") {
+
+          // Handle both "update" and "create" events as file changes
+          // Atomic writes (like the claude code Write tool) produce "create"
+          // events because they write to a temp file then rename/move it
+          if (event.type === "update" || event.type === "create") {
             state.pendingFiles.add(event.path);
           } else if (event.type === "delete") {
             state.pendingDeletes.add(event.path);
