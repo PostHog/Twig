@@ -321,6 +321,7 @@ export const showFileContextMenuService = createIpcService({
   handler: async (
     _event,
     filePath: string,
+    options?: { showCollapseAll?: boolean },
   ): Promise<ExternalAppContextMenuResult> => {
     return new Promise((resolve) => {
       const setupMenu = async () => {
@@ -329,7 +330,21 @@ export const showFileContextMenuService = createIpcService({
           resolve,
         );
 
-        showContextMenu(externalAppsItems, { action: null }).then(resolve);
+        const template: MenuItemConstructorOptions[] = [];
+
+        if (options?.showCollapseAll) {
+          template.push(
+            {
+              label: "Collapse All",
+              click: () => resolve({ action: { type: "collapse-all" } }),
+            },
+            { type: "separator" },
+          );
+        }
+
+        template.push(...externalAppsItems);
+
+        showContextMenu(template, { action: null }).then(resolve);
       };
 
       setupMenu();

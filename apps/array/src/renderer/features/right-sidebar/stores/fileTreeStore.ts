@@ -7,6 +7,7 @@ interface FileTreeStoreState {
 
 interface FileTreeStoreActions {
   togglePath: (taskId: string, path: string) => void;
+  collapseAll: (taskId: string) => void;
 }
 
 type FileTreeStore = FileTreeStoreState & FileTreeStoreActions;
@@ -29,4 +30,11 @@ export const useFileTreeStore = create<FileTreeStore>()((set) => ({
         },
       };
     }),
+  collapseAll: (taskId) =>
+    set((state) => ({
+      expandedPaths: {
+        ...state.expandedPaths,
+        [taskId]: new Set<string>(),
+      },
+    })),
 }));

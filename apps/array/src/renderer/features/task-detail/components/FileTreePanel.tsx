@@ -48,6 +48,7 @@ function LazyTreeItem({
     (state) => state.expandedPaths[taskId]?.has(entry.path) ?? false,
   );
   const togglePath = useFileTreeStore((state) => state.togglePath);
+  const collapseAll = useFileTreeStore((state) => state.collapseAll);
   const openFile = usePanelLayoutStore((state) => state.openFile);
 
   const { data: children } = useQuery({
@@ -70,9 +71,16 @@ function LazyTreeItem({
 
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const result = await window.electronAPI.showFileContextMenu(entry.path);
+    const result = await window.electronAPI.showFileContextMenu(entry.path, {
+      showCollapseAll: true,
+    });
 
     if (!result.action) return;
+
+    if (result.action.type === "collapse-all") {
+      collapseAll(taskId);
+      return;
+    }
 
     await handleExternalAppAction(result.action, entry.path, entry.name);
   };
