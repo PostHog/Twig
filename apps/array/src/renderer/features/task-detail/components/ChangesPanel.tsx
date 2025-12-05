@@ -127,7 +127,7 @@ function ChangedFileItem({
 
     await window.electronAPI.discardFileChanges(
       repoPath,
-      file.path,
+      file.originalPath ?? file.path, // For renames, use the original path
       file.status,
     );
 
@@ -137,6 +137,9 @@ function ChangedFileItem({
       queryKey: ["changed-files-head", repoPath],
     });
   };
+
+  const hasLineStats =
+    file.linesAdded !== undefined || file.linesRemoved !== undefined;
 
   return (
     <Flex
@@ -154,13 +157,6 @@ function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <Badge
-        size="1"
-        color={indicator.color}
-        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
-      >
-        {indicator.label}
-      </Badge>
       <FileIcon
         size={14}
         weight="regular"
@@ -190,6 +186,27 @@ function ChangedFileItem({
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
+      {hasLineStats && (
+        <Flex
+          align="center"
+          gap="1"
+          style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
+        >
+          {(file.linesAdded ?? 0) > 0 && (
+            <Text style={{ color: "var(--green-9)" }}>+{file.linesAdded}</Text>
+          )}
+          {(file.linesRemoved ?? 0) > 0 && (
+            <Text style={{ color: "var(--red-9)" }}>-{file.linesRemoved}</Text>
+          )}
+        </Flex>
+      )}
+      <Badge
+        size="1"
+        color={indicator.color}
+        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
+      >
+        {indicator.label}
+      </Badge>
       <Tooltip content="Discard changes">
         <IconButton
           size="1"
