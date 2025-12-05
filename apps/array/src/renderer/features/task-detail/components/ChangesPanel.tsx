@@ -141,20 +141,40 @@ function ChangedFileItem({
   return (
     <Flex
       align="center"
-      gap="2"
-      py="1"
-      pl="1"
-      pr="2"
+      gap="1"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`group ${isActive ? "bg-gray-3" : "hover:bg-gray-2"}`}
-      style={{ cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden" }}
+      className={`group ${isActive ? "border-accent-8 border-y bg-accent-4" : "border-transparent border-y hover:bg-gray-3"}`}
+      style={{
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        height: "26px",
+        paddingLeft: "8px",
+        paddingRight: "8px",
+      }}
     >
-      <Badge size="1" color={indicator.color} style={{ flexShrink: 0 }}>
+      <Badge
+        size="1"
+        color={indicator.color}
+        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
+      >
         {indicator.label}
       </Badge>
-      <FileIcon size={12} weight="regular" style={{ flexShrink: 0 }} />
-      <Text size="1" style={{ userSelect: "none", flexShrink: 0 }}>
+      <FileIcon
+        size={14}
+        weight="regular"
+        color="var(--gray-10)"
+        style={{ flexShrink: 0 }}
+      />
+      <Text
+        size="1"
+        style={{
+          userSelect: "none",
+          flexShrink: 0,
+          marginLeft: "2px",
+        }}
+      >
         {fileName}
       </Text>
       <Text
@@ -165,6 +185,7 @@ function ChangedFileItem({
           overflow: "hidden",
           textOverflow: "ellipsis",
           flex: 1,
+          marginLeft: "4px",
         }}
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
@@ -176,7 +197,7 @@ function ChangedFileItem({
           color="gray"
           onClick={handleDiscard}
           className={isActive ? "" : "opacity-0 group-hover:opacity-100"}
-          style={{ flexShrink: 0 }}
+          style={{ flexShrink: 0, width: "20px", height: "20px" }}
         >
           <ArrowCounterClockwiseIcon size={12} />
         </IconButton>
@@ -216,8 +237,8 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   }
 
   return (
-    <Box height="100%" overflowY="auto" p="4">
-      <Flex direction="column" gap="1" px="1">
+    <Box height="100%" overflowY="auto" py="2">
+      <Flex direction="column">
         {changedFiles.map((file) => (
           <ChangedFileItem
             key={file.path}

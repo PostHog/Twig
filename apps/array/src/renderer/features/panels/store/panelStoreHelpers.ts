@@ -317,3 +317,11 @@ export function isDiffTabActiveInTree(
   const tabId = createDiffTabId(filePath, status);
   return isTabActiveInTree(tree, tabId);
 }
+
+export function isFileTabActiveInTree(
+  tree: PanelNode,
+  filePath: string,
+): boolean {
+  const tabId = createFileTabId(filePath);
+  return isTabActiveInTree(tree, tabId);
+}

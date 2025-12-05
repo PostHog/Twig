@@ -53,11 +53,14 @@ export const RightSidebar: React.FC<{ children: React.ReactNode }> = ({
     <Box
       style={{
         width: open ? `${width}px` : "0",
+        minWidth: open ? `${width}px` : "0",
+        maxWidth: open ? `${width}px` : "0",
         height: "100%",
         overflow: "hidden",
         transition: isResizing ? "none" : "width 0.2s ease-in-out",
         borderLeft: open ? "1px solid var(--gray-6)" : "none",
         position: "relative",
+        flexShrink: 0,
       }}
     >
       <Flex

@@ -2,6 +2,7 @@ import { RightSidebarTrigger } from "@features/right-sidebar/components/RightSid
 import { useRightSidebarStore } from "@features/right-sidebar/stores/rightSidebarStore";
 import { SidebarTrigger } from "@features/sidebar/components/SidebarTrigger";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
 import { Box, Flex } from "@radix-ui/themes";
 import { useHeaderStore } from "@stores/headerStore";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -157,10 +158,10 @@ export function HeaderRow() {
         </Flex>
       )}
 
-      {showRightSidebarSection && (
+      {showRightSidebarSection && view.type === "task-detail" && view.data && (
         <Flex
           align="center"
-          justify="start"
+          justify="between"
           px="2"
           pl="3"
           style={{
@@ -177,6 +178,9 @@ export function HeaderRow() {
           }}
         >
           <RightSidebarTrigger />
+          {rightSidebarOpen && (
+            <ChangesTabBadge taskId={view.data.id} task={view.data} />
+          )}
           {rightSidebarOpen && (
             <Box
               onMouseDown={handleRightMouseDown}

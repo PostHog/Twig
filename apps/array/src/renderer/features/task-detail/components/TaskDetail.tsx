@@ -1,6 +1,5 @@
 import { PanelLayout } from "@features/panels";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
-import { ChangesTabBadge } from "@features/task-detail/components/ChangesTabBadge";
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
@@ -79,7 +78,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           <StartWorkspaceButton taskId={taskId} />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
-          <ChangesTabBadge taskId={taskId} task={task} />
           <ExternalAppsOpener
             targetPath={effectiveRepoPath}
             label={workspace?.worktreeName ?? undefined}
@@ -87,7 +85,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         </Flex>
       </Flex>
     ),
-    [task.title, branchName, workspace, taskId, task, effectiveRepoPath],
+    [task.title, branchName, workspace, taskId, effectiveRepoPath],
   );
 
   useSetHeaderContent(headerContent);

@@ -1,12 +1,18 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
-import { usePanelLayoutStore } from "@features/panels";
+import { isFileTabActiveInTree, usePanelLayoutStore } from "@features/panels";
+import { useFileTreeStore } from "@features/right-sidebar/stores/fileTreeStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FileIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
+import {
+  CaretRight,
+  FileIcon,
+  FolderIcon,
+  FolderOpenIcon,
+} from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -28,10 +34,20 @@ interface LazyTreeItemProps {
   depth: number;
   taskId: string;
   repoPath: string;
+  isFileActive: (relativePath: string) => boolean;
 }
 
-function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function LazyTreeItem({
+  entry,
+  depth,
+  taskId,
+  repoPath,
+  isFileActive,
+}: LazyTreeItemProps) {
+  const isExpanded = useFileTreeStore(
+    (state) => state.expandedPaths[taskId]?.has(entry.path) ?? false,
+  );
+  const togglePath = useFileTreeStore((state) => state.togglePath);
   const openFile = usePanelLayoutStore((state) => state.openFile);
 
   const { data: children } = useQuery({
@@ -41,11 +57,14 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
     staleTime: Infinity,
   });
 
+  const relativePath = entry.path.replace(`${repoPath}/`, "");
+  const isActive = entry.type === "file" && isFileActive(relativePath);
+
   const handleClick = () => {
     if (entry.type === "directory") {
-      setIsExpanded(!isExpanded);
+      togglePath(taskId, entry.path);
     } else {
-      openFile(taskId, entry.path.replace(`${repoPath}/`, ""));
+      openFile(taskId, relativePath);
     }
   };
 
@@ -58,28 +77,83 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
     await handleExternalAppAction(result.action, entry.path, entry.name);
   };
 
+  const isDirectory = entry.type === "directory";
+
   return (
     <Box>
       <Flex
         align="center"
-        gap="2"
-        py="1"
-        px="2"
-        style={{ paddingLeft: `${depth * 16 + 8}px`, cursor: "pointer" }}
-        className="rounded hover:bg-gray-2"
+        gap="1"
+        style={{
+          paddingLeft: `${depth * 12 + 4}px`,
+          paddingRight: "8px",
+          height: "26px",
+          cursor: "pointer",
+        }}
+        className={
+          isActive
+            ? "border-accent-8 border-y bg-accent-4"
+            : "border-transparent border-y hover:bg-gray-3"
+        }
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       >
-        {entry.type === "directory" ? (
+        <Box
+          style={{
+            width: "16px",
+            height: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {isDirectory && (
+            <CaretRight
+              size={10}
+              weight="bold"
+              color="var(--gray-10)"
+              style={{
+                transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                transition: "transform 0.1s ease",
+              }}
+            />
+          )}
+        </Box>
+        {isDirectory ? (
           isExpanded ? (
-            <FolderOpenIcon size={16} weight="fill" color="var(--accent-9)" />
+            <FolderOpenIcon
+              size={14}
+              weight="fill"
+              color="var(--accent-9)"
+              style={{ flexShrink: 0 }}
+            />
           ) : (
-            <FolderIcon size={16} weight="fill" color="var(--accent-9)" />
+            <FolderIcon
+              size={14}
+              weight="fill"
+              color="var(--accent-9)"
+              style={{ flexShrink: 0 }}
+            />
           )
         ) : (
-          <FileIcon size={16} weight="regular" color="var(--gray-11)" />
+          <FileIcon
+            size={14}
+            weight="regular"
+            color="var(--gray-10)"
+            style={{ flexShrink: 0 }}
+          />
         )}
-        <Text size="2" style={{ userSelect: "none" }}>
+        <Text
+          size="1"
+          style={{
+            userSelect: "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            marginLeft: "4px",
+          }}
+        >
           {entry.name}
         </Text>
       </Flex>
@@ -91,6 +165,7 @@ function LazyTreeItem({ entry, depth, taskId, repoPath }: LazyTreeItemProps) {
             depth={depth + 1}
             taskId={taskId}
             repoPath={repoPath}
+            isFileActive={isFileActive}
           />
         ))}
     </Box>
@@ -102,6 +177,7 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
   const queryClient = useQueryClient();
+  const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 
   const {
     data: rootEntries,
@@ -124,6 +200,11 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
     });
   }, [repoPath, queryClient]);
 
+  const isFileActive = (relativePath: string): boolean => {
+    if (!layout) return false;
+    return isFileTabActiveInTree(layout.panelTree, relativePath);
+  };
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
@@ -141,8 +222,14 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   }
 
   return (
-    <Box height="100%" overflowY="auto" p="4">
-      <Flex direction="column" gap="1">
+    <Box
+      height="100%"
+      py="2"
+      style={{
+        overflowY: "scroll",
+      }}
+    >
+      <Flex direction="column">
         {rootEntries.map((entry) => (
           <LazyTreeItem
             key={entry.path}
@@ -150,6 +237,7 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
             depth={0}
             taskId={taskId}
             repoPath={repoPath}
+            isFileActive={isFileActive}
           />
         ))}
       </Flex>
