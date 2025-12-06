@@ -1,6 +1,14 @@
 import "@features/task-detail/components/TaskInput.css";
-import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
-import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { ArrowUp, CaretDown, Paperclip, Stop } from "@phosphor-icons/react";
+import {
+  Box,
+  Button,
+  DropdownMenu,
+  Flex,
+  IconButton,
+  Text,
+  Tooltip,
+} from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { MentionItem } from "@shared/types";
 import { Extension, type JSONContent } from "@tiptap/core";
@@ -231,6 +239,9 @@ export const MessageEditor = forwardRef<
       }
     };
     const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
+    const [_selectedModel, setSelectedModel] = useState(
+      "claude-sonnet-4-5-20250514",
+    );
     const mentionItemsRef = useRef(mentionItems);
     const repoPathRef = useRef(repoPath);
     const onSubmitRef = useRef(onSubmit);
@@ -430,7 +441,7 @@ export const MessageEditor = forwardRef<
         onClick={handleContainerClick}
         style={{ cursor: "text" }}
       >
-        <Box className="max-h-[200px] flex-1 overflow-y-auto font-mono text-sm">
+        <Box className="max-h-[200px] min-h-[40px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </Box>
         <Flex justify="between" align="center">
@@ -441,39 +452,74 @@ export const MessageEditor = forwardRef<
             onChange={handleFileSelect}
             style={{ display: "none" }}
           />
-          <Tooltip content="Attach file">
-            <IconButton
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-            >
-              <Paperclip size={14} />
-            </IconButton>
-          </Tooltip>
-          {isLoading && onCancel ? (
-            <IconButton
-              size="1"
-              variant="soft"
-              color="red"
-              onClick={onCancel}
-              title="Stop"
-            >
-              <Stop size={14} weight="fill" />
-            </IconButton>
-          ) : (
-            <IconButton
-              size="1"
-              variant="solid"
-              color="orange"
-              onClick={handleSubmit}
-              disabled={disabled || isEmpty}
-              title="Send (Enter)"
-            >
-              <ArrowUp size={14} weight="bold" />
-            </IconButton>
-          )}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Button
+                variant="ghost"
+                color="gray"
+                size="1"
+                style={{ marginLeft: "0" }}
+              >
+                <Text size="1">Sonnet 4.5</Text>
+                <CaretDown size={12} />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content size="1">
+              <DropdownMenu.Item
+                onSelect={() => setSelectedModel("claude-sonnet-4-5-20250514")}
+              >
+                <Text size="1">Sonnet 4.5</Text>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+          <Flex gap="4" align="center">
+            <Tooltip content="Attach file">
+              <IconButton
+                size="1"
+                variant="soft"
+                color="gray"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                title="Attach file"
+              >
+                <Paperclip size={14} weight="bold" />
+              </IconButton>
+            </Tooltip>
+            {isLoading && onCancel ? (
+              <Tooltip content="Stop">
+                <IconButton
+                  size="1"
+                  variant="soft"
+                  color="red"
+                  onClick={onCancel}
+                  title="Stop"
+                >
+                  <Stop size={14} weight="fill" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip
+                content={
+                  disabled || isEmpty ? "Enter a message" : "Send message"
+                }
+              >
+                <IconButton
+                  size="1"
+                  variant="solid"
+                  onClick={handleSubmit}
+                  disabled={disabled || isEmpty}
+                  loading={isLoading}
+                  style={{
+                    backgroundColor:
+                      disabled || isEmpty ? "var(--accent-a4)" : undefined,
+                    color: disabled || isEmpty ? "var(--accent-8)" : undefined,
+                  }}
+                >
+                  <ArrowUp size={14} weight="bold" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Flex>
         </Flex>
       </Flex>
     );
