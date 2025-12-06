@@ -4,6 +4,7 @@ import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import type { CloudRegion } from "@shared/types/oauth";
+import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -368,6 +369,8 @@ export const useAuthStore = create<AuthState>()(
         }
 
         queryClient.clear();
+
+        useNavigationStore.getState().navigateToTaskInput();
 
         set({
           oauthAccessToken: null,
