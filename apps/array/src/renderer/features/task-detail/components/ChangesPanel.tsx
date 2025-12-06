@@ -127,7 +127,7 @@ function ChangedFileItem({
 
     await window.electronAPI.discardFileChanges(
       repoPath,
-      file.path,
+      file.originalPath ?? file.path, // For renames, use the original path
       file.status,
     );
 
@@ -137,6 +137,9 @@ function ChangedFileItem({
       queryKey: ["changed-files-head", repoPath],
     });
   };
+
+  const hasLineStats =
+    file.linesAdded !== undefined || file.linesRemoved !== undefined;
 
   return (
     <Flex
@@ -154,13 +157,6 @@ function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <Badge
-        size="1"
-        color={indicator.color}
-        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
-      >
-        {indicator.label}
-      </Badge>
       <FileIcon
         size={14}
         weight="regular"
@@ -190,18 +186,56 @@ function ChangedFileItem({
       >
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
-      <Tooltip content="Discard changes">
-        <IconButton
-          size="1"
-          variant="ghost"
-          color="gray"
-          onClick={handleDiscard}
-          className={isActive ? "" : "opacity-0 group-hover:opacity-100"}
-          style={{ flexShrink: 0, width: "20px", height: "20px" }}
+
+      {hasLineStats && (
+        <Flex
+          align="center"
+          gap="1"
+          className="group-hover:hidden"
+          style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
         >
-          <ArrowCounterClockwiseIcon size={12} />
-        </IconButton>
-      </Tooltip>
+          {(file.linesAdded ?? 0) > 0 && (
+            <Text style={{ color: "var(--green-9)" }}>+{file.linesAdded}</Text>
+          )}
+          {(file.linesRemoved ?? 0) > 0 && (
+            <Text style={{ color: "var(--red-9)" }}>-{file.linesRemoved}</Text>
+          )}
+        </Flex>
+      )}
+
+      <Flex
+        align="center"
+        gap="1"
+        className="hidden group-hover:flex"
+        style={{ flexShrink: 0 }}
+      >
+        <Tooltip content="Discard changes">
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={handleDiscard}
+            style={{
+              flexShrink: 0,
+              width: "18px",
+              height: "18px",
+              padding: 0,
+              marginLeft: "2px",
+              marginRight: "2px",
+            }}
+          >
+            <ArrowCounterClockwiseIcon size={12} />
+          </IconButton>
+        </Tooltip>
+      </Flex>
+
+      <Badge
+        size="1"
+        color={indicator.color}
+        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
+      >
+        {indicator.label}
+      </Badge>
     </Flex>
   );
 }

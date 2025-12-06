@@ -13,6 +13,19 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
+const countFileLines = async (filePath: string): Promise<number> => {
+  try {
+    const content = await fsPromises.readFile(filePath, "utf-8");
+    if (!content) return 0;
+
+    // Match git line counting: do not count trailing newline as extra line
+    const lines = content.split("\n");
+    return lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
+  } catch {
+    return 0;
+  }
+};
+
 const getAllFilesInDirectory = async (
   directoryPath: string,
   basePath: string,
@@ -194,14 +207,43 @@ const getChangedFilesAgainstHead = async (
     const files: ChangedFile[] = [];
     const seenPaths = new Set<string>();
 
-    // Use git diff with -M to detect renames in working tree
-    const { stdout: diffOutput } = await execAsync(
-      "git diff -M --name-status HEAD",
-      { cwd: directoryPath },
-    );
+    // Run git commands in parallel
+    const [nameStatusResult, numstatResult, statusResult] = await Promise.all([
+      execAsync("git diff -M --name-status HEAD", { cwd: directoryPath }),
+      execAsync("git diff -M --numstat HEAD", { cwd: directoryPath }),
+      execAsync("git status --porcelain", { cwd: directoryPath }),
+    ]);
 
-    for (const line of diffOutput.trim().split("\n").filter(Boolean)) {
-      // Format: STATUS\tPATH or STATUS\tOLD_PATH\tNEW_PATH for renames
+    // Build line stats map from numstat output
+    // Format: ADDED\tREMOVED\tPATH or for renames: ADDED\tREMOVED\tOLD_PATH => NEW_PATH
+    const lineStats = new Map<string, { added: number; removed: number }>();
+    for (const line of numstatResult.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)) {
+      const parts = line.split("\t");
+      if (parts.length >= 3) {
+        const added = parts[0] === "-" ? 0 : parseInt(parts[0], 10) || 0;
+        const removed = parts[1] === "-" ? 0 : parseInt(parts[1], 10) || 0;
+        const filePath = parts.slice(2).join("\t");
+        // For renames, numstat shows "old => new" - extract both paths
+        if (filePath.includes(" => ")) {
+          const renameParts = filePath.split(" => ");
+          // Store under both old and new path for lookup
+          lineStats.set(renameParts[0], { added, removed });
+          lineStats.set(renameParts[1], { added, removed });
+        } else {
+          lineStats.set(filePath, { added, removed });
+        }
+      }
+    }
+
+    // Parse name-status output for file status
+    // Format: STATUS\tPATH or STATUS\tOLD_PATH\tNEW_PATH for renames
+    for (const line of nameStatusResult.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)) {
       const parts = line.split("\t");
       const statusChar = parts[0][0]; // First char (ignore rename percentage like R100)
 
@@ -209,11 +251,19 @@ const getChangedFilesAgainstHead = async (
         // Rename: R100\told-path\tnew-path
         const originalPath = parts[1];
         const newPath = parts[2];
-        files.push({ path: newPath, status: "renamed", originalPath });
+        const stats = lineStats.get(newPath) || lineStats.get(originalPath);
+        files.push({
+          path: newPath,
+          status: "renamed",
+          originalPath,
+          linesAdded: stats?.added,
+          linesRemoved: stats?.removed,
+        });
         seenPaths.add(newPath);
         seenPaths.add(originalPath);
       } else if (parts.length >= 2) {
         const filePath = parts[1];
+        const stats = lineStats.get(filePath);
         let status: GitFileStatus;
         switch (statusChar) {
           case "D":
@@ -225,23 +275,22 @@ const getChangedFilesAgainstHead = async (
           default:
             status = "modified";
         }
-        files.push({ path: filePath, status });
+        files.push({
+          path: filePath,
+          status,
+          linesAdded: stats?.added,
+          linesRemoved: stats?.removed,
+        });
         seenPaths.add(filePath);
       }
     }
 
     // Add untracked files from git status
-    const { stdout: statusOutput } = await execAsync("git status --porcelain", {
-      cwd: directoryPath,
-    });
-
-    for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
+    for (const line of statusResult.stdout.trim().split("\n").filter(Boolean)) {
       const statusCode = line.substring(0, 2);
       const filePath = line.substring(3);
 
-      // Only add untracked files not already seen
       if (statusCode === "??" && !seenPaths.has(filePath)) {
-        // Check if it's a directory (git shows directories with trailing /)
         if (filePath.endsWith("/")) {
           const dirPath = filePath.slice(0, -1);
           try {
@@ -251,14 +300,28 @@ const getChangedFilesAgainstHead = async (
             );
             for (const file of dirFiles) {
               if (!seenPaths.has(file)) {
-                files.push({ path: file, status: "untracked" });
+                const lineCount = await countFileLines(
+                  path.join(directoryPath, file),
+                );
+                files.push({
+                  path: file,
+                  status: "untracked",
+                  linesAdded: lineCount || undefined,
+                });
               }
             }
           } catch {
             // Directory might not exist or be inaccessible
           }
         } else {
-          files.push({ path: filePath, status: "untracked" });
+          const lineCount = await countFileLines(
+            path.join(directoryPath, filePath),
+          );
+          files.push({
+            path: filePath,
+            status: "untracked",
+            linesAdded: lineCount || undefined,
+          });
         }
       }
     }

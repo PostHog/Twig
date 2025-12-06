@@ -184,6 +184,8 @@ export interface ChangedFile {
   path: string;
   status: GitFileStatus;
   originalPath?: string; // For renames: the old path
+  linesAdded?: number;
+  linesRemoved?: number;
 }
 
 // External apps detection types
