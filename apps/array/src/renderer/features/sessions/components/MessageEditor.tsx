@@ -430,7 +430,7 @@ export const MessageEditor = forwardRef<
         onClick={handleContainerClick}
         style={{ cursor: "text" }}
       >
-        <Box className="max-h-[200px] flex-1 overflow-y-auto font-mono text-sm">
+        <Box className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </Box>
         <Flex justify="between" align="center">
@@ -448,32 +448,48 @@ export const MessageEditor = forwardRef<
               color="gray"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
+              title="Attach file"
+              style={{ marginLeft: "0px" }}
             >
-              <Paperclip size={14} />
+              <Paperclip size={14} weight="bold" />
             </IconButton>
           </Tooltip>
-          {isLoading && onCancel ? (
-            <IconButton
-              size="1"
-              variant="soft"
-              color="red"
-              onClick={onCancel}
-              title="Stop"
-            >
-              <Stop size={14} weight="fill" />
-            </IconButton>
-          ) : (
-            <IconButton
-              size="1"
-              variant="solid"
-              color="orange"
-              onClick={handleSubmit}
-              disabled={disabled || isEmpty}
-              title="Send (Enter)"
-            >
-              <ArrowUp size={14} weight="bold" />
-            </IconButton>
-          )}
+          <Flex gap="4" align="center">
+            {isLoading && onCancel ? (
+              <Tooltip content="Stop">
+                <IconButton
+                  size="1"
+                  variant="soft"
+                  color="red"
+                  onClick={onCancel}
+                  title="Stop"
+                >
+                  <Stop size={14} weight="fill" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip
+                content={
+                  disabled || isEmpty ? "Enter a message" : "Send message"
+                }
+              >
+                <IconButton
+                  size="1"
+                  variant="solid"
+                  onClick={handleSubmit}
+                  disabled={disabled || isEmpty}
+                  loading={isLoading}
+                  style={{
+                    backgroundColor:
+                      disabled || isEmpty ? "var(--accent-a4)" : undefined,
+                    color: disabled || isEmpty ? "var(--accent-8)" : undefined,
+                  }}
+                >
+                  <ArrowUp size={14} weight="bold" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Flex>
         </Flex>
       </Flex>
     );

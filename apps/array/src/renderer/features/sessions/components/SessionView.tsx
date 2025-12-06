@@ -475,7 +475,7 @@ export function SessionView({
       const shouldCollapse = turn.isComplete && collapsibleMessages.length > 0;
 
       return (
-        <Box className="flex flex-col gap-2">
+        <Box className="flex flex-col gap-4">
           <UserMessage content={turn.userMessage.content} />
           {shouldCollapse ? (
             <>
@@ -588,7 +588,7 @@ export function SessionView({
               renderItem={renderTurn}
               autoScrollToBottom
               className="flex-1 p-4"
-              gap={8}
+              gap={24}
               footer={
                 <>
                   {isPromptPending && (
