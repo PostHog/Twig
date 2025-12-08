@@ -202,6 +202,17 @@ const config: ForgeConfig = {
       copyNativeDependency("@parcel/watcher", buildPath);
       copyNativeDependency("@parcel/watcher-darwin-arm64", buildPath);
       copyNativeDependency("file-icon", buildPath);
+      // Copy @parcel/watcher's hoisted dependencies
+      copyNativeDependency("micromatch", buildPath);
+      copyNativeDependency("is-glob", buildPath);
+      copyNativeDependency("detect-libc", buildPath);
+      // Copy transitive dependencies (full chain)
+      copyNativeDependency("braces", buildPath);
+      copyNativeDependency("picomatch", buildPath);
+      copyNativeDependency("is-extglob", buildPath);
+      copyNativeDependency("fill-range", buildPath);
+      copyNativeDependency("to-regex-range", buildPath);
+      copyNativeDependency("is-number", buildPath);
     },
   },
   publishers: [

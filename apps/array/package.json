@@ -1,6 +1,6 @@
 {
   "name": "@posthog/array",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Array - PostHog desktop task manager",
   "main": ".vite/build/index.js",
   "versionHash": "dynamic",
@@ -121,6 +121,9 @@
     "chokidar": "^5.0.0",
     "cmdk": "^1.1.1",
     "date-fns": "^3.3.1",
+    "detect-libc": "^1.0.3",
+    "is-glob": "^4.0.3",
+    "micromatch": "^4.0.5",
     "electron-log": "^5.4.3",
     "electron-store": "^11.0.0",
     "file-icon": "^6.0.0",
