@@ -1,6 +1,6 @@
 {
   "name": "array-monorepo",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Array monorepo - PostHog desktop task manager and agent",
   "engines": {
