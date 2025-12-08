@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
@@ -118,6 +119,17 @@ class FileService {
       repoPath,
       (err, events) => {
         if (err) {
+          if (!fsSync.existsSync(repoPath)) {
+            log.info(
+              `Watched directory no longer exists, stopping watcher: ${repoPath}`,
+            );
+            this.stopWatching(repoPath).catch((stopErr) => {
+              log.warn(
+                `Failed to stop watcher for deleted directory: ${stopErr}`,
+              );
+            });
+            return;
+          }
           log.error("Watcher error:", err);
           return;
         }
