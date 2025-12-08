@@ -1,12 +1,28 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { ArrowCounterClockwiseIcon, FileIcon } from "@phosphor-icons/react";
-import { Badge, Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
+import {
+  ArrowCounterClockwiseIcon,
+  CodeIcon,
+  CopyIcon,
+  FileIcon,
+  FilePlus,
+} from "@phosphor-icons/react";
+import {
+  Badge,
+  Box,
+  DropdownMenu,
+  Flex,
+  IconButton,
+  Text,
+  Tooltip,
+} from "@radix-ui/themes";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
+import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
+import { useState } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -92,7 +108,16 @@ function ChangedFileItem({
     (state) => state.closeDiffTabsForFile,
   );
   const queryClient = useQueryClient();
+  const { detectedApps } = useExternalAppsStore();
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // show toolbar when hovered OR when dropdown is open
+  const isToolbarVisible = isHovered || isDropdownOpen;
+
   const fileName = file.path.split("/").pop() || file.path;
+  const fullPath = `${repoPath}/${file.path}`;
   const indicator = getStatusIndicator(file.status);
 
   const handleClick = () => {
@@ -101,12 +126,28 @@ function ChangedFileItem({
 
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const fullPath = `${repoPath}/${file.path}`;
     const result = await window.electronAPI.showFileContextMenu(fullPath);
 
     if (!result.action) return;
 
     await handleExternalAppAction(result.action, fullPath, fileName);
+  };
+
+  const handleOpenWith = async (appId: string) => {
+    await handleExternalAppAction(
+      { type: "open-in-app", appId },
+      fullPath,
+      fileName,
+    );
+
+    // blur active element to dismiss any open tooltip
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
+
+  const handleCopyPath = async () => {
+    await handleExternalAppAction({ type: "copy-path" }, fullPath, fileName);
   };
 
   const handleDiscard = async (e: React.MouseEvent) => {
@@ -147,7 +188,13 @@ function ChangedFileItem({
       gap="1"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`group ${isActive ? "border-accent-8 border-y bg-accent-4" : "border-transparent border-y hover:bg-gray-3"}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={
+        isActive
+          ? "border-accent-8 border-y bg-accent-4"
+          : "border-transparent border-y hover:bg-gray-3"
+      }
       style={{
         cursor: "pointer",
         whiteSpace: "nowrap",
@@ -187,11 +234,10 @@ function ChangedFileItem({
         {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
       </Text>
 
-      {hasLineStats && (
+      {hasLineStats && !isToolbarVisible && (
         <Flex
           align="center"
           gap="1"
-          className="group-hover:hidden"
           style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
         >
           {(file.linesAdded ?? 0) > 0 && (
@@ -203,31 +249,84 @@ function ChangedFileItem({
         </Flex>
       )}
 
-      <Flex
-        align="center"
-        gap="1"
-        className="hidden group-hover:flex"
-        style={{ flexShrink: 0 }}
-      >
-        <Tooltip content="Discard changes">
-          <IconButton
-            size="1"
-            variant="ghost"
-            color="gray"
-            onClick={handleDiscard}
-            style={{
-              flexShrink: 0,
-              width: "18px",
-              height: "18px",
-              padding: 0,
-              marginLeft: "2px",
-              marginRight: "2px",
-            }}
+      {isToolbarVisible && (
+        <Flex align="center" gap="1" style={{ flexShrink: 0 }}>
+          <Tooltip content="Discard changes">
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={handleDiscard}
+              style={{
+                flexShrink: 0,
+                width: "18px",
+                height: "18px",
+                padding: 0,
+                marginLeft: "2px",
+                marginRight: "2px",
+              }}
+            >
+              <ArrowCounterClockwiseIcon size={12} />
+            </IconButton>
+          </Tooltip>
+
+          <DropdownMenu.Root
+            open={isDropdownOpen}
+            onOpenChange={setIsDropdownOpen}
           >
-            <ArrowCounterClockwiseIcon size={12} />
-          </IconButton>
-        </Tooltip>
-      </Flex>
+            <Tooltip content="Open file">
+              <DropdownMenu.Trigger>
+                <IconButton
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    flexShrink: 0,
+                    width: "18px",
+                    height: "18px",
+                    padding: 0,
+                  }}
+                >
+                  <FilePlus size={12} weight="regular" />
+                </IconButton>
+              </DropdownMenu.Trigger>
+            </Tooltip>
+            <DropdownMenu.Content size="1" align="end">
+              {detectedApps
+                .filter((app) => app.type !== "terminal")
+                .map((app) => (
+                  <DropdownMenu.Item
+                    key={app.id}
+                    onSelect={() => handleOpenWith(app.id)}
+                  >
+                    <Flex align="center" gap="2">
+                      {app.icon ? (
+                        <img
+                          src={app.icon}
+                          width={16}
+                          height={16}
+                          alt=""
+                          style={{ borderRadius: "2px" }}
+                        />
+                      ) : (
+                        <CodeIcon size={16} weight="regular" />
+                      )}
+                      <Text size="1">{app.name}</Text>
+                    </Flex>
+                  </DropdownMenu.Item>
+                ))}
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item onSelect={handleCopyPath}>
+                <Flex align="center" gap="2">
+                  <CopyIcon size={16} weight="regular" />
+                  <Text size="1">Copy Path</Text>
+                </Flex>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </Flex>
+      )}
 
       <Badge
         size="1"

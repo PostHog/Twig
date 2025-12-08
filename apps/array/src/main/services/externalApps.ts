@@ -24,21 +24,37 @@ async function getFileIcon() {
 let cachedApps: DetectedApplication[] | null = null;
 let detectionPromise: Promise<DetectedApplication[]> | null = null;
 
-const APP_PATHS: Record<string, string> = {
-  vscode: "/Applications/Visual Studio Code.app",
-  cursor: "/Applications/Cursor.app",
-  sublime: "/Applications/Sublime Text.app",
-  webstorm: "/Applications/WebStorm.app",
-  intellij: "/Applications/IntelliJ IDEA.app",
-  zed: "/Applications/Zed.app",
-  pycharm: "/Applications/PyCharm.app",
-  iterm: "/Applications/iTerm.app",
-  warp: "/Applications/Warp.app",
-  terminal: "/System/Applications/Utilities/Terminal.app",
-  alacritty: "/Applications/Alacritty.app",
-  kitty: "/Applications/kitty.app",
-  ghostty: "/Applications/Ghostty.app",
-  finder: "/System/Library/CoreServices/Finder.app",
+interface AppDefinition {
+  path: string;
+  type: ExternalAppType;
+}
+
+const APP_DEFINITIONS: Record<string, AppDefinition> = {
+  // Editors
+  vscode: { path: "/Applications/Visual Studio Code.app", type: "editor" },
+  cursor: { path: "/Applications/Cursor.app", type: "editor" },
+  sublime: { path: "/Applications/Sublime Text.app", type: "editor" },
+  webstorm: { path: "/Applications/WebStorm.app", type: "editor" },
+  intellij: { path: "/Applications/IntelliJ IDEA.app", type: "editor" },
+  zed: { path: "/Applications/Zed.app", type: "editor" },
+  pycharm: { path: "/Applications/PyCharm.app", type: "editor" },
+
+  // Terminals
+  iterm: { path: "/Applications/iTerm.app", type: "terminal" },
+  warp: { path: "/Applications/Warp.app", type: "terminal" },
+  terminal: {
+    path: "/System/Applications/Utilities/Terminal.app",
+    type: "terminal",
+  },
+  alacritty: { path: "/Applications/Alacritty.app", type: "terminal" },
+  kitty: { path: "/Applications/kitty.app", type: "terminal" },
+  ghostty: { path: "/Applications/Ghostty.app", type: "terminal" },
+
+  // File managers
+  finder: {
+    path: "/System/Library/CoreServices/Finder.app",
+    type: "file-manager",
+  },
 };
 
 const DISPLAY_NAMES: Record<string, string> = {
@@ -129,8 +145,12 @@ async function checkApplication(
 async function detectExternalApps(): Promise<DetectedApplication[]> {
   const apps: DetectedApplication[] = [];
 
-  for (const [id, appPath] of Object.entries(APP_PATHS)) {
-    const detected = await checkApplication(id, appPath, "editor");
+  for (const [id, definition] of Object.entries(APP_DEFINITIONS)) {
+    const detected = await checkApplication(
+      id,
+      definition.path,
+      definition.type,
+    );
     if (detected) {
       apps.push(detected);
     }
@@ -180,11 +200,21 @@ export function registerExternalAppsIpc(): void {
           return { success: false, error: "Application not found" };
         }
 
+        let isFile = false;
+        try {
+          const stat = await fs.stat(targetPath);
+          isFile = stat.isFile();
+        } catch {
+          // if stat fails, assume it is a path that does not exist yet
+          isFile = false;
+        }
+
         let command: string;
-        if (appToOpen.command.includes("open -a")) {
-          command = `${appToOpen.command} "${targetPath}"`;
+        if (appToOpen.id === "finder" && isFile) {
+          // for Finder with files, use -R to highlight the file in its parent folder
+          command = `open -R "${targetPath}"`;
         } else {
-          command = `${appToOpen.command} "${targetPath}"`;
+          command = `open -a "${appToOpen.path}" "${targetPath}"`;
         }
 
         await execAsync(command);
