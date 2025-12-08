@@ -29,6 +29,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const cancelPrompt = useSessionStore((state) => state.cancelPrompt);
   const markActivity = useTaskViewedStore((state) => state.markActivity);
+  const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -60,14 +61,17 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const handleSendPrompt = useCallback(
     async (text: string) => {
       try {
-        markActivity(taskId);
+        markAsViewed(taskId);
+
         const result = await sendPrompt(taskId, text);
         log.info("Prompt completed", { stopReason: result.stopReason });
+
+        markActivity(taskId);
       } catch (error) {
         log.error("Failed to send prompt", error);
       }
     },
-    [taskId, sendPrompt, markActivity],
+    [taskId, sendPrompt, markActivity, markAsViewed],
   );
 
   const handleCancelPrompt = useCallback(async () => {
