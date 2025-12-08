@@ -139,6 +139,11 @@ function ChangedFileItem({
       fullPath,
       fileName,
     );
+
+    // blur active element to dismiss any open tooltip
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
   };
 
   const handleCopyPath = async () => {
@@ -288,27 +293,29 @@ function ChangedFileItem({
               </DropdownMenu.Trigger>
             </Tooltip>
             <DropdownMenu.Content size="1" align="end">
-              {detectedApps.map((app) => (
-                <DropdownMenu.Item
-                  key={app.id}
-                  onSelect={() => handleOpenWith(app.id)}
-                >
-                  <Flex align="center" gap="2">
-                    {app.icon ? (
-                      <img
-                        src={app.icon}
-                        width={16}
-                        height={16}
-                        alt=""
-                        style={{ borderRadius: "2px" }}
-                      />
-                    ) : (
-                      <CodeIcon size={16} weight="regular" />
-                    )}
-                    <Text size="1">{app.name}</Text>
-                  </Flex>
-                </DropdownMenu.Item>
-              ))}
+              {detectedApps
+                .filter((app) => app.type !== "terminal")
+                .map((app) => (
+                  <DropdownMenu.Item
+                    key={app.id}
+                    onSelect={() => handleOpenWith(app.id)}
+                  >
+                    <Flex align="center" gap="2">
+                      {app.icon ? (
+                        <img
+                          src={app.icon}
+                          width={16}
+                          height={16}
+                          alt=""
+                          style={{ borderRadius: "2px" }}
+                        />
+                      ) : (
+                        <CodeIcon size={16} weight="regular" />
+                      )}
+                      <Text size="1">{app.name}</Text>
+                    </Flex>
+                  </DropdownMenu.Item>
+                ))}
               <DropdownMenu.Separator />
               <DropdownMenu.Item onSelect={handleCopyPath}>
                 <Flex align="center" gap="2">
