@@ -9,6 +9,7 @@ import {
 } from "@features/workspace/stores/workspaceStore";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -67,6 +68,14 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         log.info("Prompt completed", { stopReason: result.stopReason });
 
         markActivity(taskId);
+
+        // if we are currently viewing this task by the end of the prompt, mark it as viewed
+        const view = useNavigationStore.getState().view;
+        const isViewingTask =
+          view?.type === "task-detail" && view?.data?.id === taskId;
+        if (isViewingTask) {
+          markAsViewed(taskId);
+        }
       } catch (error) {
         log.error("Failed to send prompt", error);
       }
