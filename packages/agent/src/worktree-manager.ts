@@ -686,6 +686,51 @@ export class WorktreeManager {
   }
 
   async deleteWorktree(worktreePath: string): Promise<void> {
+    const resolvedWorktreePath = path.resolve(worktreePath);
+    const resolvedMainRepoPath = path.resolve(this.mainRepoPath);
+
+    // Safety check 1: Never delete the main repo path
+    if (resolvedWorktreePath === resolvedMainRepoPath) {
+      const error = new Error(
+        "Cannot delete worktree: path matches main repo path",
+      );
+      this.logger.error("Safety check failed", { worktreePath, error });
+      throw error;
+    }
+
+    // Safety check 2: Never delete a parent of the main repo path
+    if (
+      resolvedMainRepoPath.startsWith(resolvedWorktreePath) &&
+      resolvedMainRepoPath !== resolvedWorktreePath
+    ) {
+      const error = new Error(
+        "Cannot delete worktree: path is a parent of main repo path",
+      );
+      this.logger.error("Safety check failed", { worktreePath, error });
+      throw error;
+    }
+
+    // Safety check 3: Check for .git directory (indicates main repo)
+    try {
+      const gitPath = path.join(resolvedWorktreePath, ".git");
+      const stat = await fs.stat(gitPath);
+      if (stat.isDirectory()) {
+        const error = new Error(
+          "Cannot delete worktree: path appears to be a main repository (contains .git directory)",
+        );
+        this.logger.error("Safety check failed", { worktreePath, error });
+        throw error;
+      }
+    } catch (error) {
+      // If .git doesn't exist or we can't read it, proceed (unless it was the directory check above)
+      if (
+        error instanceof Error &&
+        error.message.includes("Cannot delete worktree")
+      ) {
+        throw error;
+      }
+    }
+
     this.logger.info("Deleting worktree", { worktreePath });
 
     try {
