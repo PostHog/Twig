@@ -184,10 +184,12 @@ export interface ChangedFile {
   path: string;
   status: GitFileStatus;
   originalPath?: string; // For renames: the old path
+  linesAdded?: number;
+  linesRemoved?: number;
 }
 
 // External apps detection types
-export type ExternalAppType = "editor" | "terminal";
+export type ExternalAppType = "editor" | "terminal" | "file-manager";
 
 export interface DetectedApplication {
   id: string; // "vscode", "cursor", "iterm"

@@ -31,7 +31,7 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   const filesLabel = diffStats.filesChanged === 1 ? "file" : "files";
 
   return (
-    <Flex gap="2">
+    <Flex gap="2" mr="2">
       {diffStats.linesAdded > 0 && (
         <Text size="1">
           <Text size="1" color="green">

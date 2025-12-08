@@ -99,10 +99,6 @@ export function VirtualizedList<T>({
     });
   }, [autoScrollToBottom, items]);
 
-  if (items.length === 0) {
-    return null;
-  }
-
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
@@ -111,30 +107,32 @@ export function VirtualizedList<T>({
       className={className}
       style={{ height: "100%", overflow: "auto" }}
     >
-      <div
-        style={{
-          height: virtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualItems.map((virtualRow) => (
-          <div
-            key={virtualRow.key}
-            ref={virtualizer.measureElement}
-            data-index={virtualRow.index}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${virtualRow.start}px)`,
-            }}
-          >
-            {renderItem(items[virtualRow.index], virtualRow.index)}
-          </div>
-        ))}
-      </div>
+      {items.length > 0 && (
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualItems.map((virtualRow) => (
+            <div
+              key={virtualRow.key}
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              {renderItem(items[virtualRow.index], virtualRow.index)}
+            </div>
+          ))}
+        </div>
+      )}
       {footer}
     </div>
   );
