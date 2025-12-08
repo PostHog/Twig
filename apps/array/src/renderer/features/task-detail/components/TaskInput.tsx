@@ -29,7 +29,7 @@ export function TaskInput() {
     lastUsedDirectory || "",
   );
   const [runMode, setRunMode] = useState<RunMode>(
-    import.meta.env.DEV ? lastUsedRunMode : "cloud",
+    import.meta.env.DEV ? lastUsedRunMode : "local",
   );
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
