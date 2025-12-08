@@ -185,6 +185,9 @@ importers:
       date-fns:
         specifier: ^3.3.1
         version: 3.6.0
+      detect-libc:
+        specifier: ^1.0.3
+        version: 1.0.3
       electron-log:
         specifier: ^5.4.3
         version: 5.4.3
@@ -197,6 +200,12 @@ importers:
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
+      is-glob:
+        specifier: ^4.0.3
+        version: 4.0.3
+      micromatch:
+        specifier: ^4.0.5
+        version: 4.0.8
       node-addon-api:
         specifier: ^8.5.0
         version: 8.5.0
