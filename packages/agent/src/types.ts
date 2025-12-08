@@ -134,7 +134,7 @@ export interface TaskExecutionOptions {
   repositoryPath?: string;
   permissionMode?: PermissionMode;
   isCloudMode?: boolean; // Determines local vs cloud behavior (local pauses after each phase)
-  createPR?: boolean; // Whether to create PR after build (defaults to false if local. This setting has no effect if isCloudMode is true.)
+  createPR?: boolean; // Whether to create PR after build (defaults to false)
   autoProgress?: boolean;
   queryOverrides?: Record<string, unknown>;
   // Fine-grained permission control (only applied to build phase)
