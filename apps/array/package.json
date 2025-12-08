@@ -1,6 +1,6 @@
 {
   "name": "@posthog/array",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Array - PostHog desktop task manager",
   "main": ".vite/build/index.js",
   "versionHash": "dynamic",
