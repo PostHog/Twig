@@ -14,6 +14,7 @@ import type {
   WorktreeInfo,
 } from "../../../shared/types";
 import { logger } from "../../lib/logger";
+import { fileService } from "../fileWatcher";
 import { getWorktreeLocation } from "../settingsStore";
 import { foldersStore } from "../store";
 import { deleteWorktreeIfExists } from "../worktreeUtils";
@@ -650,6 +651,15 @@ export class WorkspaceService {
     mainRepoPath: string,
     worktreePath: string,
   ): Promise<void> {
+    try {
+      await fileService.stopWatching(worktreePath);
+    } catch (error) {
+      log.warn(
+        `Failed to stop file watcher for worktree ${worktreePath}:`,
+        error,
+      );
+    }
+
     try {
       await deleteWorktreeIfExists(mainRepoPath, worktreePath);
     } catch (error) {

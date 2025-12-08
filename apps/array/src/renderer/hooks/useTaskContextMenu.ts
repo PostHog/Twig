@@ -3,6 +3,7 @@ import {
   useDuplicateTask,
 } from "@features/tasks/hooks/useTasks";
 import { logger } from "@renderer/lib/logger";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
 import type { Task } from "@shared/types";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
@@ -15,6 +16,7 @@ export function useTaskContextMenu() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const duplicateTask = useDuplicateTask();
   const deleteTask = useDeleteTask();
+  const { view, navigateToTaskInput } = useNavigationStore();
 
   const showContextMenu = useCallback(
     async (task: Task, event: React.MouseEvent, worktreePath?: string) => {
@@ -48,6 +50,10 @@ export function useTaskContextMenu() {
               await duplicateTask.mutateAsync(task.id);
               break;
             case "delete":
+              // navigate away first if we are viewing this task
+              if (view.type === "task-detail" && view.data?.id === task.id) {
+                navigateToTaskInput();
+              }
               await deleteTask.mutateAsync(task.id);
               break;
           }
@@ -68,7 +74,7 @@ export function useTaskContextMenu() {
         log.error("Failed to show context menu", error);
       }
     },
-    [duplicateTask, deleteTask],
+    [duplicateTask, deleteTask, view, navigateToTaskInput],
   );
 
   return {
