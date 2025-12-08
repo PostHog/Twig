@@ -449,11 +449,43 @@ export class WorkspaceService {
     const repoName = path.basename(folderPath);
     const repoWorktreeFolderPath = path.join(worktreeBasePath, repoName);
 
+    // Safety check 1: Never delete the project folder itself
+    if (path.resolve(repoWorktreeFolderPath) === path.resolve(folderPath)) {
+      log.warn(
+        `Skipping cleanup of worktree folder: path matches project folder (${folderPath})`,
+      );
+      return;
+    }
+
     if (!fs.existsSync(repoWorktreeFolderPath)) {
       return;
     }
 
+    // Safety check 2: Check if any other registered folder shares the same basename
+    const allFolders = foldersStore.get("folders", []);
+    const otherFoldersWithSameName = allFolders.filter(
+      (f) => f.path !== folderPath && path.basename(f.path) === repoName,
+    );
+
+    if (otherFoldersWithSameName.length > 0) {
+      log.info(
+        `Skipping cleanup of worktree folder ${repoWorktreeFolderPath}: used by other folders: ${otherFoldersWithSameName.map((f) => f.path).join(", ")}`,
+      );
+      return;
+    }
+
     try {
+      // Safety check 3: Only delete if empty (ignoring .DS_Store)
+      const files = fs.readdirSync(repoWorktreeFolderPath);
+      const validFiles = files.filter((f) => f !== ".DS_Store");
+
+      if (validFiles.length > 0) {
+        log.info(
+          `Skipping cleanup of worktree folder ${repoWorktreeFolderPath}: folder not empty (contains: ${validFiles.slice(0, 3).join(", ")}${validFiles.length > 3 ? "..." : ""})`,
+        );
+        return;
+      }
+
       fs.rmSync(repoWorktreeFolderPath, { recursive: true, force: true });
       log.info(`Cleaned up worktree folder at ${repoWorktreeFolderPath}`);
     } catch (error) {
