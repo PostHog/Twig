@@ -1,9 +1,8 @@
-import { Link } from "expo-router";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useAuthStore } from "../../stores/authStore";
 
 export default function TasksScreen() {
-  const { cloudRegion, projectId, logout } = useAuthStore();
+  const { cloudRegion, projectId } = useAuthStore();
 
   return (
     <ScrollView className="flex-1 bg-dark-bg">
@@ -32,30 +31,10 @@ export default function TasksScreen() {
           </View>
         </View>
 
-        {/* Chat Links */}
-        <Link href="/(auth)/agent" className="mb-3 rounded-xl bg-blue-600 p-4">
-          <Text className="text-center font-medium text-white">
-            Array Agent
-          </Text>
-        </Link>
-        <Link href="/chat" className="mb-6 rounded-xl bg-dark-surface p-4">
-          <Text className="text-center font-medium text-white">
-            PostHog AI (Max)
-          </Text>
-        </Link>
-
         {/* Empty State */}
         <View className="flex-1 items-center justify-center py-20">
           <Text className="text-base text-dark-text-muted">No tasks yet</Text>
         </View>
-
-        {/* Sign Out */}
-        <TouchableOpacity
-          onPress={logout}
-          className="mb-6 rounded-xl bg-dark-surface p-4"
-        >
-          <Text className="text-center font-medium text-red-500">Sign out</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );

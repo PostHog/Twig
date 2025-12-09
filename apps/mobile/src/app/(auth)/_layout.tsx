@@ -3,21 +3,21 @@ import { DynamicColorIOS, Platform } from "react-native";
 
 export default function AuthTabLayout() {
   // Dynamic colors for liquid glass effect on iOS
-  const dynamicTextColor = Platform.select({
-    ios: DynamicColorIOS({
-      dark: "white",
-      light: "black",
-    }),
-    default: "white",
-  });
+  const dynamicTextColor =
+    Platform.OS === "ios"
+      ? DynamicColorIOS({
+          dark: "white",
+          light: "black",
+        })
+      : "white";
 
-  const dynamicTintColor = Platform.select({
-    ios: DynamicColorIOS({
-      dark: "#f97316", // orange-500
-      light: "#ea580c", // orange-600
-    }),
-    default: "#f97316",
-  });
+  const dynamicTintColor =
+    Platform.OS === "ios"
+      ? DynamicColorIOS({
+          dark: "#f97316", // orange-500
+          light: "#ea580c", // orange-600
+        })
+      : "#f97316";
 
   return (
     <NativeTabs
@@ -36,21 +36,21 @@ export default function AuthTabLayout() {
         />
       </NativeTabs.Trigger>
 
-      {/* Chat - New Chat Tab with + icon */}
-      <NativeTabs.Trigger name="chat">
-        <Label>Chat</Label>
-        <Icon
-          sf={{ default: "plus.circle", selected: "plus.circle.fill" }}
-          drawable="ic_menu_add"
-        />
-      </NativeTabs.Trigger>
-
       {/* Settings/Profile Tab */}
       <NativeTabs.Trigger name="settings">
         <Label>Profile</Label>
         <Icon
           sf={{ default: "person", selected: "person.fill" }}
           drawable="ic_menu_preferences"
+        />
+      </NativeTabs.Trigger>
+
+      {/* Chat - Separate floating button (iOS search role style) */}
+      <NativeTabs.Trigger name="chat" role="search">
+        <Label hidden />
+        <Icon
+          sf={{ default: "plus", selected: "plus" }}
+          drawable="ic_menu_add"
         />
       </NativeTabs.Trigger>
     </NativeTabs>
