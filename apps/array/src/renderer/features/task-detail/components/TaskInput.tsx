@@ -25,7 +25,7 @@ export function TaskInput() {
 
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { folders, isLoaded: foldersLoaded } = useRegisteredFoldersStore();
+  const { folders } = useRegisteredFoldersStore();
   const { lastUsedRunMode, lastUsedLocalWorkspaceMode } = useSettingsStore();
 
   const [selectedDirectory, setSelectedDirectory] = useState(
@@ -40,35 +40,6 @@ export function TaskInput() {
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!foldersLoaded || selectedDirectory) return;
-
-    if (view.folderId) {
-      const folder = folders.find((f) => f.id === view.folderId);
-      if (folder) {
-        setSelectedDirectory(folder.path);
-        return;
-      }
-    }
-
-    if (lastUsedDirectory) {
-      const folderExists = folders.some((f) => f.path === lastUsedDirectory);
-      if (folderExists) {
-        setSelectedDirectory(lastUsedDirectory);
-      } else if (folders.length > 0) {
-        setSelectedDirectory(folders[0].path);
-      }
-    } else if (folders.length > 0) {
-      setSelectedDirectory(folders[0].path);
-    }
-  }, [
-    foldersLoaded,
-    folders,
-    lastUsedDirectory,
-    view.folderId,
-    selectedDirectory,
-  ]);
 
   const { githubIntegration } = useRepositoryIntegration();
 
