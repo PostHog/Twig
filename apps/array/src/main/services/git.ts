@@ -90,6 +90,45 @@ export const parseGitHubUrl = (url: string): GitHubRepo | null => {
   };
 };
 
+const getRepositoryFromRemoteUrl = async (
+  directoryPath: string,
+): Promise<string> => {
+  const remoteUrl = await getRemoteUrl(directoryPath);
+  if (!remoteUrl) {
+    throw new Error("No remote URL found");
+  }
+
+  // Parse repo from URL (handles both HTTPS and SSH formats)
+  const repoMatch = remoteUrl.match(
+    /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/,
+  );
+  if (!repoMatch) {
+    throw new Error(`Cannot parse repository from URL: ${remoteUrl}`);
+  }
+
+  return repoMatch[1];
+};
+
+const validatePullRequestNumber = (prNumber: number): void => {
+  if (
+    typeof prNumber !== "number" ||
+    !Number.isInteger(prNumber) ||
+    prNumber < 1
+  ) {
+    throw new Error(`Invalid pull request number: ${prNumber}`);
+  }
+};
+
+const validateCommentId = (commentId: number): void => {
+  if (
+    typeof commentId !== "number" ||
+    !Number.isInteger(commentId) ||
+    commentId < 1
+  ) {
+    throw new Error(`Invalid comment ID: ${commentId}`);
+  }
+};
+
 export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
@@ -517,6 +556,104 @@ export const detectSSHError = (output: string): string | undefined => {
   return `SSH test failed: ${output.substring(0, 200)}`;
 };
 
+const getAllPullRequestComments = async (
+  directoryPath: string,
+  prNumber: number,
+): Promise<any> => {
+  validatePullRequestNumber(prNumber);
+
+  try {
+    const { stdout } = await execAsync(
+      `gh pr view ${prNumber} --json comments`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to fetch PR comments: ${error}`);
+  }
+};
+
+const getPullRequestReviewComments = async (
+  directoryPath: string,
+  prNumber: number,
+): Promise<any> => {
+  validatePullRequestNumber(prNumber);
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    // TODO: Paginate if many comments
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to fetch PR review comments: ${error}`);
+  }
+};
+
+interface AddPullRequestCommentOptions {
+  body: string;
+  commitId: string;
+  path: string;
+  line: number;
+  side?: "LEFT" | "RIGHT";
+}
+
+const addPullRequestComment = async (
+  directoryPath: string,
+  prNumber: number,
+  options: AddPullRequestCommentOptions,
+): Promise<any> => {
+  validatePullRequestNumber(prNumber);
+
+  // Validate required options
+  if (!options.body || !options.commitId || !options.path) {
+    throw new Error("body, commitId, and path are required");
+  }
+
+  if (typeof options.line !== "number" || options.line < 1) {
+    throw new Error("line must be a positive number");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+    const side = options.side || "RIGHT";
+
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments ` +
+        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f commit_id="${options.commitId}" ` +
+        `-f path="${options.path}" ` +
+        `-f line=${options.line} ` +
+        `-f side="${side}"`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to add PR comment: ${error}`);
+  }
+};
+
+const deletePullRequestComment = async (
+  directoryPath: string,
+  commentId: number,
+): Promise<void> => {
+  validateCommentId(commentId);
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId} -X DELETE`,
+      { cwd: directoryPath },
+    );
+  } catch (error) {
+    throw new Error(`Failed to delete PR comment: ${error}`);
+  }
+};
+
 export function registerGitIpc(
   getMainWindow: () => BrowserWindow | null,
 ): void {
@@ -794,6 +931,51 @@ export function registerGitIpc(
       fileStatus: GitFileStatus,
     ): Promise<void> => {
       return discardFileChanges(directoryPath, filePath, fileStatus);
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-comments",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+    ): Promise<any> => {
+      return getAllPullRequestComments(directoryPath, prNumber);
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-review-comments",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+    ): Promise<any> => {
+      return getPullRequestReviewComments(directoryPath, prNumber);
+    },
+  );
+
+  ipcMain.handle(
+    "add-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+      options: AddPullRequestCommentOptions,
+    ): Promise<any> => {
+      return addPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "delete-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      commentId: number,
+    ): Promise<void> => {
+      return deletePullRequestComment(directoryPath, commentId);
     },
   );
 }
