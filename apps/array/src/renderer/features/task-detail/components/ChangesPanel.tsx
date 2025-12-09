@@ -24,9 +24,8 @@ import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useState } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
