@@ -4,6 +4,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { logger } from "@renderer/lib/logger";
+import { sessionEvents } from "@renderer/lib/sessionEvents";
 import type { Task } from "@shared/types";
 import { create } from "zustand";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
@@ -464,7 +465,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }));
 
     try {
-      return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
+      const result = await window.electronAPI.agentPrompt(
+        session.taskRunId,
+        blocks,
+      );
+
+      sessionEvents.emit("prompt:complete", {
+        taskId,
+        taskRunId: session.taskRunId,
+        stopReason: result.stopReason,
+      });
+
+      return result;
     } finally {
       set((state) => ({
         sessions: {

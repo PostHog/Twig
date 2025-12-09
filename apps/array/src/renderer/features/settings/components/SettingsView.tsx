@@ -1,6 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import {
+  type CompletionSound,
   type DefaultRunMode,
   useSettingsStore,
 } from "@features/settings/stores/settingsStore";
@@ -21,6 +22,7 @@ import {
 } from "@radix-ui/themes";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
+import { sounds } from "@renderer/lib/sounds";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -58,9 +60,11 @@ export function SettingsView() {
     autoRunTasks,
     defaultRunMode,
     createPR,
+    completionSound,
     setAutoRunTasks,
     setDefaultRunMode,
     setCreatePR,
+    setCompletionSound,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -166,6 +170,54 @@ export function SettingsView() {
                   <Text size="1" color="gray">
                     Split pane shows the terminal in a separate pane beneath the
                     logs. Tabbed shows the terminal as a tab alongside logs.
+                  </Text>
+                </Flex>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          {/* Notifications Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Notifications</Heading>
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Completion sound
+                  </Text>
+                  <Flex gap="2" align="center">
+                    <Select.Root
+                      value={completionSound}
+                      onValueChange={(value) =>
+                        setCompletionSound(value as CompletionSound)
+                      }
+                      size="1"
+                    >
+                      <Select.Trigger style={{ flex: 1 }} />
+                      <Select.Content>
+                        <Select.Item value="none">None</Select.Item>
+                        <Select.Item value="guitar">Guitar solo</Select.Item>
+                        <Select.Item value="danilo">I'm ready</Select.Item>
+                        <Select.Item value="revi">Cute noise</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+                    {completionSound !== "none" && (
+                      <Button
+                        variant="soft"
+                        size="1"
+                        onClick={() => {
+                          const audio = new Audio(sounds[completionSound]);
+                          audio.play();
+                        }}
+                      >
+                        Test
+                      </Button>
+                    )}
+                  </Flex>
+                  <Text size="1" color="gray">
+                    Play a sound when a task completes
                   </Text>
                 </Flex>
               </Flex>
