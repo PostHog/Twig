@@ -9,6 +9,7 @@ import {
 } from "@features/workspace/stores/workspaceStore";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -29,6 +30,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const cancelPrompt = useSessionStore((state) => state.cancelPrompt);
   const markActivity = useTaskViewedStore((state) => state.markActivity);
+  const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -60,14 +62,25 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const handleSendPrompt = useCallback(
     async (text: string) => {
       try {
-        markActivity(taskId);
+        markAsViewed(taskId);
+
         const result = await sendPrompt(taskId, text);
         log.info("Prompt completed", { stopReason: result.stopReason });
+
+        markActivity(taskId);
+
+        // if we are currently viewing this task by the end of the prompt, mark it as viewed
+        const view = useNavigationStore.getState().view;
+        const isViewingTask =
+          view?.type === "task-detail" && view?.data?.id === taskId;
+        if (isViewingTask) {
+          markAsViewed(taskId);
+        }
       } catch (error) {
         log.error("Failed to send prompt", error);
       }
     },
-    [taskId, sendPrompt, markActivity],
+    [taskId, sendPrompt, markActivity, markAsViewed],
   );
 
   const handleCancelPrompt = useCallback(async () => {
