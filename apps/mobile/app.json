@@ -29,7 +29,114 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
-
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "JetBrains Mono",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Thin.ttf",
+                    "weight": 100
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-ThinItalic.ttf",
+                    "weight": 100,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-ExtraLight.ttf",
+                    "weight": 200
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-ExtraLightItalic.ttf",
+                    "weight": 200,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Light.ttf",
+                    "weight": 300
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-LightItalic.ttf",
+                    "weight": 300,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Italic.ttf",
+                    "weight": 400,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Medium.ttf",
+                    "weight": 500
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-MediumItalic.ttf",
+                    "weight": 500,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-SemiBold.ttf",
+                    "weight": 600
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-SemiBoldItalic.ttf",
+                    "weight": 600,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Bold.ttf",
+                    "weight": 700
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-BoldItalic.ttf",
+                    "weight": 700,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-ExtraBold.ttf",
+                    "weight": 800
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-ExtraBoldItalic.ttf",
+                    "weight": 800,
+                    "style": "italic"
+                  }
+                ]
+              }
+            ]
+          },
+          "ios": {
+            "fonts": [
+              "./assets/fonts/JetBrainsMono-Thin.ttf",
+              "./assets/fonts/JetBrainsMono-ThinItalic.ttf",
+              "./assets/fonts/JetBrainsMono-ExtraLight.ttf",
+              "./assets/fonts/JetBrainsMono-ExtraLightItalic.ttf",
+              "./assets/fonts/JetBrainsMono-Light.ttf",
+              "./assets/fonts/JetBrainsMono-LightItalic.ttf",
+              "./assets/fonts/JetBrainsMono-Regular.ttf",
+              "./assets/fonts/JetBrainsMono-Italic.ttf",
+              "./assets/fonts/JetBrainsMono-Medium.ttf",
+              "./assets/fonts/JetBrainsMono-MediumItalic.ttf",
+              "./assets/fonts/JetBrainsMono-SemiBold.ttf",
+              "./assets/fonts/JetBrainsMono-SemiBoldItalic.ttf",
+              "./assets/fonts/JetBrainsMono-Bold.ttf",
+              "./assets/fonts/JetBrainsMono-BoldItalic.ttf",
+              "./assets/fonts/JetBrainsMono-ExtraBold.ttf",
+              "./assets/fonts/JetBrainsMono-ExtraBoldItalic.ttf"
+            ]
+          }
+        }
+      ]
+    ]
   }
 }

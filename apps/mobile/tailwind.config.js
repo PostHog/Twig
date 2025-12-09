@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   presets: [require("nativewind/preset")],
-  content: ["./App.{js,ts,jsx,tsx}", "./**/*.{js,ts,jsx,tsx}"],
+  content: ["./App.{js,ts,jsx,tsx}", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -26,7 +26,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "Consolas", "Monaco", "monospace"],
+        mono: ["JetBrains Mono"],
       },
     },
   },

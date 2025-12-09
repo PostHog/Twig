@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
 import { useAuthStore } from '../stores/authStore';
 import type { CloudRegion } from '../types/oauth';
+import { Text } from '@components/text';
 
 const REGIONS: { value: CloudRegion; label: string }[] = [
   { value: 'us', label: 'US Cloud' },
