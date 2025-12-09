@@ -517,6 +517,30 @@ export const detectSSHError = (output: string): string | undefined => {
   return `SSH test failed: ${output.substring(0, 200)}`;
 };
 
+const getAllPullRequestComments = async (
+  directoryPath: string,
+  prNumber: number,
+): Promise<any> => {
+  // Validate prNumber: must be a positive integer
+  if (
+    typeof prNumber !== "number" ||
+    !Number.isInteger(prNumber) ||
+    prNumber < 1
+  ) {
+    throw new Error(`Invalid pull request number: ${prNumber}`);
+  }
+
+  try {
+    const { stdout } = await execAsync(
+      `gh pr view ${prNumber} --json comments`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to fetch PR comments: ${error}`);
+  }
+};
+
 const getPullRequestReviewComments = async (
   directoryPath: string,
   prNumber: number,
@@ -834,6 +858,17 @@ export function registerGitIpc(
       fileStatus: GitFileStatus,
     ): Promise<void> => {
       return discardFileChanges(directoryPath, filePath, fileStatus);
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-comments",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+    ): Promise<any> => {
+      return getAllPullRequestComments(directoryPath, prNumber);
     },
   );
 
