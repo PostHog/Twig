@@ -26,6 +26,12 @@ export function CodeEditorPanel({
   const repoPath = worktreePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
 
+  // Extract PR number from PR URL if available
+  const prUrl = task.latest_run?.output?.pr_url as string | undefined;
+  const prNumber = prUrl
+    ? parseInt(prUrl.split("/").pop() || "0", 10)
+    : undefined;
+
   const {
     data: fileContent,
     isLoading,
@@ -65,6 +71,7 @@ export function CodeEditorPanel({
         content={fileContent}
         filePath={absolutePath}
         readOnly
+        prNumber={prNumber}
       />
     </Box>
   );

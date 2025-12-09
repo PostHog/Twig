@@ -29,6 +29,12 @@ export function DiffEditorPanel({
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
 
+  // Extract PR number from PR URL if available
+  const prUrl = task.latest_run?.output?.pr_url as string | undefined;
+  const prNumber = prUrl
+    ? parseInt(prUrl.split("/").pop() || "0", 10)
+    : undefined;
+
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
     queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
@@ -106,6 +112,7 @@ export function DiffEditorPanel({
           fileId={filePath}
           readOnly
           enableComments
+          prNumber={prNumber}
         />
       )}
     </Box>

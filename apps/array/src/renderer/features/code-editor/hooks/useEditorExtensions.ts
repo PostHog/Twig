@@ -16,7 +16,7 @@ import { getLanguageExtension } from "../utils/languages";
 export function useEditorExtensions(
   filePath?: string,
   readOnly = false,
-  options?: { enableComments?: boolean; fileId?: string },
+  options?: { enableComments?: boolean; fileId?: string; prNumber?: number },
 ) {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const showComments = useCommentStore((state) => state.showComments);
@@ -28,7 +28,7 @@ export function useEditorExtensions(
   const createComment = useCommentStore((state) => state.createComment);
   const composerState = useCommentStore((state) => state.composerState);
 
-  const { enableComments = false, fileId } = options || {};
+  const { enableComments = false, fileId, prNumber } = options || {};
 
   // Handler for when user clicks "+" to add a comment
   const handleOpenComposer = useCallback(
@@ -44,7 +44,7 @@ export function useEditorExtensions(
       if (!fileId) return;
 
       await createComment({
-        prNumber: 0, // TODO: Get actual PR number from context
+        prNumber: prNumber || 0,
         directoryPath: "", // TODO: Get actual directory path from context
         path: fileId || "",
         line,
@@ -54,7 +54,7 @@ export function useEditorExtensions(
       });
       closeComposer();
     },
-    [fileId, createComment, closeComposer],
+    [fileId, createComment, closeComposer, prNumber],
   );
 
   return useMemo(() => {
