@@ -147,11 +147,15 @@ export function RepositoryPicker({
           variant="outline"
           size="1"
           color="gray"
-          style={{ width: "100%" }}
           disabled={!hasIntegration}
         >
           <Flex justify="between" align="center" gap="2" width="100%">
-            <Flex align="center" gap="2" style={{ minWidth: 0, flex: 1 }}>
+            <Flex
+              align="center"
+              gap="2"
+              width="250px"
+              style={{ minWidth: 0, flex: 1 }}
+            >
               <GitBranchIcon
                 size={16}
                 weight="regular"

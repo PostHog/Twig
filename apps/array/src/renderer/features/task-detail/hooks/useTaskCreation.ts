@@ -22,6 +22,8 @@ const log = logger.scope("task-creation");
 interface UseTaskCreationOptions {
   editor: Editor | null;
   selectedDirectory: string;
+  selectedRepository?: string | null;
+  githubIntegrationId?: number;
   workspaceMode: WorkspaceMode;
 }
 
@@ -46,6 +48,8 @@ async function startAgentSession(
 export function useTaskCreation({
   editor,
   selectedDirectory,
+  selectedRepository,
+  githubIntegrationId,
   workspaceMode,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const {
@@ -60,20 +64,22 @@ export function useTaskCreation({
   const { autoRunTasks } = useSettingsStore();
   const { clearDraft } = useTaskInputStore();
 
+  const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
     !!editor &&
     isAuthenticated &&
     !!client &&
-    !!selectedDirectory &&
+    (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
     !isCreatingTask &&
     !editor.isEmpty;
 
   const handleSubmit = useCallback(async () => {
+    const isCloud = workspaceMode === "cloud";
     const canSubmit =
       !!editor &&
       isAuthenticated &&
       !!client &&
-      !!selectedDirectory &&
+      (isCloud ? !!selectedRepository : !!selectedDirectory) &&
       !isCreatingTask &&
       !editor.isEmpty;
 
@@ -91,7 +97,9 @@ export function useTaskCreation({
     const filePaths = extractFileMentions(editorJson);
 
     let repository: string | undefined;
-    if (selectedDirectory) {
+    if (selectedRepository) {
+      repository = selectedRepository;
+    } else if (selectedDirectory) {
       const detected = await window.electronAPI.detectRepo(selectedDirectory);
       if (detected) {
         repository = `${detected.organization}/${detected.repository}`;
@@ -102,6 +110,7 @@ export function useTaskCreation({
       {
         description: content,
         repository,
+        github_integration: isCloud ? githubIntegrationId : undefined,
         autoRun: autoRunTasks,
         createdFrom: "cli",
       },
@@ -192,6 +201,8 @@ export function useTaskCreation({
   }, [
     editor,
     selectedDirectory,
+    selectedRepository,
+    githubIntegrationId,
     workspaceMode,
     createTask,
     saveRepoPath,
