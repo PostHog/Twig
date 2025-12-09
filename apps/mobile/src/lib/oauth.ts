@@ -1,5 +1,4 @@
 import * as AuthSession from "expo-auth-session";
-import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import {
   getCloudUrlFromRegion,
@@ -13,26 +12,6 @@ import type {
 
 // Required for web browser auth session to work properly
 WebBrowser.maybeCompleteAuthSession();
-
-// Generate PKCE code verifier and challenge
-async function generateCodeVerifier(): Promise<string> {
-  const randomBytes = await Crypto.getRandomBytesAsync(32);
-  return btoa(String.fromCharCode(...randomBytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, data);
-
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
 
 export function getRedirectUri(): string {
   return AuthSession.makeRedirectUri({
@@ -56,6 +35,10 @@ export async function exchangeCodeForToken(
 ): Promise<OAuthTokenResponse> {
   const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
   const redirectUri = getRedirectUri();
+
+  console.log("[OAuth Token Exchange] URL:", `${cloudUrl}/oauth/token`);
+  console.log("[OAuth Token Exchange] Redirect URI:", redirectUri);
+  console.log("[OAuth Token Exchange] Code:", code);
 
   const response = await fetch(`${cloudUrl}/oauth/token`, {
     method: "POST",
@@ -116,28 +99,32 @@ export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthFlowResult> {
   try {
-    const codeVerifier = await generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
     const redirectUri = getRedirectUri();
     const clientId = getOauthClientIdFromRegion(config.cloudRegion);
+
+    console.log("[OAuth] Redirect URI:", redirectUri);
+    console.log("[OAuth] Client ID:", clientId);
 
     const discovery: AuthSession.DiscoveryDocument = {
       authorizationEndpoint: getAuthorizationEndpoint(config.cloudRegion),
       tokenEndpoint: getTokenEndpoint(config.cloudRegion),
     };
 
+    // Let expo-auth-session handle PKCE internally
     const authRequest = new AuthSession.AuthRequest({
       clientId,
       scopes: config.scopes,
       redirectUri,
-      codeChallenge,
-      codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
+      usePKCE: true,
       extraParams: {
         required_access_level: "project",
       },
     });
 
+    // promptAsync will load the request internally and generate PKCE
     const authResult = await authRequest.promptAsync(discovery);
+
+    console.log("[OAuth] Code Verifier:", authRequest.codeVerifier);
 
     if (authResult.type === "cancel" || authResult.type === "dismiss") {
       return {
@@ -160,9 +147,17 @@ export async function performOAuthFlow(
       };
     }
 
+    // Use the AuthRequest's codeVerifier for token exchange
+    if (!authRequest.codeVerifier) {
+      return {
+        success: false,
+        error: "PKCE code verifier not available",
+      };
+    }
+
     const tokenResponse = await exchangeCodeForToken(
       authResult.params.code,
-      codeVerifier,
+      authRequest.codeVerifier,
       config,
     );
 
