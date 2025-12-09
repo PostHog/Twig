@@ -622,3 +622,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return Object.values(get().sessions).find((s) => s.taskId === taskId);
   },
 }));
+
+let lastKnownToken: string | null = null;
+useAuthStore.subscribe(
+  (state) => state.oauthAccessToken,
+  (newToken) => {
+    if (!newToken || newToken === lastKnownToken) return;
+    lastKnownToken = newToken;
+
+    const sessions = useSessionStore.getState().sessions;
+    for (const session of Object.values(sessions)) {
+      if (session.status === "connected" && !session.isCloud) {
+        window.electronAPI
+          .agentTokenRefresh(session.taskRunId, newToken)
+          .catch((err) => {
+            log.warn("Failed to update session token", {
+              taskRunId: session.taskRunId,
+              error: err,
+            });
+          });
+      }
+    }
+  },
+);

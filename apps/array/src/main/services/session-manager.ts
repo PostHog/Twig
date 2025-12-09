@@ -116,6 +116,13 @@ export interface PostHogCredentials {
   projectId: number;
 }
 
+interface AcpMcpServer {
+  name: string;
+  type: "http";
+  url: string;
+  headers: Array<{ name: string; value: string }>;
+}
+
 export interface SessionConfig {
   taskId: string;
   taskRunId: string; // THE session identifier everywhere
@@ -146,12 +153,52 @@ function getClaudeCliPath(): string {
 
 export class SessionManager {
   private sessions = new Map<string, ManagedSession>();
+  private sessionTokens = new Map<string, string>();
   private getMainWindow: () => BrowserWindow | null;
   private onLog: OnLogCallback;
 
   constructor(getMainWindow: () => BrowserWindow | null, onLog: OnLogCallback) {
     this.getMainWindow = getMainWindow;
     this.onLog = onLog;
+  }
+
+  public updateSessionToken(taskRunId: string, newToken: string): void {
+    this.sessionTokens.set(taskRunId, newToken);
+    log.info("Session token updated", { taskRunId });
+  }
+
+  private getSessionToken(taskRunId: string, fallback: string): string {
+    return this.sessionTokens.get(taskRunId) || fallback;
+  }
+
+  private buildMcpServers(
+    credentials: PostHogCredentials,
+    taskRunId: string,
+  ): AcpMcpServer[] {
+    const servers: AcpMcpServer[] = [];
+
+    const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
+    const token = this.getSessionToken(taskRunId, credentials.apiKey);
+
+    servers.push({
+      name: "posthog",
+      type: "http",
+      url: mcpUrl,
+      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+    });
+
+    return servers;
+  }
+
+  private getPostHogMcpUrl(apiHost: string): string {
+    if (
+      apiHost.includes("localhost") ||
+      apiHost.includes("127.0.0.1") ||
+      !app.isPackaged
+    ) {
+      return "http://localhost:8787/mcp";
+    }
+    return "https://mcp.posthog.com/mcp";
   }
 
   async createSession(config: SessionConfig): Promise<ManagedSession> {
@@ -209,13 +256,15 @@ export class SessionManager {
         clientCapabilities: {},
       });
 
+      const mcpServers = this.buildMcpServers(credentials, taskRunId);
+
       if (isReconnect) {
         // Use our custom extension method to resume without replaying history.
         // Client fetches history from S3 directly.
         await connection.extMethod("_posthog/session/resume", {
           sessionId: taskRunId,
           cwd: repoPath,
-          mcpServers: [],
+          mcpServers,
           _meta: {
             ...(logUrl && {
               persistence: { taskId, runId: taskRunId, logUrl },
@@ -226,7 +275,7 @@ export class SessionManager {
       } else {
         await connection.newSession({
           cwd: repoPath,
-          mcpServers: [],
+          mcpServers,
           _meta: { sessionId: taskRunId },
         });
       }
@@ -586,6 +635,17 @@ export function registerAgentIpc(
         toSessionConfig(params),
       );
       return session ? toSessionResponse(session) : null;
+    },
+  );
+
+  ipcMain.handle(
+    "agent-token-refresh",
+    async (
+      _event: IpcMainInvokeEvent,
+      taskRunId: string,
+      newToken: string,
+    ): Promise<void> => {
+      sessionManager.updateSessionToken(taskRunId, newToken);
     },
   );
 }
