@@ -4,8 +4,6 @@ import * as WebBrowser from "expo-web-browser";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
-  MOBILE_OAUTH_PORT,
-  OAUTH_SCOPES,
 } from "../constants/oauth";
 import type {
   CloudRegion,
@@ -37,11 +35,6 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 }
 
 export function getRedirectUri(): string {
-  // Use localhost callback for development, custom scheme for production
-  if (__DEV__) {
-    return `http://localhost:${MOBILE_OAUTH_PORT}/callback`;
-  }
-
   return AuthSession.makeRedirectUri({
     scheme: "posthog-mobile",
     path: "callback",

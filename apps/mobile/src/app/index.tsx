@@ -20,7 +20,7 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-dark-bg items-center justify-center">
+      <View className="flex-1 items-center justify-center bg-dark-bg">
         <ActivityIndicator size="large" color="#f97316" />
       </View>
     );

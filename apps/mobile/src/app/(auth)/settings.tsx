@@ -14,25 +14,25 @@ export default function SettingsScreen() {
       <View className="flex-1 px-6 pt-16">
         {/* Header */}
         <View className="mb-10">
-          <Text className="text-3xl font-bold text-white mb-2">Settings</Text>
+          <Text className="mb-2 font-bold text-3xl text-white">Settings</Text>
           <Text className="text-base text-dark-text-muted">
             App preferences
           </Text>
         </View>
 
         {/* Placeholder Content */}
-        <View className="bg-dark-surface rounded-xl p-4 mb-6">
-          <Text className="text-sm text-dark-text-muted text-center">
+        <View className="mb-6 rounded-xl bg-dark-surface p-4">
+          <Text className="text-center text-dark-text-muted text-sm">
             Settings coming soon...
           </Text>
         </View>
 
         {/* Logout Button */}
         <TouchableOpacity
-          className="bg-dark-surface py-4 rounded-lg items-center border border-dark-border"
+          className="items-center rounded-lg border border-dark-border bg-dark-surface py-4"
           onPress={handleLogout}
         >
-          <Text className="text-white text-base font-semibold">Sign out</Text>
+          <Text className="font-semibold text-base text-white">Sign out</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -48,7 +48,7 @@ export default function AuthScreen() {
       <View className="flex-1 px-6 pt-16">
         {/* Header */}
         <View className="mb-10">
-          <Text className="text-3xl font-bold text-white mb-2">
+          <Text className="mb-2 font-bold text-3xl text-white">
             PostHog Mobile
           </Text>
           <Text className="text-base text-dark-text-muted">
@@ -58,16 +58,16 @@ export default function AuthScreen() {
 
         {/* Form */}
         <View className="gap-4">
-          <Text className="text-sm font-medium text-dark-text-muted mb-2">
+          <Text className="mb-2 font-medium text-dark-text-muted text-sm">
             PostHog region
           </Text>
 
           {/* Region Picker */}
-          <View className="flex-row gap-3 mb-4">
+          <View className="mb-4 flex-row gap-3">
             {REGIONS.map((region) => (
               <TouchableOpacity
                 key={region.value}
-                className={`flex-1 py-3 px-4 rounded-lg border items-center ${
+                className={`flex-1 items-center rounded-lg border px-4 py-3 ${
                   selectedRegion === region.value
                     ? "border-orange-500 bg-orange-500/10"
                     : "border-dark-border bg-dark-surface"
@@ -75,7 +75,7 @@ export default function AuthScreen() {
                 onPress={() => setSelectedRegion(region.value)}
               >
                 <Text
-                  className={`text-sm font-medium ${
+                  className={`font-medium text-sm ${
                     selectedRegion === region.value
                       ? "text-orange-500"
                       : "text-dark-text-muted"
@@ -89,14 +89,14 @@ export default function AuthScreen() {
 
           {/* Error Message */}
           {error && (
-            <View className="bg-red-500/10 rounded-lg p-3 border border-red-500">
+            <View className="rounded-lg border border-red-500 bg-red-500/10 p-3">
               <Text className="text-red-500 text-sm">{error}</Text>
             </View>
           )}
 
           {/* Loading Message */}
           {isLoading && (
-            <View className="bg-blue-500/10 rounded-lg p-3 border border-blue-500">
+            <View className="rounded-lg border border-blue-500 bg-blue-500/10 p-3">
               <Text className="text-blue-500 text-sm">
                 Waiting for authorization in your browser...
               </Text>
@@ -105,7 +105,7 @@ export default function AuthScreen() {
 
           {/* Sign In Button */}
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center mt-2 ${
+            className={`mt-2 items-center rounded-lg py-4 ${
               isLoading ? "bg-gray-600" : "bg-orange-500"
             }`}
             onPress={handleSignIn}
@@ -114,7 +114,7 @@ export default function AuthScreen() {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-white text-base font-semibold">
+              <Text className="font-semibold text-base text-white">
                 Sign in with PostHog
               </Text>
             )}

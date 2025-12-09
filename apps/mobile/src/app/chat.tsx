@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Message, MessagesList } from "../components/MessagesList";
+import { type Message, MessagesList } from "../components/MessagesList";
 
 // Sample messages for demo
 const SAMPLE_MESSAGES: Message[] = [
@@ -13,8 +13,8 @@ export default function ChatScreen() {
   return (
     <SafeAreaView className="flex-1 bg-dark-bg">
       {/* Header */}
-      <View className="px-6 pt-4 pb-2 border-b border-dark-border">
-        <Text className="text-xl font-bold text-white">Chat</Text>
+      <View className="border-dark-border border-b px-6 pt-4 pb-2">
+        <Text className="font-bold text-white text-xl">Chat</Text>
       </View>
 
       {/* Messages */}
