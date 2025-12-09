@@ -3,6 +3,8 @@ import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
   ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  CaretUpIcon,
   CodeIcon,
   CopyIcon,
   FileIcon,
@@ -22,7 +24,8 @@ import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -344,6 +347,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
+  const openDiff = usePanelLayoutStore((state) => state.openDiff);
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -351,6 +355,40 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     enabled: !!repoPath,
     refetchOnMount: "always",
   });
+
+  const getActiveIndex = useCallback((): number => {
+    if (!layout) return -1;
+    return changedFiles.findIndex((file) =>
+      isDiffTabActiveInTree(layout.panelTree, file.path, file.status),
+    );
+  }, [layout, changedFiles]);
+
+  const handleKeyNavigation = useCallback(
+    (direction: "up" | "down") => {
+      if (changedFiles.length === 0) return;
+
+      const currentIndex = getActiveIndex();
+      const startIndex =
+        currentIndex === -1
+          ? direction === "down"
+            ? -1
+            : changedFiles.length
+          : currentIndex;
+      const newIndex =
+        direction === "up"
+          ? Math.max(0, startIndex - 1)
+          : Math.min(changedFiles.length - 1, startIndex + 1);
+
+      const file = changedFiles[newIndex];
+      if (file) {
+        openDiff(taskId, file.path, file.status);
+      }
+    },
+    [changedFiles, getActiveIndex, openDiff, taskId],
+  );
+
+  useHotkeys("up", () => handleKeyNavigation("up"), [handleKeyNavigation]);
+  useHotkeys("down", () => handleKeyNavigation("down"), [handleKeyNavigation]);
 
   const isFileActive = (file: ChangedFile): boolean => {
     if (!layout) return false;
@@ -381,6 +419,16 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
             isActive={isFileActive(file)}
           />
         ))}
+        <Flex align="center" justify="center" gap="1" py="2">
+          <CaretUpIcon size={12} color="var(--gray-10)" />
+          <Text size="1" className="text-gray-10">
+            /
+          </Text>
+          <CaretDownIcon size={12} color="var(--gray-10)" />
+          <Text size="1" className="text-gray-10" ml="1">
+            to switch files
+          </Text>
+        </Flex>
       </Flex>
     </Box>
   );
