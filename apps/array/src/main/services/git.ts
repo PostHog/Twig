@@ -109,6 +109,26 @@ const getRepositoryFromRemoteUrl = async (
   return repoMatch[1];
 };
 
+const validatePullRequestNumber = (prNumber: number): void => {
+  if (
+    typeof prNumber !== "number" ||
+    !Number.isInteger(prNumber) ||
+    prNumber < 1
+  ) {
+    throw new Error(`Invalid pull request number: ${prNumber}`);
+  }
+};
+
+const validateCommentId = (commentId: number): void => {
+  if (
+    typeof commentId !== "number" ||
+    !Number.isInteger(commentId) ||
+    commentId < 1
+  ) {
+    throw new Error(`Invalid comment ID: ${commentId}`);
+  }
+};
+
 export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
@@ -540,14 +560,7 @@ const getAllPullRequestComments = async (
   directoryPath: string,
   prNumber: number,
 ): Promise<any> => {
-  // Validate prNumber: must be a positive integer
-  if (
-    typeof prNumber !== "number" ||
-    !Number.isInteger(prNumber) ||
-    prNumber < 1
-  ) {
-    throw new Error(`Invalid pull request number: ${prNumber}`);
-  }
+  validatePullRequestNumber(prNumber);
 
   try {
     const { stdout } = await execAsync(
@@ -564,14 +577,7 @@ const getPullRequestReviewComments = async (
   directoryPath: string,
   prNumber: number,
 ): Promise<any> => {
-  // Validate prNumber: must be a positive integer
-  if (
-    typeof prNumber !== "number" ||
-    !Number.isInteger(prNumber) ||
-    prNumber < 1
-  ) {
-    throw new Error(`Invalid pull request number: ${prNumber}`);
-  }
+  validatePullRequestNumber(prNumber);
 
   try {
     const repo = await getRepositoryFromRemoteUrl(directoryPath);
@@ -600,14 +606,7 @@ const addPullRequestComment = async (
   prNumber: number,
   options: AddPullRequestCommentOptions,
 ): Promise<any> => {
-  // Validate prNumber: must be a positive integer
-  if (
-    typeof prNumber !== "number" ||
-    !Number.isInteger(prNumber) ||
-    prNumber < 1
-  ) {
-    throw new Error(`Invalid pull request number: ${prNumber}`);
-  }
+  validatePullRequestNumber(prNumber);
 
   // Validate required options
   if (!options.body || !options.commitId || !options.path) {
@@ -634,6 +633,24 @@ const addPullRequestComment = async (
     return JSON.parse(stdout);
   } catch (error) {
     throw new Error(`Failed to add PR comment: ${error}`);
+  }
+};
+
+const deletePullRequestComment = async (
+  directoryPath: string,
+  commentId: number,
+): Promise<void> => {
+  validateCommentId(commentId);
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId} -X DELETE`,
+      { cwd: directoryPath },
+    );
+  } catch (error) {
+    throw new Error(`Failed to delete PR comment: ${error}`);
   }
 };
 
@@ -948,6 +965,17 @@ export function registerGitIpc(
       options: AddPullRequestCommentOptions,
     ): Promise<any> => {
       return addPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "delete-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      commentId: number,
+    ): Promise<void> => {
+      return deletePullRequestComment(directoryPath, commentId);
     },
   );
 }
