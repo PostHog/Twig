@@ -1,3 +1,4 @@
+import { fetch } from "expo/fetch";
 import { create } from "zustand";
 import { getCloudUrlFromRegion } from "../constants/oauth";
 import {
@@ -49,7 +50,11 @@ function generateUUID(): string {
 }
 
 export const useMaxStore = create<MaxState>((set, get) => ({
-  conversation: null,
+  conversation: {
+    id: generateUUID(),
+    title: "New chat",
+    status: ConversationStatus.Idle,
+  },
   thread: [],
   streamingActive: false,
   conversationLoading: false,
@@ -115,6 +120,7 @@ export const useMaxStore = create<MaxState>((set, get) => ({
       );
 
       if (!response.ok) {
+        console.log(await response.text());
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -157,7 +163,7 @@ export const useMaxStore = create<MaxState>((set, get) => ({
         }
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if ((error as any).name === "AbortError") {
         // Request was cancelled, don't show error
         console.log("Request cancelled");
       } else {
