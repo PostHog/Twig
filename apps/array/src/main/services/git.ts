@@ -90,6 +90,25 @@ export const parseGitHubUrl = (url: string): GitHubRepo | null => {
   };
 };
 
+const getRepositoryFromRemoteUrl = async (
+  directoryPath: string,
+): Promise<string> => {
+  const remoteUrl = await getRemoteUrl(directoryPath);
+  if (!remoteUrl) {
+    throw new Error("No remote URL found");
+  }
+
+  // Parse repo from URL (handles both HTTPS and SSH formats)
+  const repoMatch = remoteUrl.match(
+    /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/,
+  );
+  if (!repoMatch) {
+    throw new Error(`Cannot parse repository from URL: ${remoteUrl}`);
+  }
+
+  return repoMatch[1];
+};
+
 export const isGitRepository = async (
   directoryPath: string,
 ): Promise<boolean> => {
@@ -555,20 +574,7 @@ const getPullRequestReviewComments = async (
   }
 
   try {
-    // Extract repo from remote URL (format: owner/repo)
-    const remoteUrl = await getRemoteUrl(directoryPath);
-    if (!remoteUrl) {
-      throw new Error("No remote URL found");
-    }
-
-    // Parse repo from URL (handles both HTTPS and SSH formats)
-    const repoMatch = remoteUrl.match(
-      /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/,
-    );
-    if (!repoMatch) {
-      throw new Error(`Cannot parse repository from URL: ${remoteUrl}`);
-    }
-    const repo = repoMatch[1];
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
 
     // TODO: Paginate if many comments
     const { stdout } = await execAsync(
@@ -578,6 +584,56 @@ const getPullRequestReviewComments = async (
     return JSON.parse(stdout);
   } catch (error) {
     throw new Error(`Failed to fetch PR review comments: ${error}`);
+  }
+};
+
+interface AddPullRequestCommentOptions {
+  body: string;
+  commitId: string;
+  path: string;
+  line: number;
+  side?: "LEFT" | "RIGHT";
+}
+
+const addPullRequestComment = async (
+  directoryPath: string,
+  prNumber: number,
+  options: AddPullRequestCommentOptions,
+): Promise<any> => {
+  // Validate prNumber: must be a positive integer
+  if (
+    typeof prNumber !== "number" ||
+    !Number.isInteger(prNumber) ||
+    prNumber < 1
+  ) {
+    throw new Error(`Invalid pull request number: ${prNumber}`);
+  }
+
+  // Validate required options
+  if (!options.body || !options.commitId || !options.path) {
+    throw new Error("body, commitId, and path are required");
+  }
+
+  if (typeof options.line !== "number" || options.line < 1) {
+    throw new Error("line must be a positive number");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+    const side = options.side || "RIGHT";
+
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments ` +
+        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f commit_id="${options.commitId}" ` +
+        `-f path="${options.path}" ` +
+        `-f line=${options.line} ` +
+        `-f side="${side}"`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to add PR comment: ${error}`);
   }
 };
 
@@ -880,6 +936,18 @@ export function registerGitIpc(
       prNumber: number,
     ): Promise<any> => {
       return getPullRequestReviewComments(directoryPath, prNumber);
+    },
+  );
+
+  ipcMain.handle(
+    "add-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+      options: AddPullRequestCommentOptions,
+    ): Promise<any> => {
+      return addPullRequestComment(directoryPath, prNumber, options);
     },
   );
 }
