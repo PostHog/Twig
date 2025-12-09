@@ -23,7 +23,7 @@ export function getCloudUrlFromRegion(region: CloudRegion): string {
     case "eu":
       return "https://eu.posthog.com";
     case "dev":
-      return "http://localhost:8010";
+      return "http://localhost:8237";
   }
 }
 

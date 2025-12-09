@@ -1,12 +1,17 @@
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-import * as Crypto from 'expo-crypto';
+import * as AuthSession from "expo-auth-session";
+import * as Crypto from "expo-crypto";
+import * as WebBrowser from "expo-web-browser";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
+  MOBILE_OAUTH_PORT,
   OAUTH_SCOPES,
-} from '../constants/oauth';
-import type { CloudRegion, OAuthTokenResponse, OAuthConfig } from '../types/oauth';
+} from "../constants/oauth";
+import type {
+  CloudRegion,
+  OAuthConfig,
+  OAuthTokenResponse,
+} from "../types/oauth";
 
 // Required for web browser auth session to work properly
 WebBrowser.maybeCompleteAuthSession();
@@ -15,26 +20,31 @@ WebBrowser.maybeCompleteAuthSession();
 async function generateCodeVerifier(): Promise<string> {
   const randomBytes = await Crypto.getRandomBytesAsync(32);
   return btoa(String.fromCharCode(...randomBytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 }
 
 async function generateCodeChallenge(verifier: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(verifier);
   const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, data);
-  
+
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 }
 
 export function getRedirectUri(): string {
+  // Use localhost callback for development, custom scheme for production
+  if (__DEV__) {
+    return `http://localhost:${MOBILE_OAUTH_PORT}/callback`;
+  }
+
   return AuthSession.makeRedirectUri({
-    scheme: 'posthog-mobile',
-    path: 'callback',
+    scheme: "posthog-mobile",
+    path: "callback",
   });
 }
 
@@ -49,18 +59,18 @@ export function getTokenEndpoint(region: CloudRegion): string {
 export async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
-  config: OAuthConfig
+  config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
   const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
   const redirectUri = getRedirectUri();
 
   const response = await fetch(`${cloudUrl}/oauth/token`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
       client_id: getOauthClientIdFromRegion(config.cloudRegion),
@@ -70,7 +80,9 @@ export async function exchangeCodeForToken(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Token exchange failed: ${response.statusText} - ${errorText}`);
+    throw new Error(
+      `Token exchange failed: ${response.statusText} - ${errorText}`,
+    );
   }
 
   return response.json();
@@ -78,17 +90,17 @@ export async function exchangeCodeForToken(
 
 export async function refreshAccessToken(
   refreshToken: string,
-  region: CloudRegion
+  region: CloudRegion,
 ): Promise<OAuthTokenResponse> {
   const cloudUrl = getCloudUrlFromRegion(region);
 
   const response = await fetch(`${cloudUrl}/oauth/token`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: getOauthClientIdFromRegion(region),
     }),
@@ -107,13 +119,15 @@ export interface OAuthFlowResult {
   error?: string;
 }
 
-export async function performOAuthFlow(config: OAuthConfig): Promise<OAuthFlowResult> {
+export async function performOAuthFlow(
+  config: OAuthConfig,
+): Promise<OAuthFlowResult> {
   try {
     const codeVerifier = await generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const redirectUri = getRedirectUri();
     const clientId = getOauthClientIdFromRegion(config.cloudRegion);
-    
+
     const discovery: AuthSession.DiscoveryDocument = {
       authorizationEndpoint: getAuthorizationEndpoint(config.cloudRegion),
       tokenEndpoint: getTokenEndpoint(config.cloudRegion),
@@ -126,37 +140,37 @@ export async function performOAuthFlow(config: OAuthConfig): Promise<OAuthFlowRe
       codeChallenge,
       codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
       extraParams: {
-        required_access_level: 'project',
+        required_access_level: "project",
       },
     });
 
     const authResult = await authRequest.promptAsync(discovery);
 
-    if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
+    if (authResult.type === "cancel" || authResult.type === "dismiss") {
       return {
         success: false,
-        error: 'Authorization cancelled',
+        error: "Authorization cancelled",
       };
     }
 
-    if (authResult.type === 'error') {
+    if (authResult.type === "error") {
       return {
         success: false,
-        error: authResult.error?.message || 'Authorization failed',
+        error: authResult.error?.message || "Authorization failed",
       };
     }
 
-    if (authResult.type !== 'success' || !authResult.params.code) {
+    if (authResult.type !== "success" || !authResult.params.code) {
       return {
         success: false,
-        error: 'No authorization code received',
+        error: "No authorization code received",
       };
     }
 
     const tokenResponse = await exchangeCodeForToken(
       authResult.params.code,
       codeVerifier,
-      config
+      config,
     );
 
     return {
@@ -166,7 +180,7 @@ export async function performOAuthFlow(config: OAuthConfig): Promise<OAuthFlowRe
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }

@@ -4,6 +4,9 @@ export const POSTHOG_US_CLIENT_ID = 'HCWoE0aRFMYxIxFNTTwkOORn5LBjOt2GVDzwSw5W';
 export const POSTHOG_EU_CLIENT_ID = 'AIvijgMS0dxKEmr5z6odvRd8Pkh5vts3nPTzgzU9';
 export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
 
+// OAuth callback port for mobile (different from desktop which uses 8237)
+export const MOBILE_OAUTH_PORT = 8238;
+
 export const OAUTH_SCOPES = [
   'user:read',
   'project:read',

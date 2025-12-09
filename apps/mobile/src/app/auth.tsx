@@ -1,26 +1,21 @@
-import React, { useState } from 'react';
-import {
-  View,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-} from 'react-native';
-import { useAuthStore } from '../stores/authStore';
-import type { CloudRegion } from '../types/oauth';
-import { Text } from '@components/text';
+import { useState } from "react";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuthStore } from "../stores/authStore";
+import type { CloudRegion } from "../types/oauth";
 
 const REGIONS: { value: CloudRegion; label: string }[] = [
-  { value: 'us', label: 'US Cloud' },
-  { value: 'eu', label: 'EU Cloud' },
+  { value: "us", label: "US Cloud" },
+  { value: "eu", label: "EU Cloud" },
 ];
 
 // Add dev region in development
 if (__DEV__) {
-  REGIONS.push({ value: 'dev', label: 'Development' });
+  REGIONS.push({ value: "dev", label: "Development" });
 }
 
-export function AuthScreen() {
-  const [selectedRegion, setSelectedRegion] = useState<CloudRegion>('us');
+export default function AuthScreen() {
+  const [selectedRegion, setSelectedRegion] = useState<CloudRegion>("us");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,12 +28,13 @@ export function AuthScreen() {
     try {
       await loginWithOAuth(selectedRegion);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to authenticate';
-      
-      if (message.includes('cancelled') || message.includes('cancel')) {
-        setError('Authorization cancelled.');
-      } else if (message.includes('timed out')) {
-        setError('Authorization timed out. Please try again.');
+      const message =
+        err instanceof Error ? err.message : "Failed to authenticate";
+
+      if (message.includes("cancelled") || message.includes("cancel")) {
+        setError("Authorization cancelled.");
+      } else if (message.includes("timed out")) {
+        setError("Authorization timed out. Please try again.");
       } else {
         setError(message);
       }
@@ -65,7 +61,7 @@ export function AuthScreen() {
           <Text className="text-sm font-medium text-dark-text-muted mb-2">
             PostHog region
           </Text>
-          
+
           {/* Region Picker */}
           <View className="flex-row gap-3 mb-4">
             {REGIONS.map((region) => (
@@ -73,16 +69,16 @@ export function AuthScreen() {
                 key={region.value}
                 className={`flex-1 py-3 px-4 rounded-lg border items-center ${
                   selectedRegion === region.value
-                    ? 'border-orange-500 bg-orange-500/10'
-                    : 'border-dark-border bg-dark-surface'
+                    ? "border-orange-500 bg-orange-500/10"
+                    : "border-dark-border bg-dark-surface"
                 }`}
                 onPress={() => setSelectedRegion(region.value)}
               >
                 <Text
                   className={`text-sm font-medium ${
                     selectedRegion === region.value
-                      ? 'text-orange-500'
-                      : 'text-dark-text-muted'
+                      ? "text-orange-500"
+                      : "text-dark-text-muted"
                   }`}
                 >
                   {region.label}
@@ -110,7 +106,7 @@ export function AuthScreen() {
           {/* Sign In Button */}
           <TouchableOpacity
             className={`py-4 rounded-lg items-center mt-2 ${
-              isLoading ? 'bg-gray-600' : 'bg-orange-500'
+              isLoading ? "bg-gray-600" : "bg-orange-500"
             }`}
             onPress={handleSignIn}
             disabled={isLoading}
