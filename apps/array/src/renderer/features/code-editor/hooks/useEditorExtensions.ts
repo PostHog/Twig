@@ -44,10 +44,13 @@ export function useEditorExtensions(
       if (!fileId) return;
 
       await createComment({
-        fileId,
+        prNumber: 0, // TODO: Get actual PR number from context
+        directoryPath: "", // TODO: Get actual directory path from context
+        path: fileId || "",
         line,
         side: "right",
         content,
+        commitId: "", // TODO: Get actual commit ID from context
       });
       closeComposer();
     },

@@ -68,13 +68,13 @@ export function CommentBubble({
     const trimmed = editContent.trim();
     if (!trimmed) return;
 
-    await updateComment(comment.id, trimmed);
+    await updateComment(comment.id, trimmed, ""); // TODO: Get actual directory path from context
     setIsEditing(false);
   }, [editContent, comment.id, updateComment]);
 
   const handleDelete = useCallback(async () => {
     if (window.confirm("Delete this comment? This action cannot be undone.")) {
-      await deleteComment(comment.id);
+      await deleteComment(comment.id, ""); // TODO: Get actual directory path from context
     }
   }, [comment.id, deleteComment]);
 

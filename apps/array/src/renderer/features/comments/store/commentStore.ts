@@ -40,9 +40,17 @@ interface CommentStore {
   // Commands (async, call API then update local state)
   createComment: (input: CreateCommentInput) => Promise<Comment>;
   createReply: (input: CreateReplyInput) => Promise<Comment>;
-  updateComment: (commentId: string, content: string) => Promise<void>;
-  deleteComment: (commentId: string) => Promise<void>;
-  resolveComment: (commentId: string, resolved: boolean) => Promise<void>;
+  updateComment: (
+    commentId: string,
+    content: string,
+    directoryPath: string,
+  ) => Promise<void>;
+  deleteComment: (commentId: string, directoryPath: string) => Promise<void>;
+  resolveComment: (
+    commentId: string,
+    resolved: boolean,
+    directoryPath: string,
+  ) => Promise<void>;
 
   // Local-only actions (no API call)
   toggleShowComments: () => void;
@@ -106,25 +114,33 @@ export const useCommentStore = create<CommentStore>()(
         return reply;
       },
 
-      updateComment: async (commentId: string, content: string) => {
+      updateComment: async (
+        commentId: string,
+        content: string,
+        directoryPath: string,
+      ) => {
         // Call API to update
-        await commentApi.updateComment(commentId, content);
+        await commentApi.updateComment(commentId, content, directoryPath);
 
         // Update local state
         get()._updateCommentInState(commentId, { content });
       },
 
-      deleteComment: async (commentId: string) => {
+      deleteComment: async (commentId: string, directoryPath: string) => {
         // Call API to delete
-        await commentApi.deleteComment(commentId);
+        await commentApi.deleteComment(commentId, directoryPath);
 
         // Update local state
         get()._removeCommentFromState(commentId);
       },
 
-      resolveComment: async (commentId: string, resolved: boolean) => {
+      resolveComment: async (
+        commentId: string,
+        resolved: boolean,
+        directoryPath: string,
+      ) => {
         // Call API to update resolve status
-        await commentApi.resolveComment(commentId, resolved);
+        await commentApi.resolveComment(commentId, resolved, directoryPath);
 
         // Update local state
         get()._updateCommentInState(commentId, { resolved });
