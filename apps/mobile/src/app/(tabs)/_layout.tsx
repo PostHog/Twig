@@ -1,7 +1,7 @@
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { DynamicColorIOS, Platform } from "react-native";
 
-export default function AuthTabLayout() {
+export default function TabsLayout() {
   // Dynamic colors for liquid glass effect on iOS
   const dynamicTextColor =
     Platform.OS === "ios"

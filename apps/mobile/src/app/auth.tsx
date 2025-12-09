@@ -28,8 +28,8 @@ export default function AuthScreen() {
 
     try {
       await loginWithOAuth(selectedRegion);
-      // Navigate to auth tabs on success
-      router.replace("/(auth)");
+      // Navigate to tabs on success
+      router.replace("/(tabs)");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to authenticate";

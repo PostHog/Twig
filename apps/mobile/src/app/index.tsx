@@ -4,9 +4,9 @@ import { useAuthStore } from "../stores/authStore";
 export default function Index() {
   const { isAuthenticated } = useAuthStore();
 
-  // Redirect to auth tabs if authenticated, otherwise to login
+  // Redirect to tabs if authenticated, otherwise to login
   if (isAuthenticated) {
-    return <Redirect href="/(auth)" />;
+    return <Redirect href="/(tabs)" />;
   }
 
   return <Redirect href="/auth" />;
