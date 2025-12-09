@@ -1,10 +1,13 @@
+import { GitHubAPIClient } from "@api/githubClient";
 import { PostHogAPIClient } from "@api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
+import { parseRepository } from "@renderer/utils/repository";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useNavigationStore } from "@stores/navigationStore";
+import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -36,6 +39,9 @@ interface AuthState {
   client: PostHogAPIClient | null;
   projectId: number | null; // Current team/project ID
 
+  // GitHub client
+  githubClient: GitHubAPIClient | null;
+
   // OpenAI API key (separate concern, kept for now)
   openaiApiKey: string | null;
   encryptedOpenaiKey: string | null;
@@ -50,6 +56,9 @@ interface AuthState {
   // Other methods
   setOpenAIKey: (apiKey: string) => Promise<void>;
   setDefaultWorkspace: (workspace: string) => void;
+  createGitHubClient: (accessToken: string, repository: string) => boolean;
+  initializeGitHubClient: (accessToken: string) => boolean;
+  initializeGitHubClientFromIntegration: () => Promise<boolean>;
   logout: () => void;
 }
 
@@ -69,6 +78,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       client: null,
       projectId: null,
+
+      // GitHub client
+      githubClient: null,
 
       // OpenAI key
       openaiApiKey: null,
@@ -143,6 +155,13 @@ export const useAuthStore = create<AuthState>()(
             project_id: projectId.toString(),
             region,
           });
+
+          // Initialize GitHub client if available
+          try {
+            await get().initializeGitHubClientFromIntegration();
+          } catch (error) {
+            log.warn("Failed to initialize GitHub client during login:", error);
+          }
         } catch {
           throw new Error("Failed to authenticate with PostHog");
         }
@@ -316,6 +335,16 @@ export const useAuthStore = create<AuthState>()(
               region: tokens.cloudRegion,
             });
 
+            // Initialize GitHub client if available
+            try {
+              await get().initializeGitHubClientFromIntegration();
+            } catch (error) {
+              log.warn(
+                "Failed to initialize GitHub client during OAuth init:",
+                error,
+              );
+            }
+
             if (state.encryptedOpenaiKey) {
               const decryptedOpenaiKey =
                 await window.electronAPI.retrieveApiKey(
@@ -359,6 +388,73 @@ export const useAuthStore = create<AuthState>()(
       setDefaultWorkspace: (workspace: string) => {
         set({ defaultWorkspace: workspace });
       },
+
+      createGitHubClient: (accessToken: string, repository: string) => {
+        const parsed = parseRepository(repository);
+        if (!parsed) {
+          log.error("Invalid repository format:", repository);
+          return false;
+        }
+
+        const githubClient = new GitHubAPIClient(
+          accessToken,
+          parsed.organization,
+          parsed.repoName,
+        );
+        set({ githubClient });
+        return true;
+      },
+
+      initializeGitHubClient: (accessToken: string) => {
+        const { selectedRepository } = repositoryWorkspaceStore.getState();
+
+        if (!selectedRepository) {
+          log.warn("No repository selected, cannot create GitHub client");
+          return false;
+        }
+
+        return get().createGitHubClient(accessToken, selectedRepository);
+      },
+
+      initializeGitHubClientFromIntegration: async () => {
+        const { client } = get();
+
+        if (!client) {
+          log.warn(
+            "No PostHog client available, cannot fetch GitHub integration",
+          );
+          return false;
+        }
+
+        try {
+          const integrations = await client.getIntegrations();
+          const githubIntegration = integrations.find(
+            (i: any) => i.kind === "github",
+          );
+
+          if (!githubIntegration) {
+            log.warn("No GitHub integration found");
+            return false;
+          }
+
+          const accessToken = await client.getGitHubAccessToken(
+            githubIntegration.id,
+          );
+
+          if (!accessToken) {
+            log.warn("No access token found for GitHub integration");
+            return false;
+          }
+
+          return get().initializeGitHubClient(accessToken);
+        } catch (error) {
+          log.error(
+            "Failed to initialize GitHub client from integration:",
+            error,
+          );
+          return false;
+        }
+      },
       logout: () => {
         track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
         resetUser();
@@ -381,6 +477,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           client: null,
           projectId: null,
+          githubClient: null,
           openaiApiKey: null,
           encryptedOpenaiKey: null,
         });

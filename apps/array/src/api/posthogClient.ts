@@ -370,4 +370,25 @@ export class PostHogAPIClient {
     });
     return data.results ?? [];
   }
+
+  async getGitHubAccessToken(
+    integrationId: string | number,
+  ): Promise<string | null> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/environments/${teamId}/integrations/${integrationId}/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/environments/${teamId}/integrations/${integrationId}/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch integration: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.access_token || null;
+  }
 }
