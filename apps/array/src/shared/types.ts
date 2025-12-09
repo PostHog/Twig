@@ -203,3 +203,17 @@ export interface DetectedApplication {
 export interface ExternalAppsPreferences {
   lastUsedApp?: string;
 }
+
+// Comment types for code review
+export interface Comment {
+  id: string;
+  fileId: string;
+  line: number;
+  side: "left" | "right";
+  content: string; // Markdown
+  author: string;
+  timestamp: Date;
+  resolved: boolean;
+  replies: Comment[];
+  isOutdated?: boolean;
+}
