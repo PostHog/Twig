@@ -17,12 +17,17 @@
     "expo-secure-store": "^15.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "^15.0.10",
-    "react": "^19.1.0",
+    "react": "19.1.0",
     "react-native": "0.81.5",
-    "zustand": "^4.5.7"
+    "zustand": "^4.5.7",
+    "nativewind": "^4.2.1",
+    "react-native-reanimated": "~3.17.5",
+    "react-native-safe-area-context": "5.4.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
+    "prettier-plugin-tailwindcss": "^0.5.14",
+    "tailwindcss": "^3.4.18",
     "typescript": "~5.9.2"
   },
   "private": true
