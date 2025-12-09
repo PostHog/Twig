@@ -36,9 +36,12 @@ export default function AgentScreen() {
   const fetchTasks = useCallback(async () => {
     try {
       const data = await getTasks();
-      setTasks(data.sort((a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      ));
+      setTasks(
+        data.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        ),
+      );
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
     }
@@ -87,9 +90,7 @@ export default function AgentScreen() {
 
     setCreating(true);
     try {
-      const githubIntegration = integrations.find(
-        (i) => i.kind === "github"
-      );
+      const githubIntegration = integrations.find((i) => i.kind === "github");
 
       const task = await createTask({
         description: prompt.trim(),
@@ -153,7 +154,9 @@ export default function AgentScreen() {
       <SafeAreaView className="flex-1 bg-neutral-900">
         <View className="flex-1 px-4 pt-4">
           <View className="flex-row items-center justify-between mb-6">
-            <Text className="text-white text-xl font-bold">New Conversation</Text>
+            <Text className="text-white text-xl font-bold">
+              New Conversation
+            </Text>
             <Pressable onPress={() => setShowNewTask(false)}>
               <Text className="text-blue-500">Cancel</Text>
             </Pressable>
@@ -188,7 +191,9 @@ export default function AgentScreen() {
                   >
                     <Text
                       className={`${
-                        selectedRepo === item ? "text-white" : "text-neutral-300"
+                        selectedRepo === item
+                          ? "text-white"
+                          : "text-neutral-300"
                       }`}
                     >
                       {item}
@@ -265,7 +270,9 @@ export default function AgentScreen() {
               onPress={handleNewTask}
               className="bg-blue-600 px-6 py-3 rounded-xl"
             >
-              <Text className="text-white font-medium">Start a Conversation</Text>
+              <Text className="text-white font-medium">
+                Start a Conversation
+              </Text>
             </Pressable>
           </View>
         ) : (

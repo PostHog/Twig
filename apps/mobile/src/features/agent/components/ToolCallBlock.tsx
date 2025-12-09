@@ -55,7 +55,10 @@ export function ToolCallBlock({
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2 flex-1">
             <Text className="text-neutral-400 text-sm">Tool:</Text>
-            <Text className="text-white text-sm font-mono flex-1" numberOfLines={1}>
+            <Text
+              className="text-white text-sm font-mono flex-1"
+              numberOfLines={1}
+            >
               {toolName}
             </Text>
           </View>
@@ -78,7 +81,10 @@ export function ToolCallBlock({
           {result !== undefined ? (
             <View>
               <Text className="text-neutral-400 text-xs mb-1">Result:</Text>
-              <Text className="text-neutral-300 text-xs font-mono" numberOfLines={10}>
+              <Text
+                className="text-neutral-300 text-xs font-mono"
+                numberOfLines={10}
+              >
                 {typeof result === "string"
                   ? result
                   : JSON.stringify(result, null, 2)}

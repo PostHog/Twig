@@ -56,7 +56,9 @@ export default function TaskDetailScreen() {
   const handleCancel = useCallback(() => {
     // For cloud runs, we don't have a direct cancel mechanism
     // The agent will complete its current operation
-    console.log("Cancel requested - cloud runs complete their current operation");
+    console.log(
+      "Cancel requested - cloud runs complete their current operation",
+    );
   }, []);
 
   if (loading) {

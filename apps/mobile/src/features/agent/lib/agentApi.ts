@@ -81,22 +81,21 @@ export async function createTask(options: CreateTaskOptions): Promise<Task> {
   const projectId = getProjectId();
   const headers = getAuthHeaders();
 
-  const response = await fetch(
-    `${baseUrl}/api/projects/${projectId}/tasks/`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        origin_product: "user_created",
-        ...options,
-      }),
-    },
-  );
+  const response = await fetch(`${baseUrl}/api/projects/${projectId}/tasks/`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      origin_product: "user_created",
+      ...options,
+    }),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error("Create task error:", errorText);
-    throw new Error(`Failed to create task: ${response.statusText} - ${errorText}`);
+    throw new Error(
+      `Failed to create task: ${response.statusText} - ${errorText}`,
+    );
   }
 
   return await response.json();
@@ -122,7 +121,10 @@ export async function runTaskInCloud(taskId: string): Promise<Task> {
   return await response.json();
 }
 
-export async function getTaskRun(taskId: string, runId: string): Promise<TaskRun> {
+export async function getTaskRun(
+  taskId: string,
+  runId: string,
+): Promise<TaskRun> {
   const baseUrl = getBaseUrl();
   const projectId = getProjectId();
   const headers = getAuthHeaders();

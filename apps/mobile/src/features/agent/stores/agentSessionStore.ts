@@ -110,7 +110,10 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
         }));
 
         get()._startCloudPolling(newRunId, newLogUrl);
-        console.log("Started new cloud session", { taskId, taskRunId: newRunId });
+        console.log("Started new cloud session", {
+          taskId,
+          taskRunId: newRunId,
+        });
         return;
       }
 
@@ -287,7 +290,8 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
                 const sessionUpdateEvent: SessionEvent = {
                   type: "session_update",
                   ts,
-                  notification: entry.notification.params as SessionNotification,
+                  notification: entry.notification
+                    .params as SessionNotification,
                 };
                 get()._handleEvent(taskRunId, sessionUpdateEvent);
 

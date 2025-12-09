@@ -1,10 +1,13 @@
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import {
   AssistantMessageType,
+  isArtifactMessage,
   isAssistantMessage,
   isHumanMessage,
+  isVisualizationArtifactContent,
   type ThreadMessage,
 } from "../types/max";
+import { VisualizationArtifact } from "./VisualizationArtifact";
 
 interface MessagesListProps {
   messages: ThreadMessage[];
@@ -14,8 +17,16 @@ interface MessagesListProps {
 function MessageBubble({ message }: { message: ThreadMessage }) {
   const isHuman = isHumanMessage(message);
   const isAssistant = isAssistantMessage(message);
+  const isArtifact = isArtifactMessage(message);
   const isFailure = message.type === AssistantMessageType.Failure;
   const isLoading = message.status === "loading";
+
+  // Handle artifact messages (visualizations)
+  if (isArtifact && isVisualizationArtifactContent(message.content)) {
+    return (
+      <VisualizationArtifact message={message} content={message.content} />
+    );
+  }
 
   // Get content based on message type
   let content = "";

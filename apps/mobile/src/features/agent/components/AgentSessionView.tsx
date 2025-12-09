@@ -53,9 +53,7 @@ function mapToolStatus(
   }
 }
 
-function parseSessionNotification(
-  notification: SessionNotification,
-): {
+function parseSessionNotification(notification: SessionNotification): {
   type: "user" | "agent" | "tool" | "tool_update";
   content?: string;
   toolData?: ToolData;
@@ -70,7 +68,8 @@ function parseSessionNotification(
     case "agent_message_chunk": {
       if (update.content?.type === "text") {
         return {
-          type: update.sessionUpdate === "user_message_chunk" ? "user" : "agent",
+          type:
+            update.sessionUpdate === "user_message_chunk" ? "user" : "agent",
           content: update.content.text,
         };
       }

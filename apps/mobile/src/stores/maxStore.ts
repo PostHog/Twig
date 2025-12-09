@@ -8,6 +8,7 @@ import {
   AssistantMessageType,
   type Conversation,
   ConversationStatus,
+  isArtifactMessage,
   isAssistantMessage,
   isHumanMessage,
   type RootAssistantMessage,
@@ -105,7 +106,7 @@ export const useMaxStore = create<MaxState>((set, get) => ({
       if (currentConversation?.id) {
         requestBody.conversation = currentConversation.id;
       }
-
+      console.log(requestBody);
       const response = await fetch(
         `${cloudUrl}/api/environments/${authState.projectId}/conversations/`,
         {
@@ -286,6 +287,7 @@ async function processSSEEvent(
       ) {
         eventType = AssistantEventType.Status;
       } else {
+        // Handle all message types including artifacts
         eventType = AssistantEventType.Message;
       }
     }
@@ -333,6 +335,7 @@ async function processSSEEvent(
         }
       } else if (
         isAssistantMessage(message) ||
+        isArtifactMessage(message) ||
         message.type === AssistantMessageType.Failure
       ) {
         // Check if message with same ID exists
