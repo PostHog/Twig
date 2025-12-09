@@ -15,7 +15,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export function getRedirectUri(): string {
   return AuthSession.makeRedirectUri({
-    scheme: "posthog-mobile",
+    scheme: "posthog",
     path: "callback",
   });
 }

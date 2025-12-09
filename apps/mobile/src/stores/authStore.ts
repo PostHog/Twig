@@ -1,10 +1,13 @@
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { CloudRegion, StoredTokens } from '../types/oauth';
-import { TOKEN_REFRESH_BUFFER_MS, OAUTH_SCOPES } from '../constants/oauth';
-import { performOAuthFlow, refreshAccessToken as refreshAccessTokenRequest } from '../lib/oauth';
-import { saveTokens, getTokens, deleteTokens } from '../lib/secureStorage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { OAUTH_SCOPES, TOKEN_REFRESH_BUFFER_MS } from "../constants/oauth";
+import {
+  performOAuthFlow,
+  refreshAccessToken as refreshAccessTokenRequest,
+} from "../lib/oauth";
+import { deleteTokens, getTokens, saveTokens } from "../lib/secureStorage";
+import type { CloudRegion, StoredTokens } from "../types/oauth";
 
 interface AuthState {
   // OAuth state
@@ -49,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
         });
 
         if (!result.success || !result.data) {
-          throw new Error(result.error || 'OAuth flow failed');
+          throw new Error(result.error || "OAuth flow failed");
         }
 
         const tokenResponse = result.data;
@@ -57,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
         const projectId = tokenResponse.scoped_teams?.[0];
 
         if (!projectId) {
-          throw new Error('No team found in OAuth scopes');
+          throw new Error("No team found in OAuth scopes");
         }
 
         const storedTokens: StoredTokens = {
@@ -87,12 +90,12 @@ export const useAuthStore = create<AuthState>()(
         const state = get();
 
         if (!state.oauthRefreshToken || !state.cloudRegion) {
-          throw new Error('No refresh token available');
+          throw new Error("No refresh token available");
         }
 
         const tokenResponse = await refreshAccessTokenRequest(
           state.oauthRefreshToken,
-          state.cloudRegion
+          state.cloudRegion,
         );
 
         const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
@@ -131,21 +134,22 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        const timeUntilRefresh = state.tokenExpiry - Date.now() - TOKEN_REFRESH_BUFFER_MS;
+        const timeUntilRefresh =
+          state.tokenExpiry - Date.now() - TOKEN_REFRESH_BUFFER_MS;
 
         if (timeUntilRefresh > 0) {
           refreshTimeoutId = setTimeout(() => {
             get()
               .refreshAccessToken()
               .catch((error) => {
-                console.error('Proactive token refresh failed:', error);
+                console.error("Proactive token refresh failed:", error);
               });
           }, timeUntilRefresh);
         } else {
           get()
             .refreshAccessToken()
             .catch((error) => {
-              console.error('Immediate token refresh failed:', error);
+              console.error("Immediate token refresh failed:", error);
             });
         }
       },
@@ -176,7 +180,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               await get().refreshAccessToken();
             } catch (error) {
-              console.error('Failed to refresh expired token:', error);
+              console.error("Failed to refresh expired token:", error);
               await deleteTokens();
               set({ isLoading: false, isAuthenticated: false });
               return false;
@@ -187,7 +191,7 @@ export const useAuthStore = create<AuthState>()(
           get().scheduleTokenRefresh();
           return true;
         } catch (error) {
-          console.error('Failed to initialize auth:', error);
+          console.error("Failed to initialize auth:", error);
           set({ isLoading: false, isAuthenticated: false });
           return false;
         }
@@ -212,12 +216,12 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'posthog-mobile-auth',
+      name: "posthog-auth",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
         projectId: state.projectId,
       }),
-    }
-  )
+    },
+  ),
 );

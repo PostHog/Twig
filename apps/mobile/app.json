@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "PostHog Mobile",
-    "slug": "posthog-mobile",
+    "slug": "posthog",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "bundler": "metro",
-    "scheme": "posthog-mobile",
+    "scheme": "posthog",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
