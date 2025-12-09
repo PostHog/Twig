@@ -302,24 +302,6 @@ export class SessionManager {
     }
   }
 
-  async setSessionMode(taskRunId: string, modeId: string): Promise<void> {
-    const session = this.sessions.get(taskRunId);
-    if (!session) {
-      throw new Error(`Session not found: ${taskRunId}`);
-    }
-
-    try {
-      await session.connection.setSessionMode({
-        sessionId: taskRunId,
-        modeId,
-      });
-      log.info("Session mode changed", { taskRunId, modeId });
-    } catch (err) {
-      log.error("Failed to set session mode", { taskRunId, modeId, err });
-      throw err;
-    }
-  }
-
   getSession(taskRunId: string): ManagedSession | undefined {
     return this.sessions.get(taskRunId);
   }
@@ -604,17 +586,6 @@ export function registerAgentIpc(
         toSessionConfig(params),
       );
       return session ? toSessionResponse(session) : null;
-    },
-  );
-
-  ipcMain.handle(
-    "agent-set-session-mode",
-    async (
-      _event: IpcMainInvokeEvent,
-      sessionId: string,
-      modeId: string,
-    ): Promise<void> => {
-      return sessionManager.setSessionMode(sessionId, modeId);
     },
   );
 }

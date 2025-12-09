@@ -10,9 +10,7 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { logger } from "@renderer/lib/logger";
-import type { SessionMode } from "./SessionModeSwitcher";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { SessionEvent } from "../stores/sessionStore";
 import { useSessionViewStore } from "../stores/sessionViewStore";
 import { AgentMessage } from "./AgentMessage";
@@ -341,8 +339,6 @@ function groupMessagesIntoTurns(
   return turns;
 }
 
-const log = logger.scope("session-view");
-
 export function SessionView({
   events,
   sessionId,
@@ -353,35 +349,6 @@ export function SessionView({
   repoPath,
 }: SessionViewProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [currentMode, setCurrentMode] = useState<SessionMode>("default");
-
-  const handleModeChange = useCallback(
-    async (mode: SessionMode) => {
-      if (!sessionId) return;
-      setCurrentMode(mode);
-      try {
-        await window.electronAPI.agentSetSessionMode(sessionId, mode);
-        log.info("Session mode changed", { sessionId, mode });
-      } catch (error) {
-        log.error("Failed to change session mode", { sessionId, mode, error });
-        setCurrentMode(currentMode);
-      }
-    },
-    [sessionId, currentMode],
-  );
-
-  useEffect(() => {
-    for (const event of events) {
-      if (event.type !== "session_update") continue;
-      const update = event.notification?.update;
-      if (update?.sessionUpdate === "current_mode_update" && "currentModeId" in update) {
-        const newMode = update.currentModeId as SessionMode;
-        if (newMode !== currentMode) {
-          setCurrentMode(newMode);
-        }
-      }
-    }
-  }, [events, currentMode]);
 
   const {
     showRawLogs,
@@ -654,8 +621,6 @@ export function SessionView({
               isLoading={isPromptPending}
               onSubmit={handleSubmit}
               onCancel={onCancelPrompt}
-              currentMode={currentMode}
-              onModeChange={handleModeChange}
             />
           </Box>
         </Flex>
