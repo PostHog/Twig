@@ -40,9 +40,11 @@ export function useCreateTask() {
       {
         description,
         repository,
+        github_integration,
       }: {
         description: string;
         repository?: string;
+        github_integration?: number;
         autoRun?: boolean;
         createdFrom?: "cli" | "command-menu";
       },
@@ -50,6 +52,7 @@ export function useCreateTask() {
       client.createTask({
         description,
         repository,
+        github_integration,
       }) as unknown as Promise<Task>,
     {
       onSuccess: (_task, variables) => {
