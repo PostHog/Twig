@@ -5,6 +5,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthStore } from "../stores/authStore";
 
@@ -50,12 +51,14 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <View className="flex-1 bg-dark-bg">
-          <RootLayoutNav />
-          <StatusBar style="light" />
-        </View>
-      </QueryClientProvider>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <View className="flex-1 bg-dark-bg">
+            <RootLayoutNav />
+            <StatusBar style="light" />
+          </View>
+        </QueryClientProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

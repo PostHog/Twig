@@ -5,6 +5,7 @@ export enum AssistantMessageType {
   Human = "human",
   Assistant = "ai",
   Failure = "ai/failure",
+  ToolCall = "ai/tool_call",
 }
 
 export enum AssistantEventType {
@@ -40,10 +41,22 @@ export interface FailureMessage extends BaseAssistantMessage {
   content?: string;
 }
 
+export type ToolCallStatus = "pending" | "running" | "completed" | "error";
+
+export interface ToolCallMessage extends BaseAssistantMessage {
+  type: AssistantMessageType.ToolCall;
+  toolName: string;
+  toolCallId: string;
+  status: ToolCallStatus;
+  args?: Record<string, unknown>;
+  result?: unknown;
+}
+
 export type RootAssistantMessage =
   | HumanMessage
   | AssistantMessage
-  | FailureMessage;
+  | FailureMessage
+  | ToolCallMessage;
 
 export type MessageStatus = "loading" | "completed" | "error";
 
@@ -85,4 +98,10 @@ export function isFailureMessage(
   message: RootAssistantMessage,
 ): message is FailureMessage {
   return message.type === AssistantMessageType.Failure;
+}
+
+export function isToolCallMessage(
+  message: RootAssistantMessage,
+): message is ToolCallMessage {
+  return message.type === AssistantMessageType.ToolCall;
 }

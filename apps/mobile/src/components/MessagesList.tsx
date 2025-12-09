@@ -1,95 +1,117 @@
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  type StyleProp,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import {
   AssistantMessageType,
   isAssistantMessage,
   isHumanMessage,
+  isToolCallMessage,
   type ThreadMessage,
 } from "../types/max";
+import { AIMessage } from "./AIMessage";
+import { FailureMessage } from "./FailureMessage";
+import { HumanMessage } from "./HumanMessage";
+import { ToolCallMessage } from "./ToolCallMessage";
 
 interface MessagesListProps {
   messages: ThreadMessage[];
-  isLoading?: boolean;
+  streamingActive?: boolean;
+  contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
-function MessageBubble({ message }: { message: ThreadMessage }) {
-  const isHuman = isHumanMessage(message);
-  const isAssistant = isAssistantMessage(message);
-  const isFailure = message.type === AssistantMessageType.Failure;
-  const isLoading = message.status === "loading";
-
-  // Get content based on message type
-  let content = "";
-  if (isHuman || isAssistant || isFailure) {
-    content = message.content || "";
+function MessageItem({ item }: { item: ThreadMessage }) {
+  if (isHumanMessage(item)) {
+    return <HumanMessage content={item.content} />;
   }
 
-  // Show thinking indicator for assistant messages
-  const thinking = isAssistant && message.meta?.thinking?.[0]?.thinking;
+  if (isToolCallMessage(item)) {
+    return (
+      <ToolCallMessage
+        toolName={item.toolName}
+        status={item.status}
+        args={item.args}
+        result={item.result}
+      />
+    );
+  }
 
+  if (isAssistantMessage(item)) {
   return (
-    <View className={`px-4 py-3 ${isHuman ? "items-end" : "items-start"}`}>
-      <View
-        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-          isHuman
-            ? "bg-blue-600"
-            : isFailure
-              ? "bg-red-900/50"
-              : "bg-dark-border"
-        }`}
-      >
-        {isLoading && !content && thinking ? (
-          <View className="flex-row items-center gap-2">
-            <ActivityIndicator size="small" color="#9CA3AF" />
-            <Text className="text-base text-dark-text-muted italic">
-              {thinking}
-            </Text>
-          </View>
-        ) : isLoading && !content ? (
-          <View className="flex-row items-center gap-2">
-            <ActivityIndicator size="small" color="#9CA3AF" />
-            <Text className="text-base text-dark-text-muted italic">
-              Thinking...
-            </Text>
-          </View>
-        ) : (
-          <Text
-            className={`text-base ${isHuman ? "text-white" : isFailure ? "text-red-300" : "text-white"}`}
-          >
-            {content}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
+      <AIMessage
+        content={item.content}
+        isLoading={item.status === "loading"}
+        thinkingText={item.meta?.thinking?.[0]?.thinking}
+      />
+    );
+  }
+
+  if (item.type === AssistantMessageType.Failure) {
+    return <FailureMessage content={item.content} />;
+  }
+
+  return null;
 }
 
-export function MessagesList({ messages, isLoading }: MessagesListProps) {
-  // Add a loading indicator at the end if streaming and last message is complete
-  const displayMessages = [...messages];
-  const lastMessage = displayMessages[displayMessages.length - 1];
+export function MessagesList({
+  messages,
+  streamingActive,
+  contentContainerStyle,
+}: MessagesListProps) {
+  const flatListRef = useRef<FlatList>(null);
 
-  if (isLoading && (!lastMessage || lastMessage.status === "completed")) {
-    displayMessages.push({
-      type: AssistantMessageType.Assistant,
-      content: "",
-      status: "loading",
-      id: "loading-indicator",
-    });
-  }
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0 && flatListRef.current) {
+      flatListRef.current.scrollToOffset({ offset: 0, animated: true });
+    }
+  }, [messages.length]);
+
+  // Reverse messages for inverted FlatList
+  const reversedMessages = [...messages].reverse();
 
   return (
     <FlatList
-      data={displayMessages}
+      ref={flatListRef}
+      data={reversedMessages}
       keyExtractor={(item, index) => item.id || `msg-${index}`}
       inverted
-      renderItem={({ item }) => <MessageBubble message={item} />}
-      contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+      renderItem={({ item }) => <MessageItem item={item} />}
+      contentContainerStyle={contentContainerStyle}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
       ListEmptyComponent={
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-base text-dark-text-muted">
+        <View
+          className="flex-1 items-center justify-center px-8"
+          style={{ transform: [{ scaleY: -1 }] }}
+        >
+          <Text className="mb-2 text-center font-semibold text-dark-text text-xl">
+            Start a conversation
+          </Text>
+          <Text className="text-center text-base text-dark-text-muted">
             Ask Max anything about your product data
           </Text>
         </View>
+      }
+      ListFooterComponent={
+        streamingActive &&
+        messages.length > 0 &&
+        messages[messages.length - 1]?.status !== "loading" ? (
+          <View className="items-start px-4 py-2">
+            <View className="flex-row items-center gap-2 rounded-2xl rounded-bl-md bg-dark-surface px-4 py-3">
+              <ActivityIndicator size="small" color="#a3a3a3" />
+              <Text className="text-base text-dark-text-muted italic">
+                Thinking...
+              </Text>
+            </View>
+          </View>
+        ) : null
       }
     />
   );

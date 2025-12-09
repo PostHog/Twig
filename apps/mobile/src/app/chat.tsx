@@ -1,33 +1,50 @@
 import { Stack } from "expo-router";
-import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useCallback } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChatInput } from "../components/ChatInput";
+import { MessagesList } from "../components/MessagesList";
+import { useGradualAnimation } from "../hooks/useGradualAnimation";
 import { useMaxStore } from "../stores/maxStore";
 
 export default function ChatScreen() {
-  const [inputText, setInputText] = useState("");
-  const {
-    thread,
-    conversation,
-    streamingActive,
-    askMax,
-    stopGeneration,
-    resetThread,
-  } = useMaxStore();
+  const insets = useSafeAreaInsets();
+  const { thread, streamingActive, askMax, stopGeneration, resetThread } =
+    useMaxStore();
 
-  const handleSend = async () => {
-    const trimmed = inputText.trim();
-    if (!trimmed) return;
-    setInputText("");
-    await askMax(trimmed);
-  };
+  const handleSend = useCallback(
+    async (message: string) => {
+      await askMax(message);
+    },
+    [askMax],
+  );
+
+  const headerRight = useCallback(() => {
+    if (streamingActive) {
+      return (
+        <TouchableOpacity onPress={stopGeneration} className="px-2">
+          <Text className="font-medium text-red-500">Stop</Text>
+        </TouchableOpacity>
+      );
+    }
+    if (thread.length > 0) {
+      return (
+        <TouchableOpacity onPress={resetThread} className="px-2">
+          <Text className="font-medium text-orange-500">New</Text>
+        </TouchableOpacity>
+      );
+    }
+    return null;
+  }, [streamingActive, thread.length, stopGeneration, resetThread]);
+
+  const { height } = useGradualAnimation();
+
+  const contentPosition = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: -height.value }],
+    };
+  }, []);
 
   return (
     <>
@@ -35,95 +52,31 @@ export default function ChatScreen() {
         options={{
           headerShown: true,
           headerTitle: "Chat",
+          headerBackTitle: "Back",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
-          headerRight: streamingActive
-            ? () => (
-                <TouchableOpacity onPress={stopGeneration}>
-                  <Text className="text-red-500">Stop</Text>
-                </TouchableOpacity>
-              )
-            : undefined,
+          headerTitleStyle: {
+            fontWeight: "600",
+          },
+          headerRight,
         }}
       />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 bg-black"
-        keyboardVerticalOffset={100}
-      >
-        {/* JSON Output */}
-        <ScrollView className="flex-1 p-4">
-          {/* Conversation metadata */}
-          {conversation && (
-            <View className="mb-4">
-              <Text className="mb-1 font-bold text-green-400">
-                Conversation:
-              </Text>
-              <Text className="font-mono text-green-300 text-xs">
-                {JSON.stringify(conversation, null, 2)}
-              </Text>
-            </View>
-          )}
+      <Animated.View className="flex-1 bg-dark-bg" style={[contentPosition]}>
+        <MessagesList
+          messages={thread}
+          streamingActive={streamingActive}
+          contentContainerStyle={{
+            paddingTop: 80 + insets.bottom,
+            paddingBottom: 16,
+            flexGrow: thread.length === 0 ? 1 : undefined,
+          }}
+        />
 
-          {/* Status */}
-          <View className="mb-4">
-            <Text className="text-gray-400">
-              Streaming: {streamingActive ? "true" : "false"}
-            </Text>
-            <Text className="text-gray-400">Messages: {thread.length}</Text>
-          </View>
-
-          {/* Messages */}
-          {thread.map((message, index) => (
-            <View key={message.id || `msg-${index}`} className="mb-4">
-              <Text className="mb-1 font-bold text-yellow-400">
-                [{index}] {message.type} ({message.status})
-              </Text>
-              <Text className="font-mono text-white text-xs">
-                {JSON.stringify(message, null, 2)}
-              </Text>
-            </View>
-          ))}
-
-          {thread.length === 0 && !streamingActive && (
-            <Text className="text-center text-gray-500">
-              Send a message to start
-            </Text>
-          )}
-
-          {thread.length > 0 && !streamingActive && (
-            <TouchableOpacity onPress={resetThread} className="mt-4 py-2">
-              <Text className="text-center text-blue-500 underline">
-                Start a new chat
-              </Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-
-        {/* Input */}
-        <View className="flex-row items-center gap-2 border-gray-800 border-t p-4">
-          <TextInput
-            className="flex-1 rounded-lg bg-gray-800 px-4 py-3 text-white"
-            placeholder="Type a message..."
-            placeholderTextColor="#666"
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={handleSend}
-            editable={!streamingActive}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!inputText.trim() || streamingActive}
-            className={`rounded-lg px-4 py-3 ${
-              inputText.trim() && !streamingActive
-                ? "bg-blue-600"
-                : "bg-gray-700"
-            }`}
-          >
-            <Text className="text-white">Send</Text>
-          </TouchableOpacity>
+        {/* Fixed input at bottom */}
+        <View className="absolute inset-x-0 bottom-0">
+          <ChatInput onSend={handleSend} disabled={streamingActive} />
         </View>
-      </KeyboardAvoidingView>
+      </Animated.View>
     </>
   );
 }
