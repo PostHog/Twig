@@ -96,13 +96,16 @@ export function DiffEditorPanel({
           originalContent={originalContent ?? ""}
           modifiedContent={modifiedContent ?? ""}
           filePath={absolutePath}
+          fileId={filePath} // Use relative path as fileId for comments
           onContentChange={handleContentChange}
         />
       ) : (
         <CodeMirrorEditor
           content={content ?? ""}
           filePath={absolutePath}
+          fileId={filePath}
           readOnly
+          enableComments
         />
       )}
     </Box>
