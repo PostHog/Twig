@@ -45,14 +45,15 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
+      {/* TODO: Fix this and use NativeTabs.Trigger for opening the chat */}
       {/* Chat - Separate floating button (iOS search role style) */}
-      <NativeTabs.Trigger name="chat" role="search">
+      {/* <NativeTabs.Trigger name="chat" role="search">
         <Label hidden />
         <Icon
           sf={{ default: "plus", selected: "plus" }}
           drawable="ic_menu_add"
         />
-      </NativeTabs.Trigger>
+      </NativeTabs.Trigger> */}
     </NativeTabs>
   );
 }
