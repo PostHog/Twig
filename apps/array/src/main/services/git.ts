@@ -517,6 +517,46 @@ export const detectSSHError = (output: string): string | undefined => {
   return `SSH test failed: ${output.substring(0, 200)}`;
 };
 
+const getPullRequestReviewComments = async (
+  directoryPath: string,
+  prNumber: number,
+): Promise<any> => {
+  // Validate prNumber: must be a positive integer
+  if (
+    typeof prNumber !== "number" ||
+    !Number.isInteger(prNumber) ||
+    prNumber < 1
+  ) {
+    throw new Error(`Invalid pull request number: ${prNumber}`);
+  }
+
+  try {
+    // Extract repo from remote URL (format: owner/repo)
+    const remoteUrl = await getRemoteUrl(directoryPath);
+    if (!remoteUrl) {
+      throw new Error("No remote URL found");
+    }
+
+    // Parse repo from URL (handles both HTTPS and SSH formats)
+    const repoMatch = remoteUrl.match(
+      /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/,
+    );
+    if (!repoMatch) {
+      throw new Error(`Cannot parse repository from URL: ${remoteUrl}`);
+    }
+    const repo = repoMatch[1];
+
+    // TODO: Paginate if many comments
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments`,
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to fetch PR review comments: ${error}`);
+  }
+};
+
 export function registerGitIpc(
   getMainWindow: () => BrowserWindow | null,
 ): void {
@@ -794,6 +834,17 @@ export function registerGitIpc(
       fileStatus: GitFileStatus,
     ): Promise<void> => {
       return discardFileChanges(directoryPath, filePath, fileStatus);
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-review-comments",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+    ): Promise<any> => {
+      return getPullRequestReviewComments(directoryPath, prNumber);
     },
   );
 }

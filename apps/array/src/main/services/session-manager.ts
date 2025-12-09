@@ -648,19 +648,4 @@ export function registerAgentIpc(
       sessionManager.updateSessionToken(taskRunId, newToken);
     },
   );
-
-  ipcMain.handle(
-    "agent-get-pr-review-comments",
-    async (
-      _event: IpcMainInvokeEvent,
-      sessionId: string,
-      prNumber: number,
-    ): Promise<any> => {
-      const session = sessionManager.getSession(sessionId);
-      if (!session) {
-        throw new Error(`Session not found: ${sessionId}`);
-      }
-      return session.agent.getPullRequestReviewComments(prNumber);
-    },
-  );
 }
