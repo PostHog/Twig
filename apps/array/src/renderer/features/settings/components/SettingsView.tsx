@@ -77,6 +77,11 @@ export function SettingsView() {
     queryFn: () => window.electronAPI.settings.getWorktreeLocation(),
   });
 
+  const { data: appVersion } = useQuery({
+    queryKey: ["app", "version"],
+    queryFn: () => window.electronAPI.getAppVersion(),
+  });
+
   const [localWorktreeLocation, setLocalWorktreeLocation] =
     useState<string>("");
 
@@ -367,6 +372,17 @@ export function SettingsView() {
                         {REGION_URLS[cloudRegion as CloudRegion]}
                       </Text>
                     </Flex>
+                  </Flex>
+                )}
+
+                {appVersion && (
+                  <Flex direction="column" gap="2">
+                    <Text size="1" weight="medium">
+                      Version
+                    </Text>
+                    <Text size="1" color="gray">
+                      {appVersion}
+                    </Text>
                   </Flex>
                 )}
 
