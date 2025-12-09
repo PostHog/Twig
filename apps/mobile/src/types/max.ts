@@ -6,6 +6,7 @@ export enum AssistantMessageType {
   Assistant = "ai",
   Artifact = "ai/artifact",
   Failure = "ai/failure",
+  ToolCall = "ai/tool_call",
 }
 
 /** Source of artifact - determines which model to fetch from */
@@ -88,11 +89,24 @@ export interface ArtifactMessage extends BaseAssistantMessage {
   content: ArtifactContent;
 }
 
+export type ToolCallStatus = "pending" | "running" | "completed" | "error";
+
+export interface ToolCallMessage extends BaseAssistantMessage {
+  type: AssistantMessageType.ToolCall;
+  toolName: string;
+  toolCallId: string;
+  status: ToolCallStatus;
+  args?: Record<string, unknown>;
+  result?: unknown;
+}
+
 export type RootAssistantMessage =
   | HumanMessage
   | AssistantMessage
   | ArtifactMessage
-  | FailureMessage;
+  | FailureMessage
+  | FailureMessage
+  | ToolCallMessage;
 
 export type MessageStatus = "loading" | "completed" | "error";
 
@@ -146,4 +160,10 @@ export function isVisualizationArtifactContent(
   content: ArtifactContent,
 ): content is VisualizationArtifactContent {
   return content.content_type === ArtifactContentType.Visualization;
+}
+
+export function isToolCallMessage(
+  message: RootAssistantMessage,
+): message is ToolCallMessage {
+  return message.type === AssistantMessageType.ToolCall;
 }
