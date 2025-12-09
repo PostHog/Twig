@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,6 +28,8 @@ export default function AuthScreen() {
 
     try {
       await loginWithOAuth(selectedRegion);
+      // Navigate to auth tabs on success
+      router.replace("/(auth)");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to authenticate";

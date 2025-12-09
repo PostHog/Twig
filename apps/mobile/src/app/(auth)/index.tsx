@@ -1,14 +1,13 @@
 import { Link } from "expo-router";
-import { Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useAuthStore } from "../../stores/authStore";
 
 export default function TasksScreen() {
   const { cloudRegion, projectId, logout } = useAuthStore();
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-bg">
-      <View className="flex-1 px-6 pt-16">
+    <ScrollView className="flex-1 bg-dark-bg">
+      <View className="px-6 pt-16 pb-32">
         {/* Header */}
         <View className="mb-10">
           <Text className="mb-2 font-bold text-3xl text-white">Tasks</Text>
@@ -46,7 +45,7 @@ export default function TasksScreen() {
         </Link>
 
         {/* Empty State */}
-        <View className="flex-1 items-center justify-center">
+        <View className="flex-1 items-center justify-center py-20">
           <Text className="text-base text-dark-text-muted">No tasks yet</Text>
         </View>
 
@@ -58,6 +57,6 @@ export default function TasksScreen() {
           <Text className="text-center font-medium text-red-500">Sign out</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ScrollView>
   );
 }
