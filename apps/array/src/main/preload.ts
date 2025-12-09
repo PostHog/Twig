@@ -282,6 +282,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }> => ipcRenderer.invoke("get-diff-stats", repoPath),
   getCurrentBranch: (repoPath: string): Promise<string | undefined> =>
     ipcRenderer.invoke("get-current-branch", repoPath),
+  getDefaultBranch: (repoPath: string): Promise<string> =>
+    ipcRenderer.invoke("get-default-branch", repoPath),
+  getAllBranches: (repoPath: string): Promise<string[]> =>
+    ipcRenderer.invoke("get-all-branches", repoPath),
+  createBranch: (repoPath: string, branchName: string): Promise<void> =>
+    ipcRenderer.invoke("create-branch", repoPath, branchName),
   discardFileChanges: (
     repoPath: string,
     filePath: string,

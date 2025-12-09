@@ -25,6 +25,7 @@ interface UseTaskCreationOptions {
   selectedRepository?: string | null;
   githubIntegrationId?: number;
   workspaceMode: WorkspaceMode;
+  branch?: string | null;
 }
 
 interface UseTaskCreationReturn {
@@ -51,6 +52,7 @@ export function useTaskCreation({
   selectedRepository,
   githubIntegrationId,
   workspaceMode,
+  branch,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const { mutate: createTask, invalidateTasks } = useCreateTask();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,7 +136,12 @@ export function useTaskCreation({
               try {
                 await useWorkspaceStore
                   .getState()
-                  .ensureWorkspace(newTask.id, selectedDirectory, "cloud");
+                  .ensureWorkspace(
+                    newTask.id,
+                    selectedDirectory,
+                    "cloud",
+                    branch,
+                  );
               } catch (error) {
                 log.error("Failed to create cloud workspace:", error);
               }
@@ -166,6 +173,7 @@ export function useTaskCreation({
                     newTask.id,
                     selectedDirectory,
                     workspaceMode,
+                    branch,
                   );
                 agentCwd = workspace.worktreePath ?? workspace.folderPath;
               } catch (error) {
@@ -204,6 +212,7 @@ export function useTaskCreation({
     selectedRepository,
     githubIntegrationId,
     workspaceMode,
+    branch,
     createTask,
     saveRepoPath,
     navigateToTask,

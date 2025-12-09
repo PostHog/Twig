@@ -70,6 +70,7 @@ export interface CreateWorkspaceOptions {
   folderId: string;
   folderPath: string;
   mode: WorkspaceMode;
+  branch?: string;
 }
 
 export interface ScriptExecutionResult {

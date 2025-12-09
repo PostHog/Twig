@@ -61,12 +61,7 @@ export function FolderPicker({
         onClick={handleOpenFilePicker}
       >
         <Flex justify="between" align="center" gap="2" width="100%">
-          <Flex
-            align="center"
-            gap="2"
-            width="250px"
-            style={{ minWidth: 0, flex: 1 }}
-          >
+          <Flex align="center" gap="2">
             <FolderIcon size={16} weight="regular" style={{ flexShrink: 0 }} />
             <Text
               size={size}
@@ -74,6 +69,7 @@ export function FolderPicker({
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
+                maxWidth: "120px",
               }}
               truncate
             >
@@ -90,13 +86,8 @@ export function FolderPicker({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         <Button color="gray" variant="outline" size={size}>
-          <Flex justify="between" align="center" gap="2" width="100%">
-            <Flex
-              align="center"
-              gap="2"
-              width="250px"
-              style={{ minWidth: 0, flex: 1 }}
-            >
+          <Flex justify="between" align="center" gap="2">
+            <Flex align="center" gap="2" style={{ minWidth: 0 }}>
               <FolderIcon
                 size={16}
                 weight="regular"

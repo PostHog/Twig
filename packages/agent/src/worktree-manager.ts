@@ -628,7 +628,9 @@ export class WorktreeManager {
     }
   }
 
-  async createWorktree(): Promise<WorktreeInfo> {
+  async createWorktree(options?: {
+    baseBranch?: string;
+  }): Promise<WorktreeInfo> {
     // Only modify .git/info/exclude when using in-repo storage
     if (!this.usesExternalPath()) {
       await this.ensureArrayDirIgnored();
@@ -644,7 +646,7 @@ export class WorktreeManager {
     const worktreeName = await this.generateUniqueWorktreeName();
     const worktreePath = this.getWorktreePath(worktreeName);
     const branchName = `array/${worktreeName}`;
-    const baseBranch = await this.getDefaultBranch();
+    const baseBranch = options?.baseBranch ?? (await this.getDefaultBranch());
 
     this.logger.info("Creating worktree", {
       worktreeName,
