@@ -216,7 +216,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "posthog-mobile-auth",
+      name: "posthog-auth",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         cloudRegion: state.cloudRegion,
