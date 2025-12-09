@@ -44,6 +44,12 @@ function RootLayoutNav() {
           headerTintColor: "#fff",
         }}
       />
+      <Stack.Screen
+        name="agent"
+        options={{
+          headerShown: true,
+        }}
+      />
     </Stack>
   );
 }

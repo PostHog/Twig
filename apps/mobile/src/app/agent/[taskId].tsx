@@ -2,10 +2,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AgentSessionView } from "../../../features/agent/components/AgentSessionView";
-import { getTask } from "../../../features/agent/lib/agentApi";
-import { useAgentSessionStore } from "../../../features/agent/stores/agentSessionStore";
-import type { Task } from "../../../features/agent/types/agent";
+import { AgentSessionView } from "../../features/agent/components/AgentSessionView";
+import { getTask } from "../../features/agent/lib/agentApi";
+import { useAgentSessionStore } from "../../features/agent/stores/agentSessionStore";
+import type { Task } from "../../features/agent/types/agent";
 
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();

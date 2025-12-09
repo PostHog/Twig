@@ -16,8 +16,8 @@ import {
   getIntegrations,
   getTasks,
   runTaskInCloud,
-} from "../../features/agent/lib/agentApi";
-import type { Integration, Task } from "../../features/agent/types/agent";
+} from "../features/agent/lib/agentApi";
+import type { Integration, Task } from "../features/agent/types/agent";
 
 export default function AgentScreen() {
   const router = useRouter();
@@ -105,7 +105,7 @@ export default function AgentScreen() {
       setPrompt("");
       setSelectedRepo(null);
 
-      router.push(`/(auth)/agent/${task.id}`);
+      router.push(`/agent/${task.id}`);
     } catch (error) {
       console.error("Failed to create task:", error);
     } finally {
@@ -115,7 +115,7 @@ export default function AgentScreen() {
 
   const renderTask = useCallback(
     ({ item }: { item: Task }) => (
-      <Link href={`/(auth)/agent/${item.id}`} asChild>
+      <Link href={`/agent/${item.id}`} asChild>
         <Pressable className="bg-neutral-800 rounded-xl p-4 mb-3">
           <Text className="text-white font-medium mb-1" numberOfLines={2}>
             {item.title || item.description}

@@ -7,6 +7,10 @@ export default function TasksScreen() {
   const { cloudRegion, projectId } = useAuthStore();
 
   const handleCreateTask = () => {
+    router.push("/agent");
+  };
+
+  const handleChatWithAI = () => {
     router.push("/chat");
   };
 
@@ -24,10 +28,20 @@ export default function TasksScreen() {
         {/* Create New Task Button */}
         <Pressable
           onPress={handleCreateTask}
-          className="mb-6 items-center rounded-xl bg-orange-500 py-4 active:bg-orange-600"
+          className="mb-4 items-center rounded-xl bg-orange-500 py-4 active:bg-orange-600"
         >
           <Text className="font-semibold text-base text-white">
             Create new task
+          </Text>
+        </Pressable>
+
+        {/* Chat with PostHog AI Button */}
+        <Pressable
+          onPress={handleChatWithAI}
+          className="mb-6 items-center rounded-xl bg-blue-600 py-4 active:bg-blue-700"
+        >
+          <Text className="font-semibold text-base text-white">
+            Chat with PostHog AI
           </Text>
         </Pressable>
 
