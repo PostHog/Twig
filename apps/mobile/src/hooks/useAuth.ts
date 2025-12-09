@@ -1,4 +1,4 @@
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore } from "../stores/authStore";
 
 /**
  * A convenience hook for accessing common auth state and methods.

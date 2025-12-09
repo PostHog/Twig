@@ -1,4 +1,4 @@
-export type CloudRegion = 'us' | 'eu' | 'dev';
+export type CloudRegion = "us" | "eu" | "dev";
 
 export interface OAuthTokenResponse {
   access_token: string;

@@ -1,7 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
-import type { StoredTokens } from '../types/oauth';
+import * as SecureStore from "expo-secure-store";
+import type { StoredTokens } from "../types/oauth";
 
-const TOKENS_KEY = 'posthog_oauth_tokens';
+const TOKENS_KEY = "posthog_oauth_tokens";
 
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await SecureStore.setItemAsync(TOKENS_KEY, JSON.stringify(tokens));
@@ -10,7 +10,7 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
 export async function getTokens(): Promise<StoredTokens | null> {
   const value = await SecureStore.getItemAsync(TOKENS_KEY);
   if (!value) return null;
-  
+
   try {
     return JSON.parse(value) as StoredTokens;
   } catch {
