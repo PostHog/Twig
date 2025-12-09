@@ -187,6 +187,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     sdkSessionId?: string;
   }): Promise<{ sessionId: string; channel: string } | null> =>
     ipcRenderer.invoke("agent-reconnect", params),
+  agentSetSessionMode: async (
+    sessionId: string,
+    modeId: string,
+  ): Promise<void> => ipcRenderer.invoke("agent-set-session-mode", sessionId, modeId),
   onAgentEvent: (
     channel: string,
     listener: (payload: unknown) => void,

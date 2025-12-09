@@ -138,6 +138,7 @@ declare global {
       logUrl?: string;
       sdkSessionId?: string;
     }) => Promise<{ sessionId: string; channel: string } | null>;
+    agentSetSessionMode: (sessionId: string, modeId: string) => Promise<void>;
     onAgentEvent: (
       channel: string,
       listener: (event: unknown) => void,

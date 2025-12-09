@@ -33,10 +33,15 @@ export default function TasksScreen() {
           </View>
         </View>
 
-        {/* Chat Link */}
-        <Link href="/chat" className="mb-6 rounded-xl bg-blue-600 p-4">
+        {/* Chat Links */}
+        <Link href="/(auth)/agent" className="mb-3 rounded-xl bg-blue-600 p-4">
           <Text className="text-center font-medium text-white">
-            Chat with Max
+            Array Agent
+          </Text>
+        </Link>
+        <Link href="/chat" className="mb-6 rounded-xl bg-dark-surface p-4">
+          <Text className="text-center font-medium text-white">
+            PostHog AI (Max)
           </Text>
         </Link>
 
