@@ -10,9 +10,12 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const DISABLE_FLAG = "ELECTRON_DISABLE_AUTO_UPDATE";
 const UPDATE_READY_CHANNEL = "updates:ready";
 const INSTALL_UPDATE_CHANNEL = "updates:install";
+const CHECK_FOR_UPDATES_CHANNEL = "updates:check";
+const UPDATE_STATUS_CHANNEL = "updates:status";
 
 let updateReady = false;
 let pendingNotification = false;
+let checkingForUpdates = false;
 
 function isAutoUpdateSupported(): boolean {
   return process.platform === "darwin" || process.platform === "win32";
@@ -52,6 +55,60 @@ export function registerAutoUpdater(
 
     autoUpdater.quitAndInstall();
     return { installed: true };
+  });
+
+  ipcMain.removeHandler(CHECK_FOR_UPDATES_CHANNEL);
+  ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, async () => {
+    if (!isAutoUpdateSupported()) {
+      return {
+        success: false,
+        error: "Auto updates are only supported on macOS and Windows",
+      };
+    }
+
+    if (!app.isPackaged) {
+      return {
+        success: false,
+        error: "Updates are only available in packaged builds",
+      };
+    }
+
+    if (checkingForUpdates) {
+      return {
+        success: false,
+        error: "Already checking for updates",
+      };
+    }
+
+    try {
+      checkingForUpdates = true;
+      const window = getWindow();
+      if (window) {
+        window.webContents.send(UPDATE_STATUS_CHANNEL, {
+          checking: true,
+        });
+      }
+
+      await checkForUpdates();
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      log.error("Manual update check failed", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    } finally {
+      checkingForUpdates = false;
+      const window = getWindow();
+      if (window) {
+        window.webContents.send(UPDATE_STATUS_CHANNEL, {
+          checking: false,
+        });
+      }
+    }
   });
 
   if (process.env[DISABLE_FLAG]) {
@@ -98,6 +155,13 @@ export function registerAutoUpdater(
 
     autoUpdater.on("update-not-available", () => {
       log.info("No updates available");
+      const window = getWindow();
+      if (window && checkingForUpdates) {
+        window.webContents.send(UPDATE_STATUS_CHANNEL, {
+          checking: false,
+          upToDate: true,
+        });
+      }
     });
 
     autoUpdater.on("update-downloaded", () => {

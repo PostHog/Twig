@@ -322,6 +322,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     createVoidIpcListener("updates:ready", listener),
   installUpdate: (): Promise<{ installed: boolean }> =>
     ipcRenderer.invoke("updates:install"),
+  checkForUpdates: (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("updates:check"),
+  onUpdateStatus: (
+    listener: IpcEventListener<{
+      checking?: boolean;
+      upToDate?: boolean;
+    }>,
+  ): (() => void) => createIpcListener("updates:status", listener),
+  onCheckForUpdatesMenu: (listener: () => void): (() => void) =>
+    createVoidIpcListener("check-for-updates-menu", listener),
   shellCreate: (
     sessionId: string,
     cwd?: string,
