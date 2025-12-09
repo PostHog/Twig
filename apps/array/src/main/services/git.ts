@@ -13,6 +13,27 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
+// GitHub API response types
+interface GitHubUser {
+  login: string;
+  id: number;
+}
+
+interface GitHubComment {
+  id: number;
+  path: string;
+  line: number;
+  side: string;
+  body: string;
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
+}
+
+interface GitHubPullRequestComments {
+  comments: GitHubComment[];
+}
+
 const countFileLines = async (filePath: string): Promise<number> => {
   try {
     const content = await fsPromises.readFile(filePath, "utf-8");
@@ -559,7 +580,7 @@ export const detectSSHError = (output: string): string | undefined => {
 const getAllPullRequestComments = async (
   directoryPath: string,
   prNumber: number,
-): Promise<any> => {
+): Promise<GitHubPullRequestComments> => {
   validatePullRequestNumber(prNumber);
 
   try {
@@ -576,7 +597,7 @@ const getAllPullRequestComments = async (
 const getPullRequestReviewComments = async (
   directoryPath: string,
   prNumber: number,
-): Promise<any> => {
+): Promise<GitHubComment[]> => {
   validatePullRequestNumber(prNumber);
 
   try {
@@ -605,7 +626,7 @@ const addPullRequestComment = async (
   directoryPath: string,
   prNumber: number,
   options: AddPullRequestCommentOptions,
-): Promise<any> => {
+): Promise<GitHubComment> => {
   validatePullRequestNumber(prNumber);
 
   // Validate required options
@@ -636,6 +657,77 @@ const addPullRequestComment = async (
   }
 };
 
+interface ReplyPullRequestCommentOptions {
+  body: string;
+  inReplyTo: number; // The comment ID to reply to
+}
+
+const replyToPullRequestComment = async (
+  directoryPath: string,
+  prNumber: number,
+  options: ReplyPullRequestCommentOptions,
+): Promise<GitHubComment> => {
+  validatePullRequestNumber(prNumber);
+  validateCommentId(options.inReplyTo);
+
+  if (!options.body || options.body.trim().length === 0) {
+    throw new Error("Reply body cannot be empty");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    // First, get the original comment to extract necessary details
+    const { stdout: originalCommentOutput } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${options.inReplyTo}`,
+      { cwd: directoryPath },
+    );
+
+    const originalComment = JSON.parse(originalCommentOutput);
+
+    // Create a reply comment using the same commit, path, and line as the original
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments ` +
+        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f commit_id="${originalComment.commit_id}" ` +
+        `-f path="${originalComment.path}" ` +
+        `-f line=${originalComment.line} ` +
+        `-f side="${originalComment.side}" ` +
+        `-f in_reply_to=${options.inReplyTo}`,
+      { cwd: directoryPath },
+    );
+
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to reply to PR comment: ${error}`);
+  }
+};
+
+const updatePullRequestComment = async (
+  directoryPath: string,
+  commentId: number,
+  content: string,
+): Promise<GitHubComment> => {
+  validateCommentId(commentId);
+
+  if (!content || content.trim().length === 0) {
+    throw new Error("Comment content cannot be empty");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${content.replace(/"/g, '\\"')}"`,
+      { cwd: directoryPath },
+    );
+
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to update PR comment: ${error}`);
+  }
+};
+
 const deletePullRequestComment = async (
   directoryPath: string,
   commentId: number,
@@ -651,6 +743,60 @@ const deletePullRequestComment = async (
     );
   } catch (error) {
     throw new Error(`Failed to delete PR comment: ${error}`);
+  }
+};
+
+const resolvePullRequestComment = async (
+  directoryPath: string,
+  commentId: number,
+  resolved: boolean,
+): Promise<GitHubComment> => {
+  validateCommentId(commentId);
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+    // TODO: use gh api graphql (resolveReviewThread)
+
+    // GitHub API doesn't have a direct "resolve" endpoint for review comments
+    // We'll use a custom approach by updating the comment body to indicate resolution
+    // First, get the current comment to preserve its content
+    const { stdout: currentComment } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId}`,
+      { cwd: directoryPath },
+    );
+
+    const comment = JSON.parse(currentComment);
+    const originalBody = comment.body;
+
+    // Add or remove resolution marker
+    const resolveMarker = "<!-- RESOLVED -->";
+    let newBody: string;
+
+    if (resolved) {
+      // Add resolve marker if not already present
+      newBody = originalBody.includes(resolveMarker)
+        ? originalBody
+        : `${resolveMarker}\n${originalBody}`;
+    } else {
+      // Remove resolve marker
+      newBody = originalBody
+        .replace(`${resolveMarker}\n`, "")
+        .replace(resolveMarker, "");
+    }
+
+    // Update the comment with the new body
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${newBody.replace(/"/g, '\\"')}"`,
+      { cwd: directoryPath },
+    );
+
+    const updatedComment = JSON.parse(stdout);
+    return {
+      ...updatedComment,
+      resolved, // Add our custom resolved field
+    };
+  } catch (error) {
+    throw new Error(`Failed to resolve PR comment: ${error}`);
   }
 };
 
@@ -940,7 +1086,7 @@ export function registerGitIpc(
       _event: IpcMainInvokeEvent,
       directoryPath: string,
       prNumber: number,
-    ): Promise<any> => {
+    ): Promise<GitHubPullRequestComments> => {
       return getAllPullRequestComments(directoryPath, prNumber);
     },
   );
@@ -951,7 +1097,7 @@ export function registerGitIpc(
       _event: IpcMainInvokeEvent,
       directoryPath: string,
       prNumber: number,
-    ): Promise<any> => {
+    ): Promise<GitHubComment[]> => {
       return getPullRequestReviewComments(directoryPath, prNumber);
     },
   );
@@ -963,8 +1109,32 @@ export function registerGitIpc(
       directoryPath: string,
       prNumber: number,
       options: AddPullRequestCommentOptions,
-    ): Promise<any> => {
+    ): Promise<GitHubComment> => {
       return addPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "reply-pr-review",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+      options: ReplyPullRequestCommentOptions,
+    ): Promise<GitHubComment> => {
+      return replyToPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "update-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      commentId: number,
+      content: string,
+    ): Promise<GitHubComment> => {
+      return updatePullRequestComment(directoryPath, commentId, content);
     },
   );
 
@@ -976,6 +1146,18 @@ export function registerGitIpc(
       commentId: number,
     ): Promise<void> => {
       return deletePullRequestComment(directoryPath, commentId);
+    },
+  );
+
+  ipcMain.handle(
+    "resolve-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      commentId: number,
+      resolved: boolean,
+    ): Promise<GitHubComment> => {
+      return resolvePullRequestComment(directoryPath, commentId, resolved);
     },
   );
 }
