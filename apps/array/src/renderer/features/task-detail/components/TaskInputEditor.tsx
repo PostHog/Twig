@@ -1,7 +1,8 @@
-import { ArrowUpIcon, GitBranchIcon } from "@phosphor-icons/react";
+import { ArrowUpIcon, GitBranchIcon, Paperclip } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
+import { useRef } from "react";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
@@ -28,8 +29,35 @@ export function TaskInputEditor({
   onSubmit,
   hasDirectory,
 }: TaskInputEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isWorktreeMode = localWorkspaceMode === "worktree";
   const isCloudMode = runMode === "cloud";
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0 && editor) {
+      for (const file of Array.from(files)) {
+        const filePath = (file as File & { path?: string }).path || file.name;
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "mention",
+            attrs: {
+              id: filePath,
+              label: file.name,
+              type: "file",
+            },
+          })
+          .insertContent(" ")
+          .run();
+      }
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const getSubmitTooltip = () => {
     if (canSubmit) return "Create task";
@@ -110,53 +138,79 @@ export function TaskInputEditor({
         </Flex>
       </Flex>
 
-      <Flex justify="end" align="center" gap="4" px="3" pb="3">
-        {!isCloudMode && (
-          <Tooltip
-            content={
-              isWorktreeMode
-                ? "Work in a separate directory with its own branch"
-                : "Work directly in the selected folder"
-            }
-          >
+      <Flex justify="between" align="center" px="3" pb="3">
+        <Flex align="center">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            style={{ display: "none" }}
+          />
+          <Tooltip content="Attach files from anywhere">
             <IconButton
               size="1"
               variant="ghost"
+              color="gray"
               onClick={(e) => {
                 e.stopPropagation();
-                onLocalWorkspaceModeChange(
-                  isWorktreeMode ? "root" : "worktree",
-                );
+                fileInputRef.current?.click();
               }}
-              className="worktree-toggle-button"
-              data-active={isWorktreeMode}
+              disabled={isCreatingTask}
             >
-              <GitBranchIcon
-                size={16}
-                weight={isWorktreeMode ? "fill" : "regular"}
-              />
+              <Paperclip size={16} weight="bold" />
             </IconButton>
           </Tooltip>
-        )}
+        </Flex>
 
-        <Tooltip content={getSubmitTooltip()}>
-          <IconButton
-            size="1"
-            variant="solid"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSubmit();
-            }}
-            disabled={!canSubmit || isCreatingTask}
-            loading={isCreatingTask}
-            style={{
-              backgroundColor: !canSubmit ? "var(--accent-a4)" : undefined,
-              color: !canSubmit ? "var(--accent-8)" : undefined,
-            }}
-          >
-            <ArrowUpIcon size={16} weight="bold" />
-          </IconButton>
-        </Tooltip>
+        <Flex align="center" gap="4">
+          {!isCloudMode && (
+            <Tooltip
+              content={
+                isWorktreeMode
+                  ? "Work in a separate directory with its own branch"
+                  : "Work directly in the selected folder"
+              }
+            >
+              <IconButton
+                size="1"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLocalWorkspaceModeChange(
+                    isWorktreeMode ? "root" : "worktree",
+                  );
+                }}
+                className="worktree-toggle-button"
+                data-active={isWorktreeMode}
+              >
+                <GitBranchIcon
+                  size={16}
+                  weight={isWorktreeMode ? "fill" : "regular"}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          <Tooltip content={getSubmitTooltip()}>
+            <IconButton
+              size="1"
+              variant="solid"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSubmit();
+              }}
+              disabled={!canSubmit || isCreatingTask}
+              loading={isCreatingTask}
+              style={{
+                backgroundColor: !canSubmit ? "var(--accent-a4)" : undefined,
+                color: !canSubmit ? "var(--accent-8)" : undefined,
+              }}
+            >
+              <ArrowUpIcon size={16} weight="bold" />
+            </IconButton>
+          </Tooltip>
+        </Flex>
       </Flex>
 
       <style>
