@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import dns from "node:dns";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -55,6 +56,28 @@ const taskControllers = new Map<string, TaskController>();
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
+
+// Fix PATH for macOS GUI apps launched from Finder/Dock.
+// GUI apps don't inherit shell PATH, only minimal system paths.
+// This extracts the full PATH from user's login shell.
+function fixPath(): void {
+  if (process.platform !== "darwin") return;
+
+  try {
+    const shellPath = process.env.SHELL || "/bin/zsh";
+    const result = execSync(`${shellPath} -ilc 'echo -n "$PATH"'`, {
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    if (result) {
+      process.env.PATH = result;
+    }
+  } catch {
+    // Keep existing PATH if shell extraction fails
+  }
+}
+
+fixPath();
 
 // Set app name to ensure consistent userData path across platforms
 app.setName("Array");

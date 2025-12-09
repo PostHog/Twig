@@ -1,5 +1,7 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { RepositoryPicker } from "@features/repository-picker/components/RepositoryPicker";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
@@ -28,11 +30,16 @@ export function TaskInput() {
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
+  const [selectedRepository, setSelectedRepository] = useState<string | null>(
+    null,
+  );
   const [runMode, setRunMode] = useState<RunMode>(
     import.meta.env.DEV ? lastUsedRunMode : "local",
   );
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
+
+  const { githubIntegration } = useRepositoryIntegration();
 
   useEffect(() => {
     if (view.folderId) {
@@ -60,6 +67,8 @@ export function TaskInput() {
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editor,
     selectedDirectory,
+    selectedRepository,
+    githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
   });
 
@@ -113,12 +122,21 @@ export function TaskInput() {
         }}
       >
         <Flex gap="2" align="center">
-          <FolderPicker
-            value={selectedDirectory}
-            onChange={handleDirectoryChange}
-            placeholder="Select working directory..."
-            size="1"
-          />
+          {runMode === "cloud" ? (
+            <RepositoryPicker
+              value={selectedRepository}
+              onChange={setSelectedRepository}
+              placeholder="Select repository..."
+              size="1"
+            />
+          ) : (
+            <FolderPicker
+              value={selectedDirectory}
+              onChange={handleDirectoryChange}
+              placeholder="Select working directory..."
+              size="1"
+            />
+          )}
           {import.meta.env.DEV && (
             <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
           )}
@@ -132,7 +150,9 @@ export function TaskInput() {
           onLocalWorkspaceModeChange={setLocalWorkspaceMode}
           canSubmit={canSubmit}
           onSubmit={handleSubmit}
-          hasDirectory={!!selectedDirectory}
+          hasDirectory={
+            runMode === "cloud" ? !!selectedRepository : !!selectedDirectory
+          }
         />
 
         <SuggestedTasks editor={editor} />
