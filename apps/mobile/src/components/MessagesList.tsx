@@ -47,7 +47,6 @@ function MessageItem({ item }: { item: ThreadMessage }) {
   }
 
   if (isArtifactMessage(item) && isVisualizationArtifactContent(item.content)) {
-    // TODO: Handle artifact messages (visualizations)
     return <VisualizationArtifact message={item} content={item.content} />;
   }
 
@@ -61,14 +60,12 @@ export function MessagesList({
 }: MessagesListProps) {
   const flatListRef = useRef<FlatList>(null);
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
     }
   }, [messages.length]);
 
-  // Reverse messages for inverted FlatList
   const reversedMessages = [...messages].reverse();
 
   return (
@@ -87,10 +84,10 @@ export function MessagesList({
           className="flex-1 items-center justify-center px-8"
           style={{ transform: [{ scaleY: -1 }] }}
         >
-          <Text className="mb-2 text-center font-semibold text-dark-text text-xl">
+          <Text className="mb-2 text-center font-mono text-lg text-neutral-200">
             Start a conversation
           </Text>
-          <Text className="text-center text-base text-dark-text-muted">
+          <Text className="text-center font-mono text-[13px] text-neutral-500">
             Ask Max anything about your product data
           </Text>
         </View>
@@ -100,10 +97,10 @@ export function MessagesList({
         messages.length > 0 &&
         messages[messages.length - 1]?.status !== "loading" ? (
           <View className="items-start px-4 py-2">
-            <View className="flex-row items-center gap-2 rounded-2xl rounded-bl-md bg-dark-surface px-4 py-3">
-              <ActivityIndicator size="small" color="#a3a3a3" />
-              <Text className="text-base text-dark-text-muted italic">
-                Thinking...
+            <View className="flex-row items-center gap-2 py-1">
+              <ActivityIndicator size="small" color="#f1a82c" />
+              <Text className="font-mono text-[13px] italic text-neutral-400">
+                Generating...
               </Text>
             </View>
           </View>

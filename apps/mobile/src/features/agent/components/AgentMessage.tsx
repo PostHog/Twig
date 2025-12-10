@@ -6,10 +6,10 @@ interface AgentMessageProps {
 
 export function AgentMessage({ content }: AgentMessageProps) {
   return (
-    <View className="flex-row justify-start mb-2">
-      <View className="bg-neutral-800 rounded-2xl rounded-bl-sm px-4 py-2 max-w-[80%]">
-        <Text className="text-white text-base">{content}</Text>
-      </View>
+    <View className="mb-3 max-w-[95%] py-1">
+      <Text className="font-mono text-[13px] text-neutral-200 leading-5">
+        {content}
+      </Text>
     </View>
   );
 }

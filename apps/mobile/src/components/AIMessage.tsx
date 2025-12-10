@@ -16,9 +16,9 @@ export function AIMessage({
   toolCalls,
 }: AIMessageProps) {
   return (
-    <View className="items-start py-2">
+    <View className="py-2">
       {toolCalls && toolCalls.length > 0 && (
-        <View className="mb-1 w-full">
+        <View className="mb-1">
           {toolCalls.map((tc) => (
             <ToolCallMessage
               key={tc.id}
@@ -30,16 +30,16 @@ export function AIMessage({
         </View>
       )}
       {(content || isLoading) && (
-        <View className="mx-4 max-w-[85%] rounded-2xl rounded-bl-md bg-dark-surface px-4 py-3">
+        <View className="max-w-[95%] px-4 py-1">
           {isLoading && !content ? (
             <View className="flex-row items-center gap-2">
-              <ActivityIndicator size="small" color="#a3a3a3" />
-              <Text className="text-base text-dark-text-muted italic">
-                {thinkingText || "Thinking..."}
+              <ActivityIndicator size="small" color="#f1a82c" />
+              <Text className="font-mono text-[13px] text-neutral-400 italic">
+                {thinkingText || "Generating..."}
               </Text>
             </View>
           ) : (
-            <Text className="text-base text-dark-text leading-6">
+            <Text className="font-mono text-[13px] text-neutral-200 leading-5">
               {content}
             </Text>
           )}

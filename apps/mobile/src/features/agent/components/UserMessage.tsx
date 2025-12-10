@@ -6,9 +6,11 @@ interface UserMessageProps {
 
 export function UserMessage({ content }: UserMessageProps) {
   return (
-    <View className="flex-row justify-end mb-2">
-      <View className="bg-blue-600 rounded-2xl rounded-br-sm px-4 py-2 max-w-[80%]">
-        <Text className="text-white text-base">{content}</Text>
+    <View className="mt-3 mb-3 max-w-[95%]">
+      <View className="bg-amber-500/20 px-3 py-2">
+        <Text className="font-mono text-[13px] text-amber-100 leading-5">
+          {content}
+        </Text>
       </View>
     </View>
   );

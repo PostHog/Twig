@@ -79,7 +79,6 @@ export default function ConversationDetailScreen() {
           options={{
             headerShown: true,
             headerTitle: "Error",
-            headerBackTitle: "Back",
             headerStyle: { backgroundColor: "#09090b" },
             headerTintColor: "#fff",
           }}
@@ -104,7 +103,7 @@ export default function ConversationDetailScreen() {
           options={{
             headerShown: true,
             headerTitle: "Loading...",
-            headerBackTitle: "Back",
+            headerBackTitle: "",
             headerStyle: { backgroundColor: "#09090b" },
             headerTintColor: "#fff",
           }}
@@ -125,7 +124,7 @@ export default function ConversationDetailScreen() {
         options={{
           headerShown: true,
           headerTitle: conversation?.title || "Conversation",
-          headerBackTitle: "Back",
+          headerBackTitle: "",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
           headerTitleStyle: {

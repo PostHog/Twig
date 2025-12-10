@@ -6,9 +6,11 @@ interface HumanMessageProps {
 
 export function HumanMessage({ content }: HumanMessageProps) {
   return (
-    <View className="items-end px-4 py-2">
-      <View className="max-w-[85%] rounded-2xl rounded-br-md bg-orange-500 px-4 py-3">
-        <Text className="text-base text-white leading-6">{content}</Text>
+    <View className="px-4 py-2">
+      <View className="mt-3 max-w-[95%] bg-amber-500/20 px-3 py-2">
+        <Text className="font-mono text-[13px] text-amber-100 leading-5">
+          {content}
+        </Text>
       </View>
     </View>
   );

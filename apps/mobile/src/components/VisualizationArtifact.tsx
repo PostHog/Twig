@@ -166,8 +166,8 @@ export function VisualizationArtifact({
   if (!renderQueryUrl || !projectId || !accessToken) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] rounded-2xl bg-red-900/50 px-4 py-3">
-          <Text className="text-base text-red-300">
+        <View className="max-w-[85%] bg-red-900/50 px-4 py-3">
+          <Text className="font-mono text-[13px] text-red-300">
             Unable to load visualization: Not authenticated
           </Text>
         </View>
@@ -178,8 +178,8 @@ export function VisualizationArtifact({
   if (hasError) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] rounded-2xl bg-red-900/50 px-4 py-3">
-          <Text className="text-base text-red-300">
+        <View className="max-w-[85%] bg-red-900/50 px-4 py-3">
+          <Text className="font-mono text-[13px] text-red-300">
             {errorMessage || "Failed to load visualization"}
           </Text>
         </View>
@@ -191,17 +191,17 @@ export function VisualizationArtifact({
   if (!queryResults) {
     return (
       <View className="w-full items-start px-4 py-3">
-        <View className="w-full overflow-hidden rounded-2xl bg-dark-border">
+        <View className="w-full overflow-hidden bg-dark-border">
           {content.name && (
             <View className="border-gray-700 border-b px-4 py-2">
-              <Text className="font-medium text-sm text-white">
+              <Text className="font-mono text-[13px] text-white">
                 {content.name}
               </Text>
             </View>
           )}
           <View className="h-80 w-full items-center justify-center">
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text className="mt-2 text-dark-text-muted text-sm">
+            <ActivityIndicator size="large" color="#f1a82c" />
+            <Text className="mt-2 font-mono text-[13px] text-neutral-500">
               Fetching data...
             </Text>
           </View>
@@ -212,11 +212,11 @@ export function VisualizationArtifact({
 
   return (
     <View className="w-full items-start px-4 py-3">
-      <View className="w-full overflow-hidden rounded-2xl bg-dark-border">
+      <View className="w-full overflow-hidden bg-dark-border">
         {/* Header with title */}
         {content.name && (
           <View className="border-gray-700 border-b px-4 py-2">
-            <Text className="font-medium text-sm text-white">
+            <Text className="font-mono text-[13px] text-white">
               {content.name}
             </Text>
           </View>
@@ -226,8 +226,8 @@ export function VisualizationArtifact({
         <View className="relative h-80 w-full">
           {isLoading && (
             <View className="absolute inset-0 z-10 items-center justify-center bg-dark-border">
-              <ActivityIndicator size="large" color="#3B82F6" />
-              <Text className="mt-2 text-dark-text-muted text-sm">
+              <ActivityIndicator size="large" color="#f1a82c" />
+              <Text className="mt-2 font-mono text-[13px] text-neutral-500">
                 Loading visualization...
               </Text>
             </View>
@@ -251,7 +251,9 @@ export function VisualizationArtifact({
         {/* Artifact name */}
         {content.name && (
           <View className="border-gray-700 border-t px-4 py-2">
-            <Text className="text-dark-text-muted text-xs">{content.name}</Text>
+            <Text className="font-mono text-[11px] text-neutral-500">
+              {content.name}
+            </Text>
           </View>
         )}
       </View>
