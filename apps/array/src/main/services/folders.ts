@@ -7,7 +7,7 @@ import type { RegisteredFolder } from "../../shared/types";
 import { generateId } from "../../shared/utils/id";
 import { createIpcHandler } from "../lib/ipcHandler";
 import { logger } from "../lib/logger";
-import { isGitRepository } from "./git";
+import { getRemoteUrl, isGitRepository, parseGitHubUrl } from "./git";
 import { getWorktreeLocation } from "./settingsStore";
 import { clearAllStoreData, foldersStore } from "./store";
 import { deleteWorktreeIfExists } from "./worktreeUtils";
@@ -25,8 +25,38 @@ function extractFolderName(folderPath: string): string {
   return path.basename(folderPath);
 }
 
+async function getRepositoryString(folderPath: string): Promise<string | undefined> {
+  try {
+    const remoteUrl = await getRemoteUrl(folderPath);
+    if (!remoteUrl) return undefined;
+
+    const parsed = parseGitHubUrl(remoteUrl);
+    if (!parsed) return undefined;
+
+    return `${parsed.organization}/${parsed.repository}`;
+  } catch {
+    return undefined;
+  }
+}
+
 async function getFolders(): Promise<RegisteredFolder[]> {
-  return foldersStore.get("folders", []);
+  const folders = foldersStore.get("folders", []);
+
+  let needsUpdate = false;
+  for (const folder of folders) {
+    if (!folder.repository) {
+      folder.repository = await getRepositoryString(folder.path);
+      if (folder.repository) {
+        needsUpdate = true;
+      }
+    }
+  }
+
+  if (needsUpdate) {
+    foldersStore.set("folders", folders);
+  }
+
+  return folders;
 }
 
 async function addFolder(folderPath: string): Promise<RegisteredFolder> {
@@ -35,9 +65,14 @@ async function addFolder(folderPath: string): Promise<RegisteredFolder> {
   const existing = folders.find((f) => f.path === folderPath);
   if (existing) {
     existing.lastAccessed = new Date().toISOString();
+    if (!existing.repository) {
+      existing.repository = await getRepositoryString(folderPath);
+    }
     foldersStore.set("folders", folders);
     return existing;
   }
+
+  const repository = await getRepositoryString(folderPath);
 
   const newFolder: RegisteredFolder = {
     id: generateFolderId(),
@@ -45,6 +80,7 @@ async function addFolder(folderPath: string): Promise<RegisteredFolder> {
     name: extractFolderName(folderPath),
     lastAccessed: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    repository,
   };
 
   folders.push(newFolder);

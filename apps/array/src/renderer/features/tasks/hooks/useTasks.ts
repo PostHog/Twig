@@ -24,6 +24,11 @@ export function useTasks(filters?: { repository?: string }) {
     taskKeys.list(filters),
     (client) =>
       client.getTasks(filters?.repository) as unknown as Promise<Task[]>,
+    {
+      staleTime: 30 * 1000,
+      refetchInterval: 30 * 1000,
+      refetchOnWindowFocus: true,
+    },
   );
 }
 

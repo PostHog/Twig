@@ -7,9 +7,10 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
+import { logger } from "@renderer/lib/logger";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RegisteredFolder, Task, Workspace } from "@shared/types";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
   getTaskRepository,
@@ -17,6 +18,8 @@ import {
 } from "@/renderer/utils/repository";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
+
+const log = logger.scope("sidebar-data");
 
 export interface TaskView {
   id: string;
@@ -44,6 +47,12 @@ export interface TaskData {
   isUnread?: boolean;
 }
 
+export interface CloudRepoData {
+  repository: string;
+  repoName: string;
+  tasks: TaskData[];
+}
+
 export interface SidebarData {
   userName: string;
   isHomeActive: boolean;
@@ -53,6 +62,7 @@ export interface SidebarData {
   activeRepository: string | null;
   isLoading: boolean;
   folders: FolderData[];
+  cloudRepos: CloudRepoData[];
   activeTaskId: string | null;
 }
 
@@ -202,6 +212,48 @@ export function useSidebarData({
     syncFolderOrder(folderIds);
   }, [syncFolderOrder, folderIds]);
 
+  // Auto-sync remote tasks to workspaces based on repository matching
+  const ensureWorkspace = useWorkspaceStore((state) => state.ensureWorkspace);
+  const syncingRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const syncTasksToWorkspaces = async () => {
+      for (const task of allTasks) {
+        const taskRepo = getTaskRepository(task);
+        if (!taskRepo) continue;
+
+        const hasWorkspace = !!workspaces[task.id];
+        if (hasWorkspace) continue;
+
+        if (syncingRef.current.has(task.id)) continue;
+
+        const matchingFolder = folders.find(
+          (f) => f.repository?.toLowerCase() === taskRepo.toLowerCase(),
+        );
+        if (!matchingFolder) continue;
+
+        syncingRef.current.add(task.id);
+        log.info("Auto-syncing task to folder", {
+          taskId: task.id,
+          taskRepo,
+          folderId: matchingFolder.id,
+        });
+
+        try {
+          await ensureWorkspace(task.id, matchingFolder.path, "cloud");
+        } catch (err) {
+          log.error("Failed to auto-sync task", { taskId: task.id, error: err });
+        } finally {
+          syncingRef.current.delete(task.id);
+        }
+      }
+    };
+
+    if (allTasks.length > 0 && folders.length > 0) {
+      syncTasksToWorkspaces();
+    }
+  }, [allTasks, folders, workspaces, ensureWorkspace]);
+
   // Sort folders by persisted order
   const sortedFolders = sortFoldersByOrder(folders, folderOrder);
   const tasksByFolder = groupTasksByFolder(allTasks, folders, workspaces);
@@ -215,22 +267,42 @@ export function useSidebarData({
     return Object.values(sessions).find((s) => s.taskId === taskId);
   };
 
+  // Helper to convert task to TaskData
+  const toTaskData = (
+    task: Task,
+    isCurrentlyViewing: boolean,
+  ): { taskData: TaskData; lastActivityAt: number } => {
+    const session = getSessionForTask(task.id);
+    const apiUpdatedAt = new Date(task.updated_at).getTime();
+    const localActivity = localActivityAt[task.id];
+    const lastActivityAt = localActivity
+      ? Math.max(apiUpdatedAt, localActivity)
+      : apiUpdatedAt;
+    const taskLastViewedAt = lastViewedAt[task.id];
+    const isUnread =
+      !isCurrentlyViewing &&
+      taskLastViewedAt !== undefined &&
+      lastActivityAt > taskLastViewedAt;
+
+    return {
+      taskData: {
+        id: task.id,
+        title: task.title,
+        lastActivityAt,
+        isGenerating: session?.isPromptPending ?? false,
+        isUnread,
+      },
+      lastActivityAt,
+    };
+  };
+
   const folderData: FolderData[] = sortedFolders.map((folder) => {
     const folderTasks = tasksByFolder.get(folder.id) || [];
 
     const tasksWithActivity = folderTasks.map((task) => {
-      const session = getSessionForTask(task.id);
-      // Use max of task.updated_at and local activity timestamp for accurate ordering
-      const apiUpdatedAt = new Date(task.updated_at).getTime();
-      const localActivity = localActivityAt[task.id];
-      const lastActivityAt = localActivity
-        ? Math.max(apiUpdatedAt, localActivity)
-        : apiUpdatedAt;
-      return {
-        task,
-        lastActivityAt,
-        isGenerating: session?.isPromptPending ?? false,
-      };
+      const isCurrentlyViewing = activeTaskId === task.id;
+      const { taskData, lastActivityAt } = toTaskData(task, isCurrentlyViewing);
+      return { taskData, lastActivityAt };
     });
 
     tasksWithActivity.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -239,24 +311,57 @@ export function useSidebarData({
       id: folder.id,
       name: folder.name,
       path: folder.path,
-      tasks: tasksWithActivity.map(({ task, lastActivityAt, isGenerating }) => {
-        const taskLastViewedAt = lastViewedAt[task.id];
-        const isCurrentlyViewing = activeTaskId === task.id;
-        // Only show unread if: user has viewed it before AND there's new activity since
-        const isUnread =
-          !isCurrentlyViewing &&
-          taskLastViewedAt !== undefined &&
-          lastActivityAt > taskLastViewedAt;
-
-        return {
-          id: task.id,
-          title: task.title,
-          lastActivityAt,
-          isGenerating,
-          isUnread,
-        };
-      }),
+      tasks: tasksWithActivity.map(({ taskData }) => taskData),
     };
+  });
+
+  // Collect all task IDs that are already shown in folders
+  const tasksInFolders = new Set<string>();
+  for (const folder of folderData) {
+    for (const task of folder.tasks) {
+      tasksInFolders.add(task.id);
+    }
+  }
+
+  // Cloud tasks are tasks that don't have a workspace (not in any folder)
+  // Group them by repository
+  const cloudTasksByRepo = new Map<
+    string,
+    { task: Task; taskData: TaskData; lastActivityAt: number }[]
+  >();
+
+  for (const task of allTasks) {
+    if (tasksInFolders.has(task.id)) continue;
+
+    const repository = getTaskRepository(task) ?? "unknown";
+    const isCurrentlyViewing = activeTaskId === task.id;
+    const { taskData, lastActivityAt } = toTaskData(task, isCurrentlyViewing);
+
+    if (!cloudTasksByRepo.has(repository)) {
+      cloudTasksByRepo.set(repository, []);
+    }
+    cloudTasksByRepo.get(repository)!.push({ task, taskData, lastActivityAt });
+  }
+
+  // Convert to CloudRepoData array, sorted by most recent activity
+  const cloudRepos: CloudRepoData[] = [];
+  for (const [repository, tasks] of cloudTasksByRepo) {
+    // Sort tasks within repo by activity
+    tasks.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+
+    const parsed = parseRepository(repository);
+    cloudRepos.push({
+      repository,
+      repoName: parsed?.repoName ?? repository,
+      tasks: tasks.map((t) => t.taskData),
+    });
+  }
+
+  // Sort repos by their most recent task activity
+  cloudRepos.sort((a, b) => {
+    const aLatest = a.tasks[0]?.lastActivityAt ?? 0;
+    const bLatest = b.tasks[0]?.lastActivityAt ?? 0;
+    return bLatest - aLatest;
   });
 
   return {
@@ -268,6 +373,7 @@ export function useSidebarData({
     activeRepository,
     isLoading,
     folders: folderData,
+    cloudRepos,
     activeTaskId,
   };
 }
