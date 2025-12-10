@@ -1,11 +1,6 @@
-import {
-  Circle,
-  Host,
-  TextField,
-  type TextFieldRef,
-} from "@expo/ui/swift-ui";
+import { Circle, Host, TextField, type TextFieldRef } from "@expo/ui/swift-ui";
 import { clipped, glassEffect, padding } from "@expo/ui/swift-ui/modifiers";
-import { ArrowUp, Microphone, type IconProps } from "phosphor-react-native";
+import { ArrowUp, Microphone } from "phosphor-react-native";
 import { useRef, useState } from "react";
 import { Platform, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
