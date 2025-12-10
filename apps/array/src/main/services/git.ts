@@ -680,7 +680,7 @@ const replyToPullRequestComment = async (
     // Create a reply comment using the same commit, path, and line as the original
     const { stdout } = await execAsync(
       `gh api repos/${repo}/pulls/${prNumber}/comments ` +
-        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f body="${options.body.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" ` +
         `-f commit_id="${originalComment.commit_id}" ` +
         `-f path="${originalComment.path}" ` +
         `-F line=${originalComment.line} ` +
@@ -710,7 +710,7 @@ const updatePullRequestComment = async (
     const repo = await getRepositoryFromRemoteUrl(directoryPath);
 
     const { stdout } = await execAsync(
-      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${content.replace(/"/g, '\\"')}"`,
+      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${content.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
       { cwd: directoryPath },
     );
 
