@@ -12,14 +12,12 @@ import {
   isArtifactMessage,
   isAssistantMessage,
   isHumanMessage,
-  isToolCallMessage,
   isVisualizationArtifactContent,
   type ThreadMessage,
 } from "../types/max";
 import { AIMessage } from "./AIMessage";
 import { FailureMessage } from "./FailureMessage";
 import { HumanMessage } from "./HumanMessage";
-import { ToolCallMessage } from "./ToolCallMessage";
 import { VisualizationArtifact } from "./VisualizationArtifact";
 
 interface MessagesListProps {
@@ -33,23 +31,13 @@ function MessageItem({ item }: { item: ThreadMessage }) {
     return <HumanMessage content={item.content} />;
   }
 
-  if (isToolCallMessage(item)) {
-    return (
-      <ToolCallMessage
-        toolName={item.toolName}
-        status={item.status}
-        args={item.args}
-        result={item.result}
-      />
-    );
-  }
-
   if (isAssistantMessage(item)) {
     return (
       <AIMessage
         content={item.content}
         isLoading={item.status === "loading"}
         thinkingText={item.meta?.thinking?.[0]?.thinking}
+        toolCalls={item.tool_calls}
       />
     );
   }
