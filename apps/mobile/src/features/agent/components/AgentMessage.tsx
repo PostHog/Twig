@@ -6,7 +6,7 @@ interface AgentMessageProps {
 
 export function AgentMessage({ content }: AgentMessageProps) {
   return (
-    <View className="mb-3 max-w-[95%] py-1">
+    <View className="mb-3 max-w-[95%] px-4 py-1">
       <Text className="font-mono text-[13px] text-neutral-200 leading-5">
         {content}
       </Text>

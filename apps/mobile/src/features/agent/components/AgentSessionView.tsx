@@ -191,7 +191,10 @@ export function AgentSessionView({
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         inverted
-        contentContainerStyle={{ flexDirection: "column-reverse", padding: 16 }}
+        contentContainerStyle={{
+          flexDirection: "column-reverse",
+          paddingVertical: 16,
+        }}
         ListHeaderComponent={
           isPromptPending ? (
             <View className="mb-2 flex-row items-center gap-2">

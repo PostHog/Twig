@@ -45,7 +45,7 @@ export function ToolCallBlock({
   const displayTitle = formatToolTitle(toolName, args);
 
   return (
-    <View className="py-0.5">
+    <View className="px-4 py-0.5">
       <Pressable
         onPress={() => hasContent && setIsOpen(!isOpen)}
         className="flex-row gap-2 items-center"
