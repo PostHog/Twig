@@ -59,6 +59,55 @@ async function listFilesWithGit(
   }
 }
 
+/**
+ * List files with early termination using grep and head.
+ * Returns limited results directly from git without loading all files into memory.
+ */
+async function listFilesWithQuery(
+  repoPath: string,
+  query: string,
+  limit: number,
+  changedFiles: Set<string>,
+): Promise<FileEntry[]> {
+  try {
+    // escape special regex characters in the query for grep
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // grep -i for case-insensitive matching, head for early termination
+    const grepCmd = `grep -i "${escapedQuery}" | head -n ${limit}`;
+
+    // the || true prevents error when grep finds no matches
+    const [trackedResult, untrackedResult] = await Promise.all([
+      execAsync(`git ls-files | ${grepCmd} || true`, {
+        cwd: repoPath,
+        maxBuffer: 1024 * 1024,
+      }),
+      execAsync(
+        `git ls-files --others --exclude-standard | ${grepCmd} || true`,
+        {
+          cwd: repoPath,
+          maxBuffer: 1024 * 1024,
+        },
+      ),
+    ]);
+
+    const trackedFiles = trackedResult.stdout.split("\n").filter(Boolean);
+    const untrackedFiles = untrackedResult.stdout.split("\n").filter(Boolean);
+
+    // combine and limit to requested amount (in case both sources have results)
+    const allFiles = [...trackedFiles, ...untrackedFiles].slice(0, limit);
+
+    return allFiles.map((relativePath) => ({
+      path: relativePath,
+      name: path.basename(relativePath),
+      changed: changedFiles.has(relativePath),
+    }));
+  } catch (error) {
+    log.error("Error listing files with query:", error);
+    return [];
+  }
+}
+
 export function registerFsIpc(): void {
   ipcMain.handle(
     "list-repo-files",
@@ -73,6 +122,19 @@ export function registerFsIpc(): void {
       const resultLimit = limit ?? 50;
 
       try {
+        const changedFiles = await getChangedFilesForRepo(repoPath);
+
+        // when there is a query, use early termination with grep + head
+        // this avoids loading all files into memory for filtered searches
+        if (query?.trim()) {
+          return await listFilesWithQuery(
+            repoPath,
+            query.trim(),
+            resultLimit,
+            changedFiles,
+          );
+        }
+
         const cached = repoFileCache.get(repoPath);
         const now = Date.now();
 
@@ -81,24 +143,12 @@ export function registerFsIpc(): void {
         if (cached && now - cached.timestamp < CACHE_TTL) {
           allFiles = cached.files;
         } else {
-          const changedFiles = await getChangedFilesForRepo(repoPath);
-
           allFiles = await listFilesWithGit(repoPath, changedFiles);
 
           repoFileCache.set(repoPath, {
             files: allFiles,
             timestamp: now,
           });
-        }
-
-        if (query?.trim()) {
-          const lowerQuery = query.toLowerCase();
-          const filtered = allFiles.filter(
-            (f) =>
-              f.path.toLowerCase().includes(lowerQuery) ||
-              f.name.toLowerCase().includes(lowerQuery),
-          );
-          return resultLimit > 0 ? filtered.slice(0, resultLimit) : filtered;
         }
 
         return allFiles.slice(0, resultLimit);
