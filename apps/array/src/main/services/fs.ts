@@ -24,77 +24,88 @@ const repoFileCache = new Map<
 >();
 const CACHE_TTL = 30000; // 30 seconds
 
-async function getGitIgnoredFiles(repoPath: string): Promise<Set<string>> {
+/**
+ * List files using git ls-files - fast and works for any git repository.
+ * This is much faster than recursive fs.readdir for large codebases.
+ */
+async function listFilesWithGit(
+  repoPath: string,
+  changedFiles: Set<string>,
+): Promise<FileEntry[]> {
   try {
-    const { stdout } = await execAsync(
-      "git ls-files --others --ignored --exclude-standard",
-      { cwd: repoPath },
+    const { stdout: trackedStdout } = await execAsync("git ls-files", {
+      cwd: repoPath,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+
+    const { stdout: untrackedStdout } = await execAsync(
+      "git ls-files --others --exclude-standard",
+      { cwd: repoPath, maxBuffer: 50 * 1024 * 1024 },
     );
-    return new Set(
-      stdout
-        .split("\n")
-        .filter(Boolean)
-        .map((f) => path.join(repoPath, f)),
-    );
-  } catch {
-    // If git command fails, return empty set
-    return new Set();
+
+    const allFiles = [
+      ...trackedStdout.split("\n").filter(Boolean),
+      ...untrackedStdout.split("\n").filter(Boolean),
+    ];
+
+    return allFiles.map((relativePath) => ({
+      path: relativePath,
+      name: path.basename(relativePath),
+      changed: changedFiles.has(relativePath),
+    }));
+  } catch (error) {
+    log.error("Error listing files with git:", error);
+    return [];
   }
 }
 
-async function listFilesRecursive(
-  dirPath: string,
-  ignoredFiles: Set<string>,
-  baseDir: string,
+/**
+ * List files with early termination using grep and head.
+ * Returns limited results directly from git without loading all files into memory.
+ */
+async function listFilesWithQuery(
+  repoPath: string,
+  query: string,
+  limit: number,
   changedFiles: Set<string>,
 ): Promise<FileEntry[]> {
-  const files: FileEntry[] = [];
-
   try {
-    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+    // escape special regex characters in the query for grep
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      const relativePath = path.relative(baseDir, fullPath);
+    // grep -i for case-insensitive matching, head for early termination
+    const grepCmd = `grep -i "${escapedQuery}" | head -n ${limit}`;
 
-      // Skip .git directory, node_modules, and common build dirs
-      if (
-        entry.name === ".git" ||
-        entry.name === "node_modules" ||
-        entry.name === "dist" ||
-        entry.name === "build" ||
-        entry.name === "__pycache__"
-      ) {
-        continue;
-      }
+    // the || true prevents error when grep finds no matches
+    const [trackedResult, untrackedResult] = await Promise.all([
+      execAsync(`git ls-files | ${grepCmd} || true`, {
+        cwd: repoPath,
+        maxBuffer: 1024 * 1024,
+      }),
+      execAsync(
+        `git ls-files --others --exclude-standard | ${grepCmd} || true`,
+        {
+          cwd: repoPath,
+          maxBuffer: 1024 * 1024,
+        },
+      ),
+    ]);
 
-      // Skip git-ignored files
-      if (ignoredFiles.has(fullPath)) {
-        continue;
-      }
+    const trackedFiles = trackedResult.stdout.split("\n").filter(Boolean);
+    const untrackedFiles = untrackedResult.stdout.split("\n").filter(Boolean);
 
-      if (entry.isDirectory()) {
-        const subFiles = await listFilesRecursive(
-          fullPath,
-          ignoredFiles,
-          baseDir,
-          changedFiles,
-        );
-        files.push(...subFiles);
-      } else if (entry.isFile()) {
-        files.push({
-          path: relativePath,
-          name: entry.name,
-          changed: changedFiles.has(relativePath),
-        });
-      }
-    }
+    // combine and limit to requested amount (in case both sources have results)
+    const allFiles = [...trackedFiles, ...untrackedFiles].slice(0, limit);
+
+    return allFiles.map((relativePath) => ({
+      path: relativePath,
+      name: path.basename(relativePath),
+      changed: changedFiles.has(relativePath),
+    }));
   } catch (error) {
-    // Skip directories we can't read
-    log.error(`Error reading directory ${dirPath}:`, error);
+    log.error("Error listing files with query:", error);
+    return [];
   }
-
-  return files;
 }
 
 export function registerFsIpc(): void {
@@ -104,11 +115,26 @@ export function registerFsIpc(): void {
       _event: IpcMainInvokeEvent,
       repoPath: string,
       query?: string,
+      limit?: number,
     ): Promise<FileEntry[]> => {
       if (!repoPath) return [];
 
+      const resultLimit = limit ?? 50;
+
       try {
-        // Check cache
+        const changedFiles = await getChangedFilesForRepo(repoPath);
+
+        // when there is a query, use early termination with grep + head
+        // this avoids loading all files into memory for filtered searches
+        if (query?.trim()) {
+          return await listFilesWithQuery(
+            repoPath,
+            query.trim(),
+            resultLimit,
+            changedFiles,
+          );
+        }
+
         const cached = repoFileCache.get(repoPath);
         const now = Date.now();
 
@@ -117,40 +143,15 @@ export function registerFsIpc(): void {
         if (cached && now - cached.timestamp < CACHE_TTL) {
           allFiles = cached.files;
         } else {
-          // Get git-ignored files
-          const ignoredFiles = await getGitIgnoredFiles(repoPath);
+          allFiles = await listFilesWithGit(repoPath, changedFiles);
 
-          // Get changed files from git
-          const changedFiles = await getChangedFilesForRepo(repoPath);
-
-          // List all files
-          allFiles = await listFilesRecursive(
-            repoPath,
-            ignoredFiles,
-            repoPath,
-            changedFiles,
-          );
-
-          // Update cache
           repoFileCache.set(repoPath, {
             files: allFiles,
             timestamp: now,
           });
         }
 
-        // Filter by query if provided
-        if (query?.trim()) {
-          const lowerQuery = query.toLowerCase();
-          return allFiles
-            .filter(
-              (f) =>
-                f.path.toLowerCase().includes(lowerQuery) ||
-                f.name.toLowerCase().includes(lowerQuery),
-            )
-            .slice(0, 50); // Limit search results
-        }
-
-        return allFiles; // Return all files for full tree view
+        return allFiles.slice(0, resultLimit);
       } catch (error) {
         log.error("Error listing repo files:", error);
         return [];

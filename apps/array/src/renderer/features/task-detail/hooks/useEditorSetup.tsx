@@ -16,8 +16,9 @@ import type {
   SuggestionOptions,
   SuggestionProps,
 } from "@tiptap/suggestion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
+  type MentionState,
   TaskFileMentionList,
   type TaskFileMentionListRef,
 } from "../components/TaskFileMentionList";
@@ -31,21 +32,46 @@ interface UseEditorSetupOptions {
   repoPath?: string | null;
 }
 
+interface MentionContext {
+  items: MentionItem[];
+  state: MentionState;
+  query: string;
+  directoryName?: string;
+}
+
 export function useEditorSetup({
   onSubmit,
   isDisabled = false,
   repoPath,
 }: UseEditorSetupOptions): Editor | null {
   const { draft, setDraft } = useTaskInputStore();
-  const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
-  const mentionItemsRef = useRef(mentionItems);
+  const mentionContextRef = useRef<MentionContext>({
+    items: [],
+    state: "loading",
+    query: "",
+    directoryName: undefined,
+  });
   const repoPathRef = useRef(repoPath);
   const onSubmitRef = useRef(onSubmit);
+  const componentRef = useRef<ReactRenderer<TaskFileMentionListRef> | null>(
+    null,
+  );
+  const commandRef = useRef<
+    ((item: { id: string; label: string; type?: string }) => void) | null
+  >(null);
 
-  // Keep refs synced
-  useEffect(() => {
-    mentionItemsRef.current = mentionItems;
-  }, [mentionItems]);
+  const updateMentionContext = (context: MentionContext) => {
+    mentionContextRef.current = context;
+    if (componentRef.current && commandRef.current) {
+      componentRef.current.updateProps({
+        items: context.items,
+        command: commandRef.current,
+        state: context.state,
+        query: context.query,
+        directoryName: context.directoryName,
+      });
+    }
+  };
 
   useEffect(() => {
     repoPathRef.current = repoPath;
@@ -108,10 +134,30 @@ export function useEditorSetup({
         suggestion: {
           char: "@",
           items: async ({ query }: { query: string }) => {
+            const directoryName = repoPathRef.current
+              ? repoPathRef.current.split("/").pop()
+              : undefined;
+
             if (!repoPathRef.current) {
-              setMentionItems([]);
+              // Update synchronously before returning so onStart sees correct state
+              mentionContextRef.current = {
+                items: [],
+                state: "no-directory",
+                query,
+                directoryName: undefined,
+              };
+              updateMentionContext(mentionContextRef.current);
               return [];
             }
+
+            // Set loading state synchronously before any await
+            // This ensures onStart (called after items returns or yields) sees correct initial state
+            mentionContextRef.current = {
+              items: [],
+              state: "loading",
+              query,
+              directoryName,
+            };
 
             try {
               const results = await window.electronAPI?.listRepoFiles(
@@ -123,17 +169,26 @@ export function useEditorSetup({
                 name: file.name,
                 type: "file" as const,
               }));
-              setMentionItems(items);
+
+              updateMentionContext({
+                items,
+                state: items.length > 0 ? "has-results" : "no-results",
+                query,
+                directoryName,
+              });
               return items;
             } catch (error) {
               log.error("Error fetching files:", error);
-              setMentionItems([]);
+              updateMentionContext({
+                items: [],
+                state: "no-results",
+                query,
+                directoryName,
+              });
               return [];
             }
           },
           render: () => {
-            let component: ReactRenderer<TaskFileMentionListRef> | null = null;
-
             const updatePosition = (editor: Editor, element: HTMLElement) => {
               const virtualElement = {
                 getBoundingClientRect: () =>
@@ -158,13 +213,22 @@ export function useEditorSetup({
 
             return {
               onStart: (props: SuggestionProps) => {
-                component = new ReactRenderer(TaskFileMentionList, {
+                // Store command ref for use in updateMentionContext
+                commandRef.current = props.command;
+
+                const component = new ReactRenderer(TaskFileMentionList, {
                   props: {
-                    items: mentionItemsRef.current,
+                    items: mentionContextRef.current.items,
                     command: props.command,
+                    state: mentionContextRef.current.state,
+                    query: mentionContextRef.current.query,
+                    directoryName: mentionContextRef.current.directoryName,
                   },
                   editor: props.editor,
                 });
+
+                // Store reference so updateMentionContext can update it
+                componentRef.current = component;
 
                 if (!props.clientRect) {
                   return;
@@ -177,30 +241,42 @@ export function useEditorSetup({
               },
 
               onUpdate: (props: SuggestionProps) => {
-                component?.updateProps({
-                  items: mentionItemsRef.current,
+                componentRef.current?.updateProps({
+                  items: mentionContextRef.current.items,
                   command: props.command,
+                  state: mentionContextRef.current.state,
+                  query: mentionContextRef.current.query,
+                  directoryName: mentionContextRef.current.directoryName,
                 });
 
-                if (!props.clientRect || !component) {
+                if (!props.clientRect || !componentRef.current) {
                   return;
                 }
 
-                updatePosition(props.editor, component.element);
+                updatePosition(props.editor, componentRef.current.element);
               },
 
               onKeyDown: (props: SuggestionKeyDownProps) => {
                 if (props.event.key === "Escape") {
-                  component?.destroy();
+                  componentRef.current?.destroy();
                   return true;
                 }
 
-                return component?.ref?.onKeyDown?.(props) ?? false;
+                return componentRef.current?.ref?.onKeyDown?.(props) ?? false;
               },
 
               onExit: () => {
-                component?.element.remove();
-                component?.destroy();
+                componentRef.current?.element.remove();
+                componentRef.current?.destroy();
+                componentRef.current = null;
+                commandRef.current = null;
+                // Reset state for next time dropdown opens
+                mentionContextRef.current = {
+                  items: [],
+                  state: "loading",
+                  query: "",
+                  directoryName: undefined,
+                };
               },
             };
           },

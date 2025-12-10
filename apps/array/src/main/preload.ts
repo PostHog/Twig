@@ -147,8 +147,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listRepoFiles: (
     repoPath: string,
     query?: string,
+    limit?: number,
   ): Promise<Array<{ path: string; name: string }>> =>
-    ipcRenderer.invoke("list-repo-files", repoPath, query),
+    ipcRenderer.invoke("list-repo-files", repoPath, query, limit),
   clearRepoFileCache: (repoPath: string): Promise<void> =>
     ipcRenderer.invoke("clear-repo-file-cache", repoPath),
   agentStart: async (

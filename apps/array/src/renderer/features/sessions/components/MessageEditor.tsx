@@ -231,12 +231,20 @@ export const MessageEditor = forwardRef<
       }
     };
     const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
-    const mentionItemsRef = useRef(mentionItems);
     const repoPathRef = useRef(repoPath);
     const onSubmitRef = useRef(onSubmit);
+    const componentRef = useRef<ReactRenderer<MentionListRef> | null>(null);
+    const commandRef = useRef<
+      ((item: { id: string; label: string; type?: string }) => void) | null
+    >(null);
 
     useEffect(() => {
-      mentionItemsRef.current = mentionItems;
+      if (componentRef.current && commandRef.current) {
+        componentRef.current.updateProps({
+          items: mentionItems,
+          command: commandRef.current,
+        });
+      }
     }, [mentionItems]);
 
     useEffect(() => {
@@ -301,10 +309,14 @@ export const MessageEditor = forwardRef<
                 setMentionItems([]);
                 return [];
               }
+
+              setMentionItems([]);
+
               try {
                 const results = await window.electronAPI?.listRepoFiles(
                   repoPathRef.current,
                   query,
+                  10,
                 );
                 const items = (results || []).map((file) => ({
                   path: file.path,
@@ -320,8 +332,6 @@ export const MessageEditor = forwardRef<
               }
             },
             render: () => {
-              let component: ReactRenderer<MentionListRef> | null = null;
-
               const updatePosition = (ed: Editor, element: HTMLElement) => {
                 const refRect = posToDOMRect(
                   ed.view,
@@ -338,36 +348,41 @@ export const MessageEditor = forwardRef<
 
               return {
                 onStart: (props: SuggestionProps) => {
-                  component = new ReactRenderer(MentionList, {
+                  commandRef.current = props.command;
+
+                  const component = new ReactRenderer(MentionList, {
                     props: {
-                      items: mentionItemsRef.current,
+                      items: [],
                       command: props.command,
                     },
                     editor: props.editor,
                   });
+
+                  componentRef.current = component;
+
                   if (!props.clientRect) return;
                   component.element.style.position = "absolute";
                   document.body.appendChild(component.element);
                   updatePosition(props.editor, component.element);
                 },
                 onUpdate: (props: SuggestionProps) => {
-                  component?.updateProps({
-                    items: mentionItemsRef.current,
-                    command: props.command,
-                  });
-                  if (!props.clientRect || !component) return;
-                  updatePosition(props.editor, component.element);
+                  if (!props.clientRect || !componentRef.current) return;
+                  updatePosition(props.editor, componentRef.current.element);
                 },
                 onKeyDown: (props: SuggestionKeyDownProps) => {
                   if (props.event.key === "Escape") {
-                    component?.destroy();
+                    componentRef.current?.destroy();
+                    componentRef.current = null;
+                    commandRef.current = null;
                     return true;
                   }
-                  return component?.ref?.onKeyDown?.(props) ?? false;
+                  return componentRef.current?.ref?.onKeyDown?.(props) ?? false;
                 },
                 onExit: () => {
-                  component?.element.remove();
-                  component?.destroy();
+                  componentRef.current?.element.remove();
+                  componentRef.current?.destroy();
+                  componentRef.current = null;
+                  commandRef.current = null;
                 },
               };
             },
