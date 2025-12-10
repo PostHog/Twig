@@ -224,6 +224,11 @@ declare global {
     onResetLayout: (listener: () => void) => () => void;
     onClearStorage: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
+    checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
+    onUpdateStatus: (
+      listener: (status: { checking: boolean; upToDate?: boolean }) => void,
+    ) => () => void;
+    onCheckForUpdatesMenu: (listener: () => void) => () => void;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
     // Shell API

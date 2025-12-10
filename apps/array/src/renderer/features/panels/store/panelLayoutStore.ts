@@ -111,7 +111,7 @@ function createDefaultPanelTree(
       tabs: [
         {
           id: DEFAULT_TAB_IDS.LOGS,
-          label: "Logs",
+          label: "Chat",
           data: { type: "logs" },
           component: null,
           closeable: false,
@@ -166,7 +166,7 @@ function createDefaultPanelTree(
             tabs: [
               {
                 id: DEFAULT_TAB_IDS.LOGS,
-                label: "Logs",
+                label: "Chat",
                 data: { type: "logs" },
                 component: null,
                 closeable: false,
