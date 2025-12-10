@@ -13,6 +13,23 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
+// GitHub API response types
+interface GitHubUser {
+  login: string;
+  id: number;
+}
+
+interface GitHubComment {
+  id: number;
+  path: string;
+  line: number;
+  side: string;
+  body: string;
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
+}
+
 const countFileLines = async (filePath: string): Promise<number> => {
   try {
     const content = await fsPromises.readFile(filePath, "utf-8");
@@ -165,6 +182,19 @@ export const getCurrentBranch = async (
     return stdout.trim();
   } catch {
     return undefined;
+  }
+};
+
+export const getHeadCommitSha = async (
+  directoryPath: string,
+): Promise<string> => {
+  try {
+    const { stdout } = await execAsync("git rev-parse HEAD", {
+      cwd: directoryPath,
+    });
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(`Failed to get HEAD commit SHA: ${error}`);
   }
 };
 
@@ -556,27 +586,10 @@ export const detectSSHError = (output: string): string | undefined => {
   return `SSH test failed: ${output.substring(0, 200)}`;
 };
 
-const getAllPullRequestComments = async (
-  directoryPath: string,
-  prNumber: number,
-): Promise<any> => {
-  validatePullRequestNumber(prNumber);
-
-  try {
-    const { stdout } = await execAsync(
-      `gh pr view ${prNumber} --json comments`,
-      { cwd: directoryPath },
-    );
-    return JSON.parse(stdout);
-  } catch (error) {
-    throw new Error(`Failed to fetch PR comments: ${error}`);
-  }
-};
-
 const getPullRequestReviewComments = async (
   directoryPath: string,
   prNumber: number,
-): Promise<any> => {
+): Promise<GitHubComment[]> => {
   validatePullRequestNumber(prNumber);
 
   try {
@@ -605,7 +618,7 @@ const addPullRequestComment = async (
   directoryPath: string,
   prNumber: number,
   options: AddPullRequestCommentOptions,
-): Promise<any> => {
+): Promise<GitHubComment> => {
   validatePullRequestNumber(prNumber);
 
   // Validate required options
@@ -626,13 +639,84 @@ const addPullRequestComment = async (
         `-f body="${options.body.replace(/"/g, '\\"')}" ` +
         `-f commit_id="${options.commitId}" ` +
         `-f path="${options.path}" ` +
-        `-f line=${options.line} ` +
+        `-F line=${options.line} ` +
         `-f side="${side}"`,
       { cwd: directoryPath },
     );
     return JSON.parse(stdout);
   } catch (error) {
     throw new Error(`Failed to add PR comment: ${error}`);
+  }
+};
+
+interface ReplyPullRequestCommentOptions {
+  body: string;
+  inReplyTo: number; // The comment ID to reply to
+}
+
+const replyToPullRequestComment = async (
+  directoryPath: string,
+  prNumber: number,
+  options: ReplyPullRequestCommentOptions,
+): Promise<GitHubComment> => {
+  validatePullRequestNumber(prNumber);
+  validateCommentId(options.inReplyTo);
+
+  if (!options.body || options.body.trim().length === 0) {
+    throw new Error("Reply body cannot be empty");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    // First, get the original comment to extract necessary details
+    const { stdout: originalCommentOutput } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${options.inReplyTo}`,
+      { cwd: directoryPath },
+    );
+
+    const originalComment = JSON.parse(originalCommentOutput);
+
+    // Create a reply comment using the same commit, path, and line as the original
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments ` +
+        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f commit_id="${originalComment.commit_id}" ` +
+        `-f path="${originalComment.path}" ` +
+        `-F line=${originalComment.line} ` +
+        `-f side="${originalComment.side}" ` +
+        `-F in_reply_to=${options.inReplyTo}`,
+      { cwd: directoryPath },
+    );
+
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to reply to PR comment: ${error}`);
+  }
+};
+
+const updatePullRequestComment = async (
+  directoryPath: string,
+  commentId: number,
+  content: string,
+): Promise<GitHubComment> => {
+  validateCommentId(commentId);
+
+  if (!content || content.trim().length === 0) {
+    throw new Error("Comment content cannot be empty");
+  }
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    const { stdout } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${content.replace(/"/g, '\\"')}"`,
+      { cwd: directoryPath },
+    );
+
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Failed to update PR comment: ${error}`);
   }
 };
 
@@ -651,6 +735,114 @@ const deletePullRequestComment = async (
     );
   } catch (error) {
     throw new Error(`Failed to delete PR comment: ${error}`);
+  }
+};
+
+interface PullRequestInfo {
+  number: number;
+  url: string;
+  title: string;
+  state: string;
+}
+
+const getPullRequestForBranch = async (
+  directoryPath: string,
+): Promise<PullRequestInfo | null> => {
+  try {
+    const { stdout } = await execAsync(
+      "gh pr view --json number,url,title,state",
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch {
+    // No PR exists for this branch
+    return null;
+  }
+};
+
+const resolvePullRequestComment = async (
+  directoryPath: string,
+  prNumber: number,
+  commentId: number,
+  resolved: boolean,
+): Promise<GitHubComment & { resolved: boolean }> => {
+  validateCommentId(commentId);
+  validatePullRequestNumber(prNumber);
+
+  try {
+    const repo = await getRepositoryFromRemoteUrl(directoryPath);
+
+    // Find the thread ID for this comment using GraphQL
+    const { stdout: threadsOutput } = await execAsync(
+      `gh api graphql -f query='
+        query {
+          repository(owner: "${repo.split("/")[0]}", name: "${repo.split("/")[1]}") {
+            pullRequest(number: ${prNumber}) {
+              reviewThreads(first: 100) {
+                nodes {
+                  id
+                  isResolved
+                  comments(first: 100) {
+                    nodes {
+                      databaseId
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      '`,
+      { cwd: directoryPath },
+    );
+
+    const threadsData = JSON.parse(threadsOutput);
+    const threads = threadsData.data.repository.pullRequest.reviewThreads.nodes;
+
+    // Find the thread containing this comment
+    const thread = threads.find(
+      (t: { comments: { nodes: { databaseId: number }[] } }) =>
+        t.comments.nodes.some(
+          (c: { databaseId: number }) => c.databaseId === commentId,
+        ),
+    );
+
+    if (!thread) {
+      throw new Error(`No thread found for comment ${commentId}`);
+    }
+
+    // Resolve or unresolve the thread using GraphQL mutation
+    const mutation = resolved ? "resolveReviewThread" : "unresolveReviewThread";
+    const { stdout: mutationOutput } = await execAsync(
+      `gh api graphql -f query='
+        mutation {
+          ${mutation}(input: {threadId: "${thread.id}"}) {
+            thread {
+              id
+              isResolved
+            }
+          }
+        }
+      '`,
+      { cwd: directoryPath },
+    );
+
+    const mutationData = JSON.parse(mutationOutput);
+    const isResolved = mutationData.data[mutation].thread.isResolved;
+
+    // Fetch the updated comment to return
+    const { stdout: commentOutput } = await execAsync(
+      `gh api repos/${repo}/pulls/comments/${commentId}`,
+      { cwd: directoryPath },
+    );
+
+    const updatedComment = JSON.parse(commentOutput);
+    return {
+      ...updatedComment,
+      resolved: isResolved,
+    };
+  } catch (error) {
+    throw new Error(`Failed to resolve PR comment: ${error}`);
   }
 };
 
@@ -923,6 +1115,16 @@ export function registerGitIpc(
   );
 
   ipcMain.handle(
+    "get-head-commit-sha",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string> => {
+      return getHeadCommitSha(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
     "discard-file-changes",
     async (
       _event: IpcMainInvokeEvent,
@@ -935,23 +1137,12 @@ export function registerGitIpc(
   );
 
   ipcMain.handle(
-    "get-pr-comments",
-    async (
-      _event: IpcMainInvokeEvent,
-      directoryPath: string,
-      prNumber: number,
-    ): Promise<any> => {
-      return getAllPullRequestComments(directoryPath, prNumber);
-    },
-  );
-
-  ipcMain.handle(
     "get-pr-review-comments",
     async (
       _event: IpcMainInvokeEvent,
       directoryPath: string,
       prNumber: number,
-    ): Promise<any> => {
+    ): Promise<GitHubComment[]> => {
       return getPullRequestReviewComments(directoryPath, prNumber);
     },
   );
@@ -963,8 +1154,32 @@ export function registerGitIpc(
       directoryPath: string,
       prNumber: number,
       options: AddPullRequestCommentOptions,
-    ): Promise<any> => {
+    ): Promise<GitHubComment> => {
       return addPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "reply-pr-review",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+      options: ReplyPullRequestCommentOptions,
+    ): Promise<GitHubComment> => {
+      return replyToPullRequestComment(directoryPath, prNumber, options);
+    },
+  );
+
+  ipcMain.handle(
+    "update-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      commentId: number,
+      content: string,
+    ): Promise<GitHubComment> => {
+      return updatePullRequestComment(directoryPath, commentId, content);
     },
   );
 
@@ -976,6 +1191,34 @@ export function registerGitIpc(
       commentId: number,
     ): Promise<void> => {
       return deletePullRequestComment(directoryPath, commentId);
+    },
+  );
+
+  ipcMain.handle(
+    "resolve-pr-comment",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      prNumber: number,
+      commentId: number,
+      resolved: boolean,
+    ): Promise<GitHubComment & { resolved: boolean }> => {
+      return resolvePullRequestComment(
+        directoryPath,
+        prNumber,
+        commentId,
+        resolved,
+      );
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-for-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<PullRequestInfo | null> => {
+      return getPullRequestForBranch(directoryPath);
     },
   );
 }

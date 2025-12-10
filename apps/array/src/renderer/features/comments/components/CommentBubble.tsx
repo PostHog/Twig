@@ -17,6 +17,7 @@ import { isCurrentUser } from "../utils/currentUser";
 interface CommentBubbleProps {
   comment: Comment;
   isReply?: boolean;
+  directoryPath?: string;
 }
 
 function formatRelativeTime(date: Date): string {
@@ -45,6 +46,7 @@ function getInitials(name: string): string {
 export function CommentBubble({
   comment,
   isReply = false,
+  directoryPath,
 }: CommentBubbleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
@@ -66,17 +68,18 @@ export function CommentBubble({
 
   const handleSaveEdit = useCallback(async () => {
     const trimmed = editContent.trim();
-    if (!trimmed) return;
+    if (!trimmed || !directoryPath) return;
 
-    await updateComment(comment.id, trimmed);
+    await updateComment(comment.id, trimmed, directoryPath);
     setIsEditing(false);
-  }, [editContent, comment.id, updateComment]);
+  }, [editContent, comment.id, updateComment, directoryPath]);
 
   const handleDelete = useCallback(async () => {
+    if (!directoryPath) return;
     if (window.confirm("Delete this comment? This action cannot be undone.")) {
-      await deleteComment(comment.id);
+      await deleteComment(comment.id, directoryPath);
     }
-  }, [comment.id, deleteComment]);
+  }, [comment.id, deleteComment, directoryPath]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -22,4 +22,12 @@ export default defineConfig({
       "@utils": path.resolve(__dirname, "./src/renderer/utils"),
     },
   },
+  optimizeDeps: {
+    exclude: ["electron"],
+  },
+  build: {
+    rollupOptions: {
+      external: ["electron"],
+    },
+  },
 });

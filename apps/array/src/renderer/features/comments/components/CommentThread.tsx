@@ -8,9 +8,15 @@ import { CommentBubble } from "./CommentBubble";
 
 interface CommentThreadProps {
   comment: Comment;
+  prNumber?: number;
+  directoryPath?: string;
 }
 
-export function CommentThread({ comment: initialComment }: CommentThreadProps) {
+export function CommentThread({
+  comment: initialComment,
+  prNumber,
+  directoryPath,
+}: CommentThreadProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -35,29 +41,33 @@ export function CommentThread({ comment: initialComment }: CommentThreadProps) {
 
   const handleSubmitReply = useCallback(async () => {
     const trimmed = replyContent.trim();
-    if (!trimmed || !comment) return;
+    if (!trimmed || !comment || !prNumber || !directoryPath) return;
 
     const input: CreateReplyInput = {
       parentId: comment.id,
-      fileId: comment.fileId,
-      line: comment.line,
-      side: comment.side,
+      prNumber,
+      directoryPath,
       content: trimmed,
     };
 
     await createReply(input);
     setReplyContent("");
     setIsReplying(false);
-  }, [replyContent, comment, createReply]);
+  }, [replyContent, comment, createReply, prNumber, directoryPath]);
 
   const handleToggleResolved = useCallback(async () => {
-    if (!comment) return;
-    await resolveComment(comment.id, !comment.resolved);
+    if (!comment || !directoryPath || !prNumber) return;
+    await resolveComment(
+      comment.id,
+      !comment.resolved,
+      directoryPath,
+      prNumber,
+    );
     // Auto-collapse when resolving
     if (!comment.resolved) {
       setIsCollapsed(true);
     }
-  }, [comment, resolveComment]);
+  }, [comment, resolveComment, directoryPath, prNumber]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -121,11 +131,16 @@ export function CommentThread({ comment: initialComment }: CommentThreadProps) {
       }}
     >
       <Flex direction="column" gap="2">
-        <CommentBubble comment={comment} />
+        <CommentBubble comment={comment} directoryPath={directoryPath} />
 
         {/* Replies */}
         {comment.replies.map((reply) => (
-          <CommentBubble key={reply.id} comment={reply} isReply />
+          <CommentBubble
+            key={reply.id}
+            comment={reply}
+            isReply
+            directoryPath={directoryPath}
+          />
         ))}
 
         {/* Reply composer */}

@@ -11,6 +11,8 @@ interface CodeMirrorDiffEditorProps {
   filePath?: string;
   fileId?: string; // Unique identifier for comments (e.g., relative path)
   onContentChange?: (content: string) => void;
+  prNumber?: number;
+  directoryPath?: string;
 }
 
 export function CodeMirrorDiffEditor({
@@ -19,11 +21,15 @@ export function CodeMirrorDiffEditor({
   filePath,
   fileId,
   onContentChange,
+  prNumber,
+  directoryPath,
 }: CodeMirrorDiffEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const extensions = useEditorExtensions(filePath, true, {
     enableComments: true,
     fileId: fileId || filePath, // Fall back to filePath if no fileId provided
+    prNumber,
+    directoryPath,
   });
   const options = useMemo(
     () => ({

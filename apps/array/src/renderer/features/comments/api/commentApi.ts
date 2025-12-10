@@ -3,36 +3,57 @@
  * COMMENT API ADAPTER
  * ============================================
  *
- * TODO FOR API INTEGRATION:
+ * GitHub API integration for PR review comments.
+ * All methods delegate to the git service via IPC channels:
  *
- * 1. Create a new file `githubCommentApi.ts` that implements `CommentApi`
- * 2. Replace `mockCommentApi` with your implementation below
+ * - fetchComments: get-pr-review-comments
+ * - createComment: add-pr-comment
+ * - createReply: reply-pr-review
+ * - updateComment: update-pr-comment
+ * - deleteComment: delete-pr-comment
+ * - resolveComment: resolve-pr-comment
  *
- * Example:
- *   import { githubCommentApi } from "./githubCommentApi";
- *   export const commentApi: CommentApi = githubCommentApi;
- *
- * The store calls these functions automatically - you just need to
- * implement them to hit your GitHub API endpoints.
  * ============================================
  */
 
 import type { Comment } from "@shared/types";
-import { getCurrentUser } from "../utils/currentUser";
+
+// GitHub API response types
+interface GitHubUser {
+  login: string;
+  id: number;
+}
+
+interface GitHubComment {
+  id: number;
+  path: string;
+  line: number;
+  side: string;
+  body: string;
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
+}
 
 // ============================================
 // INPUT TYPES
 // ============================================
 
 export interface CreateCommentInput {
-  fileId: string;
+  prNumber: number;
+  directoryPath: string;
+  path: string;
   line: number;
   side: "left" | "right";
   content: string;
+  commitId: string;
 }
 
-export interface CreateReplyInput extends CreateCommentInput {
+export interface CreateReplyInput {
+  prNumber: number;
+  directoryPath: string;
   parentId: string;
+  content: string;
 }
 
 // ============================================
@@ -41,120 +62,187 @@ export interface CreateReplyInput extends CreateCommentInput {
 
 export interface CommentApi {
   /**
-   * Fetch all comments for a file
-   * GET /api/comments?fileId=...
+   * Fetch all comments for a pull request
+   * Uses IPC: get-pr-review-comments
    */
-  fetchComments(fileId: string): Promise<Comment[]>;
+  fetchComments(prNumber: number, directoryPath: string): Promise<Comment[]>;
 
   /**
    * Create a new comment on a line
-   * POST /api/comments
-   * Body: { fileId, line, side, content }
+   * Uses IPC: add-pr-comment
    * Returns: Created comment with server-generated ID
    */
   createComment(input: CreateCommentInput): Promise<Comment>;
 
   /**
    * Create a reply to an existing comment
-   * POST /api/comments/:parentId/replies
-   * Body: { content }
+   * Uses IPC: reply-pr-review
    * Returns: Created reply with server-generated ID
    */
   createReply(input: CreateReplyInput): Promise<Comment>;
 
   /**
    * Update a comment's content
-   * PATCH /api/comments/:commentId
-   * Body: { content }
+   * Uses IPC: update-pr-comment
    * Returns: Updated comment
    */
-  updateComment(commentId: string, content: string): Promise<Comment>;
+  updateComment(
+    commentId: string,
+    content: string,
+    directoryPath: string,
+  ): Promise<Comment>;
 
   /**
    * Delete a comment
-   * DELETE /api/comments/:commentId
+   * Uses IPC: delete-pr-comment
    */
-  deleteComment(commentId: string): Promise<void>;
+  deleteComment(commentId: string, directoryPath: string): Promise<void>;
 
   /**
    * Mark a comment as resolved or unresolved
-   * PATCH /api/comments/:commentId/resolve
-   * Body: { resolved: boolean }
+   * Uses IPC: resolve-pr-comment
    * Returns: Updated comment
    */
-  resolveComment(commentId: string, resolved: boolean): Promise<Comment>;
+  resolveComment(
+    commentId: string,
+    resolved: boolean,
+    directoryPath: string,
+    prNumber: number,
+  ): Promise<Comment>;
 }
 
 // ============================================
-// MOCK IMPLEMENTATION (local-only, no persistence)
+// GITHUB API IMPLEMENTATION (via git service)
 // ============================================
 
 /**
- * Mock API that works with local state only.
- * Replace this with `githubCommentApi` when ready.
+ * GitHub API implementation that delegates to the git service via IPC.
  */
-export const mockCommentApi: CommentApi = {
-  async fetchComments(_fileId) {
-    // Mock: Return empty array (store manages local state)
-    // Real: GET /api/comments?fileId=...
-    return [];
+export const githubCommentApi: CommentApi = {
+  async fetchComments(prNumber, directoryPath) {
+    try {
+      const rawComments = await window.electronAPI.prComments.getReviewComments(
+        directoryPath,
+        prNumber,
+      );
+
+      // Transform GitHub API response to Comment type
+      return (rawComments as GitHubComment[]).map((githubComment) => ({
+        id: githubComment.id.toString(),
+        fileId: githubComment.path,
+        line: githubComment.line,
+        side: githubComment.side.toLowerCase() as "left" | "right",
+        content: githubComment.body,
+        author: githubComment.user.login,
+        timestamp: new Date(githubComment.created_at),
+        resolved: false, // TODO: Fetch actual resolution status from GraphQL reviewThreads
+        replies: [], // GitHub review comments don't have nested replies
+      }));
+    } catch (_error) {
+      return [];
+    }
   },
 
   async createComment(input) {
-    // Mock: Create comment object with generated ID
-    // Real: POST /api/comments, return server response
-    const user = getCurrentUser();
+    const createdComment = (await window.electronAPI.prComments.addComment(
+      input.directoryPath,
+      input.prNumber,
+      {
+        body: input.content,
+        commitId: input.commitId,
+        path: input.path,
+        line: input.line,
+        side: input.side.toUpperCase() as "LEFT" | "RIGHT",
+      },
+    )) as GitHubComment;
+
+    // Transform the response to match our Comment type
     return {
-      id: crypto.randomUUID(),
-      fileId: input.fileId,
-      line: input.line,
-      side: input.side,
-      content: input.content,
-      author: user.name,
-      timestamp: new Date(),
-      resolved: false,
+      id: createdComment.id.toString(),
+      fileId: createdComment.path,
+      line: createdComment.line,
+      side: createdComment.side.toLowerCase() as "left" | "right",
+      content: createdComment.body,
+      author: createdComment.user.login,
+      timestamp: new Date(createdComment.created_at),
+      resolved: createdComment.body.includes("<!-- RESOLVED -->"),
       replies: [],
     };
   },
 
   async createReply(input) {
-    // Mock: Create reply object with generated ID
-    // Real: POST /api/comments/:parentId/replies
-    const user = getCurrentUser();
+    const replyComment = (await window.electronAPI.prComments.replyToReview(
+      input.directoryPath,
+      input.prNumber,
+      {
+        body: input.content,
+        inReplyTo: parseInt(input.parentId, 10),
+      },
+    )) as GitHubComment;
+
+    // Transform the response to match our Comment type
     return {
-      id: crypto.randomUUID(),
-      fileId: input.fileId,
-      line: input.line,
-      side: input.side,
-      content: input.content,
-      author: user.name,
-      timestamp: new Date(),
-      resolved: false,
+      id: replyComment.id.toString(),
+      fileId: replyComment.path,
+      line: replyComment.line,
+      side: replyComment.side.toLowerCase() as "left" | "right",
+      content: replyComment.body,
+      author: replyComment.user.login,
+      timestamp: new Date(replyComment.created_at),
+      resolved: replyComment.body.includes("<!-- RESOLVED -->"),
       replies: [],
     };
   },
 
-  async updateComment(commentId, content) {
-    // Mock: Return updated comment (store handles state update)
-    // Real: PATCH /api/comments/:commentId
-    return {
-      id: commentId,
+  async updateComment(commentId, content, directoryPath) {
+    const updatedComment = (await window.electronAPI.prComments.updateComment(
+      directoryPath,
+      parseInt(commentId, 10),
       content,
-    } as Comment;
-  },
+    )) as GitHubComment;
 
-  async deleteComment(_commentId) {
-    // Mock: No-op (store handles state removal)
-    // Real: DELETE /api/comments/:commentId
-  },
-
-  async resolveComment(commentId, resolved) {
-    // Mock: Return updated comment (store handles state update)
-    // Real: PATCH /api/comments/:commentId/resolve
+    // Transform the response to match our Comment type
+    const resolved = updatedComment.body.includes("<!-- RESOLVED -->");
     return {
-      id: commentId,
+      id: updatedComment.id.toString(),
+      fileId: updatedComment.path,
+      line: updatedComment.line,
+      side: updatedComment.side.toLowerCase() as "left" | "right",
+      content: updatedComment.body,
+      author: updatedComment.user.login,
+      timestamp: new Date(updatedComment.updated_at),
+      resolved: resolved,
+      replies: [],
+    };
+  },
+
+  async deleteComment(commentId, directoryPath) {
+    await window.electronAPI.prComments.deleteComment(
+      directoryPath,
+      parseInt(commentId, 10),
+    );
+  },
+
+  async resolveComment(commentId, resolved, directoryPath, prNumber) {
+    const updatedComment = (await window.electronAPI.prComments.resolveComment(
+      directoryPath,
+      prNumber,
+      parseInt(commentId, 10),
       resolved,
-    } as Comment;
+    )) as GitHubComment & { resolved: boolean };
+
+    // Transform the response to match our Comment type
+    return {
+      id: updatedComment.id.toString(),
+      fileId: updatedComment.path,
+      line: updatedComment.line,
+      side: updatedComment.side.toLowerCase() as "left" | "right",
+      content: updatedComment.body,
+      author: updatedComment.user.login,
+      timestamp: new Date(updatedComment.updated_at),
+      resolved: updatedComment.resolved,
+      replies: [],
+    };
   },
 };
 
@@ -163,10 +251,7 @@ export const mockCommentApi: CommentApi = {
 // ============================================
 
 /**
- * Change this to switch between mock and real API.
- *
- * When ready for GitHub integration:
- *   import { githubCommentApi } from "./githubCommentApi";
- *   export const commentApi: CommentApi = githubCommentApi;
+ * GitHub API implementation for PR review comments.
+ * All operations delegate to the git service via IPC.
  */
-export const commentApi: CommentApi = mockCommentApi;
+export const commentApi: CommentApi = githubCommentApi;

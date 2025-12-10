@@ -8,6 +8,8 @@ interface CodeMirrorEditorProps {
   fileId?: string; // Unique identifier for comments (e.g., relative path)
   readOnly?: boolean;
   enableComments?: boolean;
+  prNumber?: number;
+  directoryPath?: string;
 }
 
 export function CodeMirrorEditor({
@@ -16,10 +18,14 @@ export function CodeMirrorEditor({
   fileId,
   readOnly = false,
   enableComments = false,
+  prNumber,
+  directoryPath,
 }: CodeMirrorEditorProps) {
   const extensions = useEditorExtensions(filePath, readOnly, {
     enableComments,
     fileId: fileId || filePath,
+    prNumber,
+    directoryPath,
   });
   const options = useMemo(
     () => ({ doc: content, extensions, filePath }),

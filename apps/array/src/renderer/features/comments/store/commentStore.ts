@@ -38,11 +38,21 @@ interface CommentStore {
   getCommentsForLine: (fileId: string, line: number) => Comment[];
 
   // Commands (async, call API then update local state)
+  fetchComments: (prNumber: number, directoryPath: string) => Promise<void>;
   createComment: (input: CreateCommentInput) => Promise<Comment>;
   createReply: (input: CreateReplyInput) => Promise<Comment>;
-  updateComment: (commentId: string, content: string) => Promise<void>;
-  deleteComment: (commentId: string) => Promise<void>;
-  resolveComment: (commentId: string, resolved: boolean) => Promise<void>;
+  updateComment: (
+    commentId: string,
+    content: string,
+    directoryPath: string,
+  ) => Promise<void>;
+  deleteComment: (commentId: string, directoryPath: string) => Promise<void>;
+  resolveComment: (
+    commentId: string,
+    resolved: boolean,
+    directoryPath: string,
+    prNumber: number,
+  ) => Promise<void>;
 
   // Local-only actions (no API call)
   toggleShowComments: () => void;
@@ -86,6 +96,25 @@ export const useCommentStore = create<CommentStore>()(
       // COMMANDS (async, call API + update state)
       // ----------------------------------------
 
+      fetchComments: async (prNumber: number, directoryPath: string) => {
+        try {
+          const comments = await commentApi.fetchComments(
+            prNumber,
+            directoryPath,
+          );
+          // Group comments by fileId
+          const commentsByFile: Record<string, Comment[]> = {};
+          for (const comment of comments) {
+            if (!commentsByFile[comment.fileId]) {
+              commentsByFile[comment.fileId] = [];
+            }
+            commentsByFile[comment.fileId].push(comment);
+          }
+          // Replace all comments with fresh data from API
+          set({ comments: commentsByFile });
+        } catch (_error) {}
+      },
+
       createComment: async (input: CreateCommentInput) => {
         // Call API to create comment
         const comment = await commentApi.createComment(input);
@@ -106,25 +135,39 @@ export const useCommentStore = create<CommentStore>()(
         return reply;
       },
 
-      updateComment: async (commentId: string, content: string) => {
+      updateComment: async (
+        commentId: string,
+        content: string,
+        directoryPath: string,
+      ) => {
         // Call API to update
-        await commentApi.updateComment(commentId, content);
+        await commentApi.updateComment(commentId, content, directoryPath);
 
         // Update local state
         get()._updateCommentInState(commentId, { content });
       },
 
-      deleteComment: async (commentId: string) => {
+      deleteComment: async (commentId: string, directoryPath: string) => {
         // Call API to delete
-        await commentApi.deleteComment(commentId);
+        await commentApi.deleteComment(commentId, directoryPath);
 
         // Update local state
         get()._removeCommentFromState(commentId);
       },
 
-      resolveComment: async (commentId: string, resolved: boolean) => {
+      resolveComment: async (
+        commentId: string,
+        resolved: boolean,
+        directoryPath: string,
+        prNumber: number,
+      ) => {
         // Call API to update resolve status
-        await commentApi.resolveComment(commentId, resolved);
+        await commentApi.resolveComment(
+          commentId,
+          resolved,
+          directoryPath,
+          prNumber,
+        );
 
         // Update local state
         get()._updateCommentInState(commentId, { resolved });

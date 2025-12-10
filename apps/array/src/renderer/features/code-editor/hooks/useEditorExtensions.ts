@@ -16,7 +16,12 @@ import { getLanguageExtension } from "../utils/languages";
 export function useEditorExtensions(
   filePath?: string,
   readOnly = false,
-  options?: { enableComments?: boolean; fileId?: string },
+  options?: {
+    enableComments?: boolean;
+    fileId?: string;
+    prNumber?: number;
+    directoryPath?: string;
+  },
 ) {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const showComments = useCommentStore((state) => state.showComments);
@@ -28,7 +33,12 @@ export function useEditorExtensions(
   const createComment = useCommentStore((state) => state.createComment);
   const composerState = useCommentStore((state) => state.composerState);
 
-  const { enableComments = false, fileId } = options || {};
+  const {
+    enableComments = false,
+    fileId,
+    prNumber,
+    directoryPath,
+  } = options || {};
 
   // Handler for when user clicks "+" to add a comment
   const handleOpenComposer = useCallback(
@@ -41,17 +51,28 @@ export function useEditorExtensions(
   // Handler for submitting a new comment
   const handleSubmitComment = useCallback(
     async (line: number, content: string) => {
-      if (!fileId) return;
+      if (!fileId || !directoryPath || !prNumber) {
+        return;
+      }
 
-      await createComment({
-        fileId,
-        line,
-        side: "right",
-        content,
-      });
-      closeComposer();
+      try {
+        // Get the HEAD commit SHA for the comment
+        const commitId =
+          await window.electronAPI.getHeadCommitSha(directoryPath);
+
+        await createComment({
+          prNumber,
+          directoryPath,
+          path: fileId,
+          line,
+          side: "right",
+          content,
+          commitId,
+        });
+        closeComposer();
+      } catch (_error) {}
     },
-    [fileId, createComment, closeComposer],
+    [fileId, createComment, closeComposer, prNumber, directoryPath],
   );
 
   return useMemo(() => {
@@ -83,7 +104,12 @@ export function useEditorExtensions(
       );
       // Inline comment display
       extensions.push(
-        commentWidgetExtension(() => getCommentsForFile(fileId), showComments),
+        commentWidgetExtension(
+          () => getCommentsForFile(fileId),
+          showComments,
+          prNumber,
+          directoryPath,
+        ),
       );
     }
 
@@ -100,5 +126,7 @@ export function useEditorExtensions(
     handleSubmitComment,
     closeComposer,
     composerState,
+    directoryPath,
+    prNumber,
   ]);
 }
