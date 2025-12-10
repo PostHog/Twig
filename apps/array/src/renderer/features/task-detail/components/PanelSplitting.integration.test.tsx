@@ -20,7 +20,7 @@ const PANEL_IDS = {
 } as const;
 
 const TAB_IDS = {
-  LOGS: "logs",
+  CHAT: "chat",
   SHELL: "shell",
 } as const;
 
@@ -284,7 +284,7 @@ describe("Panel Splitting Integration Tests", () => {
             if (bottomPanel.type === "leaf") {
               expect(bottomPanel.content.tabs).toHaveLength(4);
               const tabIds = bottomPanel.content.tabs.map((t) => t.id);
-              expect(tabIds).toContain(TAB_IDS.LOGS);
+              expect(tabIds).toContain(TAB_IDS.CHAT);
               expect(tabIds).toContain(TAB_IDS.SHELL);
               expect(tabIds).toContain(TEST_FILES.APP);
               expect(tabIds).toContain(TEST_FILES.README);
@@ -343,7 +343,7 @@ describe("Panel Splitting Integration Tests", () => {
             expect(bottomPanel.type).toBe("leaf");
             if (bottomPanel.type === "leaf") {
               expect(bottomPanel.content.tabs).toHaveLength(1);
-              expect(bottomPanel.content.tabs[0].id).toBe(TAB_IDS.LOGS);
+              expect(bottomPanel.content.tabs[0].id).toBe(TAB_IDS.CHAT);
             }
           }
         }
@@ -354,7 +354,7 @@ describe("Panel Splitting Integration Tests", () => {
       await tester.setupWithFile();
 
       // Close logs and shell tabs to leave only 1 tab
-      tester.closeTab(PANEL_IDS.MAIN, TAB_IDS.LOGS);
+      tester.closeTab(PANEL_IDS.MAIN, TAB_IDS.CHAT);
       tester.closeTab(PANEL_IDS.MAIN, TAB_IDS.SHELL);
 
       await waitFor(() => {

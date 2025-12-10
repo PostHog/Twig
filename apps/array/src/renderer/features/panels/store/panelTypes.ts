@@ -38,7 +38,7 @@ export type TabData =
       artifactId: string;
     }
   | {
-      type: "logs";
+      type: "chat";
     }
   | {
       type: "other";

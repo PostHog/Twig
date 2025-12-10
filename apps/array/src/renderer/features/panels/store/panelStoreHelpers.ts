@@ -4,7 +4,7 @@ import type { SplitDirection, TaskLayout } from "./panelLayoutStore";
 import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
 
 // Constants
-export const DEFAULT_FALLBACK_TAB = DEFAULT_TAB_IDS.LOGS;
+export const DEFAULT_FALLBACK_TAB = DEFAULT_TAB_IDS.CHAT;
 
 // Tab ID utilities
 export type TabType = "file" | "artifact" | "diff" | "system";
@@ -84,6 +84,10 @@ export function createTabLabel(tabId: string): string {
     const fileName = parsed.value.split("/").pop() || parsed.value;
     const label = getStatusLabel(parsed.status);
     return `${fileName} (${label})`;
+  }
+  // Capitalize first letter for system tabs
+  if (parsed.type === "system" && parsed.value) {
+    return parsed.value.charAt(0).toUpperCase() + parsed.value.slice(1);
   }
   return parsed.value;
 }
@@ -187,8 +191,8 @@ export function createNewTab(tabId: string, closeable = true): Tab {
       };
       break;
     case "system":
-      if (tabId === "logs") {
-        data = { type: "logs" };
+      if (tabId === "chat") {
+        data = { type: "chat" };
       } else if (tabId.startsWith("shell")) {
         data = {
           type: "terminal",

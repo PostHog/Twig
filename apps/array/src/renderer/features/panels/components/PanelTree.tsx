@@ -8,7 +8,7 @@ import type { PanelNode, Tab } from "../store/panelStore";
  * Example:
  * <PanelGroupTree direction="horizontal" sizes={[75, 25]}>
  *   <PanelLeaf>
- *     <PanelTab id="logs">{logsContent}</PanelTab>
+ *     <PanelTab id="chat">{chatContent}</PanelTab>
  *   </PanelLeaf>
  *   <PanelLeaf showTabs={false}>{content}</PanelLeaf>
  * </PanelGroupTree>

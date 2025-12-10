@@ -20,7 +20,7 @@ export const DEFAULT_PANEL_IDS = {
 } as const;
 
 export const DEFAULT_TAB_IDS = {
-  LOGS: "logs",
+  CHAT: "chat",
   SHELL: "shell",
   FILES: "files",
   TODO_LIST: "todo-list",

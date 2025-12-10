@@ -52,8 +52,8 @@ describe("panelLayoutStore", () => {
         assertPanelLayout(root, [
           {
             panelId: "main-panel",
-            expectedTabs: ["logs", "shell"],
-            activeTab: "logs",
+            expectedTabs: ["chat", "shell"],
+            activeTab: "chat",
           },
         ]);
       });
@@ -72,7 +72,7 @@ describe("panelLayoutStore", () => {
       assertPanelLayout(getPanelTree("task-1"), [
         {
           panelId: "main-panel",
-          expectedTabs: ["logs", "shell", "file-src/App.tsx"],
+          expectedTabs: ["chat", "shell", "file-src/App.tsx"],
         },
       ]);
     });

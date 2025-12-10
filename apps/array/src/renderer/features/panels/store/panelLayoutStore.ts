@@ -103,22 +103,22 @@ export interface PanelLayoutStore {
 function createDefaultPanelTree(
   terminalLayoutMode: "split" | "tabbed" = "split",
 ): PanelNode {
-  const logsPanel: PanelNode = {
+  const chatPanel: PanelNode = {
     type: "leaf",
     id: DEFAULT_PANEL_IDS.MAIN_PANEL,
     content: {
       id: DEFAULT_PANEL_IDS.MAIN_PANEL,
       tabs: [
         {
-          id: DEFAULT_TAB_IDS.LOGS,
+          id: DEFAULT_TAB_IDS.CHAT,
           label: "Chat",
-          data: { type: "logs" },
+          data: { type: "chat" },
           component: null,
           closeable: false,
           draggable: true,
         },
       ],
-      activeTabId: DEFAULT_TAB_IDS.LOGS,
+      activeTabId: DEFAULT_TAB_IDS.CHAT,
       showTabs: true,
       droppable: true,
     },
@@ -156,7 +156,7 @@ function createDefaultPanelTree(
           id: "left-group",
           direction: "vertical",
           sizes: [70, 30],
-          children: [logsPanel, terminalPanel],
+          children: [chatPanel, terminalPanel],
         }
       : {
           type: "leaf",
@@ -165,9 +165,9 @@ function createDefaultPanelTree(
             id: DEFAULT_PANEL_IDS.MAIN_PANEL,
             tabs: [
               {
-                id: DEFAULT_TAB_IDS.LOGS,
+                id: DEFAULT_TAB_IDS.CHAT,
                 label: "Chat",
-                data: { type: "logs" },
+                data: { type: "chat" },
                 component: null,
                 closeable: false,
                 draggable: true,
@@ -185,7 +185,7 @@ function createDefaultPanelTree(
                 draggable: true,
               },
             ],
-            activeTabId: DEFAULT_TAB_IDS.LOGS,
+            activeTabId: DEFAULT_TAB_IDS.CHAT,
             showTabs: true,
             droppable: true,
           },

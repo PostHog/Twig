@@ -25,7 +25,7 @@ export function TabContentRenderer({
   const { data } = tab;
 
   switch (data.type) {
-    case "logs":
+    case "chat":
       return <TaskLogsPanel taskId={taskId} task={task} />;
 
     case "terminal":
