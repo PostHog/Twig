@@ -17,7 +17,6 @@
  */
 
 import type { Comment } from "@shared/types";
-import { ipcRenderer } from "electron";
 
 // GitHub API response types
 interface GitHubUser {
@@ -108,6 +107,7 @@ export interface CommentApi {
     commentId: string,
     resolved: boolean,
     directoryPath: string,
+    prNumber: number,
   ): Promise<Comment>;
 }
 
@@ -121,14 +121,13 @@ export interface CommentApi {
 export const githubCommentApi: CommentApi = {
   async fetchComments(prNumber, directoryPath) {
     try {
-      const rawComments = await ipcRenderer.invoke(
-        "get-pr-review-comments",
+      const rawComments = await window.electronAPI.prComments.getReviewComments(
         directoryPath,
         prNumber,
       );
 
       // Transform GitHub API response to Comment type
-      return rawComments.map((githubComment: GitHubComment) => ({
+      return (rawComments as GitHubComment[]).map((githubComment) => ({
         id: githubComment.id.toString(),
         fileId: githubComment.path,
         line: githubComment.line,
@@ -136,7 +135,7 @@ export const githubCommentApi: CommentApi = {
         content: githubComment.body,
         author: githubComment.user.login,
         timestamp: new Date(githubComment.created_at),
-        resolved: githubComment.body.includes("<!-- RESOLVED -->"), // Check for resolution marker
+        resolved: false, // TODO: Fetch actual resolution status from GraphQL reviewThreads
         replies: [], // GitHub review comments don't have nested replies
       }));
     } catch (_error) {
@@ -145,8 +144,7 @@ export const githubCommentApi: CommentApi = {
   },
 
   async createComment(input) {
-    const createdComment = await ipcRenderer.invoke(
-      "add-pr-comment",
+    const createdComment = (await window.electronAPI.prComments.addComment(
       input.directoryPath,
       input.prNumber,
       {
@@ -156,7 +154,7 @@ export const githubCommentApi: CommentApi = {
         line: input.line,
         side: input.side.toUpperCase() as "LEFT" | "RIGHT",
       },
-    );
+    )) as GitHubComment;
 
     // Transform the response to match our Comment type
     return {
@@ -173,15 +171,14 @@ export const githubCommentApi: CommentApi = {
   },
 
   async createReply(input) {
-    const replyComment = await ipcRenderer.invoke(
-      "reply-pr-review",
+    const replyComment = (await window.electronAPI.prComments.replyToReview(
       input.directoryPath,
       input.prNumber,
       {
         body: input.content,
         inReplyTo: parseInt(input.parentId, 10),
       },
-    );
+    )) as GitHubComment;
 
     // Transform the response to match our Comment type
     return {
@@ -198,12 +195,11 @@ export const githubCommentApi: CommentApi = {
   },
 
   async updateComment(commentId, content, directoryPath) {
-    const updatedComment = await ipcRenderer.invoke(
-      "update-pr-comment",
+    const updatedComment = (await window.electronAPI.prComments.updateComment(
       directoryPath,
       parseInt(commentId, 10),
       content,
-    );
+    )) as GitHubComment;
 
     // Transform the response to match our Comment type
     const resolved = updatedComment.body.includes("<!-- RESOLVED -->");
@@ -221,20 +217,19 @@ export const githubCommentApi: CommentApi = {
   },
 
   async deleteComment(commentId, directoryPath) {
-    await ipcRenderer.invoke(
-      "delete-pr-comment",
+    await window.electronAPI.prComments.deleteComment(
       directoryPath,
       parseInt(commentId, 10),
     );
   },
 
-  async resolveComment(commentId, resolved, directoryPath) {
-    const updatedComment = await ipcRenderer.invoke(
-      "resolve-pr-comment",
+  async resolveComment(commentId, resolved, directoryPath, prNumber) {
+    const updatedComment = (await window.electronAPI.prComments.resolveComment(
       directoryPath,
+      prNumber,
       parseInt(commentId, 10),
       resolved,
-    );
+    )) as GitHubComment & { resolved: boolean };
 
     // Transform the response to match our Comment type
     return {

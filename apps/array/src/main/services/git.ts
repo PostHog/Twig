@@ -185,6 +185,19 @@ export const getCurrentBranch = async (
   }
 };
 
+export const getHeadCommitSha = async (
+  directoryPath: string,
+): Promise<string> => {
+  try {
+    const { stdout } = await execAsync("git rev-parse HEAD", {
+      cwd: directoryPath,
+    });
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(`Failed to get HEAD commit SHA: ${error}`);
+  }
+};
+
 export const getDefaultBranch = async (
   directoryPath: string,
 ): Promise<string> => {
@@ -626,7 +639,7 @@ const addPullRequestComment = async (
         `-f body="${options.body.replace(/"/g, '\\"')}" ` +
         `-f commit_id="${options.commitId}" ` +
         `-f path="${options.path}" ` +
-        `-f line=${options.line} ` +
+        `-F line=${options.line} ` +
         `-f side="${side}"`,
       { cwd: directoryPath },
     );
@@ -670,9 +683,9 @@ const replyToPullRequestComment = async (
         `-f body="${options.body.replace(/"/g, '\\"')}" ` +
         `-f commit_id="${originalComment.commit_id}" ` +
         `-f path="${originalComment.path}" ` +
-        `-f line=${originalComment.line} ` +
+        `-F line=${originalComment.line} ` +
         `-f side="${originalComment.side}" ` +
-        `-f in_reply_to=${options.inReplyTo}`,
+        `-F in_reply_to=${options.inReplyTo}`,
       { cwd: directoryPath },
     );
 
@@ -727,52 +740,84 @@ const deletePullRequestComment = async (
 
 const resolvePullRequestComment = async (
   directoryPath: string,
+  prNumber: number,
   commentId: number,
   resolved: boolean,
-): Promise<GitHubComment> => {
+): Promise<GitHubComment & { resolved: boolean }> => {
   validateCommentId(commentId);
+  validatePullRequestNumber(prNumber);
 
   try {
     const repo = await getRepositoryFromRemoteUrl(directoryPath);
-    // TODO: use gh api graphql (resolveReviewThread)
 
-    // GitHub API doesn't have a direct "resolve" endpoint for review comments
-    // We'll use a custom approach by updating the comment body to indicate resolution
-    // First, get the current comment to preserve its content
-    const { stdout: currentComment } = await execAsync(
+    // Find the thread ID for this comment using GraphQL
+    const { stdout: threadsOutput } = await execAsync(
+      `gh api graphql -f query='
+        query {
+          repository(owner: "${repo.split("/")[0]}", name: "${repo.split("/")[1]}") {
+            pullRequest(number: ${prNumber}) {
+              reviewThreads(first: 100) {
+                nodes {
+                  id
+                  isResolved
+                  comments(first: 100) {
+                    nodes {
+                      databaseId
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      '`,
+      { cwd: directoryPath },
+    );
+
+    const threadsData = JSON.parse(threadsOutput);
+    const threads = threadsData.data.repository.pullRequest.reviewThreads.nodes;
+
+    // Find the thread containing this comment
+    const thread = threads.find(
+      (t: { comments: { nodes: { databaseId: number }[] } }) =>
+        t.comments.nodes.some(
+          (c: { databaseId: number }) => c.databaseId === commentId,
+        ),
+    );
+
+    if (!thread) {
+      throw new Error(`No thread found for comment ${commentId}`);
+    }
+
+    // Resolve or unresolve the thread using GraphQL mutation
+    const mutation = resolved ? "resolveReviewThread" : "unresolveReviewThread";
+    const { stdout: mutationOutput } = await execAsync(
+      `gh api graphql -f query='
+        mutation {
+          ${mutation}(input: {threadId: "${thread.id}"}) {
+            thread {
+              id
+              isResolved
+            }
+          }
+        }
+      '`,
+      { cwd: directoryPath },
+    );
+
+    const mutationData = JSON.parse(mutationOutput);
+    const isResolved = mutationData.data[mutation].thread.isResolved;
+
+    // Fetch the updated comment to return
+    const { stdout: commentOutput } = await execAsync(
       `gh api repos/${repo}/pulls/comments/${commentId}`,
       { cwd: directoryPath },
     );
 
-    const comment = JSON.parse(currentComment);
-    const originalBody = comment.body;
-
-    // Add or remove resolution marker
-    const resolveMarker = "<!-- RESOLVED -->";
-    let newBody: string;
-
-    if (resolved) {
-      // Add resolve marker if not already present
-      newBody = originalBody.includes(resolveMarker)
-        ? originalBody
-        : `${resolveMarker}\n${originalBody}`;
-    } else {
-      // Remove resolve marker
-      newBody = originalBody
-        .replace(`${resolveMarker}\n`, "")
-        .replace(resolveMarker, "");
-    }
-
-    // Update the comment with the new body
-    const { stdout } = await execAsync(
-      `gh api repos/${repo}/pulls/comments/${commentId} -X PATCH -f body="${newBody.replace(/"/g, '\\"')}"`,
-      { cwd: directoryPath },
-    );
-
-    const updatedComment = JSON.parse(stdout);
+    const updatedComment = JSON.parse(commentOutput);
     return {
       ...updatedComment,
-      resolved, // Add our custom resolved field
+      resolved: isResolved,
     };
   } catch (error) {
     throw new Error(`Failed to resolve PR comment: ${error}`);
@@ -1048,6 +1093,16 @@ export function registerGitIpc(
   );
 
   ipcMain.handle(
+    "get-head-commit-sha",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string> => {
+      return getHeadCommitSha(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
     "discard-file-changes",
     async (
       _event: IpcMainInvokeEvent,
@@ -1122,10 +1177,16 @@ export function registerGitIpc(
     async (
       _event: IpcMainInvokeEvent,
       directoryPath: string,
+      prNumber: number,
       commentId: number,
       resolved: boolean,
-    ): Promise<GitHubComment> => {
-      return resolvePullRequestComment(directoryPath, commentId, resolved);
+    ): Promise<GitHubComment & { resolved: boolean }> => {
+      return resolvePullRequestComment(
+        directoryPath,
+        prNumber,
+        commentId,
+        resolved,
+      );
     },
   );
 }

@@ -50,6 +50,7 @@ interface CommentStore {
     commentId: string,
     resolved: boolean,
     directoryPath: string,
+    prNumber: number,
   ) => Promise<void>;
 
   // Local-only actions (no API call)
@@ -138,9 +139,15 @@ export const useCommentStore = create<CommentStore>()(
         commentId: string,
         resolved: boolean,
         directoryPath: string,
+        prNumber: number,
       ) => {
         // Call API to update resolve status
-        await commentApi.resolveComment(commentId, resolved, directoryPath);
+        await commentApi.resolveComment(
+          commentId,
+          resolved,
+          directoryPath,
+          prNumber,
+        );
 
         // Update local state
         get()._updateCommentInState(commentId, { resolved });

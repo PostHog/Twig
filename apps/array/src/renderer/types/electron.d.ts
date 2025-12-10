@@ -321,6 +321,43 @@ declare global {
       getTerminalLayout: () => Promise<"split" | "tabbed">;
       setTerminalLayout: (mode: "split" | "tabbed") => Promise<void>;
     };
+    prComments: {
+      getReviewComments: (
+        directoryPath: string,
+        prNumber: number,
+      ) => Promise<unknown[]>;
+      addComment: (
+        directoryPath: string,
+        prNumber: number,
+        params: {
+          body: string;
+          commitId: string;
+          path: string;
+          line: number;
+          side: "LEFT" | "RIGHT";
+        },
+      ) => Promise<unknown>;
+      replyToReview: (
+        directoryPath: string,
+        prNumber: number,
+        params: { body: string; inReplyTo: number },
+      ) => Promise<unknown>;
+      updateComment: (
+        directoryPath: string,
+        commentId: number,
+        body: string,
+      ) => Promise<unknown>;
+      deleteComment: (
+        directoryPath: string,
+        commentId: number,
+      ) => Promise<void>;
+      resolveComment: (
+        directoryPath: string,
+        prNumber: number,
+        commentId: number,
+        resolved: boolean,
+      ) => Promise<unknown>;
+    };
   }
 
   interface Window {

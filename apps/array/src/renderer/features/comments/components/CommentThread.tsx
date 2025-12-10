@@ -51,7 +51,7 @@ export function CommentThread({ comment: initialComment }: CommentThreadProps) {
 
   const handleToggleResolved = useCallback(async () => {
     if (!comment) return;
-    await resolveComment(comment.id, !comment.resolved, ""); // TODO: Get actual directory path from context
+    await resolveComment(comment.id, !comment.resolved, "", 0); // TODO: Get actual directory path and PR number from context
     // Auto-collapse when resolving
     if (!comment.resolved) {
       setIsCollapsed(true);
