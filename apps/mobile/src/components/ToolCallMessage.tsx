@@ -133,7 +133,7 @@ export function ToolCallMessage({
               <Text className="mb-1 font-mono text-[13px] text-neutral-400">
                 Arguments
               </Text>
-              <View className="bg-amber-500/20 p-2">
+              <View className="rounded bg-amber-500/20 p-2">
                 <Text className="font-mono text-[13px] text-amber-100">
                   {JSON.stringify(args, null, 2)}
                 </Text>
@@ -145,7 +145,7 @@ export function ToolCallMessage({
               <Text className="mb-1 font-mono text-[13px] text-neutral-400">
                 Result
               </Text>
-              <View className="bg-neutral-800/50 p-2">
+              <View className="rounded bg-neutral-800/50 p-2">
                 <Text
                   className="font-mono text-[13px] text-neutral-300"
                   numberOfLines={10}

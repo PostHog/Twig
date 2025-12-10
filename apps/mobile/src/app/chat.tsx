@@ -52,6 +52,7 @@ export default function ChatScreen() {
         options={{
           headerShown: true,
           headerTitle: "Chat",
+          headerBackTitle: "",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
           headerTitleStyle: {

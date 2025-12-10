@@ -166,7 +166,7 @@ export function VisualizationArtifact({
   if (!renderQueryUrl || !projectId || !accessToken) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] bg-red-900/50 px-4 py-3">
+        <View className="max-w-[85%] rounded bg-red-900/50 px-4 py-3">
           <Text className="font-mono text-[13px] text-red-300">
             Unable to load visualization: Not authenticated
           </Text>
@@ -178,7 +178,7 @@ export function VisualizationArtifact({
   if (hasError) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] bg-red-900/50 px-4 py-3">
+        <View className="max-w-[85%] rounded bg-red-900/50 px-4 py-3">
           <Text className="font-mono text-[13px] text-red-300">
             {errorMessage || "Failed to load visualization"}
           </Text>
@@ -191,7 +191,7 @@ export function VisualizationArtifact({
   if (!queryResults) {
     return (
       <View className="w-full items-start px-4 py-3">
-        <View className="w-full overflow-hidden bg-dark-border">
+        <View className="w-full overflow-hidden rounded bg-dark-border">
           {content.name && (
             <View className="border-gray-700 border-b px-4 py-2">
               <Text className="font-mono text-[13px] text-white">
@@ -212,7 +212,7 @@ export function VisualizationArtifact({
 
   return (
     <View className="w-full items-start px-4 py-3">
-      <View className="w-full overflow-hidden bg-dark-border">
+      <View className="w-full overflow-hidden rounded bg-dark-border">
         {/* Header with title */}
         {content.name && (
           <View className="border-gray-700 border-b px-4 py-2">

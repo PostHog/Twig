@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import type { AssistantToolCall } from "../types/max";
 import { ToolCallMessage } from "./ToolCallMessage";
 
@@ -32,12 +32,9 @@ export function AIMessage({
       {(content || isLoading) && (
         <View className="max-w-[95%] px-4 py-1">
           {isLoading && !content ? (
-            <View className="flex-row items-center gap-2">
-              <ActivityIndicator size="small" color="#f1a82c" />
-              <Text className="font-mono text-[13px] text-neutral-400 italic">
-                {thinkingText || "Generating..."}
-              </Text>
-            </View>
+            <Text className="font-mono text-[13px] text-neutral-400 italic">
+              {thinkingText || "Generating..."}
+            </Text>
           ) : (
             <Text className="font-mono text-[13px] text-neutral-200 leading-5">
               {content}

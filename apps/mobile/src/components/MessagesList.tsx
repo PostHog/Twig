@@ -92,7 +92,7 @@ export function MessagesList({
           </Text>
         </View>
       }
-      ListFooterComponent={
+      ListHeaderComponent={
         streamingActive &&
         messages.length > 0 &&
         messages[messages.length - 1]?.status !== "loading" ? (

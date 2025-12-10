@@ -79,6 +79,7 @@ export default function ConversationDetailScreen() {
           options={{
             headerShown: true,
             headerTitle: "Error",
+            headerBackTitle: "",
             headerStyle: { backgroundColor: "#09090b" },
             headerTintColor: "#fff",
           }}
