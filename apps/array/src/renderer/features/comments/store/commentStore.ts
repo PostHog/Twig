@@ -38,6 +38,7 @@ interface CommentStore {
   getCommentsForLine: (fileId: string, line: number) => Comment[];
 
   // Commands (async, call API then update local state)
+  fetchComments: (prNumber: number, directoryPath: string) => Promise<void>;
   createComment: (input: CreateCommentInput) => Promise<Comment>;
   createReply: (input: CreateReplyInput) => Promise<Comment>;
   updateComment: (
@@ -94,6 +95,25 @@ export const useCommentStore = create<CommentStore>()(
       // ----------------------------------------
       // COMMANDS (async, call API + update state)
       // ----------------------------------------
+
+      fetchComments: async (prNumber: number, directoryPath: string) => {
+        try {
+          const comments = await commentApi.fetchComments(
+            prNumber,
+            directoryPath,
+          );
+          // Group comments by fileId
+          const commentsByFile: Record<string, Comment[]> = {};
+          for (const comment of comments) {
+            if (!commentsByFile[comment.fileId]) {
+              commentsByFile[comment.fileId] = [];
+            }
+            commentsByFile[comment.fileId].push(comment);
+          }
+          // Replace all comments with fresh data from API
+          set({ comments: commentsByFile });
+        } catch (_error) {}
+      },
 
       createComment: async (input: CreateCommentInput) => {
         // Call API to create comment

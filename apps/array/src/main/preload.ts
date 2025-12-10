@@ -282,6 +282,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }> => ipcRenderer.invoke("get-diff-stats", repoPath),
   getCurrentBranch: (repoPath: string): Promise<string | undefined> =>
     ipcRenderer.invoke("get-current-branch", repoPath),
+  getHeadCommitSha: (repoPath: string): Promise<string> =>
+    ipcRenderer.invoke("get-head-commit-sha", repoPath),
   discardFileChanges: (
     repoPath: string,
     filePath: string,
@@ -507,5 +509,60 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("settings:get-terminal-layout"),
     setTerminalLayout: (mode: "split" | "tabbed"): Promise<void> =>
       ipcRenderer.invoke("settings:set-terminal-layout", mode),
+  },
+  // PR Comments API
+  prComments: {
+    getReviewComments: (
+      directoryPath: string,
+      prNumber: number,
+    ): Promise<unknown[]> =>
+      ipcRenderer.invoke("get-pr-review-comments", directoryPath, prNumber),
+    addComment: (
+      directoryPath: string,
+      prNumber: number,
+      params: {
+        body: string;
+        commitId: string;
+        path: string;
+        line: number;
+        side: "LEFT" | "RIGHT";
+      },
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("add-pr-comment", directoryPath, prNumber, params),
+    replyToReview: (
+      directoryPath: string,
+      prNumber: number,
+      params: { body: string; inReplyTo: number },
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("reply-pr-review", directoryPath, prNumber, params),
+    updateComment: (
+      directoryPath: string,
+      commentId: number,
+      body: string,
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("update-pr-comment", directoryPath, commentId, body),
+    deleteComment: (directoryPath: string, commentId: number): Promise<void> =>
+      ipcRenderer.invoke("delete-pr-comment", directoryPath, commentId),
+    resolveComment: (
+      directoryPath: string,
+      prNumber: number,
+      commentId: number,
+      resolved: boolean,
+    ): Promise<unknown> =>
+      ipcRenderer.invoke(
+        "resolve-pr-comment",
+        directoryPath,
+        prNumber,
+        commentId,
+        resolved,
+      ),
+    getPrForBranch: (
+      directoryPath: string,
+    ): Promise<{
+      number: number;
+      url: string;
+      title: string;
+      state: string;
+    } | null> => ipcRenderer.invoke("get-pr-for-branch", directoryPath),
   },
 });

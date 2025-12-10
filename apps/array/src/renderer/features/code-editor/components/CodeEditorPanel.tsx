@@ -26,11 +26,25 @@ export function CodeEditorPanel({
   const repoPath = worktreePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
 
-  // Extract PR number from PR URL if available
-  const prUrl = task.latest_run?.output?.pr_url as string | undefined;
-  const prNumber = prUrl
-    ? parseInt(prUrl.split("/").pop() || "0", 10)
-    : undefined;
+  // Fetch PR for the current branch
+  const { data: prInfo } = useQuery({
+    queryKey: ["pr-for-branch", repoPath],
+    enabled: !!repoPath,
+    staleTime: 30_000, // Cache for 30 seconds
+    queryFn: async () => {
+      if (!window.electronAPI || !repoPath) {
+        return null;
+      }
+      return window.electronAPI.prComments.getPrForBranch(repoPath);
+    },
+  });
+
+  // Use PR from branch lookup, or fall back to task output
+  const prUrl =
+    prInfo?.url ?? (task.latest_run?.output?.pr_url as string | undefined);
+  const prNumber =
+    prInfo?.number ??
+    (prUrl ? parseInt(prUrl.split("/").pop() || "0", 10) : undefined);
 
   const {
     data: fileContent,

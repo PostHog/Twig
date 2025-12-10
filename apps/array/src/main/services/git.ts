@@ -738,6 +738,28 @@ const deletePullRequestComment = async (
   }
 };
 
+interface PullRequestInfo {
+  number: number;
+  url: string;
+  title: string;
+  state: string;
+}
+
+const getPullRequestForBranch = async (
+  directoryPath: string,
+): Promise<PullRequestInfo | null> => {
+  try {
+    const { stdout } = await execAsync(
+      "gh pr view --json number,url,title,state",
+      { cwd: directoryPath },
+    );
+    return JSON.parse(stdout);
+  } catch {
+    // No PR exists for this branch
+    return null;
+  }
+};
+
 const resolvePullRequestComment = async (
   directoryPath: string,
   prNumber: number,
@@ -1187,6 +1209,16 @@ export function registerGitIpc(
         commentId,
         resolved,
       );
+    },
+  );
+
+  ipcMain.handle(
+    "get-pr-for-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<PullRequestInfo | null> => {
+      return getPullRequestForBranch(directoryPath);
     },
   );
 }

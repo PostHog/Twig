@@ -2,11 +2,12 @@ import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirrorDiffEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
+import { useCommentStore } from "@features/comments/store/commentStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -29,11 +30,40 @@ export function DiffEditorPanel({
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
 
-  // Extract PR number from PR URL if available
-  const prUrl = task.latest_run?.output?.pr_url as string | undefined;
-  const prNumber = prUrl
-    ? parseInt(prUrl.split("/").pop() || "0", 10)
-    : undefined;
+  // Fetch PR for the current branch
+  const { data: prInfo } = useQuery({
+    queryKey: ["pr-for-branch", repoPath],
+    enabled: !!repoPath,
+    staleTime: 30_000, // Cache for 30 seconds
+    queryFn: async () => {
+      if (!window.electronAPI || !repoPath) {
+        return null;
+      }
+      return window.electronAPI.prComments.getPrForBranch(repoPath);
+    },
+  });
+
+  // Use PR from branch lookup, or fall back to task output
+  const prUrl =
+    prInfo?.url ?? (task.latest_run?.output?.pr_url as string | undefined);
+  const prNumber =
+    prInfo?.number ??
+    (prUrl ? parseInt(prUrl.split("/").pop() || "0", 10) : undefined);
+
+  // Fetch PR comments when we have a PR number, and refetch on window focus
+  const fetchComments = useCommentStore((state) => state.fetchComments);
+  useEffect(() => {
+    if (!prNumber || !repoPath) {
+      return;
+    }
+
+    fetchComments(prNumber, repoPath);
+
+    // Refetch when window regains focus
+    const handleFocus = () => fetchComments(prNumber, repoPath);
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [prNumber, repoPath, fetchComments]);
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -104,6 +134,8 @@ export function DiffEditorPanel({
           filePath={absolutePath}
           fileId={filePath} // Use relative path as fileId for comments
           onContentChange={handleContentChange}
+          prNumber={prNumber}
+          directoryPath={repoPath}
         />
       ) : (
         <CodeMirrorEditor

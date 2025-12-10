@@ -195,6 +195,7 @@ declare global {
       linesRemoved: number;
     }>;
     getCurrentBranch: (repoPath: string) => Promise<string | undefined>;
+    getHeadCommitSha: (repoPath: string) => Promise<string>;
     discardFileChanges: (
       repoPath: string,
       filePath: string,
@@ -362,6 +363,12 @@ declare global {
         commentId: number,
         resolved: boolean,
       ) => Promise<unknown>;
+      getPrForBranch: (directoryPath: string) => Promise<{
+        number: number;
+        url: string;
+        title: string;
+        state: string;
+      } | null>;
     };
   }
 
