@@ -26,7 +26,13 @@ interface MessagesListProps {
   contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
-function MessageItem({ item }: { item: ThreadMessage }) {
+function MessageItem({
+  item,
+  hasHumanMessageAfter,
+}: {
+  item: ThreadMessage;
+  hasHumanMessageAfter: boolean;
+}) {
   if (isHumanMessage(item)) {
     return <HumanMessage content={item.content} />;
   }
@@ -38,6 +44,7 @@ function MessageItem({ item }: { item: ThreadMessage }) {
         isLoading={item.status === "loading"}
         thinkingText={item.meta?.thinking?.[0]?.thinking}
         toolCalls={item.tool_calls}
+        hasHumanMessageAfter={hasHumanMessageAfter}
       />
     );
   }
@@ -74,7 +81,18 @@ export function MessagesList({
       data={reversedMessages}
       keyExtractor={(item, index) => item.id || `msg-${index}`}
       inverted
-      renderItem={({ item }) => <MessageItem item={item} />}
+      renderItem={({ item, index }) => {
+        // List is inverted, so index 0 is the last message. Check if any message before this index (after in original order) is human.
+        const hasHumanMessageAfter = reversedMessages
+          .slice(0, index)
+          .some((m) => isHumanMessage(m));
+        return (
+          <MessageItem
+            item={item}
+            hasHumanMessageAfter={hasHumanMessageAfter}
+          />
+        );
+      }}
       contentContainerStyle={contentContainerStyle}
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"

@@ -7,6 +7,7 @@ interface AIMessageProps {
   isLoading?: boolean;
   thinkingText?: string;
   toolCalls?: AssistantToolCall[];
+  hasHumanMessageAfter?: boolean;
 }
 
 export function AIMessage({
@@ -14,6 +15,7 @@ export function AIMessage({
   isLoading,
   thinkingText,
   toolCalls,
+  hasHumanMessageAfter,
 }: AIMessageProps) {
   return (
     <View className="py-2">
@@ -25,6 +27,7 @@ export function AIMessage({
               toolName={tc.name}
               status="completed"
               args={tc.args}
+              hasHumanMessageAfter={hasHumanMessageAfter}
             />
           ))}
         </View>

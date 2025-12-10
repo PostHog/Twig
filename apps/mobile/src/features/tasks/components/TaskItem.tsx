@@ -87,3 +87,5 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
 }
 
 export const TaskItem = memo(TaskItemComponent);
+
+
