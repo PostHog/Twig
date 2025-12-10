@@ -24,77 +24,52 @@ const repoFileCache = new Map<
 >();
 const CACHE_TTL = 30000; // 30 seconds
 
-async function getGitIgnoredFiles(repoPath: string): Promise<Set<string>> {
-  try {
-    const { stdout } = await execAsync(
-      "git ls-files --others --ignored --exclude-standard",
-      { cwd: repoPath },
-    );
-    return new Set(
-      stdout
-        .split("\n")
-        .filter(Boolean)
-        .map((f) => path.join(repoPath, f)),
-    );
-  } catch {
-    // If git command fails, return empty set
-    return new Set();
-  }
-}
-
-async function listFilesRecursive(
-  dirPath: string,
-  ignoredFiles: Set<string>,
-  baseDir: string,
+/**
+ * List files using git ls-files - fast and works for any git repository.
+ * This is much faster than recursive fs.readdir for large codebases.
+ */
+async function listFilesWithGit(
+  repoPath: string,
   changedFiles: Set<string>,
 ): Promise<FileEntry[]> {
-  const files: FileEntry[] = [];
-
   try {
-    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+    // Get tracked files
+    const { stdout: trackedStdout } = await execAsync("git ls-files", {
+      cwd: repoPath,
+      maxBuffer: 50 * 1024 * 1024,
+    });
 
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      const relativePath = path.relative(baseDir, fullPath);
+    // Get untracked files (not ignored)
+    const { stdout: untrackedStdout } = await execAsync(
+      "git ls-files --others --exclude-standard",
+      { cwd: repoPath, maxBuffer: 50 * 1024 * 1024 },
+    );
 
-      // Skip .git directory, node_modules, and common build dirs
-      if (
-        entry.name === ".git" ||
-        entry.name === "node_modules" ||
-        entry.name === "dist" ||
-        entry.name === "build" ||
-        entry.name === "__pycache__"
-      ) {
-        continue;
-      }
+    const allFiles = [
+      ...trackedStdout.split("\n").filter(Boolean),
+      ...untrackedStdout.split("\n").filter(Boolean),
+    ];
 
-      // Skip git-ignored files
-      if (ignoredFiles.has(fullPath)) {
-        continue;
-      }
+    // Filter out common directories that might slip through
+    const excludeDirs = [
+      ".git/",
+      "node_modules/",
+      "dist/",
+      "build/",
+      "__pycache__/",
+    ];
 
-      if (entry.isDirectory()) {
-        const subFiles = await listFilesRecursive(
-          fullPath,
-          ignoredFiles,
-          baseDir,
-          changedFiles,
-        );
-        files.push(...subFiles);
-      } else if (entry.isFile()) {
-        files.push({
-          path: relativePath,
-          name: entry.name,
-          changed: changedFiles.has(relativePath),
-        });
-      }
-    }
+    return allFiles
+      .filter((f) => !excludeDirs.some((dir) => f.includes(dir)))
+      .map((relativePath) => ({
+        path: relativePath,
+        name: path.basename(relativePath),
+        changed: changedFiles.has(relativePath),
+      }));
   } catch (error) {
-    // Skip directories we can't read
-    log.error(`Error reading directory ${dirPath}:`, error);
+    log.error("Error listing files with git:", error);
+    return [];
   }
-
-  return files;
 }
 
 export function registerFsIpc(): void {
@@ -117,19 +92,11 @@ export function registerFsIpc(): void {
         if (cached && now - cached.timestamp < CACHE_TTL) {
           allFiles = cached.files;
         } else {
-          // Get git-ignored files
-          const ignoredFiles = await getGitIgnoredFiles(repoPath);
-
           // Get changed files from git
           const changedFiles = await getChangedFilesForRepo(repoPath);
 
-          // List all files
-          allFiles = await listFilesRecursive(
-            repoPath,
-            ignoredFiles,
-            repoPath,
-            changedFiles,
-          );
+          // List all files using git ls-files (fast for any git repo)
+          allFiles = await listFilesWithGit(repoPath, changedFiles);
 
           // Update cache
           repoFileCache.set(repoPath, {
