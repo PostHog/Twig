@@ -1,0 +1,84 @@
+import { create } from "zustand";
+import type { Task } from "../../agent/types/agent";
+
+export type OrderByField = "created_at" | "status" | "title";
+export type OrderDirection = "asc" | "desc";
+
+interface TaskState {
+  tasks: Task[];
+  isLoading: boolean;
+  error: string | null;
+  selectedTaskId: string | null;
+  orderBy: OrderByField;
+  orderDirection: OrderDirection;
+  filter: string;
+
+  setTasks: (tasks: Task[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  selectTask: (taskId: string | null) => void;
+  setOrderBy: (orderBy: OrderByField) => void;
+  setOrderDirection: (direction: OrderDirection) => void;
+  setFilter: (filter: string) => void;
+}
+
+export const useTaskStore = create<TaskState>((set) => ({
+  tasks: [],
+  isLoading: false,
+  error: null,
+  selectedTaskId: null,
+  orderBy: "created_at",
+  orderDirection: "desc",
+  filter: "",
+
+  setTasks: (tasks) => set({ tasks }),
+  setLoading: (isLoading) => set({ isLoading }),
+  setError: (error) => set({ error }),
+  selectTask: (selectedTaskId) => set({ selectedTaskId }),
+  setOrderBy: (orderBy) => set({ orderBy }),
+  setOrderDirection: (orderDirection) => set({ orderDirection }),
+  setFilter: (filter) => set({ filter }),
+}));
+
+export function filterAndSortTasks(
+  tasks: Task[],
+  orderBy: OrderByField,
+  orderDirection: OrderDirection,
+  filter: string,
+): Task[] {
+  let filtered = tasks;
+
+  if (filter) {
+    const lowerFilter = filter.toLowerCase();
+    filtered = tasks.filter(
+      (task) =>
+        task.title.toLowerCase().includes(lowerFilter) ||
+        task.slug.toLowerCase().includes(lowerFilter) ||
+        task.description?.toLowerCase().includes(lowerFilter),
+    );
+  }
+
+  return [...filtered].sort((a, b) => {
+    let comparison = 0;
+
+    switch (orderBy) {
+      case "created_at":
+        comparison =
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        break;
+      case "status": {
+        const statusOrder = ["failed", "in_progress", "started", "completed"];
+        const aStatus = a.latest_run?.status || "backlog";
+        const bStatus = b.latest_run?.status || "backlog";
+        comparison =
+          statusOrder.indexOf(aStatus) - statusOrder.indexOf(bStatus);
+        break;
+      }
+      case "title":
+        comparison = a.title.localeCompare(b.title);
+        break;
+    }
+
+    return orderDirection === "desc" ? -comparison : comparison;
+  });
+}
