@@ -145,6 +145,7 @@ export function DiffEditorPanel({
           readOnly
           enableComments
           prNumber={prNumber}
+          directoryPath={repoPath}
         />
       )}
     </Box>

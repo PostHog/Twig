@@ -104,7 +104,12 @@ export function useEditorExtensions(
       );
       // Inline comment display
       extensions.push(
-        commentWidgetExtension(() => getCommentsForFile(fileId), showComments),
+        commentWidgetExtension(
+          () => getCommentsForFile(fileId),
+          showComments,
+          prNumber,
+          directoryPath,
+        ),
       );
     }
 
@@ -121,5 +126,7 @@ export function useEditorExtensions(
     handleSubmitComment,
     closeComposer,
     composerState,
+    directoryPath,
+    prNumber,
   ]);
 }

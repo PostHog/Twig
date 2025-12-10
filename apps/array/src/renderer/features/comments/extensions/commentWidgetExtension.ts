@@ -16,7 +16,11 @@ import { CommentThread } from "../components/CommentThread";
 class CommentWidget extends WidgetType {
   private root: Root | null = null;
 
-  constructor(readonly comment: Comment) {
+  constructor(
+    readonly comment: Comment,
+    readonly prNumber?: number,
+    readonly directoryPath?: string,
+  ) {
     super();
   }
 
@@ -38,7 +42,13 @@ class CommentWidget extends WidgetType {
 
     // Use React to render the CommentThread
     this.root = createRoot(container);
-    this.root.render(createElement(CommentThread, { comment: this.comment }));
+    this.root.render(
+      createElement(CommentThread, {
+        comment: this.comment,
+        prNumber: this.prNumber,
+        directoryPath: this.directoryPath,
+      }),
+    );
 
     return container;
   }
@@ -62,6 +72,8 @@ class CommentWidget extends WidgetType {
 function createCommentDecorations(
   comments: Comment[],
   doc: { lines: number; line: (n: number) => { to: number } },
+  prNumber?: number,
+  directoryPath?: string,
 ): DecorationSet {
   const decorations: Array<{ pos: number; widget: CommentWidget }> = [];
 
@@ -71,7 +83,7 @@ function createCommentDecorations(
     if (lineNum < 1 || lineNum > doc.lines) continue;
 
     const line = doc.line(lineNum);
-    const widget = new CommentWidget(comment);
+    const widget = new CommentWidget(comment, prNumber, directoryPath);
 
     decorations.push({
       pos: line.to,
@@ -105,10 +117,14 @@ export type CommentsFacetValue = Comment[];
  *
  * @param getComments - Function to get comments for the current file
  * @param showComments - Whether to show comments
+ * @param prNumber - Pull request number if available
+ * @param directoryPath - Repository directory path
  */
 export function commentWidgetExtension(
   getComments: () => Comment[],
   showComments: boolean,
+  prNumber?: number,
+  directoryPath?: string,
 ): Extension {
   // If comments are disabled, return an empty extension
   if (!showComments) {
@@ -118,12 +134,22 @@ export function commentWidgetExtension(
   const commentField = StateField.define<DecorationSet>({
     create(state) {
       const comments = getComments();
-      return createCommentDecorations(comments, state.doc);
+      return createCommentDecorations(
+        comments,
+        state.doc,
+        prNumber,
+        directoryPath,
+      );
     },
     update(decorations, tr) {
       if (tr.docChanged) {
         const comments = getComments();
-        return createCommentDecorations(comments, tr.state.doc);
+        return createCommentDecorations(
+          comments,
+          tr.state.doc,
+          prNumber,
+          directoryPath,
+        );
       }
       return decorations;
     },

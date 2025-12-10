@@ -86,6 +86,7 @@ export function CodeEditorPanel({
         filePath={absolutePath}
         readOnly
         prNumber={prNumber}
+        directoryPath={repoPath}
       />
     </Box>
   );
