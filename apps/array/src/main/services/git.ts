@@ -636,7 +636,7 @@ const addPullRequestComment = async (
 
     const { stdout } = await execAsync(
       `gh api repos/${repo}/pulls/${prNumber}/comments ` +
-        `-f body="${options.body.replace(/"/g, '\\"')}" ` +
+        `-f body="${options.body.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" ` +
         `-f commit_id="${options.commitId}" ` +
         `-f path="${options.path}" ` +
         `-F line=${options.line} ` +
