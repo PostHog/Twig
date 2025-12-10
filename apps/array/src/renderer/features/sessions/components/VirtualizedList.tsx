@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
 } from "react";
 
@@ -34,15 +35,32 @@ export function VirtualizedList<T>({
   const isAtBottomRef = useRef(true);
   const isInitialMountRef = useRef(true);
 
+  const itemsRef = useRef(items);
+  const getItemKeyRef = useRef(getItemKey);
+  itemsRef.current = items;
+  getItemKeyRef.current = getItemKey;
+
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const getEstimateSize = useCallback(() => estimateSize, [estimateSize]);
+
+  const hasGetItemKey = getItemKey !== undefined;
+  const stableGetItemKey = useMemo(() => {
+    if (!hasGetItemKey) return undefined;
+    return (index: number) => {
+      const currentItems = itemsRef.current;
+      const currentGetKey = getItemKeyRef.current;
+      if (!currentGetKey || !currentItems[index]) return index;
+      return currentGetKey(currentItems[index], index);
+    };
+  }, [hasGetItemKey]);
+
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => estimateSize,
+    getScrollElement,
+    estimateSize: getEstimateSize,
     overscan,
     gap,
-    getItemKey: getItemKey
-      ? (index) => getItemKey(items[index], index)
-      : undefined,
+    getItemKey: stableGetItemKey,
   });
 
   const handleScroll = useCallback(() => {
@@ -118,7 +136,6 @@ export function VirtualizedList<T>({
           {virtualItems.map((virtualRow) => (
             <div
               key={virtualRow.key}
-              ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               style={{
                 position: "absolute",
