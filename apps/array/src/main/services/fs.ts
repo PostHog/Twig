@@ -48,21 +48,11 @@ async function listFilesWithGit(
       ...untrackedStdout.split("\n").filter(Boolean),
     ];
 
-    const excludeDirs = [
-      ".git/",
-      "node_modules/",
-      "dist/",
-      "build/",
-      "__pycache__/",
-    ];
-
-    return allFiles
-      .filter((f) => !excludeDirs.some((dir) => f.includes(dir)))
-      .map((relativePath) => ({
-        path: relativePath,
-        name: path.basename(relativePath),
-        changed: changedFiles.has(relativePath),
-      }));
+    return allFiles.map((relativePath) => ({
+      path: relativePath,
+      name: path.basename(relativePath),
+      changed: changedFiles.has(relativePath),
+    }));
   } catch (error) {
     log.error("Error listing files with git:", error);
     return [];
