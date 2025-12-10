@@ -316,6 +316,7 @@ export const MessageEditor = forwardRef<
                 const results = await window.electronAPI?.listRepoFiles(
                   repoPathRef.current,
                   query,
+                  10,
                 );
                 const items = (results || []).map((file) => ({
                   path: file.path,

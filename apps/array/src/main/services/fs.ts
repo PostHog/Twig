@@ -33,13 +33,11 @@ async function listFilesWithGit(
   changedFiles: Set<string>,
 ): Promise<FileEntry[]> {
   try {
-    // Get tracked files
     const { stdout: trackedStdout } = await execAsync("git ls-files", {
       cwd: repoPath,
       maxBuffer: 50 * 1024 * 1024,
     });
 
-    // Get untracked files (not ignored)
     const { stdout: untrackedStdout } = await execAsync(
       "git ls-files --others --exclude-standard",
       { cwd: repoPath, maxBuffer: 50 * 1024 * 1024 },
@@ -50,7 +48,6 @@ async function listFilesWithGit(
       ...untrackedStdout.split("\n").filter(Boolean),
     ];
 
-    // Filter out common directories that might slip through
     const excludeDirs = [
       ".git/",
       "node_modules/",
@@ -79,11 +76,13 @@ export function registerFsIpc(): void {
       _event: IpcMainInvokeEvent,
       repoPath: string,
       query?: string,
+      limit?: number,
     ): Promise<FileEntry[]> => {
       if (!repoPath) return [];
 
+      const resultLimit = limit ?? 50;
+
       try {
-        // Check cache
         const cached = repoFileCache.get(repoPath);
         const now = Date.now();
 
@@ -92,32 +91,27 @@ export function registerFsIpc(): void {
         if (cached && now - cached.timestamp < CACHE_TTL) {
           allFiles = cached.files;
         } else {
-          // Get changed files from git
           const changedFiles = await getChangedFilesForRepo(repoPath);
 
-          // List all files using git ls-files (fast for any git repo)
           allFiles = await listFilesWithGit(repoPath, changedFiles);
 
-          // Update cache
           repoFileCache.set(repoPath, {
             files: allFiles,
             timestamp: now,
           });
         }
 
-        // Filter by query if provided
         if (query?.trim()) {
           const lowerQuery = query.toLowerCase();
-          return allFiles
-            .filter(
-              (f) =>
-                f.path.toLowerCase().includes(lowerQuery) ||
-                f.name.toLowerCase().includes(lowerQuery),
-            )
-            .slice(0, 50); // Limit search results
+          const filtered = allFiles.filter(
+            (f) =>
+              f.path.toLowerCase().includes(lowerQuery) ||
+              f.name.toLowerCase().includes(lowerQuery),
+          );
+          return resultLimit > 0 ? filtered.slice(0, resultLimit) : filtered;
         }
 
-        return allFiles; // Return all files for full tree view
+        return allFiles.slice(0, resultLimit);
       } catch (error) {
         log.error("Error listing repo files:", error);
         return [];

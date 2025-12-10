@@ -97,6 +97,7 @@ declare global {
     listRepoFiles: (
       repoPath: string,
       query?: string,
+      limit?: number,
     ) => Promise<Array<{ path: string; name: string }>>;
     clearRepoFileCache: (repoPath: string) => Promise<void>;
     agentStart: (params: {

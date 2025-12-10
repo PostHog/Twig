@@ -134,7 +134,6 @@ export const TaskFileMentionList = forwardRef(
       fontSize: "12px",
     };
 
-    // Show empty states
     if (props.state === "no-directory") {
       return (
         <div
