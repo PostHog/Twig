@@ -11,6 +11,7 @@ import {
   Badge,
   Box,
   Button,
+  Callout,
   Card,
   Flex,
   Heading,
@@ -84,6 +85,11 @@ export function SettingsView() {
 
   const [localWorktreeLocation, setLocalWorktreeLocation] =
     useState<string>("");
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<{
+    message?: string;
+    type?: "info" | "success" | "error";
+  }>({});
 
   useEffect(() => {
     if (worktreeLocation) {
@@ -118,6 +124,52 @@ export function SettingsView() {
   const handleLogout = () => {
     logout();
   };
+
+  const handleCheckForUpdates = async () => {
+    setCheckingForUpdates(true);
+    setUpdateStatus({ message: "Checking for updates...", type: "info" });
+
+    try {
+      const result = await window.electronAPI.checkForUpdates();
+
+      if (result.success) {
+        setUpdateStatus({
+          message:
+            "Checking for updates. You'll be notified if an update is available.",
+          type: "success",
+        });
+      } else {
+        setUpdateStatus({
+          message: result.error || "Failed to check for updates",
+          type: "error",
+        });
+      }
+    } catch (error) {
+      log.error("Failed to check for updates:", error);
+      setUpdateStatus({
+        message: "An unexpected error occurred",
+        type: "error",
+      });
+    } finally {
+      setCheckingForUpdates(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onUpdateStatus((status) => {
+      if (status.checking === false && status.upToDate) {
+        setUpdateStatus({
+          message: "You're running the latest version",
+          type: "success",
+        });
+        setCheckingForUpdates(false);
+      } else if (status.checking === false) {
+        setCheckingForUpdates(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   return (
     <Box height="100%" overflowY="auto">
@@ -376,13 +428,38 @@ export function SettingsView() {
                 )}
 
                 {appVersion && (
-                  <Flex direction="column" gap="2">
-                    <Text size="1" weight="medium">
-                      Version
-                    </Text>
-                    <Text size="1" color="gray">
-                      {appVersion}
-                    </Text>
+                  <Flex direction="column" gap="3">
+                    <Flex direction="column" gap="2">
+                      <Text size="1" weight="medium">
+                        Version
+                      </Text>
+                      <Text size="1" color="gray">
+                        {appVersion}
+                      </Text>
+                    </Flex>
+                    <Button
+                      variant="soft"
+                      size="1"
+                      onClick={handleCheckForUpdates}
+                      disabled={checkingForUpdates}
+                    >
+                      {checkingForUpdates && <Spinner />}
+                      {checkingForUpdates ? "Checking..." : "Check for updates"}
+                    </Button>
+                    {updateStatus.message && (
+                      <Callout.Root
+                        size="1"
+                        color={
+                          updateStatus.type === "error"
+                            ? "red"
+                            : updateStatus.type === "success"
+                              ? "green"
+                              : "blue"
+                        }
+                      >
+                        <Callout.Text>{updateStatus.message}</Callout.Text>
+                      </Callout.Root>
+                    )}
                   </Flex>
                 )}
 
@@ -391,30 +468,6 @@ export function SettingsView() {
                     You are not currently authenticated. Please sign in from the
                     main screen.
                   </Text>
-                )}
-
-                {isAuthenticated && (
-                  <Flex gap="2">
-                    <Button
-                      variant="classic"
-                      size="1"
-                      onClick={handleReauthenticate}
-                      color={reauthMutation.isPending ? "gray" : undefined}
-                    >
-                      {reauthMutation.isPending && <Spinner />}
-                      {reauthMutation.isPending
-                        ? "Cancel authorization"
-                        : "Re-authenticate"}
-                    </Button>
-                    <Button
-                      variant="soft"
-                      color="red"
-                      size="1"
-                      onClick={handleLogout}
-                    >
-                      Sign out
-                    </Button>
-                  </Flex>
                 )}
 
                 {reauthMutation.isError && (
@@ -426,6 +479,29 @@ export function SettingsView() {
                 )}
               </Flex>
             </Card>
+            {isAuthenticated && (
+              <Flex gap="2">
+                <Button
+                  variant="classic"
+                  size="1"
+                  onClick={handleReauthenticate}
+                  color={reauthMutation.isPending ? "gray" : undefined}
+                >
+                  {reauthMutation.isPending && <Spinner />}
+                  {reauthMutation.isPending
+                    ? "Cancel authorization"
+                    : "Re-authenticate"}
+                </Button>
+                <Button
+                  variant="soft"
+                  color="red"
+                  size="1"
+                  onClick={handleLogout}
+                >
+                  Sign out
+                </Button>
+              </Flex>
+            )}
           </Flex>
         </Flex>
       </Box>

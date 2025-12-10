@@ -118,6 +118,13 @@ function createWindow(): void {
         { role: "about" },
         { type: "separator" },
         {
+          label: "Check for Updates...",
+          click: () => {
+            mainWindow?.webContents.send("check-for-updates-menu");
+          },
+        },
+        { type: "separator" },
+        {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
           click: () => {
