@@ -1,9 +1,8 @@
 import { Box, Flex, SegmentedControl } from "@radix-ui/themes";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useCodeMirror } from "../hooks/useCodeMirror";
 import { useEditorExtensions } from "../hooks/useEditorExtensions";
-
-type ViewMode = "split" | "unified";
+import { useDiffViewerStore, type ViewMode } from "../stores/diffViewerStore";
 
 interface CodeMirrorDiffEditorProps {
   originalContent: string;
@@ -18,7 +17,7 @@ export function CodeMirrorDiffEditor({
   filePath,
   onContentChange,
 }: CodeMirrorDiffEditorProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const { viewMode, setViewMode } = useDiffViewerStore();
   const extensions = useEditorExtensions(filePath, true);
   const options = useMemo(
     () => ({
