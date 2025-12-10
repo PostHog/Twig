@@ -1,9 +1,16 @@
 import { Circle, Host, TextField, type TextFieldRef } from "@expo/ui/swift-ui";
 import { clipped, glassEffect, padding } from "@expo/ui/swift-ui/modifiers";
-import { ArrowUp, Microphone } from "phosphor-react-native";
+import { ArrowUp, Microphone, Stop } from "phosphor-react-native";
 import { useRef, useState } from "react";
-import { Platform, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -19,6 +26,11 @@ export function ChatInput({
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
   const textFieldRef = useRef<TextFieldRef>(null);
+  const { status, startRecording, stopRecording, cancelRecording } =
+    useVoiceRecording();
+
+  const isRecording = status === "recording";
+  const isTranscribing = status === "transcribing";
 
   const handleSend = () => {
     const trimmed = message.trim();
@@ -28,7 +40,27 @@ export function ChatInput({
     textFieldRef.current?.setText("");
   };
 
-  const canSend = message.trim().length > 0 && !disabled;
+  const handleMicPress = async () => {
+    if (isRecording) {
+      const transcript = await stopRecording();
+      if (transcript) {
+        setMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        textFieldRef.current?.setText(
+          message ? `${message} ${transcript}` : transcript,
+        );
+      }
+    } else if (!isTranscribing) {
+      await startRecording();
+    }
+  };
+
+  const handleMicLongPress = async () => {
+    if (isRecording) {
+      await cancelRecording();
+    }
+  };
+
+  const canSend = message.trim().length > 0 && !disabled && !isRecording;
 
   if (Platform.OS === "ios") {
     return (
@@ -64,8 +96,10 @@ export function ChatInput({
 
           {/* Mic / Send button */}
           <TouchableOpacity
-            onPress={canSend ? handleSend : undefined}
+            onPress={canSend ? handleSend : handleMicPress}
+            onLongPress={handleMicLongPress}
             activeOpacity={0.7}
+            disabled={isTranscribing || disabled}
             className="h-[34px] w-[34px] items-center justify-center"
           >
             {/* Glass Background */}
@@ -83,8 +117,12 @@ export function ChatInput({
             </View>
 
             {/* Icon */}
-            {canSend ? (
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : canSend ? (
               <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+            ) : isRecording ? (
+              <Stop size={20} color="#EF4444" weight="fill" />
             ) : (
               <Microphone size={20} color="#FFFFFF" />
             )}
@@ -121,12 +159,18 @@ export function ChatInput({
 
         {/* Mic / Send button */}
         <TouchableOpacity
-          onPress={canSend ? handleSend : undefined}
-          className="h-[34px] w-[34px] items-center justify-center rounded-full bg-white/10"
+          onPress={canSend ? handleSend : handleMicPress}
+          onLongPress={handleMicLongPress}
+          disabled={isTranscribing || disabled}
+          className={`h-[34px] w-[34px] items-center justify-center rounded-full ${isRecording ? "bg-red-500/20" : "bg-white/10"}`}
           activeOpacity={0.7}
         >
-          {canSend ? (
+          {isTranscribing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : canSend ? (
             <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+          ) : isRecording ? (
+            <Stop size={20} color="#EF4444" weight="fill" />
           ) : (
             <Microphone size={20} color="#FFFFFF" />
           )}

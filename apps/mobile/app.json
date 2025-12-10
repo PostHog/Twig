@@ -16,7 +16,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.posthog.mobile"
+      "bundleIdentifier": "com.posthog.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow PostHog to use your microphone for voice-to-text input"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,13 +28,20 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.posthog.mobile"
+      "package": "com.posthog.mobile",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow PostHog to use your microphone for voice-to-text input"
+        }
+      ],
       [
         "expo-font",
         {
