@@ -45,10 +45,10 @@ export function ToolCallBlock({
   const displayTitle = formatToolTitle(toolName, args);
 
   return (
-    <View className="py-0.5">
+    <View className="px-4 py-0.5">
       <Pressable
         onPress={() => hasContent && setIsOpen(!isOpen)}
-        className="flex-row items-center gap-2"
+        className="flex-row gap-2 items-center"
         disabled={!hasContent}
       >
         {/* Caret */}
@@ -68,8 +68,8 @@ export function ToolCallBlock({
 
         {/* Tool name */}
         <Text
-          className="font-mono text-[13px] text-neutral-200"
-          numberOfLines={1}
+          className="font-mono text-[13px] text-neutral-200 flex-1"
+          numberOfLines={2}
         >
           {displayTitle}
         </Text>

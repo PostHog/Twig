@@ -99,17 +99,15 @@ export const useMaxStore = create<MaxState>((set, get) => ({
       const cloudUrl = getCloudUrlFromRegion(authState.cloudRegion);
       const traceId = generateUUID();
 
+      // Include conversation ID - prefer explicit param over store state, fallback to new UUID
+      const effectiveConversationId =
+        conversationId ?? get().conversation?.id ?? generateUUID();
+
       const requestBody: Record<string, unknown> = {
         content: prompt,
         trace_id: traceId,
+        conversation: effectiveConversationId,
       };
-
-      // Include conversation ID - prefer explicit param over store state
-      const effectiveConversationId = conversationId ?? get().conversation?.id;
-      if (effectiveConversationId) {
-        requestBody.conversation = effectiveConversationId;
-      }
-      console.log(requestBody);
       const response = await fetch(
         `${cloudUrl}/api/environments/${authState.projectId}/conversations/`,
         {
@@ -226,7 +224,13 @@ export const useMaxStore = create<MaxState>((set, get) => ({
   resetThread: () => {
     get().stopGeneration();
     set({
-      conversation: null,
+      conversation: {
+        id: generateUUID(),
+        title: "New chat",
+        status: ConversationStatus.Idle,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
       thread: [],
     });
   },

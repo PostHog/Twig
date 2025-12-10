@@ -1,24 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useCallback, useMemo } from "react";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { ChatInput } from "../../../components/ChatInput";
+import { HumanMessage } from "../../../components/HumanMessage";
 import type { SessionEvent, SessionNotification } from "../types/agent";
 import { AgentMessage } from "./AgentMessage";
 import { ToolCallBlock } from "./ToolCallBlock";
-import { UserMessage } from "./UserMessage";
 
 interface AgentSessionViewProps {
   events: SessionEvent[];
   isPromptPending: boolean;
   onSendPrompt: (text: string) => void;
-  onCancel?: () => void;
 }
 
 interface ToolData {
@@ -170,23 +161,13 @@ export function AgentSessionView({
   events,
   isPromptPending,
   onSendPrompt,
-  onCancel,
 }: AgentSessionViewProps) {
-  const [inputText, setInputText] = useState("");
-
   const messages = useMemo(() => processEvents(events), [events]);
-
-  const handleSend = useCallback(() => {
-    const text = inputText.trim();
-    if (!text) return;
-    onSendPrompt(text);
-    setInputText("");
-  }, [inputText, onSendPrompt]);
 
   const renderMessage = useCallback(({ item }: { item: ParsedMessage }) => {
     switch (item.type) {
       case "user":
-        return <UserMessage content={item.content} />;
+        return <HumanMessage content={item.content} />;
       case "agent":
         return <AgentMessage content={item.content} />;
       case "tool":
@@ -204,65 +185,29 @@ export function AgentSessionView({
   }, []);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1"
-      keyboardVerticalOffset={100}
-    >
+    <View className="flex-1">
       <FlatList
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         inverted
-        contentContainerStyle={{ flexDirection: "column-reverse", padding: 16 }}
+        contentContainerStyle={{
+          flexDirection: "column-reverse",
+          paddingVertical: 16,
+        }}
         ListHeaderComponent={
           isPromptPending ? (
-            <View className="flex-row items-center gap-2 mb-2">
-              <ActivityIndicator size="small" color="#6b7280" />
-              <Text className="text-gray-500 text-sm">Thinking...</Text>
+            <View className="mb-2 flex-row items-center gap-2">
+              <ActivityIndicator size="small" color="#f1a82c" />
+              <Text className="font-mono text-[13px] text-neutral-400 italic">
+                Thinking...
+              </Text>
             </View>
           ) : null
         }
       />
 
-      <View className="border-t border-neutral-700 px-4 py-3">
-        <View className="flex-row items-end gap-2">
-          <TextInput
-            className="flex-1 bg-neutral-800 text-white px-4 py-3 rounded-2xl text-base"
-            placeholder="Type a message..."
-            placeholderTextColor="#6b7280"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={10000}
-            editable={!isPromptPending}
-          />
-          {isPromptPending ? (
-            <Pressable
-              onPress={onCancel}
-              className="bg-red-600 px-4 py-3 rounded-2xl"
-            >
-              <Text className="text-white font-medium">Stop</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={handleSend}
-              disabled={!inputText.trim()}
-              className={`px-4 py-3 rounded-2xl ${
-                inputText.trim() ? "bg-blue-600" : "bg-neutral-700"
-              }`}
-            >
-              <Text
-                className={`font-medium ${
-                  inputText.trim() ? "text-white" : "text-neutral-500"
-                }`}
-              >
-                Send
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+      <ChatInput onSend={onSendPrompt} disabled={isPromptPending} />
+    </View>
   );
 }

@@ -1,7 +1,13 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ActivityIndicator,
+  DynamicColorIOS,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
+import { Text } from "../../components/text";
 import { AgentSessionView } from "../../features/agent/components/AgentSessionView";
 import { getTask } from "../../features/agent/lib/agentApi";
 import { useAgentSessionStore } from "../../features/agent/stores/agentSessionStore";
@@ -67,72 +73,112 @@ export default function TaskDetailScreen() {
     }
   }, [taskId, cancelPrompt]);
 
+  const headerRight = useCallback(() => {
+    if (!session) return null;
+
+    const statusColors = {
+      connected:
+        Platform.OS === "ios"
+          ? DynamicColorIOS({ dark: "#4ade80", light: "#16a34a" })
+          : "#4ade80",
+      connecting:
+        Platform.OS === "ios"
+          ? DynamicColorIOS({ dark: "#facc15", light: "#ca8a04" })
+          : "#facc15",
+      disconnected:
+        Platform.OS === "ios"
+          ? DynamicColorIOS({ dark: "#f87171", light: "#dc2626" })
+          : "#f87171",
+      error:
+        Platform.OS === "ios"
+          ? DynamicColorIOS({ dark: "#f87171", light: "#dc2626" })
+          : "#f87171",
+    };
+
+    const color =
+      statusColors[session.status as keyof typeof statusColors] ??
+      statusColors.disconnected;
+
+    return (
+      <Text style={{ color }} className="text-xs font-medium">
+        {session.status}
+      </Text>
+    );
+  }, [session]);
+
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-neutral-900">
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#6b7280" />
-          <Text className="text-neutral-500 mt-4">Loading conversation...</Text>
+      <>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            headerTransparent: false,
+            headerTitle: "Loading...",
+            headerBackTitle: "Back",
+            headerStyle: { backgroundColor: "#09090b" },
+            headerTintColor: "#fff",
+          }}
+        />
+        <View className="flex-1 items-center justify-center bg-dark-bg">
+          <ActivityIndicator size="large" color="#f97316" />
+          <Text className="mt-4 text-dark-text-muted">Loading task...</Text>
         </View>
-      </SafeAreaView>
+      </>
     );
   }
 
   if (error || !task) {
     return (
-      <SafeAreaView className="flex-1 bg-neutral-900">
-        <View className="flex-1 items-center justify-center px-4">
-          <Text className="text-red-500 text-center mb-4">
+      <>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            headerTransparent: false,
+            headerTitle: "Error",
+            headerBackTitle: "Back",
+            headerStyle: { backgroundColor: "#09090b" },
+            headerTintColor: "#fff",
+          }}
+        />
+        <View className="flex-1 items-center justify-center bg-dark-bg px-4">
+          <Text className="mb-4 text-center text-red-400">
             {error || "Task not found"}
           </Text>
           <Pressable
             onPress={() => router.back()}
-            className="bg-neutral-800 px-6 py-3 rounded-xl"
+            className="rounded-lg bg-dark-surface px-4 py-2"
           >
             <Text className="text-white">Go Back</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral-900" edges={["top"]}>
-      <View className="flex-row items-center px-4 py-3 border-b border-neutral-700">
-        <Pressable onPress={() => router.back()} className="mr-4">
-          <Text className="text-blue-500 text-base">Back</Text>
-        </Pressable>
-        <View className="flex-1">
-          <Text className="text-white font-medium" numberOfLines={1}>
-            {task.title || "Conversation"}
-          </Text>
-          {task.repository && (
-            <Text className="text-neutral-400 text-sm" numberOfLines={1}>
-              {task.repository}
-            </Text>
-          )}
-        </View>
-        {session && (
-          <View
-            className={`px-2 py-1 rounded ${
-              session.status === "connected"
-                ? "bg-green-900"
-                : session.status === "connecting"
-                  ? "bg-yellow-900"
-                  : "bg-red-900"
-            }`}
-          >
-            <Text className="text-white text-xs">{session.status}</Text>
-          </View>
-        )}
-      </View>
-
-      <AgentSessionView
-        events={session?.events ?? []}
-        isPromptPending={session?.isPromptPending ?? false}
-        onSendPrompt={handleSendPrompt}
-        onCancel={handleCancel}
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerTransparent: false,
+          headerTitle: task.title || "Task",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: "#09090b" },
+          headerTintColor: "#fff",
+          headerTitleStyle: {
+            fontWeight: "600",
+          },
+          headerRight,
+        }}
       />
-    </SafeAreaView>
+      <View className="flex-1 bg-dark-bg">
+        <AgentSessionView
+          events={session?.events ?? []}
+          isPromptPending={session?.isPromptPending ?? false}
+          onSendPrompt={handleSendPrompt}
+          onCancel={handleCancel}
+        />
+      </View>
+    </>
   );
 }

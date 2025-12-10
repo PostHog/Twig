@@ -48,9 +48,9 @@ export default function ConversationDetailScreen() {
 
   const handleSend = useCallback(
     async (message: string) => {
-      await askMax(message);
+      await askMax(message, id);
     },
-    [askMax],
+    [askMax, id],
   );
 
   const headerRight = useCallback(() => {
@@ -79,7 +79,7 @@ export default function ConversationDetailScreen() {
           options={{
             headerShown: true,
             headerTitle: "Error",
-            headerBackTitle: "",
+            headerBackTitle: "Back",
             headerStyle: { backgroundColor: "#09090b" },
             headerTintColor: "#fff",
           }}
@@ -104,7 +104,7 @@ export default function ConversationDetailScreen() {
           options={{
             headerShown: true,
             headerTitle: "Loading...",
-            headerBackTitle: "",
+            headerBackTitle: "Back",
             headerStyle: { backgroundColor: "#09090b" },
             headerTintColor: "#fff",
           }}
@@ -125,7 +125,7 @@ export default function ConversationDetailScreen() {
         options={{
           headerShown: true,
           headerTitle: conversation?.title || "Conversation",
-          headerBackTitle: "",
+          headerBackTitle: "Back",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
           headerTitleStyle: {
@@ -153,5 +153,3 @@ export default function ConversationDetailScreen() {
     </>
   );
 }
-
-

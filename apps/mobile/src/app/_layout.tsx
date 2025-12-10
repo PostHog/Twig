@@ -40,6 +40,7 @@ function RootLayoutNav() {
         name="chat"
         options={{
           headerShown: true,
+          headerBackTitle: "",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
         }}
@@ -48,6 +49,10 @@ function RootLayoutNav() {
         name="agent"
         options={{
           headerShown: true,
+          title: "New task",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: "#09090b" },
+          headerTintColor: "#f97316",
         }}
       />
     </Stack>
