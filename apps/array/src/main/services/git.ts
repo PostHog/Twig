@@ -153,6 +153,36 @@ export const getDefaultBranch = async (
   }
 };
 
+export const getAllBranches = async (
+  directoryPath: string,
+): Promise<string[]> => {
+  try {
+    const { stdout } = await execAsync(
+      'git branch --list --format="%(refname:short)"',
+      {
+        cwd: directoryPath,
+      },
+    );
+    return stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((branch) => branch.trim())
+      .filter((branch) => !branch.startsWith("array/"));
+  } catch {
+    return [];
+  }
+};
+
+export const createBranch = async (
+  directoryPath: string,
+  branchName: string,
+): Promise<void> => {
+  await execAsync(`git checkout -b "${branchName}"`, {
+    cwd: directoryPath,
+  });
+};
+
 const getChangedFiles = async (directoryPath: string): Promise<Set<string>> => {
   const changedFiles = new Set<string>();
 
@@ -782,6 +812,37 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<string | undefined> => {
       return getCurrentBranch(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-default-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string> => {
+      return getDefaultBranch(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-all-branches",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<string[]> => {
+      return getAllBranches(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "create-branch",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+      branchName: string,
+    ): Promise<void> => {
+      return createBranch(directoryPath, branchName);
     },
   );
 

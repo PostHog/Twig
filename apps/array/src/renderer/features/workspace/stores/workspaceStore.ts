@@ -45,6 +45,7 @@ interface WorkspaceState {
     taskId: string,
     repoPath: string,
     mode?: WorkspaceMode,
+    branch?: string | null,
   ) => Promise<Workspace>;
 
   // Operations
@@ -165,6 +166,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       taskId: string,
       repoPath: string,
       mode: WorkspaceMode = "worktree",
+      branch?: string | null,
     ) => {
       // Return existing workspace if it exists
       const existing = get().workspaces[taskId];
@@ -189,7 +191,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           worktreePath: null,
           worktreeName: null,
           branchName: null,
-          baseBranch: null,
+          baseBranch: branch ?? null,
           createdAt: new Date().toISOString(),
           terminalSessionIds: [],
           hasStartScripts: false,
@@ -206,6 +208,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           folderId: folder.id,
           folderPath: repoPath,
           mode: "cloud",
+          branch: branch ?? undefined,
         });
 
         return cloudWorkspace;
@@ -258,6 +261,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           folderId: folder.id,
           folderPath: repoPath,
           mode,
+          branch: branch ?? undefined,
         });
 
         if (!workspaceInfo) {

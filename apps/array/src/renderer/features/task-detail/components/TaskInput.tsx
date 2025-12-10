@@ -11,6 +11,7 @@ import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useEffect, useState } from "react";
 import { useEditorSetup } from "../hooks/useEditorSetup";
 import { useTaskCreation } from "../hooks/useTaskCreation";
+import { BranchSelect } from "./BranchSelect";
 import { type RunMode, RunModeSelect } from "./RunModeSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
@@ -38,6 +39,7 @@ export function TaskInput() {
   );
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -70,6 +72,7 @@ export function TaskInput() {
     selectedRepository,
     githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
+    branch: selectedBranch,
   });
 
   return (
@@ -139,6 +142,13 @@ export function TaskInput() {
           )}
           {import.meta.env.DEV && (
             <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
+          )}
+          {selectedDirectory && (
+            <BranchSelect
+              value={selectedBranch}
+              onChange={setSelectedBranch}
+              directoryPath={selectedDirectory}
+            />
           )}
         </Flex>
 

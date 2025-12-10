@@ -84,7 +84,8 @@ export class WorkspaceService {
   async createWorkspace(
     options: CreateWorkspaceOptions,
   ): Promise<WorkspaceInfo> {
-    const { taskId, mainRepoPath, folderId, folderPath, mode } = options;
+    const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
+      options;
     log.info(
       `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode})`,
     );
@@ -117,6 +118,25 @@ export class WorkspaceService {
 
     // Root mode: skip worktree creation entirely
     if (mode === "root") {
+      // try to create the branch, if it already exists just switch to it
+      if (branch) {
+        try {
+          log.info(`Creating/switching to branch ${branch} for task ${taskId}`);
+          try {
+            await execAsync(`git checkout -b "${branch}"`, { cwd: folderPath });
+            log.info(`Created and switched to new branch ${branch}`);
+          } catch (_error) {
+            await execAsync(`git checkout "${branch}"`, { cwd: folderPath });
+            log.info(`Switched to existing branch ${branch}`);
+          }
+        } catch (error) {
+          log.error(`Failed to create/switch to branch ${branch}:`, error);
+          throw new Error(
+            `Failed to create/switch to branch ${branch}: ${String(error)}`,
+          );
+        }
+      }
+
       // Save task association without worktree
       const associations = getTaskAssociations();
       const existingIndex = associations.findIndex((a) => a.taskId === taskId);
@@ -219,7 +239,9 @@ export class WorkspaceService {
     let worktree: WorktreeInfo;
 
     try {
-      worktree = await worktreeManager.createWorktree();
+      worktree = await worktreeManager.createWorktree({
+        baseBranch: branch ?? undefined,
+      });
       log.info(
         `Created worktree: ${worktree.worktreeName} at ${worktree.worktreePath}`,
       );

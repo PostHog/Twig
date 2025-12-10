@@ -10,6 +10,7 @@ interface TaskDirectoryState {
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
   setRepoDirectory: (repoKey: string, directory: string) => void;
   clearRepoDirectory: (repoKey: string) => void;
+  validateLastUsedDirectory: () => Promise<void>;
 }
 
 const isValidPath = (path: string): boolean => {
@@ -54,6 +55,17 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
           repoDirectories: omitKey(state.repoDirectories, repoKey),
         }));
       },
+
+      validateLastUsedDirectory: async () => {
+        const { lastUsedDirectory } = get();
+        if (!lastUsedDirectory) return;
+
+        const exists =
+          await window.electronAPI?.validateRepo(lastUsedDirectory);
+        if (!exists) {
+          set({ lastUsedDirectory: null });
+        }
+      },
     }),
     {
       name: "task-directory-mappings",
@@ -84,6 +96,9 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
           state.repoDirectories = cleanedRepoDirs;
           state.lastUsedDirectory = cleanedLastUsed;
         }
+
+        // Validate that lastUsedDirectory still exists on disk
+        state.validateLastUsedDirectory();
       },
     },
   ),
