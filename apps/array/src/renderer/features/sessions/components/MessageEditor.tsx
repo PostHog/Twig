@@ -231,7 +231,6 @@ export const MessageEditor = forwardRef<
       }
     };
     const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
-    const mentionItemsRef = useRef(mentionItems);
     const repoPathRef = useRef(repoPath);
     const onSubmitRef = useRef(onSubmit);
     const componentRef = useRef<ReactRenderer<MentionListRef> | null>(null);
@@ -240,7 +239,6 @@ export const MessageEditor = forwardRef<
     >(null);
 
     useEffect(() => {
-      mentionItemsRef.current = mentionItems;
       if (componentRef.current && commandRef.current) {
         componentRef.current.updateProps({
           items: mentionItems,
@@ -308,18 +306,10 @@ export const MessageEditor = forwardRef<
             char: "@",
             items: async ({ query }) => {
               if (!repoPathRef.current) {
-                mentionItemsRef.current = [];
                 setMentionItems([]);
-                if (componentRef.current && commandRef.current) {
-                  componentRef.current.updateProps({
-                    items: [],
-                    command: commandRef.current,
-                  });
-                }
                 return [];
               }
 
-              mentionItemsRef.current = [];
               setMentionItems([]);
 
               try {
@@ -332,25 +322,11 @@ export const MessageEditor = forwardRef<
                   name: file.name,
                   type: "file" as const,
                 }));
-                mentionItemsRef.current = items;
                 setMentionItems(items);
-                if (componentRef.current && commandRef.current) {
-                  componentRef.current.updateProps({
-                    items,
-                    command: commandRef.current,
-                  });
-                }
                 return items;
               } catch (error) {
                 log.error("Error fetching files:", error);
-                mentionItemsRef.current = [];
                 setMentionItems([]);
-                if (componentRef.current && commandRef.current) {
-                  componentRef.current.updateProps({
-                    items: [],
-                    command: commandRef.current,
-                  });
-                }
                 return [];
               }
             },
@@ -375,7 +351,7 @@ export const MessageEditor = forwardRef<
 
                   const component = new ReactRenderer(MentionList, {
                     props: {
-                      items: mentionItemsRef.current,
+                      items: [],
                       command: props.command,
                     },
                     editor: props.editor,
@@ -389,10 +365,6 @@ export const MessageEditor = forwardRef<
                   updatePosition(props.editor, component.element);
                 },
                 onUpdate: (props: SuggestionProps) => {
-                  componentRef.current?.updateProps({
-                    items: mentionItemsRef.current,
-                    command: props.command,
-                  });
                   if (!props.clientRect || !componentRef.current) return;
                   updatePosition(props.editor, componentRef.current.element);
                 },
