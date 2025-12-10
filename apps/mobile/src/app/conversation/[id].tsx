@@ -48,9 +48,9 @@ export default function ConversationDetailScreen() {
 
   const handleSend = useCallback(
     async (message: string) => {
-      await askMax(message);
+      await askMax(message, id);
     },
-    [askMax],
+    [askMax, id],
   );
 
   const headerRight = useCallback(() => {

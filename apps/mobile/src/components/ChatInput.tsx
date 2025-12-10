@@ -1,16 +1,14 @@
-import { useState } from "react";
 import {
-  TextInput,
-  type TextStyle,
-  TouchableOpacity,
-  View,
-} from "react-native";
+  Circle,
+  Host,
+  TextField,
+  type TextFieldRef,
+} from "@expo/ui/swift-ui";
+import { clipped, glassEffect, padding } from "@expo/ui/swift-ui/modifiers";
+import { ArrowUp, Microphone, type IconProps } from "phosphor-react-native";
+import { useRef, useState } from "react";
+import { Platform, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text } from "./text";
-
-const TEXT_INPUT_STYLE: TextStyle = {
-  maxHeight: 120,
-};
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -25,69 +23,119 @@ export function ChatInput({
 }: ChatInputProps) {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
+  const textFieldRef = useRef<TextFieldRef>(null);
 
   const handleSend = () => {
     const trimmed = message.trim();
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setMessage("");
+    textFieldRef.current?.setText("");
   };
 
   const canSend = message.trim().length > 0 && !disabled;
 
+  if (Platform.OS === "ios") {
+    return (
+      <View
+        style={{
+          paddingBottom: insets.bottom + 4,
+          paddingHorizontal: 8,
+          paddingTop: 8,
+        }}
+      >
+        <View className="flex-row items-end gap-2">
+          {/* Input field container */}
+          <View className="relative flex-1 overflow-hidden rounded-full">
+            <Host style={{ minHeight: 36, overflow: "hidden" }} matchContents>
+              <TextField
+                ref={textFieldRef}
+                defaultValue=""
+                placeholder={placeholder}
+                onChangeText={setMessage}
+                multiline
+                numberOfLines={5}
+                modifiers={[
+                  padding({ leading: 12, trailing: 12, top: 8, bottom: 8 }),
+                  glassEffect({
+                    shape: "capsule",
+                    glass: { variant: "regular" },
+                  }),
+                  clipped(),
+                ]}
+              />
+            </Host>
+          </View>
+
+          {/* Mic / Send button */}
+          <TouchableOpacity
+            onPress={canSend ? handleSend : undefined}
+            activeOpacity={0.7}
+            className="h-[34px] w-[34px] items-center justify-center"
+          >
+            {/* Glass Background */}
+            <View className="absolute inset-0">
+              <Host style={{ width: 34, height: 34 }}>
+                <Circle
+                  modifiers={[
+                    glassEffect({
+                      shape: "circle",
+                      glass: { variant: "regular" },
+                    }),
+                  ]}
+                />
+              </Host>
+            </View>
+
+            {/* Icon */}
+            {canSend ? (
+              <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+            ) : (
+              <Microphone size={20} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Android fallback - matching Telegram dark theme
   return (
     <View
       style={{
-        backgroundColor: "#0a0a0a",
-        paddingBottom: insets.bottom,
-        borderTopWidth: 0.5,
-        borderTopColor: "rgba(255, 255, 255, 0.1)",
+        paddingBottom: insets.bottom + 4,
+        paddingHorizontal: 8,
+        paddingTop: 8,
       }}
     >
-      <View className="flex-row items-end gap-2 px-4 py-2">
-        {/* Plus button */}
-        <TouchableOpacity
-          className="mb-0.5 h-9 w-9 items-center justify-center rounded-full bg-dark-surface"
-          activeOpacity={0.7}
-        >
-          <Text className="text-dark-text-muted text-xl">+</Text>
-        </TouchableOpacity>
-
-        {/* Text input */}
-        <View className="relative flex-1">
+      <View className="flex-row items-end gap-2">
+        {/* Input field */}
+        <View className="min-h-[36px] flex-1 justify-center rounded-[18px] bg-[#1C1C1E] px-4 py-2">
           <TextInput
+            value={message}
+            onChangeText={setMessage}
             placeholder={placeholder}
-            style={TEXT_INPUT_STYLE}
-            className="min-h-[36px] flex-1 rounded-[18px] border border-dark-border bg-dark-surface px-4 py-2 pr-10 text-base text-dark-text"
             placeholderTextColor="#6b6b6b"
             editable={!disabled}
             multiline
-            onChangeText={setMessage}
-            value={message}
-            onSubmitEditing={handleSend}
-            blurOnSubmit={false}
+            numberOfLines={5}
+            className="text-base text-white"
+            style={{ maxHeight: 120 }}
           />
-
-          {/* Send / Mic button */}
-          <View className="absolute right-1 bottom-1">
-            {canSend ? (
-              <TouchableOpacity
-                onPress={handleSend}
-                className="h-7 w-7 items-center justify-center rounded-full bg-orange-500"
-                activeOpacity={0.7}
-              >
-                <Text className="font-bold text-sm text-white">↑</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                className="h-7 w-7 items-center justify-center rounded-full opacity-50"
-                activeOpacity={0.7}
-              >
-                <Text className="text-base text-dark-text-muted">🎤</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
+
+        {/* Mic / Send button */}
+        <TouchableOpacity
+          onPress={canSend ? handleSend : undefined}
+          className="h-[34px] w-[34px] items-center justify-center rounded-full bg-white/10"
+          activeOpacity={0.7}
+        >
+          {canSend ? (
+            <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+          ) : (
+            <Microphone size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );

@@ -40,6 +40,7 @@ function RootLayoutNav() {
         name="chat"
         options={{
           headerShown: true,
+          headerBackTitle: "",
           headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#fff",
         }}
