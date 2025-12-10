@@ -15,7 +15,7 @@ import { logger } from "@renderer/lib/logger";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import type { Editor } from "@tiptap/react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 const log = logger.scope("task-creation");
 
@@ -52,11 +52,8 @@ export function useTaskCreation({
   githubIntegrationId,
   workspaceMode,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
-  const {
-    mutate: createTask,
-    isPending: isCreatingTask,
-    invalidateTasks,
-  } = useCreateTask();
+  const { mutate: createTask, invalidateTasks } = useCreateTask();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { navigateToTask } = useNavigationStore();
   const { client, isAuthenticated } = useAuthStore();
   const { setRepoPath: saveRepoPath, setWorkspaceMode: saveWorkspaceMode } =
@@ -70,7 +67,7 @@ export function useTaskCreation({
     isAuthenticated &&
     !!client &&
     (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
-    !isCreatingTask &&
+    !isSubmitting &&
     !editor.isEmpty;
 
   const handleSubmit = useCallback(async () => {
@@ -80,12 +77,14 @@ export function useTaskCreation({
       isAuthenticated &&
       !!client &&
       (isCloud ? !!selectedRepository : !!selectedDirectory) &&
-      !isCreatingTask &&
+      !isSubmitting &&
       !editor.isEmpty;
 
     if (!canSubmit) {
       return;
     }
+
+    setIsSubmitting(true);
 
     const editorJson = editor.getJSON();
     const content = tiptapToMarkdown(editorJson).trim();
@@ -195,6 +194,7 @@ export function useTaskCreation({
         },
         onError: (error) => {
           log.error("Failed to create task:", error);
+          setIsSubmitting(false);
         },
       },
     );
@@ -209,7 +209,7 @@ export function useTaskCreation({
     navigateToTask,
     autoRunTasks,
     clearDraft,
-    isCreatingTask,
+    isSubmitting,
     client,
     isAuthenticated,
     invalidateTasks,
@@ -217,7 +217,7 @@ export function useTaskCreation({
   ]);
 
   return {
-    isCreatingTask,
+    isCreatingTask: isSubmitting,
     canSubmit,
     handleSubmit,
   };
