@@ -36,7 +36,7 @@ interface MaxState {
   abortController: AbortController | null;
 
   // Actions
-  askMax: (prompt: string) => Promise<void>;
+  askMax: (prompt: string, conversationId?: string) => Promise<void>;
   stopGeneration: () => void;
   resetThread: () => void;
   setConversation: (conversation: Conversation | null) => void;
@@ -64,7 +64,7 @@ export const useMaxStore = create<MaxState>((set, get) => ({
   conversationLoading: false,
   abortController: null,
 
-  askMax: async (prompt: string) => {
+  askMax: async (prompt: string, conversationId?: string) => {
     const authState = useAuthStore.getState();
 
     if (
@@ -104,10 +104,10 @@ export const useMaxStore = create<MaxState>((set, get) => ({
         trace_id: traceId,
       };
 
-      // Include conversation ID if we have one
-      const currentConversation = get().conversation;
-      if (currentConversation?.id) {
-        requestBody.conversation = currentConversation.id;
+      // Include conversation ID - prefer explicit param over store state
+      const effectiveConversationId = conversationId ?? get().conversation?.id;
+      if (effectiveConversationId) {
+        requestBody.conversation = effectiveConversationId;
       }
       console.log(requestBody);
       const response = await fetch(
