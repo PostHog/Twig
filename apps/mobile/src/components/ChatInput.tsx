@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { TextInput, TextStyle, TouchableOpacity, View } from "react-native";
+import {
+  TextInput,
+  type TextStyle,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "./text";
 

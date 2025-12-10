@@ -47,9 +47,17 @@ export interface HumanMessage extends BaseAssistantMessage {
   content: string;
 }
 
+export interface AssistantToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  type: "tool_call";
+}
+
 export interface AssistantMessage extends BaseAssistantMessage {
   type: AssistantMessageType.Assistant;
   content: string;
+  tool_calls?: AssistantToolCall[];
   meta?: {
     thinking?: Array<{ type: string; thinking: string }>;
   };

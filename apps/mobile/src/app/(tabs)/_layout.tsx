@@ -27,8 +27,20 @@ export default function TabsLayout() {
       tintColor={dynamicTintColor}
       minimizeBehavior="onScrollDown"
     >
-      {/* Tasks - Home Tab */}
+      {/* Conversations - First Tab (default landing) */}
       <NativeTabs.Trigger name="index">
+        <Label>Chats</Label>
+        <Icon
+          sf={{
+            default: "bubble.left.and.bubble.right",
+            selected: "bubble.left.and.bubble.right.fill",
+          }}
+          drawable="ic_menu_send"
+        />
+      </NativeTabs.Trigger>
+
+      {/* Tasks Tab */}
+      <NativeTabs.Trigger name="tasks">
         <Label>Tasks</Label>
         <Icon
           sf={{ default: "checklist", selected: "checklist" }}

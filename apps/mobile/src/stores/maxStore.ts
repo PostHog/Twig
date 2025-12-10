@@ -40,6 +40,7 @@ interface MaxState {
   stopGeneration: () => void;
   resetThread: () => void;
   setConversation: (conversation: Conversation | null) => void;
+  loadConversation: (conversationId: string) => Promise<void>;
 }
 
 function generateUUID(): string {
@@ -55,6 +56,8 @@ export const useMaxStore = create<MaxState>((set, get) => ({
     id: generateUUID(),
     title: "New chat",
     status: ConversationStatus.Idle,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   thread: [],
   streamingActive: false,
@@ -231,6 +234,74 @@ export const useMaxStore = create<MaxState>((set, get) => ({
   setConversation: (conversation: Conversation | null) => {
     set({ conversation });
   },
+
+  loadConversation: async (conversationId: string) => {
+    const authState = useAuthStore.getState();
+
+    if (
+      !authState.isAuthenticated ||
+      !authState.oauthAccessToken ||
+      !authState.cloudRegion ||
+      !authState.projectId
+    ) {
+      console.error("Not authenticated");
+      return;
+    }
+
+    set({ conversationLoading: true });
+
+    try {
+      const cloudUrl = getCloudUrlFromRegion(authState.cloudRegion);
+      const response = await fetch(
+        `${cloudUrl}/api/environments/${authState.projectId}/conversations/${conversationId}/`,
+        {
+          headers: {
+            Authorization: `Bearer ${authState.oauthAccessToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Convert messages to ThreadMessage format
+      // For ToolCallMessage, we keep its own status property
+      const thread: ThreadMessage[] = (data.messages || []).map(
+        (msg: RootAssistantMessage) => {
+          if (msg.type === AssistantMessageType.ToolCall) {
+            // ToolCallMessage has its own status, but ThreadMessage needs a MessageStatus
+            return {
+              ...msg,
+              status: "completed" as const,
+            } as ThreadMessage;
+          }
+          return {
+            ...msg,
+            status: "completed" as const,
+          };
+        },
+      );
+
+      set({
+        conversation: {
+          id: data.id,
+          title: data.title || "Conversation",
+          status: data.status || ConversationStatus.Idle,
+          created_at: data.created_at || new Date().toISOString(),
+          updated_at: data.updated_at || new Date().toISOString(),
+        },
+        thread,
+      });
+    } catch (error) {
+      console.error("Failed to load conversation:", error);
+      throw error;
+    } finally {
+      set({ conversationLoading: false });
+    }
+  },
 }));
 
 // SSE Event processor
@@ -309,10 +380,12 @@ async function processSSEEvent(
 
     case AssistantEventType.Message: {
       const message = parsedObj as unknown as RootAssistantMessage;
-      const threadMessage: ThreadMessage = {
+      // ToolCallMessage has its own status property, so we cast it directly
+      const messageStatus = message.id ? "completed" : "loading";
+      const threadMessage = {
         ...message,
-        status: message.id ? "completed" : "loading",
-      };
+        status: messageStatus,
+      } as ThreadMessage;
 
       if (isHumanMessage(message)) {
         // Find and replace the provisional human message
