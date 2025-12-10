@@ -12,6 +12,7 @@ import {
 } from "electron";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
+import { dockBadgeService } from "./services/dockBadge.js";
 import {
   cleanupAgentSessions,
   registerAgentIpc,
@@ -213,6 +214,9 @@ function createWindow(): void {
 app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
+
+  // Initialize dock badge service for notification badges
+  dockBadgeService.initialize(() => mainWindow);
 
   // Initialize PostHog analytics
   initializePostHog();

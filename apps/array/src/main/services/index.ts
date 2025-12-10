@@ -4,6 +4,7 @@
  */
 
 import "./contextMenu.js";
+import "./dockBadge.js";
 import "./externalApps.js";
 import "./fileWatcher.js";
 import "./folders.js";

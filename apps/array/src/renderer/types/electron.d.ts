@@ -326,6 +326,9 @@ declare global {
       getTerminalLayout: () => Promise<"split" | "tabbed">;
       setTerminalLayout: (mode: "split" | "tabbed") => Promise<void>;
     };
+    dockBadge: {
+      show: () => Promise<void>;
+    };
   }
 
   interface Window {

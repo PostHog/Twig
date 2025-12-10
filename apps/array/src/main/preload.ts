@@ -508,4 +508,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     setTerminalLayout: (mode: "split" | "tabbed"): Promise<void> =>
       ipcRenderer.invoke("settings:set-terminal-layout", mode),
   },
+  // Dock Badge API
+  dockBadge: {
+    show: (): Promise<void> => ipcRenderer.invoke("dock-badge:show"),
+  },
 });

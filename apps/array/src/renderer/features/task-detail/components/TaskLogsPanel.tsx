@@ -76,6 +76,11 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         if (isViewingTask) {
           markAsViewed(taskId);
         }
+
+        const isWindowFocused = document.hasFocus();
+        if (!isWindowFocused) {
+          window.electronAPI.dockBadge.show();
+        }
       } catch (error) {
         log.error("Failed to send prompt", error);
       }
