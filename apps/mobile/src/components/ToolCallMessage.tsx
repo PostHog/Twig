@@ -192,7 +192,7 @@ function CreateTaskPreview({
               <Play size={14} color="#fff" weight="fill" />
             )}
             <Text className="font-medium text-[13px] text-white">
-              {isRunning ? "Starting..." : "Run this task"}
+              {isRunning ? "Starting..." : "Open this task"}
             </Text>
           </TouchableOpacity>
         )}

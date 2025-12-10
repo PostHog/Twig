@@ -66,15 +66,26 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
 
       {/* Title */}
       <Text
-        className="mt-1 text-sm text-white"
+        className="mt-1 font-medium text-sm text-white"
         numberOfLines={1}
         ellipsizeMode="tail"
       >
         {task.title}
       </Text>
 
+      {/* Description preview */}
+      {task.description && (
+        <Text
+          className="mt-0.5 text-gray-400 text-xs"
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {task.description}
+        </Text>
+      )}
+
       {/* Bottom row: repo + time */}
-      <View className="mt-1 flex-row items-center justify-between">
+      <View className="mt-1.5 flex-row items-center justify-between">
         <Text className="text-gray-500 text-xs" numberOfLines={1}>
           {task.repository || "No repository"}
         </Text>
@@ -87,5 +98,3 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
 }
 
 export const TaskItem = memo(TaskItemComponent);
-
-
