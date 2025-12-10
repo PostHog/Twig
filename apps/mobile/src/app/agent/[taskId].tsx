@@ -20,8 +20,13 @@ export default function TaskDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { connectToTask, disconnectFromTask, sendPrompt, getSessionForTask } =
-    useAgentSessionStore();
+  const {
+    connectToTask,
+    disconnectFromTask,
+    sendPrompt,
+    cancelPrompt,
+    getSessionForTask,
+  } = useAgentSessionStore();
 
   const session = taskId ? getSessionForTask(taskId) : undefined;
 
@@ -59,13 +64,14 @@ export default function TaskDetailScreen() {
     [taskId, sendPrompt],
   );
 
-  const handleCancel = useCallback(() => {
-    // For cloud runs, we don't have a direct cancel mechanism
-    // The agent will complete its current operation
-    console.log(
-      "Cancel requested - cloud runs complete their current operation",
-    );
-  }, []);
+  const handleCancel = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      await cancelPrompt(taskId);
+    } catch (err) {
+      console.error("Failed to cancel:", err);
+    }
+  }, [taskId, cancelPrompt]);
 
   const headerRight = useCallback(() => {
     if (!session) return null;

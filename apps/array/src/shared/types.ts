@@ -4,6 +4,7 @@ export interface RegisteredFolder {
   name: string;
   lastAccessed: string;
   createdAt: string;
+  repository?: string;
 }
 
 export interface WorktreeInfo {

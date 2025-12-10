@@ -6,7 +6,7 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
-import { FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
+import { CloudIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { Task } from "@shared/types";
@@ -19,6 +19,7 @@ import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HomeItem } from "./items/HomeItem";
 import { NewTaskItem } from "./items/NewTaskItem";
 import { TaskItem } from "./items/TaskItem";
+import { SidebarSection } from "./SidebarSection";
 import { SortableFolderSection } from "./SortableFolderSection";
 
 function SidebarMenuComponent() {
@@ -226,6 +227,31 @@ function SidebarMenuComponent() {
               }
             </DragOverlay>
           </DragDropProvider>
+
+          {sidebarData.cloudRepos.map((cloudRepo) => (
+            <SidebarSection
+              key={cloudRepo.repository}
+              id={`cloud-${cloudRepo.repository}`}
+              label={cloudRepo.repoName}
+              icon={<CloudIcon size={14} weight="regular" />}
+              isExpanded={!collapsedSections.has(`cloud-${cloudRepo.repository}`)}
+              onToggle={() => toggleSection(`cloud-${cloudRepo.repository}`)}
+            >
+              {cloudRepo.tasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  id={task.id}
+                  label={task.title}
+                  isActive={sidebarData.activeTaskId === task.id}
+                  lastActivityAt={task.lastActivityAt}
+                  isGenerating={task.isGenerating}
+                  isUnread={task.isUnread}
+                  onClick={() => handleTaskClick(task.id)}
+                  onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
+                />
+              ))}
+            </SidebarSection>
+          ))}
         </Flex>
       </Box>
     </>

@@ -26,6 +26,7 @@ export interface AgentSession {
   isPromptPending: boolean;
   logUrl: string;
   processedLineCount: number;
+  processedHashes?: Set<string>;
 }
 
 interface AgentSessionStore {
@@ -34,6 +35,7 @@ interface AgentSessionStore {
   connectToTask: (task: Task) => Promise<void>;
   disconnectFromTask: (taskId: string) => void;
   sendPrompt: (taskId: string, prompt: string) => Promise<void>;
+  cancelPrompt: (taskId: string) => Promise<boolean>;
   getSessionForTask: (taskId: string) => AgentSession | undefined;
 
   _handleEvent: (taskRunId: string, event: SessionEvent) => void;
@@ -102,7 +104,7 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
                   ]
                 : [],
               status: "connected",
-              isPromptPending: false,
+              isPromptPending: true, // Agent is processing initial task
               logUrl: newLogUrl,
               processedLineCount: 0,
             },
@@ -137,6 +139,21 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
         taskDescription,
       );
 
+      // Check if agent is still processing by looking at the last entry
+      // If the last non-client entry is a user message, agent is likely still working
+      const lastAgentEntry = [...rawEntries]
+        .reverse()
+        .find((e) => e.direction !== "client");
+      const lastUpdate = (lastAgentEntry?.notification as any)?.params?.update
+        ?.sessionUpdate;
+      const isAgentResponding =
+        lastUpdate === "agent_message_chunk" ||
+        lastUpdate === "agent_thought_chunk" ||
+        lastUpdate === "tool_call" ||
+        lastUpdate === "tool_call_update";
+      // If we have entries but the last one isn't an agent response, agent may still be processing
+      const isPromptPending = rawEntries.length > 0 && !isAgentResponding;
+
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -145,7 +162,7 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
             taskId,
             events: historicalEvents,
             status: "connected",
-            isPromptPending: false,
+            isPromptPending,
             logUrl: latestRunLogUrl,
             processedLineCount: rawEntries.length,
           },
@@ -223,6 +240,45 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
     }));
   },
 
+  cancelPrompt: async (taskId: string) => {
+    const session = get().getSessionForTask(taskId);
+    if (!session) return false;
+
+    const cancelNotification: StoredLogEntry = {
+      type: "notification",
+      timestamp: new Date().toISOString(),
+      direction: "client",
+      notification: {
+        method: "session/cancel",
+        params: {
+          sessionId: session.taskRunId,
+        },
+      },
+    };
+
+    try {
+      await appendTaskRunLog(taskId, session.taskRunId, [cancelNotification]);
+      console.log("Sent cancel request via S3", {
+        taskId,
+        runId: session.taskRunId,
+      });
+
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [session.taskRunId]: {
+            ...state.sessions[session.taskRunId],
+            isPromptPending: false,
+          },
+        },
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to send cancel request", error);
+      return false;
+    }
+  },
+
   getSessionForTask: (taskId: string) => {
     return Object.values(get().sessions).find((s) => s.taskId === taskId);
   },
@@ -265,7 +321,9 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
 
         if (lines.length > processedCount) {
           const newLines = lines.slice(processedCount);
-          let hasAgentResponse = false;
+          const currentHashes = new Set(session.processedHashes ?? []);
+
+          let receivedAgentMessage = false;
 
           for (const line of newLines) {
             try {
@@ -273,6 +331,17 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
               const ts = entry.timestamp
                 ? new Date(entry.timestamp).getTime()
                 : Date.now();
+
+              const hash = `${entry.timestamp ?? ""}-${entry.notification?.method ?? ""}-${entry.direction ?? ""}`;
+              if (currentHashes.has(hash)) {
+                continue;
+              }
+              currentHashes.add(hash);
+
+              const isClientMessage = entry.direction === "client";
+              if (isClientMessage) {
+                continue;
+              }
 
               const acpEvent: SessionEvent = {
                 type: "acp_message",
@@ -295,9 +364,14 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
                 };
                 get()._handleEvent(taskRunId, sessionUpdateEvent);
 
-                const update = entry.notification.params?.update;
-                if (update?.sessionUpdate === "agent_message_chunk") {
-                  hasAgentResponse = true;
+                // Check if this is an agent message - means agent is responding
+                const sessionUpdate =
+                  entry.notification?.params?.update?.sessionUpdate;
+                if (
+                  sessionUpdate === "agent_message_chunk" ||
+                  sessionUpdate === "agent_thought_chunk"
+                ) {
+                  receivedAgentMessage = true;
                 }
               }
             } catch {
@@ -311,9 +385,11 @@ export const useAgentSessionStore = create<AgentSessionStore>((set, get) => ({
               [taskRunId]: {
                 ...state.sessions[taskRunId],
                 processedLineCount: lines.length,
-                isPromptPending: hasAgentResponse
+                processedHashes: currentHashes,
+                // Clear pending state when we receive agent response
+                isPromptPending: receivedAgentMessage
                   ? false
-                  : state.sessions[taskRunId].isPromptPending,
+                  : state.sessions[taskRunId]?.isPromptPending ?? false,
               },
             },
           }));

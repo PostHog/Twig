@@ -445,6 +445,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             events: [...state.sessions[session.taskRunId].events, userEvent],
             processedLineCount:
               (state.sessions[session.taskRunId].processedLineCount ?? 0) + 1,
+            isPromptPending: true,
           },
         },
       }));
@@ -481,6 +482,41 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   cancelPrompt: async (taskId) => {
     const session = get().getSessionForTask(taskId);
     if (!session) return false;
+
+    if (session.isCloud) {
+      const authState = useAuthStore.getState();
+      const { client } = authState;
+      if (!client) {
+        log.error("API client not available for cloud cancel");
+        return false;
+      }
+
+      const cancelNotification: StoredLogEntry = {
+        type: "notification" as const,
+        timestamp: new Date().toISOString(),
+        direction: "client" as const,
+        notification: {
+          method: "session/cancel",
+          params: {
+            sessionId: session.taskRunId,
+          },
+        },
+      };
+
+      try {
+        await client.appendTaskRunLog(taskId, session.taskRunId, [
+          cancelNotification,
+        ]);
+        log.info("Sent cloud cancel request via S3", {
+          taskId,
+          runId: session.taskRunId,
+        });
+        return true;
+      } catch (error) {
+        log.error("Failed to send cloud cancel request", error);
+        return false;
+      }
+    }
 
     try {
       return await window.electronAPI.agentCancelPrompt(session.taskRunId);
@@ -552,6 +588,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const processedCount = session.processedLineCount ?? 0;
         if (lines.length > processedCount) {
           const newLines = lines.slice(processedCount);
+          let receivedAgentMessage = false;
+
           for (const line of newLines) {
             try {
               const entry = JSON.parse(line);
@@ -581,19 +619,32 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                     .params as SessionNotification,
                 };
                 get()._handleEvent(taskRunId, sessionUpdateEvent);
+
+                // Check if this is an agent message - means agent is responding
+                const sessionUpdate =
+                  entry.notification?.params?.update?.sessionUpdate;
+                if (
+                  sessionUpdate === "agent_message_chunk" ||
+                  sessionUpdate === "agent_thought_chunk"
+                ) {
+                  receivedAgentMessage = true;
+                }
               }
             } catch {
               // Skip invalid JSON
             }
           }
 
-          // Update processed line count
+          // Update processed line count and clear pending state if agent responded
           set((state) => ({
             sessions: {
               ...state.sessions,
               [taskRunId]: {
                 ...state.sessions[taskRunId],
                 processedLineCount: lines.length,
+                isPromptPending: receivedAgentMessage
+                  ? false
+                  : state.sessions[taskRunId]?.isPromptPending ?? false,
               },
             },
           }));

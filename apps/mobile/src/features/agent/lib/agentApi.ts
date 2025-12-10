@@ -9,6 +9,45 @@ import type {
   TaskRun,
 } from "../types/agent";
 
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    shouldRetry?: (error: unknown) => boolean;
+  } = {},
+): Promise<T> {
+  const { maxRetries = 3, baseDelayMs = 200, shouldRetry } = options;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries;
+      const canRetry = shouldRetry ? shouldRetry(error) : true;
+
+      if (isLastAttempt || !canRetry) {
+        throw error;
+      }
+
+      const delay = baseDelayMs * 2 ** (attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error("Unreachable");
+}
+
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    if (/\b5\d{2}\b/.test(message)) return true;
+    if (message.includes("network")) return true;
+    if (message.includes("timeout")) return true;
+    if (message.includes("econnreset")) return true;
+  }
+  return false;
+}
+
 function getAuthHeaders(): { Authorization: string; "Content-Type": string } {
   const { oauthAccessToken } = useAuthStore.getState();
   if (!oauthAccessToken) {
@@ -146,35 +185,45 @@ export async function appendTaskRunLog(
   runId: string,
   entries: StoredLogEntry[],
 ): Promise<void> {
-  const baseUrl = getBaseUrl();
-  const projectId = getProjectId();
-  const headers = getAuthHeaders();
+  return withRetry(
+    async () => {
+      const baseUrl = getBaseUrl();
+      const projectId = getProjectId();
+      const headers = getAuthHeaders();
 
-  const response = await fetch(
-    `${baseUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/append_log/`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ entries }),
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/append_log/`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ entries }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to append log: ${response.statusText}`);
+      }
     },
+    { shouldRetry: isRetryableError },
   );
-
-  if (!response.ok) {
-    throw new Error(`Failed to append log: ${response.statusText}`);
-  }
 }
 
 export async function fetchS3Logs(logUrl: string): Promise<string> {
-  const response = await fetch(logUrl);
+  return withRetry(
+    async () => {
+      const response = await fetch(logUrl);
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      return "";
-    }
-    throw new Error(`Failed to fetch logs: ${response.statusText}`);
-  }
+      if (!response.ok) {
+        if (response.status === 404) {
+          return "";
+        }
+        throw new Error(`Failed to fetch logs: ${response.statusText}`);
+      }
 
-  return await response.text();
+      return await response.text();
+    },
+    { shouldRetry: isRetryableError },
+  );
 }
 
 export async function getIntegrations(): Promise<Integration[]> {
