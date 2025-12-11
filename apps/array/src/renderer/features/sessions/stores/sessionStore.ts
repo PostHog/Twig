@@ -96,6 +96,7 @@ export interface AgentSession {
   isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
+  model?: string;
 }
 
 interface ConnectParams {
@@ -321,7 +322,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           return;
         }
 
-        const selectedModel = useSettingsStore.getState().selectedModel;
+        const defaultModel = useSettingsStore.getState().defaultModel;
         const result = await window.electronAPI.agentStart({
           taskId,
           taskRunId: taskRun.id,
@@ -329,7 +330,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           apiKey,
           apiHost,
           projectId,
-          model: selectedModel,
+          model: defaultModel,
         });
 
         set((state) => ({
@@ -344,6 +345,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               status: "connected",
               isPromptPending: false,
               isCloud: false,
+              model: defaultModel,
             },
           },
         }));
@@ -510,6 +512,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     try {
       await window.electronAPI.agentSetModel(session.taskRunId, modelId);
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [session.taskRunId]: {
+            ...state.sessions[session.taskRunId],
+            model: modelId,
+          },
+        },
+      }));
       log.info("Session model changed", { taskId, modelId });
     } catch (error) {
       log.error("Failed to change session model", { taskId, modelId, error });

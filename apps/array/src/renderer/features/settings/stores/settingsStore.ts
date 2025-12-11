@@ -13,7 +13,7 @@ interface SettingsStore {
   lastUsedLocalWorkspaceMode: LocalWorkspaceMode;
   lastUsedWorkspaceMode: WorkspaceMode;
   createPR: boolean;
-  selectedModel: string;
+  defaultModel: string;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -21,7 +21,7 @@ interface SettingsStore {
   setLastUsedLocalWorkspaceMode: (mode: LocalWorkspaceMode) => void;
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
   setCreatePR: (createPR: boolean) => void;
-  setSelectedModel: (model: string) => void;
+  setDefaultModel: (model: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -33,7 +33,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedLocalWorkspaceMode: "worktree",
       lastUsedWorkspaceMode: "worktree",
       createPR: true,
-      selectedModel: DEFAULT_MODEL,
+      defaultModel: DEFAULT_MODEL,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -42,7 +42,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ lastUsedLocalWorkspaceMode: mode }),
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
       setCreatePR: (createPR) => set({ createPR }),
-      setSelectedModel: (model) => set({ selectedModel: model }),
+      setDefaultModel: (model) => set({ defaultModel: model }),
     }),
     {
       name: "settings-storage",

@@ -19,15 +19,19 @@ export function ModelSelector({
   disabled,
   onModelChange,
 }: ModelSelectorProps) {
-  const selectedModel = useSettingsStore((state) => state.selectedModel);
-  const setSelectedModel = useSettingsStore((state) => state.setSelectedModel);
+  const defaultModel = useSettingsStore((state) => state.defaultModel);
+  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const setSessionModel = useSessionStore((state) => state.setSessionModel);
   const session = useSessionStore((state) =>
     taskId ? state.getSessionForTask(taskId) : undefined,
   );
 
+  // Use session model if available, otherwise fall back to default
+  const activeModel = session?.model ?? defaultModel;
+
   const handleChange = (value: string) => {
-    setSelectedModel(value);
+    // Always update the default
+    setDefaultModel(value);
     onModelChange?.(value);
 
     // If there's an active session, update the model mid-session
@@ -41,12 +45,12 @@ export function ModelSelector({
     (provider) => modelsByProvider[provider].models.length > 0,
   );
 
-  const currentModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel);
-  const displayName = currentModel?.name ?? selectedModel;
+  const currentModel = AVAILABLE_MODELS.find((m) => m.id === activeModel);
+  const displayName = currentModel?.name ?? activeModel;
 
   return (
     <Select.Root
-      value={selectedModel}
+      value={activeModel}
       onValueChange={handleChange}
       disabled={disabled}
       size="1"
