@@ -673,28 +673,30 @@ export class ClaudeAcpAgent implements Agent {
             throw RequestError.authRequired();
           }
 
-          // Text/thinking content is streamed via stream_event, so we only process
-          // non-text blocks (tool_use, etc.) here to avoid duplication.
+          // When using the gateway service, text/thinking is streamed via stream_event,
+          // so skip them here to avoid duplication.
           const content = message.message.content;
-          const contentToProcess = Array.isArray(content)
-            ? content.filter(
-                (block) => block.type !== "text" && block.type !== "thinking",
-              )
-            : [];
+          const isUsingGatewayService = !!(
+            process.env.LLM_GATEWAY_URL
+          );
+          const contentToProcess =
+            isUsingGatewayService && Array.isArray(content)
+              ? content.filter(
+                  (block) => block.type !== "text" && block.type !== "thinking",
+                )
+              : content;
 
-          if (contentToProcess.length > 0) {
-            for (const notification of toAcpNotifications(
-              contentToProcess,
-              message.message.role,
-              params.sessionId,
-              this.toolUseCache,
-              this.fileContentCache,
-              this.client,
-              this.logger,
-            )) {
-              await this.client.sessionUpdate(notification);
-              this.appendNotification(params.sessionId, notification);
-            }
+          for (const notification of toAcpNotifications(
+            contentToProcess,
+            message.message.role,
+            params.sessionId,
+            this.toolUseCache,
+            this.fileContentCache,
+            this.client,
+            this.logger,
+          )) {
+            await this.client.sessionUpdate(notification);
+            this.appendNotification(params.sessionId, notification);
           }
           break;
         }
