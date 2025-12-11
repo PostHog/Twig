@@ -676,9 +676,7 @@ export class ClaudeAcpAgent implements Agent {
           // When using the gateway service, text/thinking is streamed via stream_event,
           // so skip them here to avoid duplication.
           const content = message.message.content;
-          const isUsingGatewayService = !!(
-            process.env.LLM_GATEWAY_URL
-          );
+          const isUsingGatewayService = !!process.env.LLM_GATEWAY_URL;
           const contentToProcess =
             isUsingGatewayService && Array.isArray(content)
               ? content.filter(
@@ -687,7 +685,7 @@ export class ClaudeAcpAgent implements Agent {
               : content;
 
           for (const notification of toAcpNotifications(
-            contentToProcess,
+            contentToProcess as typeof content,
             message.message.role,
             params.sessionId,
             this.toolUseCache,
