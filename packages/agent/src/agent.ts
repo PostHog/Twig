@@ -134,7 +134,8 @@ export class Agent {
     }
 
     try {
-      const gatewayUrl = this.posthogAPI.getLlmGatewayUrl();
+      const gatewayUrl =
+        process.env.LLM_GATEWAY_URL || this.posthogAPI.getLlmGatewayUrl();
       const apiKey = this.posthogAPI.getApiKey();
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
