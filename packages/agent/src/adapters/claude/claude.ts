@@ -673,21 +673,28 @@ export class ClaudeAcpAgent implements Agent {
             throw RequestError.authRequired();
           }
 
-          // For assistant messages, text/thinking are normally streamed via stream_event.
-          // But some gateways (like LiteLLM) don't stream, so we process all content.
+          // Text/thinking content is streamed via stream_event, so we only process
+          // non-text blocks (tool_use, etc.) here to avoid duplication.
           const content = message.message.content;
+          const contentToProcess = Array.isArray(content)
+            ? content.filter(
+                (block) => block.type !== "text" && block.type !== "thinking",
+              )
+            : [];
 
-          for (const notification of toAcpNotifications(
-            content,
-            message.message.role,
-            params.sessionId,
-            this.toolUseCache,
-            this.fileContentCache,
-            this.client,
-            this.logger,
-          )) {
-            await this.client.sessionUpdate(notification);
-            this.appendNotification(params.sessionId, notification);
+          if (contentToProcess.length > 0) {
+            for (const notification of toAcpNotifications(
+              contentToProcess,
+              message.message.role,
+              params.sessionId,
+              this.toolUseCache,
+              this.fileContentCache,
+              this.client,
+              this.logger,
+            )) {
+              await this.client.sessionUpdate(notification);
+              this.appendNotification(params.sessionId, notification);
+            }
           }
           break;
         }

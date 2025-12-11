@@ -411,7 +411,12 @@ export class SessionManager {
     process.env.POSTHOG_AUTH_HEADER = `Bearer ${credentials.apiKey}`;
     process.env.ANTHROPIC_API_KEY = credentials.apiKey;
     process.env.ANTHROPIC_AUTH_TOKEN = credentials.apiKey;
-    process.env.ANTHROPIC_BASE_URL = `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
+
+    const llmGatewayUrl =
+      process.env.LLM_GATEWAY_URL ||
+      `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
+    process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
+    
     // process.env.ELECTRON_RUN_AS_NODE = "1";
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
