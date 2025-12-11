@@ -3,6 +3,7 @@ import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { MentionItem } from "@shared/types";
+import { ModelSelector } from "./ModelSelector";
 import { Extension, type JSONContent } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
 import { Placeholder } from "@tiptap/extension-placeholder";
@@ -174,6 +175,7 @@ export interface MessageEditorHandle {
 
 interface MessageEditorProps {
   sessionId: string;
+  taskId?: string;
   placeholder?: string;
   repoPath?: string | null;
   disabled?: boolean;
@@ -191,6 +193,7 @@ export const MessageEditor = forwardRef<
   (
     {
       sessionId,
+      taskId,
       placeholder = "Type a message... @ to mention files",
       repoPath,
       disabled = false,
@@ -449,26 +452,29 @@ export const MessageEditor = forwardRef<
           <EditorContent editor={editor} />
         </Box>
         <Flex justify="between" align="center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            style={{ display: "none" }}
-          />
-          <Tooltip content="Attach file">
-            <IconButton
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-              title="Attach file"
-              style={{ marginLeft: "0px" }}
-            >
-              <Paperclip size={14} weight="bold" />
-            </IconButton>
-          </Tooltip>
+          <Flex gap="2" align="center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <Tooltip content="Attach file">
+              <IconButton
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                title="Attach file"
+                style={{ marginLeft: "0px" }}
+              >
+                <Paperclip size={14} weight="bold" />
+              </IconButton>
+            </Tooltip>
+            <ModelSelector taskId={taskId} disabled={disabled} />
+          </Flex>
           <Flex gap="4" align="center">
             {isLoading && onCancel ? (
               <Tooltip content="Stop">

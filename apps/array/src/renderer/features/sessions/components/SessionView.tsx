@@ -64,6 +64,7 @@ function RawLogEntry({
 interface SessionViewProps {
   events: SessionEvent[];
   sessionId: string | null;
+  taskId?: string;
   isRunning: boolean;
   isPromptPending?: boolean;
   onSendPrompt: (text: string) => void;
@@ -342,6 +343,7 @@ function groupMessagesIntoTurns(
 export function SessionView({
   events,
   sessionId,
+  taskId,
   isRunning,
   isPromptPending,
   onSendPrompt,
@@ -615,6 +617,7 @@ export function SessionView({
           <Box className="border-gray-6 border-t p-3">
             <MessageEditor
               sessionId={sessionId ?? "default"}
+              taskId={taskId}
               placeholder="Type a message... @ to mention files"
               repoPath={repoPath}
               disabled={!isRunning}

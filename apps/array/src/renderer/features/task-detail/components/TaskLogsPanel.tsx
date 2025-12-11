@@ -99,6 +99,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         <SessionView
           events={session?.events ?? []}
           sessionId={session?.taskRunId ?? null}
+          taskId={taskId}
           isRunning={isRunning}
           isPromptPending={session?.isPromptPending}
           onSendPrompt={handleSendPrompt}

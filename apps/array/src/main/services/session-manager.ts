@@ -130,6 +130,7 @@ export interface SessionConfig {
   credentials: PostHogCredentials;
   logUrl?: string; // For reconnection from S3
   sdkSessionId?: string; // SDK session ID for resuming Claude Code context
+  model?: string;
 }
 
 export interface ManagedSession {
@@ -219,8 +220,15 @@ export class SessionManager {
     config: SessionConfig,
     isReconnect: boolean,
   ): Promise<ManagedSession | null> {
-    const { taskId, taskRunId, repoPath, credentials, logUrl, sdkSessionId } =
-      config;
+    const {
+      taskId,
+      taskRunId,
+      repoPath,
+      credentials,
+      logUrl,
+      sdkSessionId,
+      model,
+    } = config;
 
     const existing = this.sessions.get(taskRunId);
     if (existing) {
@@ -276,7 +284,7 @@ export class SessionManager {
         await connection.newSession({
           cwd: repoPath,
           mcpServers,
-          _meta: { sessionId: taskRunId },
+          _meta: { sessionId: taskRunId, model },
         });
       }
 
@@ -353,6 +361,24 @@ export class SessionManager {
 
   getSession(taskRunId: string): ManagedSession | undefined {
     return this.sessions.get(taskRunId);
+  }
+
+  async setSessionModel(taskRunId: string, modelId: string): Promise<void> {
+    const session = this.sessions.get(taskRunId);
+    if (!session) {
+      throw new Error(`Session not found: ${taskRunId}`);
+    }
+
+    try {
+      await session.connection.extMethod("session/setModel", {
+        sessionId: taskRunId,
+        modelId,
+      });
+      log.info("Session model updated", { taskRunId, modelId });
+    } catch (err) {
+      log.error("Failed to set session model", { taskRunId, modelId, err });
+      throw err;
+    }
   }
 
   listSessions(taskId?: string): ManagedSession[] {
@@ -507,6 +533,7 @@ interface AgentSessionParams {
   projectId: number;
   logUrl?: string;
   sdkSessionId?: string;
+  model?: string;
 }
 
 type SessionResponse = { sessionId: string; channel: string };
@@ -536,6 +563,7 @@ function toSessionConfig(params: AgentSessionParams): SessionConfig {
     },
     logUrl: params.logUrl,
     sdkSessionId: params.sdkSessionId,
+    model: params.model,
   };
 }
 
@@ -646,6 +674,17 @@ export function registerAgentIpc(
       newToken: string,
     ): Promise<void> => {
       sessionManager.updateSessionToken(taskRunId, newToken);
+    },
+  );
+
+  ipcMain.handle(
+    "agent-set-model",
+    async (
+      _event: IpcMainInvokeEvent,
+      sessionId: string,
+      modelId: string,
+    ): Promise<void> => {
+      await sessionManager.setSessionModel(sessionId, modelId);
     },
   );
 }

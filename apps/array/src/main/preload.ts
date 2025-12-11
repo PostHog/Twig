@@ -193,6 +193,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     newToken: string,
   ): Promise<void> =>
     ipcRenderer.invoke("agent-token-refresh", taskRunId, newToken),
+  agentSetModel: async (sessionId: string, modelId: string): Promise<void> =>
+    ipcRenderer.invoke("agent-set-model", sessionId, modelId),
   onAgentEvent: (
     channel: string,
     listener: (payload: unknown) => void,

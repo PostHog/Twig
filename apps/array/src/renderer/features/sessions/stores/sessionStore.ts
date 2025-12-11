@@ -3,6 +3,7 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { create } from "zustand";
@@ -125,6 +126,9 @@ interface SessionStore {
 
   // Cancel ongoing prompt without terminating session
   cancelPrompt: (taskId: string) => Promise<boolean>;
+
+  // Change model for active session
+  setSessionModel: (taskId: string, modelId: string) => Promise<void>;
 
   // Internal: subscribe to IPC events
   _subscribeToChannel: (
@@ -317,6 +321,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           return;
         }
 
+        const selectedModel = useSettingsStore.getState().selectedModel;
         const result = await window.electronAPI.agentStart({
           taskId,
           taskRunId: taskRun.id,
@@ -324,6 +329,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           apiKey,
           apiHost,
           projectId,
+          model: selectedModel,
         });
 
         set((state) => ({
@@ -487,6 +493,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     } catch (error) {
       log.error("Failed to cancel prompt", error);
       return false;
+    }
+  },
+
+  setSessionModel: async (taskId, modelId) => {
+    const session = get().getSessionForTask(taskId);
+    if (!session) {
+      log.warn("No session found for model change", { taskId });
+      return;
+    }
+
+    if (session.isCloud) {
+      log.warn("Model change not supported for cloud sessions");
+      return;
+    }
+
+    try {
+      await window.electronAPI.agentSetModel(session.taskRunId, modelId);
+      log.info("Session model changed", { taskId, modelId });
+    } catch (error) {
+      log.error("Failed to change session model", { taskId, modelId, error });
     }
   },
 
