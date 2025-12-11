@@ -416,7 +416,7 @@ export class SessionManager {
       process.env.LLM_GATEWAY_URL ||
       `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
     process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
-    
+
     // process.env.ELECTRON_RUN_AS_NODE = "1";
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
