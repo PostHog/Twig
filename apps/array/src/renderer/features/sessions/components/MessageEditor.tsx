@@ -3,7 +3,6 @@ import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { MentionItem } from "@shared/types";
-import { ModelSelector } from "./ModelSelector";
 import { Extension, type JSONContent } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
 import { Placeholder } from "@tiptap/extension-placeholder";
@@ -30,6 +29,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useMessageDraftStore } from "../stores/messageDraftStore";
+import { ModelSelector } from "./ModelSelector";
 
 const log = logger.scope("message-editor");
 
