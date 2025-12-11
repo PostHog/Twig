@@ -135,6 +135,8 @@ export type NewSessionMeta = {
      */
     options?: Options;
   };
+  /** Initial model to use for the session (e.g., 'claude-opus-4-5', 'gpt-5.1') */
+  model?: string;
 };
 
 /**
@@ -442,6 +444,20 @@ export class ClaudeAcpAgent implements Agent {
 
     const availableCommands = await getAvailableSlashCommands(q);
     const models = await getAvailableModels(q);
+
+    // Set initial model if provided via _meta (must be after getAvailableModels which resets to default)
+    const requestedModel = (params._meta as NewSessionMeta | undefined)?.model;
+    if (requestedModel) {
+      try {
+        await q.setModel(requestedModel);
+        this.logger.info("Set initial model", { model: requestedModel });
+      } catch (err) {
+        this.logger.warn("Failed to set initial model, using default", {
+          requestedModel,
+          error: err,
+        });
+      }
+    }
 
     // Needs to happen after we return the session
     setTimeout(() => {
@@ -919,6 +935,15 @@ export class ClaudeAcpAgent implements Agent {
   ): Promise<Record<string, unknown>> {
     if (method === "_posthog/session/resume") {
       await this.resumeSession(params as unknown as LoadSessionRequest);
+      return {};
+    }
+
+    if (method === "session/setModel") {
+      const { sessionId, modelId } = params as {
+        sessionId: string;
+        modelId: string;
+      };
+      await this.setSessionModel({ sessionId, modelId });
       return {};
     }
 

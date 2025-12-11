@@ -140,6 +140,7 @@ declare global {
       sdkSessionId?: string;
     }) => Promise<{ sessionId: string; channel: string } | null>;
     agentTokenRefresh: (taskRunId: string, newToken: string) => Promise<void>;
+    agentSetModel: (sessionId: string, modelId: string) => Promise<void>;
     onAgentEvent: (
       channel: string,
       listener: (event: unknown) => void,

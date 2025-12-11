@@ -29,6 +29,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useMessageDraftStore } from "../stores/messageDraftStore";
+import { ModelSelector } from "./ModelSelector";
 
 const log = logger.scope("message-editor");
 
@@ -174,6 +175,7 @@ export interface MessageEditorHandle {
 
 interface MessageEditorProps {
   sessionId: string;
+  taskId?: string;
   placeholder?: string;
   repoPath?: string | null;
   disabled?: boolean;
@@ -191,6 +193,7 @@ export const MessageEditor = forwardRef<
   (
     {
       sessionId,
+      taskId,
       placeholder = "Type a message... @ to mention files",
       repoPath,
       disabled = false,
@@ -449,26 +452,29 @@ export const MessageEditor = forwardRef<
           <EditorContent editor={editor} />
         </Box>
         <Flex justify="between" align="center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            style={{ display: "none" }}
-          />
-          <Tooltip content="Attach file">
-            <IconButton
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-              title="Attach file"
-              style={{ marginLeft: "0px" }}
-            >
-              <Paperclip size={14} weight="bold" />
-            </IconButton>
-          </Tooltip>
+          <Flex gap="2" align="center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <Tooltip content="Attach file">
+              <IconButton
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                title="Attach file"
+                style={{ marginLeft: "0px" }}
+              >
+                <Paperclip size={14} weight="bold" />
+              </IconButton>
+            </Tooltip>
+            <ModelSelector taskId={taskId} disabled={disabled} />
+          </Flex>
           <Flex gap="4" align="center">
             {isLoading && onCancel ? (
               <Tooltip content="Stop">
