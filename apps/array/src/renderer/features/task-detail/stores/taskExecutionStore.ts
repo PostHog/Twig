@@ -1,15 +1,10 @@
-import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { expandTildePath } from "@utils/path";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-const derivePath = (workspace: string, repo: string) =>
-  `${expandTildePath(workspace)}/${repo}`;
 
 interface TaskExecutionState {
   repoPath: string | null;
@@ -127,33 +122,7 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             .catch(() => {
               store.updateTaskState(taskId, { repoExists: false });
             });
-          return;
         }
-
-        if (!repository) {
-          return;
-        }
-
-        const { defaultWorkspace } = useAuthStore.getState();
-
-        if (!defaultWorkspace) {
-          return;
-        }
-
-        const path = derivePath(defaultWorkspace, repository.split("/")[1]);
-
-        void store.setRepoPath(taskId, path);
-
-        repositoryWorkspaceStore.getState().selectRepository(repository);
-
-        window.electronAPI
-          ?.validateRepo(path)
-          .then((exists) => {
-            store.updateTaskState(taskId, { repoExists: exists });
-          })
-          .catch(() => {
-            store.updateTaskState(taskId, { repoExists: false });
-          });
       },
 
       revalidateRepo: async (taskId: string) => {
