@@ -305,6 +305,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
     hasRemote: boolean;
     currentBranch: string | null;
   }> => ipcRenderer.invoke("get-git-sync-status", repoPath),
+  getLatestCommit: (
+    repoPath: string,
+  ): Promise<{
+    sha: string;
+    shortSha: string;
+    message: string;
+    author: string;
+    date: string;
+  } | null> => ipcRenderer.invoke("get-latest-commit", repoPath),
+  getGitRepoInfo: (
+    repoPath: string,
+  ): Promise<{
+    organization: string;
+    repository: string;
+    currentBranch: string | null;
+    defaultBranch: string;
+    compareUrl: string | null;
+  } | null> => ipcRenderer.invoke("get-git-repo-info", repoPath),
   listDirectory: (
     dirPath: string,
   ): Promise<

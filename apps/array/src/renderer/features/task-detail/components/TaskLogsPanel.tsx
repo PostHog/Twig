@@ -105,6 +105,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           onSendPrompt={handleSendPrompt}
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}
+          isCloud={session?.isCloud ?? false}
         />
       </Box>
     </BackgroundWrapper>

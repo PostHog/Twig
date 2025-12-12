@@ -61,10 +61,15 @@ export function GitActionsBar({
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const session = useSessionStore((state) => state.getSessionForTask(taskId));
 
+  const isCloud = session?.isCloud ?? false;
+
   const { smartAction, ahead, behind, hasRemote, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
+    enabled: !isCloud,
   });
+
+  const effectiveAction: SmartGitAction = isCloud ? "commit-push" : smartAction;
 
   const handleAction = useCallback(
     async (actionType: GitActionType, prompt: string) => {
@@ -83,42 +88,39 @@ export function GitActionsBar({
   );
 
   const handlePrimaryAction = useCallback(() => {
-    if (!smartAction) return;
-    handleAction(smartAction, GIT_ACTION_PROMPTS[smartAction]);
-  }, [smartAction, handleAction]);
+    if (!effectiveAction) return;
+    handleAction(effectiveAction, GIT_ACTION_PROMPTS[effectiveAction]);
+  }, [effectiveAction, handleAction]);
 
-  // Don't show if no session is active
   if (!session) {
     return null;
   }
 
-  // Don't show until we've fetched git status at least once
-  if (!isFetched) {
+  if (!isCloud && !isFetched) {
     return null;
   }
 
-  // Don't show if no action is needed (everything is up to date)
-  if (!smartAction) {
+  if (!isCloud && !smartAction) {
     return null;
   }
 
-  // Build status text
   const statusParts: string[] = [];
-  if (ahead > 0) {
-    statusParts.push(`${ahead} ahead`);
-  }
-  if (behind > 0) {
-    statusParts.push(`${behind} behind`);
+  if (!isCloud) {
+    if (ahead > 0) {
+      statusParts.push(`${ahead} ahead`);
+    }
+    if (behind > 0) {
+      statusParts.push(`${behind} behind`);
+    }
   }
   const statusText = statusParts.length > 0 ? statusParts.join(", ") : null;
 
-  const isDisabled = isSending || !smartAction;
-  const buttonLabel = GIT_ACTION_LABELS[smartAction];
+  const isDisabled = isSending || !effectiveAction;
+  const buttonLabel = effectiveAction ? GIT_ACTION_LABELS[effectiveAction] : "";
 
-  // Get dropdown actions (all actions except current smart action)
   const dropdownActions = (
     Object.keys(GIT_ACTION_LABELS) as Exclude<SmartGitAction, null>[]
-  ).filter((action) => action !== smartAction);
+  ).filter((action) => action !== effectiveAction);
 
   return (
     <Box
@@ -133,17 +135,14 @@ export function GitActionsBar({
       }}
     >
       <Flex align="center" gap="2" justify="between">
-        {/* Status indicator */}
         {statusText && (
           <Text size="1" color="gray" style={{ flexShrink: 0 }}>
             {statusText}
           </Text>
         )}
 
-        {/* Spacer */}
         <Box style={{ flex: 1 }} />
 
-        {/* Primary action button with dropdown */}
         <Flex align="center" gap="0">
           <Button
             size="1"
@@ -158,7 +157,7 @@ export function GitActionsBar({
             {isSending ? (
               <Spinner size="1" />
             ) : (
-              smartAction && getActionIcon(smartAction)
+              effectiveAction && getActionIcon(effectiveAction)
             )}
             {buttonLabel}
           </Button>
@@ -182,7 +181,6 @@ export function GitActionsBar({
             </DropdownMenu.Trigger>
 
             <DropdownMenu.Content size="1" align="end">
-              {/* Other git actions */}
               {dropdownActions.map((action) => (
                 <DropdownMenu.Item
                   key={action}
@@ -197,8 +195,7 @@ export function GitActionsBar({
                 </DropdownMenu.Item>
               ))}
 
-              {/* Create PR option - only if branch has a remote */}
-              {hasRemote && (
+              {(isCloud || hasRemote) && (
                 <>
                   <DropdownMenu.Separator />
                   <DropdownMenu.Item

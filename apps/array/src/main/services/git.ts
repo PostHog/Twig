@@ -390,6 +390,70 @@ export interface GitSyncStatus {
   currentBranch: string | null;
 }
 
+export interface GitCommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface GitRepoInfo {
+  organization: string;
+  repository: string;
+  currentBranch: string | null;
+  defaultBranch: string;
+  compareUrl: string | null;
+}
+
+const getLatestCommit = async (
+  directoryPath: string,
+): Promise<GitCommitInfo | null> => {
+  try {
+    const { stdout } = await execAsync(
+      'git log -1 --format="%H|%h|%s|%an|%aI"',
+      { cwd: directoryPath },
+    );
+
+    const [sha, shortSha, message, author, date] = stdout.trim().split("|");
+    if (!sha) return null;
+
+    return { sha, shortSha, message, author, date };
+  } catch {
+    return null;
+  }
+};
+
+const getGitRepoInfo = async (
+  directoryPath: string,
+): Promise<GitRepoInfo | null> => {
+  try {
+    const remoteUrl = await getRemoteUrl(directoryPath);
+    if (!remoteUrl) return null;
+
+    const parsed = parseGitHubUrl(remoteUrl);
+    if (!parsed) return null;
+
+    const currentBranch = await getCurrentBranch(directoryPath);
+    const defaultBranch = await getDefaultBranch(directoryPath);
+
+    let compareUrl: string | null = null;
+    if (currentBranch && currentBranch !== defaultBranch) {
+      compareUrl = `https://github.com/${parsed.organization}/${parsed.repository}/compare/${defaultBranch}...${currentBranch}?expand=1`;
+    }
+
+    return {
+      organization: parsed.organization,
+      repository: parsed.repository,
+      currentBranch: currentBranch ?? null,
+      defaultBranch,
+      compareUrl,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const getGitSyncStatus = async (
   directoryPath: string,
 ): Promise<GitSyncStatus> => {
@@ -399,7 +463,6 @@ const getGitSyncStatus = async (
       return { ahead: 0, behind: 0, hasRemote: false, currentBranch: null };
     }
 
-    // Check if the branch has a remote tracking branch
     try {
       const { stdout: upstream } = await execAsync(
         `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
@@ -410,7 +473,6 @@ const getGitSyncStatus = async (
         return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
       }
 
-      // Get ahead/behind counts
       const { stdout: revList } = await execAsync(
         `git rev-list --left-right --count ${currentBranch}...${upstream.trim()}`,
         { cwd: directoryPath },
@@ -425,7 +487,6 @@ const getGitSyncStatus = async (
         currentBranch,
       };
     } catch {
-      // No upstream branch configured
       return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
     }
   } catch (error) {
@@ -916,6 +977,26 @@ export function registerGitIpc(
       directoryPath: string,
     ): Promise<GitSyncStatus> => {
       return getGitSyncStatus(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-latest-commit",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitCommitInfo | null> => {
+      return getLatestCommit(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-git-repo-info",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitRepoInfo | null> => {
+      return getGitRepoInfo(directoryPath);
     },
   );
 }

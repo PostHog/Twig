@@ -22,6 +22,7 @@ export interface GitStatus {
 interface GitStatusOptions {
   repoPath: string | null;
   hasChanges: boolean;
+  enabled?: boolean;
 }
 
 function determineSmartAction(
@@ -31,7 +32,6 @@ function determineSmartAction(
   hasRemote: boolean,
   isFetched: boolean,
 ): SmartGitAction {
-  // Don't show any action until we have fetched data at least once
   if (!isFetched) {
     return null;
   }
@@ -69,6 +69,7 @@ function determineSmartAction(
 export function useGitStatus({
   repoPath,
   hasChanges,
+  enabled = true,
 }: GitStatusOptions): GitStatus {
   const {
     data: syncStatus,
@@ -77,16 +78,16 @@ export function useGitStatus({
   } = useQuery({
     queryKey: ["git-sync-status", repoPath],
     queryFn: () => window.electronAPI.getGitSyncStatus(repoPath as string),
-    enabled: !!repoPath,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 30000, // Refresh every 30 seconds (less frequent)
-    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid flicker
-    placeholderData: keepPreviousData, // Keep previous data while refetching
+    enabled: enabled && !!repoPath,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   const ahead = syncStatus?.ahead ?? 0;
   const behind = syncStatus?.behind ?? 0;
-  const hasRemote = syncStatus?.hasRemote ?? true; // Default to true to avoid "Publish" flash
+  const hasRemote = syncStatus?.hasRemote ?? true;
   const currentBranch = syncStatus?.currentBranch ?? null;
 
   const smartAction = determineSmartAction(
@@ -109,7 +110,6 @@ export function useGitStatus({
   };
 }
 
-// Prompt templates for each action
 export const GIT_ACTION_PROMPTS: Record<
   Exclude<SmartGitAction, null>,
   string
@@ -123,7 +123,6 @@ export const GIT_ACTION_PROMPTS: Record<
   sync: "Pull the latest changes from origin, then push local commits to sync with the remote.",
 };
 
-// Labels for each action
 export const GIT_ACTION_LABELS: Record<
   Exclude<SmartGitAction, null>,
   string

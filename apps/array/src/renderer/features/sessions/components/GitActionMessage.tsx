@@ -15,7 +15,6 @@ export type GitActionType =
   | "sync"
   | "create-pr";
 
-// Marker format: <!-- GIT_ACTION:action-type -->
 export const GIT_ACTION_MARKER_PREFIX = "<!-- GIT_ACTION:";
 export const GIT_ACTION_MARKER_SUFFIX = " -->";
 

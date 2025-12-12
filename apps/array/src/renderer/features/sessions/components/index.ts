@@ -7,7 +7,7 @@ export {
   type GitActionType,
   parseGitActionMessage,
 } from "./GitActionMessage";
-export { GitActionResult, parseGitResults } from "./GitActionResult";
+export { GitActionResult } from "./GitActionResult";
 export { MessageEditor, type MessageEditorHandle } from "./MessageEditor";
 export { SessionView } from "./SessionView";
 export { ToolCallBlock } from "./ToolCallBlock";
