@@ -1,47 +1,25 @@
+import type { ToolCall } from "@agentclientprotocol/sdk";
 import { CaretRight } from "@phosphor-icons/react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useState } from "react";
-import { AgentMessage } from "./AgentMessage";
-import { ToolCallBlock } from "./ToolCallBlock";
 
-interface ToolData {
-  toolName: string;
-  toolCallId: string;
-  status: "pending" | "running" | "completed" | "error";
-  args?: Record<string, unknown>;
-  result?: unknown;
-}
-
-interface ParsedMessage {
-  id: string;
-  type: "user" | "agent" | "tool" | "console";
-  content: string;
-  toolData?: ToolData;
-}
+import {
+  type RenderItem,
+  SessionUpdateView,
+} from "./session-update/SessionUpdateView";
 
 interface TurnCollapsibleProps {
-  messages: ParsedMessage[];
+  items: RenderItem[];
+  toolCalls?: Map<string, ToolCall>;
 }
 
-export function TurnCollapsible({ messages }: TurnCollapsibleProps) {
+export function TurnCollapsible({ items, toolCalls }: TurnCollapsibleProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const agentMessageCount = messages.filter((m) => m.type === "agent").length;
-  const toolCallCount = messages.filter((m) => m.type === "tool").length;
+  if (items.length === 0) return null;
 
-  const parts: string[] = [];
-  if (agentMessageCount > 0) {
-    parts.push(
-      `${agentMessageCount} message${agentMessageCount > 1 ? "s" : ""}`,
-    );
-  }
-  if (toolCallCount > 0) {
-    parts.push(`${toolCallCount} tool call${toolCallCount > 1 ? "s" : ""}`);
-  }
-  const summary = parts.join(", ");
-
-  if (messages.length === 0) return null;
+  const summary = buildSummary(items);
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
@@ -63,28 +41,41 @@ export function TurnCollapsible({ messages }: TurnCollapsibleProps) {
 
       <Collapsible.Content>
         <Box className="mt-2 flex flex-col gap-2 border-gray-6 border-l pl-4">
-          {messages.map((message) => {
-            switch (message.type) {
-              case "agent":
-                return (
-                  <AgentMessage key={message.id} content={message.content} />
-                );
-              case "tool":
-                return message.toolData ? (
-                  <ToolCallBlock
-                    key={message.id}
-                    toolName={message.toolData.toolName}
-                    status={message.toolData.status}
-                    args={message.toolData.args}
-                    result={message.toolData.result}
-                  />
-                ) : null;
-              default:
-                return null;
-            }
-          })}
+          {items.map((item, i) =>
+            item.sessionUpdate === "console" ? null : (
+              <SessionUpdateView
+                key={`${item.sessionUpdate}-${i}`}
+                item={item}
+                toolCalls={toolCalls}
+              />
+            ),
+          )}
         </Box>
       </Collapsible.Content>
     </Collapsible.Root>
   );
+}
+
+function buildSummary(items: RenderItem[]): string {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    counts[item.sessionUpdate] = (counts[item.sessionUpdate] || 0) + 1;
+  }
+
+  const parts: string[] = [];
+  const messageCount =
+    (counts.agent_message_chunk || 0) + (counts.agent_thought_chunk || 0);
+  if (messageCount > 0) {
+    parts.push(`${messageCount} message${messageCount > 1 ? "s" : ""}`);
+  }
+  if (counts.tool_call) {
+    parts.push(
+      `${counts.tool_call} tool call${counts.tool_call > 1 ? "s" : ""}`,
+    );
+  }
+  if (counts.plan) {
+    parts.push(`${counts.plan} plan${counts.plan > 1 ? "s" : ""}`);
+  }
+
+  return parts.join(", ") || "collapsed content";
 }

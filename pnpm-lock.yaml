@@ -14,6 +14,9 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      knip:
+        specifier: ^5.66.3
+        version: 5.70.1(@types/node@22.19.1)(typescript@5.9.3)
       lint-staged:
         specifier: ^15.5.2
         version: 15.5.2
@@ -26,6 +29,9 @@ importers:
 
   apps/array:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: ^0.9.0
+        version: 0.9.0(zod@4.1.12)
       '@ai-sdk/openai':
         specifier: ^2.0.52
         version: 2.0.71(zod@4.1.12)
@@ -259,7 +265,7 @@ importers:
         version: 4.1.12
       zustand:
         specifier: ^4.5.0
-        version: 4.5.7(@types/react@18.3.27)(react@18.3.1)
+        version: 4.5.7(@types/react@18.3.27)(immer@11.0.1)(react@18.3.1)
     devDependencies:
       '@biomejs/biome':
         specifier: 2.2.4
@@ -321,12 +327,12 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      immer:
+        specifier: ^11.0.1
+        version: 11.0.1
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0
-      knip:
-        specifier: ^5.66.3
-        version: 5.70.1(@types/node@20.19.25)(typescript@5.9.3)
       lint-staged:
         specifier: ^15.5.2
         version: 15.5.2
@@ -414,6 +420,11 @@ packages:
 
   '@agentclientprotocol/sdk@0.5.1':
     resolution: {integrity: sha512-9bq2TgjhLBSUSC5jE04MEe+Hqw8YePzKghhYZ9QcjOyonY3q2oJfX6GoSO83hURpEnsqEPIrex6VZN3+61fBJg==}
+
+  '@agentclientprotocol/sdk@0.9.0':
+    resolution: {integrity: sha512-JoLjIYS+lfxKXnSBRDCQDzY19gGp6DYcYojMXHNC430b3R32CUOXCMZjndI+yz8QDFY87Dx+S76oLAZ99X+W5w==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@ai-sdk/gateway@2.0.13':
     resolution: {integrity: sha512-q8M+7+VEKp91I295cjNDgQ4LyGImKj5cDLVARDay7nBTXGjIRZOlthYE7K6Rbz2yHKFyTmKH7MMkYavAM7L/UQ==}
@@ -4604,6 +4615,9 @@ packages:
     engines: {node: '>=6.9.0'}
     hasBin: true
 
+  immer@11.0.1:
+    resolution: {integrity: sha512-naDCyggtcBWANtIrjQEajhhBEuL9b0Zg4zmlWK2CzS6xCWSE39/vvf4LqnMjUAWHBhot4m9MHCM/Z+mfWhUkiA==}
+
   imul@1.0.1:
     resolution: {integrity: sha512-WFAgfwPLAjU66EKt6vRdTlKj4nAgIDQzh29JonLa4Bqtl6D8JrIMvWjCnx7xEjVNmP3U0fM5o8ZObk7d0f62bA==}
     engines: {node: '>=0.10.0'}
@@ -7037,6 +7051,10 @@ snapshots:
   '@agentclientprotocol/sdk@0.5.1':
     dependencies:
       zod: 3.25.76
+
+  '@agentclientprotocol/sdk@0.9.0(zod@4.1.12)':
+    dependencies:
+      zod: 4.1.12
 
   '@ai-sdk/gateway@2.0.13(zod@4.1.12)':
     dependencies:
@@ -11749,6 +11767,8 @@ snapshots:
   image-size@0.7.5:
     optional: true
 
+  immer@11.0.1: {}
+
   imul@1.0.1:
     optional: true
 
@@ -11952,10 +11972,10 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  knip@5.70.1(@types/node@20.19.25)(typescript@5.9.3):
+  knip@5.70.1(@types/node@22.19.1)(typescript@5.9.3):
     dependencies:
       '@nodelib/fs.walk': 1.2.8
-      '@types/node': 20.19.25
+      '@types/node': 22.19.1
       fast-glob: 3.3.3
       formatly: 0.3.0
       jiti: 2.6.1
@@ -14463,11 +14483,12 @@ snapshots:
 
   zod@4.1.12: {}
 
-  zustand@4.5.7(@types/react@18.3.27)(react@18.3.1):
+  zustand@4.5.7(@types/react@18.3.27)(immer@11.0.1)(react@18.3.1):
     dependencies:
       use-sync-external-store: 1.6.0(react@18.3.1)
     optionalDependencies:
       '@types/react': 18.3.27
+      immer: 11.0.1
       react: 18.3.1
 
   zwitch@2.0.4: {}

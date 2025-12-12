@@ -18,24 +18,18 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
+import type { AcpMessage } from "../../shared/types/session-events";
 import { logger } from "../lib/logger";
 
 const log = logger.scope("session-manager");
 
-type MessageCallback = (
-  message: unknown,
-  direction: "client" | "agent",
-) => void;
-type MessageDirection = "client" | "agent";
+type MessageCallback = (message: unknown) => void;
 
 class NdJsonTap {
   private decoder = new TextDecoder();
   private buffer = "";
 
-  constructor(
-    private onMessage: MessageCallback,
-    private direction: MessageDirection,
-  ) {}
+  constructor(private onMessage: MessageCallback) {}
 
   process(chunk: Uint8Array): void {
     this.buffer += this.decoder.decode(chunk, { stream: true });
@@ -45,7 +39,7 @@ class NdJsonTap {
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        this.onMessage(JSON.parse(line), this.direction);
+        this.onMessage(JSON.parse(line));
       } catch {
         // Not valid JSON, skip
       }
@@ -56,10 +50,9 @@ class NdJsonTap {
 function createTappedReadableStream(
   underlying: ReadableStream<Uint8Array>,
   onMessage: MessageCallback,
-  direction: MessageDirection,
 ): ReadableStream<Uint8Array> {
   const reader = underlying.getReader();
-  const tap = new NdJsonTap(onMessage, direction);
+  const tap = new NdJsonTap(onMessage);
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -77,9 +70,8 @@ function createTappedReadableStream(
 function createTappedWritableStream(
   underlying: WritableStream<Uint8Array>,
   onMessage: MessageCallback,
-  direction: MessageDirection,
 ): WritableStream<Uint8Array> {
-  const tap = new NdJsonTap(onMessage, direction);
+  const tap = new NdJsonTap(onMessage);
 
   return new WritableStream<Uint8Array>({
     async write(chunk) {
@@ -471,30 +463,31 @@ export class SessionManager {
       }
     };
 
-    // Emit all raw ACP messages (bidirectional) to the renderer
-    const onAcpMessage = (message: unknown, direction: "client" | "agent") => {
-      emitToRenderer({
+    // Emit all raw ACP messages to the renderer
+    const onAcpMessage = (message: unknown) => {
+      const acpMessage: AcpMessage = {
         type: "acp_message",
-        direction,
         ts: Date.now(),
-        message,
-      });
+        message: message as AcpMessage["message"],
+      };
+      emitToRenderer(acpMessage);
     };
 
-    // Tap both streams to capture all messages bidirectionally
+    // Tap both streams to capture all messages
     const tappedReadable = createTappedReadableStream(
       clientStreams.readable as ReadableStream<Uint8Array>,
       onAcpMessage,
-      "agent",
     );
 
     const tappedWritable = createTappedWritableStream(
       clientStreams.writable as WritableStream<Uint8Array>,
       onAcpMessage,
-      "client",
     );
 
     // Create Client implementation that forwards to renderer
+    // Note: sessionUpdate is NOT implemented here because session/update
+    // notifications are already captured by the stream tap and forwarded
+    // as acp_message events. This avoids duplicate events.
     const client: Client = {
       async requestPermission(
         params: RequestPermissionRequest,
@@ -511,12 +504,9 @@ export class SessionManager {
         };
       },
 
-      async sessionUpdate(params: SessionNotification): Promise<void> {
-        emitToRenderer({
-          type: "session_update",
-          ts: Date.now(),
-          notification: params,
-        });
+      async sessionUpdate(_params: SessionNotification): Promise<void> {
+        // No-op: session/update notifications are captured by the stream tap
+        // and forwarded as acp_message events to avoid duplication
       },
     };
 

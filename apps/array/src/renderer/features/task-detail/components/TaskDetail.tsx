@@ -1,5 +1,5 @@
 import { PanelLayout } from "@features/panels";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
@@ -30,9 +30,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   useFileWatcher(effectiveRepoPath, taskData.task.id);
 
-  const session = useSessionStore((state) =>
-    state.getSessionForTask(taskData.task.id),
-  );
+  const session = useSessionForTask(taskData.task.id);
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
 

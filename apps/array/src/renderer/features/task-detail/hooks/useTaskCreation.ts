@@ -5,7 +5,7 @@ import {
   extractFileMentions,
   tiptapToMarkdown,
 } from "@features/editor/utils/tiptap-converter";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
@@ -39,11 +39,7 @@ async function startAgentSession(
   repoPath: string,
   initialPrompt?: ContentBlock[],
 ): Promise<void> {
-  await useSessionStore.getState().connectToTask({
-    task,
-    repoPath,
-    initialPrompt,
-  });
+  await getSessionActions().connectToTask({ task, repoPath, initialPrompt });
 }
 
 export function useTaskCreation({

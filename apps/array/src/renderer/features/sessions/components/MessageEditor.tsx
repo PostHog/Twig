@@ -28,7 +28,11 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { useMessageDraftStore } from "../stores/messageDraftStore";
+import {
+  useDraft,
+  useDraftActions,
+  useHasHydrated,
+} from "../stores/messageDraftStore";
 import { ModelSelector } from "./ModelSelector";
 
 const log = logger.scope("message-editor");
@@ -206,8 +210,9 @@ export const MessageEditor = forwardRef<
     ref,
   ) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { getDraft, setDraft, clearDraft, _hasHydrated } =
-      useMessageDraftStore();
+    const draft = useDraft(sessionId);
+    const hasHydrated = useHasHydrated();
+    const { setDraft } = useDraftActions();
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -263,7 +268,7 @@ export const MessageEditor = forwardRef<
       const text = editor.getText();
       onSubmitRef.current?.(text);
       editor.commands.clearContent();
-      clearDraft(sessionId);
+      setDraft(sessionId, null);
     };
 
     const [isEmpty, setIsEmpty] = useState(true);
@@ -392,7 +397,7 @@ export const MessageEditor = forwardRef<
           } as Partial<SuggestionOptions>,
         }),
       ],
-      content: getDraft(sessionId) ?? "",
+      content: draft ?? "",
       editorProps: {
         attributes: {
           class: "cli-editor outline-none",
@@ -413,17 +418,16 @@ export const MessageEditor = forwardRef<
     }, [editor, disabled]);
 
     // Load draft after store hydration
-    const hasLoadedDraft = useRef(false);
+    const loadedForSession = useRef<string | null>(null);
     useEffect(() => {
-      if (_hasHydrated && editor && !hasLoadedDraft.current) {
-        const draft = getDraft(sessionId);
+      if (hasHydrated && editor && loadedForSession.current !== sessionId) {
         if (draft) {
           editor.commands.setContent(draft);
           setIsEmpty(editor.isEmpty);
         }
-        hasLoadedDraft.current = true;
+        loadedForSession.current = sessionId;
       }
-    }, [_hasHydrated, editor, sessionId, getDraft]);
+    }, [hasHydrated, editor, draft, sessionId]);
 
     useImperativeHandle(ref, () => ({
       focus: () => editor?.commands.focus(),
