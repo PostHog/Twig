@@ -1,7 +1,7 @@
 import { Command } from "@features/command/components/Command";
 import { CommandKeyHints } from "@features/command/components/CommandKeyHints";
 import { useTasks } from "@features/tasks/hooks/useTasks";
-import { FileTextIcon, ListBulletIcon } from "@radix-ui/react-icons";
+import { FileTextIcon } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -14,8 +14,7 @@ interface CommandMenuProps {
 }
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
-  const { navigateToTaskList, navigateToTask, navigateToTaskInput } =
-    useNavigationStore();
+  const { navigateToTask, navigateToTaskInput } = useNavigationStore();
   const { data: tasks = [] } = useTasks();
   const commandRef = useRef<HTMLDivElement>(null);
 
@@ -64,11 +63,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     };
   }, [open, onOpenChange]);
 
-  const handleNavigateToTasks = () => {
-    navigateToTaskList();
-    onOpenChange(false);
-  };
-
   const handleCreateTask = () => {
     navigateToTaskInput();
     onOpenChange(false);
@@ -109,16 +103,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               <Command.Item value="Create new task" onSelect={handleCreateTask}>
                 <FileTextIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Create new task</Text>
-              </Command.Item>
-            </Command.Group>
-
-            <Command.Group heading="Navigation">
-              <Command.Item
-                value="Go to tasks"
-                onSelect={handleNavigateToTasks}
-              >
-                <ListBulletIcon className="mr-3 h-3 w-3 text-gray-11" />
-                <Text size="1">Go to tasks</Text>
               </Command.Item>
             </Command.Group>
 

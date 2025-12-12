@@ -107,32 +107,6 @@ describe("panelLayoutStore", () => {
     });
   });
 
-  describe("openArtifact", () => {
-    beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
-    });
-
-    it("adds artifact tab to main panel", () => {
-      usePanelLayoutStore.getState().openArtifact("task-1", "plan.md");
-
-      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
-      const artifactTab = panel?.content.tabs.find((t: { id: string }) =>
-        t.id.startsWith("artifact-"),
-      );
-      expect(artifactTab?.id).toBe("artifact-plan.md");
-    });
-
-    it("tracks open artifacts in metadata", () => {
-      usePanelLayoutStore.getState().openArtifact("task-1", "plan.md");
-      usePanelLayoutStore.getState().openArtifact("task-1", "notes.md");
-
-      const layout = getLayout("task-1");
-      expect(layout.openArtifacts).toContain("plan.md");
-      expect(layout.openArtifacts).toContain("notes.md");
-      expect(layout.openArtifacts).toHaveLength(2);
-    });
-  });
-
   describe("closeTab", () => {
     beforeEach(() => {
       usePanelLayoutStore.getState().initializeTask("task-1");

@@ -34,10 +34,6 @@ export type TabData =
       scriptType: "init" | "start";
     }
   | {
-      type: "artifact";
-      artifactId: string;
-    }
-  | {
       type: "logs";
     }
   | {

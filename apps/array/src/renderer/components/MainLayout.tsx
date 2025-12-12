@@ -13,25 +13,17 @@ import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
-import { TaskList } from "@features/task-list/components/TaskList";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
-import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
 
 export function MainLayout() {
-  const {
-    view,
-    toggleSettings,
-    navigateToTask,
-    navigateToTaskInput,
-    goBack,
-    goForward,
-  } = useNavigationStore();
+  const { view, toggleSettings, navigateToTaskInput, goBack, goForward } =
+    useNavigationStore();
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
@@ -120,10 +112,6 @@ export function MainLayout() {
     };
   }, [goBack, goForward]);
 
-  const handleSelectTask = (task: Task) => {
-    navigateToTask(task);
-  };
-
   return (
     <Flex direction="column" height="100vh">
       <HeaderRow />
@@ -131,10 +119,6 @@ export function MainLayout() {
         <MainSidebar />
 
         <Box flexGrow="1" overflow="hidden">
-          {view.type === "task-list" && (
-            <TaskList onSelectTask={handleSelectTask} />
-          )}
-
           {view.type === "task-input" && <TaskInput />}
 
           {view.type === "task-detail" && view.data && (

@@ -7,7 +7,7 @@ import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
 export const DEFAULT_FALLBACK_TAB = DEFAULT_TAB_IDS.LOGS;
 
 // Tab ID utilities
-export type TabType = "file" | "artifact" | "diff" | "system";
+export type TabType = "file" | "diff" | "system";
 
 export interface ParsedTabId {
   type: TabType;
@@ -16,10 +16,6 @@ export interface ParsedTabId {
 
 export function createFileTabId(filePath: string): string {
   return `file-${filePath}`;
-}
-
-export function createArtifactTabId(fileName: string): string {
-  return `artifact-${fileName}`;
 }
 
 export function createDiffTabId(filePath: string, status?: string): string {
@@ -43,9 +39,6 @@ export function getDiffTabIdsForFile(filePath: string): string[] {
 export function parseTabId(tabId: string): ParsedTabId & { status?: string } {
   if (tabId.startsWith("file-")) {
     return { type: "file", value: tabId.slice(5) };
-  }
-  if (tabId.startsWith("artifact-")) {
-    return { type: "artifact", value: tabId.slice(9) };
   }
   if (tabId.startsWith("diff-")) {
     const rest = tabId.slice(5);
@@ -184,12 +177,6 @@ export function createNewTab(
         status: (parsed.status || "modified") as GitFileStatus,
       };
       break;
-    case "artifact":
-      data = {
-        type: "artifact",
-        artifactId: parsed.value,
-      };
-      break;
     case "system":
       if (tabId === "logs") {
         data = { type: "logs" };
@@ -282,7 +269,7 @@ export function updateMetadataForTab(
   layout: TaskLayout,
   tabId: string,
   action: "add" | "remove",
-): Pick<TaskLayout, "openFiles" | "openArtifacts"> {
+): Pick<TaskLayout, "openFiles"> {
   const parsed = parseTabId(tabId);
 
   if (parsed.type === "file") {
@@ -290,18 +277,10 @@ export function updateMetadataForTab(
       action === "add"
         ? [...layout.openFiles, parsed.value]
         : layout.openFiles.filter((f) => f !== parsed.value);
-    return { openFiles, openArtifacts: layout.openArtifacts };
+    return { openFiles };
   }
 
-  if (parsed.type === "artifact") {
-    const openArtifacts =
-      action === "add"
-        ? [...layout.openArtifacts, parsed.value]
-        : layout.openArtifacts.filter((f) => f !== parsed.value);
-    return { openFiles: layout.openFiles, openArtifacts };
-  }
-
-  return { openFiles: layout.openFiles, openArtifacts: layout.openArtifacts };
+  return { openFiles: layout.openFiles };
 }
 
 // Cleanup utilities
