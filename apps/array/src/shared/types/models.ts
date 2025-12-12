@@ -33,7 +33,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     provider: "anthropic",
     enabled: true,
   },
-  { id: "gpt-5.1", name: "GPT 5.1", provider: "openai", enabled: true },
+  { id: "gpt-5.2", name: "GPT 5.2", provider: "openai", enabled: true },
   {
     id: "gpt-5.1-codex-max",
     name: "GPT 5.1 Codex Max",
