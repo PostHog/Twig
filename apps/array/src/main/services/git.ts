@@ -383,6 +383,57 @@ export interface DiffStats {
   linesRemoved: number;
 }
 
+export interface GitSyncStatus {
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  currentBranch: string | null;
+}
+
+const getGitSyncStatus = async (
+  directoryPath: string,
+): Promise<GitSyncStatus> => {
+  try {
+    const currentBranch = await getCurrentBranch(directoryPath);
+    if (!currentBranch) {
+      return { ahead: 0, behind: 0, hasRemote: false, currentBranch: null };
+    }
+
+    // Check if the branch has a remote tracking branch
+    try {
+      const { stdout: upstream } = await execAsync(
+        `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
+        { cwd: directoryPath },
+      );
+
+      if (!upstream.trim()) {
+        return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
+      }
+
+      // Get ahead/behind counts
+      const { stdout: revList } = await execAsync(
+        `git rev-list --left-right --count ${currentBranch}...${upstream.trim()}`,
+        { cwd: directoryPath },
+      );
+
+      const [ahead, behind] = revList.trim().split("\t").map(Number);
+
+      return {
+        ahead: ahead || 0,
+        behind: behind || 0,
+        hasRemote: true,
+        currentBranch,
+      };
+    } catch {
+      // No upstream branch configured
+      return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
+    }
+  } catch (error) {
+    log.error("Error getting git sync status:", error);
+    return { ahead: 0, behind: 0, hasRemote: false, currentBranch: null };
+  }
+};
+
 const discardFileChanges = async (
   directoryPath: string,
   filePath: string,
@@ -855,6 +906,16 @@ export function registerGitIpc(
       fileStatus: GitFileStatus,
     ): Promise<void> => {
       return discardFileChanges(directoryPath, filePath, fileStatus);
+    },
+  );
+
+  ipcMain.handle(
+    "get-git-sync-status",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitSyncStatus> => {
+      return getGitSyncStatus(directoryPath);
     },
   );
 }

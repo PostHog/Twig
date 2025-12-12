@@ -297,6 +297,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     fileStatus: string,
   ): Promise<void> =>
     ipcRenderer.invoke("discard-file-changes", repoPath, filePath, fileStatus),
+  getGitSyncStatus: (
+    repoPath: string,
+  ): Promise<{
+    ahead: number;
+    behind: number;
+    hasRemote: boolean;
+    currentBranch: string | null;
+  }> => ipcRenderer.invoke("get-git-sync-status", repoPath),
   listDirectory: (
     dirPath: string,
   ): Promise<
