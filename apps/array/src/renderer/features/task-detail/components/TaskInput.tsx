@@ -148,6 +148,7 @@ export function TaskInput() {
               value={selectedBranch}
               onChange={setSelectedBranch}
               directoryPath={selectedDirectory}
+              runMode={runMode}
             />
           )}
         </Flex>
