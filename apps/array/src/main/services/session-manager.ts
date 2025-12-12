@@ -409,8 +409,6 @@ export class SessionManager {
     const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
     process.env.PATH = newPath;
     process.env.POSTHOG_AUTH_HEADER = `Bearer ${credentials.apiKey}`;
-    process.env.ANTHROPIC_API_KEY = credentials.apiKey;
-    process.env.ANTHROPIC_AUTH_TOKEN = credentials.apiKey;
 
     const llmGatewayUrl =
       process.env.LLM_GATEWAY_URL ||
