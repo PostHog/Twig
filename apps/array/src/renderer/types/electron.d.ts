@@ -292,12 +292,6 @@ declare global {
         }) => void,
       ) => () => void;
     };
-    settings: {
-      getWorktreeLocation: () => Promise<string>;
-      setWorktreeLocation: (location: string) => Promise<void>;
-      getTerminalLayout: () => Promise<"split" | "tabbed">;
-      setTerminalLayout: (mode: "split" | "tabbed") => Promise<void>;
-    };
     dockBadge: {
       show: () => Promise<void>;
     };

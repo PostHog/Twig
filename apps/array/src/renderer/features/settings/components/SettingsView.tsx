@@ -26,6 +26,7 @@ import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { trpcVanilla } from "@/renderer/trpc";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -69,7 +70,8 @@ export function SettingsView() {
 
   const { data: worktreeLocation } = useQuery({
     queryKey: ["settings", "worktreeLocation"],
-    queryFn: () => window.electronAPI.settings.getWorktreeLocation(),
+    queryFn: () =>
+      trpcVanilla.secureStore.getItem.query({ key: "worktreeLocation" }),
   });
 
   const { data: appVersion } = useQuery({
@@ -94,7 +96,10 @@ export function SettingsView() {
   const handleWorktreeLocationChange = async (newLocation: string) => {
     setLocalWorktreeLocation(newLocation);
     try {
-      await window.electronAPI.settings.setWorktreeLocation(newLocation);
+      await trpcVanilla.secureStore.setItem.query({
+        key: "worktreeLocation",
+        value: newLocation,
+      });
     } catch (error) {
       log.error("Failed to set worktree location:", error);
     }

@@ -13,7 +13,6 @@ import "./git.js";
 import "./oauth.js";
 import "./posthog-analytics.js";
 import "./session-manager.js";
-import "./settings.js";
 import "./settingsStore.js";
 import "./shell.js";
 import "./transcription-prompts.js";

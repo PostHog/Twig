@@ -412,17 +412,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       }>,
     ): (() => void) => createIpcListener("workspace:warning", listener),
   },
-  // Settings API
-  settings: {
-    getWorktreeLocation: (): Promise<string> =>
-      ipcRenderer.invoke("settings:get-worktree-location"),
-    setWorktreeLocation: (location: string): Promise<void> =>
-      ipcRenderer.invoke("settings:set-worktree-location", location),
-    getTerminalLayout: (): Promise<"split" | "tabbed"> =>
-      ipcRenderer.invoke("settings:get-terminal-layout"),
-    setTerminalLayout: (mode: "split" | "tabbed"): Promise<void> =>
-      ipcRenderer.invoke("settings:set-terminal-layout", mode),
-  },
   // Dock Badge API
   dockBadge: {
     show: (): Promise<void> => ipcRenderer.invoke("dock-badge:show"),
