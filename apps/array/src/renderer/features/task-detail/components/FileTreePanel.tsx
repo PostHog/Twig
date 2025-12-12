@@ -69,6 +69,12 @@ function LazyTreeItem({
     }
   };
 
+  const handleDoubleClick = () => {
+    if (entry.type === "file") {
+      openFile(taskId, relativePath, false);
+    }
+  };
+
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await window.electronAPI.showFileContextMenu(entry.path, {
@@ -104,6 +110,7 @@ function LazyTreeItem({
             : "border-transparent border-y hover:bg-gray-3"
         }
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       >
         <Box

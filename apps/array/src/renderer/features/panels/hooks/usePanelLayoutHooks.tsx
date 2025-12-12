@@ -18,6 +18,7 @@ export interface PanelLayoutState {
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
+  keepTab: (taskId: string, panelId: string, tabId: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
   addTerminalTab: (taskId: string, panelId: string) => void;
   splitPanel: (
@@ -41,6 +42,7 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
         closeTab: state.closeTab,
         closeOtherTabs: state.closeOtherTabs,
         closeTabsToRight: state.closeTabsToRight,
+        keepTab: state.keepTab,
         setFocusedPanel: state.setFocusedPanel,
         addTerminalTab: state.addTerminalTab,
         splitPanel: state.splitPanel,

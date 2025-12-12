@@ -251,7 +251,7 @@ export function assertGroupStructure(
 
 export function openMultipleFiles(taskId: string, files: string[]) {
   for (const file of files) {
-    usePanelLayoutStore.getState().openFile(taskId, file);
+    usePanelLayoutStore.getState().openFile(taskId, file, false);
   }
 }
 

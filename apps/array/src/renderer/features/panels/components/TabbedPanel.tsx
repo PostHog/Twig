@@ -48,6 +48,7 @@ interface TabbedPanelProps {
   onActiveTabChange?: (panelId: string, tabId: string) => void;
   onCloseOtherTabs?: (panelId: string, tabId: string) => void;
   onCloseTabsToRight?: (panelId: string, tabId: string) => void;
+  onKeepTab?: (panelId: string, tabId: string) => void;
   onPanelFocus?: (panelId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
@@ -62,6 +63,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onActiveTabChange,
   onCloseOtherTabs,
   onCloseTabsToRight,
+  onKeepTab,
   onPanelFocus,
   draggingTabId = null,
   draggingTabPanelId = null,
@@ -163,6 +165,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 index={index}
                 draggable={tab.draggable}
                 closeable={tab.closeable !== false}
+                isPreview={tab.isPreview}
                 onSelect={() => {
                   onActiveTabChange?.(panelId, tab.id);
                   onPanelFocus?.(panelId);
@@ -175,6 +178,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 }
                 onCloseOthers={() => onCloseOtherTabs?.(panelId, tab.id)}
                 onCloseToRight={() => onCloseTabsToRight?.(panelId, tab.id)}
+                onKeep={() => onKeepTab?.(panelId, tab.id)}
                 icon={tab.icon}
                 hasUnsavedChanges={tab.hasUnsavedChanges}
                 badge={tab.badge}
