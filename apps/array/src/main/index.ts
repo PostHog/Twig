@@ -10,6 +10,7 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
+import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { dockBadgeService } from "./services/dockBadge.js";
@@ -17,6 +18,8 @@ import {
   cleanupAgentSessions,
   registerAgentIpc,
 } from "./services/session-manager.js";
+import { setMainWindowGetter } from "./trpc/context.js";
+import { trpcRouter } from "./trpc/index.js";
 
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
@@ -31,7 +34,6 @@ import {
   registerExternalAppsIpc,
 } from "./services/externalApps.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
-import { registerOsIpc } from "./services/os.js";
 import { registerPosthogIpc } from "./services/posthog.js";
 import {
   initializePostHog,
@@ -108,6 +110,9 @@ function createWindow(): void {
     mainWindow?.maximize();
     mainWindow?.show();
   });
+
+  setMainWindowGetter(() => mainWindow);
+  createIPCHandler({ router: trpcRouter, windows: [mainWindow] });
 
   setupExternalLinkHandlers(mainWindow);
 
@@ -258,7 +263,6 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 // Register IPC handlers via services
 registerPosthogIpc();
 registerOAuthHandlers();
-registerOsIpc(() => mainWindow);
 registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();

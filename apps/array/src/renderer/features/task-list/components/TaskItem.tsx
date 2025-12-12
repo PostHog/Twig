@@ -3,6 +3,7 @@ import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Cloud, GitPullRequest } from "@phosphor-icons/react";
 import { Badge, Box, Code, Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { memo } from "react";
@@ -47,7 +48,7 @@ function TaskItemComponent({
   const handleOpenPR = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (prUrl) {
-      window.electronAPI.openExternal(prUrl);
+      trpcVanilla.os.openExternal.mutate({ url: prUrl });
     }
   };
 

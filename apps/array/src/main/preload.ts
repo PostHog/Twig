@@ -1,5 +1,6 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
+import { exposeElectronTRPC } from "trpc-electron/main";
 import type {
   CreateWorkspaceOptions,
   RegisteredFolder,
@@ -19,6 +20,12 @@ import type {
 } from "./services/contextMenu.types.js";
 import "electron-log/preload";
 
+process.once("loaded", () => {
+  exposeElectronTRPC();
+});
+
+/// -- Legacy IPC handlers -- ///
+
 type IpcEventListener<T> = (data: T) => void;
 
 function createIpcListener<T>(
@@ -36,16 +43,6 @@ function createVoidIpcListener(
 ): () => void {
   ipcRenderer.on(channel, listener);
   return () => ipcRenderer.removeListener(channel, listener);
-}
-
-interface MessageBoxOptions {
-  type?: "none" | "info" | "error" | "question" | "warning";
-  title?: string;
-  message?: string;
-  detail?: string;
-  buttons?: string[];
-  defaultId?: number;
-  cancelId?: number;
 }
 
 interface AgentStartParams {
@@ -90,16 +87,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("oauth:refresh-token", refreshToken, region),
   oauthCancelFlow: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("oauth:cancel-flow"),
-  selectDirectory: (): Promise<string | null> =>
-    ipcRenderer.invoke("select-directory"),
-  searchDirectories: (query: string, searchRoot?: string): Promise<string[]> =>
-    ipcRenderer.invoke("search-directories", query, searchRoot),
   findReposDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke("find-repos-directory"),
   validateRepo: (directoryPath: string): Promise<boolean> =>
     ipcRenderer.invoke("validate-repo", directoryPath),
-  checkWriteAccess: (directoryPath: string): Promise<boolean> =>
-    ipcRenderer.invoke("check-write-access", directoryPath),
   detectRepo: (
     directoryPath: string,
   ): Promise<{
@@ -140,10 +131,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       message: string;
     }) => void,
   ): (() => void) => createIpcListener(`clone-progress:${cloneId}`, listener),
-  showMessageBox: (options: MessageBoxOptions): Promise<{ response: number }> =>
-    ipcRenderer.invoke("show-message-box", options),
-  openExternal: (url: string): Promise<void> =>
-    ipcRenderer.invoke("open-external", url),
   listRepoFiles: (
     repoPath: string,
     query?: string,

@@ -11,7 +11,6 @@ import "./folders.js";
 import "./fs.js";
 import "./git.js";
 import "./oauth.js";
-import "./os.js";
 import "./posthog-analytics.js";
 import "./posthog.js";
 import "./session-manager.js";

@@ -7,6 +7,7 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { trpcVanilla } from "@renderer/trpc";
 
 interface FolderPickerProps {
   value: string;
@@ -44,7 +45,7 @@ export function FolderPicker({
   };
 
   const handleOpenFilePicker = async () => {
-    const selectedPath = await window.electronAPI?.selectDirectory();
+    const selectedPath = await trpcVanilla.os.selectDirectory.query();
     if (selectedPath) {
       await addFolder(selectedPath);
       onChange(selectedPath);

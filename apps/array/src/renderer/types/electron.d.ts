@@ -45,14 +45,8 @@ declare global {
       error?: string;
     }>;
     oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
-    selectDirectory: () => Promise<string | null>;
-    searchDirectories: (
-      query: string,
-      searchRoot?: string,
-    ) => Promise<string[]>;
     findReposDirectory: () => Promise<string | null>;
     validateRepo: (directoryPath: string) => Promise<boolean>;
-    checkWriteAccess: (directoryPath: string) => Promise<boolean>;
     detectRepo: (directoryPath: string) => Promise<{
       organization: string;
       repository: string;
@@ -84,16 +78,6 @@ declare global {
         message: string;
       }) => void,
     ) => () => void;
-    showMessageBox: (options: {
-      type?: "none" | "info" | "error" | "question" | "warning";
-      title?: string;
-      message?: string;
-      detail?: string;
-      buttons?: string[];
-      defaultId?: number;
-      cancelId?: number;
-    }) => Promise<{ response: number }>;
-    openExternal: (url: string) => Promise<void>;
     listRepoFiles: (
       repoPath: string,
       query?: string,
