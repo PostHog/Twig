@@ -15,7 +15,7 @@ export function SessionFooter({
 }: SessionFooterProps) {
   if (isPromptPending) {
     return (
-      <Box className="py-2">
+      <Box className="py-1">
         <GeneratingIndicator />
       </Box>
     );
@@ -26,7 +26,7 @@ export function SessionFooter({
 
   if (lastGenerationDuration !== null && !wasCancelled) {
     return (
-      <Box className="pb-2">
+      <Box className="pb-1">
         <Text
           size="1"
           color="gray"

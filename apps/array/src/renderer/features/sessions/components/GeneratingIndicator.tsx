@@ -33,8 +33,8 @@ export function GeneratingIndicator() {
       className="select-none text-accent-11"
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
-      <DotsCircleSpinner size={14} className="text-accent-11" />
-      <Text size="2">
+      <DotsCircleSpinner size={12} className="text-accent-11" />
+      <Text size="1">
         Generating
         <span
           className="loading-dots"

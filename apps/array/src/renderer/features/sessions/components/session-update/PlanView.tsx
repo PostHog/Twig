@@ -10,7 +10,7 @@ export function PlanView({ plan }: PlanViewProps) {
   if (!plan.entries.length) return null;
 
   return (
-    <Box className="rounded border border-gray-6 bg-gray-2 p-3">
+    <Box className="py-1 pl-3">
       <Text size="1" weight="medium" color="gray" className="mb-2 block">
         Plan
       </Text>
@@ -19,7 +19,7 @@ export function PlanView({ plan }: PlanViewProps) {
           <Flex key={entry.content} align="center" gap="2">
             <StatusIcon status={entry.status} />
             <Text
-              size="2"
+              size="1"
               color={entry.status === "completed" ? "gray" : undefined}
             >
               {entry.content}

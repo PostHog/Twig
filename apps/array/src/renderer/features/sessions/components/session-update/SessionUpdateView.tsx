@@ -3,7 +3,6 @@ import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { AgentMessage } from "./AgentMessage";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { CurrentModeView } from "./CurrentModeView";
-import { PlanView } from "./PlanView";
 import { ThoughtView } from "./ThoughtView";
 import { ToolCallBlock } from "./ToolCallBlock";
 
@@ -48,7 +47,7 @@ export function SessionUpdateView({
     case "tool_call_update":
       return null; // Updates are merged into the original tool_call
     case "plan":
-      return <PlanView plan={item} />;
+      return null; // Plan shown in PlanStatusBar above message input
     case "available_commands_update":
       return null;
     case "current_mode_update":

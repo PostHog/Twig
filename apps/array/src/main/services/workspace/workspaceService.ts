@@ -130,10 +130,10 @@ export class WorkspaceService {
             log.info(`Switched to existing branch ${branch}`);
           }
         } catch (error) {
-          log.error(`Failed to create/switch to branch ${branch}:`, error);
-          throw new Error(
-            `Failed to create/switch to branch ${branch}: ${String(error)}`,
-          );
+          const message = `Could not switch to branch "${branch}". Please commit or stash your changes first.`;
+          log.error(message, error);
+          this.emitWorkspaceError(taskId, message);
+          throw new Error(message);
         }
       }
 

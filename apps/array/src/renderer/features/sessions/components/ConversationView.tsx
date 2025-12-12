@@ -11,7 +11,7 @@ import {
   isJsonRpcRequest,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { SessionFooter } from "./SessionFooter";
 import {
   type RenderItem,
@@ -47,12 +47,13 @@ export function ConversationView({
   return (
     <VirtualizedList
       items={turns}
-      estimateSize={100}
+      estimateSize={200}
+      overscan={3}
       getItemKey={(turn) => turn.id}
       renderItem={(turn) => <TurnView turn={turn} />}
       autoScrollToBottom
-      className="flex-1 p-4"
-      gap={24}
+      className="flex-1 bg-blackA-5 p-2 pb-16"
+      gap={12}
       footer={
         <SessionFooter
           isPromptPending={isPromptPending || !lastTurnComplete}
@@ -66,11 +67,11 @@ export function ConversationView({
   );
 }
 
-function TurnView({ turn }: { turn: Turn }) {
+const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
   const wasCancelled = turn.stopReason === "cancelled";
 
   return (
-    <Box className="flex flex-col gap-4">
+    <Box className="flex flex-col gap-1">
       <UserMessage content={turn.userContent} />
       {turn.items.map((item, i) => (
         <SessionUpdateView
@@ -81,16 +82,18 @@ function TurnView({ turn }: { turn: Turn }) {
         />
       ))}
       {wasCancelled && (
-        <Flex align="center" gap="2" className="text-gray-9">
-          <XCircle size={14} />
-          <Text size="1" color="gray">
-            Interrupted by user
-          </Text>
-        </Flex>
+        <Box className="border-gray-4 border-l-2 py-0.5 pl-3">
+          <Flex align="center" gap="2" className="text-gray-9">
+            <XCircle size={14} />
+            <Text size="1" color="gray">
+              Interrupted by user
+            </Text>
+          </Flex>
+        </Box>
       )}
     </Box>
   );
-}
+});
 
 // --- Event Processing ---
 

@@ -15,11 +15,6 @@ import {
 } from "@phosphor-icons/react";
 import { Code, Flex, Text } from "@radix-ui/themes";
 
-const fontStyle = {
-  fontSize: "var(--font-size-1-5)",
-  lineHeight: "var(--line-height-1-5)",
-};
-
 const kindIcons: Record<ToolKind, Icon> = {
   read: FileText,
   edit: PencilSimple,
@@ -47,22 +42,22 @@ export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
   const KindIcon = kind ? kindIcons[kind] : Wrench;
 
   return (
-    <Flex align="center" gap="2" className="rounded px-2 py-1">
+    <Flex align="center" gap="2" className="py-0.5 pl-3">
       {isLoading ? (
         <DotsCircleSpinner size={12} className="text-gray-9" />
       ) : (
         <KindIcon size={12} className="text-gray-9" />
       )}
-      <Code size="1" color="gray" style={fontStyle}>
+      <Code size="1" color="gray">
         {title}
       </Code>
       {isFailed && (
-        <Text size="1" color="gray" style={fontStyle}>
+        <Text size="1" color="gray">
           (Failed)
         </Text>
       )}
       {wasCancelled && (
-        <Text size="1" color="gray" style={fontStyle}>
+        <Text size="1" color="gray">
           (Cancelled)
         </Text>
       )}

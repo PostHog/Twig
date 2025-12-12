@@ -31,10 +31,7 @@ export function useWorkspaceEvents(taskId: string) {
       },
     );
 
-    const unsubscribeError = window.electronAPI?.workspace.onError((data) => {
-      if (data.taskId !== taskId) return;
-      toast.error("Workspace error", { description: data.message });
-    });
+    // Note: workspace errors are handled globally in App.tsx
 
     const unsubscribeWarning = window.electronAPI?.workspace.onWarning(
       (data) => {
@@ -48,7 +45,6 @@ export function useWorkspaceEvents(taskId: string) {
 
     return () => {
       unsubscribeTerminal?.();
-      unsubscribeError?.();
       unsubscribeWarning?.();
     };
   }, [taskId, addWorkspaceTerminalTab, registerTerminal]);
