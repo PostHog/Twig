@@ -22,14 +22,6 @@ import type { CloudRegion, OAuthTokenResponse } from "@shared/types/oauth";
 
 declare global {
   interface IElectronAPI {
-    storeApiKey: (apiKey: string) => Promise<string>;
-    retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
-    fetchS3Logs: (logUrl: string) => Promise<string | null>;
-    rendererStore: {
-      getItem: (key: string) => Promise<string | null>;
-      setItem: (key: string, value: string) => Promise<void>;
-      removeItem: (key: string) => Promise<void>;
-    };
     // OAuth API
     oauthStartFlow: (region: CloudRegion) => Promise<{
       success: boolean;

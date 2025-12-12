@@ -1,5 +1,7 @@
 /// <reference path="../../../types/electron.d.ts" />
+
 import type { SessionNotification } from "@agentclientprotocol/sdk";
+import { trpcVanilla } from "@/renderer/trpc";
 
 export interface StoredLogEntry {
   type: string;
@@ -32,8 +34,7 @@ export async function fetchSessionLogs(
   }
 
   try {
-    const content = await window.electronAPI.fetchS3Logs(logUrl);
-
+    const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
     if (!content?.trim()) {
       return { notifications: [], rawEntries: [] };
     }

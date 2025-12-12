@@ -61,20 +61,6 @@ interface AgentStartParams {
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  storeApiKey: (apiKey: string): Promise<string> =>
-    ipcRenderer.invoke("store-api-key", apiKey),
-  retrieveApiKey: (encryptedKey: string): Promise<string | null> =>
-    ipcRenderer.invoke("retrieve-api-key", encryptedKey),
-  fetchS3Logs: (logUrl: string): Promise<string | null> =>
-    ipcRenderer.invoke("fetch-s3-logs", logUrl),
-  rendererStore: {
-    getItem: (key: string): Promise<string | null> =>
-      ipcRenderer.invoke("renderer-store:get", key),
-    setItem: (key: string, value: string): Promise<void> =>
-      ipcRenderer.invoke("renderer-store:set", key, value),
-    removeItem: (key: string): Promise<void> =>
-      ipcRenderer.invoke("renderer-store:remove", key),
-  },
   // OAuth API
   oauthStartFlow: (
     region: CloudRegion,

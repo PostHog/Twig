@@ -1,17 +1,18 @@
 import { createJSONStorage, type StateStorage } from "zustand/middleware";
+import { trpcVanilla } from "../trpc";
 
 /**
- * Raw storage adapter that uses Electron IPC to persist state.
+ * Raw storage adapter that uses electron to persist state.
  */
 const electronStorageRaw: StateStorage = {
-  getItem: async (name: string): Promise<string | null> => {
-    return window.electronAPI.rendererStore.getItem(name);
+  getItem: async (key: string): Promise<string | null> => {
+    return await trpcVanilla.secureStore.getItem.query({ key });
   },
-  setItem: async (name: string, value: string): Promise<void> => {
-    await window.electronAPI.rendererStore.setItem(name, value);
+  setItem: async (key: string, value: string): Promise<void> => {
+    await trpcVanilla.secureStore.setItem.query({ key, value });
   },
-  removeItem: async (name: string): Promise<void> => {
-    await window.electronAPI.rendererStore.removeItem(name);
+  removeItem: async (key: string): Promise<void> => {
+    await trpcVanilla.secureStore.removeItem.query({ key });
   },
 };
 

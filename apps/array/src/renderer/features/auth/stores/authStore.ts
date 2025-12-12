@@ -36,10 +36,6 @@ interface AuthState {
   client: PostHogAPIClient | null;
   projectId: number | null; // Current team/project ID
 
-  // OpenAI API key (separate concern, kept for now)
-  openaiApiKey: string | null;
-  encryptedOpenaiKey: string | null;
-
   // OAuth methods
   loginWithOAuth: (region: CloudRegion) => Promise<void>;
   refreshAccessToken: () => Promise<void>;
@@ -47,7 +43,6 @@ interface AuthState {
   initializeOAuth: () => Promise<boolean>;
 
   // Other methods
-  setOpenAIKey: (apiKey: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -68,10 +63,6 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         client: null,
         projectId: null,
-
-        // OpenAI key
-        openaiApiKey: null,
-        encryptedOpenaiKey: null,
 
         loginWithOAuth: async (region: CloudRegion) => {
           const result = await window.electronAPI.oauthStartFlow(region);
@@ -314,17 +305,6 @@ export const useAuthStore = create<AuthState>()(
                 region: tokens.cloudRegion,
               });
 
-              if (state.encryptedOpenaiKey) {
-                const decryptedOpenaiKey =
-                  await window.electronAPI.retrieveApiKey(
-                    state.encryptedOpenaiKey,
-                  );
-
-                if (decryptedOpenaiKey) {
-                  set({ openaiApiKey: decryptedOpenaiKey });
-                }
-              }
-
               return true;
             } catch (error) {
               log.error("Failed to validate OAuth session:", error);
@@ -333,25 +313,7 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          if (state.encryptedOpenaiKey) {
-            const decryptedOpenaiKey = await window.electronAPI.retrieveApiKey(
-              state.encryptedOpenaiKey,
-            );
-
-            if (decryptedOpenaiKey) {
-              set({ openaiApiKey: decryptedOpenaiKey });
-            }
-          }
-
           return state.isAuthenticated;
-        },
-
-        setOpenAIKey: async (apiKey: string) => {
-          const encryptedKey = await window.electronAPI.storeApiKey(apiKey);
-          set({
-            openaiApiKey: apiKey,
-            encryptedOpenaiKey: encryptedKey,
-          });
         },
 
         logout: () => {
@@ -376,8 +338,6 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             client: null,
             projectId: null,
-            openaiApiKey: null,
-            encryptedOpenaiKey: null,
           });
         },
       }),
@@ -387,7 +347,6 @@ export const useAuthStore = create<AuthState>()(
         partialize: (state) => ({
           cloudRegion: state.cloudRegion,
           storedTokens: state.storedTokens,
-          encryptedOpenaiKey: state.encryptedOpenaiKey,
           projectId: state.projectId,
         }),
       },

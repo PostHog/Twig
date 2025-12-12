@@ -34,7 +34,6 @@ import {
   registerExternalAppsIpc,
 } from "./services/externalApps.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
-import { registerPosthogIpc } from "./services/posthog.js";
 import {
   initializePostHog,
   shutdownPostHog,
@@ -261,7 +260,6 @@ registerAutoUpdater(() => mainWindow);
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
-registerPosthogIpc();
 registerOAuthHandlers();
 registerGitIpc(() => mainWindow);
 registerAgentIpc(taskControllers, () => mainWindow);

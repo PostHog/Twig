@@ -67,7 +67,6 @@
     "yaml": "^2.8.1"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.52",
     "@codemirror/lang-angular": "^0.1.4",
     "@codemirror/lang-cpp": "^6.0.3",
     "@codemirror/lang-css": "^6.3.1",

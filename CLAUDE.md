@@ -72,9 +72,8 @@
 ## Environment Variables
 
 - Copy `.env.example` to `.env`
-- `ANTHROPIC_API_KEY` - Required for agent
-- `OPENAI_API_KEY` - Optional
-- `VITE_POSTHOG_*` - PostHog tracking config
+
+TODO: Update me
 
 ## Testing
 
