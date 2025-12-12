@@ -355,6 +355,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
     enabled: !!repoPath,
     refetchOnMount: "always",
+    refetchInterval: 10000,
   });
 
   const getActiveIndex = useCallback((): number => {
