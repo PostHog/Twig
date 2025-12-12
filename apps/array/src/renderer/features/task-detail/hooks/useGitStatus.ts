@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 export type SmartGitAction =
   | "commit-push"
@@ -16,6 +16,7 @@ export interface GitStatus {
   currentBranch: string | null;
   smartAction: SmartGitAction;
   isLoading: boolean;
+  isFetched: boolean;
 }
 
 interface GitStatusOptions {
@@ -28,7 +29,13 @@ function determineSmartAction(
   ahead: number,
   behind: number,
   hasRemote: boolean,
+  isFetched: boolean,
 ): SmartGitAction {
+  // Don't show any action until we have fetched data at least once
+  if (!isFetched) {
+    return null;
+  }
+
   // Priority order for smart action:
   // 1. If there are uncommitted changes -> commit & push
   // 2. If branch has no remote -> publish branch
@@ -63,17 +70,23 @@ export function useGitStatus({
   repoPath,
   hasChanges,
 }: GitStatusOptions): GitStatus {
-  const { data: syncStatus, isLoading } = useQuery({
+  const {
+    data: syncStatus,
+    isLoading,
+    isFetched,
+  } = useQuery({
     queryKey: ["git-sync-status", repoPath],
     queryFn: () => window.electronAPI.getGitSyncStatus(repoPath as string),
     enabled: !!repoPath,
-    refetchInterval: 10000, // Refresh every 10 seconds
-    refetchOnWindowFocus: true,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds (less frequent)
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid flicker
+    placeholderData: keepPreviousData, // Keep previous data while refetching
   });
 
   const ahead = syncStatus?.ahead ?? 0;
   const behind = syncStatus?.behind ?? 0;
-  const hasRemote = syncStatus?.hasRemote ?? false;
+  const hasRemote = syncStatus?.hasRemote ?? true; // Default to true to avoid "Publish" flash
   const currentBranch = syncStatus?.currentBranch ?? null;
 
   const smartAction = determineSmartAction(
@@ -81,6 +94,7 @@ export function useGitStatus({
     ahead,
     behind,
     hasRemote,
+    isFetched,
   );
 
   return {
@@ -91,6 +105,7 @@ export function useGitStatus({
     currentBranch,
     smartAction,
     isLoading,
+    isFetched,
   };
 }
 

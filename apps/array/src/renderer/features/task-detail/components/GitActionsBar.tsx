@@ -1,3 +1,7 @@
+import {
+  createGitActionMessage,
+  type GitActionType,
+} from "@features/sessions/components/GitActionMessage";
 import { useSessionStore } from "@features/sessions/stores/sessionStore";
 import {
   GIT_ACTION_LABELS,
@@ -57,18 +61,19 @@ export function GitActionsBar({
   const sendPrompt = useSessionStore((state) => state.sendPrompt);
   const session = useSessionStore((state) => state.getSessionForTask(taskId));
 
-  const { smartAction, ahead, behind, hasRemote, isLoading } = useGitStatus({
+  const { smartAction, ahead, behind, hasRemote, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
   });
 
   const handleAction = useCallback(
-    async (prompt: string) => {
+    async (actionType: GitActionType, prompt: string) => {
       if (!session || isSending) return;
 
       setIsSending(true);
       try {
-        await sendPrompt(taskId, prompt);
+        const message = createGitActionMessage(actionType, prompt);
+        await sendPrompt(taskId, message);
       } catch (_error) {
       } finally {
         setIsSending(false);
@@ -79,7 +84,7 @@ export function GitActionsBar({
 
   const handlePrimaryAction = useCallback(() => {
     if (!smartAction) return;
-    handleAction(GIT_ACTION_PROMPTS[smartAction]);
+    handleAction(smartAction, GIT_ACTION_PROMPTS[smartAction]);
   }, [smartAction, handleAction]);
 
   // Don't show if no session is active
@@ -87,8 +92,13 @@ export function GitActionsBar({
     return null;
   }
 
+  // Don't show until we've fetched git status at least once
+  if (!isFetched) {
+    return null;
+  }
+
   // Don't show if no action is needed (everything is up to date)
-  if (!smartAction && !isLoading) {
+  if (!smartAction) {
     return null;
   }
 
@@ -102,10 +112,8 @@ export function GitActionsBar({
   }
   const statusText = statusParts.length > 0 ? statusParts.join(", ") : null;
 
-  const isDisabled = isSending || isLoading || !smartAction;
-  const buttonLabel = smartAction
-    ? GIT_ACTION_LABELS[smartAction]
-    : "Up to date";
+  const isDisabled = isSending || !smartAction;
+  const buttonLabel = GIT_ACTION_LABELS[smartAction];
 
   // Get dropdown actions (all actions except current smart action)
   const dropdownActions = (
@@ -178,7 +186,9 @@ export function GitActionsBar({
               {dropdownActions.map((action) => (
                 <DropdownMenu.Item
                   key={action}
-                  onSelect={() => handleAction(GIT_ACTION_PROMPTS[action])}
+                  onSelect={() =>
+                    handleAction(action, GIT_ACTION_PROMPTS[action])
+                  }
                 >
                   <Flex align="center" gap="2">
                     {getActionIcon(action)}
@@ -192,7 +202,7 @@ export function GitActionsBar({
                 <>
                   <DropdownMenu.Separator />
                   <DropdownMenu.Item
-                    onSelect={() => handleAction(CREATE_PR_PROMPT)}
+                    onSelect={() => handleAction("create-pr", CREATE_PR_PROMPT)}
                   >
                     <Flex align="center" gap="2">
                       <GitPullRequest size={14} weight="regular" />

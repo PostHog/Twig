@@ -16,6 +16,8 @@ import { useSessionViewStore } from "../stores/sessionViewStore";
 import { AgentMessage } from "./AgentMessage";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
+import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
+import { GitActionResult, parseGitResults } from "./GitActionResult";
 import { MessageEditor } from "./MessageEditor";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { TurnCollapsible } from "./TurnCollapsible";
@@ -476,9 +478,22 @@ export function SessionView({
           : [];
       const shouldCollapse = turn.isComplete && collapsibleMessages.length > 0;
 
+      // Check if this is a git action message
+      const gitAction = parseGitActionMessage(turn.userMessage.content);
+
+      // If this is a completed git action, parse the agent's response for results
+      const gitResults =
+        gitAction.isGitAction && turn.isComplete && lastAgentMessage
+          ? parseGitResults(lastAgentMessage.content)
+          : [];
+
       return (
         <Box className="flex flex-col gap-4">
-          <UserMessage content={turn.userMessage.content} />
+          {gitAction.isGitAction && gitAction.actionType ? (
+            <GitActionMessage actionType={gitAction.actionType} />
+          ) : (
+            <UserMessage content={turn.userMessage.content} />
+          )}
           {shouldCollapse ? (
             <>
               <TurnCollapsible messages={collapsibleMessages} />
@@ -487,6 +502,7 @@ export function SessionView({
           ) : (
             turn.agentResponses.map(renderMessage)
           )}
+          {gitResults.length > 0 && <GitActionResult results={gitResults} />}
         </Box>
       );
     },
