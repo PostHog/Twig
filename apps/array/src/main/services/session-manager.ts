@@ -542,10 +542,6 @@ interface AgentSessionParams {
 }
 
 type SessionResponse = { sessionId: string; channel: string };
-type SessionListItem = SessionResponse & {
-  acpSessionId: string;
-  taskId: string;
-};
 
 function validateSessionParams(params: AgentSessionParams): void {
   if (!params.taskId || !params.repoPath) {
@@ -622,32 +618,6 @@ export function registerAgentIpc(
     "agent-cancel-prompt",
     async (_event: IpcMainInvokeEvent, sessionId: string) => {
       return sessionManager.cancelPrompt(sessionId);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-list-sessions",
-    async (
-      _event: IpcMainInvokeEvent,
-      taskId?: string,
-    ): Promise<SessionListItem[]> => {
-      return sessionManager.listSessions(taskId).map((s) => ({
-        sessionId: s.taskRunId,
-        acpSessionId: s.taskRunId,
-        channel: s.channel,
-        taskId: s.taskId,
-      }));
-    },
-  );
-
-  ipcMain.handle(
-    "agent-load-session",
-    async (_event: IpcMainInvokeEvent, sessionId: string, _cwd: string) => {
-      const exists = sessionManager.getSession(sessionId) !== undefined;
-      if (!exists) {
-        log.warn("Session not found for load", { sessionId });
-      }
-      return exists;
     },
   );
 

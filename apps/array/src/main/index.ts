@@ -261,7 +261,7 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
 registerOAuthHandlers();
-registerGitIpc(() => mainWindow);
+registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
 registerFileWatcherIpc(() => mainWindow);

@@ -37,7 +37,6 @@ declare global {
       error?: string;
     }>;
     oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
-    findReposDirectory: () => Promise<string | null>;
     validateRepo: (directoryPath: string) => Promise<boolean>;
     detectRepo: (directoryPath: string) => Promise<{
       organization: string;
@@ -45,19 +44,6 @@ declare global {
       branch?: string;
       remote?: string;
     } | null>;
-    validateRepositoryMatch: (
-      path: string,
-      organization: string,
-      repository: string,
-    ) => Promise<{
-      valid: boolean;
-      detected?: { organization: string; repository: string } | null;
-      error?: string;
-    }>;
-    checkSSHAccess: () => Promise<{
-      available: boolean;
-      error?: string;
-    }>;
     cloneRepository: (
       repoUrl: string,
       targetPath: string,
@@ -75,7 +61,6 @@ declare global {
       query?: string,
       limit?: number,
     ) => Promise<Array<{ path: string; name: string }>>;
-    clearRepoFileCache: (repoPath: string) => Promise<void>;
     agentStart: (params: {
       taskId: string;
       taskRunId: string;
@@ -96,15 +81,6 @@ declare global {
     ) => Promise<{ stopReason: string }>;
     agentCancel: (sessionId: string) => Promise<boolean>;
     agentCancelPrompt: (sessionId: string) => Promise<boolean>;
-    agentListSessions: (taskId?: string) => Promise<
-      Array<{
-        sessionId: string;
-        acpSessionId: string;
-        channel: string;
-        taskId: string;
-      }>
-    >;
-    agentLoadSession: (sessionId: string, cwd: string) => Promise<boolean>;
     agentReconnect: (params: {
       taskId: string;
       taskRunId: string;
@@ -122,12 +98,6 @@ declare global {
       listener: (event: unknown) => void,
     ) => () => void;
     // Task artifact operations
-    readPlanFile: (repoPath: string, taskId: string) => Promise<string | null>;
-    writePlanFile: (
-      repoPath: string,
-      taskId: string,
-      content: string,
-    ) => Promise<void>;
     ensurePosthogFolder: (repoPath: string, taskId: string) => Promise<string>;
     listTaskArtifacts: (
       repoPath: string,
