@@ -38,11 +38,11 @@ export function createMockGroupNode(overrides?: Partial<PanelNode>): PanelNode {
   } as PanelNode;
 }
 
-// File fixtures
+// File fixtures - format matches what listDirectory returns
 export const MOCK_FILES = [
-  { path: "App.tsx", name: "App.tsx" },
-  { path: "helper.ts", name: "helper.ts" },
-  { path: "README.md", name: "README.md" },
+  { path: "/test/repo/App.tsx", name: "App.tsx", type: "file" as const },
+  { path: "/test/repo/helper.ts", name: "helper.ts", type: "file" as const },
+  { path: "/test/repo/README.md", name: "README.md", type: "file" as const },
 ];
 
 export const MOCK_FILE_CONTENT = "// file content";
