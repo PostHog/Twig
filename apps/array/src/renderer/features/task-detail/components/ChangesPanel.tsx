@@ -1,3 +1,4 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
@@ -7,7 +8,6 @@ import {
   CaretUpIcon,
   CodeIcon,
   CopyIcon,
-  FileIcon,
   FilePlus,
 } from "@phosphor-icons/react";
 import {
@@ -212,12 +212,7 @@ function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <FileIcon
-        size={14}
-        weight="regular"
-        color="var(--gray-10)"
-        style={{ flexShrink: 0 }}
-      />
+      <FileIcon filename={fileName} size={14} />
       <Text
         size="1"
         style={{
