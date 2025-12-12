@@ -44,13 +44,12 @@ function getActionIcon(action: SmartGitAction) {
       return <ArrowsClockwise size={14} weight="bold" />;
     case "sync":
       return <ArrowsClockwise size={14} weight="bold" />;
+    case "create-pr":
+      return <GitPullRequest size={14} weight="bold" />;
     default:
       return <CloudArrowUp size={14} weight="bold" />;
   }
 }
-
-const CREATE_PR_PROMPT =
-  "Create a pull request for this branch with an appropriate title and description summarizing the changes.";
 
 export function GitActionsBar({
   taskId,
@@ -63,7 +62,7 @@ export function GitActionsBar({
 
   const isCloud = session?.isCloud ?? false;
 
-  const { smartAction, ahead, behind, hasRemote, isFetched } = useGitStatus({
+  const { smartAction, ahead, behind, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
     enabled: !isCloud,
@@ -194,20 +193,6 @@ export function GitActionsBar({
                   </Flex>
                 </DropdownMenu.Item>
               ))}
-
-              {(isCloud || hasRemote) && (
-                <>
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.Item
-                    onSelect={() => handleAction("create-pr", CREATE_PR_PROMPT)}
-                  >
-                    <Flex align="center" gap="2">
-                      <GitPullRequest size={14} weight="regular" />
-                      <Text size="1">Create Pull Request</Text>
-                    </Flex>
-                  </DropdownMenu.Item>
-                </>
-              )}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </Flex>

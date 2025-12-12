@@ -210,6 +210,7 @@ declare global {
       behind: number;
       hasRemote: boolean;
       currentBranch: string | null;
+      isFeatureBranch: boolean;
     }>;
     getLatestCommit: (repoPath: string) => Promise<{
       sha: string;

@@ -304,6 +304,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     behind: number;
     hasRemote: boolean;
     currentBranch: string | null;
+    isFeatureBranch: boolean;
   }> => ipcRenderer.invoke("get-git-sync-status", repoPath),
   getLatestCommit: (
     repoPath: string,

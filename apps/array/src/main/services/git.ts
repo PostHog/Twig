@@ -388,6 +388,7 @@ export interface GitSyncStatus {
   behind: number;
   hasRemote: boolean;
   currentBranch: string | null;
+  isFeatureBranch: boolean;
 }
 
 export interface GitCommitInfo {
@@ -460,8 +461,17 @@ const getGitSyncStatus = async (
   try {
     const currentBranch = await getCurrentBranch(directoryPath);
     if (!currentBranch) {
-      return { ahead: 0, behind: 0, hasRemote: false, currentBranch: null };
+      return {
+        ahead: 0,
+        behind: 0,
+        hasRemote: false,
+        currentBranch: null,
+        isFeatureBranch: false,
+      };
     }
+
+    const defaultBranch = await getDefaultBranch(directoryPath);
+    const isFeatureBranch = currentBranch !== defaultBranch;
 
     try {
       const { stdout: upstream } = await execAsync(
@@ -469,12 +479,29 @@ const getGitSyncStatus = async (
         { cwd: directoryPath },
       );
 
-      if (!upstream.trim()) {
-        return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
+      const upstreamBranch = upstream.trim();
+      if (!upstreamBranch) {
+        return {
+          ahead: 0,
+          behind: 0,
+          hasRemote: false,
+          currentBranch,
+          isFeatureBranch,
+        };
+      }
+
+      // Use --quiet to suppress output, ignore errors (network may be unavailable)
+      try {
+        await execAsync("git fetch --quiet", {
+          cwd: directoryPath,
+          timeout: 10000,
+        });
+      } catch {
+        // Fetch failed (likely offline), continue with stale data
       }
 
       const { stdout: revList } = await execAsync(
-        `git rev-list --left-right --count ${currentBranch}...${upstream.trim()}`,
+        `git rev-list --left-right --count ${currentBranch}...${upstreamBranch}`,
         { cwd: directoryPath },
       );
 
@@ -485,13 +512,26 @@ const getGitSyncStatus = async (
         behind: behind || 0,
         hasRemote: true,
         currentBranch,
+        isFeatureBranch,
       };
     } catch {
-      return { ahead: 0, behind: 0, hasRemote: false, currentBranch };
+      return {
+        ahead: 0,
+        behind: 0,
+        hasRemote: false,
+        currentBranch,
+        isFeatureBranch,
+      };
     }
   } catch (error) {
     log.error("Error getting git sync status:", error);
-    return { ahead: 0, behind: 0, hasRemote: false, currentBranch: null };
+    return {
+      ahead: 0,
+      behind: 0,
+      hasRemote: false,
+      currentBranch: null,
+      isFeatureBranch: false,
+    };
   }
 };
 
