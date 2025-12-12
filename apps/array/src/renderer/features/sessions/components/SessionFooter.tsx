@@ -5,23 +5,28 @@ import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
 interface SessionFooterProps {
   isPromptPending: boolean;
   lastGenerationDuration: number | null;
+  lastStopReason?: string;
 }
 
 export function SessionFooter({
   isPromptPending,
   lastGenerationDuration,
+  lastStopReason,
 }: SessionFooterProps) {
   if (isPromptPending) {
     return (
-      <Box className="py-2">
+      <Box className="pt-3 pb-1">
         <GeneratingIndicator />
       </Box>
     );
   }
 
-  if (lastGenerationDuration !== null) {
+  const wasCancelled =
+    lastStopReason === "cancelled" || lastStopReason === "refusal";
+
+  if (lastGenerationDuration !== null && !wasCancelled) {
     return (
-      <Box className="pb-2">
+      <Box className="pb-1">
         <Text
           size="1"
           color="gray"

@@ -1,4 +1,4 @@
-import type { CurrentModeUpdate } from "@agentclientprotocol/sdk";
+import type { CurrentModeUpdate } from "@features/sessions/types";
 import { Badge } from "@radix-ui/themes";
 
 interface CurrentModeViewProps {

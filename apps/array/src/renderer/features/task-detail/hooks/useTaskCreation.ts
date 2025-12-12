@@ -146,11 +146,11 @@ export function useTaskCreation({
             try {
               const updatedTask = await client.runTaskInCloud(newTask.id);
               log.info("Started cloud task", { taskId: newTask.id });
-              invalidateTasks();
+              invalidateTasks(updatedTask);
               navigateToTask(updatedTask);
             } catch (error) {
               log.error("Failed to start cloud task:", error);
-              invalidateTasks();
+              invalidateTasks(newTask);
               navigateToTask(newTask);
             }
             editor.commands.clearContent();
@@ -174,12 +174,22 @@ export function useTaskCreation({
                 agentCwd = workspace.worktreePath ?? workspace.folderPath;
               } catch (error) {
                 log.error("Failed to create workspace for task:", error);
+                // Delete the task since workspace creation failed
+                try {
+                  await client.deleteTask(newTask.id);
+                } catch (deleteError) {
+                  log.error(
+                    "Failed to delete task after workspace error:",
+                    deleteError,
+                  );
+                }
+                setIsSubmitting(false);
+                return;
               }
             }
 
-            // Invalidate tasks AFTER workspace is ready to avoid race condition
-            // where sidebar re-renders before workspace exists
-            invalidateTasks();
+            // Add task to cache immediately, then invalidate for server sync
+            invalidateTasks(newTask);
 
             navigateToTask(newTask);
             editor.commands.clearContent();

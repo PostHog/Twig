@@ -1,6 +1,10 @@
+import type { Plan } from "@features/sessions/types";
 import { Box, ContextMenu, Flex } from "@radix-ui/themes";
-import type { AcpMessage } from "@shared/types/session-events";
-import { useCallback } from "react";
+import {
+  type AcpMessage,
+  isJsonRpcNotification,
+} from "@shared/types/session-events";
+import { useCallback, useMemo } from "react";
 import { useKeyboardShortcut } from "../hooks/useKeyboardShortcut";
 import {
   useSessionViewActions,
@@ -8,6 +12,7 @@ import {
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
 import { MessageEditor } from "./MessageEditor";
+import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
 interface SessionViewProps {
@@ -36,6 +41,20 @@ export function SessionView({
 
   useKeyboardShortcut("Escape", onCancelPrompt, { enabled: isPromptPending });
 
+  const latestPlan = useMemo((): Plan | null => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const msg = events[i].message;
+      if (isJsonRpcNotification(msg) && msg.method === "session/update") {
+        const update = (msg.params as { update?: { sessionUpdate?: string } })
+          ?.update;
+        if (update?.sessionUpdate === "plan") {
+          return update as Plan;
+        }
+      }
+    }
+    return null;
+  }, [events]);
+
   const handleSubmit = useCallback(
     (text: string) => {
       if (text.trim()) {
@@ -48,7 +67,7 @@ export function SessionView({
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
-        <Flex direction="column" height="100%">
+        <Flex direction="column" height="100%" className="bg-gray-1">
           {showRawLogs ? (
             <RawLogsView events={events} />
           ) : (
@@ -60,7 +79,9 @@ export function SessionView({
             />
           )}
 
-          <Box className="border-gray-6 border-t p-3">
+          <PlanStatusBar plan={latestPlan} />
+
+          <Box className="border-gray-4 border-t p-2">
             <MessageEditor
               sessionId={taskId ?? "default"}
               taskId={taskId}
@@ -74,7 +95,7 @@ export function SessionView({
           </Box>
         </Flex>
       </ContextMenu.Trigger>
-      <ContextMenu.Content>
+      <ContextMenu.Content size="1">
         <ContextMenu.CheckboxItem
           checked={showRawLogs}
           onCheckedChange={setShowRawLogs}

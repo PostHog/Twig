@@ -374,6 +374,7 @@ export const MessageEditor = forwardRef<
                   updatePosition(props.editor, component.element);
                 },
                 onUpdate: (props: SuggestionProps) => {
+                  commandRef.current = props.command;
                   if (!props.clientRect || !componentRef.current) return;
                   updatePosition(props.editor, componentRef.current.element);
                 },

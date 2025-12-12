@@ -338,12 +338,19 @@ const useStore = create<SessionStore>()(
         taskId,
         taskRunId,
         repoPath,
-        ...auth,
+        apiKey: auth.apiKey,
+        apiHost: auth.apiHost,
+        projectId: auth.projectId,
         logUrl,
         sdkSessionId,
       });
 
-      updateSession(taskRunId, { status: result ? "connected" : "error" });
+      if (result) {
+        updateSession(taskRunId, { status: "connected" });
+      } else {
+        unsubscribeFromChannel(taskRunId);
+        removeSession(taskRunId);
+      }
     };
 
     const createNewLocalSession = async (
@@ -489,7 +496,9 @@ const useStore = create<SessionStore>()(
               );
             }
           } catch (error) {
-            log.error("Failed to connect to task", error);
+            const message =
+              error instanceof Error ? error.message : String(error);
+            log.error("Failed to connect to task", { message });
           } finally {
             connectAttempts.delete(taskId);
           }
