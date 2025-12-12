@@ -1,10 +1,10 @@
 import type {
   ContentBlock,
   SessionNotification,
-  SessionUpdate,
-  ToolCall,
 } from "@agentclientprotocol/sdk";
-import { Box } from "@radix-ui/themes";
+import type { SessionUpdate, ToolCall } from "@features/sessions/types";
+import { XCircle } from "@phosphor-icons/react";
+import { Box, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -18,7 +18,6 @@ import {
   SessionUpdateView,
 } from "./session-update/SessionUpdateView";
 import { UserMessage } from "./session-update/UserMessage";
-import { TurnCollapsible } from "./TurnCollapsible";
 import { VirtualizedList } from "./VirtualizedList";
 
 interface Turn {
@@ -60,6 +59,7 @@ export function ConversationView({
           lastGenerationDuration={
             lastTurn?.isComplete ? lastTurn.durationMs : null
           }
+          lastStopReason={lastTurn?.stopReason}
         />
       }
     />
@@ -67,31 +67,26 @@ export function ConversationView({
 }
 
 function TurnView({ turn }: { turn: Turn }) {
-  const lastAgentIdx = turn.items.findLastIndex(
-    (item) => item.sessionUpdate === "agent_message_chunk",
-  );
-  const lastAgent = lastAgentIdx >= 0 ? turn.items[lastAgentIdx] : null;
-  const shouldCollapse = turn.isComplete && lastAgent && turn.items.length > 1;
+  const wasCancelled = turn.stopReason === "cancelled";
 
   return (
     <Box className="flex flex-col gap-4">
       <UserMessage content={turn.userContent} />
-      {shouldCollapse ? (
-        <>
-          <TurnCollapsible
-            items={turn.items.filter((_, i) => i !== lastAgentIdx)}
-            toolCalls={turn.toolCalls}
-          />
-          <SessionUpdateView item={lastAgent} toolCalls={turn.toolCalls} />
-        </>
-      ) : (
-        turn.items.map((item, i) => (
-          <SessionUpdateView
-            key={`${item.sessionUpdate}-${i}`}
-            item={item}
-            toolCalls={turn.toolCalls}
-          />
-        ))
+      {turn.items.map((item, i) => (
+        <SessionUpdateView
+          key={`${item.sessionUpdate}-${i}`}
+          item={item}
+          toolCalls={turn.toolCalls}
+          turnCancelled={wasCancelled}
+        />
+      ))}
+      {wasCancelled && (
+        <Flex align="center" gap="2" className="text-gray-9">
+          <XCircle size={14} />
+          <Text size="1" color="gray">
+            Interrupted by user
+          </Text>
+        </Flex>
       )}
     </Box>
   );
@@ -197,17 +192,25 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
       break;
 
     case "tool_call": {
-      // Clone to allow mutation from tool_call_update
-      const toolCall = { ...update };
-      turn.toolCalls.set(update.toolCallId, toolCall);
-      turn.items.push(toolCall);
+      const existing = turn.toolCalls.get(update.toolCallId);
+      if (existing) {
+        // Update existing tool call (same toolCallId sent again)
+        Object.assign(existing, update);
+      } else {
+        // New tool call - clone to allow mutation from updates
+        const toolCall = { ...update };
+        turn.toolCalls.set(update.toolCallId, toolCall);
+        turn.items.push(toolCall);
+      }
       break;
     }
 
     case "tool_call_update": {
       const existing = turn.toolCalls.get(update.toolCallId);
       if (existing) {
-        Object.assign(existing, update);
+        // Merge update but preserve sessionUpdate as "tool_call" for rendering
+        const { sessionUpdate: _, ...rest } = update;
+        Object.assign(existing, rest);
       }
       break;
     }

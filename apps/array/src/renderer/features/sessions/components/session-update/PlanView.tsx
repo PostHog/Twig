@@ -1,4 +1,4 @@
-import type { Plan } from "@agentclientprotocol/sdk";
+import type { Plan } from "@features/sessions/types";
 import { CheckCircle, Circle, Spinner, XCircle } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 

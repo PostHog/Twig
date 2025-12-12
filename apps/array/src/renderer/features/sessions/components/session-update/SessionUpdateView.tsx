@@ -1,7 +1,6 @@
-import type { SessionUpdate, ToolCall } from "@agentclientprotocol/sdk";
+import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 
 import { AgentMessage } from "./AgentMessage";
-import { AvailableCommandsView } from "./AvailableCommandsView";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { CurrentModeView } from "./CurrentModeView";
 import { PlanView } from "./PlanView";
@@ -20,9 +19,14 @@ export type RenderItem =
 interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
+  turnCancelled?: boolean;
 }
 
-export function SessionUpdateView({ item, toolCalls }: SessionUpdateViewProps) {
+export function SessionUpdateView({
+  item,
+  toolCalls,
+  turnCancelled,
+}: SessionUpdateViewProps) {
   switch (item.sessionUpdate) {
     case "user_message_chunk":
       return null; // User messages rendered separately
@@ -36,14 +40,17 @@ export function SessionUpdateView({ item, toolCalls }: SessionUpdateViewProps) {
       ) : null;
     case "tool_call":
       return (
-        <ToolCallBlock toolCall={toolCalls?.get(item.toolCallId) ?? item} />
+        <ToolCallBlock
+          toolCall={toolCalls?.get(item.toolCallId) ?? item}
+          turnCancelled={turnCancelled}
+        />
       );
     case "tool_call_update":
       return null; // Updates are merged into the original tool_call
     case "plan":
       return <PlanView plan={item} />;
     case "available_commands_update":
-      return <AvailableCommandsView update={item} />;
+      return null;
     case "current_mode_update":
       return <CurrentModeView update={item} />;
     case "console":

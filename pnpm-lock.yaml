@@ -209,6 +209,9 @@ importers:
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
+      immer:
+        specifier: ^11.0.1
+        version: 11.0.1
       is-glob:
         specifier: ^4.0.3
         version: 4.0.3
@@ -327,9 +330,6 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
-      immer:
-        specifier: ^11.0.1
-        version: 11.0.1
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0
