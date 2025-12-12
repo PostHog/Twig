@@ -17,25 +17,59 @@ export function createMockTask(overrides: Partial<Task> = {}): Task {
   };
 }
 
+function createAutoMock(): unknown {
+  const cache = new Map<string, unknown>();
+  return new Proxy(
+    {},
+    {
+      get(_, prop: string) {
+        if (!cache.has(prop)) {
+          if (prop.startsWith("on")) {
+            cache.set(
+              prop,
+              vi.fn().mockReturnValue(() => {}),
+            );
+          } else {
+            cache.set(prop, vi.fn().mockResolvedValue(undefined));
+          }
+        }
+        return cache.get(prop);
+      },
+    },
+  );
+}
+
 export function mockElectronAPI(
   overrides: Partial<typeof window.electronAPI> = {},
 ) {
-  window.electronAPI = {
-    listRepoFiles: vi.fn().mockResolvedValue([
-      { path: "App.tsx", name: "App.tsx" },
-      { path: "helper.ts", name: "helper.ts" },
-      { path: "README.md", name: "README.md" },
-    ]),
+  const mockFiles = [
+    { path: "/test/repo/App.tsx", name: "App.tsx", type: "file" as const },
+    { path: "/test/repo/helper.ts", name: "helper.ts", type: "file" as const },
+    { path: "/test/repo/README.md", name: "README.md", type: "file" as const },
+  ];
+
+  const defaults = {
+    listRepoFiles: vi.fn().mockResolvedValue(mockFiles),
+    listDirectory: vi.fn().mockResolvedValue(mockFiles),
     readRepoFile: vi.fn().mockResolvedValue("// file content"),
-    shellCreate: vi.fn().mockResolvedValue(undefined),
-    shellWrite: vi.fn().mockResolvedValue(undefined),
-    shellResize: vi.fn().mockResolvedValue(undefined),
-    shellDispose: vi.fn().mockResolvedValue(undefined),
-    shellDestroy: vi.fn().mockResolvedValue(undefined),
-    onShellData: vi.fn().mockReturnValue(() => {}),
-    onShellExit: vi.fn().mockReturnValue(() => {}),
+    getChangedFilesHead: vi.fn().mockResolvedValue([]),
+    getDiffStats: vi.fn().mockResolvedValue({ additions: 0, deletions: 0 }),
+    showFileContextMenu: vi.fn().mockResolvedValue({ action: null }),
+    workspace: createAutoMock(),
     ...overrides,
-  } as unknown as typeof window.electronAPI;
+  };
+
+  window.electronAPI = new Proxy(defaults, {
+    get(target, prop: string) {
+      if (prop in target) {
+        return target[prop as keyof typeof target];
+      }
+      if (prop.startsWith("on")) {
+        return vi.fn().mockReturnValue(() => {});
+      }
+      return vi.fn().mockResolvedValue(undefined);
+    },
+  }) as typeof window.electronAPI;
 }
 
 export interface PanelStructure {

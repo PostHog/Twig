@@ -1,19 +1,14 @@
 import {
   assertActiveTab,
-  assertActiveTabInNestedPanel,
   assertGroupStructure,
   assertPanelLayout,
   assertTabCount,
-  assertTabInNestedPanel,
-  closeMultipleTabs,
   findPanelById,
   type GroupNode,
   getLayout,
   getNestedPanel,
   getPanelTree,
   openMultipleFiles,
-  splitAndAssert,
-  testSizePreservation,
   withRootGroup,
 } from "@test/panelTestHelpers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -44,16 +39,17 @@ describe("panelLayoutStore", () => {
 
       withRootGroup("task-1", (root: GroupNode) => {
         assertGroupStructure(root, {
-          direction: "horizontal",
+          direction: "vertical",
           childCount: 2,
           sizes: [70, 30],
         });
 
         assertPanelLayout(root, [
+          { panelId: "main-panel", expectedTabs: ["logs"], activeTab: "logs" },
           {
-            panelId: "main-panel",
-            expectedTabs: ["logs", "shell"],
-            activeTab: "logs",
+            panelId: "terminal-panel",
+            expectedTabs: ["shell"],
+            activeTab: "shell",
           },
         ]);
       });
@@ -68,11 +64,11 @@ describe("panelLayoutStore", () => {
     it("adds file tab to main panel", () => {
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
 
-      assertTabCount(getPanelTree("task-1"), "main-panel", 3);
+      assertTabCount(getPanelTree("task-1"), "main-panel", 2);
       assertPanelLayout(getPanelTree("task-1"), [
         {
           panelId: "main-panel",
-          expectedTabs: ["logs", "shell", "file-src/App.tsx"],
+          expectedTabs: ["logs", "file-src/App.tsx"],
         },
       ]);
     });
@@ -173,13 +169,15 @@ describe("panelLayoutStore", () => {
       assertActiveTab(getPanelTree("task-1"), "main-panel", "file-src/App.tsx");
     });
 
-    it("falls back to shell when last file tab closed", () => {
-      closeMultipleTabs("task-1", "main-panel", [
-        "file-src/App.tsx",
-        "file-src/Other.tsx",
-      ]);
+    it("falls back to logs when last file tab closed", () => {
+      usePanelLayoutStore
+        .getState()
+        .closeTab("task-1", "main-panel", "file-src/App.tsx");
+      usePanelLayoutStore
+        .getState()
+        .closeTab("task-1", "main-panel", "file-src/Other.tsx");
 
-      assertActiveTab(getPanelTree("task-1"), "main-panel", "shell");
+      assertActiveTab(getPanelTree("task-1"), "main-panel", "logs");
     });
   });
 
@@ -222,48 +220,45 @@ describe("panelLayoutStore", () => {
       usePanelLayoutStore.getState().initializeTask("task-1");
     });
 
-    it(
-      "preserves custom panel sizes when opening a file",
-      testSizePreservation("opening a file", () => {
-        openMultipleFiles("task-1", ["src/App.tsx"]);
-      }, [50, 50]),
-    );
+    it("preserves custom panel sizes when opening a file", () => {
+      usePanelLayoutStore
+        .getState()
+        .updateSizes("task-1", "left-group", [60, 40]);
 
-    it(
-      "preserves custom panel sizes when switching tabs",
-      testSizePreservation("switching tabs", () => {
-        openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
-        usePanelLayoutStore
-          .getState()
-          .setActiveTab("task-1", "main-panel", "file-src/App.tsx");
-      }, [60, 40]),
-    );
+      openMultipleFiles("task-1", ["src/App.tsx"]);
 
-    it(
-      "preserves custom panel sizes when closing tabs",
-      testSizePreservation("closing tabs", () => {
-        openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
-        usePanelLayoutStore
-          .getState()
-          .closeTab("task-1", "main-panel", "file-src/Other.tsx");
-      }),
-    );
+      withRootGroup("task-1", (root) => {
+        expect(root.sizes).toEqual([60, 40]);
+      });
+    });
 
-    it(
-      "preserves custom panel sizes in nested groups when splitting panels",
-      testSizePreservation("splitting panels", () => {
-        openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
-        usePanelLayoutStore
-          .getState()
-          .splitPanel(
-            "task-1",
-            "file-src/Other.tsx",
-            "main-panel",
-            "main-panel",
-            "right",
-          );
-      }, [65, 35]),
-    );
+    it("preserves custom panel sizes when switching tabs", () => {
+      usePanelLayoutStore
+        .getState()
+        .updateSizes("task-1", "left-group", [55, 45]);
+      openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
+      usePanelLayoutStore
+        .getState()
+        .setActiveTab("task-1", "main-panel", "file-src/App.tsx");
+
+      withRootGroup("task-1", (root) => {
+        expect(root.sizes).toEqual([55, 45]);
+      });
+    });
+
+    it("preserves custom panel sizes when closing tabs", () => {
+      usePanelLayoutStore
+        .getState()
+        .updateSizes("task-1", "left-group", [80, 20]);
+      openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
+      usePanelLayoutStore
+        .getState()
+        .closeTab("task-1", "main-panel", "file-src/Other.tsx");
+
+      withRootGroup("task-1", (root) => {
+        expect(root.sizes).toEqual([80, 20]);
+      });
+    });
   });
 
   describe("persistence", () => {
@@ -352,11 +347,13 @@ describe("panelLayoutStore", () => {
     });
 
     it("reorders tabs within a panel", () => {
-      usePanelLayoutStore.getState().reorderTabs("task-1", "main-panel", 2, 3);
+      // tabs: [logs, file-src/App.tsx, file-src/Other.tsx, file-src/Third.tsx]
+      // move index 1 to index 3
+      usePanelLayoutStore.getState().reorderTabs("task-1", "main-panel", 1, 3);
 
       const panel = findPanelById(getPanelTree("task-1"), "main-panel");
       const tabIds = panel?.content.tabs.map((t: { id: string }) => t.id);
-      expect(tabIds?.[2]).toBe("file-src/Other.tsx");
+      expect(tabIds?.[1]).toBe("file-src/Other.tsx");
       expect(tabIds?.[3]).toBe("file-src/App.tsx");
     });
 
@@ -364,9 +361,9 @@ describe("panelLayoutStore", () => {
       usePanelLayoutStore
         .getState()
         .setActiveTab("task-1", "main-panel", "file-src/App.tsx");
-      usePanelLayoutStore.getState().reorderTabs("task-1", "main-panel", 0, 2);
+      usePanelLayoutStore.getState().reorderTabs("task-1", "main-panel", 1, 3);
 
-      assertActiveTabInNestedPanel("task-1", "file-src/App.tsx", "left");
+      assertActiveTab(getPanelTree("task-1"), "main-panel", "file-src/App.tsx");
     });
   });
 
@@ -376,31 +373,34 @@ describe("panelLayoutStore", () => {
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
     });
 
-    it("moves tab to different panel", () => {
+    it("moves tab between panels", () => {
       usePanelLayoutStore
         .getState()
-        .moveTab("task-1", "file-src/App.tsx", "main-panel", "top-right");
+        .moveTab("task-1", "file-src/App.tsx", "main-panel", "terminal-panel");
 
-      assertTabInNestedPanel("task-1", "file-src/App.tsx", false, "left");
-      assertTabInNestedPanel(
-        "task-1",
-        "file-src/App.tsx",
-        true,
-        "right",
-        "left",
+      const mainPanel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const terminalPanel = findPanelById(
+        getPanelTree("task-1"),
+        "terminal-panel",
       );
+
+      expect(
+        mainPanel?.content.tabs.find((t) => t.id === "file-src/App.tsx"),
+      ).toBeUndefined();
+      expect(
+        terminalPanel?.content.tabs.find((t) => t.id === "file-src/App.tsx"),
+      ).toBeDefined();
     });
 
     it("sets moved tab as active in target panel", () => {
       usePanelLayoutStore
         .getState()
-        .moveTab("task-1", "file-src/App.tsx", "main-panel", "top-right");
+        .moveTab("task-1", "file-src/App.tsx", "main-panel", "terminal-panel");
 
-      assertActiveTabInNestedPanel(
-        "task-1",
+      assertActiveTab(
+        getPanelTree("task-1"),
+        "terminal-panel",
         "file-src/App.tsx",
-        "right",
-        "left",
       );
     });
   });
@@ -408,7 +408,7 @@ describe("panelLayoutStore", () => {
   describe("splitPanel", () => {
     beforeEach(() => {
       usePanelLayoutStore.getState().initializeTask("task-1");
-      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
     it.each([
@@ -419,12 +419,23 @@ describe("panelLayoutStore", () => {
     ] as const)(
       "splits panel %s creates %s layout",
       (direction, expectedDirection) => {
-        splitAndAssert(
-          "task-1",
-          "file-src/App.tsx",
-          direction,
-          expectedDirection,
-        );
+        usePanelLayoutStore
+          .getState()
+          .splitPanel(
+            "task-1",
+            "file-src/App.tsx",
+            "main-panel",
+            "main-panel",
+            direction,
+          );
+
+        // After split, main-panel becomes a group
+        const mainPanelNode = getNestedPanel("task-1", 0);
+        expect(mainPanelNode.type).toBe("group");
+        if (mainPanelNode.type === "group") {
+          expect(mainPanelNode.direction).toBe(expectedDirection);
+          expect(mainPanelNode.children).toHaveLength(2);
+        }
       },
     );
 
@@ -439,19 +450,19 @@ describe("panelLayoutStore", () => {
           "right",
         );
 
-      assertTabInNestedPanel(
-        "task-1",
-        "file-src/App.tsx",
-        true,
-        "left",
-        "right",
-      );
-      assertActiveTabInNestedPanel(
-        "task-1",
-        "file-src/App.tsx",
-        "left",
-        "right",
-      );
+      // After right split: main-panel becomes a group with [original, new]
+      const mainPanelNode = getNestedPanel("task-1", 0);
+      expect(mainPanelNode.type).toBe("group");
+      if (mainPanelNode.type === "group") {
+        const newPanel = mainPanelNode.children[1];
+        expect(newPanel.type).toBe("leaf");
+        if (newPanel.type === "leaf") {
+          expect(
+            newPanel.content.tabs.some((t) => t.id === "file-src/App.tsx"),
+          ).toBe(true);
+          expect(newPanel.content.activeTabId).toBe("file-src/App.tsx");
+        }
+      }
     });
   });
 
@@ -461,23 +472,12 @@ describe("panelLayoutStore", () => {
     });
 
     it("updates panel group sizes", () => {
-      usePanelLayoutStore.getState().updateSizes("task-1", "root", [60, 40]);
+      usePanelLayoutStore
+        .getState()
+        .updateSizes("task-1", "left-group", [60, 40]);
 
       withRootGroup("task-1", (root: GroupNode) => {
         expect(root.sizes).toEqual([60, 40]);
-      });
-    });
-
-    it("updates nested group sizes", () => {
-      usePanelLayoutStore
-        .getState()
-        .updateSizes("task-1", "right-group", [30, 70]);
-
-      const rightGroup = getNestedPanel("task-1", "right");
-      assertGroupStructure(rightGroup, {
-        direction: "vertical",
-        childCount: 2,
-        sizes: [30, 70],
       });
     });
   });
@@ -485,7 +485,7 @@ describe("panelLayoutStore", () => {
   describe("tree cleanup", () => {
     beforeEach(() => {
       usePanelLayoutStore.getState().initializeTask("task-1");
-      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
     it("removes empty panels after closing all tabs", () => {
@@ -499,13 +499,18 @@ describe("panelLayoutStore", () => {
           "right",
         );
 
-      const newPanel = getNestedPanel("task-1", "left", "right");
-      usePanelLayoutStore
-        .getState()
-        .closeTab("task-1", newPanel.id, "file-src/App.tsx");
+      // Find the new panel and close its tab
+      const mainPanelNode = getNestedPanel("task-1", 0);
+      if (mainPanelNode.type === "group") {
+        const newPanel = mainPanelNode.children[1];
+        usePanelLayoutStore
+          .getState()
+          .closeTab("task-1", newPanel.id, "file-src/App.tsx");
+      }
 
-      const updatedLeftPanel = getNestedPanel("task-1", "left");
-      expect(updatedLeftPanel.type).toBe("leaf");
+      // After closing, the group should simplify back to a leaf
+      const updatedMainPanel = getNestedPanel("task-1", 0);
+      expect(updatedMainPanel.type).toBe("leaf");
     });
   });
 });

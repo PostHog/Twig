@@ -4,6 +4,8 @@ export const buildApiFetcher: (config: {
   apiToken: string;
   onTokenRefresh?: () => Promise<string>;
 }) => Parameters<typeof createApiClient>[0] = (config) => {
+  let currentToken = config.apiToken;
+
   const makeRequest = async (
     input: Parameters<Parameters<typeof createApiClient>[0]["fetch"]>[0],
     token: string,
@@ -51,13 +53,14 @@ export const buildApiFetcher: (config: {
 
   return {
     fetch: async (input) => {
-      let response = await makeRequest(input, config.apiToken);
+      let response = await makeRequest(input, currentToken);
 
       // Handle 401 with automatic token refresh
       if (!response.ok && response.status === 401 && config.onTokenRefresh) {
         try {
           const newToken = await config.onTokenRefresh();
-          response = await makeRequest(input, newToken);
+          currentToken = newToken;
+          response = await makeRequest(input, currentToken);
         } catch {
           // Token refresh failed - throw the original 401 error
           const errorResponse = await response.json();
