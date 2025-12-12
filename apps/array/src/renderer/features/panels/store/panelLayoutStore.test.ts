@@ -513,4 +513,119 @@ describe("panelLayoutStore", () => {
       expect(updatedMainPanel.type).toBe("leaf");
     });
   });
+
+  describe("preview tabs", () => {
+    beforeEach(() => {
+      usePanelLayoutStore.getState().initializeTask("task-1");
+    });
+
+    it("creates preview tab by default when opening a file", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTab = panel?.content.tabs.find(
+        (t: { id: string }) => t.id === "file-src/App.tsx",
+      );
+      expect(fileTab?.isPreview).toBe(true);
+    });
+
+    it("replaces existing preview tab when opening another file", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      usePanelLayoutStore.getState().openFile("task-1", "src/Other.tsx");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTabs = panel?.content.tabs.filter((t: { id: string }) =>
+        t.id.startsWith("file-"),
+      );
+      expect(fileTabs).toHaveLength(1);
+      expect(fileTabs?.[0].id).toBe("file-src/Other.tsx");
+      expect(fileTabs?.[0].isPreview).toBe(true);
+    });
+
+    it("creates permanent tab when asPreview is false", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx", false);
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTab = panel?.content.tabs.find(
+        (t: { id: string }) => t.id === "file-src/App.tsx",
+      );
+      expect(fileTab?.isPreview).toBe(false);
+    });
+
+    it("keeps preview tab as preview when re-clicking same file", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTab = panel?.content.tabs.find(
+        (t: { id: string }) => t.id === "file-src/App.tsx",
+      );
+      expect(fileTab?.isPreview).toBe(true);
+    });
+
+    it("pins preview tab when double-clicking (asPreview=false)", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx", false);
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTab = panel?.content.tabs.find(
+        (t: { id: string }) => t.id === "file-src/App.tsx",
+      );
+      expect(fileTab?.isPreview).toBe(false);
+    });
+
+    it("keepTab sets isPreview to false", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+      usePanelLayoutStore
+        .getState()
+        .keepTab("task-1", "main-panel", "file-src/App.tsx");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTab = panel?.content.tabs.find(
+        (t: { id: string }) => t.id === "file-src/App.tsx",
+      );
+      expect(fileTab?.isPreview).toBe(false);
+    });
+
+    it("does not replace non-preview tabs when opening preview", () => {
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx", false);
+      usePanelLayoutStore.getState().openFile("task-1", "src/Other.tsx");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const fileTabs = panel?.content.tabs.filter((t: { id: string }) =>
+        t.id.startsWith("file-"),
+      );
+      expect(fileTabs).toHaveLength(2);
+      expect(
+        fileTabs?.find((t) => t.id === "file-src/App.tsx")?.isPreview,
+      ).toBe(false);
+      expect(
+        fileTabs?.find((t) => t.id === "file-src/Other.tsx")?.isPreview,
+      ).toBe(true);
+    });
+
+    it("openDiff creates preview tab by default", () => {
+      usePanelLayoutStore
+        .getState()
+        .openDiff("task-1", "src/App.tsx", "modified");
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const diffTab = panel?.content.tabs.find((t: { id: string }) =>
+        t.id.startsWith("diff-"),
+      );
+      expect(diffTab?.isPreview).toBe(true);
+    });
+
+    it("openDiff creates permanent tab when asPreview is false", () => {
+      usePanelLayoutStore
+        .getState()
+        .openDiff("task-1", "src/App.tsx", "modified", false);
+
+      const panel = findPanelById(getPanelTree("task-1"), "main-panel");
+      const diffTab = panel?.content.tabs.find((t: { id: string }) =>
+        t.id.startsWith("diff-"),
+      );
+      expect(diffTab?.isPreview).toBe(false);
+    });
+  });
 });

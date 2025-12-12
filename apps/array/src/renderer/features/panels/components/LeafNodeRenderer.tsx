@@ -12,6 +12,7 @@ interface LeafNodeRendererProps {
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (panelId: string, tabId: string) => void;
   closeTabsToRight: (panelId: string, tabId: string) => void;
+  keepTab: (panelId: string, tabId: string) => void;
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
   onActiveTabChange: (panelId: string, tabId: string) => void;
@@ -28,6 +29,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   closeTab,
   closeOtherTabs,
   closeTabsToRight,
+  keepTab,
   draggingTabId,
   draggingTabPanelId,
   onActiveTabChange,
@@ -56,6 +58,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
       onActiveTabChange={onActiveTabChange}
       onCloseOtherTabs={closeOtherTabs}
       onCloseTabsToRight={closeTabsToRight}
+      onKeepTab={keepTab}
       onPanelFocus={onPanelFocus}
       draggingTabId={draggingTabId}
       draggingTabPanelId={draggingTabPanelId}

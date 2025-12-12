@@ -127,6 +127,10 @@ function ChangedFileItem({
     openDiff(taskId, file.path, file.status);
   };
 
+  const handleDoubleClick = () => {
+    openDiff(taskId, file.path, file.status, false);
+  };
+
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await window.electronAPI.showFileContextMenu(fullPath);
@@ -190,6 +194,7 @@ function ChangedFileItem({
       align="center"
       gap="1"
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

@@ -48,9 +48,15 @@ export interface PanelLayoutStore {
     taskId: string,
     terminalLayoutMode?: "split" | "tabbed",
   ) => void;
-  openFile: (taskId: string, filePath: string) => void;
+  openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
   openArtifact: (taskId: string, fileName: string) => void;
-  openDiff: (taskId: string, filePath: string, status?: string) => void;
+  openDiff: (
+    taskId: string,
+    filePath: string,
+    status?: string,
+    asPreview?: boolean,
+  ) => void;
+  keepTab: (taskId: string, panelId: string, tabId: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
@@ -198,17 +204,32 @@ function openTab(
   state: { taskLayouts: Record<string, TaskLayout> },
   taskId: string,
   tabId: string,
+  asPreview = true,
 ): { taskLayouts: Record<string, TaskLayout> } {
   return updateTaskLayout(state, taskId, (layout) => {
     // Check if tab already exists in tree
     const existingTab = findTabInTree(layout.panelTree, tabId);
 
     if (existingTab) {
-      // Tab exists, just activate it
+      // Tab exists - activate it, only pin if explicitly requested (asPreview=false)
       const updatedTree = updateTreeNode(
         layout.panelTree,
         existingTab.panelId,
-        (panel) => setActiveTabInPanel(panel, tabId),
+        (panel) => {
+          if (panel.type !== "leaf") return panel;
+          return {
+            ...panel,
+            content: {
+              ...panel.content,
+              tabs: asPreview
+                ? panel.content.tabs
+                : panel.content.tabs.map((tab) =>
+                    tab.id === tabId ? { ...tab, isPreview: false } : tab,
+                  ),
+              activeTabId: tabId,
+            },
+          };
+        },
       );
 
       return { panelTree: updatedTree };
@@ -224,7 +245,7 @@ function openTab(
     const updatedTree = updateTreeNode(
       layout.panelTree,
       DEFAULT_PANEL_IDS.MAIN_PANEL,
-      (panel) => addNewTabToPanel(panel, tabId, true),
+      (panel) => addNewTabToPanel(panel, tabId, true, asPreview),
     );
 
     const metadata = updateMetadataForTab(layout, tabId, "add");
@@ -261,19 +282,43 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         }));
       },
 
-      openFile: (taskId, filePath) => {
+      openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
-        set((state) => openTab(state, taskId, tabId));
+        set((state) => openTab(state, taskId, tabId, asPreview));
       },
 
       openArtifact: (taskId, fileName) => {
         const tabId = createArtifactTabId(fileName);
-        set((state) => openTab(state, taskId, tabId));
+        set((state) => openTab(state, taskId, tabId, false));
       },
 
-      openDiff: (taskId, filePath, status) => {
+      openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
-        set((state) => openTab(state, taskId, tabId));
+        set((state) => openTab(state, taskId, tabId, asPreview));
+      },
+
+      keepTab: (taskId, panelId, tabId) => {
+        set((state) =>
+          updateTaskLayout(state, taskId, (layout) => {
+            const updatedTree = updateTreeNode(
+              layout.panelTree,
+              panelId,
+              (panel) => {
+                if (panel.type !== "leaf") return panel;
+                return {
+                  ...panel,
+                  content: {
+                    ...panel.content,
+                    tabs: panel.content.tabs.map((tab) =>
+                      tab.id === tabId ? { ...tab, isPreview: false } : tab,
+                    ),
+                  },
+                };
+              },
+            );
+            return { panelTree: updatedTree };
+          }),
+        );
       },
 
       closeTab: (taskId, panelId, tabId) => {
