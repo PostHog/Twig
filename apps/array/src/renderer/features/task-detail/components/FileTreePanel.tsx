@@ -1,13 +1,9 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isFileTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { useFileTreeStore } from "@features/right-sidebar/stores/fileTreeStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import {
-  CaretRight,
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-} from "@phosphor-icons/react";
+import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -152,12 +148,7 @@ function LazyTreeItem({
             />
           )
         ) : (
-          <FileIcon
-            size={14}
-            weight="regular"
-            color="var(--gray-10)"
-            style={{ flexShrink: 0 }}
-          />
+          <FileIcon filename={entry.name} size={14} />
         )}
         <Text
           size="1"
