@@ -21,10 +21,19 @@ interface MarkdownRendererProps {
   content: string;
 }
 
-// Preprocessor to prevent setext heading interpretation of horizontal rules
-// Ensures `---`, `***`, `___` are preceded by a blank line
 function preprocessMarkdown(content: string): string {
-  return content.replace(/\n([^\n].*)\n(---+|___+|\*\*\*+)\n/g, "\n$1\n\n$2\n");
+  // Filter sycophantic opener phrases
+  const filtered = content.replace(
+    /^(You're|You are|That's|That is)\s+(absolutely|completely|totally|entirely)\s+(right|correct|exactly)[.,!:;—-]*\s*/gim,
+    "",
+  );
+
+  // Prevent setext heading interpretation of horizontal rules
+  // Ensures `---`, `***`, `___` are preceded by a blank line
+  return filtered.replace(
+    /\n([^\n].*)\n(---+|___+|\*\*\*+)\n/g,
+    "\n$1\n\n$2\n",
+  );
 }
 
 const fontStyle = {
