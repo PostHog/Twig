@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import "@radix-ui/themes/styles.css";
 import { Providers } from "@components/Providers";
 import App from "@renderer/App";

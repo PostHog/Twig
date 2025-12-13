@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import dns from "node:dns";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
