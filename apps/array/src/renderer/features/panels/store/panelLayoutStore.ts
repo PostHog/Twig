@@ -46,8 +46,13 @@ export interface PanelLayoutStore {
     taskId: string,
     terminalLayoutMode?: "split" | "tabbed",
   ) => void;
-  openFile: (taskId: string, filePath: string) => void;
-  openDiff: (taskId: string, filePath: string, status?: string) => void;
+  openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
+  openDiff: (
+    taskId: string,
+    filePath: string,
+    status?: string,
+    asPreview?: boolean,
+  ) => void;
   keepTab: (taskId: string, panelId: string, tabId: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
