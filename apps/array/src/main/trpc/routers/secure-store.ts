@@ -7,6 +7,9 @@ import { publicProcedure, router } from "../trpc.js";
 const log = logger.scope("secureStoreRouter");
 
 export const secureStoreRouter = router({
+  /**
+   * Get an encrypted item from the store
+   */
   getItem: publicProcedure
     .input(z.object({ key: z.string() }))
     .query(async ({ input }) => {
@@ -19,6 +22,10 @@ export const secureStoreRouter = router({
         return null;
       }
     }),
+
+  /**
+   * Set an encrypted item in the store
+   */
   setItem: publicProcedure
     .input(z.object({ key: z.string(), value: z.string() }))
     .query(async ({ input }) => {
@@ -28,6 +35,10 @@ export const secureStoreRouter = router({
         log.error("Failed to set item:", error);
       }
     }),
+
+  /**
+   * Remove an item from the store
+   */
   removeItem: publicProcedure
     .input(z.object({ key: z.string() }))
     .query(async ({ input }) => {
@@ -37,6 +48,10 @@ export const secureStoreRouter = router({
         log.error("Failed to remove item:", error);
       }
     }),
+
+  /**
+   * Clear all items from the store
+   */
   clear: publicProcedure.query(async () => {
     try {
       rendererStore.clear();
