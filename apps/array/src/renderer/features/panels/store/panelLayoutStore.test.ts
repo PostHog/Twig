@@ -512,6 +512,53 @@ describe("panelLayoutStore", () => {
       const updatedMainPanel = getNestedPanel("task-1", 0);
       expect(updatedMainPanel.type).toBe("leaf");
     });
+
+    it("removes split pane when moving its only tab to another pane", () => {
+      // Create a split: main-panel becomes a group with [original, new-panel]
+      usePanelLayoutStore
+        .getState()
+        .splitPanel(
+          "task-1",
+          "file-src/App.tsx",
+          "main-panel",
+          "main-panel",
+          "right",
+        );
+
+      // Verify we have a split with 2 panels
+      const mainPanelNode = getNestedPanel("task-1", 0);
+      expect(mainPanelNode.type).toBe("group");
+      if (mainPanelNode.type !== "group") return;
+      expect(mainPanelNode.children).toHaveLength(2);
+
+      // Get the new panel (contains file-src/App.tsx)
+      const newPanel = mainPanelNode.children[1];
+      expect(newPanel.type).toBe("leaf");
+      if (newPanel.type !== "leaf") return;
+
+      // Original panel (contains logs and file-src/Other.tsx)
+      const originalPanel = mainPanelNode.children[0];
+      expect(originalPanel.type).toBe("leaf");
+      if (originalPanel.type !== "leaf") return;
+
+      // Move the tab from the new panel back to the original panel
+      usePanelLayoutStore
+        .getState()
+        .moveTab("task-1", "file-src/App.tsx", newPanel.id, originalPanel.id);
+
+      // The split should be collapsed since new panel is now empty
+      const updatedMainPanel = getNestedPanel("task-1", 0);
+      expect(updatedMainPanel.type).toBe("leaf");
+
+      // The tab should now be in the original panel
+      if (updatedMainPanel.type === "leaf") {
+        expect(
+          updatedMainPanel.content.tabs.some(
+            (t) => t.id === "file-src/App.tsx",
+          ),
+        ).toBe(true);
+      }
+    });
   });
 
   describe("preview tabs", () => {
