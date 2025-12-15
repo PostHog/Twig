@@ -96,12 +96,14 @@ export function DiffEditorPanel({
           originalContent={originalContent ?? ""}
           modifiedContent={modifiedContent ?? ""}
           filePath={absolutePath}
+          relativePath={filePath}
           onContentChange={handleContentChange}
         />
       ) : (
         <CodeMirrorEditor
           content={content ?? ""}
           filePath={absolutePath}
+          relativePath={filePath}
           readOnly
         />
       )}

@@ -11,7 +11,7 @@ import {
   isJsonRpcRequest,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -20,7 +20,6 @@ import {
   SessionUpdateView,
 } from "./session-update/SessionUpdateView";
 import { UserMessage } from "./session-update/UserMessage";
-import { VirtualizedList } from "./VirtualizedList";
 
 interface Turn {
   id: string;
@@ -46,32 +45,41 @@ export function ConversationView({
   repoPath,
   isCloud = false,
 }: ConversationViewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const turns = useMemo(() => buildTurns(events), [events]);
   const lastTurn = turns[turns.length - 1];
   const lastTurnComplete = lastTurn?.isComplete ?? true;
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
   return (
-    <VirtualizedList
-      items={turns}
-      estimateSize={200}
-      overscan={3}
-      getItemKey={(turn) => turn.id}
-      renderItem={(turn) => (
-        <TurnView turn={turn} repoPath={repoPath} isCloud={isCloud} />
-      )}
-      autoScrollToBottom
-      className="flex-1 bg-white p-2 pb-16 dark:bg-gray-1"
-      gap={12}
-      footer={
-        <SessionFooter
-          isPromptPending={isPromptPending || !lastTurnComplete}
-          lastGenerationDuration={
-            lastTurn?.isComplete ? lastTurn.durationMs : null
-          }
-          lastStopReason={lastTurn?.stopReason}
-        />
-      }
-    />
+    <div
+      ref={scrollRef}
+      className="scrollbar-hide flex-1 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
+    >
+      <div className="flex flex-col gap-3">
+        {turns.map((turn) => (
+          <TurnView
+            key={turn.id}
+            turn={turn}
+            repoPath={repoPath}
+            isCloud={isCloud}
+          />
+        ))}
+      </div>
+      <SessionFooter
+        isPromptPending={isPromptPending || !lastTurnComplete}
+        lastGenerationDuration={
+          lastTurn?.isComplete ? lastTurn.durationMs : null
+        }
+        lastStopReason={lastTurn?.stopReason}
+      />
+    </div>
   );
 }
 

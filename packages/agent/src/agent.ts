@@ -57,8 +57,8 @@ export class Agent {
 
     // Add auth if API key provided
     const headers: Record<string, string> = {};
-    if (config.posthogApiKey) {
-      headers.Authorization = `Bearer ${config.posthogApiKey}`;
+    if (config.getPosthogApiKey) {
+      headers.Authorization = `Bearer ${config.getPosthogApiKey()}`;
     }
 
     const defaultMcpServers = {
@@ -93,12 +93,12 @@ export class Agent {
 
     if (
       config.posthogApiUrl &&
-      config.posthogApiKey &&
+      config.getPosthogApiKey &&
       config.posthogProjectId
     ) {
       this.posthogAPI = new PostHogAPIClient({
         apiUrl: config.posthogApiUrl,
-        apiKey: config.posthogApiKey,
+        getApiKey: config.getPosthogApiKey,
         projectId: config.posthogProjectId,
       });
 
