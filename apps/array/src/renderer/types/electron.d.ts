@@ -289,6 +289,10 @@ declare global {
     dockBadge: {
       show: () => Promise<void>;
     };
+    shellExecute: (
+      cwd: string,
+      command: string,
+    ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
   }
 
   interface Window {

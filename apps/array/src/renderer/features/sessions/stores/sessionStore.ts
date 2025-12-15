@@ -12,6 +12,11 @@ import type {
   AcpMessage,
   JsonRpcMessage,
   StoredLogEntry,
+  UserShellExecuteParams,
+} from "@shared/types/session-events";
+import {
+  isJsonRpcNotification,
+  isJsonRpcRequest,
 } from "@shared/types/session-events";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
@@ -54,6 +59,12 @@ interface SessionActions {
   ) => Promise<{ stopReason: string }>;
   cancelPrompt: (taskId: string) => Promise<boolean>;
   setSessionModel: (taskId: string, modelId: string) => Promise<void>;
+  appendUserShellExecute: (
+    taskId: string,
+    command: string,
+    cwd: string,
+    result: { stdout: string; stderr: string; exitCode: number },
+  ) => Promise<void>;
 }
 
 interface AuthCredentials {
@@ -104,6 +115,62 @@ function createUserMessageEvent(text: string, ts: number): AcpMessage {
       } as SessionNotification,
     },
   };
+}
+
+function createUserShellExecuteEvent(
+  command: string,
+  cwd: string,
+  result: { stdout: string; stderr: string; exitCode: number },
+): AcpMessage {
+  return {
+    type: "acp_message",
+    ts: Date.now(),
+    message: {
+      jsonrpc: "2.0",
+      method: "_array/user_shell_execute",
+      params: { command, cwd, result },
+    },
+  };
+}
+
+/**
+ * Collects user shell executes that occurred after the last prompt request.
+ * These are included as hidden context in the next prompt so the agent
+ * knows what commands the user ran between turns.
+ *
+ * Scans backwards from the end of events, stopping at the most recent
+ * session/prompt request (not response), collecting any _array/user_shell_execute
+ * notifications found along the way.
+ */
+function getUserShellExecutesSinceLastPrompt(
+  events: AcpMessage[],
+): UserShellExecuteParams[] {
+  const results: UserShellExecuteParams[] = [];
+
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i].message;
+
+    if (isJsonRpcRequest(msg) && msg.method === "session/prompt") break;
+
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_array/user_shell_execute"
+    ) {
+      results.unshift(msg.params as UserShellExecuteParams);
+    }
+  }
+
+  return results;
+}
+
+function shellExecutesToContextBlocks(
+  shellExecutes: UserShellExecuteParams[],
+): ContentBlock[] {
+  return shellExecutes.map((cmd) => ({
+    type: "text" as const,
+    text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${cmd.result.stdout || cmd.result.stderr || "(no output)"}`,
+    _meta: { ui: { hidden: true } },
+  }));
 }
 
 async function fetchSessionLogs(
@@ -224,6 +291,30 @@ const useStore = create<SessionStore>()(
           }
         }
       });
+    };
+
+    const appendAndPersist = async (
+      taskId: string,
+      session: AgentSession,
+      event: AcpMessage,
+      storedEntry: StoredLogEntry,
+    ) => {
+      appendEvents(
+        session.taskRunId,
+        [event],
+        (session.processedLineCount ?? 0) + 1,
+      );
+
+      const auth = useAuthStore.getState();
+      if (auth.client) {
+        try {
+          await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
+            storedEntry,
+          ]);
+        } catch (error) {
+          log.warn("Failed to persist event to logs", { error });
+        }
+      }
     };
 
     const subscribeToChannel = (taskRunId: string, channel: string) => {
@@ -402,10 +493,7 @@ const useStore = create<SessionStore>()(
       taskId: string,
       blocks: ContentBlock[],
     ): Promise<{ stopReason: string }> => {
-      const auth = useAuthStore.getState();
-      if (!auth.client) throw new Error("API client not available");
-
-      const notification: StoredLogEntry = {
+      const storedEntry: StoredLogEntry = {
         type: "notification",
         timestamp: new Date().toISOString(),
         notification: {
@@ -416,21 +504,13 @@ const useStore = create<SessionStore>()(
         },
       };
 
-      await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
-        notification,
-      ]);
+      const event: AcpMessage = {
+        type: "acp_message",
+        ts: Date.now(),
+        message: storedEntry.notification as JsonRpcMessage,
+      };
 
-      appendEvents(
-        session.taskRunId,
-        [
-          {
-            type: "acp_message",
-            ts: Date.now(),
-            message: notification.notification as JsonRpcMessage,
-          },
-        ],
-        (session.processedLineCount ?? 0) + 1,
-      );
+      await appendAndPersist(taskId, session, event, storedEntry);
 
       return { stopReason: "pending" };
     };
@@ -527,10 +607,18 @@ const useStore = create<SessionStore>()(
           const session = getSessionByTaskId(taskId);
           if (!session) throw new Error("No active session for task");
 
-          const blocks: ContentBlock[] =
+          let blocks: ContentBlock[] =
             typeof prompt === "string"
               ? [{ type: "text", text: prompt }]
               : prompt;
+
+          const shellExecutes = getUserShellExecutesSinceLastPrompt(
+            session.events,
+          );
+          if (shellExecutes.length > 0) {
+            const contextBlocks = shellExecutesToContextBlocks(shellExecutes);
+            blocks = [...contextBlocks, ...blocks];
+          }
 
           return session.isCloud
             ? sendCloudPrompt(session, taskId, blocks)
@@ -565,6 +653,24 @@ const useStore = create<SessionStore>()(
               error,
             });
           }
+        },
+
+        appendUserShellExecute: async (taskId, command, cwd, result) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) return;
+
+          const storedEntry: StoredLogEntry = {
+            type: "notification",
+            timestamp: new Date().toISOString(),
+            notification: {
+              method: "_array/user_shell_execute",
+              params: { command, cwd, result },
+            },
+          };
+
+          const event = createUserShellExecuteEvent(command, cwd, result);
+
+          await appendAndPersist(taskId, session, event, storedEntry);
         },
       },
     };

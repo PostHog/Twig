@@ -408,4 +408,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dockBadge: {
     show: (): Promise<void> => ipcRenderer.invoke("dock-badge:show"),
   },
+  shellExecute: (
+    cwd: string,
+    command: string,
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
+    ipcRenderer.invoke("shell:execute", cwd, command),
 });

@@ -97,6 +97,22 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     log.info("Prompt cancelled", { success: result });
   }, [taskId, cancelPrompt]);
 
+  const { appendUserShellExecute } = useSessionActions();
+
+  const handleBashCommand = useCallback(
+    async (command: string) => {
+      if (!repoPath) return;
+
+      try {
+        const result = await window.electronAPI.shellExecute(repoPath, command);
+        appendUserShellExecute(taskId, command, repoPath, result);
+      } catch (error) {
+        log.error("Failed to execute shell command", error);
+      }
+    },
+    [taskId, repoPath, appendUserShellExecute],
+  );
+
   return (
     <BackgroundWrapper>
       <Box height="100%" width="100%">
@@ -106,6 +122,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           isRunning={isRunning}
           isPromptPending={isPromptPending}
           onSendPrompt={handleSendPrompt}
+          onBashCommand={handleBashCommand}
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
