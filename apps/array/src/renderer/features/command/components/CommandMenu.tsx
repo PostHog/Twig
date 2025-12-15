@@ -14,7 +14,7 @@ import { Flex, Text } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useThemeStore } from "@stores/themeStore";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 interface CommandMenuProps {
@@ -29,7 +29,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
   const commandRef = useRef<HTMLDivElement>(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -41,12 +40,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
       },
     [close],
   );
-
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery("");
-    }
-  }, [open]);
 
   useHotkeys("escape", close, {
     enabled: open,
@@ -85,14 +78,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, close]);
 
-  const matchingFolders = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    return folders.filter((folder) =>
-      folder.name.toLowerCase().includes(query),
-    );
-  }, [folders, searchQuery]);
-
   if (!open) return null;
 
   return (
@@ -113,7 +98,6 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               autoFocus={true}
               style={{ fontSize: "12px" }}
               className="w-full bg-transparent py-3 outline-none placeholder:text-gray-9"
-              onValueChange={setSearchQuery}
             />
           </div>
 
@@ -172,12 +156,12 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </Command.Item>
             </Command.Group>
 
-            {matchingFolders.length > 0 && (
+            {folders.length > 0 && (
               <Command.Group heading="New task in folder">
-                {matchingFolders.map((folder) => (
+                {folders.map((folder) => (
                   <Command.Item
                     key={folder.id}
-                    value={`New task in ${folder.name} folder`}
+                    value={`New task in ${folder.name} folder ${folder.path}`}
                     onSelect={runAndClose(() => navigateToTaskInput(folder.id))}
                   >
                     <FileTextIcon className="mr-3 h-3 w-3 text-gray-11" />
