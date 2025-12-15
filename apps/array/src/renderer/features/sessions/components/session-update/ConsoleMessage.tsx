@@ -1,5 +1,4 @@
-import { Bug, Info, Warning, XCircle } from "@phosphor-icons/react";
-import { Badge, Flex, Text } from "@radix-ui/themes";
+import { Box, Text } from "@radix-ui/themes";
 
 interface ConsoleMessageProps {
   level: "info" | "debug" | "warn" | "error";
@@ -8,56 +7,24 @@ interface ConsoleMessageProps {
 }
 
 export function ConsoleMessage({ level, message }: ConsoleMessageProps) {
-  const getIcon = () => {
+  const getLevelColor = () => {
     switch (level) {
       case "error":
-        return <XCircle size={12} weight="fill" />;
+        return "text-red-11";
       case "warn":
-        return <Warning size={12} weight="fill" />;
+        return "text-yellow-11";
       case "debug":
-        return <Bug size={12} weight="fill" />;
+        return "text-purple-11";
       default:
-        return <Info size={12} weight="fill" />;
-    }
-  };
-
-  const getBadgeColor = (): "gray" | "yellow" | "red" | "purple" => {
-    switch (level) {
-      case "error":
-        return "red";
-      case "warn":
-        return "yellow";
-      case "debug":
-        return "purple";
-      default:
-        return "gray";
-    }
-  };
-
-  const getLabel = () => {
-    switch (level) {
-      case "error":
-        return "error";
-      case "warn":
-        return "warn";
-      case "debug":
-        return "debug";
-      default:
-        return "info";
+        return "text-gray-10";
     }
   };
 
   return (
-    <Flex align="center" gap="3" className="py-1">
-      <Badge color={getBadgeColor()} variant="soft" size="1">
-        <Flex align="center" gap="1">
-          {getIcon()}
-          <Text size="1">{getLabel()}</Text>
-        </Flex>
-      </Badge>
-      <Text size="2" className="text-gray-12">
-        {message}
+    <Box className="border-gray-4 border-l-2 py-0.5 pl-3">
+      <Text size="1" className="font-mono text-gray-11">
+        <Text className={getLevelColor()}>[{level}]</Text> {message}
       </Text>
-    </Flex>
+    </Box>
   );
 }

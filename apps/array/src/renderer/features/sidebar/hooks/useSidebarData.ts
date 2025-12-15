@@ -95,15 +95,13 @@ function groupTasksByFolder(
 
   for (const task of tasks) {
     const workspace = workspaces[task.id];
-    if (workspace) {
-      const folder = folders.find((f) => f.id === workspace.folderId);
-      if (folder) {
-        if (!tasksByFolder.has(folder.id)) {
-          tasksByFolder.set(folder.id, []);
-        }
-        tasksByFolder.get(folder.id)?.push(task);
-      }
+    if (!workspace) continue;
+    const folder = folders.find((f) => f.id === workspace.folderId);
+    if (!folder) continue;
+    if (!tasksByFolder.has(folder.id)) {
+      tasksByFolder.set(folder.id, []);
     }
+    tasksByFolder.get(folder.id)?.push(task);
   }
 
   return tasksByFolder;

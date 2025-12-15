@@ -1,5 +1,5 @@
 import { MarkdownRenderer } from "@features/editor/components/MarkdownRenderer";
-import { ChatBubble } from "../ChatBubble";
+import { Box } from "@radix-ui/themes";
 
 interface AgentMessageProps {
   content: string;
@@ -7,8 +7,8 @@ interface AgentMessageProps {
 
 export function AgentMessage({ content }: AgentMessageProps) {
   return (
-    <ChatBubble variant="agent">
+    <Box className="py-1 pl-3 [&>*:last-child]:mb-0">
       <MarkdownRenderer content={content} />
-    </ChatBubble>
+    </Box>
   );
 }

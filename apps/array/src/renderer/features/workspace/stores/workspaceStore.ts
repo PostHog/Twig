@@ -91,13 +91,17 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     try {
       const workspaces = await window.electronAPI?.workspace.getAll();
       if (workspaces) {
-        set({ workspaces, isLoaded: true });
+        // Merge with existing state to preserve workspaces created during load
+        set((state) => ({
+          workspaces: { ...workspaces, ...state.workspaces },
+          isLoaded: true,
+        }));
       } else {
-        set({ workspaces: {}, isLoaded: true });
+        set({ isLoaded: true });
       }
     } catch (error) {
       log.error("Failed to load workspaces:", error);
-      set({ workspaces: {}, isLoaded: true });
+      set({ isLoaded: true });
     }
   })();
 

@@ -1,17 +1,17 @@
 import type {
   ContentBlock,
   SessionNotification,
-  SessionUpdate,
-  ToolCall,
 } from "@agentclientprotocol/sdk";
-import { Box } from "@radix-ui/themes";
+import type { SessionUpdate, ToolCall } from "@features/sessions/types";
+import { XCircle } from "@phosphor-icons/react";
+import { Box, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
   isJsonRpcRequest,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -20,7 +20,6 @@ import {
   SessionUpdateView,
 } from "./session-update/SessionUpdateView";
 import { UserMessage } from "./session-update/UserMessage";
-import { TurnCollapsible } from "./TurnCollapsible";
 import { VirtualizedList } from "./VirtualizedList";
 
 interface Turn {
@@ -54,20 +53,22 @@ export function ConversationView({
   return (
     <VirtualizedList
       items={turns}
-      estimateSize={100}
+      estimateSize={200}
+      overscan={3}
       getItemKey={(turn) => turn.id}
       renderItem={(turn) => (
         <TurnView turn={turn} repoPath={repoPath} isCloud={isCloud} />
       )}
       autoScrollToBottom
-      className="flex-1 p-4"
-      gap={24}
+      className="flex-1 bg-blackA-5 p-2 pb-16"
+      gap={12}
       footer={
         <SessionFooter
           isPromptPending={isPromptPending || !lastTurnComplete}
           lastGenerationDuration={
             lastTurn?.isComplete ? lastTurn.durationMs : null
           }
+          lastStopReason={lastTurn?.stopReason}
         />
       }
     />
@@ -80,41 +81,31 @@ interface TurnViewProps {
   isCloud?: boolean;
 }
 
-function TurnView({ turn, repoPath, isCloud = false }: TurnViewProps) {
-  const lastAgentIdx = turn.items.findLastIndex(
-    (item) => item.sessionUpdate === "agent_message_chunk",
-  );
-  const lastAgent = lastAgentIdx >= 0 ? turn.items[lastAgentIdx] : null;
-  const shouldCollapse = turn.isComplete && lastAgent && turn.items.length > 1;
-
+const TurnView = memo(function TurnView({
+  turn,
+  repoPath,
+  isCloud = false,
+}: TurnViewProps) {
+  const wasCancelled = turn.stopReason === "cancelled";
   const gitAction = parseGitActionMessage(turn.userContent);
   const showGitResult =
     gitAction.isGitAction && gitAction.actionType && turn.isComplete;
 
   return (
-    <Box className="flex flex-col gap-4">
+    <Box className="flex flex-col gap-2">
       {gitAction.isGitAction && gitAction.actionType ? (
         <GitActionMessage actionType={gitAction.actionType} />
       ) : (
         <UserMessage content={turn.userContent} />
       )}
-      {shouldCollapse ? (
-        <>
-          <TurnCollapsible
-            items={turn.items.filter((_, i) => i !== lastAgentIdx)}
-            toolCalls={turn.toolCalls}
-          />
-          <SessionUpdateView item={lastAgent} toolCalls={turn.toolCalls} />
-        </>
-      ) : (
-        turn.items.map((item, i) => (
-          <SessionUpdateView
-            key={`${item.sessionUpdate}-${i}`}
-            item={item}
-            toolCalls={turn.toolCalls}
-          />
-        ))
-      )}
+      {turn.items.map((item, i) => (
+        <SessionUpdateView
+          key={`${item.sessionUpdate}-${i}`}
+          item={item}
+          toolCalls={turn.toolCalls}
+          turnCancelled={wasCancelled}
+        />
+      ))}
       {showGitResult && repoPath && (
         <GitActionResult
           actionType={gitAction.actionType!}
@@ -123,9 +114,19 @@ function TurnView({ turn, repoPath, isCloud = false }: TurnViewProps) {
           isCloud={isCloud}
         />
       )}
+      {wasCancelled && (
+        <Box className="border-gray-4 border-l-2 py-0.5 pl-3">
+          <Flex align="center" gap="2" className="text-gray-9">
+            <XCircle size={14} />
+            <Text size="1" color="gray">
+              Interrupted by user
+            </Text>
+          </Flex>
+        </Box>
+      )}
     </Box>
   );
-}
+});
 
 // --- Event Processing ---
 
@@ -227,17 +228,25 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
       break;
 
     case "tool_call": {
-      // Clone to allow mutation from tool_call_update
-      const toolCall = { ...update };
-      turn.toolCalls.set(update.toolCallId, toolCall);
-      turn.items.push(toolCall);
+      const existing = turn.toolCalls.get(update.toolCallId);
+      if (existing) {
+        // Update existing tool call (same toolCallId sent again)
+        Object.assign(existing, update);
+      } else {
+        // New tool call - clone to allow mutation from updates
+        const toolCall = { ...update };
+        turn.toolCalls.set(update.toolCallId, toolCall);
+        turn.items.push(toolCall);
+      }
       break;
     }
 
     case "tool_call_update": {
       const existing = turn.toolCalls.get(update.toolCallId);
       if (existing) {
-        Object.assign(existing, update);
+        // Merge update but preserve sessionUpdate as "tool_call" for rendering
+        const { sessionUpdate: _, ...rest } = update;
+        Object.assign(existing, rest);
       }
       break;
     }

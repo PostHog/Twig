@@ -1,11 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 
 interface VirtualizedListProps<T> {
   items: T[];
@@ -45,20 +39,25 @@ export function VirtualizedList<T>({
       : undefined,
   });
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const threshold = 50;
-    isAtBottomRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-  }, []);
-
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.addEventListener("scroll", handleScroll);
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const threshold = 50;
+        isAtBottomRef.current =
+          el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+        ticking = false;
+      });
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
+  }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -73,30 +72,19 @@ export function VirtualizedList<T>({
     }
   }, [autoScrollToBottom, items.length]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (
       !el ||
       !autoScrollToBottom ||
       items.length === 0 ||
-      isInitialMountRef.current
+      isInitialMountRef.current ||
+      !isAtBottomRef.current
     ) {
       return;
     }
 
-    if (!isAtBottomRef.current) {
-      return;
-    }
-
-    const scrollToBottom = () => {
-      const el = scrollRef.current;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToBottom);
-    });
+    el.scrollTop = el.scrollHeight;
   }, [autoScrollToBottom, items]);
 
   const virtualItems = virtualizer.getVirtualItems();
@@ -104,8 +92,12 @@ export function VirtualizedList<T>({
   return (
     <div
       ref={scrollRef}
-      className={className}
-      style={{ height: "100%", overflow: "auto" }}
+      className={`${className} scrollbar-hide`}
+      style={{
+        height: "100%",
+        overflow: "auto",
+        scrollBehavior: "auto",
+      }}
     >
       {items.length > 0 && (
         <div
