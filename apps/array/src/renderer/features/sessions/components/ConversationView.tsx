@@ -60,7 +60,7 @@ export function ConversationView({
   return (
     <div
       ref={scrollRef}
-      className="scrollbar-hide flex-1 overflow-auto bg-blackA-5 p-2 pb-16"
+      className="scrollbar-hide flex-1 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
     >
       <div className="flex flex-col gap-3">
         {turns.map((turn) => (
