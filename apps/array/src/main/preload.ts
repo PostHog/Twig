@@ -1,5 +1,6 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
+import { exposeElectronTRPC } from "trpc-electron/main";
 import type {
   CreateWorkspaceOptions,
   RegisteredFolder,
@@ -18,6 +19,12 @@ import type {
   TaskContextMenuResult,
 } from "./services/contextMenu.types.js";
 import "electron-log/preload";
+
+process.once("loaded", () => {
+  exposeElectronTRPC();
+});
+
+/// -- Legacy IPC handlers -- ///
 
 type IpcEventListener<T> = (data: T) => void;
 
@@ -38,16 +45,6 @@ function createVoidIpcListener(
   return () => ipcRenderer.removeListener(channel, listener);
 }
 
-interface MessageBoxOptions {
-  type?: "none" | "info" | "error" | "question" | "warning";
-  title?: string;
-  message?: string;
-  detail?: string;
-  buttons?: string[];
-  defaultId?: number;
-  cancelId?: number;
-}
-
 interface AgentStartParams {
   taskId: string;
   taskRunId: string;
@@ -64,20 +61,6 @@ interface AgentStartParams {
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  storeApiKey: (apiKey: string): Promise<string> =>
-    ipcRenderer.invoke("store-api-key", apiKey),
-  retrieveApiKey: (encryptedKey: string): Promise<string | null> =>
-    ipcRenderer.invoke("retrieve-api-key", encryptedKey),
-  fetchS3Logs: (logUrl: string): Promise<string | null> =>
-    ipcRenderer.invoke("fetch-s3-logs", logUrl),
-  rendererStore: {
-    getItem: (key: string): Promise<string | null> =>
-      ipcRenderer.invoke("renderer-store:get", key),
-    setItem: (key: string, value: string): Promise<void> =>
-      ipcRenderer.invoke("renderer-store:set", key, value),
-    removeItem: (key: string): Promise<void> =>
-      ipcRenderer.invoke("renderer-store:remove", key),
-  },
   // OAuth API
   oauthStartFlow: (
     region: CloudRegion,
@@ -90,16 +73,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("oauth:refresh-token", refreshToken, region),
   oauthCancelFlow: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("oauth:cancel-flow"),
-  selectDirectory: (): Promise<string | null> =>
-    ipcRenderer.invoke("select-directory"),
-  searchDirectories: (query: string, searchRoot?: string): Promise<string[]> =>
-    ipcRenderer.invoke("search-directories", query, searchRoot),
-  findReposDirectory: (): Promise<string | null> =>
-    ipcRenderer.invoke("find-repos-directory"),
+  // Repo API
   validateRepo: (directoryPath: string): Promise<boolean> =>
     ipcRenderer.invoke("validate-repo", directoryPath),
-  checkWriteAccess: (directoryPath: string): Promise<boolean> =>
-    ipcRenderer.invoke("check-write-access", directoryPath),
   detectRepo: (
     directoryPath: string,
   ): Promise<{
@@ -108,25 +84,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     branch?: string;
     remote?: string;
   } | null> => ipcRenderer.invoke("detect-repo", directoryPath),
-  validateRepositoryMatch: (
-    path: string,
-    organization: string,
-    repository: string,
-  ): Promise<{
-    valid: boolean;
-    detected?: { organization: string; repository: string } | null;
-    error?: string;
-  }> =>
-    ipcRenderer.invoke(
-      "validate-repository-match",
-      path,
-      organization,
-      repository,
-    ),
-  checkSSHAccess: (): Promise<{
-    available: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke("check-ssh-access"),
   cloneRepository: (
     repoUrl: string,
     targetPath: string,
@@ -140,18 +97,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
       message: string;
     }) => void,
   ): (() => void) => createIpcListener(`clone-progress:${cloneId}`, listener),
-  showMessageBox: (options: MessageBoxOptions): Promise<{ response: number }> =>
-    ipcRenderer.invoke("show-message-box", options),
-  openExternal: (url: string): Promise<void> =>
-    ipcRenderer.invoke("open-external", url),
   listRepoFiles: (
     repoPath: string,
     query?: string,
     limit?: number,
   ): Promise<Array<{ path: string; name: string }>> =>
     ipcRenderer.invoke("list-repo-files", repoPath, query, limit),
-  clearRepoFileCache: (repoPath: string): Promise<void> =>
-    ipcRenderer.invoke("clear-repo-file-cache", repoPath),
+  // Agent API
   agentStart: async (
     params: AgentStartParams,
   ): Promise<{ sessionId: string; channel: string }> =>
@@ -165,18 +117,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("agent-cancel", sessionId),
   agentCancelPrompt: async (sessionId: string): Promise<boolean> =>
     ipcRenderer.invoke("agent-cancel-prompt", sessionId),
-  agentListSessions: async (
-    taskId?: string,
-  ): Promise<
-    Array<{
-      sessionId: string;
-      acpSessionId: string;
-      channel: string;
-      taskId: string;
-    }>
-  > => ipcRenderer.invoke("agent-list-sessions", taskId),
-  agentLoadSession: async (sessionId: string, cwd: string): Promise<boolean> =>
-    ipcRenderer.invoke("agent-load-session", sessionId, cwd),
   agentReconnect: async (params: {
     taskId: string;
     taskRunId: string;
@@ -200,68 +140,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     listener: (payload: unknown) => void,
   ): (() => void) => createIpcListener(channel, listener),
   // Plan mode operations
-  agentStartPlanMode: async (params: {
-    taskId: string;
-    taskTitle: string;
-    taskDescription: string;
-    repoPath: string;
-    apiKey: string;
-    apiHost: string;
-    projectId: number;
-  }): Promise<{ taskId: string; channel: string }> =>
-    ipcRenderer.invoke("agent-start-plan-mode", params),
-  agentGeneratePlan: async (params: {
-    taskId: string;
-    taskTitle: string;
-    taskDescription: string;
-    repoPath: string;
-    questionAnswers: unknown[];
-    apiKey: string;
-    apiHost: string;
-    projectId: number;
-  }): Promise<{ taskId: string; channel: string }> =>
-    ipcRenderer.invoke("agent-generate-plan", params),
-  readPlanFile: (repoPath: string, taskId: string): Promise<string | null> =>
-    ipcRenderer.invoke("read-plan-file", repoPath, taskId),
-  writePlanFile: (
-    repoPath: string,
-    taskId: string,
-    content: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("write-plan-file", repoPath, taskId, content),
-  ensurePosthogFolder: (repoPath: string, taskId: string): Promise<string> =>
-    ipcRenderer.invoke("ensure-posthog-folder", repoPath, taskId),
-  listTaskArtifacts: (repoPath: string, taskId: string): Promise<unknown[]> =>
-    ipcRenderer.invoke("list-task-artifacts", repoPath, taskId),
-  readTaskArtifact: (
-    repoPath: string,
-    taskId: string,
-    fileName: string,
-  ): Promise<string | null> =>
-    ipcRenderer.invoke("read-task-artifact", repoPath, taskId, fileName),
-  appendToArtifact: (
-    repoPath: string,
-    taskId: string,
-    fileName: string,
-    content: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke(
-      "append-to-artifact",
-      repoPath,
-      taskId,
-      fileName,
-      content,
-    ),
-  saveQuestionAnswers: (
-    repoPath: string,
-    taskId: string,
-    answers: Array<{
-      questionId: string;
-      selectedOption: string;
-      customInput?: string;
-    }>,
-  ): Promise<void> =>
-    ipcRenderer.invoke("save-question-answers", repoPath, taskId, answers),
   readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
     ipcRenderer.invoke("read-repo-file", repoPath, filePath),
   writeRepoFile: (
@@ -467,6 +345,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ): Promise<string | null> =>
       ipcRenderer.invoke("worktree-get-main-repo", mainRepoPath, worktreePath),
   },
+  // External Apps API
   externalApps: {
     getDetectedApps: (): Promise<
       Array<{
@@ -532,17 +411,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
         message: string;
       }>,
     ): (() => void) => createIpcListener("workspace:warning", listener),
-  },
-  // Settings API
-  settings: {
-    getWorktreeLocation: (): Promise<string> =>
-      ipcRenderer.invoke("settings:get-worktree-location"),
-    setWorktreeLocation: (location: string): Promise<void> =>
-      ipcRenderer.invoke("settings:set-worktree-location", location),
-    getTerminalLayout: (): Promise<"split" | "tabbed"> =>
-      ipcRenderer.invoke("settings:get-terminal-layout"),
-    setTerminalLayout: (mode: "split" | "tabbed"): Promise<void> =>
-      ipcRenderer.invoke("settings:set-terminal-layout", mode),
   },
   // Dock Badge API
   dockBadge: {

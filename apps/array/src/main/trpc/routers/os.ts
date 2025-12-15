@@ -1,33 +1,33 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  type BrowserWindow,
-  dialog,
-  type IpcMainInvokeEvent,
-  ipcMain,
-  shell,
-} from "electron";
+import { dialog, shell } from "electron";
+import { z } from "zod";
+import { getMainWindow } from "../context.js";
+import { publicProcedure, router } from "../trpc.js";
 
 const fsPromises = fs.promises;
 
-interface MessageBoxOptionsCustom {
-  type?: "info" | "error" | "warning" | "question";
-  title?: string;
-  message?: string;
-  detail?: string;
-  buttons?: string[];
-  defaultId?: number;
-  cancelId?: number;
-}
+const messageBoxOptionsSchema = z.object({
+  type: z.enum(["none", "info", "error", "question", "warning"]).optional(),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  detail: z.string().optional(),
+  buttons: z.array(z.string()).optional(),
+  defaultId: z.number().optional(),
+  cancelId: z.number().optional(),
+});
 
 const expandHomePath = (searchPath: string): string =>
   searchPath.startsWith("~")
     ? searchPath.replace(/^~/, os.homedir())
     : searchPath;
 
-export function registerOsIpc(getMainWindow: () => BrowserWindow | null): void {
-  ipcMain.handle("select-directory", async (): Promise<string | null> => {
+export const osRouter = router({
+  /**
+   * Show directory picker dialog
+   */
+  selectDirectory: publicProcedure.query(async () => {
     const win = getMainWindow();
     if (!win) return null;
 
@@ -43,19 +43,19 @@ export function registerOsIpc(getMainWindow: () => BrowserWindow | null): void {
       return null;
     }
     return result.filePaths[0];
-  });
+  }),
 
-  ipcMain.handle(
-    "check-write-access",
-    async (
-      _event: IpcMainInvokeEvent,
-      directoryPath: string,
-    ): Promise<boolean> => {
-      if (!directoryPath) return false;
+  /**
+   * Check if a directory has write access
+   */
+  checkWriteAccess: publicProcedure
+    .input(z.object({ directoryPath: z.string() }))
+    .query(async ({ input }) => {
+      if (!input.directoryPath) return false;
       try {
-        await fsPromises.access(directoryPath, fs.constants.W_OK);
+        await fsPromises.access(input.directoryPath, fs.constants.W_OK);
         const testFile = path.join(
-          directoryPath,
+          input.directoryPath,
           `.agent-write-test-${Date.now()}`,
         );
         await fsPromises.writeFile(testFile, "ok");
@@ -64,18 +64,18 @@ export function registerOsIpc(getMainWindow: () => BrowserWindow | null): void {
       } catch {
         return false;
       }
-    },
-  );
+    }),
 
-  ipcMain.handle(
-    "show-message-box",
-    async (
-      _event: IpcMainInvokeEvent,
-      options: MessageBoxOptionsCustom,
-    ): Promise<{ response: number }> => {
+  /**
+   * Show a message box dialog
+   */
+  showMessageBox: publicProcedure
+    .input(z.object({ options: messageBoxOptionsSchema }))
+    .mutation(async ({ input }) => {
       const win = getMainWindow();
       if (!win) throw new Error("Main window not available");
 
+      const options = input.options;
       const result = await dialog.showMessageBox(win, {
         type: options?.type || "info",
         title: options?.title || "Array",
@@ -89,22 +89,26 @@ export function registerOsIpc(getMainWindow: () => BrowserWindow | null): void {
         cancelId: options?.cancelId ?? 1,
       });
       return { response: result.response };
-    },
-  );
+    }),
 
-  ipcMain.handle(
-    "open-external",
-    async (_event: IpcMainInvokeEvent, url: string): Promise<void> => {
-      await shell.openExternal(url);
-    },
-  );
+  /**
+   * Open URL in external browser
+   */
+  openExternal: publicProcedure
+    .input(z.object({ url: z.string() }))
+    .mutation(async ({ input }) => {
+      await shell.openExternal(input.url);
+    }),
 
-  ipcMain.handle(
-    "search-directories",
-    async (_event: IpcMainInvokeEvent, query: string): Promise<string[]> => {
-      if (!query?.trim()) return [];
+  /**
+   * Search for directories matching a query
+   */
+  searchDirectories: publicProcedure
+    .input(z.object({ query: z.string(), searchRoot: z.string().optional() }))
+    .query(async ({ input }) => {
+      if (!input.query?.trim()) return [];
 
-      const searchPath = expandHomePath(query.trim());
+      const searchPath = expandHomePath(input.query.trim());
       const lastSlashIdx = searchPath.lastIndexOf("/");
       const basePath =
         lastSlashIdx === -1 ? "" : searchPath.substring(0, lastSlashIdx + 1);
@@ -133,6 +137,5 @@ export function registerOsIpc(getMainWindow: () => BrowserWindow | null): void {
       } catch {
         return [];
       }
-    },
-  );
-}
+    }),
+});

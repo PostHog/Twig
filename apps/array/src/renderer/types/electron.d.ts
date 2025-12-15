@@ -22,14 +22,6 @@ import type { CloudRegion, OAuthTokenResponse } from "@shared/types/oauth";
 
 declare global {
   interface IElectronAPI {
-    storeApiKey: (apiKey: string) => Promise<string>;
-    retrieveApiKey: (encryptedKey: string) => Promise<string | null>;
-    fetchS3Logs: (logUrl: string) => Promise<string | null>;
-    rendererStore: {
-      getItem: (key: string) => Promise<string | null>;
-      setItem: (key: string, value: string) => Promise<void>;
-      removeItem: (key: string) => Promise<void>;
-    };
     // OAuth API
     oauthStartFlow: (region: CloudRegion) => Promise<{
       success: boolean;
@@ -45,33 +37,13 @@ declare global {
       error?: string;
     }>;
     oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
-    selectDirectory: () => Promise<string | null>;
-    searchDirectories: (
-      query: string,
-      searchRoot?: string,
-    ) => Promise<string[]>;
-    findReposDirectory: () => Promise<string | null>;
     validateRepo: (directoryPath: string) => Promise<boolean>;
-    checkWriteAccess: (directoryPath: string) => Promise<boolean>;
     detectRepo: (directoryPath: string) => Promise<{
       organization: string;
       repository: string;
       branch?: string;
       remote?: string;
     } | null>;
-    validateRepositoryMatch: (
-      path: string,
-      organization: string,
-      repository: string,
-    ) => Promise<{
-      valid: boolean;
-      detected?: { organization: string; repository: string } | null;
-      error?: string;
-    }>;
-    checkSSHAccess: () => Promise<{
-      available: boolean;
-      error?: string;
-    }>;
     cloneRepository: (
       repoUrl: string,
       targetPath: string,
@@ -84,22 +56,11 @@ declare global {
         message: string;
       }) => void,
     ) => () => void;
-    showMessageBox: (options: {
-      type?: "none" | "info" | "error" | "question" | "warning";
-      title?: string;
-      message?: string;
-      detail?: string;
-      buttons?: string[];
-      defaultId?: number;
-      cancelId?: number;
-    }) => Promise<{ response: number }>;
-    openExternal: (url: string) => Promise<void>;
     listRepoFiles: (
       repoPath: string,
       query?: string,
       limit?: number,
     ) => Promise<Array<{ path: string; name: string }>>;
-    clearRepoFileCache: (repoPath: string) => Promise<void>;
     agentStart: (params: {
       taskId: string;
       taskRunId: string;
@@ -120,15 +81,6 @@ declare global {
     ) => Promise<{ stopReason: string }>;
     agentCancel: (sessionId: string) => Promise<boolean>;
     agentCancelPrompt: (sessionId: string) => Promise<boolean>;
-    agentListSessions: (taskId?: string) => Promise<
-      Array<{
-        sessionId: string;
-        acpSessionId: string;
-        channel: string;
-        taskId: string;
-      }>
-    >;
-    agentLoadSession: (sessionId: string, cwd: string) => Promise<boolean>;
     agentReconnect: (params: {
       taskId: string;
       taskRunId: string;
@@ -146,12 +98,6 @@ declare global {
       listener: (event: unknown) => void,
     ) => () => void;
     // Task artifact operations
-    readPlanFile: (repoPath: string, taskId: string) => Promise<string | null>;
-    writePlanFile: (
-      repoPath: string,
-      taskId: string,
-      content: string,
-    ) => Promise<void>;
     ensurePosthogFolder: (repoPath: string, taskId: string) => Promise<string>;
     listTaskArtifacts: (
       repoPath: string,
@@ -345,12 +291,6 @@ declare global {
           message: string;
         }) => void,
       ) => () => void;
-    };
-    settings: {
-      getWorktreeLocation: () => Promise<string>;
-      setWorktreeLocation: (location: string) => Promise<void>;
-      getTerminalLayout: () => Promise<"split" | "tabbed">;
-      setTerminalLayout: (mode: "split" | "tabbed") => Promise<void>;
     };
     dockBadge: {
       show: () => Promise<void>;

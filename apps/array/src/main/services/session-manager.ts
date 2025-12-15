@@ -448,12 +448,9 @@ export class SessionManager {
     credentials: PostHogCredentials,
     mockNodeDir: string,
   ): void {
-    const token = this.getToken(credentials.apiKey);
     const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
     process.env.PATH = newPath;
-    process.env.POSTHOG_AUTH_HEADER = `Bearer ${token}`;
-    process.env.ANTHROPIC_API_KEY = token;
-    process.env.ANTHROPIC_AUTH_TOKEN = token;
+    process.env.POSTHOG_AUTH_HEADER = `Bearer ${credentials.apiKey}`;
 
     const llmGatewayUrl =
       process.env.LLM_GATEWAY_URL ||
@@ -601,10 +598,6 @@ interface AgentSessionParams {
 }
 
 type SessionResponse = { sessionId: string; channel: string };
-type SessionListItem = SessionResponse & {
-  acpSessionId: string;
-  taskId: string;
-};
 
 function validateSessionParams(params: AgentSessionParams): void {
   if (!params.taskId || !params.repoPath) {
@@ -681,32 +674,6 @@ export function registerAgentIpc(
     "agent-cancel-prompt",
     async (_event: IpcMainInvokeEvent, sessionId: string) => {
       return sessionManager.cancelPrompt(sessionId);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-list-sessions",
-    async (
-      _event: IpcMainInvokeEvent,
-      taskId?: string,
-    ): Promise<SessionListItem[]> => {
-      return sessionManager.listSessions(taskId).map((s) => ({
-        sessionId: s.taskRunId,
-        acpSessionId: s.taskRunId,
-        channel: s.channel,
-        taskId: s.taskId,
-      }));
-    },
-  );
-
-  ipcMain.handle(
-    "agent-load-session",
-    async (_event: IpcMainInvokeEvent, sessionId: string, _cwd: string) => {
-      const exists = sessionManager.getSession(sessionId) !== undefined;
-      if (!exists) {
-        log.warn("Session not found for load", { sessionId });
-      }
-      return exists;
     },
   );
 

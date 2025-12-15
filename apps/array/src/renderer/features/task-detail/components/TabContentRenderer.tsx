@@ -3,11 +3,8 @@ import { DiffEditorPanel } from "@features/code-editor/components/DiffEditorPane
 import type { Tab } from "@features/panels/store/panelTypes";
 import { ChangesPanel } from "@features/task-detail/components/ChangesPanel";
 import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
-import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
-import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
 import { TaskLogsPanel } from "@features/task-detail/components/TaskLogsPanel";
 import { TaskShellPanel } from "@features/task-detail/components/TaskShellPanel";
-import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
 import { WorkspaceTerminalPanel } from "@features/workspace/components/WorkspaceTerminalPanel";
 import type { Task } from "@shared/types";
 
@@ -60,25 +57,12 @@ export function TabContentRenderer({
         />
       );
 
-    case "artifact":
-      return (
-        <TaskArtifactEditorPanel
-          taskId={taskId}
-          task={task}
-          fileName={data.artifactId}
-        />
-      );
-
     case "other":
       // Handle system tabs by ID
       // TODO: These should all have their own type as well
       switch (tab.id) {
-        case "todo-list":
-          return <TodoListPanel taskId={taskId} />;
         case "files":
           return <FileTreePanel taskId={taskId} task={task} />;
-        case "artifacts":
-          return <TaskArtifactsPanel taskId={taskId} task={task} />;
         case "changes":
           return <ChangesPanel taskId={taskId} task={task} />;
         default:

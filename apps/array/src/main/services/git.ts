@@ -1,10 +1,10 @@
-import { type ChildProcess, exec, execFile } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { ChangedFile, GitFileStatus } from "@shared/types";
-import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
+import { type IpcMainInvokeEvent, ipcMain } from "electron";
 import { logger } from "../lib/logger";
 
 const log = logger.scope("git");
@@ -51,31 +51,10 @@ const getAllFilesInDirectory = async (
   return files;
 };
 
-const CLONE_MAX_BUFFER = 10 * 1024 * 1024;
-
 export interface GitHubRepo {
   organization: string;
   repository: string;
 }
-
-interface CloneProgress {
-  status: "cloning" | "complete" | "error";
-  message: string;
-}
-
-interface ValidationResult {
-  valid: boolean;
-  detected?: GitHubRepo | null;
-  error?: string;
-}
-
-const sendCloneProgress = (
-  win: BrowserWindow,
-  cloneId: string,
-  progress: CloneProgress,
-) => {
-  win.webContents.send(`clone-progress:${cloneId}`, progress);
-};
 
 export const parseGitHubUrl = (url: string): GitHubRepo | null => {
   const match =
@@ -699,13 +678,7 @@ export const detectSSHError = (output: string): string | undefined => {
   return `SSH test failed: ${output.substring(0, 200)}`;
 };
 
-export function registerGitIpc(
-  getMainWindow: () => BrowserWindow | null,
-): void {
-  ipcMain.handle("find-repos-directory", async (): Promise<string | null> => {
-    return findReposDirectory();
-  });
-
+export function registerGitIpc(): void {
   ipcMain.handle(
     "validate-repo",
     async (
@@ -739,190 +712,6 @@ export function registerGitIpc(
       const branch = await getCurrentBranch(directoryPath);
 
       return { ...repo, branch, remote: remoteUrl };
-    },
-  );
-
-  ipcMain.handle(
-    "validate-repository-match",
-    async (
-      _event: IpcMainInvokeEvent,
-      directoryPath: string,
-      expectedOrg: string,
-      expectedRepo: string,
-    ): Promise<ValidationResult> => {
-      if (!directoryPath) {
-        return { valid: false, error: "No directory path provided" };
-      }
-
-      try {
-        await fsPromises.access(directoryPath);
-      } catch {
-        return { valid: false, error: "Directory does not exist" };
-      }
-
-      if (!(await isGitRepository(directoryPath))) {
-        return { valid: false, error: "Not a git repository" };
-      }
-
-      const remoteUrl = await getRemoteUrl(directoryPath);
-      if (!remoteUrl) {
-        return {
-          valid: false,
-          detected: null,
-          error: "Could not detect GitHub repository",
-        };
-      }
-
-      const detected = parseGitHubUrl(remoteUrl);
-      if (!detected) {
-        return {
-          valid: false,
-          detected: null,
-          error: "Could not parse GitHub repository URL",
-        };
-      }
-
-      const matches =
-        detected.organization.toLowerCase() === expectedOrg.toLowerCase() &&
-        detected.repository.toLowerCase() === expectedRepo.toLowerCase();
-
-      return {
-        valid: matches,
-        detected,
-        error: matches
-          ? undefined
-          : `Folder contains ${detected.organization}/${detected.repository}, expected ${expectedOrg}/${expectedRepo}`,
-      };
-    },
-  );
-
-  ipcMain.handle(
-    "check-ssh-access",
-    async (): Promise<{ available: boolean; error?: string }> => {
-      try {
-        const { stdout, stderr } = await execAsync(
-          'ssh -T git@github.com -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 2>&1 || echo "SSH_TEST_COMPLETE"',
-        );
-
-        const output = stdout + stderr;
-        const error = detectSSHError(output);
-
-        return error ? { available: false, error } : { available: true };
-      } catch (error) {
-        return {
-          available: false,
-          error: `Failed to test SSH: ${error instanceof Error ? error.message : "Unknown error"}`,
-        };
-      }
-    },
-  );
-
-  const activeClones = new Map<string, boolean>();
-
-  const setupCloneProcess = (
-    cloneId: string,
-    repoUrl: string,
-    targetPath: string,
-    win: BrowserWindow,
-  ): ChildProcess => {
-    // Expand home directory for SSH config path
-    const homeDir = os.homedir();
-    const sshConfigPath = path.join(homeDir, ".ssh", "config");
-
-    // Use GIT_SSH_COMMAND to ensure SSH uses the config file
-    const env = {
-      ...process.env,
-      GIT_SSH_COMMAND: `ssh -F ${sshConfigPath}`,
-    };
-
-    const cloneProcess = exec(
-      `git clone --progress "${repoUrl}" "${targetPath}"`,
-      {
-        maxBuffer: CLONE_MAX_BUFFER,
-        env,
-      },
-    );
-
-    sendCloneProgress(win, cloneId, {
-      status: "cloning",
-      message: `Cloning ${repoUrl}...`,
-    });
-
-    let stderrData = "";
-
-    cloneProcess.stdout?.on("data", (data: Buffer) => {
-      if (activeClones.get(cloneId)) {
-        sendCloneProgress(win, cloneId, {
-          status: "cloning",
-          message: data.toString().trim(),
-        });
-      }
-    });
-
-    cloneProcess.stderr?.on("data", (data: Buffer) => {
-      const text = data.toString();
-      stderrData += text;
-
-      if (activeClones.get(cloneId)) {
-        // Parse progress from git output (e.g., "Receiving objects: 45% (6234/13948)")
-        const progressMatch = text.match(/(\w+\s+\w+):\s+(\d+)%/);
-        let progressMessage = text.trim();
-
-        if (progressMatch) {
-          const [, stage, percent] = progressMatch;
-          progressMessage = `${stage}: ${percent}%`;
-        }
-
-        sendCloneProgress(win, cloneId, {
-          status: "cloning",
-          message: progressMessage,
-        });
-      }
-    });
-
-    cloneProcess.on("close", (code: number) => {
-      if (!activeClones.get(cloneId)) return;
-
-      const status = code === 0 ? "complete" : "error";
-      const message =
-        code === 0
-          ? "Repository cloned successfully"
-          : `Clone failed with exit code ${code}. stderr: ${stderrData}`;
-
-      sendCloneProgress(win, cloneId, { status, message });
-      activeClones.delete(cloneId);
-    });
-
-    cloneProcess.on("error", (error: Error) => {
-      log.error("Process error:", error);
-      if (activeClones.get(cloneId)) {
-        sendCloneProgress(win, cloneId, {
-          status: "error",
-          message: `Clone error: ${error.message}`,
-        });
-        activeClones.delete(cloneId);
-      }
-    });
-
-    return cloneProcess;
-  };
-
-  ipcMain.handle(
-    "clone-repository",
-    async (
-      _event: IpcMainInvokeEvent,
-      repoUrl: string,
-      targetPath: string,
-      cloneId: string,
-    ): Promise<{ cloneId: string }> => {
-      const win = getMainWindow();
-
-      if (!win) throw new Error("Main window not available");
-
-      activeClones.set(cloneId, true);
-      setupCloneProcess(cloneId, repoUrl, targetPath, win);
-
-      return { cloneId };
     },
   );
 

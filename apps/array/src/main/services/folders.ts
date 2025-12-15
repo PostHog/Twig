@@ -7,9 +7,9 @@ import type { RegisteredFolder } from "../../shared/types";
 import { generateId } from "../../shared/utils/id";
 import { createIpcHandler } from "../lib/ipcHandler";
 import { logger } from "../lib/logger";
+import { clearAllStoreData, foldersStore } from "../utils/store";
 import { isGitRepository } from "./git";
 import { getWorktreeLocation } from "./settingsStore";
-import { clearAllStoreData, foldersStore } from "./store";
 import { deleteWorktreeIfExists } from "./worktreeUtils";
 
 const execAsync = promisify(exec);

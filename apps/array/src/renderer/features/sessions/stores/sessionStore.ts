@@ -16,6 +16,7 @@ import type {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import { trpcVanilla } from "@/renderer/trpc";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -111,7 +112,7 @@ async function fetchSessionLogs(
   if (!logUrl) return { rawEntries: [] };
 
   try {
-    const content = await window.electronAPI.fetchS3Logs(logUrl);
+    const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
     if (!content?.trim()) return { rawEntries: [] };
 
     const rawEntries: StoredLogEntry[] = [];

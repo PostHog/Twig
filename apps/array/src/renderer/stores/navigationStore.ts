@@ -11,7 +11,7 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-list" | "task-detail" | "task-input" | "settings";
+type ViewType = "task-detail" | "task-input" | "settings";
 
 interface ViewState {
   type: ViewType;
@@ -23,7 +23,6 @@ interface NavigationStore {
   view: ViewState;
   history: ViewState[];
   historyIndex: number;
-  navigateToTaskList: () => void;
   navigateToTask: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
@@ -63,10 +62,6 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
     view: { type: "task-input" },
     history: [{ type: "task-input" }],
     historyIndex: 0,
-
-    navigateToTaskList: () => {
-      navigate({ type: "task-list" });
-    },
 
     navigateToTask: async (task: Task) => {
       navigate({ type: "task-detail", data: task });
@@ -111,7 +106,7 @@ export const useNavigationStore = create<NavigationStore>((set, get) => {
     toggleSettings: () => {
       const current = get().view;
       if (current.type === "settings") {
-        get().navigateToTaskList();
+        get().navigateToTaskInput();
       } else {
         get().navigateToSettings();
       }

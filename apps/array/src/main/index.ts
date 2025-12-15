@@ -16,6 +16,7 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
+import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { dockBadgeService } from "./services/dockBadge.js";
@@ -23,6 +24,8 @@ import {
   cleanupAgentSessions,
   registerAgentIpc,
 } from "./services/session-manager.js";
+import { setMainWindowGetter } from "./trpc/context.js";
+import { trpcRouter } from "./trpc/index.js";
 
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
@@ -37,14 +40,11 @@ import {
   registerExternalAppsIpc,
 } from "./services/externalApps.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
-import { registerOsIpc } from "./services/os.js";
-import { registerPosthogIpc } from "./services/posthog.js";
 import {
   initializePostHog,
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import { registerSettingsIpc } from "./services/settings.js";
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
@@ -114,6 +114,9 @@ function createWindow(): void {
     mainWindow?.maximize();
     mainWindow?.show();
   });
+
+  setMainWindowGetter(() => mainWindow);
+  createIPCHandler({ router: trpcRouter, windows: [mainWindow] });
 
   setupExternalLinkHandlers(mainWindow);
 
@@ -293,10 +296,8 @@ registerAutoUpdater(() => mainWindow);
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
-registerPosthogIpc();
 registerOAuthHandlers();
-registerOsIpc(() => mainWindow);
-registerGitIpc(() => mainWindow);
+registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();
 registerFileWatcherIpc(() => mainWindow);
@@ -305,4 +306,3 @@ registerWorktreeIpc();
 registerShellIpc();
 registerExternalAppsIpc();
 registerWorkspaceIpc(() => mainWindow);
-registerSettingsIpc();

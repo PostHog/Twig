@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -98,7 +99,7 @@ function loadAddons(term: XTerm) {
     const hasModifier = isMac ? event.metaKey : event.ctrlKey;
 
     if (hasModifier) {
-      window.electronAPI?.openExternal(uri).catch((error: Error) => {
+      trpcVanilla.os.openExternal.mutate({ url: uri }).catch((error: Error) => {
         log.error("Failed to open link:", uri, error);
       });
     }

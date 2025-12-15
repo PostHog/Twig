@@ -7,7 +7,6 @@ import {
 import {
   addNewTabToPanel,
   applyCleanupWithFallback,
-  createArtifactTabId,
   createDiffTabId,
   createFileTabId,
   generatePanelId,
@@ -32,7 +31,6 @@ import type { PanelNode, Tab } from "./panelTypes";
 export interface TaskLayout {
   panelTree: PanelNode;
   openFiles: string[];
-  openArtifacts: string[];
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
   focusedPanelId: string | null;
@@ -49,7 +47,6 @@ export interface PanelLayoutStore {
     terminalLayoutMode?: "split" | "tabbed",
   ) => void;
   openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
-  openArtifact: (taskId: string, fileName: string) => void;
   openDiff: (
     taskId: string,
     filePath: string,
@@ -285,11 +282,6 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
         set((state) => openTab(state, taskId, tabId, asPreview));
-      },
-
-      openArtifact: (taskId, fileName) => {
-        const tabId = createArtifactTabId(fileName);
-        set((state) => openTab(state, taskId, tabId, false));
       },
 
       openDiff: (taskId, filePath, status, asPreview = true) => {

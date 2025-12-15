@@ -57,7 +57,7 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-list" | "task-detail" | "task-input" | "settings";
+  type: "task-detail" | "task-input" | "settings";
   data?: Task;
 }
 
@@ -153,11 +153,8 @@ function createTaskViews(currentUser: Schemas.User | undefined): TaskView[] {
 
 function getActiveViewId(
   views: TaskView[],
-  activeView: ViewState,
   activeFilters: ActiveFilters,
 ): string | null {
-  if (activeView.type !== "task-list") return null;
-
   for (const view of views) {
     if (filtersMatch(activeFilters, view.filters)) {
       return view.id;
@@ -189,7 +186,7 @@ export function useSidebarData({
   const isHomeActive = activeView.type === "task-input";
 
   const views = createTaskViews(currentUser);
-  const activeViewId = getActiveViewId(views, activeView, activeFilters);
+  const activeViewId = getActiveViewId(views, activeFilters);
 
   const repositories = buildRepositoryMap(allTasks);
   const activeRepository = getActiveRepository(activeFilters);

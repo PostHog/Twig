@@ -167,6 +167,15 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.11.0
         version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)
+      '@trpc/client':
+        specifier: ^11.7.2
+        version: 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
+      '@trpc/react-query':
+        specifier: ^11.7.2
+        version: 11.8.0(@tanstack/react-query@5.90.10(react@18.3.1))(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+      '@trpc/server':
+        specifier: ^11.7.2
+        version: 11.8.0(typescript@5.9.3)
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
@@ -260,6 +269,9 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      trpc-electron:
+        specifier: ^0.1.2
+        version: 0.1.2(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(electron@30.5.1)
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -3108,6 +3120,27 @@ packages:
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
+
+  '@trpc/client@11.8.0':
+    resolution: {integrity: sha512-imJQeESX1hAapDaC4JB91yvXg41AZfBuTh/scnEiN/hAubZa5s/ikp0n+w29q2GCf+hREkr3WptUFKFJoDAIug==}
+    peerDependencies:
+      '@trpc/server': 11.8.0
+      typescript: '>=5.7.2'
+
+  '@trpc/react-query@11.8.0':
+    resolution: {integrity: sha512-zJG22PqhGUBq6ke58McGxRBGWGDTHlmsgpxp/rQx8iT2yi0Ja1H2/UcSsjZ/MG65DhCfpKvMVH0OVivTn9FWwA==}
+    peerDependencies:
+      '@tanstack/react-query': ^5.80.3
+      '@trpc/client': 11.8.0
+      '@trpc/server': 11.8.0
+      react: '>=18.2.0'
+      react-dom: '>=18.2.0'
+      typescript: '>=5.7.2'
+
+  '@trpc/server@11.8.0':
+    resolution: {integrity: sha512-DphyQnLuyX2nwJCQGWQ9zYz4hZGvRhSBqDhQ0SH3tDhQ3PU4u68xofA0pJ741Ir4InEAFD+TtJVLAQy+wVOkiQ==}
+    peerDependencies:
+      typescript: '>=5.7.2'
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -6492,6 +6525,13 @@ packages:
 
   trough@2.2.0:
     resolution: {integrity: sha512-tmMpK00BjZiUyVyvrBK7knerNgmgvcV/KLVyuma/SC+TQN167GrMRciANTz09+k3zW8L8t60jWO1GpfkZdjTaw==}
+
+  trpc-electron@0.1.2:
+    resolution: {integrity: sha512-sQpWBwQWzsgrERugjzUpPqY/+/n8NxkUq6YssQ5+5rALkvGCWq45T5Dreiwm2kh91dZMFlALTyMd8PhB0vgbIg==}
+    peerDependencies:
+      '@trpc/client': '>=11.0.0'
+      '@trpc/server': '>=11.0.0'
+      electron: '>19.0.0'
 
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
@@ -10065,6 +10105,24 @@ snapshots:
       '@tiptap/pm': 3.11.0
 
   '@tootallnate/once@2.0.0': {}
+
+  '@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@trpc/server': 11.8.0(typescript@5.9.3)
+      typescript: 5.9.3
+
+  '@trpc/react-query@11.8.0(@tanstack/react-query@5.90.10(react@18.3.1))(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)':
+    dependencies:
+      '@tanstack/react-query': 5.90.10(react@18.3.1)
+      '@trpc/client': 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
+      '@trpc/server': 11.8.0(typescript@5.9.3)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      typescript: 5.9.3
+
+  '@trpc/server@11.8.0(typescript@5.9.3)':
+    dependencies:
+      typescript: 5.9.3
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -14007,6 +14065,12 @@ snapshots:
       escape-string-regexp: 1.0.5
 
   trough@2.2.0: {}
+
+  trpc-electron@0.1.2(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(electron@30.5.1):
+    dependencies:
+      '@trpc/client': 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
+      '@trpc/server': 11.8.0(typescript@5.9.3)
+      electron: 30.5.1
 
   ts-algebra@2.0.0: {}
 

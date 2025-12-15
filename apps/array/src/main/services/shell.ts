@@ -1,6 +1,6 @@
 import { createIpcHandler } from "../lib/ipcHandler";
 import { shellManager } from "../lib/shellManager";
-import { foldersStore } from "./store";
+import { foldersStore } from "../utils/store";
 import { buildWorkspaceEnv } from "./workspace/workspaceEnv";
 
 const handle = createIpcHandler("shell");

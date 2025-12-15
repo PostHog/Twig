@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { trpcVanilla } from "../trpc";
 
 export type TerminalLayoutMode = "split" | "tabbed";
 
@@ -15,8 +16,10 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
 
   loadTerminalLayout: async () => {
     try {
-      const mode = await window.electronAPI.settings.getTerminalLayout();
-      set({ terminalLayoutMode: mode, isLoading: false });
+      const mode = await trpcVanilla.secureStore.getItem.query({
+        key: "terminalLayoutMode",
+      });
+      set({ terminalLayoutMode: mode as TerminalLayoutMode, isLoading: false });
     } catch (_error) {
       set({ terminalLayoutMode: "split", isLoading: false });
     }
@@ -24,7 +27,10 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
 
   setTerminalLayout: async (mode: TerminalLayoutMode) => {
     try {
-      await window.electronAPI.settings.setTerminalLayout(mode);
+      await trpcVanilla.secureStore.setItem.query({
+        key: "terminalLayoutMode",
+        value: mode,
+      });
       set({ terminalLayoutMode: mode });
     } catch (_error) {}
   },

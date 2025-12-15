@@ -14,9 +14,9 @@ import type {
   WorktreeInfo,
 } from "../../../shared/types";
 import { logger } from "../../lib/logger";
+import { foldersStore } from "../../utils/store";
 import { fileService } from "../fileWatcher";
 import { getWorktreeLocation } from "../settingsStore";
-import { foldersStore } from "../store";
 import { deleteWorktreeIfExists } from "../worktreeUtils";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";

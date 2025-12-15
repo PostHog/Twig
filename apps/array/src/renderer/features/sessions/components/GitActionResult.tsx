@@ -6,6 +6,7 @@ import {
 } from "@phosphor-icons/react";
 import { Badge, Box, Button, Flex, Text } from "@radix-ui/themes";
 import { useQuery } from "@tanstack/react-query";
+import { trpcVanilla } from "@/renderer/trpc";
 import type { GitActionType } from "./GitActionMessage";
 
 interface GitActionResultProps {
@@ -38,7 +39,7 @@ export function GitActionResult({
   });
 
   const handleOpenUrl = (url: string) => {
-    window.electronAPI.openExternal(url);
+    trpcVanilla.os.openExternal.mutate({ url });
   };
 
   if (isCloud) {
