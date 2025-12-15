@@ -103,11 +103,11 @@ export function GitActionResult({
             </Text>
             <Button
               size="1"
-              variant="soft"
+              variant="ghost"
               onClick={() => handleOpenUrl(repoInfo.compareUrl as string)}
             >
               <ArrowSquareOut size={12} />
-              Create Pull Request
+              Open on GitHub
             </Button>
           </Flex>
         )}
