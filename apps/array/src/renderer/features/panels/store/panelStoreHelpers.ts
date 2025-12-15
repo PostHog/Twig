@@ -157,7 +157,11 @@ export function updateTaskLayout(
 }
 
 // Tree update helpers
-export function createNewTab(tabId: string, closeable = true): Tab {
+export function createNewTab(
+  tabId: string,
+  closeable = true,
+  isPreview = false,
+): Tab {
   const parsed = parseTabId(tabId);
   let data: Tab["data"];
 
@@ -210,6 +214,7 @@ export function createNewTab(tabId: string, closeable = true): Tab {
     component: null,
     closeable,
     draggable: true,
+    isPreview,
   };
 }
 
@@ -217,14 +222,20 @@ export function addNewTabToPanel(
   panel: PanelNode,
   tabId: string,
   closeable = true,
+  isPreview = false,
 ): PanelNode {
   if (panel.type !== "leaf") return panel;
+
+  // If opening as preview, remove any existing preview tab first
+  const tabs = isPreview
+    ? panel.content.tabs.filter((tab) => !tab.isPreview)
+    : panel.content.tabs;
 
   return {
     ...panel,
     content: {
       ...panel.content,
-      tabs: [...panel.content.tabs, createNewTab(tabId, closeable)],
+      tabs: [...tabs, createNewTab(tabId, closeable, isPreview)],
       activeTabId: tabId,
     },
   };

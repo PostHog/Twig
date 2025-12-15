@@ -1,3 +1,4 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
@@ -8,7 +9,6 @@ import {
   CaretUpIcon,
   CodeIcon,
   CopyIcon,
-  FileIcon,
   FilePlus,
 } from "@phosphor-icons/react";
 import {
@@ -128,6 +128,10 @@ function ChangedFileItem({
     openDiff(taskId, file.path, file.status);
   };
 
+  const handleDoubleClick = () => {
+    openDiff(taskId, file.path, file.status, false);
+  };
+
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await window.electronAPI.showFileContextMenu(fullPath);
@@ -191,6 +195,7 @@ function ChangedFileItem({
       align="center"
       gap="1"
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -208,12 +213,7 @@ function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <FileIcon
-        size={14}
-        weight="regular"
-        color="var(--gray-10)"
-        style={{ flexShrink: 0 }}
-      />
+      <FileIcon filename={fileName} size={14} />
       <Text
         size="1"
         style={{

@@ -1,3 +1,4 @@
+import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { ArrowUpIcon, GitBranchIcon, Paperclip } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import type { Editor } from "@tiptap/react";
@@ -139,7 +140,7 @@ export function TaskInputEditor({
       </Flex>
 
       <Flex justify="between" align="center" px="3" pb="3">
-        <Flex align="center">
+        <Flex align="center" gap="1">
           <input
             ref={fileInputRef}
             type="file"
@@ -161,6 +162,7 @@ export function TaskInputEditor({
               <Paperclip size={16} weight="bold" />
             </IconButton>
           </Tooltip>
+          <ModelSelector disabled={isCreatingTask} />
         </Flex>
 
         <Flex align="center" gap="4">
