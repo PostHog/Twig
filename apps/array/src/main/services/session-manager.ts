@@ -23,6 +23,13 @@ import { logger } from "../lib/logger";
 
 const log = logger.scope("session-manager");
 
+function isAuthError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("Authentication required")
+  );
+}
+
 type MessageCallback = (message: unknown) => void;
 
 class NdJsonTap {
@@ -135,6 +142,7 @@ export interface ManagedSession {
   createdAt: number;
   lastActivityAt: number;
   mockNodeDir: string;
+  config: SessionConfig;
 }
 
 function getClaudeCliPath(): string {
@@ -146,7 +154,7 @@ function getClaudeCliPath(): string {
 
 export class SessionManager {
   private sessions = new Map<string, ManagedSession>();
-  private sessionTokens = new Map<string, string>();
+  private currentToken: string | null = null;
   private getMainWindow: () => BrowserWindow | null;
   private onLog: OnLogCallback;
 
@@ -155,23 +163,20 @@ export class SessionManager {
     this.onLog = onLog;
   }
 
-  public updateSessionToken(taskRunId: string, newToken: string): void {
-    this.sessionTokens.set(taskRunId, newToken);
-    log.info("Session token updated", { taskRunId });
+  public updateToken(newToken: string): void {
+    this.currentToken = newToken;
+    log.info("Session token updated");
   }
 
-  private getSessionToken(taskRunId: string, fallback: string): string {
-    return this.sessionTokens.get(taskRunId) || fallback;
+  private getToken(fallback: string): string {
+    return this.currentToken || fallback;
   }
 
-  private buildMcpServers(
-    credentials: PostHogCredentials,
-    taskRunId: string,
-  ): AcpMcpServer[] {
+  private buildMcpServers(credentials: PostHogCredentials): AcpMcpServer[] {
     const servers: AcpMcpServer[] = [];
 
     const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
-    const token = this.getSessionToken(taskRunId, credentials.apiKey);
+    const token = this.getToken(credentials.apiKey);
 
     servers.push({
       name: "posthog",
@@ -211,6 +216,7 @@ export class SessionManager {
   private async getOrCreateSession(
     config: SessionConfig,
     isReconnect: boolean,
+    isRetry = false,
   ): Promise<ManagedSession | null> {
     const {
       taskId,
@@ -222,9 +228,11 @@ export class SessionManager {
       model,
     } = config;
 
-    const existing = this.sessions.get(taskRunId);
-    if (existing) {
-      return existing;
+    if (!isRetry) {
+      const existing = this.sessions.get(taskRunId);
+      if (existing) {
+        return existing;
+      }
     }
 
     const channel = `agent-event:${taskRunId}`;
@@ -234,7 +242,7 @@ export class SessionManager {
     const agent = new Agent({
       workingDirectory: repoPath,
       posthogApiUrl: credentials.apiHost,
-      posthogApiKey: credentials.apiKey,
+      getPosthogApiKey: () => this.getToken(credentials.apiKey),
       posthogProjectId: credentials.projectId,
       debug: !app.isPackaged,
       onLog: this.onLog,
@@ -256,11 +264,9 @@ export class SessionManager {
         clientCapabilities: {},
       });
 
-      const mcpServers = this.buildMcpServers(credentials, taskRunId);
+      const mcpServers = this.buildMcpServers(credentials);
 
       if (isReconnect) {
-        // Use our custom extension method to resume without replaying history.
-        // Client fetches history from S3 directly.
         await connection.extMethod("_posthog/session/resume", {
           sessionId: taskRunId,
           cwd: repoPath,
@@ -290,14 +296,25 @@ export class SessionManager {
         createdAt: Date.now(),
         lastActivityAt: Date.now(),
         mockNodeDir,
+        config,
       };
 
       this.sessions.set(taskRunId, session);
+      if (isRetry) {
+        log.info("Session created after auth retry", { taskRunId });
+      }
       return session;
     } catch (err) {
       this.cleanupMockNodeEnvironment(mockNodeDir);
+      if (!isRetry && isAuthError(err)) {
+        log.warn(
+          `Auth error during ${isReconnect ? "reconnect" : "create"}, retrying`,
+          { taskRunId },
+        );
+        return this.getOrCreateSession(config, isReconnect, true);
+      }
       log.error(
-        `Failed to ${isReconnect ? "reconnect" : "create"} session`,
+        `Failed to ${isReconnect ? "reconnect" : "create"} session${isRetry ? " after retry" : ""}`,
         err,
       );
       if (isReconnect) return null;
@@ -305,23 +322,56 @@ export class SessionManager {
     }
   }
 
+  private async recreateSession(taskRunId: string): Promise<ManagedSession> {
+    const existing = this.sessions.get(taskRunId);
+    if (!existing) {
+      throw new Error(`Session not found for recreation: ${taskRunId}`);
+    }
+
+    log.info("Recreating session due to auth error", { taskRunId });
+
+    // Store config and cleanup old session
+    const config = existing.config;
+    this.cleanupSession(taskRunId);
+
+    // Reconnect to preserve Claude context via sdkSessionId
+    const newSession = await this.getOrCreateSession(config, true);
+    if (!newSession) {
+      throw new Error(`Failed to recreate session: ${taskRunId}`);
+    }
+
+    return newSession;
+  }
+
   async prompt(
     taskRunId: string,
     prompt: ContentBlock[],
   ): Promise<{ stopReason: string }> {
-    const session = this.sessions.get(taskRunId);
+    let session = this.sessions.get(taskRunId);
     if (!session) {
       throw new Error(`Session not found: ${taskRunId}`);
     }
 
     session.lastActivityAt = Date.now();
 
-    const result = await session.connection.prompt({
-      sessionId: taskRunId, // Use taskRunId as ACP sessionId
-      prompt,
-    });
-
-    return { stopReason: result.stopReason };
+    try {
+      const result = await session.connection.prompt({
+        sessionId: taskRunId,
+        prompt,
+      });
+      return { stopReason: result.stopReason };
+    } catch (err) {
+      if (isAuthError(err)) {
+        log.warn("Auth error during prompt, recreating session", { taskRunId });
+        session = await this.recreateSession(taskRunId);
+        const result = await session.connection.prompt({
+          sessionId: taskRunId,
+          prompt,
+        });
+        return { stopReason: result.stopReason };
+      }
+      throw err;
+    }
   }
 
   async cancelSession(taskRunId: string): Promise<boolean> {
@@ -398,11 +448,12 @@ export class SessionManager {
     credentials: PostHogCredentials,
     mockNodeDir: string,
   ): void {
+    const token = this.getToken(credentials.apiKey);
     const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
     process.env.PATH = newPath;
-    process.env.POSTHOG_AUTH_HEADER = `Bearer ${credentials.apiKey}`;
-    process.env.ANTHROPIC_API_KEY = credentials.apiKey;
-    process.env.ANTHROPIC_AUTH_TOKEN = credentials.apiKey;
+    process.env.POSTHOG_AUTH_HEADER = `Bearer ${token}`;
+    process.env.ANTHROPIC_API_KEY = token;
+    process.env.ANTHROPIC_AUTH_TOKEN = token;
 
     const llmGatewayUrl =
       process.env.LLM_GATEWAY_URL ||
@@ -507,6 +558,24 @@ export class SessionManager {
       async sessionUpdate(_params: SessionNotification): Promise<void> {
         // No-op: session/update notifications are captured by the stream tap
         // and forwarded as acp_message events to avoid duplication
+      },
+
+      extNotification: async (
+        method: string,
+        params: Record<string, unknown>,
+      ): Promise<void> => {
+        if (method === "_posthog/sdk_session") {
+          const { sessionId, sdkSessionId } = params as {
+            sessionId: string;
+            sdkSessionId: string;
+          };
+          // Store sdkSessionId in session config for recreation/reconnection
+          const session = this.sessions.get(sessionId);
+          if (session) {
+            session.config.sdkSessionId = sdkSessionId;
+            log.info("SDK session ID captured", { sessionId, sdkSessionId });
+          }
+        }
       },
     };
 
@@ -665,10 +734,10 @@ export function registerAgentIpc(
     "agent-token-refresh",
     async (
       _event: IpcMainInvokeEvent,
-      taskRunId: string,
+      _taskRunId: string,
       newToken: string,
     ): Promise<void> => {
-      sessionManager.updateSessionToken(taskRunId, newToken);
+      sessionManager.updateToken(newToken);
     },
   );
 
