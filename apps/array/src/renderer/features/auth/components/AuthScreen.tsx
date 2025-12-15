@@ -12,6 +12,7 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -48,7 +49,7 @@ export function AuthScreen() {
   const handleSignIn = async () => {
     if (authMutation.isPending) {
       authMutation.reset();
-      await window.electronAPI.oauthCancelFlow();
+      await trpcVanilla.oauth.cancelFlow.mutate();
     } else {
       authMutation.mutate(region);
     }

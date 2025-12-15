@@ -1,8 +1,10 @@
 import { PostHogAPIClient } from "@api/posthogClient";
+import type { OAuthTokenResponse } from "@main/trpc/routers/oauth";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
+import { trpcVanilla } from "@renderer/trpc";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
@@ -65,13 +67,9 @@ export const useAuthStore = create<AuthState>()(
         projectId: null,
 
         loginWithOAuth: async (region: CloudRegion) => {
-          const result = await window.electronAPI.oauthStartFlow(region);
-
-          if (!result.success || !result.data) {
-            throw new Error(result.error || "OAuth flow failed");
-          }
-
-          const tokenResponse = result.data;
+          const tokenResponse = await trpcVanilla.oauth.startFlow.mutate({
+            region,
+          });
           const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
 
           const projectId = tokenResponse.scoped_teams?.[0];
@@ -144,18 +142,19 @@ export const useAuthStore = create<AuthState>()(
             throw new Error("No refresh token available");
           }
 
-          const result = await window.electronAPI.oauthRefreshToken(
-            state.oauthRefreshToken,
-            state.cloudRegion,
-          );
-
-          if (!result.success || !result.data) {
+          let tokenResponse: OAuthTokenResponse;
+          try {
+            tokenResponse = await trpcVanilla.oauth.refreshToken.mutate({
+              refreshToken: state.oauthRefreshToken,
+              region: state.cloudRegion,
+            });
+          } catch (error) {
             // Refresh failed - logout user
             get().logout();
-            throw new Error(result.error || "Token refresh failed");
+            throw new Error(
+              error instanceof Error ? error.message : "Token refresh failed",
+            );
           }
-
-          const tokenResponse = result.data;
           const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
 
           const storedTokens: StoredTokens = {

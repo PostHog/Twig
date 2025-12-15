@@ -18,25 +18,9 @@ import type {
   WorkspaceTerminalInfo,
 } from "@shared/types";
 import "@main/services/types";
-import type { CloudRegion, OAuthTokenResponse } from "@shared/types/oauth";
 
 declare global {
   interface IElectronAPI {
-    // OAuth API
-    oauthStartFlow: (region: CloudRegion) => Promise<{
-      success: boolean;
-      data?: OAuthTokenResponse;
-      error?: string;
-    }>;
-    oauthRefreshToken: (
-      refreshToken: string,
-      region: CloudRegion,
-    ) => Promise<{
-      success: boolean;
-      data?: OAuthTokenResponse;
-      error?: string;
-    }>;
-    oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
     validateRepo: (directoryPath: string) => Promise<boolean>;
     cloneRepository: (
       repoUrl: string,

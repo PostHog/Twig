@@ -14,7 +14,11 @@ import {
 import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
+import { get } from "./di/container.js";
+import { MAIN_TOKENS } from "./di/tokens.js";
+import type { DeepLinkService } from "./services/deep-link/service.js";
 import { dockBadgeService } from "./services/dockBadge.js";
+import type { OAuthService } from "./services/oauth/service.js";
 import {
   cleanupAgentSessions,
   registerAgentIpc,
@@ -34,7 +38,6 @@ import {
   getOrRefreshApps,
   registerExternalAppsIpc,
 } from "./services/externalApps.js";
-import { registerOAuthHandlers } from "./services/oauth.js";
 import {
   initializePostHog,
   shutdownPostHog,
@@ -60,6 +63,54 @@ dns.setDefaultResultOrder("ipv4first");
 
 // Set app name to ensure consistent userData path across platforms
 app.setName("Array");
+
+// Single instance lock must be acquired FIRST before any other app setup
+// This ensures deep links go to the existing instance, not a new one
+// In development, we need to pass the same args that setAsDefaultProtocolClient uses
+const additionalData = process.defaultApp ? { argv: process.argv } : undefined;
+const gotTheLock = app.requestSingleInstanceLock(additionalData);
+if (!gotTheLock) {
+  app.quit();
+  // Must exit immediately to prevent any further initialization
+  process.exit(0);
+}
+
+// Queue to hold deep link URLs received before app is ready
+let pendingDeepLinkUrl: string | null = null;
+
+// Handle deep link URLs on macOS - must be registered before app is ready
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+
+  // If the app isn't ready yet, queue the URL for later processing
+  if (!app.isReady()) {
+    pendingDeepLinkUrl = url;
+    return;
+  }
+
+  const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  deepLinkService.handleUrl(url);
+
+  // Focus the main window when receiving a deep link
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+// Handle deep link URLs on Windows/Linux (second instance sends URL via command line)
+app.on("second-instance", (_event, commandLine) => {
+  const url = commandLine.find((arg) => arg.startsWith("array://"));
+  if (url) {
+    const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+    deepLinkService.handleUrl(url);
+  }
+
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
@@ -219,6 +270,17 @@ app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
 
+  // Initialize deep link service and register protocol
+  const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  deepLinkService.registerProtocol();
+
+  // Register OAuth callback handler for deep links
+  const oauthService = get<OAuthService>(MAIN_TOKENS.OAuthService);
+  deepLinkService.registerHandler(
+    "callback",
+    oauthService.getDeepLinkHandler(),
+  );
+
   // Initialize dock badge service for notification badges
   dockBadgeService.initialize(() => mainWindow);
 
@@ -230,6 +292,21 @@ app.whenReady().then(() => {
   getOrRefreshApps().catch(() => {
     // Silently fail, will retry on first use
   });
+
+  // Handle case where app was launched by a deep link
+  if (process.platform === "darwin") {
+    // On macOS, the open-url event may have fired before app was ready
+    if (pendingDeepLinkUrl) {
+      deepLinkService.handleUrl(pendingDeepLinkUrl);
+      pendingDeepLinkUrl = null;
+    }
+  } else {
+    // On Windows/Linux, the URL comes via command line arguments
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("array://"));
+    if (deepLinkUrl) {
+      deepLinkService.handleUrl(deepLinkUrl);
+    }
+  }
 });
 
 app.on("window-all-closed", async () => {
@@ -260,7 +337,6 @@ registerAutoUpdater(() => mainWindow);
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
-registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFsIpc();

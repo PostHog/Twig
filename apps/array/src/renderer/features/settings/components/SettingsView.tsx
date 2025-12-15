@@ -114,7 +114,7 @@ export function SettingsView() {
   const handleReauthenticate = async () => {
     if (reauthMutation.isPending) {
       reauthMutation.reset();
-      await window.electronAPI.oauthCancelFlow();
+      await trpcVanilla.oauth.cancelFlow.mutate();
     } else if (cloudRegion) {
       reauthMutation.mutate(cloudRegion);
     }

@@ -10,7 +10,6 @@ import type {
   WorkspaceTerminalInfo,
   WorktreeInfo,
 } from "../shared/types";
-import type { CloudRegion, OAuthTokenResponse } from "../shared/types/oauth";
 import type {
   ExternalAppContextMenuResult,
   FolderContextMenuResult,
@@ -61,18 +60,6 @@ interface AgentStartParams {
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  // OAuth API
-  oauthStartFlow: (
-    region: CloudRegion,
-  ): Promise<{ success: boolean; data?: OAuthTokenResponse; error?: string }> =>
-    ipcRenderer.invoke("oauth:start-flow", region),
-  oauthRefreshToken: (
-    refreshToken: string,
-    region: CloudRegion,
-  ): Promise<{ success: boolean; data?: OAuthTokenResponse; error?: string }> =>
-    ipcRenderer.invoke("oauth:refresh-token", refreshToken, region),
-  oauthCancelFlow: (): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke("oauth:cancel-flow"),
   // Repo API
   validateRepo: (directoryPath: string): Promise<boolean> =>
     ipcRenderer.invoke("validate-repo", directoryPath),

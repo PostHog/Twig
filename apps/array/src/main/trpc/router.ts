@@ -1,6 +1,7 @@
 import { encryptionRouter } from "./routers/encryption.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
+import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { router } from "./trpc.js";
@@ -11,6 +12,7 @@ export const trpcRouter = router({
   secureStore: secureStoreRouter,
   encryption: encryptionRouter,
   git: gitRouter,
+  oauth: oauthRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;
