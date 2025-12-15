@@ -12,10 +12,7 @@ import {
   isJsonRpcResponse,
 } from "@shared/types/session-events";
 import { useMemo } from "react";
-import {
-  GitActionMessage,
-  parseGitActionMessage,
-} from "./GitActionMessage";
+import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
 import {

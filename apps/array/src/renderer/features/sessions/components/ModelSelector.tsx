@@ -22,7 +22,7 @@ export function ModelSelector({
   const defaultModel = useSettingsStore((state) => state.defaultModel);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const { setSessionModel } = useSessionActions();
-  const session = useSessionForTask(taskId ?? "");
+  const session = useSessionForTask(taskId);
 
   // Use session model if available, otherwise fall back to default
   const activeModel = session?.model ?? defaultModel;

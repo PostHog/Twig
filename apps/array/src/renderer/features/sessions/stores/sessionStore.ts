@@ -563,9 +563,11 @@ const useStore = create<SessionStore>()(
 
 export const useSessions = () => useStore((s) => s.sessions);
 export const useSessionActions = () => useStore((s) => s.actions);
-export const useSessionForTask = (taskId: string) =>
+export const useSessionForTask = (taskId: string | undefined) =>
   useStore((s) =>
-    Object.values(s.sessions).find((session) => session.taskId === taskId),
+    taskId
+      ? Object.values(s.sessions).find((session) => session.taskId === taskId)
+      : undefined,
   );
 export const getSessionActions = () => useStore.getState().actions;
 
