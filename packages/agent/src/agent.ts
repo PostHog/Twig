@@ -57,9 +57,7 @@ export class Agent {
 
     // Add auth if API key provided
     const headers: Record<string, string> = {};
-    console.log("config.getPosthogApiKey", config.getPosthogApiKey);
     if (config.getPosthogApiKey) {
-      console.log("Adding auth header", config.getPosthogApiKey());
       headers.Authorization = `Bearer ${config.getPosthogApiKey()}`;
     }
 
@@ -141,7 +139,6 @@ export class Agent {
       const apiKey = this.posthogAPI.getApiKey();
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
-      process.env.ANTHROPIC_API_KEY = apiKey;
       this.ensureOpenAIGatewayEnv(gatewayUrl, apiKey);
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
