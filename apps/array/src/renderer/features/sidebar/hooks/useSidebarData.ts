@@ -1,7 +1,7 @@
 import type { Schemas } from "@api/generated";
 import {
   type AgentSession,
-  useSessionStore,
+  useSessions,
 } from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
@@ -181,7 +181,7 @@ export function useSidebarData({
   const { data: allTasks = [], isLoading } = useTasks();
   const { folders } = useRegisteredFoldersStore();
   const workspaces = useWorkspaceStore.use.workspaces();
-  const sessions = useSessionStore((state) => state.sessions);
+  const sessions = useSessions();
   const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);

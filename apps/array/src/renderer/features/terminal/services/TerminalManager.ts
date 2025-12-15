@@ -439,11 +439,12 @@ class TerminalManagerImpl {
   }
 
   on<T extends EventType>(event: T, listener: Listener<T>): () => void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+    let listeners = this.listeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(event, listeners);
     }
 
-    const listeners = this.listeners.get(event)!;
     listeners.add(listener as Listener<EventType>);
 
     return () => {

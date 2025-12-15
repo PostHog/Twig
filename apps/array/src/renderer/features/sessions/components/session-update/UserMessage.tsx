@@ -1,5 +1,5 @@
 import { MarkdownRenderer } from "@features/editor/components/MarkdownRenderer";
-import { ChatBubble } from "./ChatBubble";
+import { ChatBubble } from "../ChatBubble";
 
 interface UserMessageProps {
   content: string;

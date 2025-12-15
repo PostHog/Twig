@@ -42,6 +42,16 @@
 - TypeScript strict mode enabled
 - Tailwind CSS classes should be sorted (biome `useSortedClasses` rule)
 
+### Avoid Barrel Files
+
+Barrel files:
+- Break tree-shaking
+- Create circular dependency risks  
+- Hide the true source of imports
+- Make refactoring harder
+
+Import directly from source files instead.
+
 ## Architecture
 
 ### Electron App (apps/array)

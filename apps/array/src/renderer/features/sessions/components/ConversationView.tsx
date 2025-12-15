@@ -1,0 +1,279 @@
+import type {
+  ContentBlock,
+  SessionNotification,
+  SessionUpdate,
+  ToolCall,
+} from "@agentclientprotocol/sdk";
+import { Box } from "@radix-ui/themes";
+import {
+  type AcpMessage,
+  isJsonRpcNotification,
+  isJsonRpcRequest,
+  isJsonRpcResponse,
+} from "@shared/types/session-events";
+import { useMemo } from "react";
+import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
+import { GitActionResult } from "./GitActionResult";
+import { SessionFooter } from "./SessionFooter";
+import {
+  type RenderItem,
+  SessionUpdateView,
+} from "./session-update/SessionUpdateView";
+import { UserMessage } from "./session-update/UserMessage";
+import { TurnCollapsible } from "./TurnCollapsible";
+import { VirtualizedList } from "./VirtualizedList";
+
+interface Turn {
+  id: string;
+  promptId: number;
+  userContent: string;
+  items: RenderItem[];
+  isComplete: boolean;
+  stopReason?: string;
+  durationMs: number;
+  toolCalls: Map<string, ToolCall>;
+}
+
+interface ConversationViewProps {
+  events: AcpMessage[];
+  isPromptPending: boolean;
+  repoPath?: string | null;
+  isCloud?: boolean;
+}
+
+export function ConversationView({
+  events,
+  isPromptPending,
+  repoPath,
+  isCloud = false,
+}: ConversationViewProps) {
+  const turns = useMemo(() => buildTurns(events), [events]);
+  const lastTurn = turns[turns.length - 1];
+  const lastTurnComplete = lastTurn?.isComplete ?? true;
+
+  return (
+    <VirtualizedList
+      items={turns}
+      estimateSize={100}
+      getItemKey={(turn) => turn.id}
+      renderItem={(turn) => (
+        <TurnView turn={turn} repoPath={repoPath} isCloud={isCloud} />
+      )}
+      autoScrollToBottom
+      className="flex-1 p-4"
+      gap={24}
+      footer={
+        <SessionFooter
+          isPromptPending={isPromptPending || !lastTurnComplete}
+          lastGenerationDuration={
+            lastTurn?.isComplete ? lastTurn.durationMs : null
+          }
+        />
+      }
+    />
+  );
+}
+
+interface TurnViewProps {
+  turn: Turn;
+  repoPath?: string | null;
+  isCloud?: boolean;
+}
+
+function TurnView({ turn, repoPath, isCloud = false }: TurnViewProps) {
+  const lastAgentIdx = turn.items.findLastIndex(
+    (item) => item.sessionUpdate === "agent_message_chunk",
+  );
+  const lastAgent = lastAgentIdx >= 0 ? turn.items[lastAgentIdx] : null;
+  const shouldCollapse = turn.isComplete && lastAgent && turn.items.length > 1;
+
+  const gitAction = parseGitActionMessage(turn.userContent);
+  const showGitResult =
+    gitAction.isGitAction && gitAction.actionType && turn.isComplete;
+
+  return (
+    <Box className="flex flex-col gap-4">
+      {gitAction.isGitAction && gitAction.actionType ? (
+        <GitActionMessage actionType={gitAction.actionType} />
+      ) : (
+        <UserMessage content={turn.userContent} />
+      )}
+      {shouldCollapse ? (
+        <>
+          <TurnCollapsible
+            items={turn.items.filter((_, i) => i !== lastAgentIdx)}
+            toolCalls={turn.toolCalls}
+          />
+          <SessionUpdateView item={lastAgent} toolCalls={turn.toolCalls} />
+        </>
+      ) : (
+        turn.items.map((item, i) => (
+          <SessionUpdateView
+            key={`${item.sessionUpdate}-${i}`}
+            item={item}
+            toolCalls={turn.toolCalls}
+          />
+        ))
+      )}
+      {showGitResult && repoPath && (
+        <GitActionResult
+          actionType={gitAction.actionType!}
+          repoPath={repoPath}
+          turnId={turn.id}
+          isCloud={isCloud}
+        />
+      )}
+    </Box>
+  );
+}
+
+// --- Event Processing ---
+
+function buildTurns(events: AcpMessage[]): Turn[] {
+  const turns: Turn[] = [];
+  let current: Turn | null = null;
+  // Map prompt request IDs to their turns for matching responses
+  const pendingPrompts = new Map<number, Turn>();
+
+  for (const event of events) {
+    const msg = event.message;
+
+    // session/prompt request - starts a new turn
+    if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
+      const userContent = extractUserContent(msg.params);
+
+      current = {
+        id: `turn-${msg.id}`,
+        promptId: msg.id,
+        userContent,
+        items: [],
+        isComplete: false,
+        durationMs: 0,
+        toolCalls: new Map(),
+      };
+      current.durationMs = -event.ts; // Will add end timestamp later
+
+      pendingPrompts.set(msg.id, current);
+      turns.push(current);
+      continue;
+    }
+
+    // session/prompt response - ends the turn
+    if (isJsonRpcResponse(msg) && pendingPrompts.has(msg.id)) {
+      const turn = pendingPrompts.get(msg.id);
+      if (!turn) continue;
+      turn.isComplete = true;
+      turn.durationMs += event.ts; // Complete the duration calculation
+      turn.stopReason = (msg.result as { stopReason?: string })?.stopReason;
+      pendingPrompts.delete(msg.id);
+      continue;
+    }
+
+    // session/update notification - add to current turn
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "session/update" &&
+      current
+    ) {
+      const update = (msg.params as SessionNotification)?.update;
+      if (!update) continue;
+
+      processSessionUpdate(current, update);
+      continue;
+    }
+
+    // PostHog console messages
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/console" &&
+      current
+    ) {
+      const params = msg.params as { level?: string; message?: string };
+      if (params?.message) {
+        current.items.push({
+          sessionUpdate: "console",
+          level: params.level ?? "info",
+          message: params.message,
+          timestamp: new Date(event.ts).toISOString(),
+        });
+      }
+    }
+  }
+
+  return turns;
+}
+
+function extractUserContent(params: unknown): string {
+  const p = params as { prompt?: ContentBlock[] };
+  if (!p?.prompt?.length) return "";
+
+  const textBlock = p.prompt.find(
+    (b): b is { type: "text"; text: string } => b.type === "text",
+  );
+  return textBlock?.text ?? "";
+}
+
+function processSessionUpdate(turn: Turn, update: SessionUpdate) {
+  switch (update.sessionUpdate) {
+    case "user_message_chunk":
+      // Skip - we get user content from the prompt request
+      break;
+
+    case "agent_message_chunk":
+    case "agent_thought_chunk":
+      if (update.content.type === "text") {
+        appendTextChunk(turn, update);
+      }
+      break;
+
+    case "tool_call": {
+      // Clone to allow mutation from tool_call_update
+      const toolCall = { ...update };
+      turn.toolCalls.set(update.toolCallId, toolCall);
+      turn.items.push(toolCall);
+      break;
+    }
+
+    case "tool_call_update": {
+      const existing = turn.toolCalls.get(update.toolCallId);
+      if (existing) {
+        Object.assign(existing, update);
+      }
+      break;
+    }
+
+    case "plan":
+    case "available_commands_update":
+    case "current_mode_update":
+      turn.items.push(update);
+      break;
+  }
+}
+
+function appendTextChunk(
+  turn: Turn,
+  update: SessionUpdate & {
+    sessionUpdate: "agent_message_chunk" | "agent_thought_chunk";
+  },
+) {
+  if (update.content.type !== "text") return;
+
+  const last = turn.items[turn.items.length - 1];
+  if (
+    last?.sessionUpdate === update.sessionUpdate &&
+    "content" in last &&
+    last.content.type === "text"
+  ) {
+    // Replace with new object containing appended text (SDK objects are frozen)
+    turn.items[turn.items.length - 1] = {
+      ...last,
+      content: { type: "text", text: last.content.text + update.content.text },
+    };
+  } else {
+    // Clone to avoid mutating frozen SDK objects
+    turn.items.push({
+      ...update,
+      content: { ...update.content },
+    });
+  }
+}

@@ -1,4 +1,4 @@
-import type { ToolKind } from "@agentclientprotocol/sdk";
+import type { ToolCall, ToolKind } from "@agentclientprotocol/sdk";
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import {
   ArrowsClockwise,
@@ -36,24 +36,15 @@ const kindIcons: Record<ToolKind, Icon> = {
 };
 
 interface ToolCallBlockProps {
-  toolName: string;
-  kind?: ToolKind;
-  status: "pending" | "running" | "completed" | "error";
-  args?: Record<string, unknown>;
-  result?: unknown;
+  toolCall: ToolCall;
 }
 
-export function ToolCallBlock({
-  toolName,
-  kind,
-  status,
-  args,
-  result,
-}: ToolCallBlockProps) {
+export function ToolCallBlock({ toolCall }: ToolCallBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const isLoading = status === "pending" || status === "running";
-  const isFailed = status === "error";
+  const { title, kind, status, rawInput, rawOutput } = toolCall;
+  const isLoading = status === "pending" || status === "in_progress";
+  const isFailed = status === "failed";
   const KindIcon = kind ? kindIcons[kind] : null;
 
   return (
@@ -76,7 +67,7 @@ export function ToolCallBlock({
             <Wrench size={12} className="text-gray-9" />
           )}
           <Code size="1" color="gray" style={fontStyle}>
-            {toolName}
+            {title}
           </Code>
           {isFailed && (
             <Text size="1" color="gray" style={fontStyle}>
@@ -88,7 +79,7 @@ export function ToolCallBlock({
 
       <Collapsible.Content>
         <Box className="mt-1 ml-6 overflow-hidden rounded bg-gray-2 p-2">
-          {args && (
+          {rawInput !== undefined && (
             <Box className="mb-2">
               <Text size="1" color="gray" weight="medium" style={fontStyle}>
                 Arguments
@@ -98,11 +89,11 @@ export function ToolCallBlock({
                 className="mt-1 block overflow-x-auto whitespace-pre"
                 style={fontStyle}
               >
-                {JSON.stringify(args, null, 2)}
+                {JSON.stringify(rawInput, null, 2)}
               </Code>
             </Box>
           )}
-          {result !== undefined && (
+          {rawOutput !== undefined && (
             <Box>
               <Text size="1" color="gray" weight="medium" style={fontStyle}>
                 Result
@@ -112,9 +103,9 @@ export function ToolCallBlock({
                 className="mt-1 block overflow-x-auto whitespace-pre"
                 style={fontStyle}
               >
-                {typeof result === "string"
-                  ? result
-                  : JSON.stringify(result, null, 2)}
+                {typeof rawOutput === "string"
+                  ? rawOutput
+                  : JSON.stringify(rawOutput, null, 2)}
               </Code>
             </Box>
           )}

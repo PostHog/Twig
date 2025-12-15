@@ -2,7 +2,10 @@ import {
   createGitActionMessage,
   type GitActionType,
 } from "@features/sessions/components/GitActionMessage";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import {
+  useSessionActions,
+  useSessionForTask,
+} from "@features/sessions/stores/sessionStore";
 import {
   GIT_ACTION_LABELS,
   GIT_ACTION_PROMPTS,
@@ -57,8 +60,8 @@ export function GitActionsBar({
   hasChanges,
 }: GitActionsBarProps) {
   const [isSending, setIsSending] = useState(false);
-  const sendPrompt = useSessionStore((state) => state.sendPrompt);
-  const session = useSessionStore((state) => state.getSessionForTask(taskId));
+  const { sendPrompt } = useSessionActions();
+  const session = useSessionForTask(taskId);
 
   const isCloud = session?.isCloud ?? false;
 
