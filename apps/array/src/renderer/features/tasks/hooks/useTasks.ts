@@ -30,7 +30,14 @@ export function useTasks(filters?: { repository?: string }) {
 export function useCreateTask() {
   const queryClient = useQueryClient();
 
-  const invalidateTasks = () => {
+  const invalidateTasks = (newTask?: Task) => {
+    // If a new task is provided, add it to cache immediately for instant UI update
+    if (newTask) {
+      queryClient.setQueryData<Task[]>(taskKeys.list(), (old) =>
+        old ? [newTask, ...old] : [newTask],
+      );
+    }
+    // Also invalidate to ensure we're in sync with server
     queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
   };
 

@@ -41,9 +41,17 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
   (set, get) => {
     (async () => {
       try {
-        const folders = await loadFolders();
-        set({ folders, isLoaded: true });
+        const loadedFolders = await loadFolders();
+        // Merge with existing state to preserve folders added during load
+        set((state) => {
+          // Dedupe by id, local state wins for freshness
+          const byId = new Map<string, RegisteredFolder>();
+          for (const f of loadedFolders) byId.set(f.id, f);
+          for (const f of state.folders) byId.set(f.id, f);
+          return { folders: Array.from(byId.values()), isLoaded: true };
+        });
 
+        const folders = get().folders;
         for (const folder of folders) {
           get()
             .cleanupOrphanedWorktrees(folder.path)
@@ -56,7 +64,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
         }
       } catch (error) {
         log.error("Failed to load folders:", error);
-        set({ folders: [], isLoaded: true });
+        set({ isLoaded: true });
       }
     })();
 

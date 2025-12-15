@@ -42,7 +42,7 @@ export class PostHogAPIClient {
 
   private get headers(): Record<string, string> {
     return {
-      Authorization: `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.config.getApiKey()}`,
       "Content-Type": "application/json",
     };
   }
@@ -84,7 +84,7 @@ export class PostHogAPIClient {
   }
 
   getApiKey(): string {
-    return this.config.apiKey;
+    return this.config.getApiKey();
   }
 
   getLlmGatewayUrl(): string {

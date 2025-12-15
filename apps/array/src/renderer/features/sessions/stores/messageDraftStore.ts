@@ -1,42 +1,48 @@
 import type { JSONContent } from "@tiptap/react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
-interface MessageDraftStore {
+interface MessageDraftState {
   drafts: Record<string, JSONContent>;
   _hasHydrated: boolean;
-  setHasHydrated: (state: boolean) => void;
-  getDraft: (sessionId: string) => JSONContent | null;
-  setDraft: (sessionId: string, draft: JSONContent | null) => void;
-  clearDraft: (sessionId: string) => void;
 }
 
-export const useMessageDraftStore = create<MessageDraftStore>()(
+interface MessageDraftActions {
+  setHasHydrated: (state: boolean) => void;
+  setDraft: (sessionId: string, draft: JSONContent | null) => void;
+}
+
+type MessageDraftStore = MessageDraftState & { actions: MessageDraftActions };
+
+const useStore = create<MessageDraftStore>()(
   persist(
-    (set, get) => ({
+    immer((set) => ({
       drafts: {},
       _hasHydrated: false,
-      setHasHydrated: (state) => set({ _hasHydrated: state }),
-      getDraft: (sessionId) => get().drafts[sessionId] ?? null,
-      setDraft: (sessionId, draft) =>
-        set((state) => {
-          if (draft === null) {
-            const { [sessionId]: _, ...rest } = state.drafts;
-            return { drafts: rest };
-          }
-          return { drafts: { ...state.drafts, [sessionId]: draft } };
-        }),
-      clearDraft: (sessionId) =>
-        set((state) => {
-          const { [sessionId]: _, ...rest } = state.drafts;
-          return { drafts: rest };
-        }),
-    }),
+      actions: {
+        setHasHydrated: (state) => set({ _hasHydrated: state }),
+        setDraft: (sessionId, draft) =>
+          set((state) => {
+            if (draft === null) {
+              delete state.drafts[sessionId];
+            } else {
+              state.drafts[sessionId] = draft;
+            }
+          }),
+      },
+    })),
     {
       name: "message-drafts",
+      partialize: (state) => ({ drafts: state.drafts }),
       onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
+        state?.actions.setHasHydrated(true);
       },
     },
   ),
 );
+
+export const useDraft = (sessionId: string) =>
+  useStore((s) => s.drafts[sessionId] ?? null);
+export const useHasHydrated = () => useStore((s) => s._hasHydrated);
+export const useDraftActions = () => useStore((s) => s.actions);

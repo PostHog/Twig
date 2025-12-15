@@ -18,24 +18,25 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
 } from "electron";
+import type { AcpMessage } from "../../shared/types/session-events";
 import { logger } from "../lib/logger";
 
 const log = logger.scope("session-manager");
 
-type MessageCallback = (
-  message: unknown,
-  direction: "client" | "agent",
-) => void;
-type MessageDirection = "client" | "agent";
+function isAuthError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("Authentication required")
+  );
+}
+
+type MessageCallback = (message: unknown) => void;
 
 class NdJsonTap {
   private decoder = new TextDecoder();
   private buffer = "";
 
-  constructor(
-    private onMessage: MessageCallback,
-    private direction: MessageDirection,
-  ) {}
+  constructor(private onMessage: MessageCallback) {}
 
   process(chunk: Uint8Array): void {
     this.buffer += this.decoder.decode(chunk, { stream: true });
@@ -45,7 +46,7 @@ class NdJsonTap {
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        this.onMessage(JSON.parse(line), this.direction);
+        this.onMessage(JSON.parse(line));
       } catch {
         // Not valid JSON, skip
       }
@@ -56,10 +57,9 @@ class NdJsonTap {
 function createTappedReadableStream(
   underlying: ReadableStream<Uint8Array>,
   onMessage: MessageCallback,
-  direction: MessageDirection,
 ): ReadableStream<Uint8Array> {
   const reader = underlying.getReader();
-  const tap = new NdJsonTap(onMessage, direction);
+  const tap = new NdJsonTap(onMessage);
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -77,9 +77,8 @@ function createTappedReadableStream(
 function createTappedWritableStream(
   underlying: WritableStream<Uint8Array>,
   onMessage: MessageCallback,
-  direction: MessageDirection,
 ): WritableStream<Uint8Array> {
-  const tap = new NdJsonTap(onMessage, direction);
+  const tap = new NdJsonTap(onMessage);
 
   return new WritableStream<Uint8Array>({
     async write(chunk) {
@@ -143,6 +142,7 @@ export interface ManagedSession {
   createdAt: number;
   lastActivityAt: number;
   mockNodeDir: string;
+  config: SessionConfig;
 }
 
 function getClaudeCliPath(): string {
@@ -154,7 +154,7 @@ function getClaudeCliPath(): string {
 
 export class SessionManager {
   private sessions = new Map<string, ManagedSession>();
-  private sessionTokens = new Map<string, string>();
+  private currentToken: string | null = null;
   private getMainWindow: () => BrowserWindow | null;
   private onLog: OnLogCallback;
 
@@ -163,23 +163,20 @@ export class SessionManager {
     this.onLog = onLog;
   }
 
-  public updateSessionToken(taskRunId: string, newToken: string): void {
-    this.sessionTokens.set(taskRunId, newToken);
-    log.info("Session token updated", { taskRunId });
+  public updateToken(newToken: string): void {
+    this.currentToken = newToken;
+    log.info("Session token updated");
   }
 
-  private getSessionToken(taskRunId: string, fallback: string): string {
-    return this.sessionTokens.get(taskRunId) || fallback;
+  private getToken(fallback: string): string {
+    return this.currentToken || fallback;
   }
 
-  private buildMcpServers(
-    credentials: PostHogCredentials,
-    taskRunId: string,
-  ): AcpMcpServer[] {
+  private buildMcpServers(credentials: PostHogCredentials): AcpMcpServer[] {
     const servers: AcpMcpServer[] = [];
 
     const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
-    const token = this.getSessionToken(taskRunId, credentials.apiKey);
+    const token = this.getToken(credentials.apiKey);
 
     servers.push({
       name: "posthog",
@@ -219,6 +216,7 @@ export class SessionManager {
   private async getOrCreateSession(
     config: SessionConfig,
     isReconnect: boolean,
+    isRetry = false,
   ): Promise<ManagedSession | null> {
     const {
       taskId,
@@ -230,9 +228,11 @@ export class SessionManager {
       model,
     } = config;
 
-    const existing = this.sessions.get(taskRunId);
-    if (existing) {
-      return existing;
+    if (!isRetry) {
+      const existing = this.sessions.get(taskRunId);
+      if (existing) {
+        return existing;
+      }
     }
 
     const channel = `agent-event:${taskRunId}`;
@@ -242,7 +242,7 @@ export class SessionManager {
     const agent = new Agent({
       workingDirectory: repoPath,
       posthogApiUrl: credentials.apiHost,
-      posthogApiKey: credentials.apiKey,
+      getPosthogApiKey: () => this.getToken(credentials.apiKey),
       posthogProjectId: credentials.projectId,
       debug: !app.isPackaged,
       onLog: this.onLog,
@@ -264,11 +264,9 @@ export class SessionManager {
         clientCapabilities: {},
       });
 
-      const mcpServers = this.buildMcpServers(credentials, taskRunId);
+      const mcpServers = this.buildMcpServers(credentials);
 
       if (isReconnect) {
-        // Use our custom extension method to resume without replaying history.
-        // Client fetches history from S3 directly.
         await connection.extMethod("_posthog/session/resume", {
           sessionId: taskRunId,
           cwd: repoPath,
@@ -298,14 +296,25 @@ export class SessionManager {
         createdAt: Date.now(),
         lastActivityAt: Date.now(),
         mockNodeDir,
+        config,
       };
 
       this.sessions.set(taskRunId, session);
+      if (isRetry) {
+        log.info("Session created after auth retry", { taskRunId });
+      }
       return session;
     } catch (err) {
       this.cleanupMockNodeEnvironment(mockNodeDir);
+      if (!isRetry && isAuthError(err)) {
+        log.warn(
+          `Auth error during ${isReconnect ? "reconnect" : "create"}, retrying`,
+          { taskRunId },
+        );
+        return this.getOrCreateSession(config, isReconnect, true);
+      }
       log.error(
-        `Failed to ${isReconnect ? "reconnect" : "create"} session`,
+        `Failed to ${isReconnect ? "reconnect" : "create"} session${isRetry ? " after retry" : ""}`,
         err,
       );
       if (isReconnect) return null;
@@ -313,23 +322,56 @@ export class SessionManager {
     }
   }
 
+  private async recreateSession(taskRunId: string): Promise<ManagedSession> {
+    const existing = this.sessions.get(taskRunId);
+    if (!existing) {
+      throw new Error(`Session not found for recreation: ${taskRunId}`);
+    }
+
+    log.info("Recreating session due to auth error", { taskRunId });
+
+    // Store config and cleanup old session
+    const config = existing.config;
+    this.cleanupSession(taskRunId);
+
+    // Reconnect to preserve Claude context via sdkSessionId
+    const newSession = await this.getOrCreateSession(config, true);
+    if (!newSession) {
+      throw new Error(`Failed to recreate session: ${taskRunId}`);
+    }
+
+    return newSession;
+  }
+
   async prompt(
     taskRunId: string,
     prompt: ContentBlock[],
   ): Promise<{ stopReason: string }> {
-    const session = this.sessions.get(taskRunId);
+    let session = this.sessions.get(taskRunId);
     if (!session) {
       throw new Error(`Session not found: ${taskRunId}`);
     }
 
     session.lastActivityAt = Date.now();
 
-    const result = await session.connection.prompt({
-      sessionId: taskRunId, // Use taskRunId as ACP sessionId
-      prompt,
-    });
-
-    return { stopReason: result.stopReason };
+    try {
+      const result = await session.connection.prompt({
+        sessionId: taskRunId,
+        prompt,
+      });
+      return { stopReason: result.stopReason };
+    } catch (err) {
+      if (isAuthError(err)) {
+        log.warn("Auth error during prompt, recreating session", { taskRunId });
+        session = await this.recreateSession(taskRunId);
+        const result = await session.connection.prompt({
+          sessionId: taskRunId,
+          prompt,
+        });
+        return { stopReason: result.stopReason };
+      }
+      throw err;
+    }
   }
 
   async cancelSession(taskRunId: string): Promise<boolean> {
@@ -469,30 +511,31 @@ export class SessionManager {
       }
     };
 
-    // Emit all raw ACP messages (bidirectional) to the renderer
-    const onAcpMessage = (message: unknown, direction: "client" | "agent") => {
-      emitToRenderer({
+    // Emit all raw ACP messages to the renderer
+    const onAcpMessage = (message: unknown) => {
+      const acpMessage: AcpMessage = {
         type: "acp_message",
-        direction,
         ts: Date.now(),
-        message,
-      });
+        message: message as AcpMessage["message"],
+      };
+      emitToRenderer(acpMessage);
     };
 
-    // Tap both streams to capture all messages bidirectionally
+    // Tap both streams to capture all messages
     const tappedReadable = createTappedReadableStream(
       clientStreams.readable as ReadableStream<Uint8Array>,
       onAcpMessage,
-      "agent",
     );
 
     const tappedWritable = createTappedWritableStream(
       clientStreams.writable as WritableStream<Uint8Array>,
       onAcpMessage,
-      "client",
     );
 
     // Create Client implementation that forwards to renderer
+    // Note: sessionUpdate is NOT implemented here because session/update
+    // notifications are already captured by the stream tap and forwarded
+    // as acp_message events. This avoids duplicate events.
     const client: Client = {
       async requestPermission(
         params: RequestPermissionRequest,
@@ -509,12 +552,27 @@ export class SessionManager {
         };
       },
 
-      async sessionUpdate(params: SessionNotification): Promise<void> {
-        emitToRenderer({
-          type: "session_update",
-          ts: Date.now(),
-          notification: params,
-        });
+      async sessionUpdate(_params: SessionNotification): Promise<void> {
+        // No-op: session/update notifications are captured by the stream tap
+        // and forwarded as acp_message events to avoid duplication
+      },
+
+      extNotification: async (
+        method: string,
+        params: Record<string, unknown>,
+      ): Promise<void> => {
+        if (method === "_posthog/sdk_session") {
+          const { sessionId, sdkSessionId } = params as {
+            sessionId: string;
+            sdkSessionId: string;
+          };
+          // Store sdkSessionId in session config for recreation/reconnection
+          const session = this.sessions.get(sessionId);
+          if (session) {
+            session.config.sdkSessionId = sdkSessionId;
+            log.info("SDK session ID captured", { sessionId, sdkSessionId });
+          }
+        }
       },
     };
 
@@ -643,10 +701,10 @@ export function registerAgentIpc(
     "agent-token-refresh",
     async (
       _event: IpcMainInvokeEvent,
-      taskRunId: string,
+      _taskRunId: string,
       newToken: string,
     ): Promise<void> => {
-      sessionManager.updateSessionToken(taskRunId, newToken);
+      sessionManager.updateToken(newToken);
     },
   );
 

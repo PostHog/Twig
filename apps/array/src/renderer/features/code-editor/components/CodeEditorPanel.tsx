@@ -64,6 +64,7 @@ export function CodeEditorPanel({
       <CodeMirrorEditor
         content={fileContent}
         filePath={absolutePath}
+        relativePath={filePath}
         readOnly
       />
     </Box>
