@@ -38,12 +38,6 @@ declare global {
     }>;
     oauthCancelFlow: () => Promise<{ success: boolean; error?: string }>;
     validateRepo: (directoryPath: string) => Promise<boolean>;
-    detectRepo: (directoryPath: string) => Promise<{
-      organization: string;
-      repository: string;
-      branch?: string;
-      remote?: string;
-    } | null>;
     cloneRepository: (
       repoUrl: string,
       targetPath: string,

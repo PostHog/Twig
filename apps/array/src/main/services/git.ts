@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import type { ChangedFile, GitFileStatus } from "@shared/types";
 import { type IpcMainInvokeEvent, ipcMain } from "electron";
 import { logger } from "../lib/logger";
+import { parseGitHubUrl } from "./git/utils";
 
 const log = logger.scope("git");
 
@@ -49,24 +50,6 @@ const getAllFilesInDirectory = async (
   }
 
   return files;
-};
-
-export interface GitHubRepo {
-  organization: string;
-  repository: string;
-}
-
-export const parseGitHubUrl = (url: string): GitHubRepo | null => {
-  const match =
-    url.match(/github\.com[:/](.+?)\/(.+?)(\.git)?$/) ||
-    url.match(/git@github\.com:(.+?)\/(.+?)(\.git)?$/);
-
-  if (!match) return null;
-
-  return {
-    organization: match[1],
-    repository: match[2].replace(/\.git$/, ""),
-  };
 };
 
 export const isGitRepository = async (
@@ -687,31 +670,6 @@ export function registerGitIpc(): void {
     ): Promise<boolean> => {
       if (!directoryPath) return false;
       return isGitRepository(directoryPath);
-    },
-  );
-
-  ipcMain.handle(
-    "detect-repo",
-    async (
-      _event: IpcMainInvokeEvent,
-      directoryPath: string,
-    ): Promise<{
-      organization: string;
-      repository: string;
-      branch?: string;
-      remote?: string;
-    } | null> => {
-      if (!directoryPath) return null;
-
-      const remoteUrl = await getRemoteUrl(directoryPath);
-      if (!remoteUrl) return null;
-
-      const repo = parseGitHubUrl(remoteUrl);
-      if (!repo) return null;
-
-      const branch = await getCurrentBranch(directoryPath);
-
-      return { ...repo, branch, remote: remoteUrl };
     },
   );
 

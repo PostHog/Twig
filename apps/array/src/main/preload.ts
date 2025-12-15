@@ -76,14 +76,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Repo API
   validateRepo: (directoryPath: string): Promise<boolean> =>
     ipcRenderer.invoke("validate-repo", directoryPath),
-  detectRepo: (
-    directoryPath: string,
-  ): Promise<{
-    organization: string;
-    repository: string;
-    branch?: string;
-    remote?: string;
-  } | null> => ipcRenderer.invoke("detect-repo", directoryPath),
   cloneRepository: (
     repoUrl: string,
     targetPath: string,

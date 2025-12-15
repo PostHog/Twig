@@ -1,2 +1,2 @@
 export { container, get } from "./container.js";
-export { TOKENS } from "./tokens.js";
+export { MAIN_TOKENS } from "./tokens.js";

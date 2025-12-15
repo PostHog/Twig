@@ -61,10 +61,11 @@ export function TaskInputEditor({
   };
 
   const getSubmitTooltip = () => {
-    if (canSubmit) return "Create task";
-    if (!hasDirectory) return "Select a folder first";
+    if (isCreatingTask) return "Creating task...";
     if (editor?.isEmpty) return "Enter a task description";
-    return "Enter a task description";
+    if (!hasDirectory) return "Select a folder first";
+    if (!canSubmit) return "Missing required fields";
+    return "Create task";
   };
 
   return (
