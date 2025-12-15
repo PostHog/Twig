@@ -60,7 +60,7 @@ export function ConversationView({
         <TurnView turn={turn} repoPath={repoPath} isCloud={isCloud} />
       )}
       autoScrollToBottom
-      className="flex-1 bg-blackA-5 p-2 pb-16"
+      className="flex-1 bg-white p-2 pb-16 dark:bg-gray-1"
       gap={12}
       footer={
         <SessionFooter
