@@ -1,7 +1,7 @@
 import type { Schemas } from "@api/generated";
 import {
   type AgentSession,
-  useSessionStore,
+  useSessions,
 } from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
@@ -95,15 +95,13 @@ function groupTasksByFolder(
 
   for (const task of tasks) {
     const workspace = workspaces[task.id];
-    if (workspace) {
-      const folder = folders.find((f) => f.id === workspace.folderId);
-      if (folder) {
-        if (!tasksByFolder.has(folder.id)) {
-          tasksByFolder.set(folder.id, []);
-        }
-        tasksByFolder.get(folder.id)?.push(task);
-      }
+    if (!workspace) continue;
+    const folder = folders.find((f) => f.id === workspace.folderId);
+    if (!folder) continue;
+    if (!tasksByFolder.has(folder.id)) {
+      tasksByFolder.set(folder.id, []);
     }
+    tasksByFolder.get(folder.id)?.push(task);
   }
 
   return tasksByFolder;
@@ -178,7 +176,7 @@ export function useSidebarData({
   const { data: allTasks = [], isLoading } = useTasks();
   const { folders } = useRegisteredFoldersStore();
   const workspaces = useWorkspaceStore.use.workspaces();
-  const sessions = useSessionStore((state) => state.sessions);
+  const sessions = useSessions();
   const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);

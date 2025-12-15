@@ -131,7 +131,7 @@ export function useTaskCreation({
         const { task } = result.data;
 
         // Invalidate tasks query
-        invalidateTasks();
+        invalidateTasks(task);
 
         // Navigate to the new task
         navigateToTask(task);

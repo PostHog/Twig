@@ -6,11 +6,8 @@ import {
   Checkbox,
   Code,
   Em,
-  Heading,
   Kbd,
   Link,
-  Strong,
-  Table,
   Text,
 } from "@radix-ui/themes";
 import type { Components } from "react-markdown";
@@ -27,44 +24,20 @@ function preprocessMarkdown(content: string): string {
   return content.replace(/\n([^\n].*)\n(---+|___+|\*\*\*+)\n/g, "\n$1\n\n$2\n");
 }
 
-const fontStyle = {
-  fontSize: "var(--font-size-1-5)",
-  lineHeight: "var(--line-height-1-5)",
-};
+const HeadingText = ({ children }: { children: React.ReactNode }) => (
+  <Text as="p" size="1" mb="2" style={{ color: "var(--accent-11)" }}>
+    <strong>{children}</strong>
+  </Text>
+);
 
 const components: Components = {
-  h1: ({ children }) => (
-    <Heading as="h1" size="4" mb="3" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
-  h2: ({ children }) => (
-    <Heading as="h2" size="3" mb="3" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
-  h3: ({ children }) => (
-    <Heading as="h3" size="2" mb="2" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
-  h4: ({ children }) => (
-    <Heading as="h4" size="2" mb="2" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
-  h5: ({ children }) => (
-    <Heading as="h5" size="2" mb="2" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
-  h6: ({ children }) => (
-    <Heading as="h6" size="2" mb="2" color="gray" highContrast>
-      {children}
-    </Heading>
-  ),
+  h1: ({ children }) => <HeadingText>{children}</HeadingText>,
+  h2: ({ children }) => <HeadingText>{children}</HeadingText>,
+  h3: ({ children }) => <HeadingText>{children}</HeadingText>,
+  h4: ({ children }) => <HeadingText>{children}</HeadingText>,
+  h5: ({ children }) => <HeadingText>{children}</HeadingText>,
+  h6: ({ children }) => <HeadingText>{children}</HeadingText>,
   p: ({ children, node }) => {
-    // Check if paragraph only contains a strong element (used as pseudo-heading by LLMs)
     const isStrongOnly =
       node?.children?.length === 1 &&
       node.children[0].type === "element" &&
@@ -76,7 +49,6 @@ const components: Components = {
         size="1"
         mb={isStrongOnly ? "2" : "3"}
         color="gray"
-        style={fontStyle}
         highContrast
       >
         {children}
@@ -84,7 +56,11 @@ const components: Components = {
     );
   },
   blockquote: ({ children }) => (
-    <Blockquote size="2" mb="3" color="gray" style={fontStyle} highContrast>
+    <Blockquote
+      size="1"
+      mb="3"
+      style={{ color: "var(--accent-10)", borderColor: "var(--accent-6)" }}
+    >
       {children}
     </Blockquote>
   ),
@@ -92,50 +68,47 @@ const components: Components = {
     const isInline = !className?.includes("language-");
     if (isInline) {
       return (
-        <Code
-          size="2"
-          variant="soft"
-          color="gray"
-          style={fontStyle}
-          highContrast
-        >
+        <Code size="1" variant="soft" color="gray" highContrast>
           {children}
         </Code>
       );
     }
     return <code>{children}</code>;
   },
-  pre: ({ children }) => <CodeBlock size="1.5">{children}</CodeBlock>,
-  em: ({ children }) => <Em>{children}</Em>,
-  strong: ({ children }) => <Strong>{children}</Strong>,
+  pre: ({ children }) => <CodeBlock size="1">{children}</CodeBlock>,
+  em: ({ children }) => (
+    <Em style={{ color: "var(--accent-10)" }}>{children}</Em>
+  ),
+  strong: ({ children }) => (
+    <strong
+      style={{ fontSize: "var(--font-size-1)", color: "var(--accent-11)" }}
+    >
+      {children}
+    </strong>
+  ),
   del: ({ children }) => (
-    <del style={{ textDecoration: "line-through", color: "var(--gray-11)" }}>
+    <del style={{ textDecoration: "line-through", color: "var(--gray-9)" }}>
       {children}
     </del>
   ),
   a: ({ href, children }) => (
-    <Link
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={fontStyle}
-    >
+    <Link href={href} target="_blank" rel="noopener noreferrer" size="1">
       {children}
     </Link>
   ),
-  kbd: ({ children }) => <Kbd style={fontStyle}>{children}</Kbd>,
+  kbd: ({ children }) => <Kbd size="1">{children}</Kbd>,
   ul: ({ children }) => (
-    <List as="ul" size="1.5">
+    <List as="ul" size="1">
       {children}
     </List>
   ),
   ol: ({ children }) => (
-    <List as="ol" size="1.5">
+    <List as="ol" size="1">
       {children}
     </List>
   ),
-  li: ({ children }) => <ListItem size="1.5">{children}</ListItem>,
-  hr: () => <Divider size="2" />,
+  li: ({ children }) => <ListItem size="1">{children}</ListItem>,
+  hr: () => <Divider size="1" />,
   // Task list checkbox
   input: ({ type, checked }) => {
     if (type === "checkbox") {
@@ -149,22 +122,24 @@ const components: Components = {
     }
     return <input type={type} />;
   },
-  // Table components using Radix Table
+  // Table components - plain HTML for size control
   table: ({ children }) => (
-    <Table.Root size="1" variant="surface" mb="3">
+    <table className="mb-3" style={{ fontSize: "var(--font-size-1)" }}>
       {children}
-    </Table.Root>
+    </table>
   ),
-  thead: ({ children }) => <Table.Header>{children}</Table.Header>,
-  tbody: ({ children }) => <Table.Body>{children}</Table.Body>,
-  tr: ({ children }) => <Table.Row>{children}</Table.Row>,
+  thead: ({ children }) => <thead>{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-gray-6 border-b">{children}</tr>,
   th: ({ children, style }) => (
-    <Table.ColumnHeaderCell style={{ ...fontStyle, ...style }}>
+    <th className="px-2 py-1 text-left text-gray-11" style={style}>
       {children}
-    </Table.ColumnHeaderCell>
+    </th>
   ),
   td: ({ children, style }) => (
-    <Table.Cell style={{ ...fontStyle, ...style }}>{children}</Table.Cell>
+    <td className="px-2 py-1 text-gray-12" style={style}>
+      {children}
+    </td>
   ),
 };
 

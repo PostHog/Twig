@@ -1,6 +1,9 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { SessionView } from "@features/sessions/components/SessionView";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import {
+  useSessionActions,
+  useSessionForTask,
+} from "@features/sessions/stores/sessionStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
@@ -25,15 +28,16 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
-  const session = useSessionStore((state) => state.getSessionForTask(taskId));
-  const connectToTask = useSessionStore((state) => state.connectToTask);
-  const sendPrompt = useSessionStore((state) => state.sendPrompt);
-  const cancelPrompt = useSessionStore((state) => state.cancelPrompt);
+  const session = useSessionForTask(taskId);
+  const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
+
+  const events = session?.events ?? [];
+  const isPromptPending = session?.isPromptPending ?? false;
 
   const hasAttemptedConnect = useRef(false);
   useEffect(() => {
@@ -97,11 +101,10 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     <BackgroundWrapper>
       <Box height="100%" width="100%">
         <SessionView
-          events={session?.events ?? []}
-          sessionId={session?.taskRunId ?? null}
+          events={events}
           taskId={taskId}
           isRunning={isRunning}
-          isPromptPending={session?.isPromptPending}
+          isPromptPending={isPromptPending}
           onSendPrompt={handleSendPrompt}
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}

@@ -197,7 +197,7 @@ export interface AgentConfig {
 
   // PostHog API configuration (optional - enables PostHog integration when provided)
   posthogApiUrl?: string;
-  posthogApiKey?: string;
+  getPosthogApiKey?: () => string;
   posthogProjectId?: number;
 
   // PostHog MCP configuration
@@ -219,7 +219,7 @@ export interface AgentConfig {
 
 export interface PostHogAPIConfig {
   apiUrl: string;
-  apiKey: string;
+  getApiKey: () => string;
   projectId: number;
 }
 

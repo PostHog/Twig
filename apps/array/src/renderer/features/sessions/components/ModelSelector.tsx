@@ -6,7 +6,7 @@ import {
   type ModelProvider,
 } from "@shared/types/models";
 import { Fragment } from "react";
-import { useSessionStore } from "../stores/sessionStore";
+import { useSessionActions, useSessionForTask } from "../stores/sessionStore";
 
 interface ModelSelectorProps {
   taskId?: string;
@@ -21,10 +21,8 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const defaultModel = useSettingsStore((state) => state.defaultModel);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
-  const setSessionModel = useSessionStore((state) => state.setSessionModel);
-  const session = useSessionStore((state) =>
-    taskId ? state.getSessionForTask(taskId) : undefined,
-  );
+  const { setSessionModel } = useSessionActions();
+  const session = useSessionForTask(taskId);
 
   // Use session model if available, otherwise fall back to default
   const activeModel = session?.model ?? defaultModel;

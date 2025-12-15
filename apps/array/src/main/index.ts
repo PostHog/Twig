@@ -1,11 +1,17 @@
+declare const __BUILD_COMMIT__: string | undefined;
+declare const __BUILD_DATE__: string | undefined;
+
 import "reflect-metadata";
 import dns from "node:dns";
 import { mkdirSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   app,
   BrowserWindow,
+  clipboard,
+  dialog,
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
@@ -120,7 +126,38 @@ function createWindow(): void {
     {
       label: "Array",
       submenu: [
-        { role: "about" },
+        {
+          label: "About Array",
+          click: () => {
+            const commit = __BUILD_COMMIT__ ?? "dev";
+            const buildDate = __BUILD_DATE__ ?? "dev";
+            const info = [
+              `Version: ${app.getVersion()}`,
+              `Commit: ${commit}`,
+              `Date: ${buildDate}`,
+              `Electron: ${process.versions.electron}`,
+              `Chromium: ${process.versions.chrome}`,
+              `Node.js: ${process.versions.node}`,
+              `V8: ${process.versions.v8}`,
+              `OS: ${process.platform} ${process.arch} ${os.release()}`,
+            ].join("\n");
+
+            dialog
+              .showMessageBox({
+                type: "info",
+                title: "About Array",
+                message: "Array",
+                detail: info,
+                buttons: ["Copy", "OK"],
+                defaultId: 1,
+              })
+              .then((result) => {
+                if (result.response === 0) {
+                  clipboard.writeText(info);
+                }
+              });
+          },
+        },
         { type: "separator" },
         {
           label: "Check for Updates...",
