@@ -222,6 +222,11 @@ function extractUserContent(params: unknown): string {
   return textBlock?.text ?? "";
 }
 
+function mergeToolCallUpdate(existing: ToolCall, update: SessionUpdate) {
+  const { sessionUpdate: _, ...rest } = update;
+  Object.assign(existing, rest);
+}
+
 function processSessionUpdate(turn: Turn, update: SessionUpdate) {
   switch (update.sessionUpdate) {
     case "user_message_chunk":
@@ -252,9 +257,7 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
     case "tool_call_update": {
       const existing = turn.toolCalls.get(update.toolCallId);
       if (existing) {
-        // Merge update but preserve sessionUpdate as "tool_call" for rendering
-        const { sessionUpdate: _, ...rest } = update;
-        Object.assign(existing, rest);
+        mergeToolCallUpdate(existing, update);
       }
       break;
     }
