@@ -16,6 +16,8 @@ import { useSessionViewStore } from "../stores/sessionViewStore";
 import { AgentMessage } from "./AgentMessage";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
+import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
+import { GitActionResult } from "./GitActionResult";
 import { MessageEditor } from "./MessageEditor";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { TurnCollapsible } from "./TurnCollapsible";
@@ -70,6 +72,7 @@ interface SessionViewProps {
   onSendPrompt: (text: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
+  isCloud?: boolean;
 }
 
 interface ToolData {
@@ -349,6 +352,7 @@ export function SessionView({
   onSendPrompt,
   onCancelPrompt,
   repoPath,
+  isCloud = false,
 }: SessionViewProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -476,9 +480,20 @@ export function SessionView({
           : [];
       const shouldCollapse = turn.isComplete && collapsibleMessages.length > 0;
 
+      // Check if this is a git action message
+      const gitAction = parseGitActionMessage(turn.userMessage.content);
+
+      // Show git result if this is a completed git action
+      const showGitResult =
+        gitAction.isGitAction && gitAction.actionType && turn.isComplete;
+
       return (
         <Box className="flex flex-col gap-4">
-          <UserMessage content={turn.userMessage.content} />
+          {gitAction.isGitAction && gitAction.actionType ? (
+            <GitActionMessage actionType={gitAction.actionType} />
+          ) : (
+            <UserMessage content={turn.userMessage.content} />
+          )}
           {shouldCollapse ? (
             <>
               <TurnCollapsible messages={collapsibleMessages} />
@@ -487,10 +502,18 @@ export function SessionView({
           ) : (
             turn.agentResponses.map(renderMessage)
           )}
+          {showGitResult && repoPath && (
+            <GitActionResult
+              actionType={gitAction.actionType!}
+              repoPath={repoPath}
+              turnId={turn.id}
+              isCloud={isCloud}
+            />
+          )}
         </Box>
       );
     },
-    [renderMessage, getLastAgentMessage],
+    [renderMessage, getLastAgentMessage, repoPath, isCloud],
   );
 
   const renderRawLogEntry = useCallback(
