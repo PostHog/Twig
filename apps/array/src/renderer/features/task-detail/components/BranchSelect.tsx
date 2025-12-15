@@ -3,6 +3,7 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text, TextField } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RunMode } from "./RunModeSelect";
 
 const MAX_DISPLAYED_BRANCHES = 20;
 
@@ -10,6 +11,7 @@ interface BranchSelectProps {
   value: string | null; // null means use default branch
   onChange: (branch: string | null) => void;
   directoryPath: string;
+  runMode: RunMode;
   size?: Responsive<"1" | "2">;
 }
 
@@ -17,10 +19,12 @@ export function BranchSelect({
   value,
   onChange,
   directoryPath,
+  runMode,
   size = "1",
 }: BranchSelectProps) {
   const [branches, setBranches] = useState<string[]>([]);
   const [defaultBranch, setDefaultBranch] = useState<string>("");
+  const [currentBranch, setCurrentBranch] = useState<string>("");
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +36,7 @@ export function BranchSelect({
       setIsLoading(false);
       setBranches([]);
       setDefaultBranch("");
+      setCurrentBranch("");
       return;
     }
 
@@ -41,15 +46,18 @@ export function BranchSelect({
     const load = async () => {
       setIsLoading(true);
       try {
-        const [allBranches, detectedDefault] = await Promise.all([
-          window.electronAPI.getAllBranches(directoryPath),
-          window.electronAPI.getDefaultBranch(directoryPath),
-        ]);
+        const [allBranches, detectedDefault, detectedCurrent] =
+          await Promise.all([
+            window.electronAPI.getAllBranches(directoryPath),
+            window.electronAPI.getDefaultBranch(directoryPath),
+            window.electronAPI.getCurrentBranch(directoryPath),
+          ]);
 
         if (cancelled) return;
 
         setBranches(allBranches);
         setDefaultBranch(detectedDefault);
+        setCurrentBranch(detectedCurrent ?? "");
       } catch (_error) {
       } finally {
         if (!cancelled) {
@@ -65,12 +73,23 @@ export function BranchSelect({
     };
   }, [directoryPath]);
 
+  // Determine which branch to use as the initial value based on run mode
+  const initialBranch =
+    runMode === "local" ? currentBranch || defaultBranch : defaultBranch;
+
   useEffect(() => {
-    if (!hasSetInitialValue.current && value === null && defaultBranch) {
+    if (!hasSetInitialValue.current && value === null && initialBranch) {
       hasSetInitialValue.current = true;
-      onChange(defaultBranch);
+      onChange(initialBranch);
     }
-  }, [defaultBranch, value, onChange]);
+  }, [initialBranch, value, onChange]);
+
+  // Reset branch selection when runMode changes
+  useEffect(() => {
+    if (initialBranch) {
+      onChange(initialBranch);
+    }
+  }, [initialBranch, onChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpenChange = useCallback(
     async (open: boolean) => {
@@ -78,12 +97,15 @@ export function BranchSelect({
         setSearchQuery("");
         if (directoryPath) {
           try {
-            const [allBranches, detectedDefault] = await Promise.all([
-              window.electronAPI.getAllBranches(directoryPath),
-              window.electronAPI.getDefaultBranch(directoryPath),
-            ]);
+            const [allBranches, detectedDefault, detectedCurrent] =
+              await Promise.all([
+                window.electronAPI.getAllBranches(directoryPath),
+                window.electronAPI.getDefaultBranch(directoryPath),
+                window.electronAPI.getCurrentBranch(directoryPath),
+              ]);
             setBranches(allBranches);
             setDefaultBranch(detectedDefault);
+            setCurrentBranch(detectedCurrent ?? "");
           } catch (_error) {}
         }
       }

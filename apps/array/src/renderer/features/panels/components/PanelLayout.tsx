@@ -52,6 +52,13 @@ const PanelLayoutRenderer: React.FC<{
     [layoutState, taskId],
   );
 
+  const handleKeepTab = useCallback(
+    (panelId: string, tabId: string) => {
+      layoutState.keepTab(taskId, panelId, tabId);
+    },
+    [layoutState, taskId],
+  );
+
   const handlePanelFocus = useCallback(
     (panelId: string) => {
       layoutState.setFocusedPanel(taskId, panelId);
@@ -116,6 +123,7 @@ const PanelLayoutRenderer: React.FC<{
             closeTab={layoutState.closeTab}
             closeOtherTabs={handleCloseOtherTabs}
             closeTabsToRight={handleCloseTabsToRight}
+            keepTab={handleKeepTab}
             draggingTabId={layoutState.draggingTabId}
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
@@ -147,6 +155,7 @@ const PanelLayoutRenderer: React.FC<{
       handleSetActiveTab,
       handleCloseOtherTabs,
       handleCloseTabsToRight,
+      handleKeepTab,
       handlePanelFocus,
       handleAddTerminal,
       handleSplitPanel,

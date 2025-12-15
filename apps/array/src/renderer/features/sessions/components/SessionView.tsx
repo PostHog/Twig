@@ -18,6 +18,7 @@ interface SessionViewProps {
   onSendPrompt: (text: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
+  isCloud?: boolean;
 }
 
 export function SessionView({
@@ -28,6 +29,7 @@ export function SessionView({
   onSendPrompt,
   onCancelPrompt,
   repoPath,
+  isCloud = false,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -53,6 +55,8 @@ export function SessionView({
             <ConversationView
               events={events}
               isPromptPending={isPromptPending}
+              repoPath={repoPath}
+              isCloud={isCloud}
             />
           )}
 

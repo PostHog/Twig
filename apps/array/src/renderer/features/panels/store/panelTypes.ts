@@ -57,6 +57,7 @@ export type Tab = {
   icon?: React.ReactNode;
   hasUnsavedChanges?: boolean;
   badge?: React.ReactNode;
+  isPreview?: boolean;
 };
 
 export type PanelContent = {

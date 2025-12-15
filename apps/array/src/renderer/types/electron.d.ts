@@ -205,6 +205,27 @@ declare global {
       filePath: string,
       fileStatus: string,
     ) => Promise<void>;
+    getGitSyncStatus: (repoPath: string) => Promise<{
+      ahead: number;
+      behind: number;
+      hasRemote: boolean;
+      currentBranch: string | null;
+      isFeatureBranch: boolean;
+    }>;
+    getLatestCommit: (repoPath: string) => Promise<{
+      sha: string;
+      shortSha: string;
+      message: string;
+      author: string;
+      date: string;
+    } | null>;
+    getGitRepoInfo: (repoPath: string) => Promise<{
+      organization: string;
+      repository: string;
+      currentBranch: string | null;
+      defaultBranch: string;
+      compareUrl: string | null;
+    } | null>;
     listDirectory: (
       dirPath: string,
     ) => Promise<

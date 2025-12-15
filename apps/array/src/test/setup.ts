@@ -2,6 +2,19 @@ import "@testing-library/jest-dom";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
+// Mock electron-log before any imports that use it
+vi.mock("electron-log/renderer", () => {
+  const mockLog = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    scope: () => mockLog,
+    transports: { console: { level: "debug" } },
+  };
+  return { default: mockLog };
+});
+
 // Suppress act() warnings from Radix UI async updates in tests,
 // we don't care about them.
 const originalError = console.error;
@@ -29,6 +42,7 @@ globalThis.ResizeObserver = class ResizeObserver {
 };
 
 HTMLCanvasElement.prototype.getContext = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,

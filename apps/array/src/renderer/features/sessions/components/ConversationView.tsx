@@ -12,6 +12,11 @@ import {
   isJsonRpcResponse,
 } from "@shared/types/session-events";
 import { useMemo } from "react";
+import {
+  GitActionMessage,
+  parseGitActionMessage,
+} from "./GitActionMessage";
+import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
 import {
   type RenderItem,
@@ -35,11 +40,15 @@ interface Turn {
 interface ConversationViewProps {
   events: AcpMessage[];
   isPromptPending: boolean;
+  repoPath?: string | null;
+  isCloud?: boolean;
 }
 
 export function ConversationView({
   events,
   isPromptPending,
+  repoPath,
+  isCloud = false,
 }: ConversationViewProps) {
   const turns = useMemo(() => buildTurns(events), [events]);
   const lastTurn = turns[turns.length - 1];
@@ -50,7 +59,9 @@ export function ConversationView({
       items={turns}
       estimateSize={100}
       getItemKey={(turn) => turn.id}
-      renderItem={(turn) => <TurnView turn={turn} />}
+      renderItem={(turn) => (
+        <TurnView turn={turn} repoPath={repoPath} isCloud={isCloud} />
+      )}
       autoScrollToBottom
       className="flex-1 p-4"
       gap={24}
@@ -66,16 +77,30 @@ export function ConversationView({
   );
 }
 
-function TurnView({ turn }: { turn: Turn }) {
+interface TurnViewProps {
+  turn: Turn;
+  repoPath?: string | null;
+  isCloud?: boolean;
+}
+
+function TurnView({ turn, repoPath, isCloud = false }: TurnViewProps) {
   const lastAgentIdx = turn.items.findLastIndex(
     (item) => item.sessionUpdate === "agent_message_chunk",
   );
   const lastAgent = lastAgentIdx >= 0 ? turn.items[lastAgentIdx] : null;
   const shouldCollapse = turn.isComplete && lastAgent && turn.items.length > 1;
 
+  const gitAction = parseGitActionMessage(turn.userContent);
+  const showGitResult =
+    gitAction.isGitAction && gitAction.actionType && turn.isComplete;
+
   return (
     <Box className="flex flex-col gap-4">
-      <UserMessage content={turn.userContent} />
+      {gitAction.isGitAction && gitAction.actionType ? (
+        <GitActionMessage actionType={gitAction.actionType} />
+      ) : (
+        <UserMessage content={turn.userContent} />
+      )}
       {shouldCollapse ? (
         <>
           <TurnCollapsible
@@ -92,6 +117,14 @@ function TurnView({ turn }: { turn: Turn }) {
             toolCalls={turn.toolCalls}
           />
         ))
+      )}
+      {showGitResult && repoPath && (
+        <GitActionResult
+          actionType={gitAction.actionType!}
+          repoPath={repoPath}
+          turnId={turn.id}
+          isCloud={isCloud}
+        />
       )}
     </Box>
   );

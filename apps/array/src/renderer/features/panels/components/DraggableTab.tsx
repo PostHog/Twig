@@ -14,10 +14,12 @@ interface DraggableTabProps {
   isActive: boolean;
   index: number;
   closeable?: boolean;
+  isPreview?: boolean;
   onSelect: () => void;
   onClose?: () => void;
   onCloseOthers?: () => void;
   onCloseToRight?: () => void;
+  onKeep?: () => void;
   icon?: React.ReactNode;
   badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
@@ -31,10 +33,12 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   isActive,
   index,
   closeable = true,
+  isPreview,
   onSelect,
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onKeep,
   icon,
   badge,
   hasUnsavedChanges,
@@ -49,6 +53,12 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     },
     data: { tabId, panelId, type: "tab" },
   });
+
+  const handleDoubleClick = useCallback(() => {
+    if (isPreview) {
+      onKeep?.();
+    }
+  }, [isPreview, onKeep]);
 
   const handleContextMenu = useCallback(
     async (e: React.MouseEvent) => {
@@ -112,6 +122,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
         minWidth: "60px",
       }}
       onClick={onSelect}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={(e) => {
         if (!isActive) {
@@ -130,6 +141,10 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       <Text
         size="1"
         className="max-w-[200px] select-none overflow-hidden text-ellipsis whitespace-nowrap"
+        style={{
+          fontStyle: isPreview ? "italic" : "normal",
+          opacity: isPreview ? 0.7 : 1,
+        }}
       >
         {label}
       </Text>

@@ -383,6 +383,158 @@ export interface DiffStats {
   linesRemoved: number;
 }
 
+export interface GitSyncStatus {
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  currentBranch: string | null;
+  isFeatureBranch: boolean;
+}
+
+export interface GitCommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface GitRepoInfo {
+  organization: string;
+  repository: string;
+  currentBranch: string | null;
+  defaultBranch: string;
+  compareUrl: string | null;
+}
+
+const getLatestCommit = async (
+  directoryPath: string,
+): Promise<GitCommitInfo | null> => {
+  try {
+    const { stdout } = await execAsync(
+      'git log -1 --format="%H|%h|%s|%an|%aI"',
+      { cwd: directoryPath },
+    );
+
+    const [sha, shortSha, message, author, date] = stdout.trim().split("|");
+    if (!sha) return null;
+
+    return { sha, shortSha, message, author, date };
+  } catch {
+    return null;
+  }
+};
+
+const getGitRepoInfo = async (
+  directoryPath: string,
+): Promise<GitRepoInfo | null> => {
+  try {
+    const remoteUrl = await getRemoteUrl(directoryPath);
+    if (!remoteUrl) return null;
+
+    const parsed = parseGitHubUrl(remoteUrl);
+    if (!parsed) return null;
+
+    const currentBranch = await getCurrentBranch(directoryPath);
+    const defaultBranch = await getDefaultBranch(directoryPath);
+
+    let compareUrl: string | null = null;
+    if (currentBranch && currentBranch !== defaultBranch) {
+      compareUrl = `https://github.com/${parsed.organization}/${parsed.repository}/compare/${defaultBranch}...${currentBranch}?expand=1`;
+    }
+
+    return {
+      organization: parsed.organization,
+      repository: parsed.repository,
+      currentBranch: currentBranch ?? null,
+      defaultBranch,
+      compareUrl,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getGitSyncStatus = async (
+  directoryPath: string,
+): Promise<GitSyncStatus> => {
+  try {
+    const currentBranch = await getCurrentBranch(directoryPath);
+    if (!currentBranch) {
+      return {
+        ahead: 0,
+        behind: 0,
+        hasRemote: false,
+        currentBranch: null,
+        isFeatureBranch: false,
+      };
+    }
+
+    const defaultBranch = await getDefaultBranch(directoryPath);
+    const isFeatureBranch = currentBranch !== defaultBranch;
+
+    try {
+      const { stdout: upstream } = await execAsync(
+        `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
+        { cwd: directoryPath },
+      );
+
+      const upstreamBranch = upstream.trim();
+      if (!upstreamBranch) {
+        return {
+          ahead: 0,
+          behind: 0,
+          hasRemote: false,
+          currentBranch,
+          isFeatureBranch,
+        };
+      }
+
+      // Use --quiet to suppress output, ignore errors (network may be unavailable)
+      try {
+        await execAsync("git fetch --quiet", {
+          cwd: directoryPath,
+          timeout: 10000,
+        });
+      } catch {
+        // Fetch failed (likely offline), continue with stale data
+      }
+
+      const { stdout: revList } = await execAsync(
+        `git rev-list --left-right --count ${currentBranch}...${upstreamBranch}`,
+        { cwd: directoryPath },
+      );
+
+      const [ahead, behind] = revList.trim().split("\t").map(Number);
+
+      return {
+        ahead: ahead || 0,
+        behind: behind || 0,
+        hasRemote: true,
+        currentBranch,
+        isFeatureBranch,
+      };
+    } catch {
+      return {
+        ahead: 0,
+        behind: 0,
+        hasRemote: false,
+        currentBranch,
+        isFeatureBranch,
+      };
+    }
+  } catch (error) {
+    log.error("Error getting git sync status:", error);
+    return {
+      ahead: 0,
+      behind: 0,
+      hasRemote: false,
+      currentBranch: null,
+      isFeatureBranch: false,
+    };
+  }
+};
+
 const discardFileChanges = async (
   directoryPath: string,
   filePath: string,
@@ -855,6 +1007,36 @@ export function registerGitIpc(
       fileStatus: GitFileStatus,
     ): Promise<void> => {
       return discardFileChanges(directoryPath, filePath, fileStatus);
+    },
+  );
+
+  ipcMain.handle(
+    "get-git-sync-status",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitSyncStatus> => {
+      return getGitSyncStatus(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-latest-commit",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitCommitInfo | null> => {
+      return getLatestCommit(directoryPath);
+    },
+  );
+
+  ipcMain.handle(
+    "get-git-repo-info",
+    async (
+      _event: IpcMainInvokeEvent,
+      directoryPath: string,
+    ): Promise<GitRepoInfo | null> => {
+      return getGitRepoInfo(directoryPath);
     },
   );
 }
