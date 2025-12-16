@@ -1,4 +1,4 @@
-import type { ExternalAppAction } from "@main/services/context-menu/types";
+import type { ExternalAppAction } from "@main/services/context-menu/schemas";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { useExternalAppsStore } from "@stores/externalAppsStore";

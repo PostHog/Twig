@@ -1,6 +1,13 @@
-import { z } from "zod";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
+import {
+  copyPathInput,
+  getDetectedAppsOutput,
+  getLastUsedOutput,
+  openInAppInput,
+  openInAppOutput,
+  setLastUsedInput,
+} from "../../services/external-apps/schemas.js";
 import type { ExternalAppsService } from "../../services/external-apps/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -8,21 +15,26 @@ const getService = () =>
   container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
 
 export const externalAppsRouter = router({
-  getDetectedApps: publicProcedure.query(() => getService().getDetectedApps()),
+  getDetectedApps: publicProcedure
+    .output(getDetectedAppsOutput)
+    .query(() => getService().getDetectedApps()),
 
   openInApp: publicProcedure
-    .input(z.object({ appId: z.string(), targetPath: z.string() }))
+    .input(openInAppInput)
+    .output(openInAppOutput)
     .mutation(({ input }) =>
       getService().openInApp(input.appId, input.targetPath),
     ),
 
   setLastUsed: publicProcedure
-    .input(z.object({ appId: z.string() }))
+    .input(setLastUsedInput)
     .mutation(({ input }) => getService().setLastUsed(input.appId)),
 
-  getLastUsed: publicProcedure.query(() => getService().getLastUsed()),
+  getLastUsed: publicProcedure
+    .output(getLastUsedOutput)
+    .query(() => getService().getLastUsed()),
 
   copyPath: publicProcedure
-    .input(z.object({ targetPath: z.string() }))
+    .input(copyPathInput)
     .mutation(({ input }) => getService().copyPath(input.targetPath)),
 });

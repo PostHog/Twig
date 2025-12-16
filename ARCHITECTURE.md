@@ -127,22 +127,25 @@ We use [tRPC](https://trpc.io/) with [trpc-electron](https://github.com/jsonnull
 
 ```typescript
 // src/main/trpc/routers/my-router.ts
-import { z } from "zod";
 import { container } from "../../di/container";
 import { MAIN_TOKENS } from "../../di/tokens";
+import {
+  getDataInput,
+  getDataOutput,
+  updateDataInput,
+} from "../../services/my-service/schemas";
 import { router, publicProcedure } from "../trpc";
 
 const getService = () => container.get<MyService>(MAIN_TOKENS.MyService);
 
 export const myRouter = router({
-  // Query - for read operations
   getData: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(getDataInput)
+    .output(getDataOutput)
     .query(({ input }) => getService().getData(input.id)),
 
-  // Mutation - for write operations
   updateData: publicProcedure
-    .input(z.object({ id: z.string(), value: z.string() }))
+    .input(updateDataInput)
     .mutation(({ input }) => getService().updateData(input.id, input.value)),
 });
 ```
@@ -238,11 +241,63 @@ Main services should be:
 src/main/services/
 ├── my-service/
 │   ├── service.ts      # The injectable service class
-│   └── types.ts        # Types and interfaces
+│   ├── schemas.ts      # Zod schemas for tRPC input/output
+│   └── types.ts        # Internal types (not exposed via tRPC)
 
 src/renderer/services/
 ├── my-service.ts       # Renderer-side service
 ```
+
+### Zod Schemas
+
+All tRPC inputs and outputs use Zod schemas as the single source of truth. Types are inferred from schemas.
+
+```typescript
+// src/main/services/my-service/schemas.ts
+import { z } from "zod";
+
+export const getDataInput = z.object({
+  id: z.string(),
+});
+
+export const getDataOutput = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+});
+
+export type GetDataInput = z.infer<typeof getDataInput>;
+export type GetDataOutput = z.infer<typeof getDataOutput>;
+```
+
+```typescript
+// src/main/trpc/routers/my-router.ts
+import { getDataInput, getDataOutput } from "../../services/my-service/schemas";
+
+export const myRouter = router({
+  getData: publicProcedure
+    .input(getDataInput)
+    .output(getDataOutput)
+    .query(({ input }) => getService().getData(input.id)),
+});
+```
+
+```typescript
+// src/main/services/my-service/service.ts
+import type { GetDataInput, GetDataOutput } from "./schemas";
+
+@injectable()
+export class MyService {
+  async getData(id: string): Promise<GetDataOutput> {
+    // ...
+  }
+}
+```
+
+This pattern provides:
+- Runtime validation of inputs and outputs
+- Single source of truth for types
+- Explicit API contracts between main and renderer
 
 ## Adding a New Feature
 

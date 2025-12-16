@@ -1,0 +1,84 @@
+import { z } from "zod";
+
+export const taskContextMenuInput = z.object({
+  taskTitle: z.string(),
+  worktreePath: z.string().optional(),
+});
+
+export const folderContextMenuInput = z.object({
+  folderName: z.string(),
+  folderPath: z.string().optional(),
+});
+
+export const tabContextMenuInput = z.object({
+  canClose: z.boolean(),
+  filePath: z.string().optional(),
+});
+
+export const fileContextMenuInput = z.object({
+  filePath: z.string(),
+  showCollapseAll: z.boolean().optional(),
+});
+
+const externalAppAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("open-in-app"), appId: z.string() }),
+  z.object({ type: z.literal("copy-path") }),
+]);
+
+const taskAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("rename") }),
+  z.object({ type: z.literal("duplicate") }),
+  z.object({ type: z.literal("delete") }),
+  z.object({ type: z.literal("external-app"), action: externalAppAction }),
+]);
+
+const folderAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("remove") }),
+  z.object({ type: z.literal("external-app"), action: externalAppAction }),
+]);
+
+const tabAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("close") }),
+  z.object({ type: z.literal("close-others") }),
+  z.object({ type: z.literal("close-right") }),
+  z.object({ type: z.literal("external-app"), action: externalAppAction }),
+]);
+
+const fileAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("collapse-all") }),
+  z.object({ type: z.literal("external-app"), action: externalAppAction }),
+]);
+
+const splitDirection = z.enum(["left", "right", "up", "down"]);
+
+export const taskContextMenuOutput = z.object({
+  action: taskAction.nullable(),
+});
+export const folderContextMenuOutput = z.object({
+  action: folderAction.nullable(),
+});
+export const tabContextMenuOutput = z.object({ action: tabAction.nullable() });
+export const fileContextMenuOutput = z.object({
+  action: fileAction.nullable(),
+});
+export const splitContextMenuOutput = z.object({
+  direction: splitDirection.nullable(),
+});
+
+export type TaskContextMenuInput = z.infer<typeof taskContextMenuInput>;
+export type FolderContextMenuInput = z.infer<typeof folderContextMenuInput>;
+export type TabContextMenuInput = z.infer<typeof tabContextMenuInput>;
+export type FileContextMenuInput = z.infer<typeof fileContextMenuInput>;
+
+export type ExternalAppAction = z.infer<typeof externalAppAction>;
+export type TaskAction = z.infer<typeof taskAction>;
+export type FolderAction = z.infer<typeof folderAction>;
+export type TabAction = z.infer<typeof tabAction>;
+export type FileAction = z.infer<typeof fileAction>;
+export type SplitDirection = z.infer<typeof splitDirection>;
+
+export type TaskContextMenuResult = z.infer<typeof taskContextMenuOutput>;
+export type FolderContextMenuResult = z.infer<typeof folderContextMenuOutput>;
+export type TabContextMenuResult = z.infer<typeof tabContextMenuOutput>;
+export type FileContextMenuResult = z.infer<typeof fileContextMenuOutput>;
+export type SplitContextMenuResult = z.infer<typeof splitContextMenuOutput>;
