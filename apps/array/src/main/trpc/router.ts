@@ -1,4 +1,5 @@
 import { contextMenuRouter } from "./routers/context-menu.js";
+import { deepLinkRouter } from "./routers/deep-link.js";
 import { dockBadgeRouter } from "./routers/dock-badge.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
 import { encryptionRouter } from "./routers/encryption.js";
