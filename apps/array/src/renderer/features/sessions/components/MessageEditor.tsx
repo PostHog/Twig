@@ -2,6 +2,7 @@ import "@features/task-detail/components/TaskInput.css";
 import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import type { MentionItem } from "@shared/types";
 import { Extension, type JSONContent } from "@tiptap/core";
@@ -352,12 +353,12 @@ export const MessageEditor = forwardRef<
               setMentionItems([]);
 
               try {
-                const results = await window.electronAPI?.listRepoFiles(
-                  repoPathRef.current,
+                const results = await trpcVanilla.fs.listRepoFiles.query({
+                  repoPath: repoPathRef.current,
                   query,
-                  10,
-                );
-                const items = (results || []).map((file) => ({
+                  limit: 10,
+                });
+                const items = results.map((file) => ({
                   path: file.path,
                   name: file.name,
                   type: "file" as const,

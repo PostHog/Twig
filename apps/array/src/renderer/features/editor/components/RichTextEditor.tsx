@@ -10,6 +10,7 @@ import {
 import { computePosition, flip, shift } from "@floating-ui/dom";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { MentionItem } from "@shared/types";
 import type { Editor } from "@tiptap/core";
 import { Link } from "@tiptap/extension-link";
@@ -193,11 +194,11 @@ export function RichTextEditor({
             // Only search for files if we haven't detected a URL
             if (repoPathRef.current && query.length > 0 && !isUrl(urlToCheck)) {
               try {
-                const results = await window.electronAPI?.listRepoFiles(
-                  repoPathRef.current,
+                const results = await trpcVanilla.fs.listRepoFiles.query({
+                  repoPath: repoPathRef.current,
                   query,
-                );
-                const fileItems = (results || []).map((file) => ({
+                });
+                const fileItems = results.map((file) => ({
                   path: file.path,
                   name: file.name,
                   type: "file" as const,

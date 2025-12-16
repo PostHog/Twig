@@ -42,11 +42,6 @@ declare global {
         message: string;
       }) => void,
     ) => () => void;
-    listRepoFiles: (
-      repoPath: string,
-      query?: string,
-      limit?: number,
-    ) => Promise<Array<{ path: string; name: string }>>;
     agentStart: (params: {
       taskId: string;
       taskRunId: string;
@@ -108,15 +103,6 @@ declare global {
         selectedOption: string;
         customInput?: string;
       }>,
-    ) => Promise<void>;
-    readRepoFile: (
-      repoPath: string,
-      filePath: string,
-    ) => Promise<string | null>;
-    writeRepoFile: (
-      repoPath: string,
-      filePath: string,
-      content: string,
     ) => Promise<void>;
     getChangedFilesHead: (repoPath: string) => Promise<ChangedFile[]>;
     getFileAtHead: (
