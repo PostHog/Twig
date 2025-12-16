@@ -1,3 +1,4 @@
+import { exec } from "node:child_process";
 import { createIpcHandler } from "../lib/ipcHandler";
 import { shellManager } from "../lib/shellManager";
 import { foldersStore } from "../utils/store";
@@ -56,4 +57,23 @@ export function registerShellIpc(): void {
   handle("shell:get-process", (_event, sessionId: string) => {
     return shellManager.getProcess(sessionId);
   });
+
+  handle(
+    "shell:execute",
+    async (
+      _event,
+      cwd: string,
+      command: string,
+    ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+      return new Promise((resolve) => {
+        exec(command, { cwd, timeout: 60000 }, (error, stdout, stderr) => {
+          resolve({
+            stdout: stdout || "",
+            stderr: stderr || "",
+            exitCode: error?.code ?? 0,
+          });
+        });
+      });
+    },
+  );
 }

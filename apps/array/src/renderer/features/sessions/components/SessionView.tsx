@@ -4,7 +4,7 @@ import {
   type AcpMessage,
   isJsonRpcNotification,
 } from "@shared/types/session-events";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useKeyboardShortcut } from "../hooks/useKeyboardShortcut";
 import {
   useSessionViewActions,
@@ -21,6 +21,7 @@ interface SessionViewProps {
   isRunning: boolean;
   isPromptPending?: boolean;
   onSendPrompt: (text: string) => void;
+  onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
   isCloud?: boolean;
@@ -32,6 +33,7 @@ export function SessionView({
   isRunning,
   isPromptPending = false,
   onSendPrompt,
+  onBashCommand,
   onCancelPrompt,
   repoPath,
   isCloud = false,
@@ -64,6 +66,8 @@ export function SessionView({
     [onSendPrompt],
   );
 
+  const [isBashMode, setIsBashMode] = useState(false);
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
@@ -81,15 +85,24 @@ export function SessionView({
 
           <PlanStatusBar plan={latestPlan} />
 
-          <Box className="border-gray-4 border-t p-2">
+          <Box
+            className={
+              isBashMode
+                ? "border border-accent-9 p-2"
+                : "border-gray-4 border-t p-2"
+            }
+          >
             <MessageEditor
               sessionId={taskId ?? "default"}
               taskId={taskId}
-              placeholder="Type a message... @ to mention files"
+              placeholder="Type a message... @ to mention files, ! for bash mode"
               repoPath={repoPath}
               disabled={!isRunning}
               isLoading={isPromptPending}
+              isCloud={isCloud}
               onSubmit={handleSubmit}
+              onBashCommand={onBashCommand}
+              onBashModeChange={setIsBashMode}
               onCancel={onCancelPrompt}
             />
           </Box>

@@ -1,6 +1,10 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import type { ToolCall } from "@features/sessions/types";
-import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon, Copy } from "@phosphor-icons/react";
+import {
+  ArrowsInSimpleIcon,
+  ArrowsOutSimpleIcon,
+  Copy,
+} from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { useState } from "react";
 
