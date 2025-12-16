@@ -2,8 +2,11 @@ import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
+  type DirectoryChangedPayload,
+  type FileChangedPayload,
+  type FileDeletedPayload,
   FileWatcherEvent,
-  type FileWatcherEvents,
+  type GitStateChangedPayload,
   listDirectoryInput,
   listDirectoryOutput,
   watcherInput,
@@ -14,11 +17,16 @@ import { publicProcedure, router } from "../trpc.js";
 const getService = () =>
   container.get<FileWatcherService>(MAIN_TOKENS.FileWatcherService);
 
-function subscribe<K extends keyof FileWatcherEvents>(event: K) {
-  return publicProcedure.subscription(async function* (opts) {
+function subscribe<T>(event: string) {
+  return publicProcedure.subscription(async function* (opts): AsyncGenerator<
+    T,
+    void,
+    unknown
+  > {
     const service = getService();
-    for await (const [payload] of on(service, event, { signal: opts.signal })) {
-      yield payload as FileWatcherEvents[K];
+    const options = opts.signal ? { signal: opts.signal } : undefined;
+    for await (const [payload] of on(service, event, options)) {
+      yield payload as T;
     }
   });
 }
@@ -37,8 +45,12 @@ export const fileWatcherRouter = router({
     .input(watcherInput)
     .mutation(({ input }) => getService().stopWatching(input.repoPath)),
 
-  onDirectoryChanged: subscribe(FileWatcherEvent.DirectoryChanged),
-  onFileChanged: subscribe(FileWatcherEvent.FileChanged),
-  onFileDeleted: subscribe(FileWatcherEvent.FileDeleted),
-  onGitStateChanged: subscribe(FileWatcherEvent.GitStateChanged),
+  onDirectoryChanged: subscribe<DirectoryChangedPayload>(
+    FileWatcherEvent.DirectoryChanged,
+  ),
+  onFileChanged: subscribe<FileChangedPayload>(FileWatcherEvent.FileChanged),
+  onFileDeleted: subscribe<FileDeletedPayload>(FileWatcherEvent.FileDeleted),
+  onGitStateChanged: subscribe<GitStateChangedPayload>(
+    FileWatcherEvent.GitStateChanged,
+  ),
 });

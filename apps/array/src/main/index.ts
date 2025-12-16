@@ -41,7 +41,7 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import { registerAutoUpdater } from "./services/updates.js";
+import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,12 +152,19 @@ function createWindow(): void {
           },
         },
         { type: "separator" },
-        {
-          label: "Check for Updates...",
-          click: () => {
-            mainWindow?.webContents.send("check-for-updates-menu");
-          },
-        },
+        ...(app.isPackaged
+          ? [
+              {
+                label: "Check for Updates...",
+                click: () => {
+                  const updatesService = container.get<UpdatesService>(
+                    MAIN_TOKENS.UpdatesService,
+                  );
+                  updatesService.triggerMenuCheck();
+                },
+              },
+            ]
+          : []),
         { type: "separator" },
         {
           label: "Settings...",
@@ -249,8 +256,9 @@ app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
 
-  // Initialize dock badge service for notification badges
+  // Initialize services that need early startup
   container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
+  container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
 
   // Initialize PostHog analytics
   initializePostHog();
@@ -283,9 +291,6 @@ app.on("activate", () => {
     createWindow();
   }
 });
-
-// Background services
-registerAutoUpdater(() => mainWindow);
 
 ipcMain.handle("app:get-version", () => app.getVersion());
 
