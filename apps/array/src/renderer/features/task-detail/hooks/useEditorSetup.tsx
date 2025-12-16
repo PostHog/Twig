@@ -1,5 +1,6 @@
 import { computePosition, flip, shift } from "@floating-ui/dom";
 import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { MentionItem } from "@shared/types";
 import { Extension } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
@@ -160,11 +161,11 @@ export function useEditorSetup({
             };
 
             try {
-              const results = await window.electronAPI?.listRepoFiles(
-                repoPathRef.current,
+              const results = await trpcVanilla.fs.listRepoFiles.query({
+                repoPath: repoPathRef.current,
                 query,
-              );
-              const items = (results || []).map((file) => ({
+              });
+              const items = results.map((file) => ({
                 path: file.path,
                 name: file.name,
                 type: "file" as const,

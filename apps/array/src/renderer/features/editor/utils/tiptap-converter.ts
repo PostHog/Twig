@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { JSONContent } from "@tiptap/react";
 
 /**
@@ -564,10 +565,10 @@ export async function buildPromptBlocks(
   // Add EmbeddedResource for each file mention
   for (const relativePath of filePaths) {
     try {
-      const fileContent = await window.electronAPI.readRepoFile(
+      const fileContent = await trpcVanilla.fs.readRepoFile.query({
         repoPath,
-        relativePath,
-      );
+        filePath: relativePath,
+      });
       if (fileContent) {
         blocks.push({
           type: "resource",

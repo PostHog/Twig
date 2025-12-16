@@ -1,16 +1,7 @@
-import type {
-  ExternalAppContextMenuResult,
-  FolderContextMenuResult,
-  SplitContextMenuResult,
-  TabContextMenuResult,
-  TaskContextMenuResult,
-} from "@main/services/contextMenu.types";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type {
   ChangedFile,
   CreateWorkspaceOptions,
-  DetectedApplication,
-  RegisteredFolder,
   ScriptExecutionResult,
   TaskArtifact,
   Workspace,
@@ -34,11 +25,6 @@ declare global {
         message: string;
       }) => void,
     ) => () => void;
-    listRepoFiles: (
-      repoPath: string,
-      query?: string,
-      limit?: number,
-    ) => Promise<Array<{ path: string; name: string }>>;
     agentStart: (params: {
       taskId: string;
       taskRunId: string;
@@ -101,15 +87,6 @@ declare global {
         customInput?: string;
       }>,
     ) => Promise<void>;
-    readRepoFile: (
-      repoPath: string,
-      filePath: string,
-    ) => Promise<string | null>;
-    writeRepoFile: (
-      repoPath: string,
-      filePath: string,
-      content: string,
-    ) => Promise<void>;
     getChangedFilesHead: (repoPath: string) => Promise<ChangedFile[]>;
     getFileAtHead: (
       repoPath: string,
@@ -150,99 +127,11 @@ declare global {
       defaultBranch: string;
       compareUrl: string | null;
     } | null>;
-    listDirectory: (
-      dirPath: string,
-    ) => Promise<
-      Array<{ name: string; path: string; type: "file" | "directory" }>
-    >;
-    watcherStart: (repoPath: string) => Promise<void>;
-    watcherStop: (repoPath: string) => Promise<void>;
-    onDirectoryChanged: (
-      listener: (data: { repoPath: string; dirPath: string }) => void,
-    ) => () => void;
-    onFileChanged: (
-      listener: (data: { repoPath: string; filePath: string }) => void,
-    ) => () => void;
-    onFileDeleted: (
-      listener: (data: { repoPath: string; filePath: string }) => void,
-    ) => () => void;
-    onGitStateChanged: (
-      listener: (data: { repoPath: string }) => void,
-    ) => () => void;
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
     onResetLayout: (listener: () => void) => () => void;
     onClearStorage: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
-    checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
-    onUpdateStatus: (
-      listener: (status: { checking: boolean; upToDate?: boolean }) => void,
-    ) => () => void;
-    onCheckForUpdatesMenu: (listener: () => void) => () => void;
-    onUpdateReady: (listener: () => void) => () => void;
-    installUpdate: () => Promise<{ installed: boolean }>;
-    // Shell API
-    shellCreate: (
-      sessionId: string,
-      cwd?: string,
-      taskId?: string,
-    ) => Promise<void>;
-    shellWrite: (sessionId: string, data: string) => Promise<void>;
-    shellResize: (
-      sessionId: string,
-      cols: number,
-      rows: number,
-    ) => Promise<void>;
-    shellCheck: (sessionId: string) => Promise<boolean>;
-    shellDestroy: (sessionId: string) => Promise<void>;
-    shellGetProcess: (sessionId: string) => Promise<string | null>;
-    onShellData: (
-      sessionId: string,
-      listener: (data: string) => void,
-    ) => () => void;
-    onShellExit: (sessionId: string, listener: () => void) => () => void;
-    showTaskContextMenu: (
-      taskId: string,
-      taskTitle: string,
-      worktreePath?: string,
-    ) => Promise<TaskContextMenuResult>;
-    showFolderContextMenu: (
-      folderId: string,
-      folderName: string,
-      folderPath?: string,
-    ) => Promise<FolderContextMenuResult>;
-    showTabContextMenu: (
-      canClose: boolean,
-      filePath?: string,
-    ) => Promise<TabContextMenuResult>;
-    showSplitContextMenu: () => Promise<SplitContextMenuResult>;
-    showFileContextMenu: (
-      filePath: string,
-      options?: { showCollapseAll?: boolean },
-    ) => Promise<ExternalAppContextMenuResult>;
-    folders: {
-      getFolders: () => Promise<RegisteredFolder[]>;
-      addFolder: (folderPath: string) => Promise<RegisteredFolder>;
-      removeFolder: (folderId: string) => Promise<void>;
-      updateFolderAccessed: (folderId: string) => Promise<void>;
-      clearAllData: () => Promise<void>;
-      cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
-        deleted: string[];
-        errors: Array<{ path: string; error: string }>;
-      }>;
-    };
-    externalApps: {
-      getDetectedApps: () => Promise<DetectedApplication[]>;
-      openInApp: (
-        appId: string,
-        path: string,
-      ) => Promise<{ success: boolean; error?: string }>;
-      setLastUsed: (appId: string) => Promise<void>;
-      getLastUsed: () => Promise<{
-        lastUsedApp?: string;
-      }>;
-      copyPath: (path: string) => Promise<void>;
-    };
     workspace: {
       create: (options: CreateWorkspaceOptions) => Promise<WorkspaceInfo>;
       delete: (taskId: string, mainRepoPath: string) => Promise<void>;
@@ -269,9 +158,6 @@ declare global {
           message: string;
         }) => void,
       ) => () => void;
-    };
-    dockBadge: {
-      show: () => Promise<void>;
     };
   }
 

@@ -20,6 +20,7 @@ import {
   Text,
   Tooltip,
 } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -134,11 +135,15 @@ function ChangedFileItem({
 
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const result = await window.electronAPI.showFileContextMenu(fullPath);
+    const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
+      filePath: fullPath,
+    });
 
     if (!result.action) return;
 
-    await handleExternalAppAction(result.action, fullPath, fileName);
+    if (result.action.type === "external-app") {
+      await handleExternalAppAction(result.action.action, fullPath, fileName);
+    }
   };
 
   const handleOpenWith = async (appId: string) => {

@@ -448,9 +448,12 @@ export class SessionManager {
     credentials: PostHogCredentials,
     mockNodeDir: string,
   ): void {
+    const token = this.getToken(credentials.apiKey);
     const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
     process.env.PATH = newPath;
-    process.env.POSTHOG_AUTH_HEADER = `Bearer ${credentials.apiKey}`;
+    process.env.POSTHOG_AUTH_HEADER = `Bearer ${token}`;
+    process.env.ANTHROPIC_API_KEY = token;
+    process.env.ANTHROPIC_AUTH_TOKEN = token;
 
     const llmGatewayUrl =
       process.env.LLM_GATEWAY_URL ||
@@ -461,7 +464,7 @@ export class SessionManager {
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
     // Set env vars for SessionStore in agent package
-    process.env.POSTHOG_API_KEY = credentials.apiKey;
+    process.env.POSTHOG_API_KEY = token;
     process.env.POSTHOG_API_URL = credentials.apiHost;
     process.env.POSTHOG_PROJECT_ID = String(credentials.projectId);
   }

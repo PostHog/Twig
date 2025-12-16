@@ -1,7 +1,9 @@
 import "@features/task-detail/components/TaskInput.css";
 import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
-import { Box, Flex, IconButton, Tooltip } from "@radix-ui/themes";
+import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc/client";
+import { toast } from "@renderer/utils/toast";
 import type { MentionItem } from "@shared/types";
 import { Extension, type JSONContent } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
@@ -184,7 +186,10 @@ interface MessageEditorProps {
   repoPath?: string | null;
   disabled?: boolean;
   isLoading?: boolean;
+  isCloud?: boolean;
   onSubmit?: (text: string) => void;
+  onBashCommand?: (command: string) => void;
+  onBashModeChange?: (isBashMode: boolean) => void;
   onCancel?: () => void;
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
@@ -202,7 +207,10 @@ export const MessageEditor = forwardRef<
       repoPath,
       disabled = false,
       isLoading = false,
+      isCloud = false,
       onSubmit,
+      onBashCommand,
+      onBashModeChange,
       onCancel,
       onAttachFiles,
       autoFocus = false,
@@ -240,7 +248,6 @@ export const MessageEditor = forwardRef<
     };
     const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
     const repoPathRef = useRef(repoPath);
-    const onSubmitRef = useRef(onSubmit);
     const componentRef = useRef<ReactRenderer<MentionListRef> | null>(null);
     const commandRef = useRef<
       ((item: { id: string; label: string; type?: string }) => void) | null
@@ -259,19 +266,44 @@ export const MessageEditor = forwardRef<
       repoPathRef.current = repoPath;
     }, [repoPath]);
 
-    useEffect(() => {
-      onSubmitRef.current = onSubmit;
-    }, [onSubmit]);
+    const [isEmpty, setIsEmpty] = useState(true);
+    const [isBashMode, setIsBashMode] = useState(false);
+
+    const handleEditorUpdate = (editor: Editor) => {
+      setIsEmpty(editor.isEmpty);
+      const newBashMode = editor.getText().trimStart().startsWith("!");
+      if (newBashMode !== isBashMode) {
+        setIsBashMode(newBashMode);
+        onBashModeChange?.(newBashMode);
+      }
+      setDraft(sessionId, editor.isEmpty ? null : editor.getJSON());
+    };
+
+    const handleBashSubmit = (text: string) => {
+      if (isCloud) {
+        toast.error("Bash mode is not supported in cloud sessions");
+        return false;
+      }
+      const command = text.slice(1).trim();
+      if (command) {
+        onBashCommand?.(command);
+      }
+      return true;
+    };
 
     const handleSubmit = () => {
       if (!editor || editor.isEmpty) return;
-      const text = editor.getText();
-      onSubmitRef.current?.(text);
+      const text = editor.getText().trim();
+
+      if (text.startsWith("!")) {
+        if (!handleBashSubmit(text)) return;
+      } else {
+        onSubmit?.(text);
+      }
+
       editor.commands.clearContent();
       setDraft(sessionId, null);
     };
-
-    const [isEmpty, setIsEmpty] = useState(true);
 
     const editor = useEditor({
       extensions: [
@@ -321,12 +353,12 @@ export const MessageEditor = forwardRef<
               setMentionItems([]);
 
               try {
-                const results = await window.electronAPI?.listRepoFiles(
-                  repoPathRef.current,
+                const results = await trpcVanilla.fs.listRepoFiles.query({
+                  repoPath: repoPathRef.current,
                   query,
-                  10,
-                );
-                const items = (results || []).map((file) => ({
+                  limit: 10,
+                });
+                const items = results.map((file) => ({
                   path: file.path,
                   name: file.name,
                   type: "file" as const,
@@ -406,10 +438,7 @@ export const MessageEditor = forwardRef<
         },
       },
       autofocus: autoFocus,
-      onUpdate: ({ editor }) => {
-        setIsEmpty(editor.isEmpty);
-        setDraft(sessionId, editor.isEmpty ? null : editor.getJSON());
-      },
+      onUpdate: ({ editor }) => handleEditorUpdate(editor),
     });
 
     useEffect(() => {
@@ -479,6 +508,11 @@ export const MessageEditor = forwardRef<
               </IconButton>
             </Tooltip>
             <ModelSelector taskId={taskId} disabled={disabled} />
+            {isBashMode && (
+              <Text size="1" className="font-mono text-accent-11">
+                bash mode
+              </Text>
+            )}
           </Flex>
           <Flex gap="4" align="center">
             {isLoading && onCancel ? (

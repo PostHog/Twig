@@ -3,20 +3,11 @@ import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import { exposeElectronTRPC } from "trpc-electron/main";
 import type {
   CreateWorkspaceOptions,
-  RegisteredFolder,
   ScriptExecutionResult,
   Workspace,
   WorkspaceInfo,
   WorkspaceTerminalInfo,
-  WorktreeInfo,
 } from "../shared/types";
-import type {
-  ExternalAppContextMenuResult,
-  FolderContextMenuResult,
-  SplitContextMenuResult,
-  TabContextMenuResult,
-  TaskContextMenuResult,
-} from "./services/contextMenu.types.js";
 import "electron-log/preload";
 
 process.once("loaded", () => {
@@ -76,12 +67,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       message: string;
     }) => void,
   ): (() => void) => createIpcListener(`clone-progress:${cloneId}`, listener),
-  listRepoFiles: (
-    repoPath: string,
-    query?: string,
-    limit?: number,
-  ): Promise<Array<{ path: string; name: string }>> =>
-    ipcRenderer.invoke("list-repo-files", repoPath, query, limit),
   // Agent API
   agentStart: async (
     params: AgentStartParams,
@@ -118,15 +103,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     channel: string,
     listener: (payload: unknown) => void,
   ): (() => void) => createIpcListener(channel, listener),
-  // Plan mode operations
-  readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
-    ipcRenderer.invoke("read-repo-file", repoPath, filePath),
-  writeRepoFile: (
-    repoPath: string,
-    filePath: string,
-    content: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("write-repo-file", repoPath, filePath, content),
+  // Git operations
   getChangedFilesHead: (
     repoPath: string,
   ): Promise<Array<{ path: string; status: string; originalPath?: string }>> =>
@@ -181,27 +158,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     defaultBranch: string;
     compareUrl: string | null;
   } | null> => ipcRenderer.invoke("get-git-repo-info", repoPath),
-  listDirectory: (
-    dirPath: string,
-  ): Promise<
-    Array<{ name: string; path: string; type: "file" | "directory" }>
-  > => ipcRenderer.invoke("fs:list-directory", dirPath),
-  watcherStart: (repoPath: string): Promise<void> =>
-    ipcRenderer.invoke("watcher:start", repoPath),
-  watcherStop: (repoPath: string): Promise<void> =>
-    ipcRenderer.invoke("watcher:stop", repoPath),
-  onDirectoryChanged: (
-    listener: IpcEventListener<{ repoPath: string; dirPath: string }>,
-  ): (() => void) => createIpcListener("fs:directory-changed", listener),
-  onFileChanged: (
-    listener: IpcEventListener<{ repoPath: string; filePath: string }>,
-  ): (() => void) => createIpcListener("fs:file-changed", listener),
-  onFileDeleted: (
-    listener: IpcEventListener<{ repoPath: string; filePath: string }>,
-  ): (() => void) => createIpcListener("fs:file-deleted", listener),
-  onGitStateChanged: (
-    listener: IpcEventListener<{ repoPath: string }>,
-  ): (() => void) => createIpcListener("git:state-changed", listener),
   onOpenSettings: (listener: () => void): (() => void) =>
     createVoidIpcListener("open-settings", listener),
   onNewTask: (listener: () => void): (() => void) =>
@@ -211,144 +167,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onClearStorage: (listener: () => void): (() => void) =>
     createVoidIpcListener("clear-storage", listener),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
-  onUpdateReady: (listener: () => void): (() => void) =>
-    createVoidIpcListener("updates:ready", listener),
-  installUpdate: (): Promise<{ installed: boolean }> =>
-    ipcRenderer.invoke("updates:install"),
-  checkForUpdates: (): Promise<{
-    success: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke("updates:check"),
-  onUpdateStatus: (
-    listener: IpcEventListener<{
-      checking?: boolean;
-      upToDate?: boolean;
-    }>,
-  ): (() => void) => createIpcListener("updates:status", listener),
-  onCheckForUpdatesMenu: (listener: () => void): (() => void) =>
-    createVoidIpcListener("check-for-updates-menu", listener),
-  shellCreate: (
-    sessionId: string,
-    cwd?: string,
-    taskId?: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("shell:create", sessionId, cwd, taskId),
-  shellWrite: (sessionId: string, data: string): Promise<void> =>
-    ipcRenderer.invoke("shell:write", sessionId, data),
-  shellResize: (sessionId: string, cols: number, rows: number): Promise<void> =>
-    ipcRenderer.invoke("shell:resize", sessionId, cols, rows),
-  shellCheck: (sessionId: string): Promise<boolean> =>
-    ipcRenderer.invoke("shell:check", sessionId),
-  shellDestroy: (sessionId: string): Promise<void> =>
-    ipcRenderer.invoke("shell:destroy", sessionId),
-  shellGetProcess: (sessionId: string): Promise<string | null> =>
-    ipcRenderer.invoke("shell:get-process", sessionId),
-  onShellData: (
-    sessionId: string,
-    listener: (data: string) => void,
-  ): (() => void) => createIpcListener(`shell:data:${sessionId}`, listener),
-  onShellExit: (sessionId: string, listener: () => void): (() => void) =>
-    createVoidIpcListener(`shell:exit:${sessionId}`, listener),
-  // Context Menu API
-  showTaskContextMenu: (
-    taskId: string,
-    taskTitle: string,
-    worktreePath?: string,
-  ): Promise<TaskContextMenuResult> =>
-    ipcRenderer.invoke(
-      "show-task-context-menu",
-      taskId,
-      taskTitle,
-      worktreePath,
-    ),
-  showFolderContextMenu: (
-    folderId: string,
-    folderName: string,
-    folderPath?: string,
-  ): Promise<FolderContextMenuResult> =>
-    ipcRenderer.invoke(
-      "show-folder-context-menu",
-      folderId,
-      folderName,
-      folderPath,
-    ),
-  showTabContextMenu: (
-    canClose: boolean,
-    filePath?: string,
-  ): Promise<TabContextMenuResult> =>
-    ipcRenderer.invoke("show-tab-context-menu", canClose, filePath),
-  showSplitContextMenu: (): Promise<SplitContextMenuResult> =>
-    ipcRenderer.invoke("show-split-context-menu"),
-  showFileContextMenu: (
-    filePath: string,
-    options?: { showCollapseAll?: boolean },
-  ): Promise<ExternalAppContextMenuResult> =>
-    ipcRenderer.invoke("show-file-context-menu", filePath, options),
-  folders: {
-    getFolders: (): Promise<RegisteredFolder[]> =>
-      ipcRenderer.invoke("get-folders"),
-    addFolder: (folderPath: string): Promise<RegisteredFolder> =>
-      ipcRenderer.invoke("add-folder", folderPath),
-    removeFolder: (folderId: string): Promise<void> =>
-      ipcRenderer.invoke("remove-folder", folderId),
-    updateFolderAccessed: (folderId: string): Promise<void> =>
-      ipcRenderer.invoke("update-folder-accessed", folderId),
-    clearAllData: (): Promise<void> => ipcRenderer.invoke("clear-all-data"),
-    cleanupOrphanedWorktrees: (
-      mainRepoPath: string,
-    ): Promise<{
-      deleted: string[];
-      errors: Array<{ path: string; error: string }>;
-    }> => ipcRenderer.invoke("cleanup-orphaned-worktrees", mainRepoPath),
-  },
-  // Worktree API
-  worktree: {
-    create: (mainRepoPath: string): Promise<WorktreeInfo> =>
-      ipcRenderer.invoke("worktree-create", mainRepoPath),
-    delete: (mainRepoPath: string, worktreePath: string): Promise<void> =>
-      ipcRenderer.invoke("worktree-delete", mainRepoPath, worktreePath),
-    getInfo: (
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<WorktreeInfo | null> =>
-      ipcRenderer.invoke("worktree-get-info", mainRepoPath, worktreePath),
-    exists: (mainRepoPath: string, name: string): Promise<boolean> =>
-      ipcRenderer.invoke("worktree-exists", mainRepoPath, name),
-    list: (mainRepoPath: string): Promise<WorktreeInfo[]> =>
-      ipcRenderer.invoke("worktree-list", mainRepoPath),
-    isWorktree: (mainRepoPath: string, repoPath: string): Promise<boolean> =>
-      ipcRenderer.invoke("worktree-is-worktree", mainRepoPath, repoPath),
-    getMainRepoPath: (
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<string | null> =>
-      ipcRenderer.invoke("worktree-get-main-repo", mainRepoPath, worktreePath),
-  },
-  // External Apps API
-  externalApps: {
-    getDetectedApps: (): Promise<
-      Array<{
-        id: string;
-        name: string;
-        type: "editor" | "terminal";
-        path: string;
-        command: string;
-        icon?: string;
-      }>
-    > => ipcRenderer.invoke("external-apps:get-detected-apps"),
-    openInApp: (
-      appId: string,
-      path: string,
-    ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke("external-apps:open-in-app", appId, path),
-    setLastUsed: (appId: string): Promise<void> =>
-      ipcRenderer.invoke("external-apps:set-last-used", appId),
-    getLastUsed: (): Promise<{
-      lastUsedApp?: string;
-    }> => ipcRenderer.invoke("external-apps:get-last-used"),
-    copyPath: (path: string): Promise<void> =>
-      ipcRenderer.invoke("external-apps:copy-path", path),
-  },
   // Workspace API
   workspace: {
     create: (options: CreateWorkspaceOptions): Promise<WorkspaceInfo> =>
@@ -390,9 +208,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
         message: string;
       }>,
     ): (() => void) => createIpcListener("workspace:warning", listener),
-  },
-  // Dock Badge API
-  dockBadge: {
-    show: (): Promise<void> => ipcRenderer.invoke("dock-badge:show"),
   },
 });

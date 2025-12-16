@@ -12,7 +12,7 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";

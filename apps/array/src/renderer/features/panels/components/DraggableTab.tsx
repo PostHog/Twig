@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import type { TabData } from "@features/panels/store/panelTypes";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import type React from "react";
 import { useCallback } from "react";
@@ -64,38 +65,37 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     async (e: React.MouseEvent) => {
       e.preventDefault();
 
-      // Get absolute path from tab data for file and diff tabs
       let filePath: string | undefined;
       if (tabData.type === "file" || tabData.type === "diff") {
         filePath = tabData.absolutePath;
       }
 
-      const result = await window.electronAPI.showTabContextMenu(
-        closeable,
+      const result = await trpcVanilla.contextMenu.showTabContextMenu.mutate({
+        canClose: closeable,
         filePath,
-      );
+      });
 
-      // Handle string actions (close, close-others, close-right)
-      if (typeof result.action === "string") {
-        switch (result.action) {
-          case "close":
-            onClose?.();
-            break;
-          case "close-others":
-            onCloseOthers?.();
-            break;
-          case "close-right":
-            onCloseToRight?.();
-            break;
-        }
-      }
-      // Handle external app actions
-      else if (
-        typeof result.action === "object" &&
-        result.action !== null &&
-        filePath
-      ) {
-        await handleExternalAppAction(result.action, filePath, label);
+      if (!result.action) return;
+
+      switch (result.action.type) {
+        case "close":
+          onClose?.();
+          break;
+        case "close-others":
+          onCloseOthers?.();
+          break;
+        case "close-right":
+          onCloseToRight?.();
+          break;
+        case "external-app":
+          if (filePath) {
+            await handleExternalAppAction(
+              result.action.action,
+              filePath,
+              label,
+            );
+          }
+          break;
       }
     },
     [closeable, onClose, onCloseOthers, onCloseToRight, tabData, label],
