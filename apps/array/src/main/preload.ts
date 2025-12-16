@@ -11,13 +11,6 @@ import type {
   WorktreeInfo,
 } from "../shared/types";
 import type { CloudRegion, OAuthTokenResponse } from "../shared/types/oauth";
-import type {
-  ExternalAppContextMenuResult,
-  FolderContextMenuResult,
-  SplitContextMenuResult,
-  TabContextMenuResult,
-  TaskContextMenuResult,
-} from "./services/contextMenu.types.js";
 import "electron-log/preload";
 
 process.once("loaded", () => {
@@ -262,41 +255,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ): (() => void) => createIpcListener(`shell:data:${sessionId}`, listener),
   onShellExit: (sessionId: string, listener: () => void): (() => void) =>
     createVoidIpcListener(`shell:exit:${sessionId}`, listener),
-  // Context Menu API
-  showTaskContextMenu: (
-    taskId: string,
-    taskTitle: string,
-    worktreePath?: string,
-  ): Promise<TaskContextMenuResult> =>
-    ipcRenderer.invoke(
-      "show-task-context-menu",
-      taskId,
-      taskTitle,
-      worktreePath,
-    ),
-  showFolderContextMenu: (
-    folderId: string,
-    folderName: string,
-    folderPath?: string,
-  ): Promise<FolderContextMenuResult> =>
-    ipcRenderer.invoke(
-      "show-folder-context-menu",
-      folderId,
-      folderName,
-      folderPath,
-    ),
-  showTabContextMenu: (
-    canClose: boolean,
-    filePath?: string,
-  ): Promise<TabContextMenuResult> =>
-    ipcRenderer.invoke("show-tab-context-menu", canClose, filePath),
-  showSplitContextMenu: (): Promise<SplitContextMenuResult> =>
-    ipcRenderer.invoke("show-split-context-menu"),
-  showFileContextMenu: (
-    filePath: string,
-    options?: { showCollapseAll?: boolean },
-  ): Promise<ExternalAppContextMenuResult> =>
-    ipcRenderer.invoke("show-file-context-menu", filePath, options),
   folders: {
     getFolders: (): Promise<RegisteredFolder[]> =>
       ipcRenderer.invoke("get-folders"),

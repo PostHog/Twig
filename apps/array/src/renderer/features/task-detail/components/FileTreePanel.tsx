@@ -5,6 +5,7 @@ import { useFileTreeStore } from "@features/right-sidebar/stores/fileTreeStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
@@ -73,7 +74,8 @@ function LazyTreeItem({
 
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const result = await window.electronAPI.showFileContextMenu(entry.path, {
+    const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
+      filePath: entry.path,
       showCollapseAll: true,
     });
 
@@ -81,10 +83,13 @@ function LazyTreeItem({
 
     if (result.action.type === "collapse-all") {
       collapseAll(taskId);
-      return;
+    } else if (result.action.type === "external-app") {
+      await handleExternalAppAction(
+        result.action.action,
+        entry.path,
+        entry.name,
+      );
     }
-
-    await handleExternalAppAction(result.action, entry.path, entry.name);
   };
 
   const isDirectory = entry.type === "directory";

@@ -9,6 +9,7 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { memo, useCallback } from "react";
@@ -113,30 +114,24 @@ function SidebarMenuComponent() {
     const folder = folders.find((f) => f.id === folderId);
     if (!folder) return;
 
-    if (!window.electronAPI?.showFolderContextMenu) {
-      const confirmed = window.confirm(
-        `Remove "${folder.name}" from Array?\n\nThis will not delete any files on your computer.`,
-      );
-      if (confirmed) {
-        await removeFolder(folderId);
-      }
-      return;
-    }
+    const result = await trpcVanilla.contextMenu.showFolderContextMenu.mutate({
+      folderName: folder.name,
+      folderPath: folder.path,
+    });
 
-    const result = await window.electronAPI.showFolderContextMenu(
-      folderId,
-      folder.name,
-      folder.path,
-    );
+    if (!result.action) return;
 
-    if (result.action === "remove") {
+    if (result.action.type === "remove") {
       await removeFolder(folderId);
-    } else if (result.action && typeof result.action === "object") {
-      // Handle external app actions
+    } else if (result.action.type === "external-app") {
       const { handleExternalAppAction } = await import(
         "@utils/handleExternalAppAction"
       );
-      await handleExternalAppAction(result.action, folder.path, folder.name);
+      await handleExternalAppAction(
+        result.action.action,
+        folder.path,
+        folder.name,
+      );
     }
   };
 

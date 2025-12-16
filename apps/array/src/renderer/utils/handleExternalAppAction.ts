@@ -1,4 +1,4 @@
-import type { ExternalAppAction } from "@main/services/contextMenu.types";
+import type { ExternalAppAction } from "@main/services/context-menu/types";
 import { logger } from "@renderer/lib/logger";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { toast } from "@utils/toast";
@@ -10,8 +10,6 @@ export async function handleExternalAppAction(
   filePath: string,
   displayName: string,
 ): Promise<void> {
-  if (!action) return;
-
   if (action.type === "open-in-app") {
     log.info("Opening file in app", {
       appId: action.appId,
