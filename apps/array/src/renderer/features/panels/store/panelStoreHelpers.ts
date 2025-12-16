@@ -85,6 +85,9 @@ export function createTabLabel(tabId: string): string {
     const label = getStatusLabel(parsed.status);
     return `${fileName} (${label})`;
   }
+  if (tabId === "plan") {
+    return "Plan";
+  }
   return parsed.value;
 }
 
@@ -189,6 +192,8 @@ export function createNewTab(tabId: string, closeable = true): Tab {
     case "system":
       if (tabId === "logs") {
         data = { type: "logs" };
+      } else if (tabId === "plan") {
+        data = { type: "plan" };
       } else if (tabId.startsWith("shell")) {
         data = {
           type: "terminal",

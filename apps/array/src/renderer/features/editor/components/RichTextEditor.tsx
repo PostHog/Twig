@@ -467,7 +467,9 @@ export function RichTextEditor({
       }}
     >
       {showToolbar && editor && <FormattingToolbar editor={editor} />}
-      <EditorContent editor={editor} />
+      <Box style={{ flex: 1, overflow: "auto" }}>
+        <EditorContent editor={editor} />
+      </Box>
       <style>
         {`
           .rich-text-file-path {

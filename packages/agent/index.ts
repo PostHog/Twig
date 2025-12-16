@@ -41,6 +41,7 @@ export type {
   KillShellTool,
   KnownTool,
   NotebookEditTool,
+  ReadPlanTool,
   ReadTool,
   SlashCommandTool,
   TaskTool,
@@ -49,6 +50,7 @@ export type {
   ToolCategory,
   WebFetchTool,
   WebSearchTool,
+  WritePlanTool,
   WriteTool,
 } from "./src/tools/types.js";
 export type {

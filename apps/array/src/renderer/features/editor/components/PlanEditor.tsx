@@ -4,10 +4,45 @@ import { FloppyDiskIcon } from "@phosphor-icons/react";
 import { Box, Button, TextArea } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 const log = logger.scope("plan-editor");
+
+// Hook to watch for external file changes
+function usePlanFileWatcher(
+  repoPath: string | undefined,
+  taskId: string,
+  fileName: string,
+  onFileChanged: () => void,
+) {
+  const onFileChangedRef = useRef(onFileChanged);
+  onFileChangedRef.current = onFileChanged;
+
+  useEffect(() => {
+    if (!repoPath || !window.electronAPI?.onFileChanged) return;
+
+    // Build the expected path for the plan file
+    const expectedPath = `${repoPath}/.posthog/${taskId}/${fileName}`;
+
+    log.debug("Watching for changes to:", expectedPath);
+
+    const unsubscribe = window.electronAPI.onFileChanged(
+      ({ repoPath: eventRepoPath, filePath }) => {
+        // Only process events for our repo
+        if (eventRepoPath !== repoPath) return;
+
+        // Check if the changed file is our plan file
+        if (filePath === expectedPath) {
+          log.debug("Plan file changed externally:", filePath);
+          onFileChangedRef.current();
+        }
+      },
+    );
+
+    return unsubscribe;
+  }, [repoPath, taskId, fileName]);
+}
 
 interface PlanEditorProps {
   taskId: string;
@@ -29,11 +64,14 @@ export function PlanEditor({
   const [content, setContent] = useState(initialContent || "");
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(!!initialContent);
+  const savedContentRef = useRef<string>(initialContent || "");
   const updateTabMetadata = usePanelLayoutStore(
     (state) => state.updateTabMetadata,
   );
 
-  const isMarkdownFile = fileName.endsWith(".md");
+  // Always use plain textarea for plan files - RichTextEditor's markdown round-trip causes issues with live updates
+  const useRichEditor = false;
 
   const queryClient = useQueryClient();
   const { data: fetchedContent } = useQuery({
@@ -56,11 +94,49 @@ export function PlanEditor({
     },
   });
 
+  // Initialize content from fetched data only once
   useEffect(() => {
-    if (!initialContent && fetchedContent && content === "") {
+    if (!hasInitialized && fetchedContent !== undefined) {
       setContent(fetchedContent);
+      savedContentRef.current = fetchedContent;
+      setHasInitialized(true);
     }
-  }, [fetchedContent, initialContent, content]);
+  }, [fetchedContent, hasInitialized]);
+
+  // Handle external file changes
+  const handleExternalFileChange = useCallback(async () => {
+    // Refetch the file content
+    try {
+      let newContent: string | null = null;
+      if (fileName === "plan.md") {
+        newContent = await window.electronAPI?.readPlanFile(repoPath, taskId);
+      } else {
+        newContent = await window.electronAPI?.readTaskArtifact(
+          repoPath,
+          taskId,
+          fileName,
+        );
+      }
+
+      if (newContent !== null && newContent !== savedContentRef.current) {
+        // Only update if the file content actually changed from what we last saved/loaded
+        setContent(newContent);
+        savedContentRef.current = newContent;
+        // Also reset unsaved changes since we just loaded fresh content
+        setHasUnsavedChanges(false);
+        queryClient.setQueryData(
+          ["task-file", repoPath, taskId, fileName],
+          newContent,
+        );
+        log.debug("Reloaded plan content from external change");
+      }
+    } catch (error) {
+      log.error("Failed to reload file after external change:", error);
+    }
+  }, [repoPath, taskId, fileName, queryClient]);
+
+  // Watch for external file changes
+  usePlanFileWatcher(repoPath, taskId, fileName, handleExternalFileChange);
 
   const handleSave = useCallback(
     async (contentToSave: string) => {
@@ -80,6 +156,7 @@ export function PlanEditor({
           ["task-file", repoPath, taskId, fileName],
           contentToSave,
         );
+        savedContentRef.current = contentToSave;
         setHasUnsavedChanges(false);
       } catch (error) {
         log.error("Failed to save file:", error);
@@ -94,10 +171,10 @@ export function PlanEditor({
     handleSave(content);
   }, [content, handleSave]);
 
-  // Track unsaved changes
+  // Track unsaved changes by comparing to last saved content
   useEffect(() => {
-    setHasUnsavedChanges(content !== fetchedContent);
-  }, [content, fetchedContent]);
+    setHasUnsavedChanges(content !== savedContentRef.current);
+  }, [content]);
 
   // Update tab metadata when unsaved changes state changes
   useEffect(() => {
@@ -115,7 +192,7 @@ export function PlanEditor({
         handleManualSave();
       }
     },
-    { enableOnFormTags: ["INPUT", "TEXTAREA"] },
+    { enableOnFormTags: ["INPUT", "TEXTAREA"], enableOnContentEditable: true },
     [hasUnsavedChanges, isSaving, handleManualSave],
   );
 
@@ -134,7 +211,7 @@ export function PlanEditor({
           overflow: "hidden",
         }}
       >
-        {isMarkdownFile ? (
+        {useRichEditor ? (
           <RichTextEditor
             value={content}
             onChange={setContent}
@@ -142,13 +219,29 @@ export function PlanEditor({
             placeholder="Your implementation plan will appear here..."
             showToolbar={true}
             minHeight="100%"
+            style={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
           />
         ) : (
           <TextArea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="File content will appear here..."
-            className="min-h-full flex-1 resize-none rounded-none border-none bg-transparent font-mono text-sm shadow-none outline-none"
+            placeholder="Your implementation plan will appear here..."
+            style={{
+              height: "100%",
+              width: "100%",
+              resize: "none",
+              border: "none",
+              outline: "none",
+              fontFamily: "monospace",
+              fontSize: "13px",
+              padding: "16px",
+              backgroundColor: "transparent",
+            }}
           />
         )}
       </Box>

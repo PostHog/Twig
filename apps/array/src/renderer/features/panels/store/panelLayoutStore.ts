@@ -51,6 +51,7 @@ export interface PanelLayoutStore {
   openFile: (taskId: string, filePath: string) => void;
   openArtifact: (taskId: string, fileName: string) => void;
   openDiff: (taskId: string, filePath: string, status?: string) => void;
+  openPlan: (taskId: string) => void;
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
@@ -117,6 +118,14 @@ function createDefaultPanelTree(
           closeable: false,
           draggable: true,
         },
+        {
+          id: DEFAULT_TAB_IDS.PLAN,
+          label: "Plan",
+          data: { type: "plan" },
+          component: null,
+          closeable: true,
+          draggable: true,
+        },
       ],
       activeTabId: DEFAULT_TAB_IDS.LOGS,
       showTabs: true,
@@ -170,6 +179,14 @@ function createDefaultPanelTree(
                 data: { type: "logs" },
                 component: null,
                 closeable: false,
+                draggable: true,
+              },
+              {
+                id: DEFAULT_TAB_IDS.PLAN,
+                label: "Plan",
+                data: { type: "plan" },
+                component: null,
+                closeable: true,
                 draggable: true,
               },
               {
@@ -274,6 +291,10 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openDiff: (taskId, filePath, status) => {
         const tabId = createDiffTabId(filePath, status);
         set((state) => openTab(state, taskId, tabId));
+      },
+
+      openPlan: (taskId) => {
+        set((state) => openTab(state, taskId, DEFAULT_TAB_IDS.PLAN));
       },
 
       closeTab: (taskId, panelId, tabId) => {
@@ -740,7 +761,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 8,
+      version: 9,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

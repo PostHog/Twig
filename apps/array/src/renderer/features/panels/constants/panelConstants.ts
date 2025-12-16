@@ -26,4 +26,5 @@ export const DEFAULT_TAB_IDS = {
   TODO_LIST: "todo-list",
   ARTIFACTS: "artifacts",
   CHANGES: "changes",
+  PLAN: "plan",
 } as const;

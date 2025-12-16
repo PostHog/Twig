@@ -276,7 +276,7 @@ export class SessionManager {
         await connection.newSession({
           cwd: repoPath,
           mcpServers,
-          _meta: { sessionId: taskRunId },
+          _meta: { sessionId: taskRunId, taskId },
         });
       }
 

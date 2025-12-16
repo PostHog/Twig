@@ -296,7 +296,12 @@ export class ClaudeAcpAgent implements Agent {
 
     // Only add the acp MCP server if built-in tools are not disabled
     if (!params._meta?.disableBuiltInTools) {
-      const server = createMcpServer(this, sessionId, this.clientCapabilities);
+      // Extract taskId from _meta if provided
+      const taskId = (params._meta as { taskId?: string } | undefined)?.taskId;
+      const server = createMcpServer(this, sessionId, this.clientCapabilities, {
+        taskId,
+        cwd: params.cwd,
+      });
       mcpServers.acp = {
         type: "sdk",
         name: "acp",
@@ -308,6 +313,36 @@ export class ClaudeAcpAgent implements Agent {
       type: "preset",
       preset: "claude_code",
     };
+
+    // Add plan tool instructions when taskId is available
+    const taskId = (params._meta as { taskId?: string } | undefined)?.taskId;
+    if (taskId && params.cwd) {
+      const planInstructions = `
+
+# Implementation Planning
+
+You have access to plan management tools for this task:
+
+- **WritePlan**: Use this to create or update the implementation plan. The plan is visible to the user in their Plan tab in real-time.
+- **ReadPlan**: Use this to read the current plan before making updates.
+
+## When to use these tools:
+
+1. **At the start of complex tasks**: Before diving into code, use WritePlan to document your approach. Include:
+   - Overview of what needs to be done
+   - Key steps or phases
+   - Important considerations or trade-offs
+   - Files that will be modified
+
+2. **During implementation**: Update the plan as you make progress. Mark completed items and add any new discoveries.
+
+3. **Before making changes**: Use ReadPlan to check the current plan and ensure your work aligns with it.
+
+The plan should be written in markdown format. Keep it concise but informative. The user can see and edit the plan directly, so it serves as a shared document for collaboration.
+`;
+      systemPrompt.append = (systemPrompt.append || "") + planInstructions;
+    }
+
     if (params._meta?.systemPrompt) {
       const customPrompt = params._meta.systemPrompt;
       if (typeof customPrompt === "string") {
@@ -317,7 +352,7 @@ export class ClaudeAcpAgent implements Agent {
         "append" in customPrompt &&
         typeof customPrompt.append === "string"
       ) {
-        systemPrompt.append = customPrompt.append;
+        systemPrompt.append = (systemPrompt.append || "") + customPrompt.append;
       }
     }
 

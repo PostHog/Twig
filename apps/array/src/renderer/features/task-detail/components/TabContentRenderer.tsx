@@ -6,6 +6,7 @@ import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
 import { TaskArtifactEditorPanel } from "@features/task-detail/components/TaskArtifactEditorPanel";
 import { TaskArtifactsPanel } from "@features/task-detail/components/TaskArtifactsPanel";
 import { TaskLogsPanel } from "@features/task-detail/components/TaskLogsPanel";
+import { TaskPlanPanel } from "@features/task-detail/components/TaskPlanPanel";
 import { TaskShellPanel } from "@features/task-detail/components/TaskShellPanel";
 import { TodoListPanel } from "@features/task-detail/components/TodoListPanel";
 import { WorkspaceTerminalPanel } from "@features/workspace/components/WorkspaceTerminalPanel";
@@ -68,6 +69,9 @@ export function TabContentRenderer({
           fileName={data.artifactId}
         />
       );
+
+    case "plan":
+      return <TaskPlanPanel taskId={taskId} task={task} />;
 
     case "other":
       // Handle system tabs by ID

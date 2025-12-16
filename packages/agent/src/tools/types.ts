@@ -105,6 +105,16 @@ export interface SlashCommandTool extends Tool {
   category: "assistant";
 }
 
+export interface WritePlanTool extends Tool {
+  name: "WritePlan";
+  category: "assistant";
+}
+
+export interface ReadPlanTool extends Tool {
+  name: "ReadPlan";
+  category: "assistant";
+}
+
 /**
  * Union type of all known tool types.
  * Useful for discriminated unions and type narrowing.
@@ -124,4 +134,6 @@ export type KnownTool =
   | TaskTool
   | TodoWriteTool
   | ExitPlanModeTool
-  | SlashCommandTool;
+  | SlashCommandTool
+  | WritePlanTool
+  | ReadPlanTool;

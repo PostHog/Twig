@@ -70,6 +70,12 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
+          <Code size="1" color="gray" variant="ghost" title="Task ID">
+            {taskId}
+          </Code>
+          <Code size="1" color="gray" variant="ghost" title="Repo Path">
+            {effectiveRepoPath ?? "no path"}
+          </Code>
           {branchName && (
             <Code size="1" color="gray" variant="ghost">
               {branchName}

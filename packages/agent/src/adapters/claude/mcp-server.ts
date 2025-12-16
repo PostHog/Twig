@@ -39,11 +39,19 @@ export const toolNames = {
 
 export const EDIT_TOOL_NAMES = [toolNames.edit, toolNames.write];
 
+export type McpServerContext = {
+  taskId?: string;
+  cwd?: string;
+};
+
 export function createMcpServer(
   agent: ClaudeAcpAgent,
   sessionId: string,
   clientCapabilities: ClientCapabilities | undefined,
+  context: McpServerContext = {},
 ): McpServer {
+  const fs = require("node:fs");
+
   // Create MCP server
   const server = new McpServer(
     { name: "acp", version: "1.0.0" },
@@ -334,6 +342,127 @@ Usage:
               {
                 type: "text",
                 text: `Editing file failed: ${error?.message ?? String(error)}`,
+              },
+            ],
+          };
+        }
+      },
+    );
+  }
+
+  // WritePlan tool - writes to the task's plan.md file
+  // Registered independently of writeTextFile capability since it uses the agent's method
+  if (context.taskId && context.cwd) {
+    server.registerTool(
+      "WritePlan",
+      {
+        title: "WritePlan",
+        description: `Writes or updates the implementation plan for the current task.
+
+Use this tool to create or update the plan.md file that the user can see in their Plan tab.
+The plan should be written in markdown format and will be saved to the task's plan file.
+
+This tool automatically writes to the correct location - you only need to provide the content.
+
+Usage:
+- Use this to document your implementation approach before or during coding
+- Update the plan as you make progress or discover new requirements
+- The plan is visible to the user in real-time as you write it
+- Write clear, structured plans with headings, bullet points, and checkboxes`,
+        inputSchema: {
+          content: z
+            .string()
+            .describe("The full plan content in markdown format"),
+        },
+        annotations: {
+          title: "Write Plan",
+          readOnlyHint: false,
+          destructiveHint: false,
+          openWorldHint: false,
+          idempotentHint: true,
+        },
+      },
+      async (input) => {
+        try {
+          // Construct the plan file path and ensure directory exists
+          const planDir = `${context.cwd}/.posthog/${context.taskId}`;
+          const planPath = `${planDir}/plan.md`;
+
+          // Create directory if it doesn't exist and write file directly
+          fs.mkdirSync(planDir, { recursive: true });
+          fs.writeFileSync(planPath, input.content, "utf-8");
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Plan updated successfully`,
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Writing plan failed: ${error.message}`,
+              },
+            ],
+          };
+        }
+      },
+    );
+
+    // ReadPlan tool - reads the task's plan.md file
+    server.registerTool(
+      "ReadPlan",
+      {
+        title: "ReadPlan",
+        description: `Reads the current implementation plan for this task.
+
+Use this tool to read the plan.md file that contains the implementation plan.
+This is useful to check what was previously planned before making updates.
+
+The plan is stored in the task's .posthog folder and is visible to the user in their Plan tab.`,
+        inputSchema: {},
+        annotations: {
+          title: "Read Plan",
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
+          idempotentHint: true,
+        },
+      },
+      async () => {
+        try {
+          const planPath = `${context.cwd}/.posthog/${context.taskId}/plan.md`;
+
+          if (!fs.existsSync(planPath)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "No plan exists yet. Use WritePlan to create one.",
+                },
+              ],
+            };
+          }
+
+          const content = fs.readFileSync(planPath, "utf-8");
+          return {
+            content: [
+              {
+                type: "text",
+                text: content,
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Reading plan failed: ${error.message}`,
               },
             ],
           };

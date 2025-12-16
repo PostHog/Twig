@@ -41,6 +41,9 @@ export type TabData =
       type: "logs";
     }
   | {
+      type: "plan";
+    }
+  | {
       type: "other";
       // Generic tab without specific data
     };

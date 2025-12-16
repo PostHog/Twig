@@ -389,6 +389,27 @@ export function toolInfoFromToolUse(
           : [],
       };
 
+    case "WritePlan":
+      return {
+        title: "Update Plan",
+        kind: "edit",
+        content: input?.content
+          ? [
+              {
+                type: "content",
+                content: { type: "text", text: input.content },
+              },
+            ]
+          : [],
+      };
+
+    case "ReadPlan":
+      return {
+        title: "Read Plan",
+        kind: "read",
+        content: [],
+      };
+
     case "Other": {
       let output: string;
       try {

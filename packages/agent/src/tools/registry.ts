@@ -89,6 +89,16 @@ const TOOL_DEFINITIONS: Record<string, Tool> = {
     category: "assistant",
     description: "Execute a slash command",
   },
+  WritePlan: {
+    name: "WritePlan",
+    category: "assistant",
+    description: "Write or update the implementation plan file",
+  },
+  ReadPlan: {
+    name: "ReadPlan",
+    category: "assistant",
+    description: "Read the current implementation plan file",
+  },
 };
 
 /**
