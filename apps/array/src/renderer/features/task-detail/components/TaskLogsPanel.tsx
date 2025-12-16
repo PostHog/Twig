@@ -105,7 +105,10 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       if (!repoPath) return;
 
       try {
-        const result = await window.electronAPI.shellExecute(repoPath, command);
+        const result = await trpcVanilla.shell.execute.mutate({
+          cwd: repoPath,
+          command,
+        });
         appendUserShellExecute(taskId, command, repoPath, result);
       } catch (error) {
         log.error("Failed to execute shell command", error);

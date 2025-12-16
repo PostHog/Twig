@@ -12,4 +12,5 @@ export const MAIN_TOKENS = Object.freeze({
   FileWatcherService: Symbol.for("Main.FileWatcherService"),
   FsService: Symbol.for("Main.FsService"),
   GitService: Symbol.for("Main.GitService"),
+  ShellService: Symbol.for("Main.ShellService"),
 });

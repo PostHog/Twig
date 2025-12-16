@@ -156,26 +156,6 @@ declare global {
     onCheckForUpdatesMenu: (listener: () => void) => () => void;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
-    // Shell API
-    shellCreate: (
-      sessionId: string,
-      cwd?: string,
-      taskId?: string,
-    ) => Promise<void>;
-    shellWrite: (sessionId: string, data: string) => Promise<void>;
-    shellResize: (
-      sessionId: string,
-      cols: number,
-      rows: number,
-    ) => Promise<void>;
-    shellCheck: (sessionId: string) => Promise<boolean>;
-    shellDestroy: (sessionId: string) => Promise<void>;
-    shellGetProcess: (sessionId: string) => Promise<string | null>;
-    onShellData: (
-      sessionId: string,
-      listener: (data: string) => void,
-    ) => () => void;
-    onShellExit: (sessionId: string, listener: () => void) => () => void;
     folders: {
       getFolders: () => Promise<RegisteredFolder[]>;
       addFolder: (folderPath: string) => Promise<RegisteredFolder>;
@@ -214,10 +194,6 @@ declare global {
         }) => void,
       ) => () => void;
     };
-    shellExecute: (
-      cwd: string,
-      command: string,
-    ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
   }
 
   interface Window {

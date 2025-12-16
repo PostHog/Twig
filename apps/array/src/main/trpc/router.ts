@@ -8,6 +8,7 @@ import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
 import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
+import { shellRouter } from "./routers/shell.js";
 import { router } from "./trpc.js";
 
 export const trpcRouter = router({
@@ -21,6 +22,7 @@ export const trpcRouter = router({
   logs: logsRouter,
   os: osRouter,
   secureStore: secureStoreRouter,
+  shell: shellRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;
