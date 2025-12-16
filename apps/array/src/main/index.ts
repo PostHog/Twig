@@ -45,7 +45,6 @@ import {
 } from "./services/posthog-analytics.js";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
-import { registerWorkspaceIpc } from "./services/workspace/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -375,4 +374,3 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 // Register IPC handlers via services
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
-registerWorkspaceIpc(() => mainWindow);

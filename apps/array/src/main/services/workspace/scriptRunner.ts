@@ -1,14 +1,15 @@
 import { exec } from "node:child_process";
 import * as fs from "node:fs";
 import { promisify } from "node:util";
-import type { BrowserWindow } from "electron";
-import type {
-  ScriptExecutionResult,
-  WorkspaceTerminalInfo,
-} from "../../../shared/types";
 import { randomSuffix } from "../../../shared/utils/id";
 import { logger } from "../../lib/logger";
 import { shellManager } from "../../lib/shellManager";
+import { getMainWindow } from "../../trpc/context.js";
+import type {
+  ScriptExecutionResult,
+  WorkspaceTerminalCreatedPayload,
+  WorkspaceTerminalInfo,
+} from "./schemas.js";
 
 const execAsync = promisify(exec);
 const log = logger.scope("workspace:scripts");
@@ -18,14 +19,14 @@ function generateSessionId(taskId: string, scriptType: string): string {
 }
 
 export interface ScriptRunnerOptions {
-  getMainWindow: () => BrowserWindow | null;
+  onTerminalCreated: (info: WorkspaceTerminalCreatedPayload) => void;
 }
 
 export class ScriptRunner {
-  private getMainWindow: () => BrowserWindow | null;
+  private onTerminalCreated: (info: WorkspaceTerminalCreatedPayload) => void;
 
   constructor(options: ScriptRunnerOptions) {
-    this.getMainWindow = options.getMainWindow;
+    this.onTerminalCreated = options.onTerminalCreated;
   }
 
   async executeScriptsWithTerminal(
@@ -48,7 +49,7 @@ export class ScriptRunner {
       };
     }
 
-    const mainWindow = this.getMainWindow();
+    const mainWindow = getMainWindow();
     if (!mainWindow) {
       return {
         success: false,
@@ -72,7 +73,7 @@ export class ScriptRunner {
 
         terminalSessionIds.push(sessionId);
 
-        this.emitTerminalCreated({
+        this.onTerminalCreated({
           taskId,
           sessionId,
           scriptType,
@@ -157,17 +158,6 @@ export class ScriptRunner {
 
   getTaskSessions(taskId: string): string[] {
     return shellManager.getSessionsByPrefix(`workspace-${taskId}-`);
-  }
-
-  private emitTerminalCreated(
-    info: WorkspaceTerminalInfo & { taskId: string },
-  ): void {
-    const mainWindow = this.getMainWindow();
-    if (!mainWindow) {
-      log.warn("No main window available to emit terminal created event");
-      return;
-    }
-    mainWindow.webContents.send("workspace:terminal-created", info);
   }
 }
 

@@ -3,6 +3,7 @@ import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@utils/toast";
 import { useEffect, useState } from "react";
 
@@ -17,10 +18,12 @@ function App() {
 
   // Global workspace error listener for toasts
   useEffect(() => {
-    const unsubscribe = window.electronAPI?.workspace.onError((data) => {
-      toast.error("Workspace error", { description: data.message });
+    const subscription = trpcVanilla.workspace.onError.subscribe(undefined, {
+      onData: (data) => {
+        toast.error("Workspace error", { description: data.message });
+      },
     });
-    return () => unsubscribe?.();
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {

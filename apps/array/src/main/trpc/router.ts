@@ -13,6 +13,7 @@ import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
 import { updatesRouter } from "./routers/updates.js";
+import { workspaceRouter } from "./routers/workspace.js";
 import { router } from "./trpc.js";
 
 export const trpcRouter = router({
@@ -31,6 +32,7 @@ export const trpcRouter = router({
   secureStore: secureStoreRouter,
   shell: shellRouter,
   updates: updatesRouter,
+  workspace: workspaceRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;
