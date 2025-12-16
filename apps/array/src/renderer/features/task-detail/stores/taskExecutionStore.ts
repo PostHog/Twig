@@ -1,8 +1,8 @@
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { trpcVanilla } from "@renderer/trpc/client";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
