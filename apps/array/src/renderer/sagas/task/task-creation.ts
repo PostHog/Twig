@@ -67,7 +67,9 @@ export class TaskCreationSaga extends Saga<
     const repoKey = getTaskRepository(task);
     const repoPath =
       input.repoPath ??
-      useTaskDirectoryStore.getState().getTaskDirectory(task.id, repoKey ?? undefined);
+      useTaskDirectoryStore
+        .getState()
+        .getTaskDirectory(task.id, repoKey ?? undefined);
 
     // Step 3: Resolve workspaceMode - input takes precedence, then derive from task
     const workspaceMode =
@@ -151,7 +153,8 @@ export class TaskCreationSaga extends Saga<
     }
 
     // Step 6: Connect to session
-    const agentCwd = workspace?.worktreePath ?? workspace?.folderPath ?? repoPath;
+    const agentCwd =
+      workspace?.worktreePath ?? workspace?.folderPath ?? repoPath;
     const shouldConnect =
       !!input.taskId || // Open: always connect to load chat history
       workspaceMode === "cloud" || // Cloud create: always connect
@@ -160,7 +163,11 @@ export class TaskCreationSaga extends Saga<
     if (shouldConnect) {
       const initialPrompt =
         !input.taskId && input.autoRun && input.content
-          ? await buildPromptBlocks(input.content, input.filePaths ?? [], agentCwd ?? "")
+          ? await buildPromptBlocks(
+              input.content,
+              input.filePaths ?? [],
+              agentCwd ?? "",
+            )
           : undefined;
 
       await this.step({
@@ -225,7 +232,9 @@ export class TaskCreationSaga extends Saga<
 
     // Save repo → directory mapping for future lookups (e.g., when opening via deep link)
     if (repository && input.repoPath) {
-      useTaskDirectoryStore.getState().setRepoDirectory(repository, input.repoPath);
+      useTaskDirectoryStore
+        .getState()
+        .setRepoDirectory(repository, input.repoPath);
     }
 
     return this.step({

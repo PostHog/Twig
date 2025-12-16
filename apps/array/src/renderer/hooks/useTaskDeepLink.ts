@@ -4,9 +4,9 @@ import { get } from "@renderer/di/container";
 import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
 import type { TaskService } from "@renderer/services/task/service";
-import { useNavigationStore } from "@stores/navigationStore";
 import { trpcReact, trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -86,7 +86,8 @@ export function useTaskDeepLink() {
     const fetchPending = async () => {
       hasFetchedPending.current = true;
       try {
-        const pendingTaskId = await trpcVanilla.deepLink.getPendingTaskId.query();
+        const pendingTaskId =
+          await trpcVanilla.deepLink.getPendingTaskId.query();
         if (pendingTaskId) {
           log.info(`Found pending deep link task: ${pendingTaskId}`);
           handleOpenTask(pendingTaskId);
