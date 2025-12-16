@@ -86,7 +86,9 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  const deepLinkService = container.get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
   deepLinkService.handleUrl(url);
 
   // Focus the main window when receiving a deep link
@@ -100,7 +102,9 @@ app.on("open-url", (event, url) => {
 app.on("second-instance", (_event, commandLine) => {
   const url = commandLine.find((arg) => arg.startsWith("array://"));
   if (url) {
-    const deepLinkService = container.get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+    const deepLinkService = container.get<DeepLinkService>(
+      MAIN_TOKENS.DeepLinkService,
+    );
     deepLinkService.handleUrl(url);
   }
 
@@ -307,7 +311,9 @@ app.whenReady().then(() => {
   ensureClaudeConfigDir();
 
   // Initialize deep link service and register protocol
-  const deepLinkService = container.get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
   deepLinkService.registerProtocol();
 
   // Initialize OAuth service (registers its deep link handler)

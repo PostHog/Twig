@@ -163,15 +163,6 @@ importers:
         version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)
       '@trpc/client':
         specifier: ^11.7.2
-<<<<<<< HEAD
-        version: 11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3)
-      '@trpc/react-query':
-        specifier: ^11.7.2
-        version: 11.7.2(@tanstack/react-query@5.90.10(react@18.3.1))(@trpc/client@11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.7.2(typescript@5.9.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
-      '@trpc/server':
-        specifier: ^11.7.2
-        version: 11.7.2(typescript@5.9.3)
-=======
         version: 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/react-query':
         specifier: ^11.7.2
@@ -179,7 +170,6 @@ importers:
       '@trpc/server':
         specifier: ^11.7.2
         version: 11.8.0(typescript@5.9.3)
->>>>>>> main
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
@@ -222,12 +212,9 @@ importers:
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
-<<<<<<< HEAD
-=======
       immer:
         specifier: ^11.0.1
         version: 11.0.1
->>>>>>> main
       inversify:
         specifier: ^7.10.6
         version: 7.10.6(reflect-metadata@0.2.2)
@@ -284,11 +271,7 @@ importers:
         version: 2.0.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       trpc-electron:
         specifier: ^0.1.2
-<<<<<<< HEAD
-        version: 0.1.2(@trpc/client@11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.7.2(typescript@5.9.3))(electron@30.5.1)
-=======
         version: 0.1.2(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(electron@30.5.1)
->>>>>>> main
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -3149,20 +3132,6 @@ packages:
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
 
-<<<<<<< HEAD
-  '@trpc/client@11.7.2':
-    resolution: {integrity: sha512-OQxqUMfpDvjcszo9dbnqWQXnW2L5IbrKSz2H7l8s+mVM3EvYw7ztQ/gjFIN3iy0NcamiQfd4eE6qjcb9Lm+63A==}
-    peerDependencies:
-      '@trpc/server': 11.7.2
-      typescript: '>=5.7.2'
-
-  '@trpc/react-query@11.7.2':
-    resolution: {integrity: sha512-IcLDMqx2mvlGRxkr0/m37TtPvRQ8nonITH3EwYv436x0Igx8eduR9z4tdgGBsjJY9e5W1G7cZ4zKCwrizSimFQ==}
-    peerDependencies:
-      '@tanstack/react-query': ^5.80.3
-      '@trpc/client': 11.7.2
-      '@trpc/server': 11.7.2
-=======
   '@trpc/client@11.8.0':
     resolution: {integrity: sha512-imJQeESX1hAapDaC4JB91yvXg41AZfBuTh/scnEiN/hAubZa5s/ikp0n+w29q2GCf+hREkr3WptUFKFJoDAIug==}
     peerDependencies:
@@ -3175,18 +3144,12 @@ packages:
       '@tanstack/react-query': ^5.80.3
       '@trpc/client': 11.8.0
       '@trpc/server': 11.8.0
->>>>>>> main
       react: '>=18.2.0'
       react-dom: '>=18.2.0'
       typescript: '>=5.7.2'
 
-<<<<<<< HEAD
-  '@trpc/server@11.7.2':
-    resolution: {integrity: sha512-AgB26PXY69sckherIhCacKLY49rxE2XP5h38vr/KMZTbLCL1p8IuIoKPjALTcugC2kbyQ7Lbqo2JDVfRSmPmfQ==}
-=======
   '@trpc/server@11.8.0':
     resolution: {integrity: sha512-DphyQnLuyX2nwJCQGWQ9zYz4hZGvRhSBqDhQ0SH3tDhQ3PU4u68xofA0pJ741Ir4InEAFD+TtJVLAQy+wVOkiQ==}
->>>>>>> main
     peerDependencies:
       typescript: '>=5.7.2'
 
@@ -10178,18 +10141,6 @@ snapshots:
 
   '@tootallnate/once@2.0.0': {}
 
-<<<<<<< HEAD
-  '@trpc/client@11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3)':
-    dependencies:
-      '@trpc/server': 11.7.2(typescript@5.9.3)
-      typescript: 5.9.3
-
-  '@trpc/react-query@11.7.2(@tanstack/react-query@5.90.10(react@18.3.1))(@trpc/client@11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.7.2(typescript@5.9.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)':
-    dependencies:
-      '@tanstack/react-query': 5.90.10(react@18.3.1)
-      '@trpc/client': 11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3)
-      '@trpc/server': 11.7.2(typescript@5.9.3)
-=======
   '@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
       '@trpc/server': 11.8.0(typescript@5.9.3)
@@ -10200,16 +10151,11 @@ snapshots:
       '@tanstack/react-query': 5.90.10(react@18.3.1)
       '@trpc/client': 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server': 11.8.0(typescript@5.9.3)
->>>>>>> main
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       typescript: 5.9.3
 
-<<<<<<< HEAD
-  '@trpc/server@11.7.2(typescript@5.9.3)':
-=======
   '@trpc/server@11.8.0(typescript@5.9.3)':
->>>>>>> main
     dependencies:
       typescript: 5.9.3
 
@@ -14165,17 +14111,10 @@ snapshots:
 
   trough@2.2.0: {}
 
-<<<<<<< HEAD
-  trpc-electron@0.1.2(@trpc/client@11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.7.2(typescript@5.9.3))(electron@30.5.1):
-    dependencies:
-      '@trpc/client': 11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3)
-      '@trpc/server': 11.7.2(typescript@5.9.3)
-=======
   trpc-electron@0.1.2(@trpc/client@11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3))(@trpc/server@11.8.0(typescript@5.9.3))(electron@30.5.1):
     dependencies:
       '@trpc/client': 11.8.0(@trpc/server@11.8.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server': 11.8.0(typescript@5.9.3)
->>>>>>> main
       electron: 30.5.1
 
   ts-algebra@2.0.0: {}
