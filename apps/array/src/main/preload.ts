@@ -337,10 +337,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       }>,
     ): (() => void) => createIpcListener("workspace:warning", listener),
   },
-  // Dock Badge API
-  dockBadge: {
-    show: (): Promise<void> => ipcRenderer.invoke("dock-badge:show"),
-  },
   shellExecute: (
     cwd: string,
     command: string,

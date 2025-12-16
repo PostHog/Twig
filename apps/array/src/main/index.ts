@@ -20,7 +20,9 @@ import {
 import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
-import { dockBadgeService } from "./services/dockBadge.js";
+import { container } from "./di/container.js";
+import { MAIN_TOKENS } from "./di/tokens.js";
+import type { DockBadgeService } from "./services/dock-badge/service.js";
 import {
   cleanupAgentSessions,
   registerAgentIpc,
@@ -254,7 +256,7 @@ app.whenReady().then(() => {
   ensureClaudeConfigDir();
 
   // Initialize dock badge service for notification badges
-  dockBadgeService.initialize(() => mainWindow);
+  container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
 
   // Initialize PostHog analytics
   initializePostHog();

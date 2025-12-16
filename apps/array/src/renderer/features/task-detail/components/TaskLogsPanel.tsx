@@ -13,6 +13,7 @@ import {
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -83,7 +84,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
         const isWindowFocused = document.hasFocus();
         if (!isWindowFocused) {
-          window.electronAPI.dockBadge.show();
+          trpcVanilla.dockBadge.show.mutate();
         }
       } catch (error) {
         log.error("Failed to send prompt", error);

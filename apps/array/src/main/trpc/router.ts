@@ -1,4 +1,5 @@
 import { contextMenuRouter } from "./routers/context-menu.js";
+import { dockBadgeRouter } from "./routers/dock-badge.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { externalAppsRouter } from "./routers/external-apps.js";
 import { gitRouter } from "./routers/git.js";
@@ -8,13 +9,14 @@ import { secureStoreRouter } from "./routers/secure-store.js";
 import { router } from "./trpc.js";
 
 export const trpcRouter = router({
-  os: osRouter,
-  logs: logsRouter,
-  secureStore: secureStoreRouter,
-  encryption: encryptionRouter,
-  git: gitRouter,
   contextMenu: contextMenuRouter,
+  dockBadge: dockBadgeRouter,
+  encryption: encryptionRouter,
   externalApps: externalAppsRouter,
+  git: gitRouter,
+  logs: logsRouter,
+  os: osRouter,
+  secureStore: secureStoreRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;
