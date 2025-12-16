@@ -663,17 +663,6 @@ export const detectSSHError = (output: string): string | undefined => {
 
 export function registerGitIpc(): void {
   ipcMain.handle(
-    "validate-repo",
-    async (
-      _event: IpcMainInvokeEvent,
-      directoryPath: string,
-    ): Promise<boolean> => {
-      if (!directoryPath) return false;
-      return isGitRepository(directoryPath);
-    },
-  );
-
-  ipcMain.handle(
     "get-changed-files-head",
     async (
       _event: IpcMainInvokeEvent,

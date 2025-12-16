@@ -2,6 +2,7 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { repositoryWorkspaceStore } from "@stores/repositoryWorkspaceStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -114,8 +115,8 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
             repositoryWorkspaceStore.getState().selectRepository(repository);
           }
 
-          window.electronAPI
-            ?.validateRepo(storedDirectory)
+          trpcVanilla.git.validateRepo
+            .query({ directoryPath: storedDirectory })
             .then((exists) => {
               store.updateTaskState(taskId, { repoExists: exists });
             })
@@ -132,9 +133,9 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
         if (!taskState.repoPath) return;
 
         try {
-          const exists = await window.electronAPI?.validateRepo(
-            taskState.repoPath,
-          );
+          const exists = await trpcVanilla.git.validateRepo.query({
+            directoryPath: taskState.repoPath,
+          });
           store.updateTaskState(taskId, { repoExists: exists });
         } catch {
           store.updateTaskState(taskId, { repoExists: false });

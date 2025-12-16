@@ -12,19 +12,6 @@ import "@main/services/types";
 
 declare global {
   interface IElectronAPI {
-    validateRepo: (directoryPath: string) => Promise<boolean>;
-    cloneRepository: (
-      repoUrl: string,
-      targetPath: string,
-      cloneId: string,
-    ) => Promise<{ cloneId: string }>;
-    onCloneProgress: (
-      cloneId: string,
-      listener: (event: {
-        status: "cloning" | "complete" | "error";
-        message: string;
-      }) => void,
-    ) => () => void;
     agentStart: (params: {
       taskId: string;
       taskRunId: string;
