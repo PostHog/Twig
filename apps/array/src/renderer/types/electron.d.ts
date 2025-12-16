@@ -2,7 +2,6 @@ import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type {
   ChangedFile,
   CreateWorkspaceOptions,
-  RegisteredFolder,
   ScriptExecutionResult,
   TaskArtifact,
   Workspace,
@@ -156,17 +155,6 @@ declare global {
     onCheckForUpdatesMenu: (listener: () => void) => () => void;
     onUpdateReady: (listener: () => void) => () => void;
     installUpdate: () => Promise<{ installed: boolean }>;
-    folders: {
-      getFolders: () => Promise<RegisteredFolder[]>;
-      addFolder: (folderPath: string) => Promise<RegisteredFolder>;
-      removeFolder: (folderId: string) => Promise<void>;
-      updateFolderAccessed: (folderId: string) => Promise<void>;
-      clearAllData: () => Promise<void>;
-      cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
-        deleted: string[];
-        errors: Array<{ path: string; error: string }>;
-      }>;
-    };
     workspace: {
       create: (options: CreateWorkspaceOptions) => Promise<WorkspaceInfo>;
       delete: (taskId: string, mainRepoPath: string) => Promise<void>;
