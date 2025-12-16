@@ -1,6 +1,7 @@
 declare const __BUILD_COMMIT__: string | undefined;
 declare const __BUILD_DATE__: string | undefined;
 
+import "reflect-metadata";
 import dns from "node:dns";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
