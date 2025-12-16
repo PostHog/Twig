@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { get } from "../../di/container.js";
+import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import type { ContextMenuService } from "../../services/context-menu/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
 const getService = () =>
-  get<ContextMenuService>(MAIN_TOKENS.ContextMenuService);
+  container.get<ContextMenuService>(MAIN_TOKENS.ContextMenuService);
 
 export const contextMenuRouter = router({
   showTaskContextMenu: publicProcedure
