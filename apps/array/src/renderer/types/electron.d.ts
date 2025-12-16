@@ -247,9 +247,6 @@ declare global {
         }) => void,
       ) => () => void;
     };
-    dockBadge: {
-      show: () => Promise<void>;
-    };
     shellExecute: (
       cwd: string,
       command: string,
