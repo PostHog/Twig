@@ -99,7 +99,8 @@ export class TaskService {
       } catch (error) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Failed to fetch task",
+          error:
+            error instanceof Error ? error.message : "Failed to fetch task",
           failedStep: "fetch_task",
         };
       }
@@ -129,7 +130,8 @@ export class TaskService {
     const workspaceStore = useWorkspaceStore.getState();
 
     // Derive values from input or output
-    const workspaceMode = input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
+    const workspaceMode =
+      input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
     const repoPath = input?.repoPath ?? output.workspace?.folderPath;
 
     // Save workspace mode for this task
