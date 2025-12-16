@@ -1,4 +1,5 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { create } from "zustand";
 
@@ -25,6 +26,33 @@ interface CloneStore {
 
 const REMOVE_DELAY_SUCCESS_MS = 3000;
 const REMOVE_DELAY_ERROR_MS = 5000;
+
+// Global subscription to clone progress events
+let globalSubscription: { unsubscribe: () => void } | null = null;
+let subscriptionRefCount = 0;
+
+const ensureGlobalSubscription = (store: CloneStore) => {
+  if (globalSubscription) {
+    subscriptionRefCount++;
+    return;
+  }
+
+  subscriptionRefCount = 1;
+  globalSubscription = trpcVanilla.git.onCloneProgress.subscribe(undefined, {
+    onData: (event) => {
+      store.updateClone(event.cloneId, event.status, event.message);
+    },
+  });
+};
+
+const releaseGlobalSubscription = () => {
+  subscriptionRefCount--;
+  if (subscriptionRefCount <= 0 && globalSubscription) {
+    globalSubscription.unsubscribe();
+    globalSubscription = null;
+    subscriptionRefCount = 0;
+  }
+};
 
 export const cloneStore = create<CloneStore>((set, get) => {
   const updateTaskRepoExists = (targetPath: string, exists: boolean) => {
@@ -66,26 +94,14 @@ export const cloneStore = create<CloneStore>((set, get) => {
     window.setTimeout(() => get().removeClone(cloneId), REMOVE_DELAY_ERROR_MS);
   };
 
-  return {
+  const store: CloneStore = {
     operations: {},
 
     startClone: (cloneId, repository, targetPath) => {
-      const unsubscribe = window.electronAPI.onCloneProgress(
-        cloneId,
-        (event) => {
-          get().updateClone(cloneId, event.status, event.message);
+      // Ensure global subscription is active
+      ensureGlobalSubscription(store);
 
-          const operation = get().operations[cloneId];
-          if (!operation) return;
-
-          if (event.status === "complete") {
-            handleComplete(cloneId, repository);
-          } else if (event.status === "error") {
-            handleError(cloneId, repository, event.message);
-          }
-        },
-      );
-
+      // Set up clone operation with progress handler
       set((state) => ({
         operations: {
           ...state.operations,
@@ -95,10 +111,22 @@ export const cloneStore = create<CloneStore>((set, get) => {
             targetPath,
             status: "cloning",
             latestMessage: `Cloning ${repository}...`,
-            unsubscribe,
+            unsubscribe: releaseGlobalSubscription,
           },
         },
       }));
+
+      // Start the clone operation via tRPC mutation
+      trpcVanilla.git.cloneRepository
+        .mutate({ repoUrl: repository, targetPath, cloneId })
+        .then(() => {
+          handleComplete(cloneId, repository);
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : "Clone failed";
+          get().updateClone(cloneId, "error", message);
+          handleError(cloneId, repository, message);
+        });
     },
 
     updateClone: (cloneId, status, message) => {
@@ -140,4 +168,6 @@ export const cloneStore = create<CloneStore>((set, get) => {
         (op) => op.repository === repository,
       ) ?? null,
   };
+
+  return store;
 });

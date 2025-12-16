@@ -51,22 +51,6 @@ interface AgentStartParams {
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  // Repo API
-  validateRepo: (directoryPath: string): Promise<boolean> =>
-    ipcRenderer.invoke("validate-repo", directoryPath),
-  cloneRepository: (
-    repoUrl: string,
-    targetPath: string,
-    cloneId: string,
-  ): Promise<{ cloneId: string }> =>
-    ipcRenderer.invoke("clone-repository", repoUrl, targetPath, cloneId),
-  onCloneProgress: (
-    cloneId: string,
-    listener: (event: {
-      status: "cloning" | "complete" | "error";
-      message: string;
-    }) => void,
-  ): (() => void) => createIpcListener(`clone-progress:${cloneId}`, listener),
   // Agent API
   agentStart: async (
     params: AgentStartParams,
