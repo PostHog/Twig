@@ -10,16 +10,12 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { getMainWindow } from "../../trpc/context.js";
 import type { ExternalAppsService } from "../external-apps/service.js";
 import type {
-  ActionItemDef,
-  ConfirmOptions,
   FileAction,
   FileContextMenuInput,
   FileContextMenuResult,
   FolderAction,
   FolderContextMenuInput,
   FolderContextMenuResult,
-  MenuItemDef,
-  SeparatorDef,
   SplitContextMenuResult,
   SplitDirection,
   TabAction,
@@ -28,6 +24,12 @@ import type {
   TaskAction,
   TaskContextMenuInput,
   TaskContextMenuResult,
+} from "./schemas.js";
+import type {
+  ActionItemDef,
+  ConfirmOptions,
+  MenuItemDef,
+  SeparatorDef,
 } from "./types.js";
 
 @injectable()

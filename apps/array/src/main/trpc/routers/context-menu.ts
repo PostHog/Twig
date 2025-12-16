@@ -1,6 +1,16 @@
-import { z } from "zod";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
+import {
+  fileContextMenuInput,
+  fileContextMenuOutput,
+  folderContextMenuInput,
+  folderContextMenuOutput,
+  splitContextMenuOutput,
+  tabContextMenuInput,
+  tabContextMenuOutput,
+  taskContextMenuInput,
+  taskContextMenuOutput,
+} from "../../services/context-menu/schemas.js";
 import type { ContextMenuService } from "../../services/context-menu/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -9,31 +19,26 @@ const getService = () =>
 
 export const contextMenuRouter = router({
   showTaskContextMenu: publicProcedure
-    .input(
-      z.object({ taskTitle: z.string(), worktreePath: z.string().optional() }),
-    )
+    .input(taskContextMenuInput)
+    .output(taskContextMenuOutput)
     .mutation(({ input }) => getService().showTaskContextMenu(input)),
 
   showFolderContextMenu: publicProcedure
-    .input(
-      z.object({ folderName: z.string(), folderPath: z.string().optional() }),
-    )
+    .input(folderContextMenuInput)
+    .output(folderContextMenuOutput)
     .mutation(({ input }) => getService().showFolderContextMenu(input)),
 
   showTabContextMenu: publicProcedure
-    .input(z.object({ canClose: z.boolean(), filePath: z.string().optional() }))
+    .input(tabContextMenuInput)
+    .output(tabContextMenuOutput)
     .mutation(({ input }) => getService().showTabContextMenu(input)),
 
-  showSplitContextMenu: publicProcedure.mutation(() =>
-    getService().showSplitContextMenu(),
-  ),
+  showSplitContextMenu: publicProcedure
+    .output(splitContextMenuOutput)
+    .mutation(() => getService().showSplitContextMenu()),
 
   showFileContextMenu: publicProcedure
-    .input(
-      z.object({
-        filePath: z.string(),
-        showCollapseAll: z.boolean().optional(),
-      }),
-    )
+    .input(fileContextMenuInput)
+    .output(fileContextMenuOutput)
     .mutation(({ input }) => getService().showFileContextMenu(input)),
 });

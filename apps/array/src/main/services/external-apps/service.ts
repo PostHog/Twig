@@ -7,20 +7,11 @@ import Store from "electron-store";
 import { injectable } from "inversify";
 import type {
   DetectedApplication,
-  ExternalAppsPreferences,
   ExternalAppType,
 } from "../../../shared/types.js";
+import type { AppDefinition, ExternalAppsSchema } from "./types.js";
 
 const execAsync = promisify(exec);
-
-interface AppDefinition {
-  path: string;
-  type: ExternalAppType;
-}
-
-interface ExternalAppsSchema {
-  externalAppsPrefs: ExternalAppsPreferences;
-}
 
 @injectable()
 export class ExternalAppsService {
