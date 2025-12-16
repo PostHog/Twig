@@ -42,16 +42,28 @@
 - TypeScript strict mode enabled
 - Tailwind CSS classes should be sorted (biome `useSortedClasses` rule)
 
+### Avoid Barrel Files
+
+Barrel files:
+- Break tree-shaking
+- Create circular dependency risks  
+- Hide the true source of imports
+- Make refactoring harder
+
+Import directly from source files instead.
+
 ## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tRPC, state management).
 
 ### Electron App (apps/array)
 
-- Main process: `src/main/` - Node.js, IPC handlers, services
-- Renderer process: `src/renderer/` - React app
-- Preload script: `src/main/preload.ts`
-- IPC bridge pattern between main/renderer
-- State management: Zustand stores in `src/renderer/stores/`
-- Testing: Vitest with React Testing Library
+- **Main process** (`src/main/`) - Stateless services, tRPC routers, system I/O
+- **Renderer process** (`src/renderer/`) - React app, all application state
+- **IPC**: tRPC over Electron IPC (type-safe)
+- **DI**: InversifyJS in both processes (`src/main/di/`, `src/renderer/di/`)
+- **State**: Zustand stores in renderer only - main is stateless
+- **Testing**: Vitest with React Testing Library
 
 ### Agent Package (packages/agent)
 

@@ -1,9 +1,22 @@
+import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
+
+function _getGitCommit(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+function _getBuildDate(): string {
+  return new Date().toISOString();
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

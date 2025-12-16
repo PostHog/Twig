@@ -25,9 +25,10 @@ import type { SessionPersistenceConfig } from "./src/session-store.js";
 import { Logger } from "./src/utils/logger.js";
 
 // PostHog configuration - set via env vars
+const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || "";
 const POSTHOG_CONFIG = {
   apiUrl: process.env.POSTHOG_API_URL || "",
-  apiKey: process.env.POSTHOG_API_KEY || "",
+  getApiKey: () => POSTHOG_API_KEY,
   projectId: parseInt(process.env.POSTHOG_PROJECT_ID || "0", 10),
 };
 
@@ -250,11 +251,7 @@ async function main() {
     }
   } else if (!existingSessionId) {
     // Create new Task/TaskRun for new sessions (only if PostHog is configured)
-    if (
-      POSTHOG_CONFIG.apiUrl &&
-      POSTHOG_CONFIG.apiKey &&
-      POSTHOG_CONFIG.projectId
-    ) {
+    if (POSTHOG_CONFIG.apiUrl && POSTHOG_API_KEY && POSTHOG_CONFIG.projectId) {
       console.log("🔗 Connecting to PostHog...");
       const posthogClient = new PostHogAPIClient(POSTHOG_CONFIG);
 
@@ -299,7 +296,7 @@ async function main() {
       logger.log(level, message, data, scope);
     },
     ...(POSTHOG_CONFIG.apiUrl && { posthogApiUrl: POSTHOG_CONFIG.apiUrl }),
-    ...(POSTHOG_CONFIG.apiKey && { posthogApiKey: POSTHOG_CONFIG.apiKey }),
+    ...(POSTHOG_API_KEY && { getPosthogApiKey: POSTHOG_CONFIG.getApiKey }),
     ...(POSTHOG_CONFIG.projectId && {
       posthogProjectId: POSTHOG_CONFIG.projectId,
     }),

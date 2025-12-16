@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["mprocs.yaml"]
+    },
+    "apps/array": {
+      "entry": [
+        "src/main/index.ts",
+        "src/main/preload.ts",
+        "src/renderer/main.tsx",
+        "forge.config.ts",
+        "vite.main.config.mts",
+        "vite.preload.config.mts",
+        "vite.renderer.config.mts",
+        "scripts/*.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+      "ignore": ["src/api/generated.ts"],
+      "ignoreDependencies": [
+        "typed-openapi",
+        "chokidar",
+        "detect-libc",
+        "is-glob",
+        "micromatch",
+        "node-addon-api"
+      ]
+    },
+    "packages/agent": {
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/templates/**"],
+      "ignoreDependencies": ["minimatch"],
+      "includeEntryExports": true
+    }
+  }
+}

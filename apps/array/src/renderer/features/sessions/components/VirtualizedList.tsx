@@ -1,11 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 interface VirtualizedListProps<T> {
   items: T[];
@@ -31,8 +25,6 @@ export function VirtualizedList<T>({
   footer,
 }: VirtualizedListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
-  const isInitialMountRef = useRef(true);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -45,94 +37,44 @@ export function VirtualizedList<T>({
       : undefined,
   });
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const threshold = 50;
-    isAtBottomRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-  }, []);
-
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !autoScrollToBottom || items.length === 0) {
-      return;
+    if (autoScrollToBottom && items.length > 0) {
+      virtualizer.scrollToIndex(items.length - 1, { align: "end" });
     }
-
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false;
-      el.scrollTop = el.scrollHeight;
-      return;
-    }
-  }, [autoScrollToBottom, items.length]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (
-      !el ||
-      !autoScrollToBottom ||
-      items.length === 0 ||
-      isInitialMountRef.current
-    ) {
-      return;
-    }
-
-    if (!isAtBottomRef.current) {
-      return;
-    }
-
-    const scrollToBottom = () => {
-      const el = scrollRef.current;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToBottom);
-    });
-  }, [autoScrollToBottom, items]);
+  }, [autoScrollToBottom, items.length, virtualizer]);
 
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
     <div
       ref={scrollRef}
-      className={className}
+      className={`${className} scrollbar-hide`}
       style={{ height: "100%", overflow: "auto" }}
     >
-      {items.length > 0 && (
-        <div
-          style={{
-            height: virtualizer.getTotalSize(),
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {virtualItems.map((virtualRow) => (
-            <div
-              key={virtualRow.key}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              {renderItem(items[virtualRow.index], virtualRow.index)}
-            </div>
-          ))}
-        </div>
-      )}
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualItems.map((virtualRow) => (
+          <div
+            key={virtualRow.key}
+            ref={virtualizer.measureElement}
+            data-index={virtualRow.index}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualRow.start}px)`,
+            }}
+          >
+            {renderItem(items[virtualRow.index], virtualRow.index)}
+          </div>
+        ))}
+      </div>
       {footer}
     </div>
   );

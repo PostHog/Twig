@@ -1,6 +1,6 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/tiptap-converter";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
 import { Saga, type SagaLogger } from "@shared/lib/saga";
@@ -153,7 +153,7 @@ export class TaskCreationSaga extends Saga<
             agentCwd,
           );
           // Don't await this, we want to optimistically route to the task page before the agent session is started
-          useSessionStore.getState().connectToTask({
+          getSessionActions().connectToTask({
             task,
             repoPath: agentCwd,
             initialPrompt: promptBlocks,
@@ -162,7 +162,7 @@ export class TaskCreationSaga extends Saga<
         },
         rollback: async ({ taskId }) => {
           log.info("Rolling back: disconnecting agent session", { taskId });
-          await useSessionStore.getState().disconnectFromTask(taskId);
+          await getSessionActions().disconnectFromTask(taskId);
         },
       });
     }

@@ -8,7 +8,10 @@ import { SidebarItem } from "../SidebarItem";
 function useCurrentBranch(repoPath?: string, worktreeName?: string) {
   return useQuery({
     queryKey: ["current-branch", repoPath],
-    queryFn: () => window.electronAPI.getCurrentBranch(repoPath!),
+    queryFn: () => {
+      if (!repoPath) throw new Error("repoPath is required");
+      return window.electronAPI.getCurrentBranch(repoPath);
+    },
     enabled: !!repoPath && !worktreeName,
     staleTime: 3000,
     refetchInterval: 3000,

@@ -21,7 +21,6 @@
     "build-icons": "bash scripts/generate-icns.sh",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
-    "knip": "knip",
     "test": "vitest run",
     "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true"
   },
@@ -55,7 +54,6 @@
     "electron": "^30.0.0",
     "husky": "^9.1.7",
     "jsdom": "^26.0.0",
-    "knip": "^5.66.3",
     "lint-staged": "^15.5.2",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
@@ -130,6 +128,7 @@
     "file-icon": "^6.0.0",
     "idb-keyval": "^6.2.2",
     "inversify": "^7.10.6",
+    "immer": "^11.0.1",
     "is-glob": "^4.0.3",
     "micromatch": "^4.0.5",
     "node-addon-api": "^8.5.0",
