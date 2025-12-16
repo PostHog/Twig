@@ -19,8 +19,21 @@ export const deepLinkRouter = router({
   onOpenTask: publicProcedure.subscription(async function* (opts) {
     const service = getService();
     const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(service, TaskLinkEvent.OpenTask, options)) {
+    for await (const [payload] of on(
+      service,
+      TaskLinkEvent.OpenTask,
+      options,
+    )) {
       yield payload as TaskLinkEvents[typeof TaskLinkEvent.OpenTask];
     }
+  }),
+
+  /**
+   * Get any pending task ID that arrived before renderer was ready.
+   * This handles the case where the app is launched via deep link.
+   */
+  getPendingTaskId: publicProcedure.query(() => {
+    const service = getService();
+    return service.consumePendingTaskId();
   }),
 });

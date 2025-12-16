@@ -35,7 +35,7 @@ export class TaskService {
       hasRepo: !!input.repository,
     });
 
-    if (!input.content.trim()) {
+    if (!input.content?.trim()) {
       return {
         success: false,
         error: "Task description cannot be empty",
@@ -67,45 +67,101 @@ export class TaskService {
   }
 
   /**
-   * Batch update stores after successful task creation.
+   * Open an existing task by ID.
+   * If the workspace already exists, just fetches task data.
+   * Otherwise runs the full saga to set up the workspace.
+   */
+  public async openTask(taskId: string): Promise<CreateTaskResult> {
+    log.info("Opening existing task", { taskId });
+
+    const posthogClient = useAuthStore.getState().client;
+    if (!posthogClient) {
+      return {
+        success: false,
+        error: "Not authenticated",
+        failedStep: "validation",
+      };
+    }
+
+    // Check if workspace already exists - if so, just fetch the task
+    const existingWorkspace = useWorkspaceStore.getState().workspaces[taskId];
+    if (existingWorkspace) {
+      log.info("Workspace already exists, fetching task only", { taskId });
+      try {
+        const task = await posthogClient.getTask(taskId);
+        return {
+          success: true,
+          data: {
+            task: task as unknown as import("@shared/types").Task,
+            workspace: existingWorkspace,
+          },
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to fetch task",
+          failedStep: "fetch_task",
+        };
+      }
+    }
+
+    // No existing workspace - run full saga to set it up
+    const saga = new TaskCreationSaga({ posthogClient });
+    const result = await saga.run({ taskId, autoRun: true });
+
+    if (result.success) {
+      this.updateStoresOnSuccess(result.data);
+    }
+
+    return result;
+  }
+
+  /**
+   * Batch update stores after successful task creation/open.
    */
   private updateStoresOnSuccess(
     output: TaskCreationOutput,
-    input: TaskCreationInput,
+    input?: TaskCreationInput,
   ): void {
     const settings = useSettingsStore.getState();
     const taskExecution = useTaskExecutionStore.getState();
     const taskInput = useTaskInputStore.getState();
     const workspaceStore = useWorkspaceStore.getState();
 
+    // Derive values from input or output
+    const workspaceMode = input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
+    const repoPath = input?.repoPath ?? output.workspace?.folderPath;
+
     // Save workspace mode for this task
-    taskExecution.setWorkspaceMode(output.task.id, input.workspaceMode);
+    taskExecution.setWorkspaceMode(output.task.id, workspaceMode);
 
-    // Save as last used preferences
-    settings.setLastUsedWorkspaceMode(input.workspaceMode);
+    // Only update settings preferences when creating (user made a choice)
+    if (input) {
+      settings.setLastUsedWorkspaceMode(workspaceMode);
 
-    if (input.workspaceMode === "cloud") {
-      settings.setLastUsedRunMode("cloud");
-    } else {
-      settings.setLastUsedRunMode("local");
-      settings.setLastUsedLocalWorkspaceMode(
-        input.workspaceMode as "worktree" | "root",
-      );
-
-      // Save repo path for local tasks
-      if (input.repoPath) {
-        taskExecution.setRepoPath(output.task.id, input.repoPath);
+      if (workspaceMode === "cloud") {
+        settings.setLastUsedRunMode("cloud");
+      } else {
+        settings.setLastUsedRunMode("local");
+        settings.setLastUsedLocalWorkspaceMode(
+          workspaceMode as "worktree" | "root",
+        );
       }
+
+      // Clear draft only on create
+      taskInput.clearDraft();
     }
 
-    // Update workspace store with the created workspace
+    // Save repo path for local tasks
+    if (repoPath && workspaceMode !== "cloud") {
+      taskExecution.setRepoPath(output.task.id, repoPath);
+    }
+
+    // Update workspace store
     if (output.workspace) {
       workspaceStore.updateWorkspace(output.task.id, output.workspace);
     }
 
-    // Clear draft
-    taskInput.clearDraft();
-
-    log.info("Stores updated after task creation", { taskId: output.task.id });
+    log.info("Stores updated after task", { taskId: output.task.id });
   }
 }
