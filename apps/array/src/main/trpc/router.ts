@@ -1,3 +1,4 @@
+import { contextMenuRouter } from "./routers/context-menu.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
@@ -11,6 +12,7 @@ export const trpcRouter = router({
   secureStore: secureStoreRouter,
   encryption: encryptionRouter,
   git: gitRouter,
+  contextMenu: contextMenuRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;
