@@ -52,8 +52,8 @@ export class OAuthService {
     private readonly deepLinkService: DeepLinkService,
   ) {
     // Register OAuth callback handler for deep links
-    this.deepLinkService.registerHandler("callback", (url) =>
-      this.handleOAuthCallback(url),
+    this.deepLinkService.registerHandler("callback", (_path, searchParams) =>
+      this.handleOAuthCallback(searchParams),
     );
     log.info("Registered OAuth callback handler for deep links");
   }

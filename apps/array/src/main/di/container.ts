@@ -10,9 +10,9 @@ import { FsService } from "../services/fs/service.js";
 import { GitService } from "../services/git/service.js";
 import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
+import { TaskLinkService } from "../services/task-link/service.js";
 import { UpdatesService } from "../services/updates/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
-import { TaskLinkService } from "../services/task-link/service.js";
 
 export const container = new Container({
   defaultScope: "Singleton",

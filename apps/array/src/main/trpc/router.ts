@@ -1,5 +1,5 @@
-import { deepLinkRouter } from "./routers/deep-link.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
+import { deepLinkRouter } from "./routers/deep-link.js";
 import { dockBadgeRouter } from "./routers/dock-badge.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { externalAppsRouter } from "./routers/external-apps.js";

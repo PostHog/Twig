@@ -1,30 +1,32 @@
-import { EventEmitter } from "node:events";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
+import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { getMainWindow } from "../../trpc/context.js";
-import type { DeepLinkHandler } from "../deep-link/service.js";
+import type { DeepLinkService } from "../deep-link/service.js";
 
 const log = logger.scope("task-link-service");
 
+export const TaskLinkEvent = {
+  OpenTask: "openTask",
+} as const;
+
+export interface TaskLinkEvents {
+  [TaskLinkEvent.OpenTask]: { taskId: string };
+}
+
 @injectable()
-export class TaskLinkService {
-  private emitter = new EventEmitter();
-
-  /**
-   * Get the deep link handler for task links.
-   * Register this with DeepLinkService for the "task" key.
-   * Expects URLs like: array://task/{taskId}
-   */
-  public getDeepLinkHandler(): DeepLinkHandler {
-    return (path) => this.handleTaskLink(path);
-  }
-
-  /**
-   * Subscribe to task link events.
-   */
-  public onTaskLink(callback: (taskId: string) => void): () => void {
-    this.emitter.on("task", callback);
-    return () => this.emitter.off("task", callback);
+export class TaskLinkService extends TypedEventEmitter<TaskLinkEvents> {
+  constructor(
+    @inject(MAIN_TOKENS.DeepLinkService)
+    private readonly deepLinkService: DeepLinkService,
+  ) {
+    super();
+    // Register task link handler for deep links
+    this.deepLinkService.registerHandler("task", (path) =>
+      this.handleTaskLink(path),
+    );
+    log.info("Registered task link handler for deep links");
   }
 
   private handleTaskLink(path: string): boolean {
@@ -37,7 +39,7 @@ export class TaskLinkService {
     }
 
     log.info(`Emitting task link event: ${taskId}`);
-    this.emitter.emit("task", taskId);
+    this.emit(TaskLinkEvent.OpenTask, { taskId });
 
     // Focus the window
     const mainWindow = getMainWindow();

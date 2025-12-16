@@ -52,7 +52,7 @@ export class DeepLinkService {
 
   /**
    * Handle an incoming deep link URL
-   * 
+   *
    * NOTE: Strips the protocol and main key, passing only dynamic segments to handlers.
    */
   public handleUrl(url: string): boolean {
@@ -83,7 +83,9 @@ export class DeepLinkService {
       // Extract path segments after the main key (strip leading slash)
       const pathSegments = parsedUrl.pathname.slice(1);
 
-      log.info(`Routing deep link to '${mainKey}' handler with path: ${pathSegments || "(empty)"}`);
+      log.info(
+        `Routing deep link to '${mainKey}' handler with path: ${pathSegments || "(empty)"}`,
+      );
       return handler(pathSegments, parsedUrl.searchParams);
     } catch (error) {
       log.error("Failed to parse deep link URL:", error);

@@ -43,9 +43,9 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
+import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
-import { TaskLinkService } from "./services/task-link/service";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
