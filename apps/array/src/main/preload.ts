@@ -173,27 +173,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     defaultBranch: string;
     compareUrl: string | null;
   } | null> => ipcRenderer.invoke("get-git-repo-info", repoPath),
-  listDirectory: (
-    dirPath: string,
-  ): Promise<
-    Array<{ name: string; path: string; type: "file" | "directory" }>
-  > => ipcRenderer.invoke("fs:list-directory", dirPath),
-  watcherStart: (repoPath: string): Promise<void> =>
-    ipcRenderer.invoke("watcher:start", repoPath),
-  watcherStop: (repoPath: string): Promise<void> =>
-    ipcRenderer.invoke("watcher:stop", repoPath),
-  onDirectoryChanged: (
-    listener: IpcEventListener<{ repoPath: string; dirPath: string }>,
-  ): (() => void) => createIpcListener("fs:directory-changed", listener),
-  onFileChanged: (
-    listener: IpcEventListener<{ repoPath: string; filePath: string }>,
-  ): (() => void) => createIpcListener("fs:file-changed", listener),
-  onFileDeleted: (
-    listener: IpcEventListener<{ repoPath: string; filePath: string }>,
-  ): (() => void) => createIpcListener("fs:file-deleted", listener),
-  onGitStateChanged: (
-    listener: IpcEventListener<{ repoPath: string }>,
-  ): (() => void) => createIpcListener("git:state-changed", listener),
   onOpenSettings: (listener: () => void): (() => void) =>
     createVoidIpcListener("open-settings", listener),
   onNewTask: (listener: () => void): (() => void) =>

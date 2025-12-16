@@ -5,11 +5,10 @@ import { useFileTreeStore } from "@features/right-sidebar/stores/fileTreeStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc/client";
+import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useEffect } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -50,7 +49,8 @@ function LazyTreeItem({
 
   const { data: children } = useQuery({
     queryKey: ["directory", entry.path],
-    queryFn: () => window.electronAPI.listDirectory(entry.path),
+    queryFn: () =>
+      trpcVanilla.fileWatcher.listDirectory.query({ dirPath: entry.path }),
     enabled: entry.type === "directory" && isExpanded,
     staleTime: Infinity,
   });
@@ -198,18 +198,18 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
     queryKey: ["directory", repoPath],
     queryFn: () => {
       if (!repoPath) throw new Error("repoPath is required");
-      return window.electronAPI.listDirectory(repoPath);
+      return trpcVanilla.fileWatcher.listDirectory.query({ dirPath: repoPath });
     },
     enabled: !!repoPath,
     staleTime: Infinity,
   });
 
-  useEffect(() => {
-    if (!repoPath) return;
-    return window.electronAPI.onDirectoryChanged(({ dirPath }) => {
+  trpcReact.fileWatcher.onDirectoryChanged.useSubscription(undefined, {
+    enabled: !!repoPath,
+    onData: ({ dirPath }) => {
       queryClient.invalidateQueries({ queryKey: ["directory", dirPath] });
-    });
-  }, [repoPath, queryClient]);
+    },
+  });
 
   const isFileActive = (relativePath: string): boolean => {
     if (!layout) return false;

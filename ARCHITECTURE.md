@@ -308,6 +308,83 @@ This pattern provides:
 5. **Add router** to `src/main/trpc/router.ts`
 6. **Use in renderer** via `trpcReact` hooks
 
+## Events (tRPC Subscriptions)
+
+For pushing real-time updates from main to renderer, use tRPC subscriptions with typed event emitters.
+
+### 1. Define Events in schemas.ts
+
+Use a const object for event names and an interface for payloads:
+
+```typescript
+// src/main/services/my-service/schemas.ts
+export const MyServiceEvent = {
+  ItemCreated: "item-created",
+  ItemDeleted: "item-deleted",
+} as const;
+
+export interface MyServiceEvents {
+  [MyServiceEvent.ItemCreated]: { id: string; name: string };
+  [MyServiceEvent.ItemDeleted]: { id: string };
+}
+```
+
+### 2. Extend TypedEventEmitter in Service
+
+```typescript
+// src/main/services/my-service/service.ts
+import { TypedEventEmitter } from "../../lib/typed-event-emitter";
+import { MyServiceEvent, type MyServiceEvents } from "./schemas";
+
+@injectable()
+export class MyService extends TypedEventEmitter<MyServiceEvents> {
+  async createItem(name: string) {
+    const item = { id: "123", name };
+    // TypeScript enforces correct event name and payload shape
+    this.emit(MyServiceEvent.ItemCreated, item);
+    return item;
+  }
+}
+```
+
+### 3. Create Subscriptions in Router
+
+Use a helper to reduce boilerplate:
+
+```typescript
+// src/main/trpc/routers/my-router.ts
+import { on } from "node:events";
+import { MyServiceEvent, type MyServiceEvents } from "../../services/my-service/schemas";
+
+function subscribe<K extends keyof MyServiceEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
+    const service = getService();
+    for await (const [payload] of on(service, event, { signal: opts.signal })) {
+      yield payload as MyServiceEvents[K];
+    }
+  });
+}
+
+export const myRouter = router({
+  // ... queries and mutations
+  onItemCreated: subscribe(MyServiceEvent.ItemCreated),
+  onItemDeleted: subscribe(MyServiceEvent.ItemDeleted),
+});
+```
+
+### 4. Subscribe in Renderer
+
+```typescript
+// React component
+trpcReact.my.onItemCreated.useSubscription(undefined, {
+  enabled: true,
+  onData: (item) => {
+    // item is typed as { id: string; name: string }
+    console.log("Created:", item);
+  },
+});
+```
+
 ## Code Style
 
 See [CLAUDE.md](./CLAUDE.md) for linting, formatting, and import conventions.

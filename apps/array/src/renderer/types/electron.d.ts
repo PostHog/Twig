@@ -144,25 +144,6 @@ declare global {
       defaultBranch: string;
       compareUrl: string | null;
     } | null>;
-    listDirectory: (
-      dirPath: string,
-    ) => Promise<
-      Array<{ name: string; path: string; type: "file" | "directory" }>
-    >;
-    watcherStart: (repoPath: string) => Promise<void>;
-    watcherStop: (repoPath: string) => Promise<void>;
-    onDirectoryChanged: (
-      listener: (data: { repoPath: string; dirPath: string }) => void,
-    ) => () => void;
-    onFileChanged: (
-      listener: (data: { repoPath: string; filePath: string }) => void,
-    ) => () => void;
-    onFileDeleted: (
-      listener: (data: { repoPath: string; filePath: string }) => void,
-    ) => () => void;
-    onGitStateChanged: (
-      listener: (data: { repoPath: string }) => void,
-    ) => () => void;
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
     onResetLayout: (listener: () => void) => () => void;
