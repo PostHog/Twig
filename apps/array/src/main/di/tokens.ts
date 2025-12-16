@@ -9,4 +9,5 @@ export const MAIN_TOKENS = Object.freeze({
   GitService: Symbol.for("Main.GitService"),
   DeepLinkService: Symbol.for("Main.DeepLinkService"),
   OAuthService: Symbol.for("Main.OAuthService"),
+  TaskLinkService: Symbol.for("Main.TaskLinkService"),
 });

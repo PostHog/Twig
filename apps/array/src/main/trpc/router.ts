@@ -1,3 +1,4 @@
+import { deepLinkRouter } from "./routers/deep-link.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
@@ -13,6 +14,7 @@ export const trpcRouter = router({
   encryption: encryptionRouter,
   git: gitRouter,
   oauth: oauthRouter,
+  deepLink: deepLinkRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;

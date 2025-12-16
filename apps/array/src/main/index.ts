@@ -53,6 +53,7 @@ import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
 import { registerWorktreeIpc } from "./services/worktree.js";
+import { TaskLinkService } from "./services/task-link/service";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -316,6 +317,12 @@ app.whenReady().then(() => {
   deepLinkService.registerHandler(
     "callback",
     oauthService.getDeepLinkHandler(),
+  );
+
+  const taskLinkService = get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
+  deepLinkService.registerHandler(
+    "task",
+    taskLinkService.getDeepLinkHandler(),
   );
 
   // Initialize dock badge service for notification badges
