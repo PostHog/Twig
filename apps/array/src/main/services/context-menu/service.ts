@@ -6,8 +6,10 @@ import {
 } from "electron";
 import { injectable } from "inversify";
 import type { DetectedApplication } from "../../../shared/types.js";
+import { get } from "../../di/container.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { getMainWindow } from "../../trpc/context.js";
-import { externalAppsStore, getOrRefreshApps } from "../externalApps.js";
+import type { ExternalAppsService } from "../external-apps/service.js";
 import type {
   ActionItemDef,
   ConfirmOptions,
@@ -33,11 +35,24 @@ import type {
 export class ContextMenuService {
   private readonly ICON_SIZE = 16;
 
+  private getExternalAppsService() {
+    return get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
+  }
+
+  private async getExternalAppsData() {
+    const service = this.getExternalAppsService();
+    const [apps, lastUsed] = await Promise.all([
+      service.getDetectedApps(),
+      service.getLastUsed(),
+    ]);
+    return { apps, lastUsedAppId: lastUsed.lastUsedApp };
+  }
+
   async showTaskContextMenu(
     input: TaskContextMenuInput,
   ): Promise<TaskContextMenuResult> {
     const { taskTitle, worktreePath } = input;
-    const apps = await getOrRefreshApps();
+    const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<TaskAction>([
       this.item("Rename", { type: "rename" }),
@@ -58,7 +73,10 @@ export class ContextMenuService {
         },
       ),
       ...(worktreePath
-        ? [this.separator(), ...this.externalAppItems<TaskAction>(apps)]
+        ? [
+            this.separator(),
+            ...this.externalAppItems<TaskAction>(apps, lastUsedAppId),
+          ]
         : []),
     ]);
   }
@@ -67,7 +85,7 @@ export class ContextMenuService {
     input: FolderContextMenuInput,
   ): Promise<FolderContextMenuResult> {
     const { folderName, folderPath } = input;
-    const apps = await getOrRefreshApps();
+    const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<FolderAction>([
       this.item(
@@ -84,7 +102,10 @@ export class ContextMenuService {
         },
       ),
       ...(folderPath
-        ? [this.separator(), ...this.externalAppItems<FolderAction>(apps)]
+        ? [
+            this.separator(),
+            ...this.externalAppItems<FolderAction>(apps, lastUsedAppId),
+          ]
         : []),
     ]);
   }
@@ -93,7 +114,7 @@ export class ContextMenuService {
     input: TabContextMenuInput,
   ): Promise<TabContextMenuResult> {
     const { canClose, filePath } = input;
-    const apps = await getOrRefreshApps();
+    const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<TabAction>([
       this.item(
@@ -107,7 +128,10 @@ export class ContextMenuService {
       this.item("Close other tabs", { type: "close-others" }),
       this.item("Close tabs to the right", { type: "close-right" }),
       ...(filePath
-        ? [this.separator(), ...this.externalAppItems<TabAction>(apps)]
+        ? [
+            this.separator(),
+            ...this.externalAppItems<TabAction>(apps, lastUsedAppId),
+          ]
         : []),
     ]);
   }
@@ -125,7 +149,7 @@ export class ContextMenuService {
   async showFileContextMenu(
     input: FileContextMenuInput,
   ): Promise<FileContextMenuResult> {
-    const apps = await getOrRefreshApps();
+    const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<FileAction>([
       ...(input.showCollapseAll
@@ -134,17 +158,18 @@ export class ContextMenuService {
             this.separator(),
           ]
         : []),
-      ...this.externalAppItems<FileAction>(apps),
+      ...this.externalAppItems<FileAction>(apps, lastUsedAppId),
     ]);
   }
 
-  private externalAppItems<T>(apps: DetectedApplication[]): MenuItemDef<T>[] {
+  private externalAppItems<T>(
+    apps: DetectedApplication[],
+    lastUsedAppId?: string,
+  ): MenuItemDef<T>[] {
     if (apps.length === 0) {
       return [this.disabled("No external apps detected")];
     }
 
-    const lastUsedAppId =
-      externalAppsStore.get("externalAppsPrefs")?.lastUsedApp;
     const lastUsedApp = apps.find((app) => app.id === lastUsedAppId) || apps[0];
     const openIn = (appId: string): T =>
       ({ type: "external-app", action: { type: "open-in-app", appId } }) as T;

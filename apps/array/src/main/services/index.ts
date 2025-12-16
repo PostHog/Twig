@@ -4,7 +4,6 @@
  */
 
 import "./dockBadge.js";
-import "./externalApps.js";
 import "./fileWatcher.js";
 import "./folders.js";
 import "./fs.js";
