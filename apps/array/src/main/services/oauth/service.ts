@@ -2,19 +2,22 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import type { Socket } from "node:net";
 import { shell } from "electron";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
   OAUTH_SCOPES,
 } from "../../../constants/oauth.js";
-import type {
-  CloudRegion,
-  OAuthConfig,
-  OAuthTokenResponse,
-} from "../../../shared/types/oauth.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import type { DeepLinkHandler } from "../deep-link/service.js";
+import type { DeepLinkService } from "../deep-link/service.js";
+import type {
+  CancelFlowOutput,
+  CloudRegion,
+  OAuthTokenResponse,
+  RefreshTokenOutput,
+  StartFlowOutput,
+} from "./schemas.js";
 
 const log = logger.scope("oauth-service");
 
@@ -24,6 +27,11 @@ const DEV_CALLBACK_PORT = 8237;
 
 // Use HTTP callback in development, deep link in production
 const IS_DEV = process.defaultApp || false;
+
+interface OAuthConfig {
+  scopes: string[];
+  cloudRegion: CloudRegion;
+}
 
 interface PendingOAuthFlow {
   codeVerifier: string;
@@ -39,12 +47,15 @@ interface PendingOAuthFlow {
 export class OAuthService {
   private pendingFlow: PendingOAuthFlow | null = null;
 
-  /**
-   * Get the deep link handler for OAuth callbacks.
-   * Register this with DeepLinkService for the "callback" key.
-   */
-  public getDeepLinkHandler(): DeepLinkHandler {
-    return (_path, searchParams) => this.handleOAuthCallback(searchParams);
+  constructor(
+    @inject(MAIN_TOKENS.DeepLinkService)
+    private readonly deepLinkService: DeepLinkService,
+  ) {
+    // Register OAuth callback handler for deep links
+    this.deepLinkService.registerHandler("callback", (url) =>
+      this.handleOAuthCallback(url),
+    );
+    log.info("Registered OAuth callback handler for deep links");
   }
 
   private handleOAuthCallback(searchParams: URLSearchParams): boolean {
@@ -87,41 +98,125 @@ export class OAuthService {
    * Start the OAuth flow.
    * Uses HTTP callback in development, deep links in production.
    */
-  public async startFlow(region: CloudRegion): Promise<OAuthTokenResponse> {
-    // Cancel any existing flow
-    this.cancelFlow();
+  public async startFlow(region: CloudRegion): Promise<StartFlowOutput> {
+    try {
+      // Cancel any existing flow
+      this.cancelFlow();
 
-    const config: OAuthConfig = {
-      scopes: OAUTH_SCOPES,
-      cloudRegion: region,
-    };
+      const config: OAuthConfig = {
+        scopes: OAUTH_SCOPES,
+        cloudRegion: region,
+      };
 
-    const codeVerifier = this.generateCodeVerifier();
-    const codeChallenge = this.generateCodeChallenge(codeVerifier);
-    const redirectUri = this.getRedirectUri();
+      const codeVerifier = this.generateCodeVerifier();
+      const codeChallenge = this.generateCodeChallenge(codeVerifier);
+      const redirectUri = this.getRedirectUri();
 
-    // Build the authorization URL
-    const cloudUrl = getCloudUrlFromRegion(region);
-    const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
-    authUrl.searchParams.set("client_id", getOauthClientIdFromRegion(region));
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("code_challenge", codeChallenge);
-    authUrl.searchParams.set("code_challenge_method", "S256");
-    authUrl.searchParams.set("scope", config.scopes.join(" "));
-    authUrl.searchParams.set("required_access_level", "project");
+      // Build the authorization URL
+      const cloudUrl = getCloudUrlFromRegion(region);
+      const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
+      authUrl.searchParams.set("client_id", getOauthClientIdFromRegion(region));
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("code_challenge", codeChallenge);
+      authUrl.searchParams.set("code_challenge_method", "S256");
+      authUrl.searchParams.set("scope", config.scopes.join(" "));
+      authUrl.searchParams.set("required_access_level", "project");
 
-    // Create a promise that will be resolved when the callback arrives
-    const code = IS_DEV
-      ? await this.waitForHttpCallback(codeVerifier, config, authUrl.toString())
-      : await this.waitForDeepLinkCallback(
-          codeVerifier,
-          config,
-          authUrl.toString(),
-        );
+      // Create a promise that will be resolved when the callback arrives
+      const code = IS_DEV
+        ? await this.waitForHttpCallback(
+            codeVerifier,
+            config,
+            authUrl.toString(),
+          )
+        : await this.waitForDeepLinkCallback(
+            codeVerifier,
+            config,
+            authUrl.toString(),
+          );
 
-    // Exchange the code for tokens
-    return this.exchangeCodeForToken(code, codeVerifier, config);
+      // Exchange the code for tokens
+      const tokenResponse = await this.exchangeCodeForToken(
+        code,
+        codeVerifier,
+        config,
+      );
+
+      return {
+        success: true,
+        data: tokenResponse,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Refresh an access token using a refresh token.
+   */
+  public async refreshToken(
+    refreshToken: string,
+    region: CloudRegion,
+  ): Promise<RefreshTokenOutput> {
+    try {
+      const cloudUrl = getCloudUrlFromRegion(region);
+
+      const response = await fetch(`${cloudUrl}/oauth/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: getOauthClientIdFromRegion(region),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Token refresh failed: ${response.statusText}`);
+      }
+
+      const tokenResponse: OAuthTokenResponse = await response.json();
+
+      return {
+        success: true,
+        data: tokenResponse,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Cancel any pending OAuth flow.
+   */
+  public cancelFlow(): CancelFlowOutput {
+    try {
+      if (this.pendingFlow) {
+        // Clean up HTTP server if in dev mode
+        if (this.pendingFlow.server) {
+          this.cleanupHttpServer();
+        } else {
+          clearTimeout(this.pendingFlow.timeoutId);
+          this.pendingFlow.reject(new Error("OAuth flow cancelled"));
+          this.pendingFlow = null;
+        }
+      }
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   /**
@@ -301,50 +396,6 @@ export class OAuthService {
       clearTimeout(this.pendingFlow.timeoutId);
     }
     this.pendingFlow = null;
-  }
-
-  /**
-   * Cancel any pending OAuth flow.
-   */
-  public cancelFlow(): void {
-    if (this.pendingFlow) {
-      // Clean up HTTP server if in dev mode
-      if (this.pendingFlow.server) {
-        this.cleanupHttpServer();
-      } else {
-        clearTimeout(this.pendingFlow.timeoutId);
-        this.pendingFlow.reject(new Error("OAuth flow cancelled"));
-        this.pendingFlow = null;
-      }
-    }
-  }
-
-  /**
-   * Refresh an access token using a refresh token.
-   */
-  public async refreshToken(
-    refreshToken: string,
-    region: CloudRegion,
-  ): Promise<OAuthTokenResponse> {
-    const cloudUrl = getCloudUrlFromRegion(region);
-
-    const response = await fetch(`${cloudUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: getOauthClientIdFromRegion(region),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Token refresh failed: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 
   private async exchangeCodeForToken(

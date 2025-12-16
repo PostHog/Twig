@@ -3,8 +3,8 @@ import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEdi
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
+import { trpcReact } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -30,17 +30,13 @@ export function CodeEditorPanel({
     data: fileContent,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ["repo-file", repoPath, filePath],
-    enabled: !!repoPath && !!filePath,
-    staleTime: Infinity,
-    queryFn: async () => {
-      if (!window.electronAPI || !repoPath || !filePath) {
-        return null;
-      }
-      return window.electronAPI.readRepoFile(repoPath, filePath);
+  } = trpcReact.fs.readRepoFile.useQuery(
+    { repoPath: repoPath ?? "", filePath: filePath ?? "" },
+    {
+      enabled: !!repoPath && !!filePath,
+      staleTime: Infinity,
     },
-  });
+  );
 
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;

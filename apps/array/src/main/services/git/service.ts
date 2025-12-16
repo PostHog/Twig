@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { injectable } from "inversify";
-import type { DetectRepoResult } from "./types";
-import { parseGitHubUrl } from "./utils";
+import type { DetectRepoResult } from "./schemas.js";
+import { parseGitHubUrl } from "./utils.js";
 
 const execFileAsync = promisify(execFile);
 

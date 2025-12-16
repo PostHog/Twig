@@ -10,8 +10,9 @@ import {
   isJsonRpcNotification,
   isJsonRpcRequest,
   isJsonRpcResponse,
+  type UserShellExecuteParams,
 } from "@shared/types/session-events";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -20,8 +21,13 @@ import {
   SessionUpdateView,
 } from "./session-update/SessionUpdateView";
 import { UserMessage } from "./session-update/UserMessage";
+import {
+  type UserShellExecute,
+  UserShellExecuteView,
+} from "./session-update/UserShellExecuteView";
 
 interface Turn {
+  type: "turn";
   id: string;
   promptId: number;
   userContent: string;
@@ -31,6 +37,8 @@ interface Turn {
   durationMs: number;
   toolCalls: Map<string, ToolCall>;
 }
+
+type ConversationItem = Turn | UserShellExecute;
 
 interface ConversationViewProps {
   events: AcpMessage[];
@@ -46,16 +54,20 @@ export function ConversationView({
   isCloud = false,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const turns = useMemo(() => buildTurns(events), [events]);
-  const lastTurn = turns[turns.length - 1];
+  const items = useMemo(() => buildConversationItems(events), [events]);
+  const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
   const lastTurnComplete = lastTurn?.isComplete ?? true;
 
-  useEffect(() => {
+  // Scroll to bottom on initial mount
+  const hasScrolledRef = useRef(false);
+  useLayoutEffect(() => {
+    if (hasScrolledRef.current) return;
     const el = scrollRef.current;
-    if (el) {
+    if (el && items.length > 0) {
       el.scrollTop = el.scrollHeight;
+      hasScrolledRef.current = true;
     }
-  }, []);
+  }, [items]);
 
   return (
     <div
@@ -63,14 +75,18 @@ export function ConversationView({
       className="scrollbar-hide flex-1 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
     >
       <div className="flex flex-col gap-3">
-        {turns.map((turn) => (
-          <TurnView
-            key={turn.id}
-            turn={turn}
-            repoPath={repoPath}
-            isCloud={isCloud}
-          />
-        ))}
+        {items.map((item) =>
+          item.type === "turn" ? (
+            <TurnView
+              key={item.id}
+              turn={item}
+              repoPath={repoPath}
+              isCloud={isCloud}
+            />
+          ) : (
+            <UserShellExecuteView key={item.id} item={item} />
+          ),
+        )}
       </div>
       <SessionFooter
         isPromptPending={isPromptPending || !lastTurnComplete}
@@ -138,20 +154,38 @@ const TurnView = memo(function TurnView({
 
 // --- Event Processing ---
 
-function buildTurns(events: AcpMessage[]): Turn[] {
-  const turns: Turn[] = [];
-  let current: Turn | null = null;
+function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
+  const items: ConversationItem[] = [];
+  let currentTurn: Turn | null = null;
   // Map prompt request IDs to their turns for matching responses
   const pendingPrompts = new Map<number, Turn>();
+  let shellExecuteCounter = 0;
 
   for (const event of events) {
     const msg = event.message;
+
+    // User shell execute notification - standalone item
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_array/user_shell_execute"
+    ) {
+      const params = msg.params as UserShellExecuteParams;
+      items.push({
+        type: "user_shell_execute",
+        id: `shell-exec-${shellExecuteCounter++}`,
+        command: params.command,
+        cwd: params.cwd,
+        result: params.result,
+      });
+      continue;
+    }
 
     // session/prompt request - starts a new turn
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
       const userContent = extractUserContent(msg.params);
 
-      current = {
+      currentTurn = {
+        type: "turn",
         id: `turn-${msg.id}`,
         promptId: msg.id,
         userContent,
@@ -160,10 +194,10 @@ function buildTurns(events: AcpMessage[]): Turn[] {
         durationMs: 0,
         toolCalls: new Map(),
       };
-      current.durationMs = -event.ts; // Will add end timestamp later
+      currentTurn.durationMs = -event.ts; // Will add end timestamp later
 
-      pendingPrompts.set(msg.id, current);
-      turns.push(current);
+      pendingPrompts.set(msg.id, currentTurn);
+      items.push(currentTurn);
       continue;
     }
 
@@ -182,12 +216,12 @@ function buildTurns(events: AcpMessage[]): Turn[] {
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "session/update" &&
-      current
+      currentTurn
     ) {
       const update = (msg.params as SessionNotification)?.update;
       if (!update) continue;
 
-      processSessionUpdate(current, update);
+      processSessionUpdate(currentTurn, update);
       continue;
     }
 
@@ -195,11 +229,11 @@ function buildTurns(events: AcpMessage[]): Turn[] {
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "_posthog/console" &&
-      current
+      currentTurn
     ) {
       const params = msg.params as { level?: string; message?: string };
       if (params?.message) {
-        current.items.push({
+        currentTurn.items.push({
           sessionUpdate: "console",
           level: params.level ?? "info",
           message: params.message,
@@ -209,17 +243,31 @@ function buildTurns(events: AcpMessage[]): Turn[] {
     }
   }
 
-  return turns;
+  return items;
+}
+
+interface TextBlockWithMeta {
+  type: "text";
+  text: string;
+  _meta?: { ui?: { hidden?: boolean } };
 }
 
 function extractUserContent(params: unknown): string {
   const p = params as { prompt?: ContentBlock[] };
   if (!p?.prompt?.length) return "";
 
-  const textBlock = p.prompt.find(
-    (b): b is { type: "text"; text: string } => b.type === "text",
-  );
+  // Find first visible text block (skip hidden context blocks)
+  const textBlock = p.prompt.find((b): b is TextBlockWithMeta => {
+    if (b.type !== "text") return false;
+    const meta = (b as TextBlockWithMeta)._meta;
+    return !meta?.ui?.hidden;
+  });
   return textBlock?.text ?? "";
+}
+
+function mergeToolCallUpdate(existing: ToolCall, update: SessionUpdate) {
+  const { sessionUpdate: _, ...rest } = update;
+  Object.assign(existing, rest);
 }
 
 function processSessionUpdate(turn: Turn, update: SessionUpdate) {
@@ -252,9 +300,7 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
     case "tool_call_update": {
       const existing = turn.toolCalls.get(update.toolCallId);
       if (existing) {
-        // Merge update but preserve sessionUpdate as "tool_call" for rendering
-        const { sessionUpdate: _, ...rest } = update;
-        Object.assign(existing, rest);
+        mergeToolCallUpdate(existing, update);
       }
       break;
     }

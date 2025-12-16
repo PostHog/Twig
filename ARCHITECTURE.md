@@ -67,13 +67,56 @@ export const MAIN_TOKENS = Object.freeze({
 });
 ```
 
-### Using a Service
+### Injecting Dependencies
+
+Services should declare dependencies via constructor injection:
 
 ```typescript
-import { get } from "@main/di"; // or @renderer/di
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../di/tokens";
 
-const myService = get<MyService>(TOKENS.MyService);
-myService.doSomething();
+@injectable()
+export class MyService {
+  constructor(
+    @inject(MAIN_TOKENS.OtherService)
+    private readonly otherService: OtherService,
+  ) {}
+
+  doSomething() {
+    return this.otherService.getData();
+  }
+}
+```
+
+### Using Services in tRPC Routers
+
+tRPC routers resolve services from the container:
+
+```typescript
+import { container } from "../../di/container";
+import { MAIN_TOKENS } from "../../di/tokens";
+
+const getService = () => container.get<MyService>(MAIN_TOKENS.MyService);
+
+export const myRouter = router({
+  getData: publicProcedure.query(() => getService().getData()),
+});
+```
+
+### Testing with Mocks
+
+Constructor injection makes testing straightforward:
+
+```typescript
+// Direct instantiation with mock
+const mockOtherService = { getData: vi.fn().mockReturnValue("test") };
+const service = new MyService(mockOtherService as OtherService);
+
+// Or rebind in container for integration tests
+container.snapshot();
+container.rebind(MAIN_TOKENS.OtherService).toConstantValue(mockOtherService);
+// ... run tests ...
+container.restore();
 ```
 
 ## IPC via tRPC
@@ -84,27 +127,26 @@ We use [tRPC](https://trpc.io/) with [trpc-electron](https://github.com/jsonnull
 
 ```typescript
 // src/main/trpc/routers/my-router.ts
-import { z } from "zod";
+import { container } from "../../di/container";
+import { MAIN_TOKENS } from "../../di/tokens";
+import {
+  getDataInput,
+  getDataOutput,
+  updateDataInput,
+} from "../../services/my-service/schemas";
 import { router, publicProcedure } from "../trpc";
-import { get } from "@main/di";
-import { MAIN_TOKENS } from "@main/di/tokens";
+
+const getService = () => container.get<MyService>(MAIN_TOKENS.MyService);
 
 export const myRouter = router({
-  // Query - for read operations
   getData: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const service = get<MyService>(MAIN_TOKENS.MyService);
-      return service.getData(input.id);
-    }),
+    .input(getDataInput)
+    .output(getDataOutput)
+    .query(({ input }) => getService().getData(input.id)),
 
-  // Mutation - for write operations
   updateData: publicProcedure
-    .input(z.object({ id: z.string(), value: z.string() }))
-    .mutation(async ({ input }) => {
-      const service = get<MyService>(MAIN_TOKENS.MyService);
-      return service.updateData(input.id, input.value);
-    }),
+    .input(updateDataInput)
+    .mutation(({ input }) => getService().updateData(input.id, input.value)),
 });
 ```
 
@@ -199,11 +241,63 @@ Main services should be:
 src/main/services/
 ├── my-service/
 │   ├── service.ts      # The injectable service class
-│   └── types.ts        # Types and interfaces
+│   ├── schemas.ts      # Zod schemas for tRPC input/output
+│   └── types.ts        # Internal types (not exposed via tRPC)
 
 src/renderer/services/
 ├── my-service.ts       # Renderer-side service
 ```
+
+### Zod Schemas
+
+All tRPC inputs and outputs use Zod schemas as the single source of truth. Types are inferred from schemas.
+
+```typescript
+// src/main/services/my-service/schemas.ts
+import { z } from "zod";
+
+export const getDataInput = z.object({
+  id: z.string(),
+});
+
+export const getDataOutput = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+});
+
+export type GetDataInput = z.infer<typeof getDataInput>;
+export type GetDataOutput = z.infer<typeof getDataOutput>;
+```
+
+```typescript
+// src/main/trpc/routers/my-router.ts
+import { getDataInput, getDataOutput } from "../../services/my-service/schemas";
+
+export const myRouter = router({
+  getData: publicProcedure
+    .input(getDataInput)
+    .output(getDataOutput)
+    .query(({ input }) => getService().getData(input.id)),
+});
+```
+
+```typescript
+// src/main/services/my-service/service.ts
+import type { GetDataInput, GetDataOutput } from "./schemas";
+
+@injectable()
+export class MyService {
+  async getData(id: string): Promise<GetDataOutput> {
+    // ...
+  }
+}
+```
+
+This pattern provides:
+- Runtime validation of inputs and outputs
+- Single source of truth for types
+- Explicit API contracts between main and renderer
 
 ## Adding a New Feature
 
@@ -213,6 +307,127 @@ src/renderer/services/
 4. **Create tRPC router** in `src/main/trpc/routers/`
 5. **Add router** to `src/main/trpc/router.ts`
 6. **Use in renderer** via `trpcReact` hooks
+
+## Events (tRPC Subscriptions)
+
+For pushing real-time updates from main to renderer, use tRPC subscriptions with typed event emitters.
+
+### 1. Define Events in schemas.ts
+
+Use a const object for event names and an interface for payloads:
+
+```typescript
+// src/main/services/my-service/schemas.ts
+export const MyServiceEvent = {
+  ItemCreated: "item-created",
+  ItemDeleted: "item-deleted",
+} as const;
+
+export interface MyServiceEvents {
+  [MyServiceEvent.ItemCreated]: { id: string; name: string };
+  [MyServiceEvent.ItemDeleted]: { id: string };
+}
+```
+
+### 2. Extend TypedEventEmitter in Service
+
+```typescript
+// src/main/services/my-service/service.ts
+import { TypedEventEmitter } from "../../lib/typed-event-emitter";
+import { MyServiceEvent, type MyServiceEvents } from "./schemas";
+
+@injectable()
+export class MyService extends TypedEventEmitter<MyServiceEvents> {
+  async createItem(name: string) {
+    const item = { id: "123", name };
+    // TypeScript enforces correct event name and payload shape
+    this.emit(MyServiceEvent.ItemCreated, item);
+    return item;
+  }
+}
+```
+
+### 3. Create Subscriptions in Router
+
+Use a helper to reduce boilerplate. For global events (broadcast to all subscribers):
+
+```typescript
+// src/main/trpc/routers/my-router.ts
+import { on } from "node:events";
+import { MyServiceEvent, type MyServiceEvents } from "../../services/my-service/schemas";
+
+function subscribe<K extends keyof MyServiceEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
+    const service = getService();
+    for await (const [payload] of on(service, event, { signal: opts.signal })) {
+      yield payload as MyServiceEvents[K];
+    }
+  });
+}
+
+export const myRouter = router({
+  // ... queries and mutations
+  onItemCreated: subscribe(MyServiceEvent.ItemCreated),
+  onItemDeleted: subscribe(MyServiceEvent.ItemDeleted),
+});
+```
+
+For per-instance events (e.g., shell sessions), filter by an identifier:
+
+```typescript
+// Events include an identifier to filter on
+export interface ShellEvents {
+  [ShellEvent.Data]: { sessionId: string; data: string };
+  [ShellEvent.Exit]: { sessionId: string; exitCode: number };
+}
+
+// Router filters events to the specific session
+function subscribeToSession<K extends keyof ShellEvents>(event: K) {
+  return publicProcedure
+    .input(sessionIdInput)
+    .subscription(async function* (opts) {
+      const service = getService();
+      const targetSessionId = opts.input.sessionId;
+
+      for await (const [payload] of on(service, event, { signal: opts.signal })) {
+        const data = payload as ShellEvents[K];
+        if (data.sessionId === targetSessionId) {
+          yield data;
+        }
+      }
+    });
+}
+
+export const shellRouter = router({
+  onData: subscribeToSession(ShellEvent.Data),
+  onExit: subscribeToSession(ShellEvent.Exit),
+});
+```
+
+### 4. Subscribe in Renderer
+
+```typescript
+// React component - global events
+trpcReact.my.onItemCreated.useSubscription(undefined, {
+  enabled: true,
+  onData: (item) => {
+    // item is typed as { id: string; name: string }
+    console.log("Created:", item);
+  },
+});
+
+// React component - per-session events
+trpcReact.shell.onData.useSubscription(
+  { sessionId },
+  {
+    enabled: !!sessionId,
+    onData: (event) => {
+      // event is typed as { sessionId: string; data: string }
+      terminal.write(event.data);
+    },
+  },
+);
+```
 
 ## Code Style
 

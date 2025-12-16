@@ -20,11 +20,9 @@ import {
 import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
-import { get } from "./di/container.js";
+import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
-import type { DeepLinkService } from "./services/deep-link/service.js";
-import { dockBadgeService } from "./services/dockBadge.js";
-import type { OAuthService } from "./services/oauth/service.js";
+import type { DockBadgeService } from "./services/dock-badge/service.js";
 import {
   cleanupAgentSessions,
   registerAgentIpc,
@@ -35,24 +33,18 @@ import { trpcRouter } from "./trpc/index.js";
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
 
-import { registerFileWatcherIpc } from "./services/fileWatcher.js";
-import { registerFoldersIpc } from "./services/folders.js";
-import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
-import {
-  getOrRefreshApps,
-  registerExternalAppsIpc,
-} from "./services/externalApps.js";
+import type { DeepLinkService } from "./services/deep-link/service.js";
+import type { ExternalAppsService } from "./services/external-apps/service.js";
+import type { OAuthService } from "./services/oauth/service.js";
 import {
   initializePostHog,
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import { registerShellIpc } from "./services/shell.js";
-import { registerAutoUpdater } from "./services/updates.js";
+import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
-import { registerWorktreeIpc } from "./services/worktree.js";
 import { TaskLinkService } from "./services/task-link/service";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -95,7 +87,9 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
   deepLinkService.handleUrl(url);
 
   // Focus the main window when receiving a deep link
@@ -109,7 +103,9 @@ app.on("open-url", (event, url) => {
 app.on("second-instance", (_event, commandLine) => {
   const url = commandLine.find((arg) => arg.startsWith("array://"));
   if (url) {
-    const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+    const deepLinkService = container.get<DeepLinkService>(
+      MAIN_TOKENS.DeepLinkService,
+    );
     deepLinkService.handleUrl(url);
   }
 
@@ -211,12 +207,19 @@ function createWindow(): void {
           },
         },
         { type: "separator" },
-        {
-          label: "Check for Updates...",
-          click: () => {
-            mainWindow?.webContents.send("check-for-updates-menu");
-          },
-        },
+        ...(app.isPackaged
+          ? [
+              {
+                label: "Check for Updates...",
+                click: () => {
+                  const updatesService = container.get<UpdatesService>(
+                    MAIN_TOKENS.UpdatesService,
+                  );
+                  updatesService.triggerMenuCheck();
+                },
+              },
+            ]
+          : []),
         { type: "separator" },
         {
           label: "Settings...",
@@ -309,33 +312,25 @@ app.whenReady().then(() => {
   ensureClaudeConfigDir();
 
   // Initialize deep link service and register protocol
-  const deepLinkService = get<DeepLinkService>(MAIN_TOKENS.DeepLinkService);
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
   deepLinkService.registerProtocol();
 
-  // Register OAuth callback handler for deep links
-  const oauthService = get<OAuthService>(MAIN_TOKENS.OAuthService);
-  deepLinkService.registerHandler(
-    "callback",
-    oauthService.getDeepLinkHandler(),
-  );
+  // Initialize OAuth service (registers its deep link handler)
+  container.get<OAuthService>(MAIN_TOKENS.OAuthService);
+  container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
 
-  const taskLinkService = get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
-  deepLinkService.registerHandler(
-    "task",
-    taskLinkService.getDeepLinkHandler(),
-  );
-
-  // Initialize dock badge service for notification badges
-  dockBadgeService.initialize(() => mainWindow);
+  // Initialize services that need early startup
+  container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
+  container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
 
   // Initialize PostHog analytics
   initializePostHog();
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
 
   // Preload external app icons in background
-  getOrRefreshApps().catch(() => {
-    // Silently fail, will retry on first use
-  });
+  container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
 
   // Handle case where app was launched by a deep link
   if (process.platform === "darwin") {
@@ -375,18 +370,9 @@ app.on("activate", () => {
   }
 });
 
-// Background services
-registerAutoUpdater(() => mainWindow);
-
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
-registerFsIpc();
-registerFileWatcherIpc(() => mainWindow);
-registerFoldersIpc(() => mainWindow);
-registerWorktreeIpc();
-registerShellIpc();
-registerExternalAppsIpc();
 registerWorkspaceIpc(() => mainWindow);

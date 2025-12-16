@@ -13,11 +13,12 @@ import type {
   WorkspaceTerminalInfo,
   WorktreeInfo,
 } from "../../../shared/types";
+import { container } from "../../di/container.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
 import { foldersStore } from "../../utils/store";
-import { fileService } from "../fileWatcher";
+import type { FileWatcherService } from "../file-watcher/service.js";
 import { getWorktreeLocation } from "../settingsStore";
-import { deleteWorktreeIfExists } from "../worktreeUtils";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
@@ -674,7 +675,10 @@ export class WorkspaceService {
     worktreePath: string,
   ): Promise<void> {
     try {
-      await fileService.stopWatching(worktreePath);
+      const fileWatcher = container.get<FileWatcherService>(
+        MAIN_TOKENS.FileWatcherService,
+      );
+      await fileWatcher.stopWatching(worktreePath);
     } catch (error) {
       log.warn(
         `Failed to stop file watcher for worktree ${worktreePath}:`,
@@ -683,7 +687,9 @@ export class WorkspaceService {
     }
 
     try {
-      await deleteWorktreeIfExists(mainRepoPath, worktreePath);
+      const worktreeBasePath = getWorktreeLocation();
+      const manager = new WorktreeManager({ mainRepoPath, worktreeBasePath });
+      await manager.deleteWorktree(worktreePath);
     } catch (error) {
       log.error(`Failed to delete worktree for task ${taskId}:`, error);
     }

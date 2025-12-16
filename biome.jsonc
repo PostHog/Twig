@@ -43,6 +43,10 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
+    },
+    "parser": {
+      // Required for InversifyJS @inject() parameter decorators
+      "unsafeParameterDecoratorsEnabled": true
     }
   },
   "assist": {

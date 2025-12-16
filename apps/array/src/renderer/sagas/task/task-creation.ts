@@ -85,11 +85,13 @@ export class TaskCreationSaga extends Saga<
 
     if (input.repoPath) {
       // Get or create folder registration first
-      const folders = await window.electronAPI.folders.getFolders();
+      const folders = await trpcVanilla.folders.getFolders.query();
       let folder = folders.find((f) => f.path === input.repoPath);
 
       if (!folder) {
-        folder = await window.electronAPI.folders.addFolder(input.repoPath);
+        folder = await trpcVanilla.folders.addFolder.mutate({
+          folderPath: input.repoPath,
+        });
       }
 
       const workspaceInfo = await this.step({

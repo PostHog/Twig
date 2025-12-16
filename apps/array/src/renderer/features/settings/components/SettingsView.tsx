@@ -26,7 +26,7 @@ import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { trpcVanilla } from "@/renderer/trpc";
+import { trpcReact, trpcVanilla } from "@/renderer/trpc";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -124,12 +124,14 @@ export function SettingsView() {
     logout();
   };
 
+  const checkUpdatesMutation = trpcReact.updates.check.useMutation();
+
   const handleCheckForUpdates = async () => {
     setCheckingForUpdates(true);
     setUpdateStatus({ message: "Checking for updates...", type: "info" });
 
     try {
-      const result = await window.electronAPI.checkForUpdates();
+      const result = await checkUpdatesMutation.mutateAsync();
 
       if (result.success) {
         setUpdateStatus({
@@ -154,21 +156,20 @@ export function SettingsView() {
     }
   };
 
-  useEffect(() => {
-    const unsubscribe = window.electronAPI.onUpdateStatus((status) => {
+  trpcReact.updates.onStatus.useSubscription(undefined, {
+    onData: (status) => {
       if (status.checking === false && status.upToDate) {
+        const versionSuffix = status.version ? ` (v${status.version})` : "";
         setUpdateStatus({
-          message: "You're running the latest version",
+          message: `You're running the latest version${versionSuffix}`,
           type: "success",
         });
         setCheckingForUpdates(false);
       } else if (status.checking === false) {
         setCheckingForUpdates(false);
       }
-    });
-
-    return unsubscribe;
-  }, []);
+    },
+  });
 
   return (
     <Box height="100%" overflowY="auto">

@@ -1,10 +1,14 @@
 import { Button, Dialog, Flex, Spinner, Text } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
-import { useCallback, useEffect, useState } from "react";
+import { trpcReact } from "@renderer/trpc";
+import { useCallback, useState } from "react";
 
 const log = logger.scope("updates");
 
 export function UpdatePrompt() {
+  const { data: isEnabledData } = trpcReact.updates.isEnabled.useQuery();
+  const isEnabled = isEnabledData?.enabled ?? false;
+
   const [open, setOpen] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -14,68 +18,57 @@ export function UpdatePrompt() {
     null,
   );
 
-  useEffect(() => {
-    const unsubscribe = window.electronAPI?.onUpdateReady(() => {
+  const checkMutation = trpcReact.updates.check.useMutation();
+  const installMutation = trpcReact.updates.install.useMutation();
+
+  trpcReact.updates.onReady.useSubscription(undefined, {
+    enabled: isEnabled,
+    onData: () => {
       setErrorMessage(null);
       setOpen(true);
-    });
+    },
+  });
 
-    return () => {
-      unsubscribe?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribeStatus = window.electronAPI?.onUpdateStatus((status) => {
+  trpcReact.updates.onStatus.useSubscription(undefined, {
+    enabled: isEnabled,
+    onData: (status) => {
       if (status.checking === false && status.upToDate) {
         setCheckingForUpdates(false);
-        setCheckResultMessage(
-          `Array is up to date (version ${window.electronAPI ? "" : "unknown"})`,
-        );
+        const versionSuffix = status.version ? ` (v${status.version})` : "";
+        setCheckResultMessage(`Array is up to date${versionSuffix}`);
       } else if (status.checking === false) {
         setCheckingForUpdates(false);
       } else if (status.checking === true) {
         setCheckingForUpdates(true);
         setCheckResultMessage(null);
       }
-    });
+    },
+  });
 
-    return () => {
-      unsubscribeStatus?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleMenuCheck = async () => {
+  trpcReact.updates.onCheckFromMenu.useSubscription(undefined, {
+    enabled: isEnabled,
+    onData: async () => {
       setCheckDialogOpen(true);
       setCheckingForUpdates(true);
       setCheckResultMessage(null);
 
       try {
-        const result = await window.electronAPI?.checkForUpdates();
+        const result = await checkMutation.mutateAsync();
 
-        if (!result?.success) {
+        if (!result.success) {
           setCheckingForUpdates(false);
-          setCheckResultMessage(result?.error || "Failed to check for updates");
+          setCheckResultMessage(result.error || "Failed to check for updates");
         }
       } catch (error) {
         log.error("Failed to check for updates:", error);
         setCheckingForUpdates(false);
         setCheckResultMessage("An unexpected error occurred");
       }
-    };
-
-    const unsubscribeMenuCheck = window.electronAPI?.onCheckForUpdatesMenu(() =>
-      handleMenuCheck(),
-    );
-
-    return () => {
-      unsubscribeMenuCheck?.();
-    };
-  }, []);
+    },
+  });
 
   const handleRestart = useCallback(async () => {
-    if (!window.electronAPI || isInstalling) {
+    if (isInstalling) {
       return;
     }
 
@@ -83,24 +76,26 @@ export function UpdatePrompt() {
     setErrorMessage(null);
 
     try {
-      const result = await window.electronAPI.installUpdate();
-      if (!result?.installed) {
+      const result = await installMutation.mutateAsync();
+      if (!result.installed) {
         setErrorMessage(
           "Couldn't restart automatically. Please quit and relaunch manually.",
         );
         setIsInstalling(false);
       }
-      // When installed === true the app will quit immediately.
     } catch (error) {
       log.error("Failed to install update", error);
       setErrorMessage("Update failed to install. Try quitting manually.");
       setIsInstalling(false);
     }
-  }, [isInstalling]);
+  }, [isInstalling, installMutation]);
+
+  if (!isEnabled) {
+    return null;
+  }
 
   return (
     <>
-      {/* Update ready dialog */}
       {open && (
         <Dialog.Root open={open} onOpenChange={setOpen}>
           <Dialog.Content maxWidth="360px">
@@ -138,7 +133,6 @@ export function UpdatePrompt() {
         </Dialog.Root>
       )}
 
-      {/* Check for updates dialog (menu-triggered) */}
       {checkDialogOpen && (
         <Dialog.Root open={checkDialogOpen} onOpenChange={setCheckDialogOpen}>
           <Dialog.Content maxWidth="360px">

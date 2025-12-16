@@ -6,8 +6,16 @@
  */
 export const MAIN_TOKENS = Object.freeze({
   // Services
+  ContextMenuService: Symbol.for("Main.ContextMenuService"),
+  DockBadgeService: Symbol.for("Main.DockBadgeService"),
+  ExternalAppsService: Symbol.for("Main.ExternalAppsService"),
+  FileWatcherService: Symbol.for("Main.FileWatcherService"),
+  FoldersService: Symbol.for("Main.FoldersService"),
+  FsService: Symbol.for("Main.FsService"),
   GitService: Symbol.for("Main.GitService"),
   DeepLinkService: Symbol.for("Main.DeepLinkService"),
   OAuthService: Symbol.for("Main.OAuthService"),
   TaskLinkService: Symbol.for("Main.TaskLinkService"),
+  ShellService: Symbol.for("Main.ShellService"),
+  UpdatesService: Symbol.for("Main.UpdatesService"),
 });
