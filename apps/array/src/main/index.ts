@@ -46,7 +46,6 @@ import {
 import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
-import { registerWorktreeIpc } from "./services/worktree.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -298,6 +297,5 @@ registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFoldersIpc(() => mainWindow);
-registerWorktreeIpc();
 registerShellIpc();
 registerWorkspaceIpc(() => mainWindow);
