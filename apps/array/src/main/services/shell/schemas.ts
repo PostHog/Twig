@@ -41,7 +41,17 @@ export const ShellEvent = {
   Exit: "exit",
 } as const;
 
+export type ShellDataPayload = {
+  sessionId: string;
+  data: string;
+};
+
+export type ShellExitPayload = {
+  sessionId: string;
+  exitCode: number;
+};
+
 export interface ShellEvents {
-  [ShellEvent.Data]: { sessionId: string; data: string };
-  [ShellEvent.Exit]: { sessionId: string; exitCode: number };
+  [ShellEvent.Data]: ShellDataPayload;
+  [ShellEvent.Exit]: ShellExitPayload;
 }

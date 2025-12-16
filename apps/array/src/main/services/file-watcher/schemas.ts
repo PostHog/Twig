@@ -27,9 +27,28 @@ export const FileWatcherEvent = {
   GitStateChanged: "git-state-changed",
 } as const;
 
+export type DirectoryChangedPayload = {
+  repoPath: string;
+  dirPath: string;
+};
+
+export type FileChangedPayload = {
+  repoPath: string;
+  filePath: string;
+};
+
+export type FileDeletedPayload = {
+  repoPath: string;
+  filePath: string;
+};
+
+export type GitStateChangedPayload = {
+  repoPath: string;
+};
+
 export interface FileWatcherEvents {
-  [FileWatcherEvent.DirectoryChanged]: { repoPath: string; dirPath: string };
-  [FileWatcherEvent.FileChanged]: { repoPath: string; filePath: string };
-  [FileWatcherEvent.FileDeleted]: { repoPath: string; filePath: string };
-  [FileWatcherEvent.GitStateChanged]: { repoPath: string };
+  [FileWatcherEvent.DirectoryChanged]: DirectoryChangedPayload;
+  [FileWatcherEvent.FileChanged]: FileChangedPayload;
+  [FileWatcherEvent.FileDeleted]: FileDeletedPayload;
+  [FileWatcherEvent.GitStateChanged]: GitStateChangedPayload;
 }

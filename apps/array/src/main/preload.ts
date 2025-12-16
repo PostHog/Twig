@@ -167,22 +167,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onClearStorage: (listener: () => void): (() => void) =>
     createVoidIpcListener("clear-storage", listener),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
-  onUpdateReady: (listener: () => void): (() => void) =>
-    createVoidIpcListener("updates:ready", listener),
-  installUpdate: (): Promise<{ installed: boolean }> =>
-    ipcRenderer.invoke("updates:install"),
-  checkForUpdates: (): Promise<{
-    success: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke("updates:check"),
-  onUpdateStatus: (
-    listener: IpcEventListener<{
-      checking?: boolean;
-      upToDate?: boolean;
-    }>,
-  ): (() => void) => createIpcListener("updates:status", listener),
-  onCheckForUpdatesMenu: (listener: () => void): (() => void) =>
-    createVoidIpcListener("check-for-updates-menu", listener),
   // Workspace API
   workspace: {
     create: (options: CreateWorkspaceOptions): Promise<WorkspaceInfo> =>
