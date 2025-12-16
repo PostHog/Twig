@@ -35,7 +35,9 @@ type TaskController = unknown;
 
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
-import { ExternalAppsService } from "./services/external-apps/service.js";
+import type { DeepLinkService } from "./services/deep-link/service.js";
+import type { ExternalAppsService } from "./services/external-apps/service.js";
+import type { OAuthService } from "./services/oauth/service.js";
 import {
   initializePostHog,
   shutdownPostHog,
@@ -43,8 +45,6 @@ import {
 } from "./services/posthog-analytics.js";
 import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
-import { DeepLinkService } from "./services/deep-link/service.js";
-import { OAuthService } from "./services/oauth/service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

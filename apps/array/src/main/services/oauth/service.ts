@@ -10,7 +10,7 @@ import {
 } from "../../../constants/oauth.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import { DeepLinkService } from "../deep-link/service.js";
+import type { DeepLinkService } from "../deep-link/service.js";
 import type {
   CancelFlowOutput,
   CloudRegion,
