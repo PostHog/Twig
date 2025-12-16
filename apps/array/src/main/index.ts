@@ -43,7 +43,6 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import { registerShellIpc } from "./services/shell.js";
 import { registerAutoUpdater } from "./services/updates.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
 
@@ -297,5 +296,4 @@ registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerFoldersIpc(() => mainWindow);
-registerShellIpc();
 registerWorkspaceIpc(() => mainWindow);

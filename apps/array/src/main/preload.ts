@@ -197,28 +197,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ): (() => void) => createIpcListener("updates:status", listener),
   onCheckForUpdatesMenu: (listener: () => void): (() => void) =>
     createVoidIpcListener("check-for-updates-menu", listener),
-  shellCreate: (
-    sessionId: string,
-    cwd?: string,
-    taskId?: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("shell:create", sessionId, cwd, taskId),
-  shellWrite: (sessionId: string, data: string): Promise<void> =>
-    ipcRenderer.invoke("shell:write", sessionId, data),
-  shellResize: (sessionId: string, cols: number, rows: number): Promise<void> =>
-    ipcRenderer.invoke("shell:resize", sessionId, cols, rows),
-  shellCheck: (sessionId: string): Promise<boolean> =>
-    ipcRenderer.invoke("shell:check", sessionId),
-  shellDestroy: (sessionId: string): Promise<void> =>
-    ipcRenderer.invoke("shell:destroy", sessionId),
-  shellGetProcess: (sessionId: string): Promise<string | null> =>
-    ipcRenderer.invoke("shell:get-process", sessionId),
-  onShellData: (
-    sessionId: string,
-    listener: (data: string) => void,
-  ): (() => void) => createIpcListener(`shell:data:${sessionId}`, listener),
-  onShellExit: (sessionId: string, listener: () => void): (() => void) =>
-    createVoidIpcListener(`shell:exit:${sessionId}`, listener),
   folders: {
     getFolders: (): Promise<RegisteredFolder[]> =>
       ipcRenderer.invoke("get-folders"),
@@ -278,9 +256,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
       }>,
     ): (() => void) => createIpcListener("workspace:warning", listener),
   },
-  shellExecute: (
-    cwd: string,
-    command: string,
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
-    ipcRenderer.invoke("shell:execute", cwd, command),
 });

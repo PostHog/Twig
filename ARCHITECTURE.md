@@ -349,7 +349,7 @@ export class MyService extends TypedEventEmitter<MyServiceEvents> {
 
 ### 3. Create Subscriptions in Router
 
-Use a helper to reduce boilerplate:
+Use a helper to reduce boilerplate. For global events (broadcast to all subscribers):
 
 ```typescript
 // src/main/trpc/routers/my-router.ts
@@ -372,10 +372,42 @@ export const myRouter = router({
 });
 ```
 
+For per-instance events (e.g., shell sessions), filter by an identifier:
+
+```typescript
+// Events include an identifier to filter on
+export interface ShellEvents {
+  [ShellEvent.Data]: { sessionId: string; data: string };
+  [ShellEvent.Exit]: { sessionId: string; exitCode: number };
+}
+
+// Router filters events to the specific session
+function subscribeToSession<K extends keyof ShellEvents>(event: K) {
+  return publicProcedure
+    .input(sessionIdInput)
+    .subscription(async function* (opts) {
+      const service = getService();
+      const targetSessionId = opts.input.sessionId;
+
+      for await (const [payload] of on(service, event, { signal: opts.signal })) {
+        const data = payload as ShellEvents[K];
+        if (data.sessionId === targetSessionId) {
+          yield data;
+        }
+      }
+    });
+}
+
+export const shellRouter = router({
+  onData: subscribeToSession(ShellEvent.Data),
+  onExit: subscribeToSession(ShellEvent.Exit),
+});
+```
+
 ### 4. Subscribe in Renderer
 
 ```typescript
-// React component
+// React component - global events
 trpcReact.my.onItemCreated.useSubscription(undefined, {
   enabled: true,
   onData: (item) => {
@@ -383,6 +415,18 @@ trpcReact.my.onItemCreated.useSubscription(undefined, {
     console.log("Created:", item);
   },
 });
+
+// React component - per-session events
+trpcReact.shell.onData.useSubscription(
+  { sessionId },
+  {
+    enabled: !!sessionId,
+    onData: (event) => {
+      // event is typed as { sessionId: string; data: string }
+      terminal.write(event.data);
+    },
+  },
+);
 ```
 
 ## Code Style
