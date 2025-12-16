@@ -4,9 +4,8 @@ import {
   type MenuItemConstructorOptions,
   nativeImage,
 } from "electron";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import type { DetectedApplication } from "../../../shared/types.js";
-import { get } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { getMainWindow } from "../../trpc/context.js";
 import type { ExternalAppsService } from "../external-apps/service.js";
@@ -35,15 +34,15 @@ import type {
 export class ContextMenuService {
   private readonly ICON_SIZE = 16;
 
-  private getExternalAppsService() {
-    return get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
-  }
+  constructor(
+    @inject(MAIN_TOKENS.ExternalAppsService)
+    private readonly externalAppsService: ExternalAppsService,
+  ) {}
 
   private async getExternalAppsData() {
-    const service = this.getExternalAppsService();
     const [apps, lastUsed] = await Promise.all([
-      service.getDetectedApps(),
-      service.getLastUsed(),
+      this.externalAppsService.getDetectedApps(),
+      this.externalAppsService.getLastUsed(),
     ]);
     return { apps, lastUsedAppId: lastUsed.lastUsedApp };
   }

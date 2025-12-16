@@ -67,13 +67,56 @@ export const MAIN_TOKENS = Object.freeze({
 });
 ```
 
-### Using a Service
+### Injecting Dependencies
+
+Services should declare dependencies via constructor injection:
 
 ```typescript
-import { get } from "@main/di"; // or @renderer/di
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../di/tokens";
 
-const myService = get<MyService>(TOKENS.MyService);
-myService.doSomething();
+@injectable()
+export class MyService {
+  constructor(
+    @inject(MAIN_TOKENS.OtherService)
+    private readonly otherService: OtherService,
+  ) {}
+
+  doSomething() {
+    return this.otherService.getData();
+  }
+}
+```
+
+### Using Services in tRPC Routers
+
+tRPC routers resolve services from the container:
+
+```typescript
+import { container } from "../../di/container";
+import { MAIN_TOKENS } from "../../di/tokens";
+
+const getService = () => container.get<MyService>(MAIN_TOKENS.MyService);
+
+export const myRouter = router({
+  getData: publicProcedure.query(() => getService().getData()),
+});
+```
+
+### Testing with Mocks
+
+Constructor injection makes testing straightforward:
+
+```typescript
+// Direct instantiation with mock
+const mockOtherService = { getData: vi.fn().mockReturnValue("test") };
+const service = new MyService(mockOtherService as OtherService);
+
+// Or rebind in container for integration tests
+container.snapshot();
+container.rebind(MAIN_TOKENS.OtherService).toConstantValue(mockOtherService);
+// ... run tests ...
+container.restore();
 ```
 
 ## IPC via tRPC
@@ -85,26 +128,22 @@ We use [tRPC](https://trpc.io/) with [trpc-electron](https://github.com/jsonnull
 ```typescript
 // src/main/trpc/routers/my-router.ts
 import { z } from "zod";
+import { container } from "../../di/container";
+import { MAIN_TOKENS } from "../../di/tokens";
 import { router, publicProcedure } from "../trpc";
-import { get } from "@main/di";
-import { MAIN_TOKENS } from "@main/di/tokens";
+
+const getService = () => container.get<MyService>(MAIN_TOKENS.MyService);
 
 export const myRouter = router({
   // Query - for read operations
   getData: publicProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const service = get<MyService>(MAIN_TOKENS.MyService);
-      return service.getData(input.id);
-    }),
+    .query(({ input }) => getService().getData(input.id)),
 
   // Mutation - for write operations
   updateData: publicProcedure
     .input(z.object({ id: z.string(), value: z.string() }))
-    .mutation(async ({ input }) => {
-      const service = get<MyService>(MAIN_TOKENS.MyService);
-      return service.updateData(input.id, input.value);
-    }),
+    .mutation(({ input }) => getService().updateData(input.id, input.value)),
 });
 ```
 
