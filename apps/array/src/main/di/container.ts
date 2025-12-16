@@ -12,6 +12,7 @@ import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
 import { TaskLinkService } from "../services/task-link/service.js";
 import { UpdatesService } from "../services/updates/service.js";
+import { WorkspaceService } from "../services/workspace/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
 
 export const container = new Container({
@@ -30,3 +31,4 @@ container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
 container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);
+container.bind(MAIN_TOKENS.WorkspaceService).to(WorkspaceService);

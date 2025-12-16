@@ -1,4 +1,5 @@
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { trpcVanilla } from "@renderer/trpc";
 import type {
   CreateWorkspaceOptions,
   ScriptExecutionResult,
@@ -89,7 +90,7 @@ function workspaceInfoToWorkspace(
 const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
   (async () => {
     try {
-      const workspaces = await window.electronAPI?.workspace.getAll();
+      const workspaces = await trpcVanilla.workspace.getAll.query();
       if (workspaces) {
         // Merge with existing state to preserve workspaces created during load
         set((state) => ({
@@ -112,7 +113,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
 
     loadWorkspaces: async () => {
       try {
-        const workspaces = await window.electronAPI?.workspace.getAll();
+        const workspaces = await trpcVanilla.workspace.getAll.query();
         set({ workspaces: workspaces ?? {}, isLoaded: true });
       } catch (error) {
         log.error("Failed to load workspaces:", error);
@@ -128,7 +129,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
 
       try {
         const workspaceInfo =
-          await window.electronAPI?.workspace.create(options);
+          await trpcVanilla.workspace.create.mutate(options);
         if (!workspaceInfo) {
           throw new Error("Failed to create workspace");
         }
@@ -154,12 +155,12 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     },
 
     deleteWorkspace: async (taskId: string, mainRepoPath: string) => {
-      await window.electronAPI?.workspace.delete(taskId, mainRepoPath);
+      await trpcVanilla.workspace.delete.mutate({ taskId, mainRepoPath });
       set((state) => ({ workspaces: omitKey(state.workspaces, taskId) }));
     },
 
     verifyWorkspace: async (taskId: string) => {
-      const exists = await window.electronAPI?.workspace.verify(taskId);
+      const exists = await trpcVanilla.workspace.verify.query({ taskId });
       if (!exists) {
         set((state) => ({ workspaces: omitKey(state.workspaces, taskId) }));
       }
@@ -206,7 +207,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
         }));
 
         // Persist cloud workspace to main process
-        await window.electronAPI?.workspace.create({
+        await trpcVanilla.workspace.create.mutate({
           taskId,
           mainRepoPath: repoPath,
           folderId: folder.id,
@@ -259,7 +260,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           folder = await addFolder(repoPath);
         }
 
-        const workspaceInfo = await window.electronAPI?.workspace.create({
+        const workspaceInfo = await trpcVanilla.workspace.create.mutate({
           taskId,
           mainRepoPath: repoPath,
           folderId: folder.id,
@@ -307,11 +308,11 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       const scriptName =
         workspace.worktreeName ?? workspace.folderPath.split("/").pop() ?? "";
 
-      const result = await window.electronAPI?.workspace.runStart(
+      const result = await trpcVanilla.workspace.runStart.mutate({
         taskId,
-        scriptPath,
-        scriptName,
-      );
+        worktreePath: scriptPath,
+        worktreeName: scriptName,
+      });
       return (
         result ?? {
           success: false,
@@ -322,13 +323,14 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     },
 
     isWorkspaceRunning: async (taskId: string) => {
-      const running = await window.electronAPI?.workspace.isRunning(taskId);
+      const running = await trpcVanilla.workspace.isRunning.query({ taskId });
       return running ?? false;
     },
 
     getWorkspaceTerminals: async (taskId: string) => {
-      const terminals =
-        await window.electronAPI?.workspace.getTerminals(taskId);
+      const terminals = await trpcVanilla.workspace.getTerminals.query({
+        taskId,
+      });
       return terminals ?? [];
     },
 

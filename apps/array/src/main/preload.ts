@@ -1,13 +1,6 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import { exposeElectronTRPC } from "trpc-electron/main";
-import type {
-  CreateWorkspaceOptions,
-  ScriptExecutionResult,
-  Workspace,
-  WorkspaceInfo,
-  WorkspaceTerminalInfo,
-} from "../shared/types";
 import "electron-log/preload";
 
 process.once("loaded", () => {
@@ -151,46 +144,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onClearStorage: (listener: () => void): (() => void) =>
     createVoidIpcListener("clear-storage", listener),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:get-version"),
-  // Workspace API
-  workspace: {
-    create: (options: CreateWorkspaceOptions): Promise<WorkspaceInfo> =>
-      ipcRenderer.invoke("workspace:create", options),
-    delete: (taskId: string, mainRepoPath: string): Promise<void> =>
-      ipcRenderer.invoke("workspace:delete", taskId, mainRepoPath),
-    verify: (taskId: string): Promise<boolean> =>
-      ipcRenderer.invoke("workspace:verify", taskId),
-    getInfo: (taskId: string): Promise<WorkspaceInfo | null> =>
-      ipcRenderer.invoke("workspace:get-info", taskId),
-    getAll: (): Promise<Record<string, Workspace>> =>
-      ipcRenderer.invoke("workspace:get-all"),
-    runStart: (
-      taskId: string,
-      worktreePath: string,
-      worktreeName: string,
-    ): Promise<ScriptExecutionResult> =>
-      ipcRenderer.invoke(
-        "workspace:run-start",
-        taskId,
-        worktreePath,
-        worktreeName,
-      ),
-    isRunning: (taskId: string): Promise<boolean> =>
-      ipcRenderer.invoke("workspace:is-running", taskId),
-    getTerminals: (taskId: string): Promise<WorkspaceTerminalInfo[]> =>
-      ipcRenderer.invoke("workspace:get-terminals", taskId),
-    onTerminalCreated: (
-      listener: IpcEventListener<WorkspaceTerminalInfo & { taskId: string }>,
-    ): (() => void) =>
-      createIpcListener("workspace:terminal-created", listener),
-    onError: (
-      listener: IpcEventListener<{ taskId: string; message: string }>,
-    ): (() => void) => createIpcListener("workspace:error", listener),
-    onWarning: (
-      listener: IpcEventListener<{
-        taskId: string;
-        title: string;
-        message: string;
-      }>,
-    ): (() => void) => createIpcListener("workspace:warning", listener),
-  },
 });
