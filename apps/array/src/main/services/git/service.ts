@@ -18,10 +18,6 @@ export interface GitServiceEvents {
 
 @injectable()
 export class GitService extends TypedEventEmitter<GitServiceEvents> {
-  constructor() {
-    super();
-  }
-
   public async detectRepo(
     directoryPath: string,
   ): Promise<DetectRepoResult | null> {
@@ -71,9 +67,13 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
     emitProgress("cloning", `Starting clone of ${repoUrl}...`);
 
-    const gitProcess = spawn("git", ["clone", "--progress", repoUrl, targetPath], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const gitProcess = spawn(
+      "git",
+      ["clone", "--progress", repoUrl, targetPath],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
 
     gitProcess.stderr.on("data", (data: Buffer) => {
       const output = data.toString();
@@ -107,9 +107,13 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
   public async getRemoteUrl(directoryPath: string): Promise<string | null> {
     try {
-      const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"], {
-        cwd: directoryPath,
-      });
+      const { stdout } = await execFileAsync(
+        "git",
+        ["remote", "get-url", "origin"],
+        {
+          cwd: directoryPath,
+        },
+      );
       return stdout.trim();
     } catch {
       return null;
@@ -118,9 +122,13 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
   public async getCurrentBranch(directoryPath: string): Promise<string | null> {
     try {
-      const { stdout } = await execFileAsync("git", ["branch", "--show-current"], {
-        cwd: directoryPath,
-      });
+      const { stdout } = await execFileAsync(
+        "git",
+        ["branch", "--show-current"],
+        {
+          cwd: directoryPath,
+        },
+      );
       return stdout.trim();
     } catch {
       return null;

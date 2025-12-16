@@ -11,8 +11,8 @@ import {
   validateRepoOutput,
 } from "../../services/git/schemas.js";
 import {
-  GitServiceEvent,
   type GitService,
+  GitServiceEvent,
 } from "../../services/git/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -33,7 +33,11 @@ export const gitRouter = router({
     .input(cloneRepositoryInput)
     .output(cloneRepositoryOutput)
     .mutation(({ input }) =>
-      getService().cloneRepository(input.repoUrl, input.targetPath, input.cloneId),
+      getService().cloneRepository(
+        input.repoUrl,
+        input.targetPath,
+        input.cloneId,
+      ),
     ),
 
   onCloneProgress: publicProcedure.subscription(async function* (opts) {
