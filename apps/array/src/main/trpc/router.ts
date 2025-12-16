@@ -1,5 +1,6 @@
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { encryptionRouter } from "./routers/encryption.js";
+import { externalAppsRouter } from "./routers/external-apps.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
 import { osRouter } from "./routers/os.js";
@@ -13,6 +14,7 @@ export const trpcRouter = router({
   encryption: encryptionRouter,
   git: gitRouter,
   contextMenu: contextMenuRouter,
+  externalApps: externalAppsRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;

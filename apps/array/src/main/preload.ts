@@ -295,31 +295,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ): Promise<string | null> =>
       ipcRenderer.invoke("worktree-get-main-repo", mainRepoPath, worktreePath),
   },
-  // External Apps API
-  externalApps: {
-    getDetectedApps: (): Promise<
-      Array<{
-        id: string;
-        name: string;
-        type: "editor" | "terminal";
-        path: string;
-        command: string;
-        icon?: string;
-      }>
-    > => ipcRenderer.invoke("external-apps:get-detected-apps"),
-    openInApp: (
-      appId: string,
-      path: string,
-    ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke("external-apps:open-in-app", appId, path),
-    setLastUsed: (appId: string): Promise<void> =>
-      ipcRenderer.invoke("external-apps:set-last-used", appId),
-    getLastUsed: (): Promise<{
-      lastUsedApp?: string;
-    }> => ipcRenderer.invoke("external-apps:get-last-used"),
-    copyPath: (path: string): Promise<void> =>
-      ipcRenderer.invoke("external-apps:copy-path", path),
-  },
   // Workspace API
   workspace: {
     create: (options: CreateWorkspaceOptions): Promise<WorkspaceInfo> =>

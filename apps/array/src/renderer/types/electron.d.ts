@@ -2,7 +2,6 @@ import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type {
   ChangedFile,
   CreateWorkspaceOptions,
-  DetectedApplication,
   RegisteredFolder,
   ScriptExecutionResult,
   TaskArtifact,
@@ -220,18 +219,6 @@ declare global {
         deleted: string[];
         errors: Array<{ path: string; error: string }>;
       }>;
-    };
-    externalApps: {
-      getDetectedApps: () => Promise<DetectedApplication[]>;
-      openInApp: (
-        appId: string,
-        path: string,
-      ) => Promise<{ success: boolean; error?: string }>;
-      setLastUsed: (appId: string) => Promise<void>;
-      getLastUsed: () => Promise<{
-        lastUsedApp?: string;
-      }>;
-      copyPath: (path: string) => Promise<void>;
     };
     workspace: {
       create: (options: CreateWorkspaceOptions) => Promise<WorkspaceInfo>;

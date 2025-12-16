@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { DetectedApplication } from "@shared/types";
 import { create } from "zustand";
 
@@ -6,7 +7,6 @@ interface ExternalAppsState {
   lastUsedAppId: string | undefined;
   isLoading: boolean;
 
-  // Actions
   initialize: () => Promise<void>;
   setLastUsedApp: (appId: string) => Promise<void>;
 }
@@ -19,8 +19,8 @@ export const useExternalAppsStore = create<ExternalAppsState>((set) => ({
   initialize: async () => {
     try {
       const [apps, lastUsed] = await Promise.all([
-        window.electronAPI.externalApps.getDetectedApps(),
-        window.electronAPI.externalApps.getLastUsed(),
+        trpcVanilla.externalApps.getDetectedApps.query(),
+        trpcVanilla.externalApps.getLastUsed.query(),
       ]);
 
       set({
@@ -28,13 +28,13 @@ export const useExternalAppsStore = create<ExternalAppsState>((set) => ({
         lastUsedAppId: lastUsed.lastUsedApp,
         isLoading: false,
       });
-    } catch (_error) {
+    } catch {
       set({ isLoading: false });
     }
   },
 
   setLastUsedApp: async (appId: string) => {
-    await window.electronAPI.externalApps.setLastUsed(appId);
+    await trpcVanilla.externalApps.setLastUsed.mutate({ appId });
     set({ lastUsedAppId: appId });
   },
 }));

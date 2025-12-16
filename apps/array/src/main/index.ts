@@ -36,10 +36,7 @@ import { registerFoldersIpc } from "./services/folders.js";
 import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
-import {
-  getOrRefreshApps,
-  registerExternalAppsIpc,
-} from "./services/externalApps.js";
+import { ExternalAppsService } from "./services/external-apps/service.js";
 import { registerOAuthHandlers } from "./services/oauth.js";
 import {
   initializePostHog,
@@ -264,7 +261,7 @@ app.whenReady().then(() => {
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
 
   // Preload external app icons in background
-  getOrRefreshApps().catch(() => {
+  new ExternalAppsService().getDetectedApps().catch(() => {
     // Silently fail, will retry on first use
   });
 });
@@ -305,5 +302,4 @@ registerFileWatcherIpc(() => mainWindow);
 registerFoldersIpc(() => mainWindow);
 registerWorktreeIpc();
 registerShellIpc();
-registerExternalAppsIpc();
 registerWorkspaceIpc(() => mainWindow);
