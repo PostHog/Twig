@@ -1,0 +1,109 @@
+import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
+import { get } from "@renderer/di/container";
+import { RENDERER_TOKENS } from "@renderer/di/tokens";
+import { logger } from "@renderer/lib/logger";
+import type { TaskService } from "@renderer/services/task/service";
+import { useNavigationStore } from "@stores/navigationStore";
+import { trpcReact, trpcVanilla } from "@renderer/trpc";
+import type { Task } from "@shared/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
+
+const log = logger.scope("task-deep-link");
+
+const taskKeys = {
+  all: ["tasks"] as const,
+  lists: () => [...taskKeys.all, "list"] as const,
+  list: (filters?: { repository?: string }) =>
+    [...taskKeys.lists(), filters] as const,
+};
+
+/**
+ * Hook that subscribes to deep link events and handles opening tasks.
+ * Uses TaskService to fetch task and set up workspace via the saga pattern.
+ */
+export function useTaskDeepLink() {
+  const navigateToTask = useNavigationStore((state) => state.navigateToTask);
+  const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
+  const queryClient = useQueryClient();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasFetchedPending = useRef(false);
+
+  const handleOpenTask = useCallback(
+    async (taskId: string) => {
+      log.info(`Opening task from deep link: ${taskId}`);
+
+      try {
+        const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
+        const result = await taskService.openTask(taskId);
+
+        if (!result.success) {
+          log.error("Failed to open task from deep link", {
+            taskId,
+            error: result.error,
+            failedStep: result.failedStep,
+          });
+          toast.error(`Failed to open task: ${result.error}`);
+          return;
+        }
+
+        const { task } = result.data;
+
+        // Add task to query cache so it shows in sidebar
+        queryClient.setQueryData<Task[]>(taskKeys.list(), (old) => {
+          if (!old) return [task];
+          const existingIndex = old.findIndex((t) => t.id === task.id);
+          if (existingIndex >= 0) {
+            const updated = [...old];
+            updated[existingIndex] = task;
+            return updated;
+          }
+          return [task, ...old];
+        });
+
+        // Invalidate to ensure sync with server
+        queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+
+        // Mark as viewed and navigate
+        markAsViewed(taskId);
+        navigateToTask(task);
+
+        log.info(`Successfully opened task from deep link: ${taskId}`);
+      } catch (error) {
+        log.error("Unexpected error opening task from deep link:", error);
+        toast.error("Failed to open task");
+      }
+    },
+    [navigateToTask, markAsViewed, queryClient],
+  );
+
+  // Check for pending deep link on mount (for cold start via deep link)
+  useEffect(() => {
+    if (!isAuthenticated || hasFetchedPending.current) return;
+
+    const fetchPending = async () => {
+      hasFetchedPending.current = true;
+      try {
+        const pendingTaskId = await trpcVanilla.deepLink.getPendingTaskId.query();
+        if (pendingTaskId) {
+          log.info(`Found pending deep link task: ${pendingTaskId}`);
+          handleOpenTask(pendingTaskId);
+        }
+      } catch (error) {
+        log.error("Failed to check for pending deep link:", error);
+      }
+    };
+
+    fetchPending();
+  }, [isAuthenticated, handleOpenTask]);
+
+  // Subscribe to deep link events (for warm start via deep link)
+  trpcReact.deepLink.onOpenTask.useSubscription(undefined, {
+    onData: (data) => {
+      log.info(`Received deep link event for task: ${data.taskId}`);
+      handleOpenTask(data.taskId);
+    },
+  });
+}

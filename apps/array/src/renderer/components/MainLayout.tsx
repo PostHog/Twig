@@ -20,6 +20,7 @@ import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
+import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 
 export function MainLayout() {
   const { view, toggleSettings, navigateToTaskInput, goBack, goForward } =
@@ -27,8 +28,12 @@ export function MainLayout() {
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
-  useIntegrations();
+
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+
+  // Initialize integrations
+  useIntegrations();
+  useTaskDeepLink();
 
   const handleOpenSettings = useCallback(() => {
     toggleSettings();
