@@ -1,5 +1,6 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { logger } from "@renderer/lib/logger";
+import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
@@ -12,59 +13,59 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
   useEffect(() => {
     if (!repoPath) return;
 
-    window.electronAPI.watcherStart(repoPath).catch((error) => {
+    trpcVanilla.fileWatcher.start.mutate({ repoPath }).catch((error) => {
       log.error("Failed to start file watcher:", error);
     });
 
-    const unsubFile = window.electronAPI.onFileChanged(
-      ({ repoPath: rp, filePath }) => {
-        if (rp !== repoPath) return;
-        const relativePath = filePath.replace(`${repoPath}/`, "");
-        queryClient.invalidateQueries({
-          queryKey: ["repo-file", repoPath, relativePath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", repoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["diff-stats", repoPath],
-        });
-      },
-    );
-
-    const unsubDelete = window.electronAPI.onFileDeleted(
-      ({ repoPath: rp, filePath }) => {
-        if (rp !== repoPath) return;
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", repoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["diff-stats", repoPath],
-        });
-        if (!taskId) return;
-        const relativePath = filePath.replace(`${repoPath}/`, "");
-        closeTabsForFile(taskId, relativePath);
-      },
-    );
-
-    const unsubGit = window.electronAPI.onGitStateChanged(
-      ({ repoPath: rp }) => {
-        if (rp !== repoPath) return;
-        queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", repoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["diff-stats", repoPath],
-        });
-      },
-    );
-
     return () => {
-      unsubFile();
-      unsubDelete();
-      unsubGit();
-      window.electronAPI.watcherStop(repoPath);
+      trpcVanilla.fileWatcher.stop.mutate({ repoPath });
     };
-  }, [repoPath, taskId, queryClient, closeTabsForFile]);
+  }, [repoPath]);
+
+  trpcReact.fileWatcher.onFileChanged.useSubscription(undefined, {
+    enabled: !!repoPath,
+    onData: ({ repoPath: rp, filePath }) => {
+      if (rp !== repoPath) return;
+      const relativePath = filePath.replace(`${repoPath}/`, "");
+      queryClient.invalidateQueries({
+        queryKey: ["repo-file", repoPath, relativePath],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["changed-files-head", repoPath],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["diff-stats", repoPath],
+      });
+    },
+  });
+
+  trpcReact.fileWatcher.onFileDeleted.useSubscription(undefined, {
+    enabled: !!repoPath,
+    onData: ({ repoPath: rp, filePath }) => {
+      if (rp !== repoPath) return;
+      queryClient.invalidateQueries({
+        queryKey: ["changed-files-head", repoPath],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["diff-stats", repoPath],
+      });
+      if (!taskId) return;
+      const relativePath = filePath.replace(`${repoPath}/`, "");
+      closeTabsForFile(taskId, relativePath);
+    },
+  });
+
+  trpcReact.fileWatcher.onGitStateChanged.useSubscription(undefined, {
+    enabled: !!repoPath,
+    onData: ({ repoPath: rp }) => {
+      if (rp !== repoPath) return;
+      queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
+      queryClient.invalidateQueries({
+        queryKey: ["changed-files-head", repoPath],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["diff-stats", repoPath],
+      });
+    },
+  });
 }

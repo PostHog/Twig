@@ -1,0 +1,44 @@
+import { on } from "node:events";
+import { container } from "../../di/container.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
+import {
+  FileWatcherEvent,
+  type FileWatcherEvents,
+  listDirectoryInput,
+  listDirectoryOutput,
+  watcherInput,
+} from "../../services/file-watcher/schemas.js";
+import type { FileWatcherService } from "../../services/file-watcher/service.js";
+import { publicProcedure, router } from "../trpc.js";
+
+const getService = () =>
+  container.get<FileWatcherService>(MAIN_TOKENS.FileWatcherService);
+
+function subscribe<K extends keyof FileWatcherEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
+    const service = getService();
+    for await (const [payload] of on(service, event, { signal: opts.signal })) {
+      yield payload as FileWatcherEvents[K];
+    }
+  });
+}
+
+export const fileWatcherRouter = router({
+  listDirectory: publicProcedure
+    .input(listDirectoryInput)
+    .output(listDirectoryOutput)
+    .query(({ input }) => getService().listDirectory(input.dirPath)),
+
+  start: publicProcedure
+    .input(watcherInput)
+    .mutation(({ input }) => getService().startWatching(input.repoPath)),
+
+  stop: publicProcedure
+    .input(watcherInput)
+    .mutation(({ input }) => getService().stopWatching(input.repoPath)),
+
+  onDirectoryChanged: subscribe(FileWatcherEvent.DirectoryChanged),
+  onFileChanged: subscribe(FileWatcherEvent.FileChanged),
+  onFileDeleted: subscribe(FileWatcherEvent.FileDeleted),
+  onGitStateChanged: subscribe(FileWatcherEvent.GitStateChanged),
+});
