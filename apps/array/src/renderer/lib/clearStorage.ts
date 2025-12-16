@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc";
 import { logger } from "./logger";
 
 const log = logger.scope("clear-storage");
@@ -8,8 +9,8 @@ export function clearApplicationStorage(): void {
   );
 
   if (confirmed) {
-    window.electronAPI.folders
-      .clearAllData()
+    trpcVanilla.folders.clearAllData
+      .mutate()
       .then(() => {
         localStorage.clear();
         window.location.reload();

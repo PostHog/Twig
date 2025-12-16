@@ -3,6 +3,7 @@ import { dockBadgeRouter } from "./routers/dock-badge.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { externalAppsRouter } from "./routers/external-apps.js";
 import { fileWatcherRouter } from "./routers/file-watcher.js";
+import { foldersRouter } from "./routers/folders.js";
 import { fsRouter } from "./routers/fs.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
@@ -17,6 +18,7 @@ export const trpcRouter = router({
   encryption: encryptionRouter,
   externalApps: externalAppsRouter,
   fileWatcher: fileWatcherRouter,
+  folders: foldersRouter,
   fs: fsRouter,
   git: gitRouter,
   logs: logsRouter,

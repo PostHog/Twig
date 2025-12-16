@@ -3,7 +3,6 @@ import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import { exposeElectronTRPC } from "trpc-electron/main";
 import type {
   CreateWorkspaceOptions,
-  RegisteredFolder,
   ScriptExecutionResult,
   Workspace,
   WorkspaceInfo,
@@ -197,23 +196,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ): (() => void) => createIpcListener("updates:status", listener),
   onCheckForUpdatesMenu: (listener: () => void): (() => void) =>
     createVoidIpcListener("check-for-updates-menu", listener),
-  folders: {
-    getFolders: (): Promise<RegisteredFolder[]> =>
-      ipcRenderer.invoke("get-folders"),
-    addFolder: (folderPath: string): Promise<RegisteredFolder> =>
-      ipcRenderer.invoke("add-folder", folderPath),
-    removeFolder: (folderId: string): Promise<void> =>
-      ipcRenderer.invoke("remove-folder", folderId),
-    updateFolderAccessed: (folderId: string): Promise<void> =>
-      ipcRenderer.invoke("update-folder-accessed", folderId),
-    clearAllData: (): Promise<void> => ipcRenderer.invoke("clear-all-data"),
-    cleanupOrphanedWorktrees: (
-      mainRepoPath: string,
-    ): Promise<{
-      deleted: string[];
-      errors: Array<{ path: string; error: string }>;
-    }> => ipcRenderer.invoke("cleanup-orphaned-worktrees", mainRepoPath),
-  },
   // Workspace API
   workspace: {
     create: (options: CreateWorkspaceOptions): Promise<WorkspaceInfo> =>

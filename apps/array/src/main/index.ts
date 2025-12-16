@@ -33,7 +33,6 @@ import { trpcRouter } from "./trpc/index.js";
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
 
-import { registerFoldersIpc } from "./services/folders.js";
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
 import { ExternalAppsService } from "./services/external-apps/service.js";
@@ -295,5 +294,4 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
-registerFoldersIpc(() => mainWindow);
 registerWorkspaceIpc(() => mainWindow);
