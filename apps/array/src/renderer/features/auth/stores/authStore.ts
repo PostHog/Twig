@@ -3,6 +3,7 @@ import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
@@ -65,7 +66,7 @@ export const useAuthStore = create<AuthState>()(
         projectId: null,
 
         loginWithOAuth: async (region: CloudRegion) => {
-          const result = await window.electronAPI.oauthStartFlow(region);
+          const result = await trpcVanilla.oauth.startFlow.mutate({ region });
 
           if (!result.success || !result.data) {
             throw new Error(result.error || "OAuth flow failed");
@@ -144,10 +145,10 @@ export const useAuthStore = create<AuthState>()(
             throw new Error("No refresh token available");
           }
 
-          const result = await window.electronAPI.oauthRefreshToken(
-            state.oauthRefreshToken,
-            state.cloudRegion,
-          );
+          const result = await trpcVanilla.oauth.refreshToken.mutate({
+            refreshToken: state.oauthRefreshToken,
+            region: state.cloudRegion,
+          });
 
           if (!result.success || !result.data) {
             // Refresh failed - logout user

@@ -1,18 +1,26 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import type { Socket } from "node:net";
-import { ipcMain, shell } from "electron";
+import { shell } from "electron";
+import { injectable } from "inversify";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
   OAUTH_PORT,
   OAUTH_SCOPES,
-} from "../../constants/oauth";
+} from "../../../constants/oauth.js";
 import type {
+  CancelFlowOutput,
   CloudRegion,
-  OAuthConfig,
   OAuthTokenResponse,
-} from "../../shared/types/oauth";
+  RefreshTokenOutput,
+  StartFlowOutput,
+} from "./schemas.js";
+
+interface OAuthConfig {
+  scopes: string[];
+  cloudRegion: CloudRegion;
+}
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString("base64url");
@@ -155,7 +163,6 @@ async function startCallbackServer(authUrl: string): Promise<{
       }
     });
 
-    // Track connections
     server.on("connection", (conn) => {
       connections.add(conn);
       conn.on("close", () => {
@@ -164,7 +171,6 @@ async function startCallbackServer(authUrl: string): Promise<{
     });
 
     const closeServer = () => {
-      // Destroy all active connections
       for (const conn of connections) {
         conn.destroy();
       }
@@ -233,68 +239,15 @@ async function refreshTokenRequest(
   return response.json();
 }
 
-let activeCloseServer: (() => void) | null = null;
+@injectable()
+export class OAuthService {
+  private activeCloseServer: (() => void) | null = null;
 
-export async function performOAuthFlow(
-  config: OAuthConfig,
-): Promise<OAuthTokenResponse> {
-  const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
-
-  const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
-  authUrl.searchParams.set(
-    "client_id",
-    getOauthClientIdFromRegion(config.cloudRegion),
-  );
-  authUrl.searchParams.set(
-    "redirect_uri",
-    `http://localhost:${OAUTH_PORT}/callback`,
-  );
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("code_challenge", codeChallenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set("scope", config.scopes.join(" "));
-  authUrl.searchParams.set("required_access_level", "project");
-
-  const localLoginUrl = `http://localhost:${OAUTH_PORT}/authorize`;
-
-  const { closeServer, waitForCallback } = await startCallbackServer(
-    authUrl.toString(),
-  );
-
-  activeCloseServer = closeServer;
-
-  await shell.openExternal(localLoginUrl);
-
-  try {
-    const code = await Promise.race([
-      waitForCallback(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Authorization timed out")), 180_000),
-      ),
-    ]);
-
-    const token = await exchangeCodeForToken(code, codeVerifier, config);
-
-    closeServer();
-    activeCloseServer = null;
-
-    return token;
-  } catch (error) {
-    closeServer();
-    activeCloseServer = null;
-    throw error;
-  }
-}
-
-export function registerOAuthHandlers(): void {
-  ipcMain.handle("oauth:start-flow", async (_, region: CloudRegion) => {
+  async startFlow(region: CloudRegion): Promise<StartFlowOutput> {
     try {
-      // Close any existing server before starting a new flow
-      if (activeCloseServer) {
-        activeCloseServer();
-        activeCloseServer = null;
+      if (this.activeCloseServer) {
+        this.activeCloseServer();
+        this.activeCloseServer = null;
       }
 
       const config: OAuthConfig = {
@@ -302,7 +255,7 @@ export function registerOAuthHandlers(): void {
         cloudRegion: region,
       };
 
-      const tokenResponse = await performOAuthFlow(config);
+      const tokenResponse = await this.performOAuthFlow(config);
 
       return {
         success: true,
@@ -314,31 +267,31 @@ export function registerOAuthHandlers(): void {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
-  });
+  }
 
-  ipcMain.handle(
-    "oauth:refresh-token",
-    async (_, refreshToken: string, region: CloudRegion) => {
-      try {
-        const tokenResponse = await refreshTokenRequest(refreshToken, region);
-        return {
-          success: true,
-          data: tokenResponse,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("oauth:cancel-flow", async () => {
+  async refreshToken(
+    refreshToken: string,
+    region: CloudRegion,
+  ): Promise<RefreshTokenOutput> {
     try {
-      if (activeCloseServer) {
-        activeCloseServer();
-        activeCloseServer = null;
+      const tokenResponse = await refreshTokenRequest(refreshToken, region);
+      return {
+        success: true,
+        data: tokenResponse,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  cancelFlow(): CancelFlowOutput {
+    try {
+      if (this.activeCloseServer) {
+        this.activeCloseServer();
+        this.activeCloseServer = null;
       }
       return { success: true };
     } catch (error) {
@@ -347,5 +300,61 @@ export function registerOAuthHandlers(): void {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
-  });
+  }
+
+  private async performOAuthFlow(
+    config: OAuthConfig,
+  ): Promise<OAuthTokenResponse> {
+    const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+
+    const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
+    authUrl.searchParams.set(
+      "client_id",
+      getOauthClientIdFromRegion(config.cloudRegion),
+    );
+    authUrl.searchParams.set(
+      "redirect_uri",
+      `http://localhost:${OAUTH_PORT}/callback`,
+    );
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("code_challenge", codeChallenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    authUrl.searchParams.set("scope", config.scopes.join(" "));
+    authUrl.searchParams.set("required_access_level", "project");
+
+    const localLoginUrl = `http://localhost:${OAUTH_PORT}/authorize`;
+
+    const { closeServer, waitForCallback } = await startCallbackServer(
+      authUrl.toString(),
+    );
+
+    this.activeCloseServer = closeServer;
+
+    await shell.openExternal(localLoginUrl);
+
+    try {
+      const code = await Promise.race([
+        waitForCallback(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Authorization timed out")),
+            180_000,
+          ),
+        ),
+      ]);
+
+      const token = await exchangeCodeForToken(code, codeVerifier, config);
+
+      closeServer();
+      this.activeCloseServer = null;
+
+      return token;
+    } catch (error) {
+      closeServer();
+      this.activeCloseServer = null;
+      throw error;
+    }
+  }
 }

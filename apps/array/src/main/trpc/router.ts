@@ -7,6 +7,7 @@ import { foldersRouter } from "./routers/folders.js";
 import { fsRouter } from "./routers/fs.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
+import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
@@ -22,6 +23,7 @@ export const trpcRouter = router({
   fs: fsRouter,
   git: gitRouter,
   logs: logsRouter,
+  oauth: oauthRouter,
   os: osRouter,
   secureStore: secureStoreRouter,
   shell: shellRouter,

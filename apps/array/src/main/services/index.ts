@@ -4,7 +4,6 @@
  */
 
 import "./git.js";
-import "./oauth.js";
 import "./posthog-analytics.js";
 import "./session-manager.js";
 import "./settingsStore.js";
