@@ -36,7 +36,6 @@ type TaskController = unknown;
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
 import { ExternalAppsService } from "./services/external-apps/service.js";
-import { registerOAuthHandlers } from "./services/oauth.js";
 import {
   initializePostHog,
   shutdownPostHog,
@@ -291,7 +290,6 @@ registerAutoUpdater(() => mainWindow);
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
-registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
 registerWorkspaceIpc(() => mainWindow);

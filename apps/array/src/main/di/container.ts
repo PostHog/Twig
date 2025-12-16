@@ -7,6 +7,7 @@ import { FileWatcherService } from "../services/file-watcher/service.js";
 import { FoldersService } from "../services/folders/service.js";
 import { FsService } from "../services/fs/service.js";
 import { GitService } from "../services/git/service.js";
+import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
 
@@ -21,4 +22,5 @@ container.bind(MAIN_TOKENS.FileWatcherService).to(FileWatcherService);
 container.bind(MAIN_TOKENS.FoldersService).to(FoldersService);
 container.bind(MAIN_TOKENS.FsService).to(FsService);
 container.bind(MAIN_TOKENS.GitService).to(GitService);
+container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
