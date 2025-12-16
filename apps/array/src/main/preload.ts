@@ -82,12 +82,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       message: string;
     }) => void,
   ): (() => void) => createIpcListener(`clone-progress:${cloneId}`, listener),
-  listRepoFiles: (
-    repoPath: string,
-    query?: string,
-    limit?: number,
-  ): Promise<Array<{ path: string; name: string }>> =>
-    ipcRenderer.invoke("list-repo-files", repoPath, query, limit),
   // Agent API
   agentStart: async (
     params: AgentStartParams,
@@ -124,15 +118,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     channel: string,
     listener: (payload: unknown) => void,
   ): (() => void) => createIpcListener(channel, listener),
-  // Plan mode operations
-  readRepoFile: (repoPath: string, filePath: string): Promise<string | null> =>
-    ipcRenderer.invoke("read-repo-file", repoPath, filePath),
-  writeRepoFile: (
-    repoPath: string,
-    filePath: string,
-    content: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("write-repo-file", repoPath, filePath, content),
+  // Git operations
   getChangedFilesHead: (
     repoPath: string,
   ): Promise<Array<{ path: string; status: string; originalPath?: string }>> =>

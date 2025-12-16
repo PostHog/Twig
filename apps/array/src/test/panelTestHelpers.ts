@@ -42,16 +42,12 @@ function createAutoMock(): unknown {
 export function mockElectronAPI(
   overrides: Partial<typeof window.electronAPI> = {},
 ) {
-  const mockFiles = [
-    { path: "/test/repo/App.tsx", name: "App.tsx", type: "file" as const },
-    { path: "/test/repo/helper.ts", name: "helper.ts", type: "file" as const },
-    { path: "/test/repo/README.md", name: "README.md", type: "file" as const },
-  ];
-
   const defaults = {
-    listRepoFiles: vi.fn().mockResolvedValue(mockFiles),
-    listDirectory: vi.fn().mockResolvedValue(mockFiles),
-    readRepoFile: vi.fn().mockResolvedValue("// file content"),
+    listDirectory: vi
+      .fn()
+      .mockResolvedValue([
+        { path: "/test/repo/App.tsx", name: "App.tsx", type: "file" as const },
+      ]),
     getChangedFilesHead: vi.fn().mockResolvedValue([]),
     getDiffStats: vi.fn().mockResolvedValue({ additions: 0, deletions: 0 }),
     showFileContextMenu: vi.fn().mockResolvedValue({ action: null }),

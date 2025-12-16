@@ -4,6 +4,7 @@ import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEdi
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -45,7 +46,10 @@ export function DiffEditorPanel({
   const { data: modifiedContent, isLoading: loadingModified } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
     queryFn: () =>
-      window.electronAPI.readRepoFile(repoPath as string, filePath),
+      trpcVanilla.fs.readRepoFile.query({
+        repoPath: repoPath as string,
+        filePath,
+      }),
     enabled: !!repoPath && !isDeleted,
     staleTime: Infinity,
   });
@@ -63,7 +67,11 @@ export function DiffEditorPanel({
       if (!repoPath) return;
 
       try {
-        await window.electronAPI.writeRepoFile(repoPath, filePath, newContent);
+        await trpcVanilla.fs.writeRepoFile.mutate({
+          repoPath,
+          filePath,
+          content: newContent,
+        });
 
         queryClient.invalidateQueries({
           queryKey: ["repo-file", repoPath, filePath],

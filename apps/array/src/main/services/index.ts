@@ -5,7 +5,6 @@
 
 import "./fileWatcher.js";
 import "./folders.js";
-import "./fs.js";
 import "./git.js";
 import "./oauth.js";
 import "./posthog-analytics.js";

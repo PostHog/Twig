@@ -35,7 +35,6 @@ type TaskController = unknown;
 
 import { registerFileWatcherIpc } from "./services/fileWatcher.js";
 import { registerFoldersIpc } from "./services/folders.js";
-import { registerFsIpc } from "./services/fs.js";
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
 import { ExternalAppsService } from "./services/external-apps/service.js";
@@ -299,7 +298,6 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 registerOAuthHandlers();
 registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);
-registerFsIpc();
 registerFileWatcherIpc(() => mainWindow);
 registerFoldersIpc(() => mainWindow);
 registerWorktreeIpc();
