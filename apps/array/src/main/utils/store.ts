@@ -1,11 +1,13 @@
 import path from "node:path";
+import { WorktreeManager } from "@posthog/agent";
 import { app } from "electron";
 import Store from "electron-store";
 import type {
   RegisteredFolder,
   TaskFolderAssociation,
 } from "../../shared/types";
-import { deleteWorktreeIfExists } from "../services/worktreeUtils";
+import { logger } from "../lib/logger";
+import { getWorktreeLocation } from "../services/settingsStore";
 
 interface FoldersSchema {
   folders: RegisteredFolder[];
@@ -80,15 +82,25 @@ export const foldersStore = new Store<FoldersSchema>({
   },
 });
 
+const log = logger.scope("store");
+
 export async function clearAllStoreData(): Promise<void> {
-  // Delete all worktrees before clearing store
   const associations = foldersStore.get("taskAssociations", []);
   for (const assoc of associations) {
     if (assoc.worktree) {
-      await deleteWorktreeIfExists(
-        assoc.folderPath,
-        assoc.worktree.worktreePath,
-      );
+      try {
+        const worktreeBasePath = getWorktreeLocation();
+        const manager = new WorktreeManager({
+          mainRepoPath: assoc.folderPath,
+          worktreeBasePath,
+        });
+        await manager.deleteWorktree(assoc.worktree.worktreePath);
+      } catch (error) {
+        log.error(
+          `Failed to delete worktree ${assoc.worktree.worktreePath}:`,
+          error,
+        );
+      }
     }
   }
 

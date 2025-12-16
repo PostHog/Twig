@@ -10,7 +10,6 @@ import { logger } from "../lib/logger";
 import { clearAllStoreData, foldersStore } from "../utils/store";
 import { isGitRepository } from "./git";
 import { getWorktreeLocation } from "./settingsStore";
-import { deleteWorktreeIfExists } from "./worktreeUtils";
 
 const execAsync = promisify(exec);
 
@@ -63,10 +62,19 @@ async function removeFolder(folderId: string): Promise<void> {
   );
   for (const assoc of associationsToRemove) {
     if (assoc.worktree) {
-      await deleteWorktreeIfExists(
-        assoc.folderPath,
-        assoc.worktree.worktreePath,
-      );
+      try {
+        const worktreeBasePath = getWorktreeLocation();
+        const manager = new WorktreeManager({
+          mainRepoPath: assoc.folderPath,
+          worktreeBasePath,
+        });
+        await manager.deleteWorktree(assoc.worktree.worktreePath);
+      } catch (error) {
+        log.error(
+          `Failed to delete worktree ${assoc.worktree.worktreePath}:`,
+          error,
+        );
+      }
     }
   }
 

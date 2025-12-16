@@ -8,7 +8,6 @@ import type {
   Workspace,
   WorkspaceInfo,
   WorkspaceTerminalInfo,
-  WorktreeInfo,
 } from "../shared/types";
 import type { CloudRegion, OAuthTokenResponse } from "../shared/types/oauth";
 import "electron-log/preload";
@@ -236,29 +235,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       deleted: string[];
       errors: Array<{ path: string; error: string }>;
     }> => ipcRenderer.invoke("cleanup-orphaned-worktrees", mainRepoPath),
-  },
-  // Worktree API
-  worktree: {
-    create: (mainRepoPath: string): Promise<WorktreeInfo> =>
-      ipcRenderer.invoke("worktree-create", mainRepoPath),
-    delete: (mainRepoPath: string, worktreePath: string): Promise<void> =>
-      ipcRenderer.invoke("worktree-delete", mainRepoPath, worktreePath),
-    getInfo: (
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<WorktreeInfo | null> =>
-      ipcRenderer.invoke("worktree-get-info", mainRepoPath, worktreePath),
-    exists: (mainRepoPath: string, name: string): Promise<boolean> =>
-      ipcRenderer.invoke("worktree-exists", mainRepoPath, name),
-    list: (mainRepoPath: string): Promise<WorktreeInfo[]> =>
-      ipcRenderer.invoke("worktree-list", mainRepoPath),
-    isWorktree: (mainRepoPath: string, repoPath: string): Promise<boolean> =>
-      ipcRenderer.invoke("worktree-is-worktree", mainRepoPath, repoPath),
-    getMainRepoPath: (
-      mainRepoPath: string,
-      worktreePath: string,
-    ): Promise<string | null> =>
-      ipcRenderer.invoke("worktree-get-main-repo", mainRepoPath, worktreePath),
   },
   // Workspace API
   workspace: {

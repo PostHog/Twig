@@ -19,7 +19,6 @@ import { logger } from "../../lib/logger";
 import { foldersStore } from "../../utils/store";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import { getWorktreeLocation } from "../settingsStore";
-import { deleteWorktreeIfExists } from "../worktreeUtils";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
@@ -688,7 +687,9 @@ export class WorkspaceService {
     }
 
     try {
-      await deleteWorktreeIfExists(mainRepoPath, worktreePath);
+      const worktreeBasePath = getWorktreeLocation();
+      const manager = new WorktreeManager({ mainRepoPath, worktreeBasePath });
+      await manager.deleteWorktree(worktreePath);
     } catch (error) {
       log.error(`Failed to delete worktree for task ${taskId}:`, error);
     }

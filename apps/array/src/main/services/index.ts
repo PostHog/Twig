@@ -12,5 +12,3 @@ import "./settingsStore.js";
 import "./shell.js";
 import "./transcription-prompts.js";
 import "./updates.js";
-import "./worktree.js";
-import "./worktreeUtils.js";
