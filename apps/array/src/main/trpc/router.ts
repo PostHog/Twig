@@ -1,5 +1,6 @@
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { dockBadgeRouter } from "./routers/dock-badge.js";
+import { deepLinkRouter } from "./routers/deep-link.js";
 import { encryptionRouter } from "./routers/encryption.js";
 import { externalAppsRouter } from "./routers/external-apps.js";
 import { fileWatcherRouter } from "./routers/file-watcher.js";
@@ -29,6 +30,7 @@ export const trpcRouter = router({
   secureStore: secureStoreRouter,
   shell: shellRouter,
   updates: updatesRouter,
+  deepLink: deepLinkRouter,
 });
 
 export type TrpcRouter = typeof trpcRouter;

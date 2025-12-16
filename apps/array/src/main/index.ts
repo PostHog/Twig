@@ -45,6 +45,8 @@ import {
 } from "./services/posthog-analytics.js";
 import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
+import { registerWorktreeIpc } from "./services/worktree.js";
+import { TaskLinkService } from "./services/task-link/service";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -322,6 +324,11 @@ app.whenReady().then(() => {
   // Initialize services that need early startup
   container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
+  const taskLinkService = container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
+  deepLinkService.registerHandler(
+    "task",
+    taskLinkService.getDeepLinkHandler(),
+  );
 
   // Initialize PostHog analytics
   initializePostHog();

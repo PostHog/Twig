@@ -12,6 +12,7 @@ import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
 import { UpdatesService } from "../services/updates/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
+import { TaskLinkService } from "../services/task-link/service.js";
 
 export const container = new Container({
   defaultScope: "Singleton",
@@ -28,3 +29,7 @@ container.bind(MAIN_TOKENS.GitService).to(GitService);
 container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
+container.bind(MAIN_TOKENS.GitService).to(GitService);
+container.bind(MAIN_TOKENS.DeepLinkService).to(DeepLinkService);
+container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
+container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);

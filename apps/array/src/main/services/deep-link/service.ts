@@ -6,17 +6,16 @@ const log = logger.scope("deep-link-service");
 
 const PROTOCOL = "array";
 
-export type DeepLinkHandler = (url: URL) => boolean;
+export type DeepLinkHandler = (
+  path: string,
+  searchParams: URLSearchParams,
+) => boolean;
 
 @injectable()
 export class DeepLinkService {
   private protocolRegistered = false;
   private handlers = new Map<string, DeepLinkHandler>();
 
-  /**
-   * Register the app as the default handler for the 'array' protocol.
-   * Should be called once during app initialization (in whenReady).
-   */
   public registerProtocol(): void {
     if (this.protocolRegistered) {
       return;
@@ -39,30 +38,22 @@ export class DeepLinkService {
     log.info(`Registered '${PROTOCOL}' protocol handler`);
   }
 
-  /**
-   * Register a handler for a specific deep link path.
-   * @param path The path to handle (e.g., "callback", "task", "settings")
-   * @param handler Function that receives the parsed URL and returns true if handled
-   */
-  public registerHandler(path: string, handler: DeepLinkHandler): void {
-    if (this.handlers.has(path)) {
-      log.warn(`Overwriting existing handler for path: ${path}`);
+  public registerHandler(key: string, handler: DeepLinkHandler): void {
+    if (this.handlers.has(key)) {
+      log.warn(`Overwriting existing handler for key: ${key}`);
     }
-    this.handlers.set(path, handler);
-    log.info(`Registered deep link handler for path: ${path}`);
+    this.handlers.set(key, handler);
+    log.info(`Registered deep link handler for key: ${key}`);
+  }
+
+  public unregisterHandler(key: string): void {
+    this.handlers.delete(key);
   }
 
   /**
-   * Unregister a handler for a specific path.
-   */
-  public unregisterHandler(path: string): void {
-    this.handlers.delete(path);
-  }
-
-  /**
-   * Handle an incoming deep link URL.
-   * Routes to the appropriate registered handler based on the URL path.
-   * @returns true if the URL was handled, false otherwise
+   * Handle an incoming deep link URL
+   * 
+   * NOTE: Strips the protocol and main key, passing only dynamic segments to handlers.
    */
   public handleUrl(url: string): boolean {
     log.info("Received deep link:", url);
@@ -75,36 +66,31 @@ export class DeepLinkService {
     try {
       const parsedUrl = new URL(url);
 
-      // The "path" can be the hostname (array://callback) or pathname (array://foo/callback)
-      // For simple paths like array://callback, hostname is "callback" and pathname is "/"
-      // For paths like array://oauth/callback, hostname is "oauth" and pathname is "/callback"
-      const path = parsedUrl.hostname || parsedUrl.pathname.slice(1);
+      // The hostname is the main key (e.g., "task" in array://task/...)
+      const mainKey = parsedUrl.hostname;
 
-      const handler = this.handlers.get(path);
-      if (handler) {
-        return handler(parsedUrl);
+      if (!mainKey) {
+        log.warn("Deep link has no main key:", url);
+        return false;
       }
 
-      // Try matching with pathname for nested paths like array://oauth/callback
-      if (parsedUrl.pathname !== "/") {
-        const fullPath = `${parsedUrl.hostname}${parsedUrl.pathname}`;
-        const nestedHandler = this.handlers.get(fullPath);
-        if (nestedHandler) {
-          return nestedHandler(parsedUrl);
-        }
+      const handler = this.handlers.get(mainKey);
+      if (!handler) {
+        log.warn("No handler registered for deep link key:", mainKey);
+        return false;
       }
 
-      log.warn("No handler registered for deep link path:", path);
-      return false;
+      // Extract path segments after the main key (strip leading slash)
+      const pathSegments = parsedUrl.pathname.slice(1);
+
+      log.info(`Routing deep link to '${mainKey}' handler with path: ${pathSegments || "(empty)"}`);
+      return handler(pathSegments, parsedUrl.searchParams);
     } catch (error) {
       log.error("Failed to parse deep link URL:", error);
       return false;
     }
   }
 
-  /**
-   * Get the protocol name.
-   */
   public getProtocol(): string {
     return PROTOCOL;
   }
