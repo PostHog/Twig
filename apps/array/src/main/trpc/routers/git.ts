@@ -13,6 +13,8 @@ import {
   getAllBranchesOutput,
   getChangedFilesHeadInput,
   getChangedFilesHeadOutput,
+  getCommitConventionsInput,
+  getCommitConventionsOutput,
   getCurrentBranchInput,
   getCurrentBranchOutput,
   getDefaultBranchInput,
@@ -27,6 +29,16 @@ import {
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
+  getPrTemplateInput,
+  getPrTemplateOutput,
+  publishInput,
+  publishOutput,
+  pullInput,
+  pullOutput,
+  pushInput,
+  pushOutput,
+  syncInput,
+  syncOutput,
   validateRepoInput,
   validateRepoOutput,
 } from "../../services/git/schemas.js";
@@ -140,4 +152,49 @@ export const gitRouter = router({
     .input(getGitRepoInfoInput)
     .output(getGitRepoInfoOutput)
     .query(({ input }) => getService().getGitRepoInfo(input.directoryPath)),
+
+  push: publicProcedure
+    .input(pushInput)
+    .output(pushOutput)
+    .mutation(({ input }) =>
+      getService().push(
+        input.directoryPath,
+        input.remote,
+        input.branch,
+        input.setUpstream,
+      ),
+    ),
+
+  pull: publicProcedure
+    .input(pullInput)
+    .output(pullOutput)
+    .mutation(({ input }) =>
+      getService().pull(input.directoryPath, input.remote, input.branch),
+    ),
+
+  publish: publicProcedure
+    .input(publishInput)
+    .output(publishOutput)
+    .mutation(({ input }) =>
+      getService().publish(input.directoryPath, input.remote),
+    ),
+
+  sync: publicProcedure
+    .input(syncInput)
+    .output(syncOutput)
+    .mutation(({ input }) =>
+      getService().sync(input.directoryPath, input.remote),
+    ),
+
+  getPrTemplate: publicProcedure
+    .input(getPrTemplateInput)
+    .output(getPrTemplateOutput)
+    .query(({ input }) => getService().getPrTemplate(input.directoryPath)),
+
+  getCommitConventions: publicProcedure
+    .input(getCommitConventionsInput)
+    .output(getCommitConventionsOutput)
+    .query(({ input }) =>
+      getService().getCommitConventions(input.directoryPath, input.sampleSize),
+    ),
 });

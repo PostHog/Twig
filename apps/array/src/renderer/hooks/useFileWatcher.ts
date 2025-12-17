@@ -66,6 +66,9 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
       queryClient.invalidateQueries({
         queryKey: ["diff-stats", repoPath],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["git-sync-status", repoPath],
+      });
     },
   });
 }

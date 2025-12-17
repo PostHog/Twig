@@ -9,10 +9,16 @@ import type {
   CloneProgressPayload,
   DetectRepoResult,
   DiffStats,
+  GetCommitConventionsOutput,
+  GetPrTemplateOutput,
   GitCommitInfo,
   GitFileStatus,
   GitRepoInfo,
   GitSyncStatus,
+  PublishOutput,
+  PullOutput,
+  PushOutput,
+  SyncOutput,
 } from "./schemas.js";
 import { parseGitHubUrl } from "./utils.js";
 
@@ -557,6 +563,180 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       };
     } catch {
       return null;
+    }
+  }
+
+  public async push(
+    directoryPath: string,
+    remote = "origin",
+    branch?: string,
+    setUpstream = false,
+  ): Promise<PushOutput> {
+    try {
+      const targetBranch =
+        branch || (await this.getCurrentBranch(directoryPath));
+      if (!targetBranch) {
+        return { success: false, message: "No branch to push" };
+      }
+
+      const args = ["push"];
+      if (setUpstream) {
+        args.push("-u");
+      }
+      args.push(remote, targetBranch);
+
+      const { stdout, stderr } = await execFileAsync("git", args, {
+        cwd: directoryPath,
+      });
+
+      return {
+        success: true,
+        message: stdout || stderr || "Push successful",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, message };
+    }
+  }
+
+  public async pull(
+    directoryPath: string,
+    remote = "origin",
+    branch?: string,
+  ): Promise<PullOutput> {
+    try {
+      const targetBranch =
+        branch || (await this.getCurrentBranch(directoryPath));
+      const args = ["pull", remote];
+      if (targetBranch) {
+        args.push(targetBranch);
+      }
+
+      const { stdout, stderr } = await execFileAsync("git", args, {
+        cwd: directoryPath,
+      });
+
+      // Parse number of files changed from output
+      const output = stdout || stderr || "";
+      const filesMatch = output.match(/(\d+) files? changed/);
+      const updatedFiles = filesMatch ? parseInt(filesMatch[1], 10) : undefined;
+
+      return {
+        success: true,
+        message: output || "Pull successful",
+        updatedFiles,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, message };
+    }
+  }
+
+  public async publish(
+    directoryPath: string,
+    remote = "origin",
+  ): Promise<PublishOutput> {
+    const currentBranch = await this.getCurrentBranch(directoryPath);
+    if (!currentBranch) {
+      return { success: false, message: "No branch to publish", branch: "" };
+    }
+
+    const result = await this.push(directoryPath, remote, currentBranch, true);
+    return { ...result, branch: currentBranch };
+  }
+
+  public async sync(
+    directoryPath: string,
+    remote = "origin",
+  ): Promise<SyncOutput> {
+    const pullResult = await this.pull(directoryPath, remote);
+    if (!pullResult.success) {
+      return {
+        success: false,
+        pullMessage: pullResult.message,
+        pushMessage: "Skipped due to pull failure",
+      };
+    }
+
+    const pushResult = await this.push(directoryPath, remote);
+    return {
+      success: pushResult.success,
+      pullMessage: pullResult.message,
+      pushMessage: pushResult.message,
+    };
+  }
+
+  public async getPrTemplate(
+    directoryPath: string,
+  ): Promise<GetPrTemplateOutput> {
+    const templatePaths = [
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/pull_request_template.md",
+      "PULL_REQUEST_TEMPLATE.md",
+      "pull_request_template.md",
+      "docs/PULL_REQUEST_TEMPLATE.md",
+    ];
+
+    for (const relativePath of templatePaths) {
+      const fullPath = path.join(directoryPath, relativePath);
+      try {
+        const content = await fsPromises.readFile(fullPath, "utf-8");
+        return { template: content, templatePath: relativePath };
+      } catch {
+        // Template not found at this path, continue
+      }
+    }
+
+    return { template: null, templatePath: null };
+  }
+
+  public async getCommitConventions(
+    directoryPath: string,
+    sampleSize = 20,
+  ): Promise<GetCommitConventionsOutput> {
+    try {
+      const { stdout } = await execAsync(
+        `git log --oneline -n ${sampleSize} --format="%s"`,
+        { cwd: directoryPath },
+      );
+
+      const messages = stdout.trim().split("\n").filter(Boolean);
+
+      // Check for conventional commit pattern: type(scope): message or type: message
+      const conventionalPattern =
+        /^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\(.+\))?:/;
+      const conventionalCount = messages.filter((m) =>
+        conventionalPattern.test(m),
+      ).length;
+      const conventionalCommits = conventionalCount > messages.length * 0.5;
+
+      // Extract common prefixes
+      const prefixes = messages
+        .map((m) => m.match(/^([a-z]+)(\(.+\))?:/)?.[1])
+        .filter((p): p is string => Boolean(p));
+      const prefixCounts = prefixes.reduce(
+        (acc, p) => {
+          acc[p] = (acc[p] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+      const commonPrefixes = Object.entries(prefixCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([prefix]) => prefix);
+
+      return {
+        conventionalCommits,
+        commonPrefixes,
+        sampleMessages: messages.slice(0, 5),
+      };
+    } catch {
+      return {
+        conventionalCommits: false,
+        commonPrefixes: [],
+        sampleMessages: [],
+      };
     }
   }
 

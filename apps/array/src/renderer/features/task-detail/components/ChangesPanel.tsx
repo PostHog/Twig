@@ -363,7 +363,6 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",
-    refetchInterval: 10000,
   });
 
   const getActiveIndex = useCallback((): number => {

@@ -7,6 +7,7 @@ import {
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
 import {
+  GIT_ACTION_EXECUTION_TYPE,
   GIT_ACTION_LABELS,
   GIT_ACTION_PROMPTS,
   type SmartGitAction,
@@ -27,6 +28,8 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 interface GitActionsBarProps {
@@ -54,6 +57,46 @@ function getActionIcon(action: SmartGitAction) {
   }
 }
 
+// Execute simple git operations directly via tRPC (no agent needed)
+async function executeTrpcGitAction(
+  actionType: GitActionType,
+  repoPath: string,
+): Promise<{ success: boolean; message: string }> {
+  switch (actionType) {
+    case "push": {
+      const result = await trpcVanilla.git.push.mutate({
+        directoryPath: repoPath,
+      });
+      return result;
+    }
+    case "pull": {
+      const result = await trpcVanilla.git.pull.mutate({
+        directoryPath: repoPath,
+      });
+      return { success: result.success, message: result.message };
+    }
+    case "publish": {
+      const result = await trpcVanilla.git.publish.mutate({
+        directoryPath: repoPath,
+      });
+      return { success: result.success, message: result.message };
+    }
+    case "sync": {
+      const result = await trpcVanilla.git.sync.mutate({
+        directoryPath: repoPath,
+      });
+      return {
+        success: result.success,
+        message: result.success
+          ? "Synced successfully"
+          : `Pull: ${result.pullMessage}, Push: ${result.pushMessage}`,
+      };
+    }
+    default:
+      throw new Error(`Unknown tRPC git action: ${actionType}`);
+  }
+}
+
 export function GitActionsBar({
   taskId,
   repoPath,
@@ -62,6 +105,7 @@ export function GitActionsBar({
   const [isSending, setIsSending] = useState(false);
   const { sendPrompt } = useSessionActions();
   const session = useSessionForTask(taskId);
+  const queryClient = useQueryClient();
 
   const isCloud = session?.isCloud ?? false;
 
@@ -75,18 +119,33 @@ export function GitActionsBar({
 
   const handleAction = useCallback(
     async (actionType: GitActionType, prompt: string) => {
-      if (!session || isSending) return;
+      if (isSending) return;
+
+      const executionType = GIT_ACTION_EXECUTION_TYPE[actionType];
 
       setIsSending(true);
       try {
-        const message = createGitActionMessage(actionType, prompt);
-        await sendPrompt(taskId, message);
+        if (executionType === "trpc") {
+          const result = await executeTrpcGitAction(actionType, repoPath);
+          if (!result.success) {
+          }
+          await queryClient.invalidateQueries({
+            queryKey: ["git-sync-status", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["changed-files-head", repoPath],
+          });
+        } else {
+          if (!session) return;
+          const message = createGitActionMessage(actionType, prompt);
+          await sendPrompt(taskId, message);
+        }
       } catch (_error) {
       } finally {
         setIsSending(false);
       }
     },
-    [taskId, session, sendPrompt, isSending],
+    [taskId, session, sendPrompt, isSending, repoPath, queryClient],
   );
 
   const handlePrimaryAction = useCallback(() => {
