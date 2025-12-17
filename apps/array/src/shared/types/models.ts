@@ -1,4 +1,4 @@
-export type ModelProvider = "anthropic" | "openai";
+export type ModelProvider = "anthropic" | "openai" | "gemini";
 
 export type ModelProviderConfig = {
   name: string;
@@ -17,6 +17,9 @@ export const MODEL_PROVIDERS: Record<ModelProvider, ModelProviderConfig> = {
   },
   openai: {
     name: "OpenAI",
+  },
+  gemini: {
+    name: "Google",
   },
 };
 
@@ -46,6 +49,18 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     provider: "openai",
     enabled: true,
   },
+  {
+    id: "gemini/gemini-3-pro-preview",
+    name: "Gemini 3.0 Pro",
+    provider: "gemini",
+    enabled: true,
+  },
+  {
+    id: "gemini/gemini-3-flash-preview",
+    name: "Gemini 3.0 Flash",
+    provider: "gemini",
+    enabled: true,
+  },
 ];
 
 export const DEFAULT_MODEL = "claude-opus-4-5";
@@ -69,6 +84,12 @@ export function getModelsByProvider(): Record<
       ...MODEL_PROVIDERS.openai,
       models: AVAILABLE_MODELS.filter(
         (m) => m.provider === "openai" && m.enabled,
+      ),
+    },
+    gemini: {
+      ...MODEL_PROVIDERS.gemini,
+      models: AVAILABLE_MODELS.filter(
+        (m) => m.provider === "gemini" && m.enabled,
       ),
     },
   };
