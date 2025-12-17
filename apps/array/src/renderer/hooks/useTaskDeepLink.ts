@@ -32,16 +32,19 @@ export function useTaskDeepLink() {
   const hasFetchedPending = useRef(false);
 
   const handleOpenTask = useCallback(
-    async (taskId: string) => {
-      log.info(`Opening task from deep link: ${taskId}`);
+    async (taskId: string, taskRunId?: string) => {
+      log.info(
+        `Opening task from deep link: ${taskId}${taskRunId ? `, run: ${taskRunId}` : ""}`,
+      );
 
       try {
         const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
-        const result = await taskService.openTask(taskId);
+        const result = await taskService.openTask(taskId, taskRunId);
 
         if (!result.success) {
           log.error("Failed to open task from deep link", {
             taskId,
+            taskRunId,
             error: result.error,
             failedStep: result.failedStep,
           });
@@ -66,11 +69,12 @@ export function useTaskDeepLink() {
         // Invalidate to ensure sync with server
         queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
 
-        // Mark as viewed and navigate
         markAsViewed(taskId);
         navigateToTask(task);
 
-        log.info(`Successfully opened task from deep link: ${taskId}`);
+        log.info(
+          `Successfully opened task from deep link: ${taskId}${taskRunId ? `, run: ${taskRunId}` : ""}`,
+        );
       } catch (error) {
         log.error("Unexpected error opening task from deep link:", error);
         toast.error("Failed to open task");
@@ -86,11 +90,12 @@ export function useTaskDeepLink() {
     const fetchPending = async () => {
       hasFetchedPending.current = true;
       try {
-        const pendingTaskId =
-          await trpcVanilla.deepLink.getPendingTaskId.query();
-        if (pendingTaskId) {
-          log.info(`Found pending deep link task: ${pendingTaskId}`);
-          handleOpenTask(pendingTaskId);
+        const pending = await trpcVanilla.deepLink.getPendingDeepLink.query();
+        if (pending) {
+          log.info(
+            `Found pending deep link: taskId=${pending.taskId}, taskRunId=${pending.taskRunId ?? "none"}`,
+          );
+          handleOpenTask(pending.taskId, pending.taskRunId);
         }
       } catch (error) {
         log.error("Failed to check for pending deep link:", error);
@@ -103,9 +108,11 @@ export function useTaskDeepLink() {
   // Subscribe to deep link events (for warm start via deep link)
   trpcReact.deepLink.onOpenTask.useSubscription(undefined, {
     onData: (data) => {
-      log.info(`Received deep link event for task: ${data.taskId}`);
+      log.info(
+        `Received deep link event: taskId=${data.taskId}, taskRunId=${data.taskRunId ?? "none"}`,
+      );
       if (!data?.taskId) return;
-      handleOpenTask(data.taskId);
+      handleOpenTask(data.taskId, data.taskRunId);
     },
   });
 }

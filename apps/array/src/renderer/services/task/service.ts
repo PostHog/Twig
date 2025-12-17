@@ -67,12 +67,15 @@ export class TaskService {
   }
 
   /**
-   * Open an existing task by ID.
+   * Open an existing task by ID, optionally loading a specific run.
    * If the workspace already exists, just fetches task data.
    * Otherwise runs the full saga to set up the workspace.
    */
-  public async openTask(taskId: string): Promise<CreateTaskResult> {
-    log.info("Opening existing task", { taskId });
+  public async openTask(
+    taskId: string,
+    taskRunId?: string,
+  ): Promise<CreateTaskResult> {
+    log.info("Opening existing task", { taskId, taskRunId });
 
     const posthogClient = useAuthStore.getState().client;
     if (!posthogClient) {
@@ -89,6 +92,14 @@ export class TaskService {
       log.info("Workspace already exists, fetching task only", { taskId });
       try {
         const task = await posthogClient.getTask(taskId);
+
+        // If a specific run was requested, fetch and use it
+        if (taskRunId) {
+          log.info("Fetching specific task run", { taskId, taskRunId });
+          const run = await posthogClient.getTaskRun(taskId, taskRunId);
+          task.latest_run = run;
+        }
+
         return {
           success: true,
           data: {
@@ -112,6 +123,24 @@ export class TaskService {
 
     if (result.success) {
       this.updateStoresOnSuccess(result.data);
+
+      // If a specific run was requested, update the task with that run
+      if (taskRunId && result.data.task) {
+        try {
+          log.info("Fetching specific task run for new workspace", {
+            taskId,
+            taskRunId,
+          });
+          const run = await posthogClient.getTaskRun(taskId, taskRunId);
+          result.data.task.latest_run = run;
+        } catch (error) {
+          log.warn("Failed to fetch specific task run, using latest", {
+            taskId,
+            taskRunId,
+            error,
+          });
+        }
+      }
     }
 
     return result;
