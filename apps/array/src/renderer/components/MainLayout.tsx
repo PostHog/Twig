@@ -12,6 +12,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { Toaster } from "sonner";
+import { trpcReact } from "@/renderer/trpc";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
@@ -26,6 +27,58 @@ export function MainLayout() {
   const handleToggleCommandMenu = useCallback(() => {
     setCommandMenuOpen((prev) => !prev);
   }, []);
+
+  useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+t", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+p", () => setCommandMenuOpen((prev) => !prev), {
+    enabled: !commandMenuOpen,
+  });
+  useHotkeys("mod+n", () => handleFocusTaskMode());
+  useHotkeys("mod+,", () => handleOpenSettings());
+  useHotkeys("mod+[", () => goBack());
+  useHotkeys("mod+]", () => goForward());
+  useHotkeys("mod+b", () => toggleLeftSidebar());
+  useHotkeys("mod+shift+b", () => toggleRightSidebar());
+
+  // Subscribe to UI events from main process via tRPC
+  trpcReact.ui.onOpenSettings.useSubscription(undefined, {
+    onData: () => handleOpenSettings(),
+  });
+
+  trpcReact.ui.onNewTask.useSubscription(undefined, {
+    onData: () => handleFocusTaskMode(),
+  });
+
+  trpcReact.ui.onResetLayout.useSubscription(undefined, {
+    onData: () => handleResetLayout(),
+  });
+
+  trpcReact.ui.onClearStorage.useSubscription(undefined, {
+    onData: () => handleClearStorage(),
+  });
+
+  useEffect(() => {
+    const handleMouseButton = (event: MouseEvent) => {
+      if (event.button === 3) {
+        // Button 3 = back
+        event.preventDefault();
+        goBack();
+      } else if (event.button === 4) {
+        // Button 4 = forward
+        event.preventDefault();
+        goForward();
+      }
+    };
+
+    window.addEventListener("mouseup", handleMouseButton);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseButton);
+    };
+  }, [goBack, goForward]);
 
   return (
     <Flex direction="column" height="100vh">

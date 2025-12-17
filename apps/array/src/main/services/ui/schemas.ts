@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 // UI events emitted from main to renderer
 export const UIServiceEvent = {
   OpenSettings: "open-settings",
@@ -12,3 +14,6 @@ export interface UIServiceEvents {
   [UIServiceEvent.ResetLayout]: undefined;
   [UIServiceEvent.ClearStorage]: undefined;
 }
+
+// No input needed for subscriptions - they're global events
+export const uiEventSubscriptionInput = z.object({}).optional();
