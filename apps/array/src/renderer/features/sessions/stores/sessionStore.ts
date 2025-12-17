@@ -19,7 +19,7 @@ import {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { trpcReact, trpcVanilla } from "@/renderer/trpc";
+import { trpcVanilla } from "@/renderer/trpc";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -76,6 +76,41 @@ type SessionStore = SessionState & { actions: SessionActions };
 
 const connectAttempts = new Set<string>();
 const cloudPollers = new Map<string, NodeJS.Timeout>();
+// Track active tRPC subscriptions for cleanup
+const subscriptions = new Map<string, { unsubscribe: () => void }>();
+
+/**
+ * Subscribe to agent session events via tRPC subscription.
+ * Called synchronously after session is created, before any prompts are sent.
+ */
+function subscribeToChannel(taskRunId: string) {
+  if (subscriptions.has(taskRunId)) return;
+
+  const subscription = trpcVanilla.agent.onSessionEvent.subscribe(
+    { sessionId: taskRunId },
+    {
+      onData: (payload: unknown) => {
+        useStore.setState((state) => {
+          const session = state.sessions[taskRunId];
+          if (session) {
+            session.events.push(payload as AcpMessage);
+          }
+        });
+      },
+      onError: (err) => {
+        log.error("Session subscription error", { taskRunId, error: err });
+      },
+    },
+  );
+
+  subscriptions.set(taskRunId, subscription);
+}
+
+function unsubscribeFromChannel(taskRunId: string) {
+  const subscription = subscriptions.get(taskRunId);
+  subscription?.unsubscribe();
+  subscriptions.delete(taskRunId);
+}
 
 function getAuthCredentials(): AuthCredentials | null {
   const authState = useAuthStore.getState();
@@ -397,6 +432,7 @@ const useStore = create<SessionStore>()(
       session.logUrl = logUrl;
 
       addSession(session);
+      subscribeToChannel(taskRunId);
 
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
@@ -412,6 +448,7 @@ const useStore = create<SessionStore>()(
       if (result) {
         updateSession(taskRunId, { status: "connected" });
       } else {
+        unsubscribeFromChannel(taskRunId);
         removeSession(taskRunId);
       }
     };
@@ -450,6 +487,7 @@ const useStore = create<SessionStore>()(
       session.model = defaultModel;
 
       addSession(session);
+      subscribeToChannel(taskRun.id);
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -572,6 +610,7 @@ const useStore = create<SessionStore>()(
             } catch (error) {
               log.error("Failed to cancel session", error);
             }
+            unsubscribeFromChannel(session.taskRunId);
           }
 
           removeSession(session.taskRunId);
@@ -690,24 +729,3 @@ useAuthStore.subscribe(
     }
   },
 );
-
-/**
- * Hook to subscribe to agent session events via tRPC subscription.
- * This should be used in a component that renders when a session is active.
- */
-export function useAgentSessionSubscription(sessionId: string | undefined) {
-  trpcReact.agent.onSessionEvent.useSubscription(
-    { sessionId: sessionId ?? "" },
-    {
-      enabled: !!sessionId,
-      onData: (payload) => {
-        useStore.setState((state) => {
-          const session = state.sessions[sessionId!];
-          if (session) {
-            session.events.push(payload as AcpMessage);
-          }
-        });
-      },
-    },
-  );
-}
