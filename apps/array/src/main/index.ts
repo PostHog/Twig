@@ -33,7 +33,6 @@ import { trpcRouter } from "./trpc/index.js";
 // Legacy type kept for backwards compatibility with taskControllers map
 type TaskController = unknown;
 
-import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
 import type { DeepLinkService } from "./services/deep-link/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
@@ -372,5 +371,4 @@ app.on("activate", () => {
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 // Register IPC handlers via services
-registerGitIpc();
 registerAgentIpc(taskControllers, () => mainWindow);

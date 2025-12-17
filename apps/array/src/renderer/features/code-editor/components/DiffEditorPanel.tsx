@@ -32,7 +32,10 @@ export function DiffEditorPanel({
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getChangedFilesHead.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: !!repoPath,
     staleTime: Infinity,
   });
@@ -57,7 +60,10 @@ export function DiffEditorPanel({
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
     queryKey: ["file-at-head", repoPath, originalPath],
     queryFn: () =>
-      window.electronAPI.getFileAtHead(repoPath as string, originalPath),
+      trpcVanilla.git.getFileAtHead.query({
+        directoryPath: repoPath as string,
+        filePath: originalPath,
+      }),
     enabled: !!repoPath && !isNew,
     staleTime: Infinity,
   });

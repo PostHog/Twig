@@ -2,6 +2,7 @@ import { GitBranchIcon, PlusIcon } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text, TextField } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
+import { trpcVanilla } from "@renderer/trpc";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RunMode } from "./RunModeSelect";
 
@@ -48,9 +49,15 @@ export function BranchSelect({
       try {
         const [allBranches, detectedDefault, detectedCurrent] =
           await Promise.all([
-            window.electronAPI.getAllBranches(directoryPath),
-            window.electronAPI.getDefaultBranch(directoryPath),
-            window.electronAPI.getCurrentBranch(directoryPath),
+            trpcVanilla.git.getAllBranches.query({
+              directoryPath,
+            }),
+            trpcVanilla.git.getDefaultBranch.query({
+              directoryPath,
+            }),
+            trpcVanilla.git.getCurrentBranch.query({
+              directoryPath,
+            }),
           ]);
 
         if (cancelled) return;
@@ -99,9 +106,15 @@ export function BranchSelect({
           try {
             const [allBranches, detectedDefault, detectedCurrent] =
               await Promise.all([
-                window.electronAPI.getAllBranches(directoryPath),
-                window.electronAPI.getDefaultBranch(directoryPath),
-                window.electronAPI.getCurrentBranch(directoryPath),
+                trpcVanilla.git.getAllBranches.query({
+                  directoryPath,
+                }),
+                trpcVanilla.git.getDefaultBranch.query({
+                  directoryPath,
+                }),
+                trpcVanilla.git.getCurrentBranch.query({
+                  directoryPath,
+                }),
               ]);
             setBranches(allBranches);
             setDefaultBranch(detectedDefault);

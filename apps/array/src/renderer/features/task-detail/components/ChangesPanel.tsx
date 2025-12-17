@@ -179,11 +179,11 @@ function ChangedFileItem({
 
     if (result.response !== 1) return;
 
-    await window.electronAPI.discardFileChanges(
-      repoPath,
-      file.originalPath ?? file.path, // For renames, use the original path
-      file.status,
-    );
+    await trpcVanilla.git.discardFileChanges.mutate({
+      directoryPath: repoPath,
+      filePath: file.originalPath ?? file.path, // For renames, use the original path
+      fileStatus: file.status,
+    });
 
     closeDiffTabsForFile(taskId, file.path);
 
@@ -357,7 +357,10 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getChangedFilesHead.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: !!repoPath,
     refetchOnMount: "always",
     refetchInterval: 10000,
