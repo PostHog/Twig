@@ -40,15 +40,54 @@ export function GlobalEventHandlers({
   }, []);
 
   // Keyboard hotkeys
-  useHotkeys("mod+k", onToggleCommandMenu, { enabled: !commandMenuOpen });
-  useHotkeys("mod+t", onToggleCommandMenu, { enabled: !commandMenuOpen });
-  useHotkeys("mod+p", onToggleCommandMenu, { enabled: !commandMenuOpen });
-  useHotkeys("mod+n", handleFocusTaskMode);
-  useHotkeys("mod+,", handleOpenSettings);
-  useHotkeys("mod+[", goBack);
-  useHotkeys("mod+]", goForward);
-  useHotkeys("mod+b", toggleLeftSidebar);
-  useHotkeys("mod+shift+b", toggleRightSidebar);
+  useHotkeys("mod+k", onToggleCommandMenu, {
+    enabled: !commandMenuOpen,
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+t", onToggleCommandMenu, {
+    enabled: !commandMenuOpen,
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+p", onToggleCommandMenu, {
+    enabled: !commandMenuOpen,
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+n", handleFocusTaskMode, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+,", handleOpenSettings, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+[", goBack, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+]", goForward, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+b", toggleLeftSidebar, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
+  useHotkeys("mod+shift+b", toggleRightSidebar, {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  });
 
   // Mouse back/forward buttons
   useEffect(() => {
