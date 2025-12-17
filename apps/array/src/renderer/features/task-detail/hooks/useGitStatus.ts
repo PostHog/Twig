@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 export type SmartGitAction =
@@ -85,7 +86,10 @@ export function useGitStatus({
     isFetched,
   } = useQuery({
     queryKey: ["git-sync-status", repoPath],
-    queryFn: () => window.electronAPI.getGitSyncStatus(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getGitSyncStatus.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: enabled && !!repoPath,
     staleTime: 30000,
     refetchInterval: 30000,

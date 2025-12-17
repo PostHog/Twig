@@ -1,5 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import { Cloud, GitBranch as GitBranchIcon } from "@phosphor-icons/react";
+import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +11,9 @@ function useCurrentBranch(repoPath?: string, worktreeName?: string) {
     queryKey: ["current-branch", repoPath],
     queryFn: () => {
       if (!repoPath) throw new Error("repoPath is required");
-      return window.electronAPI.getCurrentBranch(repoPath);
+      return trpcVanilla.git.getCurrentBranch.query({
+        directoryPath: repoPath,
+      });
     },
     enabled: !!repoPath && !worktreeName,
     staleTime: 3000,
@@ -39,7 +42,8 @@ interface DiffStatsDisplayProps {
 function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", worktreePath],
-    queryFn: () => window.electronAPI.getDiffStats(worktreePath),
+    queryFn: () =>
+      trpcVanilla.git.getDiffStats.query({ directoryPath: worktreePath }),
     enabled: !!worktreePath,
     staleTime: 30000,
     refetchOnWindowFocus: false,

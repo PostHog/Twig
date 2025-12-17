@@ -80,61 +80,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     channel: string,
     listener: (payload: unknown) => void,
   ): (() => void) => createIpcListener(channel, listener),
-  // Git operations
-  getChangedFilesHead: (
-    repoPath: string,
-  ): Promise<Array<{ path: string; status: string; originalPath?: string }>> =>
-    ipcRenderer.invoke("get-changed-files-head", repoPath),
-  getFileAtHead: (repoPath: string, filePath: string): Promise<string | null> =>
-    ipcRenderer.invoke("get-file-at-head", repoPath, filePath),
-  getDiffStats: (
-    repoPath: string,
-  ): Promise<{
-    filesChanged: number;
-    linesAdded: number;
-    linesRemoved: number;
-  }> => ipcRenderer.invoke("get-diff-stats", repoPath),
-  getCurrentBranch: (repoPath: string): Promise<string | undefined> =>
-    ipcRenderer.invoke("get-current-branch", repoPath),
-  getDefaultBranch: (repoPath: string): Promise<string> =>
-    ipcRenderer.invoke("get-default-branch", repoPath),
-  getAllBranches: (repoPath: string): Promise<string[]> =>
-    ipcRenderer.invoke("get-all-branches", repoPath),
-  createBranch: (repoPath: string, branchName: string): Promise<void> =>
-    ipcRenderer.invoke("create-branch", repoPath, branchName),
-  discardFileChanges: (
-    repoPath: string,
-    filePath: string,
-    fileStatus: string,
-  ): Promise<void> =>
-    ipcRenderer.invoke("discard-file-changes", repoPath, filePath, fileStatus),
-  getGitSyncStatus: (
-    repoPath: string,
-  ): Promise<{
-    ahead: number;
-    behind: number;
-    hasRemote: boolean;
-    currentBranch: string | null;
-    isFeatureBranch: boolean;
-  }> => ipcRenderer.invoke("get-git-sync-status", repoPath),
-  getLatestCommit: (
-    repoPath: string,
-  ): Promise<{
-    sha: string;
-    shortSha: string;
-    message: string;
-    author: string;
-    date: string;
-  } | null> => ipcRenderer.invoke("get-latest-commit", repoPath),
-  getGitRepoInfo: (
-    repoPath: string,
-  ): Promise<{
-    organization: string;
-    repository: string;
-    currentBranch: string | null;
-    defaultBranch: string;
-    compareUrl: string | null;
-  } | null> => ipcRenderer.invoke("get-git-repo-info", repoPath),
   onOpenSettings: (listener: () => void): (() => void) =>
     createVoidIpcListener("open-settings", listener),
   onNewTask: (listener: () => void): (() => void) =>

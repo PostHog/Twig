@@ -1,13 +1,4 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import type {
-  ChangedFile,
-  CreateWorkspaceOptions,
-  ScriptExecutionResult,
-  TaskArtifact,
-  Workspace,
-  WorkspaceInfo,
-  WorkspaceTerminalInfo,
-} from "@shared/types";
 import "@main/services/types";
 
 declare global {
@@ -48,104 +39,11 @@ declare global {
       channel: string,
       listener: (event: unknown) => void,
     ) => () => void;
-    // Task artifact operations
-    ensurePosthogFolder: (repoPath: string, taskId: string) => Promise<string>;
-    listTaskArtifacts: (
-      repoPath: string,
-      taskId: string,
-    ) => Promise<TaskArtifact[]>;
-    readTaskArtifact: (
-      repoPath: string,
-      taskId: string,
-      fileName: string,
-    ) => Promise<string | null>;
-    appendToArtifact: (
-      repoPath: string,
-      taskId: string,
-      fileName: string,
-      content: string,
-    ) => Promise<void>;
-    saveQuestionAnswers: (
-      repoPath: string,
-      taskId: string,
-      answers: Array<{
-        questionId: string;
-        selectedOption: string;
-        customInput?: string;
-      }>,
-    ) => Promise<void>;
-    getChangedFilesHead: (repoPath: string) => Promise<ChangedFile[]>;
-    getFileAtHead: (
-      repoPath: string,
-      filePath: string,
-    ) => Promise<string | null>;
-    getDiffStats: (repoPath: string) => Promise<{
-      filesChanged: number;
-      linesAdded: number;
-      linesRemoved: number;
-    }>;
-    getCurrentBranch: (repoPath: string) => Promise<string | undefined>;
-    getDefaultBranch: (repoPath: string) => Promise<string>;
-    getAllBranches: (repoPath: string) => Promise<string[]>;
-    createBranch: (repoPath: string, branchName: string) => Promise<void>;
-    discardFileChanges: (
-      repoPath: string,
-      filePath: string,
-      fileStatus: string,
-    ) => Promise<void>;
-    getGitSyncStatus: (repoPath: string) => Promise<{
-      ahead: number;
-      behind: number;
-      hasRemote: boolean;
-      currentBranch: string | null;
-      isFeatureBranch: boolean;
-    }>;
-    getLatestCommit: (repoPath: string) => Promise<{
-      sha: string;
-      shortSha: string;
-      message: string;
-      author: string;
-      date: string;
-    } | null>;
-    getGitRepoInfo: (repoPath: string) => Promise<{
-      organization: string;
-      repository: string;
-      currentBranch: string | null;
-      defaultBranch: string;
-      compareUrl: string | null;
-    } | null>;
     onOpenSettings: (listener: () => void) => () => void;
     onNewTask: (listener: () => void) => () => void;
     onResetLayout: (listener: () => void) => () => void;
     onClearStorage: (listener: () => void) => () => void;
     getAppVersion: () => Promise<string>;
-    workspace: {
-      create: (options: CreateWorkspaceOptions) => Promise<WorkspaceInfo>;
-      delete: (taskId: string, mainRepoPath: string) => Promise<void>;
-      verify: (taskId: string) => Promise<boolean>;
-      getInfo: (taskId: string) => Promise<WorkspaceInfo | null>;
-      getAll: () => Promise<Record<string, Workspace>>;
-      runStart: (
-        taskId: string,
-        worktreePath: string,
-        worktreeName: string,
-      ) => Promise<ScriptExecutionResult>;
-      isRunning: (taskId: string) => Promise<boolean>;
-      getTerminals: (taskId: string) => Promise<WorkspaceTerminalInfo[]>;
-      onTerminalCreated: (
-        listener: (data: WorkspaceTerminalInfo & { taskId: string }) => void,
-      ) => () => void;
-      onError: (
-        listener: (data: { taskId: string; message: string }) => void,
-      ) => () => void;
-      onWarning: (
-        listener: (data: {
-          taskId: string;
-          title: string;
-          message: string;
-        }) => void,
-      ) => () => void;
-    };
   }
 
   interface Window {
