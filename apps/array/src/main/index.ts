@@ -12,7 +12,6 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
-  ipcMain,
   Menu,
   type MenuItemConstructorOptions,
   shell,
@@ -22,16 +21,11 @@ import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
+import type { AgentService } from "./services/agent/service.js";
 import type { DockBadgeService } from "./services/dock-badge/service.js";
-import {
-  cleanupAgentSessions,
-  registerAgentIpc,
-} from "./services/session-manager.js";
+import type { UIService } from "./services/ui/service.js";
 import { setMainWindowGetter } from "./trpc/context.js";
 import { trpcRouter } from "./trpc/index.js";
-
-// Legacy type kept for backwards compatibility with taskControllers map
-type TaskController = unknown;
 
 import "./services/index.js";
 import type { DeepLinkService } from "./services/deep-link/service.js";
@@ -52,7 +46,6 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
-const taskControllers = new Map<string, TaskController>();
 
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
@@ -223,7 +216,7 @@ function createWindow(): void {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
           click: () => {
-            mainWindow?.webContents.send("open-settings");
+            container.get<UIService>(MAIN_TOKENS.UIService).openSettings();
           },
         },
         { type: "separator" },
@@ -237,7 +230,7 @@ function createWindow(): void {
           label: "New task",
           accelerator: "CmdOrCtrl+N",
           click: () => {
-            mainWindow?.webContents.send("new-task");
+            container.get<UIService>(MAIN_TOKENS.UIService).newTask();
           },
         },
         { type: "separator" },
@@ -247,7 +240,7 @@ function createWindow(): void {
             {
               label: "Clear application storage",
               click: () => {
-                mainWindow?.webContents.send("clear-storage");
+                container.get<UIService>(MAIN_TOKENS.UIService).clearStorage();
               },
             },
           ],
@@ -282,7 +275,7 @@ function createWindow(): void {
         {
           label: "Reset layout",
           click: () => {
-            mainWindow?.webContents.send("reset-layout");
+            container.get<UIService>(MAIN_TOKENS.UIService).resetLayout();
           },
         },
       ],
@@ -356,7 +349,8 @@ app.on("window-all-closed", async () => {
 
 app.on("before-quit", async (event) => {
   event.preventDefault();
-  await cleanupAgentSessions();
+  const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
+  await agentService.cleanupAll();
   trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
   await shutdownPostHog();
   app.exit(0);
@@ -367,8 +361,3 @@ app.on("activate", () => {
     createWindow();
   }
 });
-
-ipcMain.handle("app:get-version", () => app.getVersion());
-
-// Register IPC handlers via services
-registerAgentIpc(taskControllers, () => mainWindow);

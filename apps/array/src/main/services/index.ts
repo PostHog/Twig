@@ -5,6 +5,5 @@
 
 import "./git.js";
 import "./posthog-analytics.js";
-import "./session-manager.js";
 import "./settingsStore.js";
 import "./transcription-prompts.js";

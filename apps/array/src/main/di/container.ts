@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { Container } from "inversify";
+import { AgentService } from "../services/agent/service.js";
 import { ContextMenuService } from "../services/context-menu/service.js";
 import { DeepLinkService } from "../services/deep-link/service.js";
 import { DockBadgeService } from "../services/dock-badge/service.js";
@@ -11,6 +12,7 @@ import { GitService } from "../services/git/service.js";
 import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
 import { TaskLinkService } from "../services/task-link/service.js";
+import { UIService } from "../services/ui/service.js";
 import { UpdatesService } from "../services/updates/service.js";
 import { WorkspaceService } from "../services/workspace/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
@@ -19,6 +21,7 @@ export const container = new Container({
   defaultScope: "Singleton",
 });
 
+container.bind(MAIN_TOKENS.AgentService).to(AgentService);
 container.bind(MAIN_TOKENS.ContextMenuService).to(ContextMenuService);
 container.bind(MAIN_TOKENS.DeepLinkService).to(DeepLinkService);
 container.bind(MAIN_TOKENS.DockBadgeService).to(DockBadgeService);
@@ -29,6 +32,7 @@ container.bind(MAIN_TOKENS.FsService).to(FsService);
 container.bind(MAIN_TOKENS.GitService).to(GitService);
 container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
+container.bind(MAIN_TOKENS.UIService).to(UIService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
 container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);
 container.bind(MAIN_TOKENS.WorkspaceService).to(WorkspaceService);

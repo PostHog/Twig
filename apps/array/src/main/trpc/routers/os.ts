@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { dialog, shell } from "electron";
+import { app, dialog, shell } from "electron";
 import { z } from "zod";
 import { getMainWindow } from "../context.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -138,4 +138,9 @@ export const osRouter = router({
         return [];
       }
     }),
+
+  /**
+   * Get the application version
+   */
+  getAppVersion: publicProcedure.query(() => app.getVersion()),
 });
