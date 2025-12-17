@@ -40,13 +40,17 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
 
-  const hasAttemptedConnect = useRef(false);
-  useEffect(() => {
-    if (hasAttemptedConnect.current) return;
-    if (!repoPath) return;
-    if (session) return;
+  const isConnecting = useRef(false);
 
-    hasAttemptedConnect.current = true;
+  useEffect(() => {
+    if (!repoPath) return;
+    if (isConnecting.current) return;
+
+    if (session?.status === "connected" || session?.status === "connecting") {
+      return;
+    }
+
+    isConnecting.current = true;
 
     const isNewSession = !task.latest_run?.id;
     const hasInitialPrompt = isNewSession && task.description;
@@ -55,12 +59,20 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       markActivity(task.id);
     }
 
+    log.info("Connecting to task session", {
+      taskId: task.id,
+      hasLatestRun: !!task.latest_run,
+      sessionStatus: session?.status ?? "none",
+    });
+
     connectToTask({
       task,
       repoPath,
       initialPrompt: hasInitialPrompt
         ? [{ type: "text", text: task.description }]
         : undefined,
+    }).finally(() => {
+      isConnecting.current = false;
     });
   }, [task, repoPath, session, connectToTask, markActivity]);
 

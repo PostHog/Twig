@@ -21,10 +21,20 @@ const log = logger.scope("folders-service");
 @injectable()
 export class FoldersService {
   async getFolders(): Promise<RegisteredFolder[]> {
-    return foldersStore.get("folders", []);
+    const folders = foldersStore.get("folders", []);
+    // Filter out any folders with empty names (from invalid paths like "/")
+    return folders.filter((f) => f.name && f.path);
   }
 
   async addFolder(folderPath: string): Promise<RegisteredFolder> {
+    // Validate the path before proceeding
+    const folderName = path.basename(folderPath);
+    if (!folderPath || !folderName) {
+      throw new Error(
+        `Invalid folder path: "${folderPath}" - path must have a valid directory name`,
+      );
+    }
+
     const isRepo = await isGitRepository(folderPath);
 
     if (!isRepo) {
@@ -65,7 +75,7 @@ export class FoldersService {
     const newFolder: RegisteredFolder = {
       id: generateId("folder", 7),
       path: folderPath,
-      name: path.basename(folderPath),
+      name: folderName,
       lastAccessed: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };

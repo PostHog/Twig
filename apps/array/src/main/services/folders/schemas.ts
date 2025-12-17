@@ -11,7 +11,7 @@ export const registeredFolderSchema = z.object({
 export const getFoldersOutput = z.array(registeredFolderSchema);
 
 export const addFolderInput = z.object({
-  folderPath: z.string(),
+  folderPath: z.string().min(2, "Folder path must be a valid directory path"),
 });
 
 export const addFolderOutput = registeredFolderSchema;
