@@ -194,13 +194,6 @@ export const useAuthStore = create<AuthState>()(
             ...(projectId && { projectId }),
           });
 
-          // Notify main process of token refresh for active agent sessions
-          window.electronAPI
-            .agentTokenRefresh("", tokenResponse.access_token)
-            .catch((err) => {
-              log.warn("Failed to update agent token:", err);
-            });
-
           get().scheduleTokenRefresh();
         },
 

@@ -2,120 +2,30 @@ import { HeaderRow } from "@components/HeaderRow";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
-import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
-import {
-  RightSidebar,
-  RightSidebarContent,
-  useRightSidebarStore,
-} from "@features/right-sidebar";
+import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
-import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
-import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { useNavigationStore } from "@stores/navigationStore";
-import { useCallback, useEffect, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
+import { useCallback, useState } from "react";
 import { Toaster } from "sonner";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
+import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
 export function MainLayout() {
-  const { view, toggleSettings, navigateToTaskInput, goBack, goForward } =
-    useNavigationStore();
-  const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
-  const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
-  const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
-
+  const { view } = useNavigationStore();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
 
   // Initialize integrations
   useIntegrations();
   useTaskDeepLink();
 
-  const handleOpenSettings = useCallback(() => {
-    toggleSettings();
-  }, [toggleSettings]);
-
-  const handleFocusTaskMode = useCallback(() => {
-    navigateToTaskInput();
-  }, [navigateToTaskInput]);
-
-  const handleResetLayout = useCallback(() => {
-    clearAllLayouts();
-    window.location.reload();
-  }, [clearAllLayouts]);
-
-  const handleClearStorage = useCallback(() => {
-    clearApplicationStorage();
+  const handleToggleCommandMenu = useCallback(() => {
+    setCommandMenuOpen((prev) => !prev);
   }, []);
-
-  useHotkeys("mod+k", () => setCommandMenuOpen((prev) => !prev), {
-    enabled: !commandMenuOpen,
-  });
-  useHotkeys("mod+t", () => setCommandMenuOpen((prev) => !prev), {
-    enabled: !commandMenuOpen,
-  });
-  useHotkeys("mod+p", () => setCommandMenuOpen((prev) => !prev), {
-    enabled: !commandMenuOpen,
-  });
-  useHotkeys("mod+n", () => handleFocusTaskMode());
-  useHotkeys("mod+,", () => handleOpenSettings());
-  useHotkeys("mod+[", () => goBack());
-  useHotkeys("mod+]", () => goForward());
-  useHotkeys("mod+b", () => toggleLeftSidebar());
-  useHotkeys("mod+shift+b", () => toggleRightSidebar());
-
-  useEffect(() => {
-    const unsubscribeSettings = window.electronAPI?.onOpenSettings(() => {
-      handleOpenSettings();
-    });
-
-    const unsubscribeNewTask = window.electronAPI?.onNewTask(() => {
-      handleFocusTaskMode();
-    });
-
-    const unsubscribeResetLayout = window.electronAPI?.onResetLayout(() => {
-      handleResetLayout();
-    });
-
-    const unsubscribeClearStorage = window.electronAPI?.onClearStorage(() => {
-      handleClearStorage();
-    });
-
-    return () => {
-      unsubscribeSettings?.();
-      unsubscribeNewTask?.();
-      unsubscribeResetLayout?.();
-      unsubscribeClearStorage?.();
-    };
-  }, [
-    handleOpenSettings,
-    handleFocusTaskMode,
-    handleResetLayout,
-    handleClearStorage,
-  ]);
-
-  useEffect(() => {
-    const handleMouseButton = (event: MouseEvent) => {
-      if (event.button === 3) {
-        // Button 3 = back
-        event.preventDefault();
-        goBack();
-      } else if (event.button === 4) {
-        // Button 4 = forward
-        event.preventDefault();
-        goForward();
-      }
-    };
-
-    window.addEventListener("mouseup", handleMouseButton);
-    return () => {
-      window.removeEventListener("mouseup", handleMouseButton);
-    };
-  }, [goBack, goForward]);
 
   return (
     <Flex direction="column" height="100vh">
@@ -144,6 +54,10 @@ export function MainLayout() {
 
       <CommandMenu open={commandMenuOpen} onOpenChange={setCommandMenuOpen} />
       <UpdatePrompt />
+      <GlobalEventHandlers
+        onToggleCommandMenu={handleToggleCommandMenu}
+        commandMenuOpen={commandMenuOpen}
+      />
       <Toaster position="bottom-right" />
     </Flex>
   );

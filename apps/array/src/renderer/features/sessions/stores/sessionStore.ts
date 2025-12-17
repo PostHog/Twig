@@ -1,5 +1,3 @@
-/// <reference path="../../../types/electron.d.ts" />
-
 import type {
   ContentBlock,
   SessionNotification,
@@ -21,7 +19,7 @@ import {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { trpcVanilla } from "@/renderer/trpc";
+import { trpcReact, trpcVanilla } from "@/renderer/trpc";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -76,7 +74,6 @@ interface AuthCredentials {
 
 type SessionStore = SessionState & { actions: SessionActions };
 
-const subscriptions = new Map<string, () => void>();
 const connectAttempts = new Set<string>();
 const cloudPollers = new Map<string, NodeJS.Timeout>();
 
@@ -317,30 +314,6 @@ const useStore = create<SessionStore>()(
       }
     };
 
-    const subscribeToChannel = (taskRunId: string, channel: string) => {
-      if (subscriptions.has(taskRunId)) return;
-
-      const cleanup = window.electronAPI.onAgentEvent(
-        channel,
-        (payload: unknown) => {
-          set((state) => {
-            const session = state.sessions[taskRunId];
-            if (session) {
-              session.events.push(payload as AcpMessage);
-            }
-          });
-        },
-      );
-
-      subscriptions.set(taskRunId, cleanup);
-    };
-
-    const unsubscribeFromChannel = (taskRunId: string) => {
-      const cleanup = subscriptions.get(taskRunId);
-      cleanup?.();
-      subscriptions.delete(taskRunId);
-    };
-
     const startCloudPolling = (taskRunId: string, logUrl: string) => {
       if (cloudPollers.has(taskRunId)) return;
 
@@ -424,9 +397,8 @@ const useStore = create<SessionStore>()(
       session.logUrl = logUrl;
 
       addSession(session);
-      subscribeToChannel(taskRunId, session.channel);
 
-      const result = await window.electronAPI.agentReconnect({
+      const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
         repoPath,
@@ -440,7 +412,6 @@ const useStore = create<SessionStore>()(
       if (result) {
         updateSession(taskRunId, { status: "connected" });
       } else {
-        unsubscribeFromChannel(taskRunId);
         removeSession(taskRunId);
       }
     };
@@ -463,7 +434,7 @@ const useStore = create<SessionStore>()(
       }
 
       const defaultModel = useSettingsStore.getState().defaultModel;
-      const result = await window.electronAPI.agentStart({
+      const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
         repoPath,
@@ -479,7 +450,6 @@ const useStore = create<SessionStore>()(
       session.model = defaultModel;
 
       addSession(session);
-      subscribeToChannel(taskRun.id, result.channel);
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -522,7 +492,10 @@ const useStore = create<SessionStore>()(
       updateSession(session.taskRunId, { isPromptPending: true });
 
       try {
-        return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
+        return await trpcVanilla.agent.prompt.mutate({
+          sessionId: session.taskRunId,
+          prompt: blocks,
+        });
       } finally {
         updateSession(session.taskRunId, { isPromptPending: false });
       }
@@ -593,11 +566,12 @@ const useStore = create<SessionStore>()(
             stopCloudPolling(session.taskRunId);
           } else {
             try {
-              await window.electronAPI.agentCancel(session.taskRunId);
+              await trpcVanilla.agent.cancel.mutate({
+                sessionId: session.taskRunId,
+              });
             } catch (error) {
               log.error("Failed to cancel session", error);
             }
-            unsubscribeFromChannel(session.taskRunId);
           }
 
           removeSession(session.taskRunId);
@@ -630,9 +604,9 @@ const useStore = create<SessionStore>()(
           if (!session) return false;
 
           try {
-            return await window.electronAPI.agentCancelPrompt(
-              session.taskRunId,
-            );
+            return await trpcVanilla.agent.cancelPrompt.mutate({
+              sessionId: session.taskRunId,
+            });
           } catch (error) {
             log.error("Failed to cancel prompt", error);
             return false;
@@ -644,7 +618,10 @@ const useStore = create<SessionStore>()(
           if (!session || session.isCloud) return;
 
           try {
-            await window.electronAPI.agentSetModel(session.taskRunId, modelId);
+            await trpcVanilla.agent.setModel.mutate({
+              sessionId: session.taskRunId,
+              modelId,
+            });
             updateSession(session.taskRunId, { model: modelId });
           } catch (error) {
             log.error("Failed to change session model", {
@@ -687,6 +664,7 @@ export const useSessionForTask = (taskId: string | undefined) =>
   );
 export const getSessionActions = () => useStore.getState().actions;
 
+// Token refresh subscription
 let lastKnownToken: string | null = null;
 useAuthStore.subscribe(
   (state) => state.oauthAccessToken,
@@ -697,8 +675,11 @@ useAuthStore.subscribe(
     const sessions = useStore.getState().sessions;
     for (const session of Object.values(sessions)) {
       if (session.status === "connected" && !session.isCloud) {
-        window.electronAPI
-          .agentTokenRefresh(session.taskRunId, newToken)
+        trpcVanilla.agent.refreshToken
+          .mutate({
+            taskRunId: session.taskRunId,
+            newToken,
+          })
           .catch((err) => {
             log.warn("Failed to update session token", {
               taskRunId: session.taskRunId,
@@ -709,3 +690,24 @@ useAuthStore.subscribe(
     }
   },
 );
+
+/**
+ * Hook to subscribe to agent session events via tRPC subscription.
+ * This should be used in a component that renders when a session is active.
+ */
+export function useAgentSessionSubscription(sessionId: string | undefined) {
+  trpcReact.agent.onSessionEvent.useSubscription(
+    { sessionId: sessionId ?? "" },
+    {
+      enabled: !!sessionId,
+      onData: (payload) => {
+        useStore.setState((state) => {
+          const session = state.sessions[sessionId!];
+          if (session) {
+            session.events.push(payload as AcpMessage);
+          }
+        });
+      },
+    },
+  );
+}

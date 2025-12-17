@@ -1,7 +1,7 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import type { PanelNode } from "@features/panels/store/panelTypes";
 import type { Task } from "@shared/types";
-import { expect, vi } from "vitest";
+import { expect } from "vitest";
 
 export function createMockTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -15,57 +15,6 @@ export function createMockTask(overrides: Partial<Task> = {}): Task {
     updated_at: new Date().toISOString(),
     ...overrides,
   };
-}
-
-function createAutoMock(): unknown {
-  const cache = new Map<string, unknown>();
-  return new Proxy(
-    {},
-    {
-      get(_, prop: string) {
-        if (!cache.has(prop)) {
-          if (prop.startsWith("on")) {
-            cache.set(
-              prop,
-              vi.fn().mockReturnValue(() => {}),
-            );
-          } else {
-            cache.set(prop, vi.fn().mockResolvedValue(undefined));
-          }
-        }
-        return cache.get(prop);
-      },
-    },
-  );
-}
-
-export function mockElectronAPI(
-  overrides: Partial<typeof window.electronAPI> = {},
-) {
-  const defaults = {
-    listDirectory: vi
-      .fn()
-      .mockResolvedValue([
-        { path: "/test/repo/App.tsx", name: "App.tsx", type: "file" as const },
-      ]),
-    getChangedFilesHead: vi.fn().mockResolvedValue([]),
-    getDiffStats: vi.fn().mockResolvedValue({ additions: 0, deletions: 0 }),
-    showFileContextMenu: vi.fn().mockResolvedValue({ action: null }),
-    workspace: createAutoMock(),
-    ...overrides,
-  };
-
-  window.electronAPI = new Proxy(defaults, {
-    get(target, prop: string) {
-      if (prop in target) {
-        return target[prop as keyof typeof target];
-      }
-      if (prop.startsWith("on")) {
-        return vi.fn().mockReturnValue(() => {});
-      }
-      return vi.fn().mockResolvedValue(undefined);
-    },
-  }) as typeof window.electronAPI;
 }
 
 export interface PanelStructure {
