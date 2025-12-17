@@ -29,7 +29,4 @@ container.bind(MAIN_TOKENS.GitService).to(GitService);
 container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
-container.bind(MAIN_TOKENS.GitService).to(GitService);
-container.bind(MAIN_TOKENS.DeepLinkService).to(DeepLinkService);
-container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);
