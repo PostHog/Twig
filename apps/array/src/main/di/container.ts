@@ -10,6 +10,7 @@ import { FsService } from "../services/fs/service.js";
 import { GitService } from "../services/git/service.js";
 import { OAuthService } from "../services/oauth/service.js";
 import { ShellService } from "../services/shell/service.js";
+import { TaskLinkService } from "../services/task-link/service.js";
 import { UpdatesService } from "../services/updates/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
 
@@ -28,3 +29,4 @@ container.bind(MAIN_TOKENS.GitService).to(GitService);
 container.bind(MAIN_TOKENS.OAuthService).to(OAuthService);
 container.bind(MAIN_TOKENS.ShellService).to(ShellService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
+container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);

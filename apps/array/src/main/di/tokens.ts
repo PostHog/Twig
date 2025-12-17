@@ -17,4 +17,5 @@ export const MAIN_TOKENS = Object.freeze({
   OAuthService: Symbol.for("Main.OAuthService"),
   ShellService: Symbol.for("Main.ShellService"),
   UpdatesService: Symbol.for("Main.UpdatesService"),
+  TaskLinkService: Symbol.for("Main.TaskLinkService"),
 });

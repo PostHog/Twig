@@ -43,6 +43,7 @@ import {
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
+import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
 import { registerWorkspaceIpc } from "./services/workspace/index.js";
 
@@ -322,6 +323,7 @@ app.whenReady().then(() => {
   // Initialize services that need early startup
   container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
+  container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
 
   // Initialize PostHog analytics
   initializePostHog();

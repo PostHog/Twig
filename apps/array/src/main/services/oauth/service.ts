@@ -52,15 +52,15 @@ export class OAuthService {
     private readonly deepLinkService: DeepLinkService,
   ) {
     // Register OAuth callback handler for deep links
-    this.deepLinkService.registerHandler("callback", (url) =>
-      this.handleOAuthCallback(url),
+    this.deepLinkService.registerHandler("callback", (_path, searchParams) =>
+      this.handleOAuthCallback(searchParams),
     );
     log.info("Registered OAuth callback handler for deep links");
   }
 
-  private handleOAuthCallback(url: URL): boolean {
-    const code = url.searchParams.get("code");
-    const error = url.searchParams.get("error");
+  private handleOAuthCallback(searchParams: URLSearchParams): boolean {
+    const code = searchParams.get("code");
+    const error = searchParams.get("error");
 
     if (!this.pendingFlow) {
       log.warn("Received OAuth callback but no pending flow");
