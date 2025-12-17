@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import { omitKey } from "@utils/object";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
@@ -60,8 +61,9 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
         const { lastUsedDirectory } = get();
         if (!lastUsedDirectory) return;
 
-        const exists =
-          await window.electronAPI?.validateRepo(lastUsedDirectory);
+        const exists = await trpcVanilla.git.validateRepo.query({
+          directoryPath: lastUsedDirectory,
+        });
         if (!exists) {
           set({ lastUsedDirectory: null });
         }
