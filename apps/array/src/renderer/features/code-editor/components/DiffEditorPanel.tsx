@@ -2,12 +2,13 @@ import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirrorDiffEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -29,6 +30,9 @@ export function DiffEditorPanel({
   const repoPath = worktreePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
+  const closeDiffTabsForFile = usePanelLayoutStore(
+    (s) => s.closeDiffTabsForFile,
+  );
 
   const { data: changedFiles = [] } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -41,6 +45,7 @@ export function DiffEditorPanel({
   });
 
   const fileInfo = changedFiles.find((f) => f.path === filePath);
+  const isFileStillChanged = !!fileInfo;
   const status = fileInfo?.status ?? "modified";
   const originalPath = fileInfo?.originalPath ?? filePath;
   const isDeleted = status === "deleted";
@@ -90,14 +95,31 @@ export function DiffEditorPanel({
     [repoPath, filePath, queryClient],
   );
 
+  const isLoading =
+    (!isDeleted && loadingModified) || (!isNew && loadingOriginal);
+
+  const hasNoChanges =
+    !!repoPath &&
+    !isLoading &&
+    (!isFileStillChanged ||
+      (!isDeleted && !isNew && originalContent === modifiedContent));
+
+  useEffect(() => {
+    if (hasNoChanges) {
+      closeDiffTabsForFile(taskId, filePath);
+    }
+  }, [hasNoChanges, closeDiffTabsForFile, taskId, filePath]);
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
 
-  const isLoading =
-    (!isDeleted && loadingModified) || (!isNew && loadingOriginal);
   if (isLoading) {
     return <PanelMessage>Loading diff...</PanelMessage>;
+  }
+
+  if (hasNoChanges) {
+    return null;
   }
 
   const showDiff = !isDeleted && !isNew;
