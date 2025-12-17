@@ -12,16 +12,22 @@ import {
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { Agent, type OnLogCallback } from "@posthog/agent";
+import { app } from "electron";
+import { injectable } from "inversify";
+import type { AcpMessage } from "../../../shared/types/session-events.js";
+import { logger } from "../../lib/logger.js";
+import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import {
-  app,
-  type BrowserWindow,
-  type IpcMainInvokeEvent,
-  ipcMain,
-} from "electron";
-import type { AcpMessage } from "../../shared/types/session-events";
-import { logger } from "../lib/logger";
+  AgentServiceEvent,
+  type AgentServiceEvents,
+  type Credentials,
+  type PromptOutput,
+  type ReconnectSessionInput,
+  type SessionResponse,
+  type StartSessionInput,
+} from "./schemas.js";
 
-const log = logger.scope("session-manager");
+const log = logger.scope("agent-service");
 
 function isAuthError(error: unknown): boolean {
   return (
@@ -109,12 +115,6 @@ const onAgentLog: OnLogCallback = (level, scope, message, data) => {
   }
 };
 
-export interface PostHogCredentials {
-  apiKey: string;
-  apiHost: string;
-  projectId: number;
-}
-
 interface AcpMcpServer {
   name: string;
   type: "http";
@@ -122,18 +122,18 @@ interface AcpMcpServer {
   headers: Array<{ name: string; value: string }>;
 }
 
-export interface SessionConfig {
+interface SessionConfig {
   taskId: string;
-  taskRunId: string; // THE session identifier everywhere
+  taskRunId: string;
   repoPath: string;
-  credentials: PostHogCredentials;
-  logUrl?: string; // For reconnection from S3
-  sdkSessionId?: string; // SDK session ID for resuming Claude Code context
+  credentials: Credentials;
+  logUrl?: string;
+  sdkSessionId?: string;
   model?: string;
 }
 
-export interface ManagedSession {
-  taskRunId: string; // Primary key - same as sessionId, acpSessionId
+interface ManagedSession {
+  taskRunId: string;
   taskId: string;
   repoPath: string;
   agent: Agent;
@@ -152,16 +152,10 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
-export class SessionManager {
+@injectable()
+export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
-  private getMainWindow: () => BrowserWindow | null;
-  private onLog: OnLogCallback;
-
-  constructor(getMainWindow: () => BrowserWindow | null, onLog: OnLogCallback) {
-    this.getMainWindow = getMainWindow;
-    this.onLog = onLog;
-  }
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
@@ -172,7 +166,7 @@ export class SessionManager {
     return this.currentToken || fallback;
   }
 
-  private buildMcpServers(credentials: PostHogCredentials): AcpMcpServer[] {
+  private buildMcpServers(credentials: Credentials): AcpMcpServer[] {
     const servers: AcpMcpServer[] = [];
 
     const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
@@ -199,18 +193,29 @@ export class SessionManager {
     return "https://mcp.posthog.com/mcp";
   }
 
-  async createSession(config: SessionConfig): Promise<ManagedSession> {
+  async startSession(params: StartSessionInput): Promise<SessionResponse> {
+    this.validateSessionParams(params);
+    const config = this.toSessionConfig(params);
     const session = await this.getOrCreateSession(config, false);
     if (!session) {
       throw new Error("Failed to create session");
     }
-    return session;
+    return this.toSessionResponse(session);
   }
 
   async reconnectSession(
-    config: SessionConfig,
-  ): Promise<ManagedSession | null> {
-    return this.getOrCreateSession(config, true);
+    params: ReconnectSessionInput,
+  ): Promise<SessionResponse | null> {
+    try {
+      this.validateSessionParams(params);
+    } catch (err) {
+      log.error("Invalid reconnect params", err);
+      return null;
+    }
+
+    const config = this.toSessionConfig(params);
+    const session = await this.getOrCreateSession(config, true);
+    return session ? this.toSessionResponse(session) : null;
   }
 
   private async getOrCreateSession(
@@ -245,7 +250,7 @@ export class SessionManager {
       getPosthogApiKey: () => this.getToken(credentials.apiKey),
       posthogProjectId: credentials.projectId,
       debug: !app.isPackaged,
-      onLog: this.onLog,
+      onLog: onAgentLog,
     });
 
     try {
@@ -330,11 +335,9 @@ export class SessionManager {
 
     log.info("Recreating session due to auth error", { taskRunId });
 
-    // Store config and cleanup old session
     const config = existing.config;
     this.cleanupSession(taskRunId);
 
-    // Reconnect to preserve Claude context via sdkSessionId
     const newSession = await this.getOrCreateSession(config, true);
     if (!newSession) {
       throw new Error(`Failed to recreate session: ${taskRunId}`);
@@ -344,28 +347,28 @@ export class SessionManager {
   }
 
   async prompt(
-    taskRunId: string,
+    sessionId: string,
     prompt: ContentBlock[],
-  ): Promise<{ stopReason: string }> {
-    let session = this.sessions.get(taskRunId);
+  ): Promise<PromptOutput> {
+    let session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session not found: ${taskRunId}`);
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
     session.lastActivityAt = Date.now();
 
     try {
       const result = await session.connection.prompt({
-        sessionId: taskRunId,
+        sessionId,
         prompt,
       });
       return { stopReason: result.stopReason };
     } catch (err) {
       if (isAuthError(err)) {
-        log.warn("Auth error during prompt, recreating session", { taskRunId });
-        session = await this.recreateSession(taskRunId);
+        log.warn("Auth error during prompt, recreating session", { sessionId });
+        session = await this.recreateSession(sessionId);
         const result = await session.connection.prompt({
-          sessionId: taskRunId,
+          sessionId,
           prompt,
         });
         return { stopReason: result.stopReason };
@@ -374,29 +377,29 @@ export class SessionManager {
     }
   }
 
-  async cancelSession(taskRunId: string): Promise<boolean> {
-    const session = this.sessions.get(taskRunId);
+  async cancelSession(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
     if (!session) return false;
 
     try {
       session.agent.cancelTask(session.taskId);
-      this.cleanupSession(taskRunId);
+      this.cleanupSession(sessionId);
       return true;
     } catch (_err) {
-      this.cleanupSession(taskRunId);
+      this.cleanupSession(sessionId);
       return false;
     }
   }
 
-  async cancelPrompt(taskRunId: string): Promise<boolean> {
-    const session = this.sessions.get(taskRunId);
+  async cancelPrompt(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
     if (!session) return false;
 
     try {
-      await session.connection.cancel({ sessionId: taskRunId });
+      await session.connection.cancel({ sessionId });
       return true;
     } catch (err) {
-      log.error("Failed to cancel prompt", { taskRunId, err });
+      log.error("Failed to cancel prompt", { sessionId, err });
       return false;
     }
   }
@@ -405,20 +408,20 @@ export class SessionManager {
     return this.sessions.get(taskRunId);
   }
 
-  async setSessionModel(taskRunId: string, modelId: string): Promise<void> {
-    const session = this.sessions.get(taskRunId);
+  async setSessionModel(sessionId: string, modelId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session not found: ${taskRunId}`);
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
     try {
       await session.connection.extMethod("session/setModel", {
-        sessionId: taskRunId,
+        sessionId,
         modelId,
       });
-      log.info("Session model updated", { taskRunId, modelId });
+      log.info("Session model updated", { sessionId, modelId });
     } catch (err) {
-      log.error("Failed to set session model", { taskRunId, modelId, err });
+      log.error("Failed to set session model", { sessionId, modelId, err });
       throw err;
     }
   }
@@ -445,7 +448,7 @@ export class SessionManager {
   }
 
   private setupEnvironment(
-    credentials: PostHogCredentials,
+    credentials: Credentials,
     mockNodeDir: string,
   ): void {
     const token = this.getToken(credentials.apiKey);
@@ -460,10 +463,8 @@ export class SessionManager {
       `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
     process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
 
-    // process.env.ELECTRON_RUN_AS_NODE = "1";
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
-    // Set env vars for SessionStore in agent package
     process.env.POSTHOG_API_KEY = token;
     process.env.POSTHOG_API_URL = credentials.apiHost;
     process.env.POSTHOG_PROJECT_ID = String(credentials.projectId);
@@ -503,18 +504,18 @@ export class SessionManager {
   }
 
   private createClientConnection(
-    _taskRunId: string,
-    channel: string,
+    taskRunId: string,
+    _channel: string,
     clientStreams: { readable: ReadableStream; writable: WritableStream },
   ): ClientSideConnection {
     const emitToRenderer = (payload: unknown) => {
-      const win = this.getMainWindow();
-      if (win && !win.isDestroyed()) {
-        win.webContents.send(channel, payload);
-      }
+      // Emit event via TypedEventEmitter for tRPC subscription
+      this.emit(AgentServiceEvent.SessionEvent, {
+        sessionId: taskRunId,
+        payload,
+      });
     };
 
-    // Emit all raw ACP messages to the renderer
     const onAcpMessage = (message: unknown) => {
       const acpMessage: AcpMessage = {
         type: "acp_message",
@@ -524,7 +525,6 @@ export class SessionManager {
       emitToRenderer(acpMessage);
     };
 
-    // Tap both streams to capture all messages
     const tappedReadable = createTappedReadableStream(
       clientStreams.readable as ReadableStream<Uint8Array>,
       onAcpMessage,
@@ -535,15 +535,10 @@ export class SessionManager {
       onAcpMessage,
     );
 
-    // Create Client implementation that forwards to renderer
-    // Note: sessionUpdate is NOT implemented here because session/update
-    // notifications are already captured by the stream tap and forwarded
-    // as acp_message events. This avoids duplicate events.
     const client: Client = {
       async requestPermission(
         params: RequestPermissionRequest,
       ): Promise<RequestPermissionResponse> {
-        // Auto-approve for now - can add UI later
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );
@@ -557,7 +552,6 @@ export class SessionManager {
 
       async sessionUpdate(_params: SessionNotification): Promise<void> {
         // No-op: session/update notifications are captured by the stream tap
-        // and forwarded as acp_message events to avoid duplication
       },
 
       extNotification: async (
@@ -569,7 +563,6 @@ export class SessionManager {
             sessionId: string;
             sdkSessionId: string;
           };
-          // Store sdkSessionId in session config for recreation/reconnection
           const session = this.sessions.get(sessionId);
           if (session) {
             session.config.sdkSessionId = sdkSessionId;
@@ -579,146 +572,41 @@ export class SessionManager {
       },
     };
 
-    // Create client-side connection with tapped streams (bidirectional)
     const clientStream = ndJsonStream(tappedWritable, tappedReadable);
 
     return new ClientSideConnection((_agent) => client, clientStream);
   }
-}
 
-let sessionManager: SessionManager;
-
-interface AgentSessionParams {
-  taskId: string;
-  taskRunId: string;
-  repoPath: string;
-  apiKey: string;
-  apiHost: string;
-  projectId: number;
-  logUrl?: string;
-  sdkSessionId?: string;
-  model?: string;
-}
-
-type SessionResponse = { sessionId: string; channel: string };
-
-function validateSessionParams(params: AgentSessionParams): void {
-  if (!params.taskId || !params.repoPath) {
-    throw new Error("taskId and repoPath are required");
+  private validateSessionParams(
+    params: StartSessionInput | ReconnectSessionInput,
+  ): void {
+    if (!params.taskId || !params.repoPath) {
+      throw new Error("taskId and repoPath are required");
+    }
+    if (!params.apiKey || !params.apiHost) {
+      throw new Error("PostHog API credentials are required");
+    }
   }
-  if (!params.apiKey || !params.apiHost) {
-    throw new Error("PostHog API credentials are required");
+
+  private toSessionConfig(
+    params: StartSessionInput | ReconnectSessionInput,
+  ): SessionConfig {
+    return {
+      taskId: params.taskId,
+      taskRunId: params.taskRunId,
+      repoPath: params.repoPath,
+      credentials: {
+        apiKey: params.apiKey,
+        apiHost: params.apiHost,
+        projectId: params.projectId,
+      },
+      logUrl: "logUrl" in params ? params.logUrl : undefined,
+      sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
+      model: "model" in params ? params.model : undefined,
+    };
   }
-}
 
-function toSessionConfig(params: AgentSessionParams): SessionConfig {
-  return {
-    taskId: params.taskId,
-    taskRunId: params.taskRunId,
-    repoPath: params.repoPath,
-    credentials: {
-      apiKey: params.apiKey,
-      apiHost: params.apiHost,
-      projectId: params.projectId,
-    },
-    logUrl: params.logUrl,
-    sdkSessionId: params.sdkSessionId,
-    model: params.model,
-  };
-}
-
-function toSessionResponse(session: ManagedSession): SessionResponse {
-  return { sessionId: session.taskRunId, channel: session.channel };
-}
-
-export async function cleanupAgentSessions(): Promise<void> {
-  await sessionManager?.cleanupAll();
-}
-
-export function registerAgentIpc(
-  _taskControllers: Map<string, unknown>,
-  getMainWindow: () => BrowserWindow | null,
-): void {
-  sessionManager = new SessionManager(getMainWindow, onAgentLog);
-
-  ipcMain.handle(
-    "agent-start",
-    async (
-      _event: IpcMainInvokeEvent,
-      params: AgentSessionParams,
-    ): Promise<SessionResponse> => {
-      validateSessionParams(params);
-      const session = await sessionManager.createSession(
-        toSessionConfig(params),
-      );
-      return toSessionResponse(session);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-prompt",
-    async (
-      _event: IpcMainInvokeEvent,
-      sessionId: string,
-      prompt: ContentBlock[],
-    ) => {
-      return sessionManager.prompt(sessionId, prompt);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-cancel",
-    async (_event: IpcMainInvokeEvent, sessionId: string) => {
-      return sessionManager.cancelSession(sessionId);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-cancel-prompt",
-    async (_event: IpcMainInvokeEvent, sessionId: string) => {
-      return sessionManager.cancelPrompt(sessionId);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-reconnect",
-    async (
-      _event: IpcMainInvokeEvent,
-      params: AgentSessionParams,
-    ): Promise<SessionResponse | null> => {
-      try {
-        validateSessionParams(params);
-      } catch (err) {
-        log.error("Invalid reconnect params", err);
-        return null;
-      }
-
-      const session = await sessionManager.reconnectSession(
-        toSessionConfig(params),
-      );
-      return session ? toSessionResponse(session) : null;
-    },
-  );
-
-  ipcMain.handle(
-    "agent-token-refresh",
-    async (
-      _event: IpcMainInvokeEvent,
-      _taskRunId: string,
-      newToken: string,
-    ): Promise<void> => {
-      sessionManager.updateToken(newToken);
-    },
-  );
-
-  ipcMain.handle(
-    "agent-set-model",
-    async (
-      _event: IpcMainInvokeEvent,
-      sessionId: string,
-      modelId: string,
-    ): Promise<void> => {
-      await sessionManager.setSessionModel(sessionId, modelId);
-    },
-  );
+  private toSessionResponse(session: ManagedSession): SessionResponse {
+    return { sessionId: session.taskRunId, channel: session.channel };
+  }
 }

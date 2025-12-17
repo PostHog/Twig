@@ -1,5 +1,3 @@
-/// <reference path="../../../types/electron.d.ts" />
-
 import type {
   ContentBlock,
   SessionNotification,
@@ -76,9 +74,43 @@ interface AuthCredentials {
 
 type SessionStore = SessionState & { actions: SessionActions };
 
-const subscriptions = new Map<string, () => void>();
 const connectAttempts = new Set<string>();
 const cloudPollers = new Map<string, NodeJS.Timeout>();
+// Track active tRPC subscriptions for cleanup
+const subscriptions = new Map<string, { unsubscribe: () => void }>();
+
+/**
+ * Subscribe to agent session events via tRPC subscription.
+ * Called synchronously after session is created, before any prompts are sent.
+ */
+function subscribeToChannel(taskRunId: string) {
+  if (subscriptions.has(taskRunId)) return;
+
+  const subscription = trpcVanilla.agent.onSessionEvent.subscribe(
+    { sessionId: taskRunId },
+    {
+      onData: (payload: unknown) => {
+        useStore.setState((state) => {
+          const session = state.sessions[taskRunId];
+          if (session) {
+            session.events.push(payload as AcpMessage);
+          }
+        });
+      },
+      onError: (err) => {
+        log.error("Session subscription error", { taskRunId, error: err });
+      },
+    },
+  );
+
+  subscriptions.set(taskRunId, subscription);
+}
+
+function unsubscribeFromChannel(taskRunId: string) {
+  const subscription = subscriptions.get(taskRunId);
+  subscription?.unsubscribe();
+  subscriptions.delete(taskRunId);
+}
 
 function getAuthCredentials(): AuthCredentials | null {
   const authState = useAuthStore.getState();
@@ -317,30 +349,6 @@ const useStore = create<SessionStore>()(
       }
     };
 
-    const subscribeToChannel = (taskRunId: string, channel: string) => {
-      if (subscriptions.has(taskRunId)) return;
-
-      const cleanup = window.electronAPI.onAgentEvent(
-        channel,
-        (payload: unknown) => {
-          set((state) => {
-            const session = state.sessions[taskRunId];
-            if (session) {
-              session.events.push(payload as AcpMessage);
-            }
-          });
-        },
-      );
-
-      subscriptions.set(taskRunId, cleanup);
-    };
-
-    const unsubscribeFromChannel = (taskRunId: string) => {
-      const cleanup = subscriptions.get(taskRunId);
-      cleanup?.();
-      subscriptions.delete(taskRunId);
-    };
-
     const startCloudPolling = (taskRunId: string, logUrl: string) => {
       if (cloudPollers.has(taskRunId)) return;
 
@@ -424,9 +432,9 @@ const useStore = create<SessionStore>()(
       session.logUrl = logUrl;
 
       addSession(session);
-      subscribeToChannel(taskRunId, session.channel);
+      subscribeToChannel(taskRunId);
 
-      const result = await window.electronAPI.agentReconnect({
+      const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
         repoPath,
@@ -463,7 +471,7 @@ const useStore = create<SessionStore>()(
       }
 
       const defaultModel = useSettingsStore.getState().defaultModel;
-      const result = await window.electronAPI.agentStart({
+      const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
         repoPath,
@@ -479,7 +487,7 @@ const useStore = create<SessionStore>()(
       session.model = defaultModel;
 
       addSession(session);
-      subscribeToChannel(taskRun.id, result.channel);
+      subscribeToChannel(taskRun.id);
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -522,7 +530,10 @@ const useStore = create<SessionStore>()(
       updateSession(session.taskRunId, { isPromptPending: true });
 
       try {
-        return await window.electronAPI.agentPrompt(session.taskRunId, blocks);
+        return await trpcVanilla.agent.prompt.mutate({
+          sessionId: session.taskRunId,
+          prompt: blocks,
+        });
       } finally {
         updateSession(session.taskRunId, { isPromptPending: false });
       }
@@ -593,7 +604,9 @@ const useStore = create<SessionStore>()(
             stopCloudPolling(session.taskRunId);
           } else {
             try {
-              await window.electronAPI.agentCancel(session.taskRunId);
+              await trpcVanilla.agent.cancel.mutate({
+                sessionId: session.taskRunId,
+              });
             } catch (error) {
               log.error("Failed to cancel session", error);
             }
@@ -630,9 +643,9 @@ const useStore = create<SessionStore>()(
           if (!session) return false;
 
           try {
-            return await window.electronAPI.agentCancelPrompt(
-              session.taskRunId,
-            );
+            return await trpcVanilla.agent.cancelPrompt.mutate({
+              sessionId: session.taskRunId,
+            });
           } catch (error) {
             log.error("Failed to cancel prompt", error);
             return false;
@@ -644,7 +657,10 @@ const useStore = create<SessionStore>()(
           if (!session || session.isCloud) return;
 
           try {
-            await window.electronAPI.agentSetModel(session.taskRunId, modelId);
+            await trpcVanilla.agent.setModel.mutate({
+              sessionId: session.taskRunId,
+              modelId,
+            });
             updateSession(session.taskRunId, { model: modelId });
           } catch (error) {
             log.error("Failed to change session model", {
@@ -687,6 +703,7 @@ export const useSessionForTask = (taskId: string | undefined) =>
   );
 export const getSessionActions = () => useStore.getState().actions;
 
+// Token refresh subscription
 let lastKnownToken: string | null = null;
 useAuthStore.subscribe(
   (state) => state.oauthAccessToken,
@@ -697,8 +714,11 @@ useAuthStore.subscribe(
     const sessions = useStore.getState().sessions;
     for (const session of Object.values(sessions)) {
       if (session.status === "connected" && !session.isCloud) {
-        window.electronAPI
-          .agentTokenRefresh(session.taskRunId, newToken)
+        trpcVanilla.agent.refreshToken
+          .mutate({
+            taskRunId: session.taskRunId,
+            newToken,
+          })
           .catch((err) => {
             log.warn("Failed to update session token", {
               taskRunId: session.taskRunId,

@@ -74,10 +74,7 @@ export function SettingsView() {
       trpcVanilla.secureStore.getItem.query({ key: "worktreeLocation" }),
   });
 
-  const { data: appVersion } = useQuery({
-    queryKey: ["app", "version"],
-    queryFn: () => window.electronAPI.getAppVersion(),
-  });
+  const { data: appVersion } = trpcReact.os.getAppVersion.useQuery();
 
   const [localWorktreeLocation, setLocalWorktreeLocation] =
     useState<string>("");

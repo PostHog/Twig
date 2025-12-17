@@ -1,3 +1,4 @@
+import { agentRouter } from "./routers/agent.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
 import { dockBadgeRouter } from "./routers/dock-badge.js";
@@ -12,11 +13,13 @@ import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
+import { uiRouter } from "./routers/ui.js";
 import { updatesRouter } from "./routers/updates.js";
 import { workspaceRouter } from "./routers/workspace.js";
 import { router } from "./trpc.js";
 
 export const trpcRouter = router({
+  agent: agentRouter,
   contextMenu: contextMenuRouter,
   dockBadge: dockBadgeRouter,
   encryption: encryptionRouter,
@@ -30,6 +33,7 @@ export const trpcRouter = router({
   os: osRouter,
   secureStore: secureStoreRouter,
   shell: shellRouter,
+  ui: uiRouter,
   updates: updatesRouter,
   deepLink: deepLinkRouter,
   workspace: workspaceRouter,
