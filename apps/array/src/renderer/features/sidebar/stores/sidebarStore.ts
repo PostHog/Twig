@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 
 interface SidebarStoreState {
   open: boolean;
+  hasUserSetOpen: boolean;
   width: number;
   isResizing: boolean;
   collapsedSections: Set<string>;
@@ -11,6 +12,7 @@ interface SidebarStoreState {
 
 interface SidebarStoreActions {
   setOpen: (open: boolean) => void;
+  setOpenAuto: (open: boolean) => void;
   toggle: () => void;
   setWidth: (width: number) => void;
   setIsResizing: (isResizing: boolean) => void;
@@ -25,13 +27,17 @@ type SidebarStore = SidebarStoreState & SidebarStoreActions;
 export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
-      open: true,
+      open: false,
+      hasUserSetOpen: false,
       width: 256,
       isResizing: false,
       collapsedSections: new Set<string>(),
       folderOrder: [],
-      setOpen: (open) => set({ open }),
-      toggle: () => set((state) => ({ open: !state.open })),
+      setOpen: (open) => set({ open, hasUserSetOpen: true }),
+      setOpenAuto: (open) =>
+        set((state) => (state.hasUserSetOpen ? state : { open })),
+      toggle: () =>
+        set((state) => ({ open: !state.open, hasUserSetOpen: true })),
       setWidth: (width) => set({ width }),
       setIsResizing: (isResizing) => set({ isResizing }),
       toggleSection: (sectionId) =>
@@ -73,6 +79,7 @@ export const useSidebarStore = create<SidebarStore>()(
       name: "sidebar-storage",
       partialize: (state) => ({
         open: state.open,
+        hasUserSetOpen: state.hasUserSetOpen,
         width: state.width,
         collapsedSections: Array.from(state.collapsedSections),
         folderOrder: state.folderOrder,
@@ -80,6 +87,7 @@ export const useSidebarStore = create<SidebarStore>()(
       merge: (persisted, current) => {
         const persistedState = persisted as {
           open?: boolean;
+          hasUserSetOpen?: boolean;
           width?: number;
           collapsedSections?: string[];
           folderOrder?: string[];
@@ -87,6 +95,8 @@ export const useSidebarStore = create<SidebarStore>()(
         return {
           ...current,
           open: persistedState.open ?? current.open,
+          hasUserSetOpen:
+            persistedState.hasUserSetOpen ?? current.hasUserSetOpen,
           width: persistedState.width ?? current.width,
           collapsedSections: new Set(persistedState.collapsedSections ?? []),
           folderOrder: persistedState.folderOrder ?? [],
