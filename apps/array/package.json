@@ -13,6 +13,7 @@
     "dev": "electron-forge start",
     "start": "electron-forge start",
     "package": "electron-forge package",
+    "package:dev": "FORCE_DEV_MODE=1 SKIP_NOTARIZE=1 electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "build": "pnpm package",

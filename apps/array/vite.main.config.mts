@@ -6,7 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
 
-function getGitCommit(): string {
+function _getGitCommit(): string {
   try {
     return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
   } catch {
@@ -14,7 +14,7 @@ function getGitCommit(): string {
   }
 }
 
-function getBuildDate(): string {
+function _getBuildDate(): string {
   return new Date().toISOString();
 }
 
@@ -151,11 +151,10 @@ function copyClaudeExecutable(): Plugin {
   };
 }
 
+// Allow forcing dev mode in packaged builds via FORCE_DEV_MODE=1
+const forceDevMode = process.env.FORCE_DEV_MODE === "1";
+
 export default defineConfig({
-  define: {
-    __BUILD_COMMIT__: JSON.stringify(getGitCommit()),
-    __BUILD_DATE__: JSON.stringify(getBuildDate()),
-  },
   plugins: [
     tsconfigPaths(),
     autoServicesPlugin(join(__dirname, "src/main/services")),
@@ -163,6 +162,13 @@ export default defineConfig({
     copyAgentTemplates(),
     copyClaudeExecutable(),
   ],
+  define: forceDevMode
+    ? {
+        "import.meta.env.DEV": "true",
+        "import.meta.env.PROD": "false",
+        "import.meta.env.MODE": '"development"',
+      }
+    : undefined,
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -35,7 +35,9 @@ type TaskController = unknown;
 
 import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
-import { ExternalAppsService } from "./services/external-apps/service.js";
+import type { DeepLinkService } from "./services/deep-link/service.js";
+import type { ExternalAppsService } from "./services/external-apps/service.js";
+import type { OAuthService } from "./services/oauth/service.js";
 import {
   initializePostHog,
   shutdownPostHog,
@@ -59,6 +61,58 @@ dns.setDefaultResultOrder("ipv4first");
 
 // Set app name to ensure consistent userData path across platforms
 app.setName("Array");
+
+// Single instance lock must be acquired FIRST before any other app setup
+// This ensures deep links go to the existing instance, not a new one
+// In development, we need to pass the same args that setAsDefaultProtocolClient uses
+const additionalData = process.defaultApp ? { argv: process.argv } : undefined;
+const gotTheLock = app.requestSingleInstanceLock(additionalData);
+if (!gotTheLock) {
+  app.quit();
+  // Must exit immediately to prevent any further initialization
+  process.exit(0);
+}
+
+// Queue to hold deep link URLs received before app is ready
+let pendingDeepLinkUrl: string | null = null;
+
+// Handle deep link URLs on macOS - must be registered before app is ready
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+
+  // If the app isn't ready yet, queue the URL for later processing
+  if (!app.isReady()) {
+    pendingDeepLinkUrl = url;
+    return;
+  }
+
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
+  deepLinkService.handleUrl(url);
+
+  // Focus the main window when receiving a deep link
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+// Handle deep link URLs on Windows/Linux (second instance sends URL via command line)
+app.on("second-instance", (_event, commandLine) => {
+  const url = commandLine.find((arg) => arg.startsWith("array://"));
+  if (url) {
+    const deepLinkService = container.get<DeepLinkService>(
+      MAIN_TOKENS.DeepLinkService,
+    );
+    deepLinkService.handleUrl(url);
+  }
+
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
@@ -256,6 +310,15 @@ app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
 
+  // Initialize deep link service and register protocol
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
+  deepLinkService.registerProtocol();
+
+  // Initialize OAuth service (registers its deep link handler)
+  container.get<OAuthService>(MAIN_TOKENS.OAuthService);
+
   // Initialize services that need early startup
   container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
@@ -265,9 +328,22 @@ app.whenReady().then(() => {
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
 
   // Preload external app icons in background
-  new ExternalAppsService().getDetectedApps().catch(() => {
-    // Silently fail, will retry on first use
-  });
+  container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
+
+  // Handle case where app was launched by a deep link
+  if (process.platform === "darwin") {
+    // On macOS, the open-url event may have fired before app was ready
+    if (pendingDeepLinkUrl) {
+      deepLinkService.handleUrl(pendingDeepLinkUrl);
+      pendingDeepLinkUrl = null;
+    }
+  } else {
+    // On Windows/Linux, the URL comes via command line arguments
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("array://"));
+    if (deepLinkUrl) {
+      deepLinkService.handleUrl(deepLinkUrl);
+    }
+  }
 });
 
 app.on("window-all-closed", async () => {
