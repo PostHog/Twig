@@ -130,9 +130,9 @@ const TurnView = memo(function TurnView({
           turnCancelled={wasCancelled}
         />
       ))}
-      {showGitResult && repoPath && (
+      {showGitResult && repoPath && gitAction.actionType && (
         <GitActionResult
-          actionType={gitAction.actionType!}
+          actionType={gitAction.actionType}
           repoPath={repoPath}
           turnId={turn.id}
           isCloud={isCloud}

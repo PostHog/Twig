@@ -1,5 +1,6 @@
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,7 +20,10 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
 
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", repoPath],
-    queryFn: () => window.electronAPI.getDiffStats(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getDiffStats.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: !!repoPath,
     refetchOnMount: "always",
   });

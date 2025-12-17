@@ -26,14 +26,16 @@ export function GitActionResult({
 
   const { data: commitInfo } = useQuery({
     queryKey: ["git-latest-commit", repoPath, turnId],
-    queryFn: () => window.electronAPI.getLatestCommit(repoPath),
+    queryFn: () =>
+      trpcVanilla.git.getLatestCommit.query({ directoryPath: repoPath }),
     enabled: canQueryGit,
     staleTime: 0,
   });
 
   const { data: repoInfo } = useQuery({
     queryKey: ["git-repo-info", repoPath, turnId],
-    queryFn: () => window.electronAPI.getGitRepoInfo(repoPath),
+    queryFn: () =>
+      trpcVanilla.git.getGitRepoInfo.query({ directoryPath: repoPath }),
     enabled: canQueryGit,
     staleTime: 30000,
   });

@@ -54,9 +54,10 @@ export class TaskCreationSaga extends Saga<
     input: TaskCreationInput,
   ): Promise<TaskCreationOutput> {
     // Step 1: Get or create task
-    const task = input.taskId
+    const taskId = input.taskId;
+    const task = taskId
       ? await this.readOnlyStep("fetch_task", () =>
-          this.deps.posthogClient.getTask(input.taskId!),
+          this.deps.posthogClient.getTask(taskId),
         )
       : await this.createTask(input);
 
@@ -224,9 +225,12 @@ export class TaskCreationSaga extends Saga<
   private async createTask(input: TaskCreationInput): Promise<Task> {
     let repository = input.repository;
 
-    if (!repository && input.repoPath) {
+    const repoPathForDetection = input.repoPath;
+    if (!repository && repoPathForDetection) {
       const detected = await this.readOnlyStep("repo_detection", () =>
-        trpcVanilla.git.detectRepo.query({ directoryPath: input.repoPath! }),
+        trpcVanilla.git.detectRepo.query({
+          directoryPath: repoPathForDetection,
+        }),
       );
       if (detected) {
         repository = `${detected.organization}/${detected.repository}`;
