@@ -51,7 +51,9 @@ export const scriptExecutionResultSchema = z.object({
 // Input schemas
 export const createWorkspaceInput = z.object({
   taskId: z.string(),
-  mainRepoPath: z.string().min(2, "Repository path must be a valid directory path"),
+  mainRepoPath: z
+    .string()
+    .min(2, "Repository path must be a valid directory path"),
   folderId: z.string(),
   folderPath: z.string().min(2, "Folder path must be a valid directory path"),
   mode: workspaceModeSchema,
