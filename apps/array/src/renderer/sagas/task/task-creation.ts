@@ -110,7 +110,7 @@ export class TaskCreationSaga extends Saga<
       const workspaceInfo = await this.step({
         name: "workspace_creation",
         execute: async () => {
-          return window.electronAPI.workspace.create({
+          return trpcVanilla.workspace.create.mutate({
             taskId: task.id,
             mainRepoPath: repoPath,
             folderId: folder.id,
@@ -121,7 +121,10 @@ export class TaskCreationSaga extends Saga<
         },
         rollback: async () => {
           log.info("Rolling back: deleting workspace", { taskId: task.id });
-          await window.electronAPI.workspace.delete(task.id, repoPath);
+          await trpcVanilla.workspace.delete.mutate({
+            taskId: task.id,
+            mainRepoPath: repoPath,
+          });
         },
       });
 

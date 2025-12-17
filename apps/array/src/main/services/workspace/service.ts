@@ -3,23 +3,29 @@ import * as fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { WorktreeManager } from "@posthog/agent";
-import type { BrowserWindow } from "electron";
+import { injectable } from "inversify";
 import type {
-  CreateWorkspaceOptions,
-  ScriptExecutionResult,
   TaskFolderAssociation,
-  Workspace,
-  WorkspaceInfo,
-  WorkspaceTerminalInfo,
   WorktreeInfo,
 } from "../../../shared/types";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
+import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import { getWorktreeLocation } from "../settingsStore";
 import { loadConfig, normalizeScripts } from "./configLoader";
+import type {
+  CreateWorkspaceInput,
+  ScriptExecutionResult,
+  Workspace,
+  WorkspaceErrorPayload,
+  WorkspaceInfo,
+  WorkspaceTerminalCreatedPayload,
+  WorkspaceTerminalInfo,
+  WorkspaceWarningPayload,
+} from "./schemas.js";
 import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
 
@@ -67,24 +73,32 @@ async function hasAnyFiles(repoPath: string): Promise<boolean> {
 
 const log = logger.scope("workspace");
 
-export interface WorkspaceServiceOptions {
-  getMainWindow: () => BrowserWindow | null;
+export const WorkspaceServiceEvent = {
+  TerminalCreated: "terminalCreated",
+  Error: "error",
+  Warning: "warning",
+} as const;
+
+export interface WorkspaceServiceEvents {
+  [WorkspaceServiceEvent.TerminalCreated]: WorkspaceTerminalCreatedPayload;
+  [WorkspaceServiceEvent.Error]: WorkspaceErrorPayload;
+  [WorkspaceServiceEvent.Warning]: WorkspaceWarningPayload;
 }
 
-export class WorkspaceService {
+@injectable()
+export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   private scriptRunner: ScriptRunner;
-  private getMainWindow: () => BrowserWindow | null;
 
-  constructor(options: WorkspaceServiceOptions) {
-    this.getMainWindow = options.getMainWindow;
+  constructor() {
+    super();
     this.scriptRunner = new ScriptRunner({
-      getMainWindow: options.getMainWindow,
+      onTerminalCreated: (info) => {
+        this.emit(WorkspaceServiceEvent.TerminalCreated, info);
+      },
     });
   }
 
-  async createWorkspace(
-    options: CreateWorkspaceOptions,
-  ): Promise<WorkspaceInfo> {
+  async createWorkspace(options: CreateWorkspaceInput): Promise<WorkspaceInfo> {
     const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
       options;
     log.info(
@@ -698,10 +712,7 @@ export class WorkspaceService {
   }
 
   private emitWorkspaceError(taskId: string, message: string): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send("workspace:error", { taskId, message });
-    }
+    this.emit(WorkspaceServiceEvent.Error, { taskId, message });
   }
 
   private emitWorkspaceWarning(
@@ -709,13 +720,6 @@ export class WorkspaceService {
     title: string,
     message: string,
   ): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send("workspace:warning", {
-        taskId,
-        title,
-        message,
-      });
-    }
+    this.emit(WorkspaceServiceEvent.Warning, { taskId, title, message });
   }
 }
