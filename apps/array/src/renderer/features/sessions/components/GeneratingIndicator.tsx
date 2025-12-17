@@ -9,7 +9,7 @@ export function formatDuration(ms: number): string {
   const centiseconds = Math.floor((ms % 1000) / 10);
 
   if (mins > 0) {
-    return `${mins}m ${secs.toString().padStart(2, "0")}.${centiseconds.toString().padStart(2, "0")}s`;
+    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
   }
   return `${secs}.${centiseconds.toString().padStart(2, "0")}s`;
 }
