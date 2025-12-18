@@ -47,6 +47,24 @@ export function serializeContent(element: HTMLDivElement): EditorContent {
   return { segments };
 }
 
+export function renderChipToElement(chip: MentionChip): HTMLSpanElement {
+  const isCommand = chip.type === "command";
+  const typeClass = isCommand ? "cli-slash-command" : "cli-file-mention";
+
+  const el = document.createElement("span");
+  el.className = `mention-chip ${typeClass} inline-block rounded-[var(--radius-1)] bg-[var(--accent-a3)] px-1 py-px font-medium text-[var(--accent-11)]`;
+  el.contentEditable = "false";
+  el.dataset.chipType = chip.type;
+  el.dataset.chipId = chip.id;
+  el.dataset.chipLabel = chip.label;
+  el.style.userSelect = "all";
+  el.style.cursor = "default";
+  el.style.fontSize = "12px";
+  el.textContent = isCommand ? `/${chip.label}` : `@${chip.label}`;
+
+  return el;
+}
+
 export function renderContentToElement(
   element: HTMLDivElement,
   content: EditorContent,
@@ -57,26 +75,7 @@ export function renderContentToElement(
     if (segment.type === "text") {
       element.appendChild(document.createTextNode(segment.text));
     } else {
-      const chip = segment.chip;
-      const chipEl = document.createElement("span");
-      chipEl.className = "mention-chip";
-      chipEl.contentEditable = "false";
-      chipEl.dataset.chipType = chip.type;
-      chipEl.dataset.chipId = chip.id;
-      chipEl.dataset.chipLabel = chip.label;
-
-      if (chip.type === "file") {
-        chipEl.classList.add("cli-file-mention");
-        chipEl.textContent = `@${chip.label}`;
-      } else if (chip.type === "command") {
-        chipEl.classList.add("cli-slash-command");
-        chipEl.textContent = `/${chip.label}`;
-      } else {
-        chipEl.classList.add("cli-file-mention");
-        chipEl.textContent = `@${chip.label}`;
-      }
-
-      element.appendChild(chipEl);
+      element.appendChild(renderChipToElement(segment.chip));
     }
   }
 }

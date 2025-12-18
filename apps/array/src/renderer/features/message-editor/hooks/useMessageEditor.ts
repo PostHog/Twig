@@ -282,18 +282,11 @@ export function useMessageEditor(
         items = getCommandSuggestions(sessionId, trigger.query);
       }
 
-      const currentItems = useSuggestionStore.getState().items;
-      if (items.length > 0 || currentItems.length === 0) {
-        suggestionActions.setItems(items);
-        suggestionActions.setLoadingState(
-          items.length > 0 ? "success" : "idle",
-        );
-      }
+      suggestionActions.setItems(items);
+      suggestionActions.setLoadingState(items.length > 0 ? "success" : "idle");
     } catch (error) {
-      const currentItems = useSuggestionStore.getState().items;
-      if (currentItems.length === 0) {
-        suggestionActions.setLoadingState("error", String(error));
-      }
+      suggestionActions.setItems([]);
+      suggestionActions.setLoadingState("error", String(error));
     }
 
     requestAnimationFrame(updateSuggestionPosition);

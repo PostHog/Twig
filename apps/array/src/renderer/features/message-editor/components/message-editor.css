@@ -9,18 +9,9 @@
   content: "";
 }
 
-/* Mention chips - created via DOM manipulation, not React */
+/* Mention chips - base styles for selection behavior */
 .mention-chip {
   display: inline;
   user-select: all;
   cursor: default;
-}
-
-.cli-file-mention,
-.cli-slash-command {
-  background-color: var(--accent-a3);
-  color: var(--accent-11);
-  padding: 1px 4px;
-  border-radius: var(--radius-1);
-  font-weight: 500;
 }

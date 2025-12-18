@@ -3,6 +3,7 @@ import {
   type EditorContent,
   isContentEmpty,
   type MentionChip,
+  renderChipToElement,
   renderContentToElement,
   serializeContent,
 } from "./content";
@@ -46,6 +47,10 @@ export class EditorController {
 
   focus(): void {
     this.element.focus();
+    // Ensure cursor is positioned at end after focus (fixes empty contenteditable issue)
+    if (this.isEmpty()) {
+      this.moveCursorToEnd();
+    }
   }
 
   blur(): void {
@@ -192,24 +197,6 @@ export class EditorController {
   }
 
   private createChipElement(chip: MentionChip): HTMLSpanElement {
-    const chipEl = document.createElement("span");
-    chipEl.className = "mention-chip";
-    chipEl.contentEditable = "false";
-    chipEl.dataset.chipType = chip.type;
-    chipEl.dataset.chipId = chip.id;
-    chipEl.dataset.chipLabel = chip.label;
-
-    if (chip.type === "file") {
-      chipEl.classList.add("cli-file-mention");
-      chipEl.textContent = `@${chip.label}`;
-    } else if (chip.type === "command") {
-      chipEl.classList.add("cli-slash-command");
-      chipEl.textContent = `/${chip.label}`;
-    } else {
-      chipEl.classList.add("cli-file-mention");
-      chipEl.textContent = `@${chip.label}`;
-    }
-
-    return chipEl;
+    return renderChipToElement(chip);
   }
 }

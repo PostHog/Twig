@@ -13,7 +13,7 @@ const FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
     { name: "name", weight: 0.7 },
     { name: "description", weight: 0.3 },
   ],
-  threshold: 0.4,
+  threshold: 0.3,
   includeScore: true,
 };
 
