@@ -9,7 +9,6 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
-  type SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { Agent, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
@@ -550,15 +549,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         };
       },
 
-      async sessionUpdate(params: SessionNotification): Promise<void> {
-        // Emit session update notifications to the renderer
-        // These are called directly by the agent (not through the stream),
-        // so we need to manually emit them
-        onAcpMessage({
-          jsonrpc: "2.0",
-          method: "session/update",
-          params,
-        });
+      async sessionUpdate() {
+        // session/update notifications flow through the tapped stream
       },
 
       extNotification: async (
