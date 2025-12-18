@@ -9,6 +9,8 @@ import { SuggestionList, type SuggestionListRef } from "./SuggestionList";
 function createSuggestion(
   sessionId: string,
 ): Partial<SuggestionOptions<FileSuggestionItem>> {
+  let lastItems: FileSuggestionItem[] = [];
+
   return {
     char: "@",
     allowSpaces: false,
@@ -16,7 +18,9 @@ function createSuggestion(
 
     items: async ({ query }): Promise<FileSuggestionItem[]> => {
       if (!sessionId) return [];
-      return getFileSuggestions(sessionId, query);
+      const results = await getFileSuggestions(sessionId, query);
+      lastItems = results;
+      return results;
     },
 
     render: () => {
@@ -25,9 +29,10 @@ function createSuggestion(
 
       return {
         onStart: (props) => {
+          const items = props.items.length > 0 ? props.items : lastItems;
           component = new ReactRenderer(SuggestionList, {
             props: {
-              items: props.items,
+              items,
               command: props.command,
             },
             editor: props.editor,
@@ -48,8 +53,9 @@ function createSuggestion(
         },
 
         onUpdate: (props) => {
+          const items = props.items.length > 0 ? props.items : lastItems;
           component?.updateProps({
-            items: props.items,
+            items,
             command: props.command,
           });
 
