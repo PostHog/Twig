@@ -38,6 +38,15 @@ export interface EditorContent {
   >;
 }
 
+export interface EditorCapabilities {
+  /** Enable @file mentions (default: true) */
+  fileMentions?: boolean;
+  /** Enable /command suggestions (default: true) */
+  commands?: boolean;
+  /** Enable !bash mode (default: true) */
+  bashMode?: boolean;
+}
+
 export interface UseContenteditableEditorOptions {
   sessionId: string;
   taskId?: string;
@@ -45,6 +54,7 @@ export interface UseContenteditableEditorOptions {
   repoPath?: string | null;
   disabled?: boolean;
   isCloud?: boolean;
+  capabilities?: EditorCapabilities;
   onSubmit?: (text: string) => void;
   onBashCommand?: (command: string) => void;
   onBashModeChange?: (isBashMode: boolean) => void;
@@ -61,6 +71,7 @@ export interface UseContenteditableEditorReturn {
   clear: () => void;
   getText: () => string;
   getContent: () => EditorContent;
+  setContent: (text: string) => void;
   insertChip: (chip: MentionChip) => void;
   onInput: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -77,7 +88,15 @@ interface TriggerMatch {
   endOffset: number;
 }
 
-function findActiveTrigger(element: HTMLDivElement): TriggerMatch | null {
+interface TriggerCapabilities {
+  fileMentions: boolean;
+  commands: boolean;
+}
+
+function findActiveTrigger(
+  element: HTMLDivElement,
+  caps: TriggerCapabilities,
+): TriggerMatch | null {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
 
@@ -119,8 +138,11 @@ function findActiveTrigger(element: HTMLDivElement): TriggerMatch | null {
     // Stop at whitespace - no trigger in this "word"
     if (/\s/.test(char)) break;
 
-    // Check for triggers
-    if (char === "@" || char === "/") {
+    // Check for triggers (respecting capabilities)
+    const isFileTrigger = char === "@" && caps.fileMentions;
+    const isCommandTrigger = char === "/" && caps.commands;
+
+    if (isFileTrigger || isCommandTrigger) {
       // Must be at start or preceded by whitespace
       const prevChar = i > 0 ? textBeforeCursor[i - 1] : null;
       if (prevChar === null || /\s/.test(prevChar)) {
@@ -153,23 +175,78 @@ function findActiveTrigger(element: HTMLDivElement): TriggerMatch | null {
   return null;
 }
 
-function getCaretRect(element: HTMLDivElement): DOMRect | null {
+function getRectAtOffset(
+  element: HTMLDivElement,
+  offset: number,
+): DOMRect | null {
+  // Save current selection to restore after measuring
   const selection = window.getSelection();
+  const savedRange = selection?.rangeCount
+    ? selection.getRangeAt(0).cloneRange()
+    : null;
+
+  // Walk through nodes to find the position at the given offset
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let currentOffset = 0;
+
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text;
+    const len = textNode.length;
+
+    if (currentOffset + len >= offset) {
+      // Found the text node containing our offset
+      const offsetInNode = offset - currentOffset;
+      const range = document.createRange();
+      range.setStart(textNode, offsetInNode);
+      range.collapse(true);
+
+      // Use range.getBoundingClientRect() directly instead of inserting a span
+      // This avoids DOM mutations that can corrupt the editor content
+      let rect = range.getBoundingClientRect();
+
+      // If rect has zero dimensions (collapsed range at line start),
+      // we need to insert a temporary element
+      if (rect.width === 0 && rect.height === 0) {
+        const span = document.createElement("span");
+        span.textContent = "\u200B"; // Zero-width space
+        range.insertNode(span);
+        rect = span.getBoundingClientRect();
+        span.parentNode?.removeChild(span);
+        element.normalize();
+
+        // Restore selection after DOM mutation
+        if (savedRange && selection) {
+          selection.removeAllRanges();
+          selection.addRange(savedRange);
+        }
+      }
+
+      return rect;
+    }
+    currentOffset += len;
+  }
+
+  // Fallback: get caret rect if offset not found
   if (!selection || selection.rangeCount === 0) return null;
 
   const range = selection.getRangeAt(0).cloneRange();
   range.collapse(true);
 
-  // Create a span to measure position
-  const span = document.createElement("span");
-  span.textContent = "\u200B"; // Zero-width space
-  range.insertNode(span);
+  let rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    const span = document.createElement("span");
+    span.textContent = "\u200B";
+    range.insertNode(span);
+    rect = span.getBoundingClientRect();
+    span.parentNode?.removeChild(span);
+    element.normalize();
 
-  const rect = span.getBoundingClientRect();
-  span.parentNode?.removeChild(span);
-
-  // Normalize to clean up any empty text nodes
-  element.normalize();
+    // Restore selection
+    if (savedRange && selection) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+  }
 
   return rect;
 }
@@ -204,6 +281,62 @@ function serializeContent(element: HTMLDivElement): EditorContent {
   }
 
   return { segments };
+}
+
+function renderContentToElement(
+  element: HTMLDivElement,
+  content: EditorContent,
+): void {
+  element.innerHTML = "";
+
+  for (const segment of content.segments) {
+    if (segment.type === "text") {
+      element.appendChild(document.createTextNode(segment.text));
+    } else {
+      const chip = segment.chip;
+      const chipEl = document.createElement("span");
+      chipEl.className = "mention-chip";
+      chipEl.contentEditable = "false";
+      chipEl.dataset.chipType = chip.type;
+      chipEl.dataset.chipId = chip.id;
+      chipEl.dataset.chipLabel = chip.label;
+
+      if (chip.type === "file") {
+        chipEl.classList.add("cli-file-mention");
+        chipEl.textContent = `@${chip.label}`;
+      } else if (chip.type === "command") {
+        chipEl.classList.add("cli-slash-command");
+        chipEl.textContent = `/${chip.label}`;
+      } else {
+        chipEl.classList.add("cli-file-mention");
+        chipEl.textContent = `@${chip.label}`;
+      }
+
+      element.appendChild(chipEl);
+    }
+  }
+}
+
+function contentToPlainText(content: EditorContent): string {
+  return content.segments
+    .map((seg) => {
+      if (seg.type === "text") return seg.text;
+      const chip = seg.chip;
+      if (chip.type === "file") return `@${chip.label}`;
+      if (chip.type === "command") return `/${chip.label}`;
+      return `@${chip.label}`;
+    })
+    .join("");
+}
+
+function isContentEmpty(content: EditorContent | null | string): boolean {
+  if (!content) return true;
+  // Handle legacy string drafts from old persisted data
+  if (typeof content === "string") return !content.trim();
+  if (!content.segments) return true;
+  return content.segments.every(
+    (seg) => seg.type === "text" && !seg.text.trim(),
+  );
 }
 
 function contentToXml(content: EditorContent): string {
@@ -241,10 +374,17 @@ export function useContenteditableEditor(
     repoPath,
     autoFocus = false,
     isCloud = false,
+    capabilities = {},
     onSubmit,
     onBashCommand,
     onBashModeChange,
   } = options;
+
+  const {
+    fileMentions: enableFileMentions = true,
+    commands: enableCommands = true,
+    bashMode: enableBashMode = true,
+  } = capabilities;
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -262,6 +402,7 @@ export function useContenteditableEditor(
   const hasHydrated = useMessageEditorStore((s) => s._hasHydrated);
   const suggestionActive = useMessageEditorStore((s) => s.suggestion.active);
   const availableCommands = useAvailableCommandsForTask(taskId);
+  const hasRestoredDraftRef = useRef(false);
 
   // Keep refs up to date
   useLayoutEffect(() => {
@@ -299,20 +440,30 @@ export function useContenteditableEditor(
     };
   }, [sessionId, actions]);
 
-  // Restore draft on hydration
+  // Restore draft on hydration (only once on initial mount)
   useLayoutEffect(() => {
-    if (hasHydrated && editorRef.current && draft) {
-      // Draft is stored as plain string now
-      if (
-        typeof draft === "string" &&
-        editorRef.current.textContent !== draft
-      ) {
+    if (
+      hasHydrated &&
+      editorRef.current &&
+      !hasRestoredDraftRef.current &&
+      draft &&
+      !isContentEmpty(draft)
+    ) {
+      hasRestoredDraftRef.current = true;
+      // Handle legacy string drafts from old persisted data
+      if (typeof draft === "string") {
         editorRef.current.textContent = draft;
         setIsEmpty(!draft);
-        setIsBashMode(draft.trimStart().startsWith("!"));
+        setIsBashMode(enableBashMode && draft.trimStart().startsWith("!"));
+        return;
       }
+      // Render the full content structure with chips
+      renderContentToElement(editorRef.current, draft);
+      const plainText = contentToPlainText(draft);
+      setIsEmpty(!plainText);
+      setIsBashMode(enableBashMode && plainText.trimStart().startsWith("!"));
     }
-  }, [hasHydrated, draft]);
+  }, [hasHydrated, draft, enableBashMode]);
 
   // Auto focus
   useEffect(() => {
@@ -323,13 +474,15 @@ export function useContenteditableEditor(
 
   const updateSuggestionPosition = useCallback(() => {
     const element = editorRef.current;
-    if (!element) return;
+    const trigger = currentTriggerRef.current;
+    if (!element || !trigger) return;
 
-    const caretRect = getCaretRect(element);
-    if (!caretRect) return;
+    // Get rect at the trigger character position (@ or /)
+    const triggerRect = getRectAtOffset(element, trigger.startOffset);
+    if (!triggerRect) return;
 
     const virtualElement = {
-      getBoundingClientRect: () => caretRect,
+      getBoundingClientRect: () => triggerRect,
     };
 
     const popup = document.querySelector(
@@ -443,10 +596,11 @@ export function useContenteditableEditor(
 
       closeSuggestion();
 
-      // Update state
+      // Update state with full content structure
       const text = element.textContent ?? "";
       setIsEmpty(!text);
-      actions.setDraft(sessionId, text || null);
+      const content = serializeContent(element);
+      actions.setDraft(sessionId, isContentEmpty(content) ? null : content);
     },
     [sessionId, actions, closeSuggestion],
   );
@@ -457,7 +611,10 @@ export function useContenteditableEditor(
     const element = editorRef.current;
     if (!element) return;
 
-    const trigger = findActiveTrigger(element);
+    const trigger = findActiveTrigger(element, {
+      fileMentions: enableFileMentions,
+      commands: enableCommands,
+    });
 
     if (!trigger) {
       if (suggestionActive) {
@@ -511,6 +668,8 @@ export function useContenteditableEditor(
     closeSuggestion,
     handleSuggestionSelect,
     updateSuggestionPosition,
+    enableFileMentions,
+    enableCommands,
   ]);
 
   const handleInput = useCallback(() => {
@@ -519,14 +678,15 @@ export function useContenteditableEditor(
 
     const text = element.textContent ?? "";
     setIsEmpty(!text);
-    setIsBashMode(text.trimStart().startsWith("!"));
+    setIsBashMode(enableBashMode && text.trimStart().startsWith("!"));
 
-    // Save draft
-    actions.setDraft(sessionId, text || null);
+    // Save draft with full content structure (including chips)
+    const content = serializeContent(element);
+    actions.setDraft(sessionId, isContentEmpty(content) ? null : content);
 
     // Check for triggers
     checkForTrigger();
-  }, [sessionId, actions, checkForTrigger]);
+  }, [sessionId, actions, checkForTrigger, enableBashMode]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -725,6 +885,29 @@ export function useContenteditableEditor(
     return serializeContent(editorRef.current);
   }, []);
 
+  const setContent = useCallback(
+    (text: string) => {
+      if (!editorRef.current) return;
+      editorRef.current.textContent = text;
+      setIsEmpty(!text);
+      setIsBashMode(enableBashMode && text.trimStart().startsWith("!"));
+      // Save draft with full content structure
+      const content = serializeContent(editorRef.current);
+      actions.setDraft(sessionId, isContentEmpty(content) ? null : content);
+      // Move cursor to end
+      const selection = window.getSelection();
+      if (selection && editorRef.current.childNodes.length > 0) {
+        const range = document.createRange();
+        range.selectNodeContents(editorRef.current);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      editorRef.current.focus();
+    },
+    [sessionId, actions, enableBashMode],
+  );
+
   const insertChip = useCallback(
     (chip: MentionChip) => {
       const element = editorRef.current;
@@ -781,6 +964,7 @@ export function useContenteditableEditor(
     clear,
     getText,
     getContent,
+    setContent,
     insertChip,
     onInput: handleInput,
     onKeyDown: handleKeyDown,

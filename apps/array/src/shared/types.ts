@@ -122,7 +122,7 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
-// URL mention types for RichTextEditor
+// Mention types for editors
 type MentionType =
   | "file"
   | "error"

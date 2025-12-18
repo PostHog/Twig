@@ -18,6 +18,7 @@ export interface MessageEditorHandle {
   isEmpty: () => boolean;
   getContent: () => EditorContent;
   getText: () => string;
+  setContent: (text: string) => void;
 }
 
 interface MessageEditorProps {
@@ -66,6 +67,7 @@ export const MessageEditor = forwardRef<
       clear,
       getText,
       getContent,
+      setContent,
       insertChip,
       onInput,
       onKeyDown,
@@ -94,8 +96,9 @@ export const MessageEditor = forwardRef<
         isEmpty: () => isEmpty,
         getContent,
         getText,
+        setContent,
       }),
-      [focus, blur, clear, isEmpty, getContent, getText],
+      [focus, blur, clear, isEmpty, getContent, getText, setContent],
     );
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

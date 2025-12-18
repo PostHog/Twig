@@ -2,6 +2,7 @@ import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
+import type { EditorContent } from "../hooks/useContenteditableEditor";
 import type {
   SuggestionItem,
   SuggestionLoadingState,
@@ -34,7 +35,8 @@ interface SuggestionState {
 }
 
 interface MessageEditorState {
-  drafts: Record<SessionId, string>;
+  /** Drafts are EditorContent, but legacy persisted data may be strings */
+  drafts: Record<SessionId, EditorContent | string>;
   _hasHydrated: boolean;
   contexts: Record<SessionId, EditorContext>;
   commands: Record<SessionId, AvailableCommand[]>;
@@ -43,7 +45,7 @@ interface MessageEditorState {
 
 interface MessageEditorActions {
   setHasHydrated: (hydrated: boolean) => void;
-  setDraft: (sessionId: SessionId, draft: string | null) => void;
+  setDraft: (sessionId: SessionId, draft: EditorContent | null) => void;
   setContext: (
     sessionId: SessionId,
     context: {

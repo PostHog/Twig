@@ -1,6 +1,7 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { EditorContent } from "../hooks/useContenteditableEditor";
 import {
   mockItems,
   openSuggestion,
@@ -24,7 +25,26 @@ describe("messageEditorStore", () => {
 
   describe("draft management", () => {
     it("sets and retrieves drafts", () => {
-      const draft = "Hello world";
+      const draft: EditorContent = {
+        segments: [{ type: "text", text: "Hello world" }],
+      };
+
+      act(() => getActions().setDraft(SESSION_ID, draft));
+
+      expect(getState().drafts[SESSION_ID]).toEqual(draft);
+    });
+
+    it("stores drafts with chips", () => {
+      const draft: EditorContent = {
+        segments: [
+          { type: "text", text: "Check " },
+          {
+            type: "chip",
+            chip: { type: "file", id: "src/index.ts", label: "index.ts" },
+          },
+          { type: "text", text: " please" },
+        ],
+      };
 
       act(() => getActions().setDraft(SESSION_ID, draft));
 
@@ -32,7 +52,9 @@ describe("messageEditorStore", () => {
     });
 
     it("clears draft when set to null", () => {
-      const draft = "Some text";
+      const draft: EditorContent = {
+        segments: [{ type: "text", text: "Some text" }],
+      };
 
       act(() => {
         getActions().setDraft(SESSION_ID, draft);
