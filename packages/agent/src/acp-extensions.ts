@@ -33,6 +33,8 @@ export const POSTHOG_NOTIFICATIONS = {
   CONSOLE: "_posthog/console",
   /** SDK session ID notification (for resumption) */
   SDK_SESSION: "_posthog/sdk_session",
+  /** Sandbox execution output (stdout/stderr from Modal or Docker) */
+  SANDBOX_OUTPUT: "_posthog/sandbox_output",
 } as const;
 
 export type PostHogNotificationType =
@@ -105,6 +107,17 @@ export interface SdkSessionPayload {
   sdkSessionId: string;
 }
 
+/**
+ * Sandbox execution output from Modal or Docker
+ */
+export interface SandboxOutputPayload {
+  sessionId: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  source: "modal" | "docker" | string;
+}
+
 export type PostHogNotificationPayload =
   | ArtifactNotificationPayload
   | PhaseNotificationPayload
@@ -114,4 +127,5 @@ export type PostHogNotificationPayload =
   | TaskCompletePayload
   | ErrorNotificationPayload
   | ConsoleNotificationPayload
-  | SdkSessionPayload;
+  | SdkSessionPayload
+  | SandboxOutputPayload;
