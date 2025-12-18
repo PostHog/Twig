@@ -2,7 +2,7 @@ import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { MentionItem } from "@shared/types";
 import Fuse, { type IFuseOptions } from "fuse.js";
-import { useMessageEditorStore } from "../stores/messageEditorStore";
+import { useDraftStore } from "../stores/draftStore";
 import type { CommandSuggestionItem, FileSuggestionItem } from "../types";
 
 const FILE_LIMIT = 10;
@@ -45,8 +45,7 @@ export async function getFileSuggestions(
   sessionId: string,
   query: string,
 ): Promise<FileSuggestionItem[]> {
-  const repoPath =
-    useMessageEditorStore.getState().contexts[sessionId]?.repoPath;
+  const repoPath = useDraftStore.getState().contexts[sessionId]?.repoPath;
 
   if (!repoPath) {
     return [];
@@ -74,7 +73,7 @@ export function getCommandSuggestions(
   sessionId: string,
   query: string,
 ): CommandSuggestionItem[] {
-  const store = useMessageEditorStore.getState();
+  const store = useDraftStore.getState();
   const taskId = store.contexts[sessionId]?.taskId;
   const commands = taskId ? (store.commands[taskId] ?? []) : [];
   const filtered = searchCommands(commands, query);

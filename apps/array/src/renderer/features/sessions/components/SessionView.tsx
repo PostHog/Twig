@@ -1,5 +1,5 @@
 import { MessageEditor } from "@features/message-editor/components/MessageEditor";
-import { useMessageEditorStore } from "@features/message-editor/stores/messageEditorStore";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import type { Plan } from "@features/sessions/types";
 import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
@@ -43,7 +43,7 @@ export function SessionView({
   const { setShowRawLogs } = useSessionViewActions();
 
   const sessionId = taskId ?? "default";
-  const setContext = useMessageEditorStore((s) => s.actions.setContext);
+  const setContext = useDraftStore((s) => s.actions.setContext);
   setContext(sessionId, {
     taskId,
     repoPath,

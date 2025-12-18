@@ -1,19 +1,13 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { act } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { EditorContent } from "../hooks/useContenteditableEditor";
-import {
-  mockItems,
-  openSuggestion,
-  setupSuggestionTests,
-} from "../test/helpers";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { EditorContent } from "../core/content";
 import { useMessageEditorStore } from "./messageEditorStore";
 
 const SESSION_ID = "session-1";
 
 const getState = () => useMessageEditorStore.getState();
 const getActions = () => getState().actions;
-const getSuggestion = () => getState().suggestion;
 
 const MOCK_COMMANDS: AvailableCommand[] = [
   { name: "test", description: "Test" },
@@ -21,7 +15,15 @@ const MOCK_COMMANDS: AvailableCommand[] = [
 ];
 
 describe("messageEditorStore", () => {
-  setupSuggestionTests();
+  beforeEach(() => {
+    useMessageEditorStore.setState({
+      drafts: {},
+      contexts: {},
+      commands: {},
+      _hasHydrated: false,
+      suggestion: useMessageEditorStore.getState().suggestion,
+    });
+  });
 
   describe("draft management", () => {
     it("sets and retrieves drafts", () => {
@@ -115,117 +117,6 @@ describe("messageEditorStore", () => {
 
     it("returns undefined for unknown session", () => {
       expect(getState().commands.unknown).toBeUndefined();
-    });
-  });
-
-  describe("suggestion", () => {
-    describe("opening", () => {
-      it("opens with correct initial state", () => {
-        expect(getSuggestion().active).toBe(false);
-
-        act(() => openSuggestion(SESSION_ID, "file", { x: 100, y: 200 }));
-
-        expect(getSuggestion()).toMatchObject({
-          active: true,
-          sessionId: SESSION_ID,
-          type: "file",
-          position: { x: 100, y: 200 },
-          items: [],
-          selectedIndex: 0,
-        });
-      });
-    });
-
-    describe("loading states", () => {
-      it("sets loading state", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionLoadingState("loading");
-        });
-
-        expect(getSuggestion().loadingState).toBe("loading");
-      });
-
-      it("sets error state with message", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionLoadingState("error", "Failed");
-        });
-
-        expect(getSuggestion().loadingState).toBe("error");
-        expect(getSuggestion().error).toBe("Failed");
-      });
-    });
-
-    describe("navigation", () => {
-      it("navigates with selectNext and selectPrevious", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionItems(mockItems);
-        });
-
-        expect(getSuggestion().selectedIndex).toBe(0);
-
-        act(() => getActions().selectNext());
-        expect(getSuggestion().selectedIndex).toBe(1);
-
-        act(() => getActions().selectPrevious());
-        expect(getSuggestion().selectedIndex).toBe(0);
-      });
-
-      it("wraps selection at boundaries", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionItems(mockItems.slice(0, 2));
-        });
-
-        act(() => getActions().selectPrevious());
-        expect(getSuggestion().selectedIndex).toBe(1);
-
-        act(() => getActions().selectNext());
-        expect(getSuggestion().selectedIndex).toBe(0);
-      });
-
-      it("returns correct selected item", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionItems(mockItems);
-        });
-
-        const { items, selectedIndex } = getSuggestion();
-        expect(items[selectedIndex]).toEqual(mockItems[0]);
-
-        act(() => getActions().selectNext());
-        expect(getSuggestion().items[getSuggestion().selectedIndex]).toEqual(
-          mockItems[1],
-        );
-      });
-    });
-
-    describe("closing", () => {
-      it("resets state on close", () => {
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setSuggestionItems(mockItems);
-          getActions().closeSuggestion();
-        });
-
-        expect(getSuggestion().active).toBe(false);
-        expect(getSuggestion().items).toEqual([]);
-      });
-    });
-
-    describe("callbacks", () => {
-      it("stores onSelectItem callback", () => {
-        const callback = vi.fn();
-
-        act(() => {
-          openSuggestion(SESSION_ID);
-          getActions().setOnSelectItem(callback);
-        });
-
-        expect(getSuggestion().onSelectItem).toBe(callback);
-      });
     });
   });
 });

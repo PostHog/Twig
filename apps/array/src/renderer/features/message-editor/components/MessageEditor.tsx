@@ -3,12 +3,9 @@ import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import {
-  type EditorContent,
-  type MentionChip,
-  useContenteditableEditor,
-} from "../hooks/useContenteditableEditor";
-import { useMessageEditorStore } from "../stores/messageEditorStore";
+import type { EditorContent, MentionChip } from "../core/content";
+import { useMessageEditor } from "../hooks/useMessageEditor";
+import { useDraftStore } from "../stores/draftStore";
 import { SuggestionPortal } from "./SuggestionPortal";
 
 export interface MessageEditorHandle {
@@ -50,7 +47,7 @@ export const MessageEditor = forwardRef<
     ref,
   ) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const context = useMessageEditorStore((s) => s.contexts[sessionId]);
+    const context = useDraftStore((s) => s.contexts[sessionId]);
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
@@ -74,7 +71,7 @@ export const MessageEditor = forwardRef<
       onPaste,
       onCompositionStart,
       onCompositionEnd,
-    } = useContenteditableEditor({
+    } = useMessageEditor({
       sessionId,
       taskId,
       placeholder,

@@ -2,7 +2,7 @@ import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
-import type { EditorContent } from "../hooks/useContenteditableEditor";
+import type { EditorContent } from "../core/content";
 import type {
   SuggestionItem,
   SuggestionLoadingState,

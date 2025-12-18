@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMessageEditorStore } from "../stores/messageEditorStore";
+import { useSuggestionStore } from "../stores/suggestionStore";
 
 export function SuggestionList() {
-  const items = useMessageEditorStore((s) => s.suggestion.items);
-  const selectedIndex = useMessageEditorStore(
-    (s) => s.suggestion.selectedIndex,
-  );
-  const type = useMessageEditorStore((s) => s.suggestion.type);
-  const loadingState = useMessageEditorStore((s) => s.suggestion.loadingState);
-  const error = useMessageEditorStore((s) => s.suggestion.error);
-  const onSelectItem = useMessageEditorStore((s) => s.suggestion.onSelectItem);
-  const actions = useMessageEditorStore((s) => s.actions);
+  const items = useSuggestionStore((s) => s.items);
+  const selectedIndex = useSuggestionStore((s) => s.selectedIndex);
+  const type = useSuggestionStore((s) => s.type);
+  const loadingState = useSuggestionStore((s) => s.loadingState);
+  const error = useSuggestionStore((s) => s.error);
+  const actions = useSuggestionStore((s) => s.actions);
 
   const emptyMessage =
     type === "command" ? "No commands available" : "No files found";
@@ -130,7 +127,7 @@ export function SuggestionList() {
               ref={(el) => {
                 itemRefs.current[index] = el;
               }}
-              onClick={() => onSelectItem?.(item)}
+              onClick={() => actions.selectItem(index)}
               onMouseEnter={() =>
                 hasMouseMoved && actions.setSelectedIndex(index)
               }

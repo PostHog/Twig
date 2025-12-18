@@ -1,7 +1,7 @@
 import "@features/message-editor/components/message-editor.css";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { SuggestionPortal } from "@features/message-editor/components/SuggestionPortal";
-import { useContenteditableEditor } from "@features/message-editor/hooks/useContenteditableEditor";
+import { useMessageEditor } from "@features/message-editor/hooks/useMessageEditor";
 import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { ArrowUpIcon, GitBranchIcon, Paperclip } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -60,7 +60,7 @@ export const TaskInputEditor = forwardRef<
       onPaste,
       onCompositionStart,
       onCompositionEnd,
-    } = useContenteditableEditor({
+    } = useMessageEditor({
       sessionId,
       repoPath,
       disabled: isCreatingTask,

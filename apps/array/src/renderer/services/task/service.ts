@@ -1,5 +1,5 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { useMessageEditorStore } from "@features/message-editor/stores/messageEditorStore";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
@@ -155,7 +155,7 @@ export class TaskService {
   ): void {
     const settings = useSettingsStore.getState();
     const taskExecution = useTaskExecutionStore.getState();
-    const messageEditor = useMessageEditorStore.getState();
+    const draftStore = useDraftStore.getState();
     const workspaceStore = useWorkspaceStore.getState();
 
     // Derive values from input or output
@@ -180,7 +180,7 @@ export class TaskService {
       }
 
       // Clear draft only on create (task-input is the sessionId used by TaskInputEditor)
-      messageEditor.actions.setDraft("task-input", null);
+      draftStore.actions.setDraft("task-input", null);
     }
 
     // Save repo path for local tasks

@@ -1,87 +1,38 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useMessageEditorStore } from "../stores/messageEditorStore";
-import { setupSuggestionTests } from "../test/helpers";
-import type { SuggestionItem, SuggestionType } from "../types";
+import { useSuggestionStore } from "../stores/suggestionStore";
+import { ARIA, CSS, EMPTY_MESSAGES, LOADING_TEXT } from "../test/constants";
+import { SUGGESTION_ITEMS } from "../test/fixtures";
+import {
+  enableMouseInteraction,
+  getListbox,
+  getOptions,
+  openSuggestion,
+  setupSuggestionTests,
+} from "../test/helpers";
 import { SuggestionList } from "./SuggestionList";
 
-const SESSION_ID = "session-1";
-const SELECTED_CLASS = "suggestion-item-selected";
-
-const ARIA_LABELS = {
-  file: "File suggestions",
-  command: "Available commands",
-} as const;
-
-const EMPTY_MESSAGES = {
-  file: "No files found",
-  command: "No commands available",
-} as const;
-
-const MOCK_ITEMS: SuggestionItem[] = [
-  { id: "1", label: "file1.ts", description: "src/file1.ts" },
-  { id: "2", label: "file2.ts", description: "src/file2.ts" },
-  { id: "3", label: "file3.ts" },
-];
-
-const getActions = () => useMessageEditorStore.getState().actions;
-const getSelectedIndex = () =>
-  useMessageEditorStore.getState().suggestion.selectedIndex;
-
-const getListbox = () => screen.getByRole("listbox");
-const getOptions = () => screen.getAllByRole("option");
-
-interface SuggestionSetup {
-  items?: SuggestionItem[];
-  selectedIndex?: number;
-  type?: SuggestionType;
-  loadingState?: "idle" | "loading" | "success" | "error";
-  error?: string;
-  onSelectItem?: (item: SuggestionItem) => void;
-}
-
-function renderSuggestionList(overrides: SuggestionSetup = {}) {
-  act(() => {
-    const actions = getActions();
-    actions.openSuggestion(SESSION_ID, overrides.type ?? "file", {
-      x: 0,
-      y: 0,
-    });
-    actions.setSuggestionItems(overrides.items ?? MOCK_ITEMS);
-    if (overrides.selectedIndex !== undefined) {
-      actions.setSelectedIndex(overrides.selectedIndex);
-    }
-    actions.setSuggestionLoadingState(
-      overrides.loadingState ?? "success",
-      overrides.error,
-    );
-    if (overrides.onSelectItem) {
-      actions.setOnSelectItem(overrides.onSelectItem);
-    }
-  });
-  return render(<SuggestionList />);
-}
-
-function enableMouseInteraction() {
-  fireEvent.mouseMove(getListbox());
-}
+const getSelectedIndex = () => useSuggestionStore.getState().selectedIndex;
 
 describe("SuggestionList", () => {
   setupSuggestionTests();
 
   describe("rendering items", () => {
     it("renders all item labels and descriptions", () => {
-      renderSuggestionList();
+      openSuggestion();
+      render(<SuggestionList />);
 
-      expect(screen.getByText("file1.ts")).toBeInTheDocument();
-      expect(screen.getByText("file2.ts")).toBeInTheDocument();
-      expect(screen.getByText("file3.ts")).toBeInTheDocument();
-      expect(screen.getByText("src/file1.ts")).toBeInTheDocument();
-      expect(screen.getByText("src/file2.ts")).toBeInTheDocument();
+      for (const item of SUGGESTION_ITEMS) {
+        expect(screen.getByText(item.label)).toBeInTheDocument();
+        if (item.description) {
+          expect(screen.getByText(item.description)).toBeInTheDocument();
+        }
+      }
     });
 
     it("renders keyboard hints footer", () => {
-      renderSuggestionList();
+      openSuggestion();
+      render(<SuggestionList />);
 
       expect(screen.getByText(/navigate/)).toBeInTheDocument();
       expect(screen.getByText(/select/)).toBeInTheDocument();
@@ -91,14 +42,15 @@ describe("SuggestionList", () => {
 
   describe("selected item highlighting", () => {
     it("applies selected class and aria-selected to correct item", () => {
-      renderSuggestionList({ selectedIndex: 1 });
+      openSuggestion({ selectedIndex: 1 });
+      render(<SuggestionList />);
 
       const options = getOptions();
-      expect(options[0]).not.toHaveClass(SELECTED_CLASS);
+      expect(options[0]).not.toHaveClass(CSS.SELECTED);
       expect(options[0]).toHaveAttribute("aria-selected", "false");
-      expect(options[1]).toHaveClass(SELECTED_CLASS);
+      expect(options[1]).toHaveClass(CSS.SELECTED);
       expect(options[1]).toHaveAttribute("aria-selected", "true");
-      expect(options[2]).not.toHaveClass(SELECTED_CLASS);
+      expect(options[2]).not.toHaveClass(CSS.SELECTED);
       expect(options[2]).toHaveAttribute("aria-selected", "false");
     });
   });
@@ -107,7 +59,8 @@ describe("SuggestionList", () => {
     it.each(["file", "command"] as const)(
       "shows correct empty message for %s type",
       (type) => {
-        renderSuggestionList({ items: [], type, loadingState: "idle" });
+        openSuggestion({ type, items: [], loadingState: "idle" });
+        render(<SuggestionList />);
 
         expect(screen.getByText(EMPTY_MESSAGES[type])).toBeInTheDocument();
       },
@@ -116,39 +69,47 @@ describe("SuggestionList", () => {
 
   describe("loading and error states", () => {
     it("shows loading indicator and hides items", () => {
-      renderSuggestionList({ loadingState: "loading" });
+      openSuggestion({ loadingState: "loading" });
+      render(<SuggestionList />);
 
-      expect(screen.getByText("Searching...")).toBeInTheDocument();
-      expect(screen.getByLabelText("Loading suggestions")).toBeInTheDocument();
-      expect(screen.queryByText("file1.ts")).not.toBeInTheDocument();
+      expect(screen.getByText(LOADING_TEXT)).toBeInTheDocument();
+      expect(screen.getByLabelText(ARIA.LOADING)).toBeInTheDocument();
+      expect(
+        screen.queryByText(SUGGESTION_ITEMS[0].label),
+      ).not.toBeInTheDocument();
     });
 
     it("shows error message and hides items", () => {
       const errorMessage = "Failed to load files";
-      renderSuggestionList({ loadingState: "error", error: errorMessage });
+      openSuggestion({ loadingState: "error", error: errorMessage });
+      render(<SuggestionList />);
 
       expect(screen.getByText(errorMessage)).toBeInTheDocument();
       expect(screen.getByRole("alert")).toHaveAttribute(
         "aria-label",
-        "Error loading suggestions",
+        ARIA.ERROR,
       );
-      expect(screen.queryByText("file1.ts")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(SUGGESTION_ITEMS[0].label),
+      ).not.toBeInTheDocument();
     });
   });
 
   describe("mouse interactions", () => {
     it("calls onSelectItem when clicking an item", () => {
       const onSelectItem = vi.fn();
-      renderSuggestionList({ onSelectItem });
+      openSuggestion({ onSelectItem });
+      render(<SuggestionList />);
 
       enableMouseInteraction();
-      fireEvent.click(screen.getByText("file2.ts"));
+      fireEvent.click(screen.getByText(SUGGESTION_ITEMS[1].label));
 
-      expect(onSelectItem).toHaveBeenCalledWith(MOCK_ITEMS[1]);
+      expect(onSelectItem).toHaveBeenCalledWith(1);
     });
 
     it("updates selectedIndex on hover after mouse movement", () => {
-      renderSuggestionList();
+      openSuggestion();
+      render(<SuggestionList />);
 
       enableMouseInteraction();
       fireEvent.mouseEnter(getOptions()[1]);
@@ -157,7 +118,8 @@ describe("SuggestionList", () => {
     });
 
     it("ignores hover before any mouse movement", () => {
-      renderSuggestionList();
+      openSuggestion();
+      render(<SuggestionList />);
 
       fireEvent.mouseEnter(getOptions()[1]);
 
@@ -167,27 +129,34 @@ describe("SuggestionList", () => {
 
   describe("accessibility", () => {
     it("has listbox role with option children", () => {
-      renderSuggestionList();
+      openSuggestion();
+      render(<SuggestionList />);
 
       expect(getListbox()).toBeInTheDocument();
-      expect(getOptions()).toHaveLength(3);
+      expect(getOptions()).toHaveLength(SUGGESTION_ITEMS.length);
     });
 
     it.each(["file", "command"] as const)(
       "sets correct aria-label for %s type",
       (type) => {
-        renderSuggestionList({ type });
+        const ariaLabels = {
+          file: ARIA.FILE_SUGGESTIONS,
+          command: ARIA.COMMAND_SUGGESTIONS,
+        };
+        openSuggestion({ type });
+        render(<SuggestionList />);
 
-        expect(getListbox()).toHaveAttribute("aria-label", ARIA_LABELS[type]);
+        expect(getListbox()).toHaveAttribute("aria-label", ariaLabels[type]);
       },
     );
 
     it("sets aria-activedescendant to selected item id", () => {
-      renderSuggestionList({ selectedIndex: 1 });
+      openSuggestion({ selectedIndex: 1 });
+      render(<SuggestionList />);
 
       expect(getListbox()).toHaveAttribute(
         "aria-activedescendant",
-        "suggestion-2",
+        `suggestion-${SUGGESTION_ITEMS[1].id}`,
       );
     });
   });

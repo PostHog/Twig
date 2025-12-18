@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useMessageEditorStore } from "../stores/messageEditorStore";
+import { useSuggestionStore } from "../stores/suggestionStore";
 import { SuggestionList } from "./SuggestionList";
 
 interface SuggestionPortalProps {
@@ -8,12 +8,10 @@ interface SuggestionPortalProps {
 }
 
 export function SuggestionPortal({ sessionId }: SuggestionPortalProps) {
-  const suggestionSessionId = useMessageEditorStore(
-    (s) => s.suggestion.sessionId,
-  );
-  const active = useMessageEditorStore((s) => s.suggestion.active);
-  const position = useMessageEditorStore((s) => s.suggestion.position);
-  const triggerExit = useMessageEditorStore((s) => s.suggestion.triggerExit);
+  const suggestionSessionId = useSuggestionStore((s) => s.sessionId);
+  const active = useSuggestionStore((s) => s.active);
+  const position = useSuggestionStore((s) => s.position);
+  const close = useSuggestionStore((s) => s.actions.close);
   const popupRef = useRef<HTMLDivElement>(null);
 
   const isActive = active && suggestionSessionId === sessionId;
@@ -25,21 +23,17 @@ export function SuggestionPortal({ sessionId }: SuggestionPortalProps) {
       const target = event.target as Node;
       const popup = popupRef.current;
 
-      // Check if click is outside the popup
       if (popup && !popup.contains(target)) {
-        // Also check if click is inside the editor (don't close if clicking in editor)
         const editor = document.querySelector(".cli-editor");
         if (!editor?.contains(target)) {
-          // Use tiptap's exitSuggestion to properly close and reset plugin state
-          triggerExit?.();
+          close();
         }
       }
     };
 
-    // Use mousedown to catch the click before focus changes
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isActive, triggerExit]);
+  }, [isActive, close]);
 
   if (!isActive) {
     return null;
