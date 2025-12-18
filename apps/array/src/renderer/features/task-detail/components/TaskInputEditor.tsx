@@ -2,9 +2,10 @@ import "@features/message-editor/components/message-editor.css";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { SuggestionPopup } from "@features/message-editor/components/SuggestionPopup";
-import { useMessageEditor } from "@features/message-editor/hooks/useMessageEditor";
+import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
+import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
@@ -45,7 +46,7 @@ export const TaskInputEditor = forwardRef<
     const isCloudMode = runMode === "cloud";
 
     const {
-      editorRef,
+      editor,
       isEmpty,
       focus,
       blur,
@@ -54,15 +55,10 @@ export const TaskInputEditor = forwardRef<
       getContent,
       setContent,
       insertChip,
-      onInput,
-      onKeyDown,
-      onPaste,
-      onFocus,
-      onCompositionStart,
-      onCompositionEnd,
-    } = useMessageEditor({
+    } = useTiptapEditor({
       sessionId,
       repoPath,
+      placeholder: "What do you want to work on? - @ to add context",
       disabled: isCreatingTask,
       isCloud: isCloudMode,
       capabilities: { commands: false, bashMode: false },
@@ -162,25 +158,7 @@ export const TaskInputEditor = forwardRef<
                   overflowY: "auto",
                 }}
               >
-                {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
-                <div
-                  ref={editorRef}
-                  className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
-                  contentEditable={!isCreatingTask}
-                  suppressContentEditableWarning
-                  spellCheck={false}
-                  role="textbox"
-                  tabIndex={isCreatingTask ? -1 : 0}
-                  aria-multiline="true"
-                  aria-placeholder="What do you want to work on? - @ to add context"
-                  data-placeholder="What do you want to work on? - @ to add context"
-                  onInput={onInput}
-                  onKeyDown={onKeyDown}
-                  onPaste={onPaste}
-                  onFocus={onFocus}
-                  onCompositionStart={onCompositionStart}
-                  onCompositionEnd={onCompositionEnd}
-                />
+                <EditorContent editor={editor} />
               </Box>
             )}
           </Flex>

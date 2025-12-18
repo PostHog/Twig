@@ -1,16 +1,17 @@
 import "./message-editor.css";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
+import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
-import type { EditorContent } from "../core/content";
-import { useMessageEditor } from "../hooks/useMessageEditor";
+import type { EditorContent as EditorContentType } from "../core/content";
 import { useDraftStore } from "../stores/draftStore";
+import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import { EditorToolbar } from "./EditorToolbar";
 import { SuggestionPopup } from "./SuggestionPopup";
 
 export type { EditorHandle as MessageEditorHandle };
-export type { EditorContent };
+export type { EditorContentType as EditorContent };
 
 interface MessageEditorProps {
   sessionId: string;
@@ -45,7 +46,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const repoPath = context?.repoPath;
 
     const {
-      editorRef,
+      editor,
       isEmpty,
       isBashMode,
       submit,
@@ -56,13 +57,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       getContent,
       setContent,
       insertChip,
-      onInput,
-      onKeyDown,
-      onPaste,
-      onFocus,
-      onCompositionStart,
-      onCompositionEnd,
-    } = useMessageEditor({
+    } = useTiptapEditor({
       sessionId,
       taskId,
       placeholder,
@@ -104,25 +99,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         style={{ cursor: "text" }}
       >
         <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
-          {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
-          <div
-            ref={editorRef}
-            className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
-            contentEditable={!disabled}
-            suppressContentEditableWarning
-            spellCheck={false}
-            role="textbox"
-            tabIndex={disabled ? -1 : 0}
-            aria-multiline="true"
-            aria-placeholder={placeholder}
-            data-placeholder={placeholder}
-            onInput={onInput}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            onFocus={onFocus}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-          />
+          <EditorContent editor={editor} />
         </div>
 
         <SuggestionPopup sessionId={sessionId} />
