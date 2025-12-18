@@ -1,22 +1,18 @@
 import "./message-editor.css";
-import { ModelSelector } from "@features/sessions/components/ModelSelector";
-import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
+import { Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import { forwardRef, useImperativeHandle, useRef } from "react";
-import type { EditorContent, MentionChip } from "../core/content";
+import { forwardRef } from "react";
+import type { EditorContent } from "../core/content";
+import { type EditorHandle, useEditorHandle } from "../hooks/useEditorHandle";
 import { useMessageEditor } from "../hooks/useMessageEditor";
 import { useDraftStore } from "../stores/draftStore";
+import { ContentEditableEditor } from "./ContentEditableEditor";
+import { EditorToolbar } from "./EditorToolbar";
+import { SubmitButton } from "./SubmitButton";
 import { SuggestionPortal } from "./SuggestionPortal";
 
-export interface MessageEditorHandle {
-  focus: () => void;
-  blur: () => void;
-  clear: () => void;
-  isEmpty: () => boolean;
-  getContent: () => EditorContent;
-  getText: () => string;
-  setContent: (text: string) => void;
-}
+export type { EditorHandle as MessageEditorHandle };
+export type { EditorContent };
 
 interface MessageEditorProps {
   sessionId: string;
@@ -29,10 +25,7 @@ interface MessageEditorProps {
   autoFocus?: boolean;
 }
 
-export const MessageEditor = forwardRef<
-  MessageEditorHandle,
-  MessageEditorProps
->(
+export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
   (
     {
       sessionId,
@@ -46,7 +39,6 @@ export const MessageEditor = forwardRef<
     },
     ref,
   ) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const context = useDraftStore((s) => s.contexts[sessionId]);
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
@@ -69,6 +61,7 @@ export const MessageEditor = forwardRef<
       onInput,
       onKeyDown,
       onPaste,
+      onFocus,
       onCompositionStart,
       onCompositionEnd,
     } = useMessageEditor({
@@ -84,37 +77,15 @@ export const MessageEditor = forwardRef<
       autoFocus,
     });
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        focus,
-        blur,
-        clear,
-        isEmpty: () => isEmpty,
-        getContent,
-        getText,
-        setContent,
-      }),
-      [focus, blur, clear, isEmpty, getContent, getText, setContent],
-    );
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        for (const file of Array.from(files)) {
-          const chip: MentionChip = {
-            type: "file",
-            id: file.name,
-            label: file.name,
-          };
-          insertChip(chip);
-        }
-        onAttachFiles?.(Array.from(files));
-      }
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    };
+    useEditorHandle(ref, {
+      focus,
+      blur,
+      clear,
+      isEmpty,
+      getContent,
+      getText,
+      setContent,
+    });
 
     const handleContainerClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -131,21 +102,14 @@ export const MessageEditor = forwardRef<
         style={{ cursor: "text" }}
       >
         <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
-          {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
-          <div
+          <ContentEditableEditor
             ref={editorRef}
-            className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
-            contentEditable={!disabled}
-            suppressContentEditableWarning
-            spellCheck={false}
-            role="textbox"
-            tabIndex={disabled ? -1 : 0}
-            aria-multiline="true"
-            aria-placeholder={placeholder}
-            data-placeholder={placeholder}
+            disabled={disabled}
+            placeholder={placeholder}
             onInput={onInput}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
+            onFocus={onFocus}
             onCompositionStart={onCompositionStart}
             onCompositionEnd={onCompositionEnd}
           />
@@ -155,27 +119,12 @@ export const MessageEditor = forwardRef<
 
         <Flex justify="between" align="center">
           <Flex gap="2" align="center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              style={{ display: "none" }}
+            <EditorToolbar
+              disabled={disabled}
+              taskId={taskId}
+              onInsertChip={insertChip}
+              onAttachFiles={onAttachFiles}
             />
-            <Tooltip content="Attach file">
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="gray"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled}
-                title="Attach file"
-                style={{ marginLeft: "0px" }}
-              >
-                <Paperclip size={14} weight="bold" />
-              </IconButton>
-            </Tooltip>
-            <ModelSelector taskId={taskId} disabled={disabled} />
             {isBashMode && (
               <Text size="1" className="font-mono text-accent-11">
                 bash mode
@@ -196,26 +145,14 @@ export const MessageEditor = forwardRef<
                 </IconButton>
               </Tooltip>
             ) : (
-              <Tooltip
-                content={
+              <SubmitButton
+                disabled={disabled || isEmpty}
+                loading={isLoading}
+                tooltip={
                   disabled || isEmpty ? "Enter a message" : "Send message"
                 }
-              >
-                <IconButton
-                  size="1"
-                  variant="solid"
-                  onClick={submit}
-                  disabled={disabled || isEmpty}
-                  loading={isLoading}
-                  style={{
-                    backgroundColor:
-                      disabled || isEmpty ? "var(--accent-a4)" : undefined,
-                    color: disabled || isEmpty ? "var(--accent-8)" : undefined,
-                  }}
-                >
-                  <ArrowUp size={14} weight="bold" />
-                </IconButton>
-              </Tooltip>
+                onClick={submit}
+              />
             )}
           </Flex>
         </Flex>

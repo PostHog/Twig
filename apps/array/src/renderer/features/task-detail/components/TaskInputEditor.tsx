@@ -1,11 +1,14 @@
 import "@features/message-editor/components/message-editor.css";
+import { ContentEditableEditor } from "@features/message-editor/components/ContentEditableEditor";
+import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import { SubmitButton } from "@features/message-editor/components/SubmitButton";
 import { SuggestionPortal } from "@features/message-editor/components/SuggestionPortal";
+import { useEditorHandle } from "@features/message-editor/hooks/useEditorHandle";
 import { useMessageEditor } from "@features/message-editor/hooks/useMessageEditor";
-import { ModelSelector } from "@features/sessions/components/ModelSelector";
-import { ArrowUpIcon, GitBranchIcon, Paperclip } from "@phosphor-icons/react";
+import { GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef } from "react";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
@@ -41,7 +44,6 @@ export const TaskInputEditor = forwardRef<
     },
     ref,
   ) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const isWorktreeMode = localWorkspaceMode === "worktree";
     const isCloudMode = runMode === "cloud";
 
@@ -58,6 +60,7 @@ export const TaskInputEditor = forwardRef<
       onInput,
       onKeyDown,
       onPaste,
+      onFocus,
       onCompositionStart,
       onCompositionEnd,
     } = useMessageEditor({
@@ -74,37 +77,15 @@ export const TaskInputEditor = forwardRef<
       autoFocus: true,
     });
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        focus,
-        blur,
-        clear,
-        isEmpty: () => isEmpty,
-        getContent,
-        getText,
-        setContent,
-      }),
-      [focus, blur, clear, isEmpty, getContent, getText, setContent],
-    );
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        for (const file of Array.from(files)) {
-          const filePath = (file as File & { path?: string }).path || file.name;
-          insertChip({
-            type: "file",
-            id: filePath,
-            label: file.name,
-          });
-        }
-      }
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    };
+    useEditorHandle(ref, {
+      focus,
+      blur,
+      clear,
+      isEmpty,
+      getContent,
+      getText,
+      setContent,
+    });
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
@@ -180,21 +161,14 @@ export const TaskInputEditor = forwardRef<
                   overflowY: "auto",
                 }}
               >
-                {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
-                <div
+                <ContentEditableEditor
                   ref={editorRef}
-                  className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
-                  contentEditable={!isCreatingTask}
-                  suppressContentEditableWarning
-                  spellCheck={false}
-                  role="textbox"
-                  tabIndex={isCreatingTask ? -1 : 0}
-                  aria-multiline="true"
-                  aria-placeholder="What do you want to work on? - @ to add context"
-                  data-placeholder="What do you want to work on? - @ to add context"
+                  disabled={isCreatingTask}
+                  placeholder="What do you want to work on? - @ to add context"
                   onInput={onInput}
                   onKeyDown={onKeyDown}
                   onPaste={onPaste}
+                  onFocus={onFocus}
                   onCompositionStart={onCompositionStart}
                   onCompositionEnd={onCompositionEnd}
                 />
@@ -206,30 +180,12 @@ export const TaskInputEditor = forwardRef<
         <SuggestionPortal sessionId={sessionId} />
 
         <Flex justify="between" align="center" px="3" pb="3">
-          <Flex align="center" gap="1">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              style={{ display: "none" }}
-            />
-            <Tooltip content="Attach files from anywhere">
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="gray"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                disabled={isCreatingTask}
-              >
-                <Paperclip size={16} weight="bold" />
-              </IconButton>
-            </Tooltip>
-            <ModelSelector disabled={isCreatingTask} />
-          </Flex>
+          <EditorToolbar
+            disabled={isCreatingTask}
+            onInsertChip={insertChip}
+            attachTooltip="Attach files from anywhere"
+            iconSize={16}
+          />
 
           <Flex align="center" gap="4">
             {!isCloudMode && (
@@ -260,24 +216,13 @@ export const TaskInputEditor = forwardRef<
               </Tooltip>
             )}
 
-            <Tooltip content={getSubmitTooltip()}>
-              <IconButton
-                size="1"
-                variant="solid"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSubmit();
-                }}
-                disabled={!canSubmit || isCreatingTask}
-                loading={isCreatingTask}
-                style={{
-                  backgroundColor: !canSubmit ? "var(--accent-a4)" : undefined,
-                  color: !canSubmit ? "var(--accent-8)" : undefined,
-                }}
-              >
-                <ArrowUpIcon size={16} weight="bold" />
-              </IconButton>
-            </Tooltip>
+            <SubmitButton
+              disabled={!canSubmit || isCreatingTask}
+              loading={isCreatingTask}
+              tooltip={getSubmitTooltip()}
+              onClick={onSubmit}
+              size={16}
+            />
           </Flex>
         </Flex>
       </Flex>

@@ -47,10 +47,7 @@ export class EditorController {
 
   focus(): void {
     this.element.focus();
-    // Ensure cursor is positioned at end after focus (fixes empty contenteditable issue)
-    if (this.isEmpty()) {
-      this.moveCursorToEnd();
-    }
+    this.moveCursorToEnd();
   }
 
   blur(): void {
@@ -62,8 +59,20 @@ export class EditorController {
     if (!selection) return;
 
     const range = document.createRange();
-    range.selectNodeContents(this.element);
-    range.collapse(false);
+    const lastChild = this.element.lastChild;
+
+    if (lastChild) {
+      if (lastChild.nodeType === Node.TEXT_NODE) {
+        range.setStart(lastChild, (lastChild as Text).length);
+      } else {
+        range.setStartAfter(lastChild);
+      }
+    } else {
+      // Empty element - explicitly set cursor at position 0
+      range.setStart(this.element, 0);
+    }
+
+    range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
   }
@@ -79,29 +88,22 @@ export class EditorController {
   insertChip(chip: MentionChip): void {
     const chipEl = this.createChipElement(chip);
 
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(chipEl);
-      range.setStartAfter(chipEl);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    } else {
-      this.element.appendChild(chipEl);
-    }
+    // Always append to the end of the editor content
+    this.element.appendChild(chipEl);
 
     const space = document.createTextNode(" ");
-    chipEl.parentNode?.insertBefore(space, chipEl.nextSibling);
+    this.element.appendChild(space);
 
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      range.setStartAfter(space);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
+    // Move cursor after the space
+    const selection = window.getSelection();
+    const newRange = document.createRange();
+    newRange.setStartAfter(space);
+    newRange.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(newRange);
+
+    // Ensure editor has focus
+    this.element.focus();
   }
 
   replaceTriggerWithChip(trigger: TriggerMatch, chip: MentionChip): void {

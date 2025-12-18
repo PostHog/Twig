@@ -63,6 +63,7 @@ export interface UseMessageEditorReturn {
   onInput: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
+  onFocus: () => void;
   onCompositionStart: () => void;
   onCompositionEnd: () => void;
 }
@@ -160,7 +161,11 @@ export function useMessageEditor(
 
   useEffect(() => {
     if (autoFocus && editorRef.current) {
-      editorRef.current.focus();
+      // Use controller.focus() to ensure proper cursor positioning in empty editor
+      if (!controllerRef.current) {
+        controllerRef.current = new EditorController(editorRef.current);
+      }
+      controllerRef.current.focus();
     }
   }, [autoFocus]);
 
@@ -432,6 +437,13 @@ export function useMessageEditor(
     checkForTrigger();
   }, [checkForTrigger]);
 
+  const handleFocus = useCallback(() => {
+    const controller = getController();
+    if (controller?.isEmpty()) {
+      controller.moveCursorToEnd();
+    }
+  }, [getController]);
+
   const handleSelectionChange = useCallback(() => {
     if (!isComposingRef.current) {
       checkForTrigger();
@@ -446,8 +458,8 @@ export function useMessageEditor(
   }, [handleSelectionChange]);
 
   const focus = useCallback(() => {
-    editorRef.current?.focus();
-  }, []);
+    getController()?.focus();
+  }, [getController]);
 
   const blur = useCallback(() => {
     editorRef.current?.blur();
@@ -514,6 +526,7 @@ export function useMessageEditor(
     onInput: handleInput,
     onKeyDown: handleKeyDown,
     onPaste: handlePaste,
+    onFocus: handleFocus,
     onCompositionStart: handleCompositionStart,
     onCompositionEnd: handleCompositionEnd,
   };
