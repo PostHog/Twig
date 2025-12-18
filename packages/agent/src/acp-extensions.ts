@@ -108,14 +108,13 @@ export interface SdkSessionPayload {
 }
 
 /**
- * Sandbox execution output from Modal or Docker
+ * Sandbox execution output
  */
 export interface SandboxOutputPayload {
   sessionId: string;
   stdout: string;
   stderr: string;
   exitCode: number;
-  source: "modal" | "docker" | string;
 }
 
 export type PostHogNotificationPayload =
