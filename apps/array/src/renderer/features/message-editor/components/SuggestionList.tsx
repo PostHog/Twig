@@ -54,101 +54,104 @@ export function SuggestionList() {
     ? `suggestion-${items[selectedIndex].id}`
     : undefined;
 
+  const kbd = (key: string) => (
+    <kbd className="mx-[2px] rounded border border-[var(--gray-a6)] bg-[var(--gray-a3)] px-1 font-mono text-[10px]">
+      {key}
+    </kbd>
+  );
+
   const footer = (
-    <div className="suggestion-footer">
-      <span className="suggestion-footer-text">
-        <kbd>↑</kbd>
-        <kbd>↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>Esc</kbd> dismiss
-      </span>
+    <div className="border-[var(--gray-a4)] border-t bg-[var(--gray-a2)] px-2 py-1 text-[10px] text-[var(--gray-10)]">
+      {kbd("↑")}
+      {kbd("↓")} navigate · {kbd("↵")} select · {kbd("esc")} dismiss
+    </div>
+  );
+
+  const container = (children: React.ReactNode) => (
+    <div className="flex min-w-[300px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-[12px] shadow-lg">
+      {children}
+      {footer}
     </div>
   );
 
   if (loadingState === "loading") {
-    return (
-      <div className="suggestion-list">
-        <output className="suggestion-loading" aria-label="Loading suggestions">
-          <span className="suggestion-loading-text">Searching...</span>
-        </output>
-        {footer}
-      </div>
+    return container(
+      <output className="block p-2" aria-label="Loading suggestions">
+        <span className="text-[var(--gray-11)]">Searching...</span>
+      </output>,
     );
   }
 
   if (loadingState === "error" && error) {
-    return (
-      <div
-        className="suggestion-list"
-        role="alert"
-        aria-label="Error loading suggestions"
-      >
-        <div className="suggestion-error">
-          <span className="suggestion-error-text">{error}</span>
-        </div>
-        {footer}
-      </div>
+    return container(
+      <div className="p-2" role="alert" aria-label="Error loading suggestions">
+        <span className="text-[var(--red-11)]">{error}</span>
+      </div>,
     );
   }
 
   if (items.length === 0) {
-    return (
-      <div className="suggestion-list">
-        <div className="suggestion-empty">
-          <span className="suggestion-empty-text">{emptyMessage}</span>
-        </div>
-        {footer}
-      </div>
+    return container(
+      <div className="p-2">
+        <span className="text-[var(--gray-11)]">{emptyMessage}</span>
+      </div>,
     );
   }
 
-  return (
-    <div className="suggestion-list">
-      <div
-        ref={containerRef}
-        role="listbox"
-        aria-label={ariaLabel}
-        aria-activedescendant={selectedItemId}
-        onMouseMove={handleMouseMove}
-        className="suggestion-list-scrollable"
-        style={{
-          cursor: hasMouseMoved ? undefined : "none",
-        }}
-        tabIndex={0}
-      >
-        {items.map((item, index) => {
-          const isSelected = index === selectedIndex;
-          const itemId = `suggestion-${item.id}`;
-          return (
-            <button
-              type="button"
-              role="option"
-              aria-selected={isSelected}
-              id={itemId}
-              key={item.id}
-              ref={(el) => {
-                itemRefs.current[index] = el;
-              }}
-              onClick={() => actions.selectItem(index)}
-              onMouseEnter={() =>
-                hasMouseMoved && actions.setSelectedIndex(index)
-              }
-              className={`suggestion-item ${isSelected ? "suggestion-item-selected" : ""} ${
-                item.description ? "suggestion-item-with-description" : ""
+  return container(
+    <div
+      ref={containerRef}
+      role="listbox"
+      aria-label={ariaLabel}
+      aria-activedescendant={selectedItemId}
+      onMouseMove={handleMouseMove}
+      className={`max-h-[240px] flex-1 overflow-y-auto pb-1 [&::-webkit-scrollbar]:hidden ${hasMouseMoved ? "" : "cursor-none"}`}
+      tabIndex={0}
+    >
+      {items.map((item, index) => {
+        const isSelected = index === selectedIndex;
+        const itemId = `suggestion-${item.id}`;
+        return (
+          <button
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            id={itemId}
+            key={item.id}
+            ref={(el) => {
+              itemRefs.current[index] = el;
+            }}
+            onClick={() => actions.selectItem(index)}
+            onMouseEnter={() =>
+              hasMouseMoved && actions.setSelectedIndex(index)
+            }
+            className={`flex w-full flex-col gap-[2px] border-none text-left ${
+              item.description ? "px-2 py-[6px]" : "px-2 py-1"
+            } ${isSelected ? "bg-[var(--accent-a4)]" : "bg-transparent"} ${
+              hasMouseMoved ? "cursor-pointer" : "cursor-none"
+            }`}
+          >
+            <span
+              className={`truncate ${
+                isSelected ? "text-[var(--accent-11)]" : "text-[var(--gray-11)]"
               }`}
-              style={{
-                cursor: hasMouseMoved ? "pointer" : "none",
-              }}
             >
-              <span className="suggestion-item-label">{item.label}</span>
-              {item.description && (
-                <span className="suggestion-item-description">
-                  {item.description}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {footer}
-    </div>
+              {item.label}
+            </span>
+            {item.description && (
+              <span
+                className={`text-[11px] ${
+                  isSelected
+                    ? "text-[var(--accent-10)]"
+                    : "text-[var(--gray-10)]"
+                }`}
+              >
+                {item.description}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>,
   );
 }

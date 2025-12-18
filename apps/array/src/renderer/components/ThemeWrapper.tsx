@@ -2,6 +2,8 @@ import { Theme } from "@radix-ui/themes";
 import { useThemeStore } from "@stores/themeStore";
 import type React from "react";
 
+export const PORTAL_CONTAINER_ID = "portal-root";
+
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
 
@@ -15,6 +17,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
       scaling="100%"
     >
       {children}
+      <div id={PORTAL_CONTAINER_ID} />
     </Theme>
   );
 }

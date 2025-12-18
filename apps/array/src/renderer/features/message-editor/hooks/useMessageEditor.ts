@@ -388,6 +388,7 @@ export function useMessageEditor(
           }
           case "Escape":
             e.preventDefault();
+            e.stopPropagation();
             closeSuggestion();
             return;
         }

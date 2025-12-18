@@ -1,3 +1,4 @@
+import { PORTAL_CONTAINER_ID } from "@components/ThemeWrapper";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSuggestionStore } from "../stores/suggestionStore";
@@ -39,6 +40,9 @@ export function SuggestionPortal({ sessionId }: SuggestionPortalProps) {
     return null;
   }
 
+  const portalContainer =
+    document.getElementById(PORTAL_CONTAINER_ID) ?? document.body;
+
   return createPortal(
     <div
       ref={popupRef}
@@ -53,6 +57,6 @@ export function SuggestionPortal({ sessionId }: SuggestionPortalProps) {
     >
       <SuggestionList />
     </div>,
-    document.body,
+    portalContainer,
   );
 }

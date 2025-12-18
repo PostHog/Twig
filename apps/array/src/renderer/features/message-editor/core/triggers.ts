@@ -96,12 +96,7 @@ export function getRectAtOffset(
   element: HTMLDivElement,
   offset: number,
 ): DOMRect | null {
-  const selection = window.getSelection();
-  const savedRange = selection?.rangeCount
-    ? selection.getRangeAt(0).cloneRange()
-    : null;
-
-  // Walk through text nodes to find position
+  // Walk through text nodes to find the position
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let currentOffset = 0;
 
@@ -115,48 +110,46 @@ export function getRectAtOffset(
       range.setStart(textNode, offsetInNode);
       range.collapse(true);
 
-      let rect = range.getBoundingClientRect();
-
-      // If rect has zero dimensions, insert temporary element to measure
-      if (rect.width === 0 && rect.height === 0) {
-        const span = document.createElement("span");
-        span.textContent = "\u200B";
-        range.insertNode(span);
-        rect = span.getBoundingClientRect();
-        span.remove();
-        // Don't call normalize() - it merges text nodes and can invalidate savedRange
-
-        if (savedRange && selection) {
-          selection.removeAllRanges();
-          selection.addRange(savedRange);
-        }
+      const rects = range.getClientRects();
+      if (rects.length > 0) {
+        return rects[0];
       }
 
-      return rect;
+      // Fallback: use getBoundingClientRect
+      const rect = range.getBoundingClientRect();
+      if (rect.width !== 0 || rect.height !== 0) {
+        return rect;
+      }
+
+      // Last resort: estimate position from element and line height
+      const elementRect = element.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(element);
+      const lineHeight = Number.parseFloat(computedStyle.lineHeight) || 20;
+
+      return new DOMRect(elementRect.left, elementRect.top, 0, lineHeight);
     }
     currentOffset += len;
   }
 
-  // Fallback: get caret rect
+  // Fallback: use current selection position without DOM mutation
+  const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
 
-  const range = selection.getRangeAt(0).cloneRange();
-  range.collapse(true);
-
-  let rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) {
-    const span = document.createElement("span");
-    span.textContent = "\u200B";
-    range.insertNode(span);
-    rect = span.getBoundingClientRect();
-    span.parentNode?.removeChild(span);
-    // Don't call normalize() - it merges text nodes and can invalidate savedRange
-
-    if (savedRange && selection) {
-      selection.removeAllRanges();
-      selection.addRange(savedRange);
-    }
+  const range = selection.getRangeAt(0);
+  const rects = range.getClientRects();
+  if (rects.length > 0) {
+    return rects[0];
   }
 
-  return rect;
+  const rect = range.getBoundingClientRect();
+  if (rect.width !== 0 || rect.height !== 0) {
+    return rect;
+  }
+
+  // Ultimate fallback: element position
+  const elementRect = element.getBoundingClientRect();
+  const computedStyle = window.getComputedStyle(element);
+  const lineHeight = Number.parseFloat(computedStyle.lineHeight) || 20;
+
+  return new DOMRect(elementRect.left, elementRect.top, 0, lineHeight);
 }

@@ -183,7 +183,7 @@ export const TaskInputEditor = forwardRef<
                 {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
                 <div
                   ref={editorRef}
-                  className="cli-editor outline-none"
+                  className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
                   contentEditable={!isCreatingTask}
                   suppressContentEditableWarning
                   spellCheck={false}
@@ -280,31 +280,6 @@ export const TaskInputEditor = forwardRef<
             </Tooltip>
           </Flex>
         </Flex>
-
-        <style>
-          {`
-            .cli-file-mention {
-              background-color: var(--accent-a3);
-              color: var(--accent-11);
-              padding: 2px 4px;
-              border-radius: 3px;
-              font-weight: 500;
-            }
-            .worktree-toggle-button {
-              color: var(--gray-11);
-            }
-            .worktree-toggle-button:hover {
-              background-color: var(--gray-a4);
-            }
-            .worktree-toggle-button[data-active="true"] {
-              background-color: var(--blue-a4);
-              color: var(--blue-11);
-            }
-            .worktree-toggle-button[data-active="true"]:hover {
-              background-color: var(--blue-a5);
-            }
-          `}
-        </style>
       </Flex>
     );
   },

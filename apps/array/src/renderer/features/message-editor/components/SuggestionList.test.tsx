@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useSuggestionStore } from "../stores/suggestionStore";
-import { ARIA, CSS, EMPTY_MESSAGES, LOADING_TEXT } from "../test/constants";
+import { ARIA, EMPTY_MESSAGES, LOADING_TEXT } from "../test/constants";
 import { SUGGESTION_ITEMS } from "../test/fixtures";
 import {
   enableMouseInteraction,
@@ -41,17 +41,17 @@ describe("SuggestionList", () => {
   });
 
   describe("selected item highlighting", () => {
-    it("applies selected class and aria-selected to correct item", () => {
+    it("applies selected styling and aria-selected to correct item", () => {
       openSuggestion({ selectedIndex: 1 });
       render(<SuggestionList />);
 
       const options = getOptions();
-      expect(options[0]).not.toHaveClass(CSS.SELECTED);
       expect(options[0]).toHaveAttribute("aria-selected", "false");
-      expect(options[1]).toHaveClass(CSS.SELECTED);
+      expect(options[0]).toHaveClass("bg-transparent");
       expect(options[1]).toHaveAttribute("aria-selected", "true");
-      expect(options[2]).not.toHaveClass(CSS.SELECTED);
+      expect(options[1]).toHaveClass("bg-[var(--accent-a4)]");
       expect(options[2]).toHaveAttribute("aria-selected", "false");
+      expect(options[2]).toHaveClass("bg-transparent");
     });
   });
 

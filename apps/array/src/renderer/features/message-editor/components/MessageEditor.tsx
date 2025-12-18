@@ -134,7 +134,7 @@ export const MessageEditor = forwardRef<
           {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
           <div
             ref={editorRef}
-            className="cli-editor outline-none"
+            className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
             contentEditable={!disabled}
             suppressContentEditableWarning
             spellCheck={false}
