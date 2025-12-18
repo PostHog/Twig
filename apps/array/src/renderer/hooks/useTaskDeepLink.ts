@@ -104,6 +104,7 @@ export function useTaskDeepLink() {
   trpcReact.deepLink.onOpenTask.useSubscription(undefined, {
     onData: (data) => {
       log.info(`Received deep link event for task: ${data.taskId}`);
+      if (!data?.taskId) return;
       handleOpenTask(data.taskId);
     },
   });

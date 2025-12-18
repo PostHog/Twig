@@ -1,9 +1,7 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   TaskLinkEvent,
-  type TaskLinkEvents,
   type TaskLinkService,
 } from "../../services/task-link/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -18,13 +16,11 @@ export const deepLinkRouter = router({
    */
   onOpenTask: publicProcedure.subscription(async function* (opts) {
     const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(
-      service,
-      TaskLinkEvent.OpenTask,
-      options,
-    )) {
-      yield payload as TaskLinkEvents[typeof TaskLinkEvent.OpenTask];
+    const iterable = service.toIterable(TaskLinkEvent.OpenTask, {
+      signal: opts.signal,
+    });
+    for await (const data of iterable) {
+      yield data;
     }
   }),
 

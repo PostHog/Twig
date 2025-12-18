@@ -1,4 +1,3 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
@@ -6,7 +5,7 @@ import {
   installUpdateOutput,
   isEnabledOutput,
   UpdatesEvent,
-  type UpdatesStatusPayload,
+  type UpdatesEvents,
 } from "../../services/updates/schemas.js";
 import type { UpdatesService } from "../../services/updates/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -14,16 +13,12 @@ import { publicProcedure, router } from "../trpc.js";
 const getService = () =>
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
 
-function subscribe<T>(event: string) {
-  return publicProcedure.subscription(async function* (opts): AsyncGenerator<
-    T,
-    void,
-    unknown
-  > {
+function subscribe<K extends keyof UpdatesEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
     const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(service, event, options)) {
-      yield payload as T;
+    const iterable = service.toIterable(event, { signal: opts.signal });
+    for await (const data of iterable) {
+      yield data;
     }
   });
 }
@@ -44,7 +39,7 @@ export const updatesRouter = router({
     return service.installUpdate();
   }),
 
-  onReady: subscribe<void>(UpdatesEvent.Ready),
-  onStatus: subscribe<UpdatesStatusPayload>(UpdatesEvent.Status),
-  onCheckFromMenu: subscribe<void>(UpdatesEvent.CheckFromMenu),
+  onReady: subscribe(UpdatesEvent.Ready),
+  onStatus: subscribe(UpdatesEvent.Status),
+  onCheckFromMenu: subscribe(UpdatesEvent.CheckFromMenu),
 });

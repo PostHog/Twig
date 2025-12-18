@@ -31,7 +31,7 @@ export type UpdatesStatusPayload = {
 };
 
 export interface UpdatesEvents {
-  [UpdatesEvent.Ready]: undefined;
+  [UpdatesEvent.Ready]: true;
   [UpdatesEvent.Status]: UpdatesStatusPayload;
-  [UpdatesEvent.CheckFromMenu]: undefined;
+  [UpdatesEvent.CheckFromMenu]: true;
 }

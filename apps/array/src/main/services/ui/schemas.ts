@@ -6,9 +6,10 @@ export const UIServiceEvent = {
   ClearStorage: "clear-storage",
 } as const;
 
+// UI events are simple signals - payload is just a marker that the event fired
 export interface UIServiceEvents {
-  [UIServiceEvent.OpenSettings]: undefined;
-  [UIServiceEvent.NewTask]: undefined;
-  [UIServiceEvent.ResetLayout]: undefined;
-  [UIServiceEvent.ClearStorage]: undefined;
+  [UIServiceEvent.OpenSettings]: true;
+  [UIServiceEvent.NewTask]: true;
+  [UIServiceEvent.ResetLayout]: true;
+  [UIServiceEvent.ClearStorage]: true;
 }
