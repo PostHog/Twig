@@ -8,7 +8,6 @@ import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import { EditorToolbar } from "./EditorToolbar";
-import { SuggestionPopup } from "./SuggestionPopup";
 
 export type { EditorHandle as MessageEditorHandle };
 export type { EditorContentType as EditorContent };
@@ -101,8 +100,6 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </div>
-
-        <SuggestionPopup sessionId={sessionId} />
 
         <Flex justify="between" align="center">
           <Flex gap="2" align="center">

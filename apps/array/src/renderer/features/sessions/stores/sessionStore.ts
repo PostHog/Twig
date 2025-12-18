@@ -738,6 +738,18 @@ export const useAvailableCommandsForTask = (
   });
 };
 
+export function getAvailableCommandsForTask(
+  taskId: string | undefined,
+): AvailableCommand[] {
+  if (!taskId) return [];
+  const sessions = useStore.getState().sessions;
+  const session = Object.values(sessions).find(
+    (sess) => sess.taskId === taskId,
+  );
+  if (!session?.events) return [];
+  return extractAvailableCommandsFromEvents(session.events);
+}
+
 // Token refresh subscription
 let lastKnownToken: string | null = null;
 useAuthStore.subscribe(

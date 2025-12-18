@@ -1,4 +1,5 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
+import { getAvailableCommandsForTask } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { MentionItem } from "@shared/types";
 import Fuse, { type IFuseOptions } from "fuse.js";
@@ -73,9 +74,8 @@ export function getCommandSuggestions(
   sessionId: string,
   query: string,
 ): CommandSuggestionItem[] {
-  const store = useDraftStore.getState();
-  const taskId = store.contexts[sessionId]?.taskId;
-  const commands = taskId ? (store.commands[taskId] ?? []) : [];
+  const taskId = useDraftStore.getState().contexts[sessionId]?.taskId;
+  const commands = getAvailableCommandsForTask(taskId);
   const filtered = searchCommands(commands, query);
 
   return filtered.map((cmd) => ({

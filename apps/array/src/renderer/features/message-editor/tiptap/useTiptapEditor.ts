@@ -1,4 +1,3 @@
-import { computePosition, flip, shift } from "@floating-ui/dom";
 import { toast } from "@renderer/utils/toast";
 import type { Editor, JSONContent } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -12,25 +11,9 @@ import {
   type MentionChip,
 } from "../core/content";
 import { useDraftStore } from "../stores/draftStore";
-import { useSuggestionStore } from "../stores/suggestionStore";
-import {
-  getCommandSuggestions,
-  getFileSuggestions,
-} from "../suggestions/getSuggestions";
-import type {
-  CommandSuggestionItem,
-  FileSuggestionItem,
-  SuggestionItem,
-  SuggestionType,
-} from "../types";
-import { type MentionChipAttrs, MentionChipNode } from "./MentionChipNode";
-
-export interface TriggerMatch {
-  type: SuggestionType;
-  query: string;
-  from: number;
-  to: number;
-}
+import { createCommandMention } from "./CommandMention";
+import { createFileMention } from "./FileMention";
+import { MentionChipNode } from "./MentionChipNode";
 
 export interface UseTiptapEditorOptions {
   sessionId: string;
@@ -114,44 +97,6 @@ function editorContentToTiptapJson(content: EditorContent): JSONContent {
   };
 }
 
-function findTrigger(
-  editor: Editor,
-  caps: { fileMentions: boolean; commands: boolean },
-): TriggerMatch | null {
-  const { selection, doc } = editor.state;
-  const { from } = selection;
-
-  const textBefore = doc.textBetween(Math.max(0, from - 100), from, "");
-
-  if (caps.fileMentions) {
-    const fileMatch = textBefore.match(/(^|\s)@([^\s@]*)$/);
-    if (fileMatch) {
-      const query = fileMatch[2];
-      return {
-        type: "file",
-        query,
-        from: from - query.length - 1,
-        to: from,
-      };
-    }
-  }
-
-  if (caps.commands) {
-    const cmdMatch = textBefore.match(/(^|\s)\/([^\s]*)$/);
-    if (cmdMatch) {
-      const query = cmdMatch[2];
-      return {
-        type: "command",
-        query,
-        from: from - query.length - 1,
-        to: from,
-      };
-    }
-  }
-
-  return null;
-}
-
 export function useTiptapEditor(
   options: UseTiptapEditorOptions,
 ): UseTiptapEditorReturn {
@@ -179,16 +124,12 @@ export function useTiptapEditor(
   const onBashCommandRef = useRef(onBashCommand);
   const onBashModeChangeRef = useRef(onBashModeChange);
   const hasRestoredDraftRef = useRef(false);
-  const currentTriggerRef = useRef<TriggerMatch | null>(null);
   const prevBashModeRef = useRef(false);
   const submitRef = useRef<() => void>(() => {});
 
   const draftActions = useDraftStore((s) => s.actions);
   const draft = useDraftStore((s) => s.drafts[sessionId] ?? null);
   const hasHydrated = useDraftStore((s) => s._hasHydrated);
-
-  const suggestionActive = useSuggestionStore((s) => s.active);
-  const suggestionActions = useSuggestionStore((s) => s.actions);
 
   useLayoutEffect(() => {
     onSubmitRef.current = onSubmit;
@@ -206,235 +147,92 @@ export function useTiptapEditor(
     };
   }, [sessionId, draftActions]);
 
-  const closeSuggestion = useCallback(() => {
-    currentTriggerRef.current = null;
-    suggestionActions.close();
-  }, [suggestionActions]);
+  const clearDraft = useCallback(() => {
+    draftActions.setDraft(sessionId, null);
+  }, [sessionId, draftActions]);
 
-  const handleSuggestionSelect = useCallback(
-    (index: number, editorInstance: Editor | null) => {
-      if (!editorInstance) return;
+  const handleCommandSubmit = useCallback((text: string) => {
+    onSubmitRef.current?.(text);
+  }, []);
 
-      const trigger = currentTriggerRef.current;
-      const item = useSuggestionStore.getState().items[index];
-      if (!trigger || !item) return;
+  const extensions = [
+    StarterKit.configure({
+      // Disable all block-level formatting
+      heading: false,
+      blockquote: false,
+      codeBlock: false,
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
+      horizontalRule: false,
+      // Disable all inline formatting (plain text only)
+      bold: false,
+      italic: false,
+      strike: false,
+      code: false,
+    }),
+    Placeholder.configure({ placeholder }),
+    MentionChipNode,
+  ];
 
-      if (trigger.type === "command") {
-        const cmdItem = item as CommandSuggestionItem;
-        if (!cmdItem.command.input?.hint) {
-          editorInstance.commands.clearContent();
-          draftActions.setDraft(sessionId, null);
-          closeSuggestion();
-          onSubmitRef.current?.(`/${cmdItem.command.name}`);
-          return;
-        }
-      }
+  if (enableFileMentions) {
+    extensions.push(createFileMention(sessionId));
+  }
 
-      const chip: MentionChipAttrs = {
-        type: trigger.type,
-        id: item.id,
-        label:
-          trigger.type === "file"
-            ? ((item as FileSuggestionItem).path.split("/").pop() ??
-              (item as FileSuggestionItem).path)
-            : item.label,
-      };
-
-      editorInstance
-        .chain()
-        .focus()
-        .deleteRange({ from: trigger.from, to: trigger.to })
-        .insertContent([
-          { type: "mentionChip", attrs: chip },
-          { type: "text", text: " " },
-        ])
-        .run();
-
-      closeSuggestion();
-
-      const json = editorInstance.getJSON();
-      const content = tiptapJsonToEditorContent(json);
-      draftActions.setDraft(
+  if (enableCommands) {
+    extensions.push(
+      createCommandMention({
         sessionId,
-        isContentEmpty(content) ? null : content,
-      );
-    },
-    [sessionId, draftActions, closeSuggestion],
-  );
+        onSubmit: handleCommandSubmit,
+        onClearDraft: clearDraft,
+      }),
+    );
+  }
 
-  const updateSuggestionPosition = useCallback(
-    (editorInstance: Editor) => {
-      const trigger = currentTriggerRef.current;
-      if (!trigger) return;
+  const editor = useEditor(
+    {
+      extensions,
+      editable: !disabled,
+      autofocus: autoFocus ? "end" : false,
+      editorProps: {
+        attributes: {
+          class:
+            "cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]",
+        },
+        handleKeyDown: (_view, event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            // Don't handle if suggestion popup is open - let it absorb the keypress
+            const suggestionPopup = document.querySelector("[data-tippy-root]");
+            if (suggestionPopup) {
+              return false;
+            }
+            event.preventDefault();
+            submitRef.current();
+            return true;
+          }
+          return false;
+        },
+      },
+      onUpdate: ({ editor: editorInstance }) => {
+        const text = editorInstance.getText();
+        const newIsBashMode =
+          enableBashMode && text.trimStart().startsWith("!");
 
-      const coords = editorInstance.view.coordsAtPos(trigger.from);
-      const virtualElement = {
-        getBoundingClientRect: () => ({
-          x: coords.left,
-          y: coords.top,
-          width: 0,
-          height: coords.bottom - coords.top,
-          top: coords.top,
-          right: coords.left,
-          bottom: coords.bottom,
-          left: coords.left,
-        }),
-      };
-
-      const popup = document.querySelector(
-        "[data-suggestion-popup]",
-      ) as HTMLElement | null;
-      if (!popup) return;
-
-      computePosition(virtualElement, popup, {
-        placement: "top-start",
-        strategy: "fixed",
-        middleware: [shift({ padding: 8 }), flip()],
-      }).then(({ x, y }) => {
-        suggestionActions.updatePosition({ x, y });
-      });
-    },
-    [suggestionActions],
-  );
-
-  const checkForTrigger = useCallback(
-    async (editorInstance: Editor) => {
-      const trigger = findTrigger(editorInstance, {
-        fileMentions: enableFileMentions,
-        commands: enableCommands,
-      });
-
-      if (!trigger) {
-        if (suggestionActive) {
-          closeSuggestion();
+        if (newIsBashMode !== prevBashModeRef.current) {
+          prevBashModeRef.current = newIsBashMode;
+          onBashModeChangeRef.current?.(newIsBashMode);
         }
-        return;
-      }
 
-      currentTriggerRef.current = trigger;
-
-      if (!suggestionActive) {
-        suggestionActions.open(
+        const json = editorInstance.getJSON();
+        const content = tiptapJsonToEditorContent(json);
+        draftActions.setDraft(
           sessionId,
-          trigger.type,
-          { x: 0, y: 0 },
-          (index) => handleSuggestionSelect(index, editorInstance),
+          isContentEmpty(content) ? null : content,
         );
-      }
-
-      try {
-        let items: SuggestionItem[];
-        if (trigger.type === "file") {
-          items = await getFileSuggestions(sessionId, trigger.query);
-        } else {
-          items = getCommandSuggestions(sessionId, trigger.query);
-        }
-
-        suggestionActions.setItems(items);
-        suggestionActions.setLoadingState(
-          items.length > 0 ? "success" : "idle",
-        );
-      } catch (error) {
-        suggestionActions.setItems([]);
-        suggestionActions.setLoadingState("error", String(error));
-      }
-
-      requestAnimationFrame(() => updateSuggestionPosition(editorInstance));
+      },
     },
-    [
-      sessionId,
-      enableFileMentions,
-      enableCommands,
-      suggestionActive,
-      suggestionActions,
-      closeSuggestion,
-      handleSuggestionSelect,
-      updateSuggestionPosition,
-    ],
+    [sessionId, disabled, enableFileMentions, enableCommands, placeholder],
   );
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        blockquote: false,
-        codeBlock: false,
-        bulletList: false,
-        orderedList: false,
-        listItem: false,
-        horizontalRule: false,
-      }),
-      Placeholder.configure({
-        placeholder,
-      }),
-      MentionChipNode,
-    ],
-    editable: !disabled,
-    autofocus: autoFocus ? "end" : false,
-    editorProps: {
-      attributes: {
-        class:
-          "cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]",
-      },
-      handleKeyDown: (view, event) => {
-        if (suggestionActive) {
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            suggestionActions.selectPrevious();
-            return true;
-          }
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            suggestionActions.selectNext();
-            return true;
-          }
-          if (event.key === "Enter" || event.key === "Tab") {
-            event.preventDefault();
-            const state = useSuggestionStore.getState();
-            handleSuggestionSelect(
-              state.selectedIndex,
-              view.state.doc ? (editor as Editor) : null,
-            );
-            return true;
-          }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            closeSuggestion();
-            return true;
-          }
-        }
-
-        if (event.key === "Enter" && !event.shiftKey) {
-          event.preventDefault();
-          submitRef.current();
-          return true;
-        }
-
-        return false;
-      },
-    },
-    onUpdate: ({ editor: editorInstance }) => {
-      const text = editorInstance.getText();
-      const newIsBashMode = enableBashMode && text.trimStart().startsWith("!");
-
-      if (newIsBashMode !== prevBashModeRef.current) {
-        prevBashModeRef.current = newIsBashMode;
-        onBashModeChangeRef.current?.(newIsBashMode);
-      }
-
-      const json = editorInstance.getJSON();
-      const content = tiptapJsonToEditorContent(json);
-      draftActions.setDraft(
-        sessionId,
-        isContentEmpty(content) ? null : content,
-      );
-
-      checkForTrigger(editorInstance);
-    },
-    onSelectionUpdate: ({ editor: editorInstance }) => {
-      checkForTrigger(editorInstance);
-    },
-  });
 
   useLayoutEffect(() => {
     if (
@@ -486,8 +284,7 @@ export function useTiptapEditor(
     editor.commands.clearContent();
     prevBashModeRef.current = false;
     draftActions.setDraft(sessionId, null);
-    closeSuggestion();
-  }, [editor, sessionId, isCloud, draftActions, closeSuggestion]);
+  }, [editor, sessionId, isCloud, draftActions]);
 
   useLayoutEffect(() => {
     submitRef.current = submit;

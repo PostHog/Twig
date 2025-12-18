@@ -1,7 +1,6 @@
 import "@features/message-editor/components/message-editor.css";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { SuggestionPopup } from "@features/message-editor/components/SuggestionPopup";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -163,8 +162,6 @@ export const TaskInputEditor = forwardRef<
             )}
           </Flex>
         </Flex>
-
-        <SuggestionPopup sessionId={sessionId} />
 
         <Flex justify="between" align="center" px="3" pb="3">
           <EditorToolbar
