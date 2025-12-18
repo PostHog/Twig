@@ -140,6 +140,7 @@ export class Agent {
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
       this.ensureOpenAIGatewayEnv(gatewayUrl, apiKey);
+      this.ensureGeminiGatewayEnv(gatewayUrl, apiKey);
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;
@@ -525,6 +526,19 @@ This PR implements the changes described in the task.`;
 
     if (resolvedToken) {
       process.env.OPENAI_API_KEY = resolvedToken;
+    }
+  }
+
+  private ensureGeminiGatewayEnv(gatewayUrl?: string, token?: string): void {
+    const resolvedGatewayUrl = gatewayUrl || process.env.ANTHROPIC_BASE_URL;
+    const resolvedToken = token || process.env.ANTHROPIC_AUTH_TOKEN;
+
+    if (resolvedGatewayUrl) {
+      process.env.GEMINI_BASE_URL = resolvedGatewayUrl;
+    }
+
+    if (resolvedToken) {
+      process.env.GEMINI_API_KEY = resolvedToken;
     }
   }
 
