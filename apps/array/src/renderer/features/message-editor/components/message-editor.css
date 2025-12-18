@@ -67,11 +67,14 @@ p.is-editor-empty:first-child::before {
   min-width: 300px;
   font-family: monospace;
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 .suggestion-list-scrollable {
   max-height: 240px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .suggestion-list-scrollable::-webkit-scrollbar {

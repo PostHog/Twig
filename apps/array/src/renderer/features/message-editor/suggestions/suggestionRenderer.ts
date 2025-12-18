@@ -99,10 +99,16 @@ function createLifecycleHandlers<T extends SuggestionItem>(
       currentEditor = props.editor;
 
       const actions = getActions();
-      actions.setSuggestionItems(props.items as T[]);
-      actions.setSuggestionLoadingState(
-        props.items.length > 0 ? "success" : "idle",
-      );
+      const currentItems = useMessageEditorStore.getState().suggestion.items;
+
+      // Only update items if we have new results, or if this is the first update
+      // This prevents flashing empty/loading states while typing
+      if (props.items.length > 0 || currentItems.length === 0) {
+        actions.setSuggestionItems(props.items as T[]);
+        actions.setSuggestionLoadingState(
+          props.items.length > 0 ? "success" : "idle",
+        );
+      }
 
       if (!popupElement) {
         popupElement = document.querySelector(

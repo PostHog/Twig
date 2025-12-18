@@ -57,13 +57,23 @@ export function SuggestionList() {
     ? `suggestion-${items[selectedIndex].id}`
     : undefined;
 
+  const footer = (
+    <div className="suggestion-footer">
+      <span className="suggestion-footer-text">
+        <kbd>↑</kbd>
+        <kbd>↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>Esc</kbd> dismiss
+      </span>
+    </div>
+  );
+
   if (loadingState === "loading") {
     return (
-      <output className="suggestion-list" aria-label="Loading suggestions">
-        <div className="suggestion-loading">
+      <div className="suggestion-list">
+        <output className="suggestion-loading" aria-label="Loading suggestions">
           <span className="suggestion-loading-text">Searching...</span>
-        </div>
-      </output>
+        </output>
+        {footer}
+      </div>
     );
   }
 
@@ -77,73 +87,71 @@ export function SuggestionList() {
         <div className="suggestion-error">
           <span className="suggestion-error-text">{error}</span>
         </div>
+        {footer}
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <output className="suggestion-list">
+      <div className="suggestion-list">
         <div className="suggestion-empty">
           <span className="suggestion-empty-text">{emptyMessage}</span>
         </div>
-      </output>
+        {footer}
+      </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      role="listbox"
-      aria-label={ariaLabel}
-      aria-activedescendant={selectedItemId}
-      onMouseMove={handleMouseMove}
-      className="suggestion-list suggestion-list-scrollable"
-      style={{
-        cursor: hasMouseMoved ? undefined : "none",
-      }}
-      tabIndex={0}
-    >
-      {items.map((item, index) => {
-        const isSelected = index === selectedIndex;
-        const itemId = `suggestion-${item.id}`;
-        return (
-          <button
-            type="button"
-            role="option"
-            aria-selected={isSelected}
-            id={itemId}
-            key={item.id}
-            ref={(el) => {
-              itemRefs.current[index] = el;
-            }}
-            onClick={() => onSelectItem?.(item)}
-            onMouseEnter={() =>
-              hasMouseMoved && actions.setSelectedIndex(index)
-            }
-            className={`suggestion-item ${isSelected ? "suggestion-item-selected" : ""} ${
-              item.description ? "suggestion-item-with-description" : ""
-            }`}
-            style={{
-              cursor: hasMouseMoved ? "pointer" : "none",
-            }}
-          >
-            <span className="suggestion-item-label">{item.label}</span>
-            {item.description && (
-              <span className="suggestion-item-description">
-                {item.description}
-              </span>
-            )}
-          </button>
-        );
-      })}
-      <div className="suggestion-footer">
-        <span className="suggestion-footer-text">
-          <kbd>↑</kbd>
-          <kbd>↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>Esc</kbd>{" "}
-          dismiss
-        </span>
+    <div className="suggestion-list">
+      <div
+        ref={containerRef}
+        role="listbox"
+        aria-label={ariaLabel}
+        aria-activedescendant={selectedItemId}
+        onMouseMove={handleMouseMove}
+        className="suggestion-list-scrollable"
+        style={{
+          cursor: hasMouseMoved ? undefined : "none",
+        }}
+        tabIndex={0}
+      >
+        {items.map((item, index) => {
+          const isSelected = index === selectedIndex;
+          const itemId = `suggestion-${item.id}`;
+          return (
+            <button
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              id={itemId}
+              key={item.id}
+              ref={(el) => {
+                itemRefs.current[index] = el;
+              }}
+              onClick={() => onSelectItem?.(item)}
+              onMouseEnter={() =>
+                hasMouseMoved && actions.setSelectedIndex(index)
+              }
+              className={`suggestion-item ${isSelected ? "suggestion-item-selected" : ""} ${
+                item.description ? "suggestion-item-with-description" : ""
+              }`}
+              style={{
+                cursor: hasMouseMoved ? "pointer" : "none",
+              }}
+            >
+              <span className="suggestion-item-label">{item.label}</span>
+              {item.description && (
+                <span className="suggestion-item-description">
+                  {item.description}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+      {footer}
     </div>
   );
 }
