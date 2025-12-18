@@ -159,3 +159,91 @@ export const getLatestCommitOutput = gitCommitInfoSchema.nullable();
 // getGitRepoInfo schemas
 export const getGitRepoInfoInput = directoryPathInput;
 export const getGitRepoInfoOutput = gitRepoInfoSchema.nullable();
+
+// Push operation
+export const pushInput = z.object({
+  directoryPath: z.string(),
+  remote: z.string().default("origin"),
+  branch: z.string().optional(),
+  setUpstream: z.boolean().default(false),
+});
+
+export const pushOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
+
+export type PushInput = z.infer<typeof pushInput>;
+export type PushOutput = z.infer<typeof pushOutput>;
+
+// Pull operation
+export const pullInput = z.object({
+  directoryPath: z.string(),
+  remote: z.string().default("origin"),
+  branch: z.string().optional(),
+});
+
+export const pullOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  updatedFiles: z.number().optional(),
+});
+
+export type PullInput = z.infer<typeof pullInput>;
+export type PullOutput = z.infer<typeof pullOutput>;
+
+// Publish (push with upstream) operation
+export const publishInput = z.object({
+  directoryPath: z.string(),
+  remote: z.string().default("origin"),
+});
+
+export const publishOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  branch: z.string(),
+});
+
+export type PublishInput = z.infer<typeof publishInput>;
+export type PublishOutput = z.infer<typeof publishOutput>;
+
+// Sync (pull then push) operation
+export const syncInput = z.object({
+  directoryPath: z.string(),
+  remote: z.string().default("origin"),
+});
+
+export const syncOutput = z.object({
+  success: z.boolean(),
+  pullMessage: z.string(),
+  pushMessage: z.string(),
+});
+
+export type SyncInput = z.infer<typeof syncInput>;
+export type SyncOutput = z.infer<typeof syncOutput>;
+
+// PR Template lookup
+export const getPrTemplateInput = directoryPathInput;
+
+export const getPrTemplateOutput = z.object({
+  template: z.string().nullable(),
+  templatePath: z.string().nullable(),
+});
+
+export type GetPrTemplateOutput = z.infer<typeof getPrTemplateOutput>;
+
+// Commit conventions analysis
+export const getCommitConventionsInput = z.object({
+  directoryPath: z.string(),
+  sampleSize: z.number().default(20),
+});
+
+export const getCommitConventionsOutput = z.object({
+  conventionalCommits: z.boolean(),
+  commonPrefixes: z.array(z.string()),
+  sampleMessages: z.array(z.string()),
+});
+
+export type GetCommitConventionsOutput = z.infer<
+  typeof getCommitConventionsOutput
+>;
