@@ -1,6 +1,7 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect } from "react";
@@ -9,11 +10,13 @@ import { trpcReact } from "@/renderer/trpc";
 
 interface GlobalEventHandlersProps {
   onToggleCommandMenu: () => void;
+  onToggleShortcutsSheet: () => void;
   commandMenuOpen: boolean;
 }
 
 export function GlobalEventHandlers({
   onToggleCommandMenu,
+  onToggleShortcutsSheet,
   commandMenuOpen,
 }: GlobalEventHandlersProps) {
   const toggleSettings = useNavigationStore((state) => state.toggleSettings);
@@ -26,13 +29,9 @@ export function GlobalEventHandlers({
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
 
-  const handleOpenSettings = useCallback(
-    (data?: unknown) => {
-      if (!data) return;
-      toggleSettings();
-    },
-    [toggleSettings],
-  );
+  const handleOpenSettings = useCallback(() => {
+    toggleSettings();
+  }, [toggleSettings]);
 
   const handleFocusTaskMode = useCallback(
     (data?: unknown) => {
@@ -56,55 +55,33 @@ export function GlobalEventHandlers({
     clearApplicationStorage();
   }, []);
 
-  // Keyboard hotkeys
-  useHotkeys("mod+k", onToggleCommandMenu, {
+  const globalOptions = {
+    enableOnFormTags: true,
+    enableOnContentEditable: true,
+    preventDefault: true,
+  } as const;
+
+  const nonEditorOptions = {
+    enableOnFormTags: false,
+    enableOnContentEditable: false,
+    preventDefault: true,
+  } as const;
+
+  useHotkeys(SHORTCUTS.COMMAND_MENU, onToggleCommandMenu, {
+    ...globalOptions,
     enabled: !commandMenuOpen,
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
   });
-  useHotkeys("mod+t", onToggleCommandMenu, {
-    enabled: !commandMenuOpen,
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+p", onToggleCommandMenu, {
-    enabled: !commandMenuOpen,
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+n", handleFocusTaskMode, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+,", handleOpenSettings, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+[", goBack, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+]", goForward, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+b", toggleLeftSidebar, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
-  useHotkeys("mod+shift+b", toggleRightSidebar, {
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-    preventDefault: true,
-  });
+  useHotkeys(SHORTCUTS.NEW_TASK, handleFocusTaskMode, globalOptions);
+  useHotkeys(SHORTCUTS.SETTINGS, handleOpenSettings, globalOptions);
+  useHotkeys(SHORTCUTS.GO_BACK, goBack, globalOptions);
+  useHotkeys(SHORTCUTS.GO_FORWARD, goForward, globalOptions);
+  useHotkeys(
+    SHORTCUTS.TOGGLE_LEFT_SIDEBAR,
+    toggleLeftSidebar,
+    nonEditorOptions,
+  );
+  useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
+  useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
 
   // Mouse back/forward buttons
   useEffect(() => {

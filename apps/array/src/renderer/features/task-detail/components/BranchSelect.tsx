@@ -197,10 +197,25 @@ export function BranchSelect({
   return (
     <DropdownMenu.Root onOpenChange={handleOpenChange}>
       <DropdownMenu.Trigger>
-        <Button color="gray" variant="outline" size={size} disabled={isLoading}>
-          <Flex justify="between" align="center" gap="2">
+        <Button
+          color="gray"
+          variant="outline"
+          size={size}
+          disabled={isLoading}
+          style={{ maxWidth: 280, overflow: "hidden" }}
+        >
+          <Flex
+            justify="between"
+            align="center"
+            gap="2"
+            style={{ minWidth: 0 }}
+          >
             <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-              <GitBranchIcon size={16} weight="regular" />
+              <GitBranchIcon
+                size={16}
+                weight="regular"
+                style={{ flexShrink: 0 }}
+              />
               <Text
                 size={size}
                 style={{

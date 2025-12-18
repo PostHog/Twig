@@ -1,3 +1,4 @@
+import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import type { Task } from "@shared/types";
 import { useCallback } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -39,25 +40,25 @@ export function useTaskKeyboardNavigation(
   }, [filteredTasks, selectedIndex, hoveredIndex, onSelectTask]);
 
   useHotkeys(
-    "up",
+    SHORTCUTS.TASK_NAV_UP,
     () => handleKeyNavigation("up"),
     { enableOnFormTags: false, enabled: contextMenuIndex === null },
     [handleKeyNavigation, contextMenuIndex],
   );
 
   useHotkeys(
-    "down",
+    SHORTCUTS.TASK_NAV_DOWN,
     () => handleKeyNavigation("down"),
     { enableOnFormTags: false, enabled: contextMenuIndex === null },
     [handleKeyNavigation, contextMenuIndex],
   );
 
   useHotkeys(
-    "enter",
+    SHORTCUTS.TASK_SELECT,
     handleSelectCurrent,
     { enableOnFormTags: false, enabled: contextMenuIndex === null },
     [handleSelectCurrent, contextMenuIndex],
   );
 
-  useHotkeys("cmd+r, ctrl+r", () => refetch(), [refetch]);
+  useHotkeys(SHORTCUTS.TASK_REFRESH, () => refetch(), [refetch]);
 }

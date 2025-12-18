@@ -1,23 +1,24 @@
-import { useEffect } from "react";
+import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
+import { useHotkeys } from "react-hotkeys-hook";
 
 export function useBlurOnEscape() {
-  useEffect(() => {
-    const handleKeydown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && document.activeElement instanceof HTMLElement) {
+  useHotkeys(
+    SHORTCUTS.BLUR,
+    () => {
+      if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
-      if (
-        e.key === "Enter" &&
-        (e.metaKey || e.ctrlKey) &&
-        document.activeElement instanceof HTMLElement
-      ) {
-        document.activeElement.blur();
-      }
-    };
+    },
+    { enableOnFormTags: true, enableOnContentEditable: true },
+  );
 
-    document.addEventListener("keydown", handleKeydown);
-    return () => {
-      document.removeEventListener("keydown", handleKeydown);
-    };
-  }, []);
+  useHotkeys(
+    SHORTCUTS.SUBMIT_BLUR,
+    () => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    },
+    { enableOnFormTags: true, enableOnContentEditable: true },
+  );
 }

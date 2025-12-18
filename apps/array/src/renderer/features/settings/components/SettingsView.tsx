@@ -20,10 +20,12 @@ import {
   Switch,
   Text,
 } from "@radix-ui/themes";
+import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
+import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { trpcReact, trpcVanilla } from "@/renderer/trpc";
@@ -64,6 +66,7 @@ export function SettingsView() {
   const setTerminalLayout = useTerminalLayoutStore(
     (state) => state.setTerminalLayout,
   );
+  const openShortcutsSheet = useShortcutsSheetStore((state) => state.open);
 
   const { data: currentUser } = useMeQuery();
   const { data: project } = useProjectQuery();
@@ -221,6 +224,27 @@ export function SettingsView() {
                     logs. Tabbed shows the terminal as a tab alongside logs.
                   </Text>
                 </Flex>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          <Flex direction="column" gap="3">
+            <Heading size="3">Keyboard shortcuts</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    View all shortcuts
+                  </Text>
+                  <Text size="1" color="gray">
+                    See all available keyboard shortcuts
+                  </Text>
+                </Flex>
+                <Button variant="soft" size="1" onClick={openShortcutsSheet}>
+                  {formatHotkey("mod+/")}
+                </Button>
               </Flex>
             </Card>
           </Flex>
