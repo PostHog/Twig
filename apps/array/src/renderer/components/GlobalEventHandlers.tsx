@@ -26,26 +26,35 @@ export function GlobalEventHandlers({
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
 
-  const handleOpenSettings = useCallback((data?: unknown) => {
-    if (!data) return;  
-    toggleSettings();
-  }, [toggleSettings]);
+  const handleOpenSettings = useCallback(
+    (data?: unknown) => {
+      if (!data) return;
+      toggleSettings();
+    },
+    [toggleSettings],
+  );
 
-  const handleFocusTaskMode = useCallback((data?: unknown) => {
-    if (!data) return;
-    navigateToTaskInput();
-  }, [navigateToTaskInput]);
+  const handleFocusTaskMode = useCallback(
+    (data?: unknown) => {
+      if (!data) return;
+      navigateToTaskInput();
+    },
+    [navigateToTaskInput],
+  );
 
-    const handleResetLayout = useCallback((data?: unknown) => {
-    if (!data) return;
-    clearAllLayouts();
-    window.location.reload();
-  }, [clearAllLayouts]);
+  const handleResetLayout = useCallback(
+    (data?: unknown) => {
+      if (!data) return;
+      clearAllLayouts();
+      window.location.reload();
+    },
+    [clearAllLayouts],
+  );
 
   const handleClearStorage = useCallback((data?: unknown) => {
     if (!data) return;
     clearApplicationStorage();
-  }, [clearApplicationStorage]);
+  }, []);
 
   // Keyboard hotkeys
   useHotkeys("mod+k", onToggleCommandMenu, {
