@@ -1,6 +1,7 @@
 import { CodeIcon, CopyIcon } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
+import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useEffect, useMemo } from "react";
@@ -67,7 +68,7 @@ export function ExternalAppsOpener({
   }, [targetPath]);
 
   useHotkeys(
-    "mod+o",
+    SHORTCUTS.OPEN_IN_EDITOR,
     (event) => {
       event.preventDefault();
       handleOpenDefault();
@@ -77,7 +78,7 @@ export function ExternalAppsOpener({
   );
 
   useHotkeys(
-    "mod+shift+c",
+    SHORTCUTS.COPY_PATH,
     (event) => {
       event.preventDefault();
       handleCopyPath();

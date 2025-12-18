@@ -5,7 +5,7 @@ import {
   isJsonRpcNotification,
 } from "@shared/types/session-events";
 import { useCallback, useMemo, useState } from "react";
-import { useKeyboardShortcut } from "../hooks/useKeyboardShortcut";
+import { useHotkeys } from "react-hotkeys-hook";
 import {
   useSessionViewActions,
   useShowRawLogs,
@@ -41,7 +41,9 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
 
-  useKeyboardShortcut("Escape", onCancelPrompt, { enabled: isPromptPending });
+  useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [
+    onCancelPrompt,
+  ]);
 
   const latestPlan = useMemo((): Plan | null => {
     for (let i = events.length - 1; i >= 0; i--) {

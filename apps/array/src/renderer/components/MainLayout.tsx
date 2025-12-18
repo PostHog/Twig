@@ -1,4 +1,5 @@
 import { HeaderRow } from "@components/HeaderRow";
+import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
@@ -10,6 +11,7 @@ import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
+import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useCallback, useState } from "react";
 import { Toaster } from "sonner";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
@@ -18,8 +20,12 @@ import { GlobalEventHandlers } from "./GlobalEventHandlers";
 export function MainLayout() {
   const { view } = useNavigationStore();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+  const {
+    isOpen: shortcutsSheetOpen,
+    toggle: toggleShortcutsSheet,
+    close: closeShortcutsSheet,
+  } = useShortcutsSheetStore();
 
-  // Initialize integrations
   useIntegrations();
   useTaskDeepLink();
 
@@ -53,9 +59,14 @@ export function MainLayout() {
       <StatusBar />
 
       <CommandMenu open={commandMenuOpen} onOpenChange={setCommandMenuOpen} />
+      <KeyboardShortcutsSheet
+        open={shortcutsSheetOpen}
+        onOpenChange={(open) => (open ? null : closeShortcutsSheet())}
+      />
       <UpdatePrompt />
       <GlobalEventHandlers
         onToggleCommandMenu={handleToggleCommandMenu}
+        onToggleShortcutsSheet={toggleShortcutsSheet}
         commandMenuOpen={commandMenuOpen}
       />
       <Toaster position="bottom-right" />
