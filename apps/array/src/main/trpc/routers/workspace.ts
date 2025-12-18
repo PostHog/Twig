@@ -1,4 +1,3 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
@@ -16,18 +15,26 @@ import {
   runStartScriptsOutput,
   verifyWorkspaceInput,
   verifyWorkspaceOutput,
-  type WorkspaceErrorPayload,
-  type WorkspaceTerminalCreatedPayload,
-  type WorkspaceWarningPayload,
 } from "../../services/workspace/schemas.js";
 import {
   type WorkspaceService,
   WorkspaceServiceEvent,
+  type WorkspaceServiceEvents,
 } from "../../services/workspace/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
 const getService = () =>
   container.get<WorkspaceService>(MAIN_TOKENS.WorkspaceService);
+
+function subscribe<K extends keyof WorkspaceServiceEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
+    const service = getService();
+    const iterable = service.toIterable(event, { signal: opts.signal });
+    for await (const data of iterable) {
+      yield data;
+    }
+  });
+}
 
 export const workspaceRouter = router({
   create: publicProcedure
@@ -76,40 +83,7 @@ export const workspaceRouter = router({
     .output(getWorkspaceTerminalsOutput)
     .query(({ input }) => getService().getWorkspaceTerminals(input.taskId)),
 
-  // Subscriptions for real-time events
-  onTerminalCreated: publicProcedure.subscription(async function* (opts) {
-    const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(
-      service,
-      WorkspaceServiceEvent.TerminalCreated,
-      options,
-    )) {
-      yield payload as WorkspaceTerminalCreatedPayload;
-    }
-  }),
-
-  onError: publicProcedure.subscription(async function* (opts) {
-    const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(
-      service,
-      WorkspaceServiceEvent.Error,
-      options,
-    )) {
-      yield payload as WorkspaceErrorPayload;
-    }
-  }),
-
-  onWarning: publicProcedure.subscription(async function* (opts) {
-    const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(
-      service,
-      WorkspaceServiceEvent.Warning,
-      options,
-    )) {
-      yield payload as WorkspaceWarningPayload;
-    }
-  }),
+  onTerminalCreated: subscribe(WorkspaceServiceEvent.TerminalCreated),
+  onError: subscribe(WorkspaceServiceEvent.Error),
+  onWarning: subscribe(WorkspaceServiceEvent.Warning),
 });

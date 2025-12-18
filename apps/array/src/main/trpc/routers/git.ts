@@ -1,8 +1,6 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
-  type CloneProgressPayload,
   cloneRepositoryInput,
   cloneRepositoryOutput,
   createBranchInput,
@@ -74,13 +72,11 @@ export const gitRouter = router({
 
   onCloneProgress: publicProcedure.subscription(async function* (opts) {
     const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const [payload] of on(
-      service,
-      GitServiceEvent.CloneProgress,
-      options,
-    )) {
-      yield payload as CloneProgressPayload;
+    const iterable = service.toIterable(GitServiceEvent.CloneProgress, {
+      signal: opts.signal,
+    });
+    for await (const data of iterable) {
+      yield data;
     }
   }),
 

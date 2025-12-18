@@ -16,28 +16,36 @@ export function GlobalEventHandlers({
   onToggleCommandMenu,
   commandMenuOpen,
 }: GlobalEventHandlersProps) {
-  const { toggleSettings, navigateToTaskInput, goBack, goForward } =
-    useNavigationStore();
+  const toggleSettings = useNavigationStore((state) => state.toggleSettings);
+  const navigateToTaskInput = useNavigationStore(
+    (state) => state.navigateToTaskInput,
+  );
+  const goBack = useNavigationStore((state) => state.goBack);
+  const goForward = useNavigationStore((state) => state.goForward);
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
 
-  const handleOpenSettings = useCallback(() => {
+  const handleOpenSettings = useCallback((data?: unknown) => {
+    if (!data) return;  
     toggleSettings();
   }, [toggleSettings]);
 
-  const handleFocusTaskMode = useCallback(() => {
+  const handleFocusTaskMode = useCallback((data?: unknown) => {
+    if (!data) return;
     navigateToTaskInput();
   }, [navigateToTaskInput]);
 
-  const handleResetLayout = useCallback(() => {
+    const handleResetLayout = useCallback((data?: unknown) => {
+    if (!data) return;
     clearAllLayouts();
     window.location.reload();
   }, [clearAllLayouts]);
 
-  const handleClearStorage = useCallback(() => {
+  const handleClearStorage = useCallback((data?: unknown) => {
+    if (!data) return;
     clearApplicationStorage();
-  }, []);
+  }, [clearApplicationStorage]);
 
   // Keyboard hotkeys
   useHotkeys("mod+k", onToggleCommandMenu, {
@@ -107,7 +115,6 @@ export function GlobalEventHandlers({
     };
   }, [goBack, goForward]);
 
-  // Subscribe to UI events from main process via tRPC
   trpcReact.ui.onOpenSettings.useSubscription(undefined, {
     onData: handleOpenSettings,
   });

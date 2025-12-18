@@ -1,18 +1,20 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
-import { UIServiceEvent } from "../../services/ui/schemas.js";
+import {
+  UIServiceEvent,
+  type UIServiceEvents,
+} from "../../services/ui/schemas.js";
 import type { UIService } from "../../services/ui/service.js";
 import { publicProcedure, router } from "../trpc.js";
 
 const getService = () => container.get<UIService>(MAIN_TOKENS.UIService);
 
-function subscribeToUIEvent(event: string) {
+function subscribeToUIEvent<K extends keyof UIServiceEvents>(event: K) {
   return publicProcedure.subscription(async function* (opts) {
     const service = getService();
-    const options = opts.signal ? { signal: opts.signal } : undefined;
-    for await (const _ of on(service, event, options)) {
-      yield {};
+    const iterable = service.toIterable(event, { signal: opts.signal });
+    for await (const data of iterable) {
+      yield data;
     }
   });
 }

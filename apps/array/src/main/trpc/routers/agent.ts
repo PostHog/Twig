@@ -1,10 +1,8 @@
-import { on } from "node:events";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   AgentServiceEvent,
-  type AgentSessionEventPayload,
   cancelPromptInput,
   cancelSessionInput,
   promptInput,
@@ -64,14 +62,11 @@ export const agentRouter = router({
     .subscription(async function* (opts) {
       const service = getService();
       const targetSessionId = opts.input.sessionId;
-      const options = opts.signal ? { signal: opts.signal } : undefined;
+      const iterable = service.toIterable(AgentServiceEvent.SessionEvent, {
+        signal: opts.signal,
+      });
 
-      for await (const [payload] of on(
-        service,
-        AgentServiceEvent.SessionEvent,
-        options,
-      )) {
-        const event = payload as AgentSessionEventPayload;
+      for await (const event of iterable) {
         if (event.sessionId === targetSessionId) {
           yield event.payload;
         }

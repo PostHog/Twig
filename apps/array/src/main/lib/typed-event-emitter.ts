@@ -1,4 +1,4 @@
-import { EventEmitter } from "node:events";
+import { EventEmitter, on } from "node:events";
 
 export class TypedEventEmitter<TEvents> extends EventEmitter {
   emit<K extends keyof TEvents & string>(
@@ -20,5 +20,14 @@ export class TypedEventEmitter<TEvents> extends EventEmitter {
     listener: (payload: TEvents[K]) => void,
   ): this {
     return super.off(event, listener);
+  }
+
+  async *toIterable<K extends keyof TEvents & string>(
+    event: K,
+    opts?: { signal?: AbortSignal },
+  ): AsyncIterable<TEvents[K]> {
+    for await (const [payload] of on(this, event, opts)) {
+      yield payload as TEvents[K];
+    }
   }
 }

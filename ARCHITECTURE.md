@@ -349,18 +349,18 @@ export class MyService extends TypedEventEmitter<MyServiceEvents> {
 
 ### 3. Create Subscriptions in Router
 
-Use a helper to reduce boilerplate. For global events (broadcast to all subscribers):
+Use `toIterable()` on the service to convert events to an async iterable. For global events (broadcast to all subscribers):
 
 ```typescript
 // src/main/trpc/routers/my-router.ts
-import { on } from "node:events";
 import { MyServiceEvent, type MyServiceEvents } from "../../services/my-service/schemas";
 
 function subscribe<K extends keyof MyServiceEvents>(event: K) {
   return publicProcedure.subscription(async function* (opts) {
     const service = getService();
-    for await (const [payload] of on(service, event, { signal: opts.signal })) {
-      yield payload as MyServiceEvents[K];
+    const iterable = service.toIterable(event, { signal: opts.signal });
+    for await (const data of iterable) {
+      yield data;
     }
   });
 }
@@ -382,15 +382,15 @@ export interface ShellEvents {
 }
 
 // Router filters events to the specific session
-function subscribeToSession<K extends keyof ShellEvents>(event: K) {
+function subscribeFiltered<K extends keyof ShellEvents>(event: K) {
   return publicProcedure
     .input(sessionIdInput)
     .subscription(async function* (opts) {
       const service = getService();
       const targetSessionId = opts.input.sessionId;
+      const iterable = service.toIterable(event, { signal: opts.signal });
 
-      for await (const [payload] of on(service, event, { signal: opts.signal })) {
-        const data = payload as ShellEvents[K];
+      for await (const data of iterable) {
         if (data.sessionId === targetSessionId) {
           yield data;
         }
@@ -399,8 +399,8 @@ function subscribeToSession<K extends keyof ShellEvents>(event: K) {
 }
 
 export const shellRouter = router({
-  onData: subscribeToSession(ShellEvent.Data),
-  onExit: subscribeToSession(ShellEvent.Exit),
+  onData: subscribeFiltered(ShellEvent.Data),
+  onExit: subscribeFiltered(ShellEvent.Exit),
 });
 ```
 

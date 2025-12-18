@@ -55,7 +55,7 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   }
 
   triggerMenuCheck(): void {
-    this.emit(UpdatesEvent.CheckFromMenu, undefined);
+    this.emit(UpdatesEvent.CheckFromMenu, true);
   }
 
   checkForUpdates(): CheckForUpdatesOutput {
@@ -120,7 +120,7 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
 
   private flushPendingNotification(): void {
     if (this.updateReady && this.pendingNotification) {
-      this.emit(UpdatesEvent.Ready, undefined);
+      this.emit(UpdatesEvent.Ready, true);
       this.pendingNotification = false;
     }
   }

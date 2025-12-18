@@ -1,4 +1,3 @@
-import { on } from "node:events";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
@@ -6,9 +5,8 @@ import {
   executeInput,
   executeOutput,
   resizeInput,
-  type ShellDataPayload,
   ShellEvent,
-  type ShellExitPayload,
+  type ShellEvents,
   sessionIdInput,
   writeInput,
 } from "../../services/shell/schemas.js";
@@ -17,16 +15,15 @@ import { publicProcedure, router } from "../trpc.js";
 
 const getService = () => container.get<ShellService>(MAIN_TOKENS.ShellService);
 
-function subscribeFiltered<T extends { sessionId: string }>(event: string) {
+function subscribeFiltered<K extends keyof ShellEvents>(event: K) {
   return publicProcedure
     .input(sessionIdInput)
-    .subscription(async function* (opts): AsyncGenerator<T, void, unknown> {
+    .subscription(async function* (opts) {
       const service = getService();
       const targetSessionId = opts.input.sessionId;
-      const options = opts.signal ? { signal: opts.signal } : undefined;
+      const iterable = service.toIterable(event, { signal: opts.signal });
 
-      for await (const [payload] of on(service, event, options)) {
-        const data = payload as T;
+      for await (const data of iterable) {
         if (data.sessionId === targetSessionId) {
           yield data;
         }
@@ -68,6 +65,6 @@ export const shellRouter = router({
     .output(executeOutput)
     .mutation(({ input }) => getService().execute(input.cwd, input.command)),
 
-  onData: subscribeFiltered<ShellDataPayload>(ShellEvent.Data),
-  onExit: subscribeFiltered<ShellExitPayload>(ShellEvent.Exit),
+  onData: subscribeFiltered(ShellEvent.Data),
+  onExit: subscribeFiltered(ShellEvent.Exit),
 });

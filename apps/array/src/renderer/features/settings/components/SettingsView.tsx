@@ -70,8 +70,12 @@ export function SettingsView() {
 
   const { data: worktreeLocation } = useQuery({
     queryKey: ["settings", "worktreeLocation"],
-    queryFn: () =>
-      trpcVanilla.secureStore.getItem.query({ key: "worktreeLocation" }),
+    queryFn: async () => {
+      const result = await trpcVanilla.secureStore.getItem.query({
+        key: "worktreeLocation",
+      });
+      return result ?? null;
+    },
   });
 
   const { data: appVersion } = trpcReact.os.getAppVersion.useQuery();
