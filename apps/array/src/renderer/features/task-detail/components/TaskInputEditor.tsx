@@ -1,14 +1,11 @@
 import "@features/message-editor/components/message-editor.css";
-import { ContentEditableEditor } from "@features/message-editor/components/ContentEditableEditor";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { SubmitButton } from "@features/message-editor/components/SubmitButton";
-import { SuggestionPortal } from "@features/message-editor/components/SuggestionPortal";
-import { useEditorHandle } from "@features/message-editor/hooks/useEditorHandle";
+import { SuggestionPopup } from "@features/message-editor/components/SuggestionPopup";
 import { useMessageEditor } from "@features/message-editor/hooks/useMessageEditor";
-import { GitBranchIcon } from "@phosphor-icons/react";
+import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import { forwardRef } from "react";
+import { forwardRef, useImperativeHandle } from "react";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
@@ -77,15 +74,19 @@ export const TaskInputEditor = forwardRef<
       autoFocus: true,
     });
 
-    useEditorHandle(ref, {
-      focus,
-      blur,
-      clear,
-      isEmpty,
-      getContent,
-      getText,
-      setContent,
-    });
+    useImperativeHandle(
+      ref,
+      () => ({
+        focus,
+        blur,
+        clear,
+        isEmpty: () => isEmpty,
+        getContent,
+        getText,
+        setContent,
+      }),
+      [focus, blur, clear, isEmpty, getContent, getText, setContent],
+    );
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
@@ -161,10 +162,18 @@ export const TaskInputEditor = forwardRef<
                   overflowY: "auto",
                 }}
               >
-                <ContentEditableEditor
+                {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
+                <div
                   ref={editorRef}
-                  disabled={isCreatingTask}
-                  placeholder="What do you want to work on? - @ to add context"
+                  className="cli-editor min-h-[1.5em] w-full break-words border-none bg-transparent font-mono text-[12px] text-[var(--gray-12)] outline-none [overflow-wrap:break-word] [white-space:pre-wrap] [word-break:break-word]"
+                  contentEditable={!isCreatingTask}
+                  suppressContentEditableWarning
+                  spellCheck={false}
+                  role="textbox"
+                  tabIndex={isCreatingTask ? -1 : 0}
+                  aria-multiline="true"
+                  aria-placeholder="What do you want to work on? - @ to add context"
+                  data-placeholder="What do you want to work on? - @ to add context"
                   onInput={onInput}
                   onKeyDown={onKeyDown}
                   onPaste={onPaste}
@@ -177,7 +186,7 @@ export const TaskInputEditor = forwardRef<
           </Flex>
         </Flex>
 
-        <SuggestionPortal sessionId={sessionId} />
+        <SuggestionPopup sessionId={sessionId} />
 
         <Flex justify="between" align="center" px="3" pb="3">
           <EditorToolbar
@@ -216,13 +225,30 @@ export const TaskInputEditor = forwardRef<
               </Tooltip>
             )}
 
-            <SubmitButton
-              disabled={!canSubmit || isCreatingTask}
-              loading={isCreatingTask}
-              tooltip={getSubmitTooltip()}
-              onClick={onSubmit}
-              size={16}
-            />
+            <Tooltip content={getSubmitTooltip()}>
+              <IconButton
+                size="1"
+                variant="solid"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSubmit();
+                }}
+                disabled={!canSubmit || isCreatingTask}
+                loading={isCreatingTask}
+                style={{
+                  backgroundColor:
+                    !canSubmit || isCreatingTask
+                      ? "var(--accent-a4)"
+                      : undefined,
+                  color:
+                    !canSubmit || isCreatingTask
+                      ? "var(--accent-8)"
+                      : undefined,
+                }}
+              >
+                <ArrowUp size={16} weight="bold" />
+              </IconButton>
+            </Tooltip>
           </Flex>
         </Flex>
       </Flex>

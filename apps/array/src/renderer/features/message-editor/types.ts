@@ -1,4 +1,15 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
+import type { EditorContent } from "./core/content";
+
+export interface EditorHandle {
+  focus: () => void;
+  blur: () => void;
+  clear: () => void;
+  isEmpty: () => boolean;
+  getContent: () => EditorContent;
+  getText: () => string;
+  setContent: (text: string) => void;
+}
 
 export interface SuggestionItem {
   id: string;

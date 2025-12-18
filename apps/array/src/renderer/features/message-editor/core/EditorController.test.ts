@@ -1,19 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CSS, TRIGGERS } from "../test/constants";
 import {
   COMMAND_CHIP,
+  CSS,
   createChip,
   createContent,
   createContentWithChip,
   createTrigger,
   FILE_CHIP,
-} from "../test/fixtures";
-import { setCursor } from "../test/helpers";
+  setCursor,
+  TRIGGERS,
+} from "../test/test-utils";
 import type { EditorContent } from "./content";
+import type { TriggerCapabilities } from "./EditorController";
 import { EditorController } from "./EditorController";
-import type { TriggerCapabilities } from "./triggers";
 
 const ALL_CAPS: TriggerCapabilities = { fileMentions: true, commands: true };
+const FILE_ONLY: TriggerCapabilities = { fileMentions: true, commands: false };
 const COMMAND_ONLY: TriggerCapabilities = {
   fileMentions: false,
   commands: true,
@@ -284,35 +286,141 @@ describe("EditorController", () => {
   });
 
   describe("findActiveTrigger", () => {
-    it.each([
-      {
-        input: `${TRIGGERS.FILE}readme`,
-        offset: 7,
-        type: "file",
-        query: "readme",
-      },
-      {
-        input: `${TRIGGERS.COMMAND}help`,
-        offset: 5,
-        type: "command",
-        query: "help",
-      },
-    ])("finds $type trigger in '$input'", ({ input, offset, type, query }) => {
-      element.textContent = input;
-      setCursor(element, offset);
+    describe("no trigger detected", () => {
+      it("returns null when no selection", () => {
+        element.textContent = `${TRIGGERS.FILE}test`;
+        window.getSelection()?.removeAllRanges();
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
 
-      const trigger = controller.findActiveTrigger(ALL_CAPS);
+      it("returns null when selection is not collapsed", () => {
+        element.textContent = `${TRIGGERS.FILE}test`;
+        const range = document.createRange();
+        range.setStart(element.firstChild!, 0);
+        range.setEnd(element.firstChild!, 5);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
 
-      expect(trigger).not.toBeNull();
-      expect(trigger?.type).toBe(type);
-      expect(trigger?.query).toBe(query);
+      it("returns null when cursor is before trigger", () => {
+        element.textContent = `${TRIGGERS.FILE}test`;
+        setCursor(element, 0);
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
+
+      it("returns null when @ is in middle of word", () => {
+        element.textContent = "email@example";
+        setCursor(element, 13);
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
     });
 
-    it("respects capabilities", () => {
-      element.textContent = `${TRIGGERS.FILE}test`;
-      setCursor(element, 5);
+    describe("trigger detection", () => {
+      it.each([
+        {
+          input: `${TRIGGERS.FILE}readme`,
+          cursorOffset: 7,
+          expected: {
+            type: "file",
+            trigger: TRIGGERS.FILE,
+            query: "readme",
+            startOffset: 0,
+            endOffset: 7,
+          },
+        },
+        {
+          input: `${TRIGGERS.COMMAND}help`,
+          cursorOffset: 5,
+          expected: {
+            type: "command",
+            trigger: TRIGGERS.COMMAND,
+            query: "help",
+            startOffset: 0,
+            endOffset: 5,
+          },
+        },
+        {
+          input: `check ${TRIGGERS.FILE}file`,
+          cursorOffset: 11,
+          expected: {
+            type: "file",
+            trigger: TRIGGERS.FILE,
+            query: "file",
+            startOffset: 6,
+            endOffset: 11,
+          },
+        },
+        {
+          input: TRIGGERS.FILE,
+          cursorOffset: 1,
+          expected: {
+            type: "file",
+            trigger: TRIGGERS.FILE,
+            query: "",
+            startOffset: 0,
+            endOffset: 1,
+          },
+        },
+      ])(
+        "detects trigger in '$input' at offset $cursorOffset",
+        ({ input, cursorOffset, expected }) => {
+          element.textContent = input;
+          setCursor(element, cursorOffset);
+          expect(controller.findActiveTrigger(ALL_CAPS)).toEqual(expected);
+        },
+      );
+    });
 
-      expect(controller.findActiveTrigger(COMMAND_ONLY)).toBeNull();
+    describe("capability restrictions", () => {
+      it("respects fileMentions capability", () => {
+        element.textContent = `${TRIGGERS.FILE}test`;
+        setCursor(element, 5);
+        expect(controller.findActiveTrigger(COMMAND_ONLY)).toBeNull();
+      });
+
+      it("respects commands capability", () => {
+        element.textContent = `${TRIGGERS.COMMAND}test`;
+        setCursor(element, 5);
+        expect(controller.findActiveTrigger(FILE_ONLY)).toBeNull();
+      });
+    });
+
+    describe("query validation", () => {
+      it("returns null for / trigger with spaces in query", () => {
+        element.textContent = `${TRIGGERS.COMMAND}help me`;
+        setCursor(element, 8);
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
+
+      it("returns null for @ followed by space (new word)", () => {
+        element.textContent = `${TRIGGERS.FILE}file name`;
+        setCursor(element, 10);
+        expect(controller.findActiveTrigger(ALL_CAPS)).toBeNull();
+      });
+    });
+
+    describe("offset calculation with chips", () => {
+      it("calculates correct offset with chips before cursor", () => {
+        element.appendChild(document.createTextNode("hello "));
+        const chip = document.createElement("span");
+        chip.className = CSS.CHIP;
+        chip.textContent = `${TRIGGERS.FILE}file`;
+        element.appendChild(chip);
+        element.appendChild(document.createTextNode(` ${TRIGGERS.FILE}readme`));
+
+        const textNode = element.childNodes[2];
+        const range = document.createRange();
+        range.setStart(textNode, 8);
+        range.collapse(true);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+
+        const trigger = controller.findActiveTrigger(ALL_CAPS);
+        expect(trigger).not.toBeNull();
+        expect(trigger?.query).toBe("readme");
+        expect(trigger?.startOffset).toBe(12);
+      });
     });
   });
 });

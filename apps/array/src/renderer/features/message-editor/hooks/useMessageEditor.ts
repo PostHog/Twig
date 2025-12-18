@@ -14,8 +14,8 @@ import {
   isContentEmpty,
   type MentionChip,
 } from "../core/content";
+import type { TriggerMatch } from "../core/EditorController";
 import { EditorController } from "../core/EditorController";
-import type { TriggerMatch } from "../core/triggers";
 import { useDraftStore } from "../stores/draftStore";
 import { useSuggestionStore } from "../stores/suggestionStore";
 import {

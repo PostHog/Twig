@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_POSITION,
   OTHER_SESSION_ID,
+  SUGGESTION_ITEMS,
+  setupSuggestionTests,
+  suggestionActions,
   TEST_SESSION_ID,
-} from "../test/constants";
-import { SUGGESTION_ITEMS } from "../test/fixtures";
-import { setupSuggestionTests, suggestionActions } from "../test/helpers";
+} from "../test/test-utils";
 import { useSuggestionStore } from "./suggestionStore";
 
 const getState = () => useSuggestionStore.getState();

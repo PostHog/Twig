@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { OTHER_SESSION_ID, TEST_SESSION_ID } from "../test/constants";
-import { createContent } from "../test/fixtures";
-import { setupDraftTests } from "../test/helpers";
+import {
+  createContent,
+  OTHER_SESSION_ID,
+  setupDraftTests,
+  TEST_SESSION_ID,
+} from "../test/test-utils";
 import { useDraftStore } from "./draftStore";
 
 const getActions = () => useDraftStore.getState().actions;

@@ -5,8 +5,8 @@ import Fuse, { type IFuseOptions } from "fuse.js";
 import { useDraftStore } from "../stores/draftStore";
 import type { CommandSuggestionItem, FileSuggestionItem } from "../types";
 
-const FILE_LIMIT = 10;
-const COMMAND_LIMIT = 10;
+const FILE_LIMIT = 5;
+const COMMAND_LIMIT = 5;
 
 const FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
   keys: [

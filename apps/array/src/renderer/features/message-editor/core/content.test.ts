@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CSS, TRIGGERS } from "../test/constants";
 import {
   ALL_CHIP_TYPES,
   COMMAND_CHIP,
+  CSS,
   createChip,
   createContent,
   createContentWithChip,
   FILE_CHIP,
-} from "../test/fixtures";
+  TRIGGERS,
+} from "../test/test-utils";
 import {
   contentToPlainText,
   contentToXml,
