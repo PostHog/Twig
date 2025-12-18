@@ -1,6 +1,7 @@
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
+  type PendingDeepLink,
   TaskLinkEvent,
   type TaskLinkService,
 } from "../../services/task-link/service.js";
@@ -12,7 +13,8 @@ const getService = () =>
 export const deepLinkRouter = router({
   /**
    * Subscribe to task link deep link events.
-   * Emits task ID when array://task/{taskId} is opened.
+   * Emits task ID (and optional task run ID) when array://task/{taskId} or
+   * array://task/{taskId}/run/{taskRunId} is opened.
    */
   onOpenTask: publicProcedure.subscription(async function* (opts) {
     const service = getService();
@@ -25,11 +27,11 @@ export const deepLinkRouter = router({
   }),
 
   /**
-   * Get any pending task ID that arrived before renderer was ready.
+   * Get any pending deep link that arrived before renderer was ready.
    * This handles the case where the app is launched via deep link.
    */
-  getPendingTaskId: publicProcedure.query(() => {
+  getPendingDeepLink: publicProcedure.query((): PendingDeepLink | null => {
     const service = getService();
-    return service.consumePendingTaskId();
+    return service.consumePendingDeepLink();
   }),
 });

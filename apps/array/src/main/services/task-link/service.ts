@@ -12,16 +12,21 @@ export const TaskLinkEvent = {
 } as const;
 
 export interface TaskLinkEvents {
-  [TaskLinkEvent.OpenTask]: { taskId: string };
+  [TaskLinkEvent.OpenTask]: { taskId: string; taskRunId?: string };
+}
+
+export interface PendingDeepLink {
+  taskId: string;
+  taskRunId?: string;
 }
 
 @injectable()
 export class TaskLinkService extends TypedEventEmitter<TaskLinkEvents> {
   /**
-   * Pending task ID that was received before renderer was ready.
+   * Pending deep link that was received before renderer was ready.
    * This handles the case where the app is launched via deep link.
    */
-  private pendingTaskId: string | null = null;
+  private pendingDeepLink: PendingDeepLink | null = null;
 
   constructor(
     @inject(MAIN_TOKENS.DeepLinkService)
@@ -36,8 +41,12 @@ export class TaskLinkService extends TypedEventEmitter<TaskLinkEvents> {
   }
 
   private handleTaskLink(path: string): boolean {
-    // path is just the taskId (e.g., "abc123" from array://task/abc123)
-    const taskId = path.split("/")[0];
+    // path formats:
+    //   "abc123" from array://task/abc123
+    //   "abc123/run/xyz789" from array://task/abc123/run/xyz789
+    const parts = path.split("/");
+    const taskId = parts[0];
+    const taskRunId = parts[1] === "run" ? parts[2] : undefined;
 
     if (!taskId) {
       log.warn("Task link missing task ID");
@@ -48,12 +57,16 @@ export class TaskLinkService extends TypedEventEmitter<TaskLinkEvents> {
     const hasListeners = this.listenerCount(TaskLinkEvent.OpenTask) > 0;
 
     if (hasListeners) {
-      log.info(`Emitting task link event: ${taskId}`);
-      this.emit(TaskLinkEvent.OpenTask, { taskId });
+      log.info(
+        `Emitting task link event: taskId=${taskId}, taskRunId=${taskRunId ?? "none"}`,
+      );
+      this.emit(TaskLinkEvent.OpenTask, { taskId, taskRunId });
     } else {
       // Renderer not ready yet - queue it for later
-      log.info(`Queueing task link (renderer not ready): ${taskId}`);
-      this.pendingTaskId = taskId;
+      log.info(
+        `Queueing task link (renderer not ready): taskId=${taskId}, taskRunId=${taskRunId ?? "none"}`,
+      );
+      this.pendingDeepLink = { taskId, taskRunId };
     }
 
     // Focus the window
@@ -69,15 +82,17 @@ export class TaskLinkService extends TypedEventEmitter<TaskLinkEvents> {
   }
 
   /**
-   * Get and clear any pending task ID.
+   * Get and clear any pending deep link.
    * Called by renderer on mount to handle deep links that arrived before it was ready.
    */
-  public consumePendingTaskId(): string | null {
-    const taskId = this.pendingTaskId;
-    this.pendingTaskId = null;
-    if (taskId) {
-      log.info(`Consumed pending task link: ${taskId}`);
+  public consumePendingDeepLink(): PendingDeepLink | null {
+    const pending = this.pendingDeepLink;
+    this.pendingDeepLink = null;
+    if (pending) {
+      log.info(
+        `Consumed pending task link: taskId=${pending.taskId}, taskRunId=${pending.taskRunId ?? "none"}`,
+      );
     }
-    return taskId;
+    return pending;
   }
 }
