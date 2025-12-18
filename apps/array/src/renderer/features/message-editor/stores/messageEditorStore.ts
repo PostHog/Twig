@@ -1,5 +1,4 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
-import type { JSONContent } from "@tiptap/react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -31,10 +30,11 @@ interface SuggestionState {
   loadingState: SuggestionLoadingState;
   error: string | null;
   onSelectItem: ((item: SuggestionItem) => void) | null;
+  triggerExit: (() => void) | null;
 }
 
 interface MessageEditorState {
-  drafts: Record<SessionId, JSONContent>;
+  drafts: Record<SessionId, string>;
   _hasHydrated: boolean;
   contexts: Record<SessionId, EditorContext>;
   commands: Record<SessionId, AvailableCommand[]>;
@@ -43,7 +43,7 @@ interface MessageEditorState {
 
 interface MessageEditorActions {
   setHasHydrated: (hydrated: boolean) => void;
-  setDraft: (sessionId: SessionId, draft: JSONContent | null) => void;
+  setDraft: (sessionId: SessionId, draft: string | null) => void;
   setContext: (
     sessionId: SessionId,
     context: {
@@ -73,6 +73,7 @@ interface MessageEditorActions {
   setSelectedIndex: (index: number) => void;
   updateSuggestionPosition: (position: SuggestionPosition) => void;
   setOnSelectItem: (callback: ((item: SuggestionItem) => void) | null) => void;
+  setTriggerExit: (callback: (() => void) | null) => void;
 }
 
 type MessageEditorStore = MessageEditorState & {
@@ -89,6 +90,7 @@ const DEFAULT_SUGGESTION_STATE: SuggestionState = {
   loadingState: "idle",
   error: null,
   onSelectItem: null,
+  triggerExit: null,
 };
 
 const useStore = create<MessageEditorStore>()(
@@ -152,6 +154,7 @@ const useStore = create<MessageEditorStore>()(
               loadingState: "idle",
               error: null,
               onSelectItem: null,
+              triggerExit: null,
             };
           }),
 
@@ -203,6 +206,11 @@ const useStore = create<MessageEditorStore>()(
         setOnSelectItem: (callback) =>
           set((state) => {
             state.suggestion.onSelectItem = callback;
+          }),
+
+        setTriggerExit: (callback) =>
+          set((state) => {
+            state.suggestion.triggerExit = callback;
           }),
       },
     })),

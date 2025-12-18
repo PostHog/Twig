@@ -2,13 +2,12 @@ import "./message-editor.css";
 import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { ArrowUp, Paperclip, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import type { JSONContent } from "@tiptap/core";
-import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import {
-  createEditorHandle,
-  useMessageEditor,
-} from "../hooks/useMessageEditor";
+  type EditorContent,
+  type MentionChip,
+  useContenteditableEditor,
+} from "../hooks/useContenteditableEditor";
 import { useMessageEditorStore } from "../stores/messageEditorStore";
 import { SuggestionPortal } from "./SuggestionPortal";
 
@@ -17,7 +16,7 @@ export interface MessageEditorHandle {
   blur: () => void;
   clear: () => void;
   isEmpty: () => boolean;
-  getContent: () => JSONContent | undefined;
+  getContent: () => EditorContent;
   getText: () => string;
 }
 
@@ -39,7 +38,7 @@ export const MessageEditor = forwardRef<
   (
     {
       sessionId,
-      placeholder,
+      placeholder = "Type a message... @ to mention files, / for commands",
       onSubmit,
       onBashCommand,
       onBashModeChange,
@@ -50,7 +49,6 @@ export const MessageEditor = forwardRef<
     ref,
   ) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const actions = useMessageEditorStore((s) => s.actions);
     const context = useMessageEditorStore((s) => s.contexts[sessionId]);
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
@@ -58,7 +56,23 @@ export const MessageEditor = forwardRef<
     const isCloud = context?.isCloud ?? false;
     const repoPath = context?.repoPath;
 
-    const { editor, isEmpty, isBashMode, submit } = useMessageEditor({
+    const {
+      editorRef,
+      isEmpty,
+      isBashMode,
+      submit,
+      focus,
+      blur,
+      clear,
+      getText,
+      getContent,
+      insertChip,
+      onInput,
+      onKeyDown,
+      onPaste,
+      onCompositionStart,
+      onCompositionEnd,
+    } = useContenteditableEditor({
       sessionId,
       taskId,
       placeholder,
@@ -73,27 +87,27 @@ export const MessageEditor = forwardRef<
 
     useImperativeHandle(
       ref,
-      () => createEditorHandle(editor, sessionId, actions),
-      [editor, sessionId, actions],
+      () => ({
+        focus,
+        blur,
+        clear,
+        isEmpty: () => isEmpty,
+        getContent,
+        getText,
+      }),
+      [focus, blur, clear, isEmpty, getContent, getText],
     );
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files.length > 0) {
         for (const file of Array.from(files)) {
-          editor
-            ?.chain()
-            .focus()
-            .insertContent({
-              type: "mention",
-              attrs: {
-                id: file.name,
-                label: file.name,
-                type: "file",
-              },
-            })
-            .insertContent(" ")
-            .run();
+          const chip: MentionChip = {
+            type: "file",
+            id: file.name,
+            label: file.name,
+          };
+          insertChip(chip);
         }
         onAttachFiles?.(Array.from(files));
       }
@@ -105,7 +119,7 @@ export const MessageEditor = forwardRef<
     const handleContainerClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest("button")) {
-        editor?.commands.focus();
+        focus();
       }
     };
 
@@ -117,7 +131,24 @@ export const MessageEditor = forwardRef<
         style={{ cursor: "text" }}
       >
         <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
-          <EditorContent editor={editor} />
+          {/* biome-ignore lint/a11y/useSemanticElements: contenteditable is intentional for rich mention chips */}
+          <div
+            ref={editorRef}
+            className="cli-editor outline-none"
+            contentEditable={!disabled}
+            suppressContentEditableWarning
+            spellCheck={false}
+            role="textbox"
+            tabIndex={disabled ? -1 : 0}
+            aria-multiline="true"
+            aria-placeholder={placeholder}
+            data-placeholder={placeholder}
+            onInput={onInput}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+          />
         </div>
 
         <SuggestionPortal sessionId={sessionId} />

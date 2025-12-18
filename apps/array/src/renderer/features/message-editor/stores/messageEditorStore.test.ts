@@ -24,7 +24,7 @@ describe("messageEditorStore", () => {
 
   describe("draft management", () => {
     it("sets and retrieves drafts", () => {
-      const draft = { type: "doc", content: [{ type: "paragraph" }] };
+      const draft = "Hello world";
 
       act(() => getActions().setDraft(SESSION_ID, draft));
 
@@ -32,7 +32,7 @@ describe("messageEditorStore", () => {
     });
 
     it("clears draft when set to null", () => {
-      const draft = { type: "doc", content: [] };
+      const draft = "Some text";
 
       act(() => {
         getActions().setDraft(SESSION_ID, draft);
