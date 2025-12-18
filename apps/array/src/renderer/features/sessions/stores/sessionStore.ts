@@ -1,4 +1,5 @@
 import type {
+  AvailableCommand,
   ContentBlock,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
@@ -702,6 +703,40 @@ export const useSessionForTask = (taskId: string | undefined) =>
       : undefined,
   );
 export const getSessionActions = () => useStore.getState().actions;
+
+function extractAvailableCommandsFromEvents(
+  events: AcpMessage[],
+): AvailableCommand[] {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i].message;
+    if (
+      "method" in msg &&
+      msg.method === "session/update" &&
+      !("id" in msg) &&
+      "params" in msg
+    ) {
+      const params = msg.params as SessionNotification | undefined;
+      const update = params?.update;
+      if (update?.sessionUpdate === "available_commands_update") {
+        return update.availableCommands || [];
+      }
+    }
+  }
+  return [];
+}
+
+export const useAvailableCommandsForTask = (
+  taskId: string | undefined,
+): AvailableCommand[] => {
+  return useStore((s) => {
+    if (!taskId) return [];
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    if (!session?.events) return [];
+    return extractAvailableCommandsFromEvents(session.events);
+  });
+};
 
 // Token refresh subscription
 let lastKnownToken: string | null = null;

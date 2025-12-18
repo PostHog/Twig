@@ -1,3 +1,5 @@
+import { MessageEditor } from "@features/message-editor/components/MessageEditor";
+import { useMessageEditorStore } from "@features/message-editor/stores/messageEditorStore";
 import type { Plan } from "@features/sessions/types";
 import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
@@ -11,7 +13,6 @@ import {
   useShowRawLogs,
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
-import { MessageEditor } from "./MessageEditor";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
@@ -40,6 +41,16 @@ export function SessionView({
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
+
+  const sessionId = taskId ?? "default";
+  const setContext = useMessageEditorStore((s) => s.actions.setContext);
+  setContext(sessionId, {
+    taskId,
+    repoPath,
+    disabled: !isRunning,
+    isLoading: isPromptPending,
+    isCloud,
+  });
 
   useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [
     onCancelPrompt,
@@ -95,13 +106,8 @@ export function SessionView({
             }
           >
             <MessageEditor
-              sessionId={taskId ?? "default"}
-              taskId={taskId}
+              sessionId={sessionId}
               placeholder="Type a message... @ to mention files, ! for bash mode"
-              repoPath={repoPath}
-              disabled={!isRunning}
-              isLoading={isPromptPending}
-              isCloud={isCloud}
               onSubmit={handleSubmit}
               onBashCommand={onBashCommand}
               onBashModeChange={setIsBashMode}

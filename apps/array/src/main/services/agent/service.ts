@@ -550,8 +550,15 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         };
       },
 
-      async sessionUpdate(_params: SessionNotification): Promise<void> {
-        // No-op: session/update notifications are captured by the stream tap
+      async sessionUpdate(params: SessionNotification): Promise<void> {
+        // Emit session update notifications to the renderer
+        // These are called directly by the agent (not through the stream),
+        // so we need to manually emit them
+        onAcpMessage({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params,
+        });
       },
 
       extNotification: async (

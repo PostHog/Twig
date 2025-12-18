@@ -1,0 +1,170 @@
+/* Message Editor Styles */
+
+/* Editor container */
+.cli-editor {
+  font-family: monospace;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  color: var(--gray-12);
+  font-size: var(--font-size-1);
+  width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.cli-editor.ProseMirror {
+  overflow-x: hidden;
+}
+
+.cli-editor.ProseMirror p {
+  margin: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Placeholder */
+.cli-editor.ProseMirror.ProseMirror-focused
+p.is-editor-empty:first-child::before {
+  content: "";
+}
+
+.cli-editor.ProseMirror:not(.ProseMirror-focused)
+  p.is-editor-empty:first-child::before {
+  color: var(--gray-11);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* File mention */
+.cli-file-mention {
+  background-color: var(--accent-a3);
+  color: var(--accent-11);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Slash command mention */
+.cli-slash-command {
+  background-color: var(--accent-a3);
+  color: var(--accent-11);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Suggestion list */
+.suggestion-list {
+  background-color: var(--color-panel-solid);
+  border: 1px solid var(--gray-a6);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-5);
+  min-width: 300px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.suggestion-list-scrollable {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.suggestion-list-scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+/* Suggestion item */
+.suggestion-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 4px 8px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  gap: 2px;
+}
+
+.suggestion-item-with-description {
+  padding: 6px 8px;
+}
+
+.suggestion-item-selected {
+  background-color: var(--accent-a3);
+}
+
+.suggestion-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gray-11);
+  font-weight: 400;
+}
+
+.suggestion-item-selected .suggestion-item-label {
+  color: var(--accent-11);
+  font-weight: 500;
+}
+
+.suggestion-item-description {
+  color: var(--gray-10);
+  font-size: 11px;
+}
+
+.suggestion-item-selected .suggestion-item-description {
+  color: var(--accent-10);
+}
+
+/* Loading state */
+.suggestion-loading {
+  padding: 8px;
+}
+
+.suggestion-loading-text {
+  color: var(--gray-11);
+}
+
+/* Error state */
+.suggestion-error {
+  padding: 8px;
+}
+
+.suggestion-error-text {
+  color: var(--red-11);
+}
+
+/* Empty state */
+.suggestion-empty {
+  padding: 8px;
+}
+
+.suggestion-empty-text {
+  color: var(--gray-11);
+}
+
+/* Keyboard hints footer */
+.suggestion-footer {
+  padding: 4px 8px;
+  border-top: 1px solid var(--gray-a4);
+  background-color: var(--gray-a2);
+}
+
+.suggestion-footer-text {
+  color: var(--gray-10);
+  font-size: 10px;
+}
+
+.suggestion-footer kbd {
+  background-color: var(--gray-a3);
+  border: 1px solid var(--gray-a6);
+  border-radius: var(--radius-1);
+  padding: 0 4px;
+  font-size: 10px;
+  font-family: inherit;
+  margin: 0 2px;
+}
