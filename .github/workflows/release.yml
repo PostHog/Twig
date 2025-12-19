@@ -7,6 +7,7 @@ on:
     paths:
       - "apps/array/**"
       - "packages/agent/**"
+      - "packages/electron-trpc/**"
       - "pnpm-lock.yaml"
       - "package.json"
       - "turbo.json"
@@ -70,6 +71,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
 
       - name: Build agent package
         run: pnpm --filter @posthog/agent run build
