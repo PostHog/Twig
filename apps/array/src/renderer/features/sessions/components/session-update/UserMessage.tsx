@@ -34,7 +34,7 @@ function parseFileMentions(content: string): ReactNode[] {
           verticalAlign: "middle",
         }}
       >
-        <File size={12} weight="fill" />
+        <File size={12} />
         {fileName}
       </Code>,
     );

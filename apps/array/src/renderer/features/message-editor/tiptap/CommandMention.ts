@@ -1,3 +1,4 @@
+import { getPortalContainer } from "@components/ThemeWrapper";
 import Mention from "@tiptap/extension-mention";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
@@ -37,9 +38,10 @@ function createSuggestion(
 
           if (!props.clientRect) return;
 
-          popup = tippy(document.body, {
+          const container = getPortalContainer();
+          popup = tippy(container, {
             getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
+            appendTo: () => container,
             content: component.element,
             showOnCreate: true,
             interactive: true,
