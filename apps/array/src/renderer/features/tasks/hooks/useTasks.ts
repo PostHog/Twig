@@ -1,6 +1,7 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
+import { useMeQuery } from "@hooks/useMeQuery";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
@@ -13,17 +14,23 @@ const log = logger.scope("tasks");
 const taskKeys = {
   all: ["tasks"] as const,
   lists: () => [...taskKeys.all, "list"] as const,
-  list: (filters?: { repository?: string }) =>
+  list: (filters?: { repository?: string; createdBy?: number }) =>
     [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
 };
 
 export function useTasks(filters?: { repository?: string }) {
+  const { data: currentUser } = useMeQuery();
+
   return useAuthenticatedQuery(
-    taskKeys.list(filters),
+    taskKeys.list({ ...filters, createdBy: currentUser?.id }),
     (client) =>
-      client.getTasks(filters?.repository) as unknown as Promise<Task[]>,
+      client.getTasks({
+        repository: filters?.repository,
+        createdBy: currentUser?.id,
+      }) as unknown as Promise<Task[]>,
+    { enabled: !!currentUser?.id },
   );
 }
 
