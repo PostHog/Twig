@@ -18276,6 +18276,7 @@ export namespace Endpoints {
         origin_product: string;
         repository: string;
         stage: string;
+        created_by: number;
       }>;
       path: { project_id: string };
     };
