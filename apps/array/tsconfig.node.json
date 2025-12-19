@@ -10,10 +10,7 @@
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "exclude": [
-    "src/renderer/**/*",
-    "src/main/preload.ts"
-  ],
+  "exclude": ["src/renderer/**/*", "src/main/preload.ts"],
   "extends": "./tsconfig.json",
   "include": ["src/main/**/*", "src/shared/**/*", "src/api/**/*"]
 }
