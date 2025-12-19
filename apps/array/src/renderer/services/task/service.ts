@@ -1,7 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
 import type { SagaResult } from "@shared/lib/saga";
@@ -155,7 +155,7 @@ export class TaskService {
   ): void {
     const settings = useSettingsStore.getState();
     const taskExecution = useTaskExecutionStore.getState();
-    const taskInput = useTaskInputStore.getState();
+    const draftStore = useDraftStore.getState();
     const workspaceStore = useWorkspaceStore.getState();
 
     // Derive values from input or output
@@ -179,8 +179,8 @@ export class TaskService {
         );
       }
 
-      // Clear draft only on create
-      taskInput.clearDraft();
+      // Clear draft only on create (task-input is the sessionId used by TaskInputEditor)
+      draftStore.actions.setDraft("task-input", null);
     }
 
     // Save repo path for local tasks

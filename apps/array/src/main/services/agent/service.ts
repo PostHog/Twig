@@ -9,7 +9,6 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
-  type SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { Agent, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
@@ -550,8 +549,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         };
       },
 
-      async sessionUpdate(_params: SessionNotification): Promise<void> {
-        // No-op: session/update notifications are captured by the stream tap
+      async sessionUpdate() {
+        // session/update notifications flow through the tapped stream
       },
 
       extNotification: async (

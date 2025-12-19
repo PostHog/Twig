@@ -1,5 +1,5 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
-import { buildPromptBlocks } from "@features/editor/utils/tiptap-converter";
+import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
 import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";

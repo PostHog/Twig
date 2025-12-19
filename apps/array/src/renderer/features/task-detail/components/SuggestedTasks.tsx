@@ -1,13 +1,13 @@
+import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
-import type { Editor } from "@tiptap/react";
 import { useSuggestedTasksStore } from "../stores/suggestedTasksStore";
 
 interface SuggestedTasksProps {
-  editor: Editor | null;
+  editorRef: React.RefObject<MessageEditorHandle | null>;
 }
 
-export function SuggestedTasks({ editor }: SuggestedTasksProps) {
+export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
   const suggestions = useSuggestedTasksStore((state) => state.getSuggestions());
   const rotateSuggestions = useSuggestedTasksStore(
     (state) => state.rotateSuggestions,
@@ -17,11 +17,11 @@ export function SuggestedTasks({ editor }: SuggestedTasksProps) {
   );
 
   const handleSuggestionClick = (suggestionTitle: string, prompt: string) => {
+    const editor = editorRef.current;
     if (!editor) return;
 
     incrementUsage(suggestionTitle);
-    editor.commands.setContent(prompt);
-    editor.commands.focus("end");
+    editor.setContent(prompt);
   };
 
   if (suggestions.length === 0) return null;
