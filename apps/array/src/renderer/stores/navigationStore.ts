@@ -7,7 +7,6 @@ import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
@@ -17,7 +16,6 @@ type ViewType = "task-detail" | "task-input" | "settings";
 interface ViewState {
   type: ViewType;
   data?: Task;
-  taskId?: string;
   folderId?: string;
 }
 
@@ -33,7 +31,6 @@ interface NavigationStore {
   goForward: () => void;
   canGoBack: () => boolean;
   canGoForward: () => boolean;
-  hydrateTask: (tasks: Task[]) => void;
 }
 
 const isSameView = (view1: ViewState, view2: ViewState): boolean => {
@@ -47,130 +44,104 @@ const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   return true;
 };
 
-export const useNavigationStore = create<NavigationStore>()(
-  persist(
-    (set, get) => {
-      const navigate = (newView: ViewState) => {
-        const { view, history, historyIndex } = get();
-        if (isSameView(view, newView)) {
-          return;
-        }
-        const newHistory = [...history.slice(0, historyIndex + 1), newView];
-        set({
-          view: newView,
-          history: newHistory,
-          historyIndex: newHistory.length - 1,
-        });
-      };
+export const useNavigationStore = create<NavigationStore>((set, get) => {
+  const navigate = (newView: ViewState) => {
+    const { view, history, historyIndex } = get();
+    if (isSameView(view, newView)) {
+      return;
+    }
+    const newHistory = [...history.slice(0, historyIndex + 1), newView];
+    set({
+      view: newView,
+      history: newHistory,
+      historyIndex: newHistory.length - 1,
+    });
+  };
 
-      return {
-        view: { type: "task-input" },
-        history: [{ type: "task-input" }],
-        historyIndex: 0,
+  return {
+    view: { type: "task-input" },
+    history: [{ type: "task-input" }],
+    historyIndex: 0,
 
-        navigateToTask: async (task: Task) => {
-          navigate({ type: "task-detail", data: task, taskId: task.id });
-          track(ANALYTICS_EVENTS.TASK_VIEWED, {
-            task_id: task.id,
-          });
+    navigateToTask: async (task: Task) => {
+      navigate({ type: "task-detail", data: task });
+      track(ANALYTICS_EVENTS.TASK_VIEWED, {
+        task_id: task.id,
+      });
 
-          const repoKey = getTaskRepository(task) ?? undefined;
-          const directory = useTaskDirectoryStore
+      const repoKey = getTaskRepository(task) ?? undefined;
+      const directory = useTaskDirectoryStore
+        .getState()
+        .getTaskDirectory(task.id, repoKey);
+
+      if (directory) {
+        try {
+          await useRegisteredFoldersStore.getState().addFolder(directory);
+
+          let workspaceMode: WorkspaceMode = useTaskExecutionStore
             .getState()
-            .getTaskDirectory(task.id, repoKey);
+            .getTaskState(task.id).workspaceMode;
 
-          if (directory) {
-            try {
-              await useRegisteredFoldersStore.getState().addFolder(directory);
-
-              let workspaceMode: WorkspaceMode = useTaskExecutionStore
-                .getState()
-                .getTaskState(task.id).workspaceMode;
-
-              if (task.latest_run?.environment === "cloud") {
-                workspaceMode = "cloud";
-              }
-
-              await useWorkspaceStore
-                .getState()
-                .ensureWorkspace(task.id, directory, workspaceMode);
-            } catch (error) {
-              log.error("Failed to auto-register folder on task open:", error);
-            }
+          if (task.latest_run?.environment === "cloud") {
+            workspaceMode = "cloud";
           }
-        },
 
-        navigateToTaskInput: (folderId?: string) => {
-          navigate({ type: "task-input", folderId });
-        },
-
-        navigateToSettings: () => {
-          navigate({ type: "settings" });
-        },
-
-        toggleSettings: () => {
-          const current = get().view;
-          if (current.type === "settings") {
-            get().navigateToTaskInput();
-          } else {
-            get().navigateToSettings();
-          }
-        },
-
-        goBack: () => {
-          const { history, historyIndex } = get();
-          if (historyIndex > 0) {
-            const newIndex = historyIndex - 1;
-            set({
-              view: history[newIndex],
-              historyIndex: newIndex,
-            });
-          }
-        },
-
-        goForward: () => {
-          const { history, historyIndex } = get();
-          if (historyIndex < history.length - 1) {
-            const newIndex = historyIndex + 1;
-            set({
-              view: history[newIndex],
-              historyIndex: newIndex,
-            });
-          }
-        },
-
-        canGoBack: () => {
-          const { historyIndex } = get();
-          return historyIndex > 0;
-        },
-
-        canGoForward: () => {
-          const { history, historyIndex } = get();
-          return historyIndex < history.length - 1;
-        },
-
-        hydrateTask: (tasks: Task[]) => {
-          const { view, navigateToTask, navigateToTaskInput } = get();
-          if (view.type !== "task-detail" || !view.taskId || view.data) return;
-
-          const task = tasks.find((t) => t.id === view.taskId);
-          if (task) {
-            navigateToTask(task);
-          } else {
-            navigateToTaskInput();
-          }
-        },
-      };
+          await useWorkspaceStore
+            .getState()
+            .ensureWorkspace(task.id, directory, workspaceMode);
+        } catch (error) {
+          log.error("Failed to auto-register folder on task open:", error);
+        }
+      }
     },
-    {
-      name: "navigation-storage",
-      partialize: (state) => ({
-        view: {
-          type: state.view.type,
-          taskId: state.view.taskId,
-          folderId: state.view.folderId,
-        },
-      }),
+
+    navigateToTaskInput: (folderId?: string) => {
+      navigate({ type: "task-input", folderId });
     },
-  ),
-);
+
+    navigateToSettings: () => {
+      navigate({ type: "settings" });
+    },
+
+    toggleSettings: () => {
+      const current = get().view;
+      if (current.type === "settings") {
+        get().navigateToTaskInput();
+      } else {
+        get().navigateToSettings();
+      }
+    },
+
+    goBack: () => {
+      const { history, historyIndex } = get();
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        set({
+          view: history[newIndex],
+          historyIndex: newIndex,
+        });
+      }
+    },
+
+    goForward: () => {
+      const { history, historyIndex } = get();
+      if (historyIndex < history.length - 1) {
+        const newIndex = historyIndex + 1;
+        set({
+          view: history[newIndex],
+          historyIndex: newIndex,
+        });
+      }
+    },
+
+    canGoBack: () => {
+      const { historyIndex } = get();
+      return historyIndex > 0;
+    },
+
+    canGoForward: () => {
+      const { history, historyIndex } = get();
+      return historyIndex < history.length - 1;
+    },
+  };
+});

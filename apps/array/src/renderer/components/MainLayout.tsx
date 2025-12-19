@@ -8,34 +8,26 @@ import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
-import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Toaster } from "sonner";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
 export function MainLayout() {
-  const { view, hydrateTask } = useNavigationStore();
+  const { view } = useNavigationStore();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
   const {
     isOpen: shortcutsSheetOpen,
     toggle: toggleShortcutsSheet,
     close: closeShortcutsSheet,
   } = useShortcutsSheetStore();
-  const { data: tasks } = useTasks();
 
   useIntegrations();
   useTaskDeepLink();
-
-  useEffect(() => {
-    if (tasks) {
-      hydrateTask(tasks);
-    }
-  }, [tasks, hydrateTask]);
 
   const handleToggleCommandMenu = useCallback(() => {
     setCommandMenuOpen((prev) => !prev);
