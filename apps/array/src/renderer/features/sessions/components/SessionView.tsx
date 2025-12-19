@@ -114,10 +114,18 @@ function parseSessionNotification(
     case "user_message_chunk":
     case "agent_message_chunk": {
       if (update.content.type === "text") {
+        const content = update.content.text;
+        // Filter out injected system reminders from display
+        if (
+          update.sessionUpdate === "user_message_chunk" &&
+          content.startsWith("[System reminder:")
+        ) {
+          return null; // Skip the system reminder block entirely
+        }
         return {
           type:
             update.sessionUpdate === "user_message_chunk" ? "user" : "agent",
-          content: update.content.text,
+          content,
         };
       }
       return null;

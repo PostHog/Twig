@@ -762,7 +762,69 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
       version: 9,
-      migrate: () => ({ taskLayouts: {} }),
+      migrate: (persistedState, version) => {
+        const state = persistedState as {
+          taskLayouts: Record<string, PanelNode>;
+        };
+
+        // Migration from version 8 to 9: Add Plan tab to existing layouts
+        if (version === 8 && state.taskLayouts) {
+          const planTab: Tab = {
+            id: DEFAULT_TAB_IDS.PLAN,
+            label: "Plan",
+            data: { type: "plan" },
+            component: null,
+            closeable: true,
+            draggable: true,
+          };
+
+          // Recursively add Plan tab to panels that have the Logs tab
+          const addPlanTabToNode = (node: PanelNode): PanelNode => {
+            if (node.type === "leaf") {
+              const hasLogsTab = node.content.tabs.some(
+                (tab) => tab.id === DEFAULT_TAB_IDS.LOGS,
+              );
+              const hasPlanTab = node.content.tabs.some(
+                (tab) => tab.id === DEFAULT_TAB_IDS.PLAN,
+              );
+
+              if (hasLogsTab && !hasPlanTab) {
+                // Find the index of the logs tab and insert plan tab after it
+                const logsIndex = node.content.tabs.findIndex(
+                  (tab) => tab.id === DEFAULT_TAB_IDS.LOGS,
+                );
+                const newTabs = [...node.content.tabs];
+                newTabs.splice(logsIndex + 1, 0, planTab);
+
+                return {
+                  ...node,
+                  content: {
+                    ...node.content,
+                    tabs: newTabs,
+                  },
+                };
+              }
+              return node;
+            }
+
+            // Recursively process group children
+            return {
+              ...node,
+              children: node.children.map(addPlanTabToNode),
+            };
+          };
+
+          const migratedLayouts: Record<string, PanelNode> = {};
+          for (const [taskId, layout] of Object.entries(state.taskLayouts)) {
+            migratedLayouts[taskId] = addPlanTabToNode(layout);
+          }
+
+          return { taskLayouts: migratedLayouts };
+        }
+
+        // For any other version, reset layouts
+        return { taskLayouts: {} };
+      },
     },
   ),
 );

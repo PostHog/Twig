@@ -397,8 +397,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       throw new Error("No active session for task");
     }
 
-    const blocks: ContentBlock[] =
+    let blocks: ContentBlock[] =
       typeof prompt === "string" ? [{ type: "text", text: prompt }] : prompt;
+
+    // Inject a reminder to read the plan when user mentions "plan"
+    const promptText = blocks
+      .filter((b): b is { type: "text"; text: string } => b.type === "text")
+      .map((b) => b.text)
+      .join(" ")
+      .toLowerCase();
+    if (promptText.includes("plan")) {
+      blocks = [
+        {
+          type: "text",
+          text: "[System reminder: If implementing a plan, call mcp__acp__ReadPlan first to get the user's current version - they may have edited it.]",
+        },
+        ...blocks,
+      ];
+    }
 
     if (session.isCloud) {
       // Cloud: send via S3 log - cloud runner polls and picks up

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import fs from "node:fs";
 import type {
   ClientCapabilities,
   TerminalOutputResponse,
@@ -6,6 +7,7 @@ import type {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as diff from "diff";
 import { z } from "zod";
+import { getPlanPath, getTaskDir } from "@/paths.js";
 import { Logger } from "@/utils/logger.js";
 import type { ClaudeAcpAgent } from "./claude.js";
 import { extractLinesWithByteLimit, sleep, unreachable } from "./utils.js";
@@ -50,8 +52,6 @@ export function createMcpServer(
   clientCapabilities: ClientCapabilities | undefined,
   context: McpServerContext = {},
 ): McpServer {
-  const fs = require("node:fs");
-
   // Create MCP server
   const server = new McpServer(
     { name: "acp", version: "1.0.0" },
@@ -359,16 +359,12 @@ Usage:
         title: "WritePlan",
         description: `Writes or updates the implementation plan for the current task.
 
-Use this tool to create or update the plan.md file that the user can see in their Plan tab.
-The plan should be written in markdown format and will be saved to the task's plan file.
+The plan is saved to disk and visible to the user in their Plan tab in real-time. The user can edit the plan directly, so always call mcp__acp__ReadPlan before implementing to get the current version.
 
-This tool automatically writes to the correct location - you only need to provide the content.
-
-Usage:
-- Use this to document your implementation approach before or during coding
-- Update the plan as you make progress or discover new requirements
-- The plan is visible to the user in real-time as you write it
-- Write clear, structured plans with headings, bullet points, and checkboxes`,
+Write in markdown format. Include:
+- Overview of what needs to be done
+- Key steps (use checkboxes like "- [ ] Step 1")
+- Files that will be modified`,
         inputSchema: {
           content: z
             .string()
@@ -384,9 +380,8 @@ Usage:
       },
       async (input) => {
         try {
-          // Construct the plan file path and ensure directory exists
-          const planDir = `${context.cwd}/.posthog/${context.taskId}`;
-          const planPath = `${planDir}/plan.md`;
+          const planDir = getTaskDir(context.cwd!, context.taskId!);
+          const planPath = getPlanPath(context.cwd!, context.taskId!);
 
           // Create directory if it doesn't exist and write file directly
           fs.mkdirSync(planDir, { recursive: true });
@@ -396,7 +391,7 @@ Usage:
             content: [
               {
                 type: "text",
-                text: `Plan updated successfully`,
+                text: `Plan saved. IMPORTANT: The user can edit this plan in their Plan tab. Before implementing, you MUST call mcp__acp__ReadPlan to get the current version - do not rely on your memory of what you wrote.`,
               },
             ],
           };
@@ -418,12 +413,14 @@ Usage:
       "ReadPlan",
       {
         title: "ReadPlan",
-        description: `Reads the current implementation plan for this task.
+        description: `Reads the current implementation plan from disk.
 
-Use this tool to read the plan.md file that contains the implementation plan.
-This is useful to check what was previously planned before making updates.
+IMPORTANT: Always use this tool before implementing a plan. The user can edit the plan at any time in their Plan tab, so your memory of the plan may be outdated. This tool returns the user's current version.
 
-The plan is stored in the task's .posthog folder and is visible to the user in their Plan tab.`,
+Call this tool:
+- Before starting implementation (required)
+- Before updating the plan
+- Whenever the user asks you to follow, execute, or implement "the plan"`,
         inputSchema: {},
         annotations: {
           title: "Read Plan",
@@ -435,14 +432,14 @@ The plan is stored in the task's .posthog folder and is visible to the user in t
       },
       async () => {
         try {
-          const planPath = `${context.cwd}/.posthog/${context.taskId}/plan.md`;
+          const planPath = getPlanPath(context.cwd!, context.taskId!);
 
           if (!fs.existsSync(planPath)) {
             return {
               content: [
                 {
                   type: "text",
-                  text: "No plan exists yet. Use WritePlan to create one.",
+                  text: "No plan exists yet. Use mcp__acp__WritePlan to create one.",
                 },
               ],
             };

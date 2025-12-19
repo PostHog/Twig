@@ -8,7 +8,7 @@ import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { Box, Code, Flex, Text } from "@radix-ui/themes";
+import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useMemo } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
@@ -61,8 +61,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     (state) => state.workspaces[taskId] ?? null,
   );
 
-  const branchName = workspace?.branchName;
-
   const headerContent = useMemo(
     () => (
       <Flex align="center" justify="between" gap="2" width="100%">
@@ -70,17 +68,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
-          <Code size="1" color="gray" variant="ghost" title="Task ID">
-            {taskId}
-          </Code>
-          <Code size="1" color="gray" variant="ghost" title="Repo Path">
-            {effectiveRepoPath ?? "no path"}
-          </Code>
-          {branchName && (
-            <Code size="1" color="gray" variant="ghost">
-              {branchName}
-            </Code>
-          )}
           <StartWorkspaceButton taskId={taskId} />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
@@ -91,7 +78,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         </Flex>
       </Flex>
     ),
-    [task.title, branchName, workspace, taskId, effectiveRepoPath],
+    [task.title, workspace, taskId, effectiveRepoPath],
   );
 
   useSetHeaderContent(headerContent);

@@ -1,4 +1,3 @@
-import { RichTextEditor } from "@features/editor/components/RichTextEditor";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { FloppyDiskIcon } from "@phosphor-icons/react";
 import { Box, Button, TextArea } from "@radix-ui/themes";
@@ -69,9 +68,6 @@ export function PlanEditor({
   const updateTabMetadata = usePanelLayoutStore(
     (state) => state.updateTabMetadata,
   );
-
-  // Always use plain textarea for plan files - RichTextEditor's markdown round-trip causes issues with live updates
-  const useRichEditor = false;
 
   const queryClient = useQueryClient();
   const { data: fetchedContent } = useQuery({
@@ -211,39 +207,22 @@ export function PlanEditor({
           overflow: "hidden",
         }}
       >
-        {useRichEditor ? (
-          <RichTextEditor
-            value={content}
-            onChange={setContent}
-            repoPath={repoPath}
-            placeholder="Your implementation plan will appear here..."
-            showToolbar={true}
-            minHeight="100%"
-            style={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-          />
-        ) : (
-          <TextArea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Your implementation plan will appear here..."
-            style={{
-              height: "100%",
-              width: "100%",
-              resize: "none",
-              border: "none",
-              outline: "none",
-              fontFamily: "monospace",
-              fontSize: "13px",
-              padding: "16px",
-              backgroundColor: "transparent",
-            }}
-          />
-        )}
+        <TextArea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Your implementation plan will appear here..."
+          style={{
+            height: "100%",
+            width: "100%",
+            resize: "none",
+            border: "none",
+            outline: "none",
+            fontFamily: "monospace",
+            fontSize: "13px",
+            padding: "16px",
+            backgroundColor: "transparent",
+          }}
+        />
       </Box>
 
       {/* Floating Save Button */}

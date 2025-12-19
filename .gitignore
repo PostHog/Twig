@@ -39,3 +39,9 @@ AGENTS.md
 
 # Session store used for example-client.ts
 .session-store.json
+
+# PostHog task artifacts (generated per-task)
+.posthog/
+
+# Test media files
+sounds/

@@ -18,6 +18,12 @@ export type {
 } from "./src/adapters/claude/claude.js";
 export { createAcpConnection } from "./src/adapters/claude/claude.js";
 export { Agent } from "./src/agent.js";
+export {
+  getPlanPath,
+  getTaskArtifactPath,
+  getTaskDir,
+  POSTHOG_FOLDER,
+} from "./src/paths.js";
 export type {
   AgentEvent,
   ConsoleEvent,
@@ -69,9 +75,7 @@ export type {
   WorktreeInfo,
 } from "./src/types.js";
 export { PermissionMode } from "./src/types.js";
-
 export type { LoggerConfig } from "./src/utils/logger.js";
 export { Logger, LogLevel } from "./src/utils/logger.js";
-
 export type { WorktreeConfig } from "./src/worktree-manager.js";
 export { WorktreeManager } from "./src/worktree-manager.js";

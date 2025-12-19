@@ -119,6 +119,22 @@ type BackgroundTerminal =
  * Extra metadata that can be given to Claude Code when creating a new session.
  */
 export type NewSessionMeta = {
+  /** Custom session ID to use instead of generating one */
+  sessionId?: string;
+  /** Task ID for plan management tools */
+  taskId?: string;
+  /** Disable built-in ACP tools (Read, Write, Edit, Bash, etc.) */
+  disableBuiltInTools?: boolean;
+  /** Custom system prompt - either a string or an object with append */
+  systemPrompt?: string | { append: string };
+  /** Session persistence configuration */
+  persistence?: {
+    type: "local";
+    path: string;
+  };
+  /** SDK session ID for resuming sessions */
+  sdkSessionId?: string;
+  /** Claude Code specific options */
   claudeCode?: {
     /**
      * Options forwarded to Claude Code when starting a new session.
@@ -265,9 +281,8 @@ export class ClaudeAcpAgent implements Agent {
     }
 
     // Allow caller to specify sessionId via _meta (e.g. taskRunId in our case)
-    const sessionId =
-      (params._meta as { sessionId?: string } | undefined)?.sessionId ||
-      uuidv7();
+    const meta = params._meta as NewSessionMeta | undefined;
+    const sessionId = meta?.sessionId || uuidv7();
     const input = new Pushable<SDKUserMessage>();
 
     const mcpServers: Record<string, McpServerConfig> = {};
@@ -294,10 +309,11 @@ export class ClaudeAcpAgent implements Agent {
       }
     }
 
+    // Extract taskId from _meta if provided
+    const taskId = meta?.taskId;
+
     // Only add the acp MCP server if built-in tools are not disabled
-    if (!params._meta?.disableBuiltInTools) {
-      // Extract taskId from _meta if provided
-      const taskId = (params._meta as { taskId?: string } | undefined)?.taskId;
+    if (!meta?.disableBuiltInTools) {
       const server = createMcpServer(this, sessionId, this.clientCapabilities, {
         taskId,
         cwd: params.cwd,
@@ -315,7 +331,6 @@ export class ClaudeAcpAgent implements Agent {
     };
 
     // Add plan tool instructions when taskId is available
-    const taskId = (params._meta as { taskId?: string } | undefined)?.taskId;
     if (taskId && params.cwd) {
       const planInstructions = `
 
@@ -323,28 +338,34 @@ export class ClaudeAcpAgent implements Agent {
 
 You have access to plan management tools for this task:
 
-- **WritePlan**: Use this to create or update the implementation plan. The plan is visible to the user in their Plan tab in real-time.
-- **ReadPlan**: Use this to read the current plan before making updates.
+- **mcp__acp__WritePlan**: Use this to create or update the implementation plan. The plan is visible to the user in their Plan tab in real-time.
+- **mcp__acp__ReadPlan**: Use this to read the current plan from disk.
+
+## Critical: The plan file is the source of truth
+
+The user can edit the plan directly in their Plan tab at any time. Their edits are saved to disk immediately. **You MUST call mcp__acp__ReadPlan before implementing or executing the plan** - never rely on your memory of what you previously wrote, as the user may have modified it.
 
 ## When to use these tools:
 
-1. **At the start of complex tasks**: Before diving into code, use WritePlan to document your approach. Include:
+1. **At the start of complex tasks**: Before diving into code, use mcp__acp__WritePlan to document your approach. Include:
    - Overview of what needs to be done
    - Key steps or phases
    - Important considerations or trade-offs
    - Files that will be modified
 
-2. **During implementation**: Update the plan as you make progress. Mark completed items and add any new discoveries.
+2. **Before implementing the plan**: ALWAYS call mcp__acp__ReadPlan first to get the current version. The user may have edited it to add, remove, or modify steps.
 
-3. **Before making changes**: Use ReadPlan to check the current plan and ensure your work aligns with it.
+3. **During implementation**: Update the plan as you make progress. Mark completed items and add any new discoveries.
 
-The plan should be written in markdown format. Keep it concise but informative. The user can see and edit the plan directly, so it serves as a shared document for collaboration.
+The plan should be written in markdown format. Keep it concise but informative.
+
+REMEMBER: When the user asks to implement, execute, or "do" a plan, your FIRST action must be to call mcp__acp__ReadPlan to get the current version.
 `;
       systemPrompt.append = (systemPrompt.append || "") + planInstructions;
     }
 
-    if (params._meta?.systemPrompt) {
-      const customPrompt = params._meta.systemPrompt;
+    if (meta?.systemPrompt) {
+      const customPrompt = meta.systemPrompt;
       if (typeof customPrompt === "string") {
         systemPrompt = customPrompt;
       } else if (
@@ -359,8 +380,7 @@ The plan should be written in markdown format. Keep it concise but informative. 
     const permissionMode = "default";
 
     // Extract options from _meta if provided
-    const userProvidedOptions = (params._meta as NewSessionMeta | undefined)
-      ?.claudeCode?.options;
+    const userProvidedOptions = meta?.claudeCode?.options;
 
     const options: Options = {
       systemPrompt,
@@ -401,7 +421,7 @@ The plan should be written in markdown format. Keep it concise but informative. 
     const disallowedTools = [];
 
     // Check if built-in tools should be disabled
-    const disableBuiltInTools = params._meta?.disableBuiltInTools === true;
+    const disableBuiltInTools = meta?.disableBuiltInTools === true;
 
     if (!disableBuiltInTools) {
       if (this.clientCapabilities?.fs?.readTextFile) {
@@ -468,7 +488,7 @@ The plan should be written in markdown format. Keep it concise but informative. 
     this.createSession(sessionId, q, input, permissionMode);
 
     // Register for S3 persistence if config provided
-    const persistence = params._meta?.persistence as
+    const persistence = meta?.persistence as
       | SessionPersistenceConfig
       | undefined;
     if (persistence && this.sessionStore) {
@@ -973,10 +993,11 @@ The plan should be written in markdown format. Keep it concise but informative. 
     const { sessionId } = params;
 
     // Extract persistence config and SDK session ID from _meta
-    const persistence = params._meta?.persistence as
+    const meta = params._meta as NewSessionMeta | undefined;
+    const persistence = meta?.persistence as
       | SessionPersistenceConfig
       | undefined;
-    const sdkSessionId = params._meta?.sdkSessionId as string | undefined;
+    const sdkSessionId = meta?.sdkSessionId;
 
     if (!this.sessions[sessionId]) {
       const input = new Pushable<SDKUserMessage>();
