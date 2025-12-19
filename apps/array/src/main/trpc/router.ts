@@ -15,6 +15,7 @@ import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
 import { uiRouter } from "./routers/ui.js";
 import { updatesRouter } from "./routers/updates.js";
+import { userNotificationRouter } from "./routers/user-notification.js";
 import { workspaceRouter } from "./routers/workspace.js";
 import { router } from "./trpc.js";
 
@@ -35,6 +36,7 @@ export const trpcRouter = router({
   shell: shellRouter,
   ui: uiRouter,
   updates: updatesRouter,
+  userNotification: userNotificationRouter,
   deepLink: deepLinkRouter,
   workspace: workspaceRouter,
 });

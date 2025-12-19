@@ -1,28 +1,17 @@
+import type { Logger, ScopedLogger } from "@shared/lib/create-logger";
+import { createLogger } from "@shared/lib/create-logger";
+import { toast } from "@utils/toast";
 import log from "electron-log/renderer";
 
-// Ensure logs appear in dev tools console
 log.transports.console.level = "debug";
 
-export const logger = {
-  info: (message: string, ...args: unknown[]) => log.info(message, ...args),
-  warn: (message: string, ...args: unknown[]) => log.warn(message, ...args),
-  error: (message: string, ...args: unknown[]) => log.error(message, ...args),
-  debug: (message: string, ...args: unknown[]) => log.debug(message, ...args),
+const isDev = import.meta.env.DEV;
+const devErrorToastsEnabled =
+  isDev && import.meta.env.VITE_DEV_ERROR_TOASTS !== "false";
 
-  scope: (name: string) => {
-    const scoped = log.scope(name);
-    return {
-      info: (message: string, ...args: unknown[]) =>
-        scoped.info(message, ...args),
-      warn: (message: string, ...args: unknown[]) =>
-        scoped.warn(message, ...args),
-      error: (message: string, ...args: unknown[]) =>
-        scoped.error(message, ...args),
-      debug: (message: string, ...args: unknown[]) =>
-        scoped.debug(message, ...args),
-    };
-  },
-};
+const emitToast = devErrorToastsEnabled
+  ? (title: string, description?: string) => toast.error(title, { description })
+  : undefined;
 
-export type Logger = typeof logger;
-export type ScopedLogger = ReturnType<typeof logger.scope>;
+export const logger = createLogger(log, emitToast);
+export type { Logger, ScopedLogger };

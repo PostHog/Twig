@@ -7,6 +7,10 @@ import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { initializeMainErrorHandling } from "./lib/error-handling.js";
+
+initializeMainErrorHandling();
+
 import {
   app,
   BrowserWindow,
@@ -17,7 +21,6 @@ import {
   shell,
 } from "electron";
 import { createIPCHandler } from "trpc-electron/main";
-import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";

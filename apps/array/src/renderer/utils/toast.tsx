@@ -1,5 +1,11 @@
-import { CheckIcon, InfoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { Card, Flex, Spinner, Text } from "@radix-ui/themes";
+import {
+  CheckIcon,
+  InfoIcon,
+  WarningIcon,
+  X,
+  XIcon,
+} from "@phosphor-icons/react";
+import { Card, Flex, IconButton, Spinner, Text } from "@radix-ui/themes";
 import { toast as sonnerToast } from "sonner";
 
 interface ToastProps {
@@ -7,10 +13,11 @@ interface ToastProps {
   type: "loading" | "success" | "error" | "info" | "warning";
   title: string;
   description?: string;
+  dismissable?: boolean;
 }
 
 function ToastComponent(props: ToastProps) {
-  const { type, title, description } = props;
+  const { id, type, title, description, dismissable = false } = props;
 
   const getIcon = () => {
     switch (type) {
@@ -48,6 +55,17 @@ function ToastComponent(props: ToastProps) {
             </Text>
           )}
         </Flex>
+        {dismissable && (
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={() => sonnerToast.dismiss(id)}
+            style={{ flexShrink: 0, marginTop: "-2px", marginRight: "-4px" }}
+          >
+            <X size={14} />
+          </IconButton>
+        )}
       </Flex>
     </Card>
   );
@@ -76,6 +94,7 @@ export const toast = {
           type="success"
           title={title}
           description={options?.description}
+          dismissable
         />
       ),
       { id: options?.id },
@@ -93,6 +112,7 @@ export const toast = {
           type="error"
           title={title}
           description={options?.description}
+          dismissable
         />
       ),
       { id: options?.id },
@@ -106,6 +126,7 @@ export const toast = {
         type="info"
         title={title}
         description={description}
+        dismissable
       />
     ));
   },
@@ -121,6 +142,7 @@ export const toast = {
           type="warning"
           title={title}
           description={options?.description}
+          dismissable
         />
       ),
       { id: options?.id, duration: options?.duration },

@@ -19,6 +19,7 @@ function _getBuildDate(): string {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = path.resolve(__dirname, "../..");
 
 /**
  * Custom Vite plugin to fix circular __filename references in bundled ESM packages.
@@ -155,6 +156,7 @@ function copyClaudeExecutable(): Plugin {
 const forceDevMode = process.env.FORCE_DEV_MODE === "1";
 
 export default defineConfig({
+  envDir: monorepoRoot,
   plugins: [
     tsconfigPaths(),
     autoServicesPlugin(join(__dirname, "src/main/services")),
