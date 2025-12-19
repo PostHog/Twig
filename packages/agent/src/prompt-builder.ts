@@ -215,17 +215,19 @@ export class PromptBuilder {
       return { description, referencedFiles };
     }
 
-    // Read all referenced files
+    // Read all referenced files, tracking which ones succeed
+    const successfulPaths = new Set<string>();
     for (const filePath of filePaths) {
       const content = await this.readFileContent(repositoryPath, filePath);
       if (content !== null) {
         referencedFiles.push({ path: filePath, content });
+        successfulPaths.add(filePath);
       }
     }
 
-    // Replace file tags with just the filename for readability
+    // Only replace tags for files that were successfully read
     let processedDescription = description;
-    for (const filePath of filePaths) {
+    for (const filePath of successfulPaths) {
       const fileName = filePath.split("/").pop() || filePath;
       processedDescription = processedDescription.replace(
         new RegExp(

@@ -48,7 +48,7 @@ function createSuggestion(
             interactive: true,
             trigger: "manual",
             placement: "top-start",
-            offset: [0, 8],
+            offset: [0, 12],
           });
         },
 

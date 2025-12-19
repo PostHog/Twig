@@ -6,10 +6,3 @@
   float: left;
   height: 0;
 }
-
-/* Mention chips - base styles for selection behavior */
-.mention-chip {
-  display: inline;
-  user-select: all;
-  cursor: default;
-}

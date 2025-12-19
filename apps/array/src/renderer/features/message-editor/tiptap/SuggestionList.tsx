@@ -18,13 +18,21 @@ export interface SuggestionListProps {
   command: (item: SuggestionItem) => void;
 }
 
+const Kbd = ({ children }: { children: string }) => (
+  <kbd className="mx-0.5 rounded border border-[var(--gray-a6)] bg-[var(--gray-a3)] px-1 font-mono text-[10px]">
+    {children}
+  </kbd>
+);
+
+const CONTAINER_CLASS =
+  "flex min-w-[300px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-xs shadow-lg";
+
 export const SuggestionList = forwardRef<
   SuggestionListRef,
   SuggestionListProps
 >(({ items, command }, ref) => {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [hasMouseMoved, setHasMouseMoved] = useState(false);
   const prevItemsRef = useRef(items);
@@ -36,51 +44,26 @@ export const SuggestionList = forwardRef<
   }
 
   useEffect(() => {
-    const container = containerRef.current;
-    const item = itemRefs.current[selectedIndex];
-    if (!container || !item) return;
-
-    const containerTop = container.scrollTop;
-    const containerBottom = containerTop + container.clientHeight;
-    const itemTop = item.offsetTop;
-    const itemBottom = itemTop + item.offsetHeight;
-
-    if (itemTop < containerTop) {
-      container.scrollTop = itemTop;
-    } else if (itemBottom > containerBottom) {
-      container.scrollTop = itemBottom - container.clientHeight;
-    }
+    itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
       if (event.key === "ArrowUp") {
-        setSelectedIndex((prev) => (prev + items.length - 1) % items.length);
+        setSelectedIndex((i) => (i + items.length - 1) % items.length);
         return true;
       }
-
       if (event.key === "ArrowDown") {
-        setSelectedIndex((prev) => (prev + 1) % items.length);
+        setSelectedIndex((i) => (i + 1) % items.length);
         return true;
       }
-
       if (event.key === "Enter" || event.key === "Tab") {
-        const item = items[selectedIndex];
-        if (item) {
-          command(item);
-        }
+        if (items[selectedIndex]) command(items[selectedIndex]);
         return true;
       }
-
       return false;
     },
   }));
-
-  const kbd = (key: string) => (
-    <kbd className="mx-[2px] rounded border border-[var(--gray-a6)] bg-[var(--gray-a3)] px-1 font-mono text-[10px]">
-      {key}
-    </kbd>
-  );
 
   const themeProps = {
     appearance: isDarkMode ? "dark" : "light",
@@ -94,10 +77,8 @@ export const SuggestionList = forwardRef<
   if (items.length === 0) {
     return (
       <Theme {...themeProps}>
-        <div className="flex min-w-[300px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-[12px] shadow-lg">
-          <div className="p-2">
-            <span className="text-[var(--gray-11)]">No results found</span>
-          </div>
+        <div className={CONTAINER_CLASS}>
+          <div className="p-2 text-[var(--gray-11)]">No results found</div>
         </div>
       </Theme>
     );
@@ -105,11 +86,10 @@ export const SuggestionList = forwardRef<
 
   return (
     <Theme {...themeProps}>
-      <div className="flex min-w-[300px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-[12px] shadow-lg">
+      <div className={CONTAINER_CLASS}>
         <div
-          ref={containerRef}
           role="listbox"
-          className={`max-h-[240px] flex-1 overflow-y-auto pb-1 [&::-webkit-scrollbar]:hidden ${hasMouseMoved ? "" : "cursor-none"}`}
+          className="max-h-60 flex-1 overflow-y-auto pb-1 [&::-webkit-scrollbar]:hidden"
           onMouseMove={() => !hasMouseMoved && setHasMouseMoved(true)}
         >
           {items.map((item, index) => {
@@ -123,28 +103,18 @@ export const SuggestionList = forwardRef<
                 }}
                 onClick={() => command(item)}
                 onMouseEnter={() => hasMouseMoved && setSelectedIndex(index)}
-                className={`flex w-full flex-col gap-[2px] border-none text-left ${
-                  item.description ? "px-2 py-[6px]" : "px-2 py-1"
-                } ${isSelected ? "bg-[var(--accent-a4)]" : "bg-transparent"} ${
-                  hasMouseMoved ? "cursor-pointer" : "cursor-none"
-                }`}
+                className={`flex w-full flex-col gap-0.5 border-none px-2 text-left ${
+                  item.description ? "py-1.5" : "py-1"
+                } ${isSelected ? "bg-[var(--accent-a4)]" : ""}`}
               >
                 <span
-                  className={`truncate ${
-                    isSelected
-                      ? "text-[var(--accent-11)]"
-                      : "text-[var(--gray-11)]"
-                  }`}
+                  className={`truncate ${isSelected ? "text-[var(--accent-11)]" : "text-[var(--gray-11)]"}`}
                 >
                   {item.label}
                 </span>
                 {item.description && (
                   <span
-                    className={`text-[11px] ${
-                      isSelected
-                        ? "text-[var(--accent-10)]"
-                        : "text-[var(--gray-10)]"
-                    }`}
+                    className={`text-[11px] ${isSelected ? "text-[var(--accent-10)]" : "text-[var(--gray-10)]"}`}
                   >
                     {item.description}
                   </span>
@@ -154,8 +124,8 @@ export const SuggestionList = forwardRef<
           })}
         </div>
         <div className="border-[var(--gray-a4)] border-t bg-[var(--gray-a2)] px-2 py-1 text-[10px] text-[var(--gray-10)]">
-          {kbd("↑")}
-          {kbd("↓")} navigate · {kbd("↵")} select · {kbd("esc")} dismiss
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd> navigate · <Kbd>↵</Kbd> select · <Kbd>esc</Kbd> dismiss
         </div>
       </div>
     </Theme>
