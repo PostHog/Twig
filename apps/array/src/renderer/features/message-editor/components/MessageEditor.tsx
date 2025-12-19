@@ -3,10 +3,10 @@ import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
-import type { EditorContent as EditorContentType } from "../core/content";
 import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
+import type { EditorContent as EditorContentType } from "../utils/content";
 import { EditorToolbar } from "./EditorToolbar";
 
 export type { EditorHandle as MessageEditorHandle };
@@ -58,15 +58,14 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       insertChip,
     } = useTiptapEditor({
       sessionId,
-      taskId,
       placeholder,
-      repoPath,
       disabled,
       isCloud,
+      autoFocus,
+      context: { taskId, repoPath },
       onSubmit,
       onBashCommand,
       onBashModeChange,
-      autoFocus,
     });
 
     useImperativeHandle(

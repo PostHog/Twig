@@ -2,7 +2,7 @@ import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { Paperclip } from "@phosphor-icons/react";
 import { Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import { useRef } from "react";
-import type { MentionChip } from "../core/content";
+import type { MentionChip } from "../utils/content";
 
 interface EditorToolbarProps {
   disabled?: boolean;

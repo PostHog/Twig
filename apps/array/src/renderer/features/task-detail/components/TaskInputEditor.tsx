@@ -56,17 +56,17 @@ export const TaskInputEditor = forwardRef<
       insertChip,
     } = useTiptapEditor({
       sessionId,
-      repoPath,
       placeholder: "What do you want to work on? - @ to add context",
       disabled: isCreatingTask,
       isCloud: isCloudMode,
+      autoFocus: true,
+      context: { repoPath },
       capabilities: { commands: false, bashMode: false },
       onSubmit: (text) => {
         if (text && canSubmit) {
           onSubmit();
         }
       },
-      autoFocus: true,
     });
 
     useImperativeHandle(

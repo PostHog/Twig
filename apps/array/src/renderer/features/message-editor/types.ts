@@ -1,5 +1,5 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
-import type { EditorContent } from "./core/content";
+import type { EditorContent } from "./utils/content";
 
 export interface EditorHandle {
   focus: () => void;

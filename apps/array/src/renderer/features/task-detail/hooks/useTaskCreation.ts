@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import type { EditorContent } from "@features/message-editor/core/content";
+import type { EditorContent } from "@features/message-editor/utils/content";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { get } from "@renderer/di/container";
