@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useAuthStore } from "../stores/authStore";
+import { useAuthStore } from "../features/auth";
 
 const queryClient = new QueryClient();
 
@@ -36,8 +36,10 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
+
+      {/* Chat routes - regular stack navigation */}
       <Stack.Screen
-        name="chat"
+        name="chat/index"
         options={{
           headerShown: true,
           headerBackTitle: "",
@@ -46,13 +48,33 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
-        name="agent"
+        name="chat/[id]"
         options={{
           headerShown: true,
-          title: "New task",
           headerBackTitle: "Back",
           headerStyle: { backgroundColor: "#09090b" },
+          headerTintColor: "#fff",
+        }}
+      />
+
+      {/* Task routes - modal presentation */}
+      <Stack.Screen
+        name="task/index"
+        options={{
+          presentation: "modal",
+          headerShown: true,
+          title: "New Task",
+          headerStyle: { backgroundColor: "#09090b" },
           headerTintColor: "#f97316",
+        }}
+      />
+      <Stack.Screen
+        name="task/[id]"
+        options={{
+          presentation: "modal",
+          headerShown: true,
+          headerStyle: { backgroundColor: "#09090b" },
+          headerTintColor: "#fff",
         }}
       />
     </Stack>

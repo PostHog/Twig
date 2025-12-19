@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,16 +6,19 @@ import {
   View,
 } from "react-native";
 import { Text } from "../../../components/text";
-import type { Task } from "../../agent/types/agent";
 import { useTasks } from "../hooks/useTasks";
+import type { Task } from "../types";
 import { TaskItem } from "./TaskItem";
 
-export function TaskList() {
-  const router = useRouter();
+interface TaskListProps {
+  onTaskPress?: (taskId: string) => void;
+}
+
+export function TaskList({ onTaskPress }: TaskListProps) {
   const { tasks, isLoading, error, refetch } = useTasks();
 
   const handleTaskPress = (task: Task) => {
-    router.push(`/agent/${task.id}`);
+    onTaskPress?.(task.id);
   };
 
   if (error) {

@@ -1,6 +1,5 @@
 import { fetch } from "expo/fetch";
-import { getCloudUrlFromRegion } from "../../constants/oauth";
-import { useAuthStore } from "../../stores/authStore";
+import { useAuthStore } from "../auth";
 import type { ConversationDetail } from "./types";
 
 function getAuthHeaders(): { Authorization: string; "Content-Type": string } {
@@ -15,7 +14,7 @@ function getAuthHeaders(): { Authorization: string; "Content-Type": string } {
 }
 
 function getBaseUrl(): string {
-  const { cloudRegion } = useAuthStore.getState();
+  const { cloudRegion, getCloudUrlFromRegion } = useAuthStore.getState();
   if (!cloudRegion) {
     throw new Error("No cloud region set");
   }

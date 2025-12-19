@@ -1,13 +1,17 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { Text } from "../../components/text";
-import { TaskList } from "../../features/tasks/components/TaskList";
+import { TaskList } from "../../features/tasks";
 
 export default function TasksScreen() {
   const router = useRouter();
 
   const handleCreateTask = () => {
-    router.push("/agent");
+    router.push("/task");
+  };
+
+  const handleTaskPress = (taskId: string) => {
+    router.push(`/task/${taskId}`);
   };
 
   return (
@@ -31,7 +35,7 @@ export default function TasksScreen() {
       </View>
 
       {/* Task List */}
-      <TaskList />
+      <TaskList onTaskPress={handleTaskPress} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { getTasks } from "../../agent/lib/agentApi";
+import { getTasks } from "../api";
 import { filterAndSortTasks, useTaskStore } from "../stores/taskStore";
 
 export function useTasks() {

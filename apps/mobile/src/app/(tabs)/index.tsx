@@ -10,7 +10,7 @@ export default function ConversationsScreen() {
   const router = useRouter();
 
   const handleConversationPress = (conversation: ConversationDetail) => {
-    router.push(`/conversation/${conversation.id}`);
+    router.push(`/chat/${conversation.id}`);
   };
 
   const handleNewChat = () => {

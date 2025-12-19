@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Task } from "../../agent/types/agent";
+import type { Task } from "../types";
 
 export type OrderByField = "created_at" | "status" | "title";
 export type OrderDirection = "asc" | "desc";
