@@ -1,10 +1,10 @@
 import { formatArgsToString } from "@shared/utils/format";
 import { toast } from "@utils/toast";
+import { IS_DEV } from "@/constants/environment";
 import { logger } from "./logger";
 
-const isDev = import.meta.env.DEV;
 const devErrorToastsEnabled =
-  isDev && import.meta.env.VITE_DEV_ERROR_TOASTS !== "false";
+  IS_DEV && import.meta.env.VITE_DEV_ERROR_TOASTS !== "false";
 
 export function initializeRendererErrorHandling(): void {
   if (devErrorToastsEnabled) {

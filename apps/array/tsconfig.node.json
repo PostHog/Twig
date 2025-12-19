@@ -12,8 +12,7 @@
   },
   "exclude": [
     "src/renderer/**/*",
-    "src/main/preload.ts",
-    "src/api/posthogClient.ts"
+    "src/main/preload.ts"
   ],
   "extends": "./tsconfig.json",
   "include": ["src/main/**/*", "src/shared/**/*", "src/api/**/*"]

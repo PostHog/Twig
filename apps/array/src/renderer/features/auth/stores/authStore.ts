@@ -1,4 +1,4 @@
-import { PostHogAPIClient } from "@api/posthogClient";
+import { PostHogAPIClient } from "@renderer/api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";

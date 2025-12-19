@@ -1,6 +1,5 @@
 import { Button, Card, Flex, Text } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
-import { toast } from "@utils/toast";
 import type { ReactNode } from "react";
 import { ErrorBoundary as ReactErrorBoundary } from "react-error-boundary";
 
@@ -9,7 +8,13 @@ interface Props {
   fallback?: ReactNode;
 }
 
-function DefaultFallback({ onReset }: { onReset: () => void }) {
+function DefaultFallback({
+  error,
+  onReset,
+}: {
+  error: Error;
+  onReset: () => void;
+}) {
   return (
     <Flex align="center" justify="center" minHeight="100vh" p="4">
       <Card size="3" style={{ maxWidth: 400 }}>
@@ -18,7 +23,7 @@ function DefaultFallback({ onReset }: { onReset: () => void }) {
             Something went wrong
           </Text>
           <Text size="2" color="gray" align="center">
-            An unexpected error occurred. Please try again.
+            {error.message}
           </Text>
           <Button onClick={onReset} variant="soft">
             Try again
@@ -32,8 +37,10 @@ function DefaultFallback({ onReset }: { onReset: () => void }) {
 export function ErrorBoundary({ children, fallback }: Props) {
   return (
     <ReactErrorBoundary
-      fallbackRender={({ resetErrorBoundary }) =>
-        fallback ?? <DefaultFallback onReset={resetErrorBoundary} />
+      fallbackRender={({ error, resetErrorBoundary }) =>
+        fallback ?? (
+          <DefaultFallback error={error} onReset={resetErrorBoundary} />
+        )
       }
       onError={(error, info) => {
         logger.error("React error boundary caught error", {
@@ -41,7 +48,6 @@ export function ErrorBoundary({ children, fallback }: Props) {
           stack: error.stack,
           componentStack: info.componentStack,
         });
-        toast.error("Something went wrong", { description: error.message });
       }}
     >
       {children}
