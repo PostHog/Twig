@@ -1,0 +1,48 @@
+{
+  "name": "@posthog/electron-trpc",
+  "description": "Electron support for tRPC (forked with HMR fix)",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./main": {
+      "types": "./dist/main/index.d.ts",
+      "import": "./dist/main.mjs"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "import": "./dist/renderer.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "main.d.ts",
+    "renderer.d.ts"
+  ],
+  "scripts": {
+    "build": "vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && pnpm build:types",
+    "build:types": "tsc -p tsconfig.build.json",
+    "dev": "pnpm build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest -c vitest.config.ts",
+    "test:ci": "vitest run -c vitest.config.ts --coverage"
+  },
+  "devDependencies": {
+    "@trpc/client": "^11.8.0",
+    "@trpc/server": "^11.8.0",
+    "@types/node": "^20.3.1",
+    "@vitest/coverage-v8": "^0.34.0",
+    "builtin-modules": "^3.3.0",
+    "dts-bundle-generator": "^8.0.1",
+    "electron": "^35.2.1",
+    "vite": "^6.0.7",
+    "vite-plugin-commonjs-externals": "^0.1.4",
+    "vitest": "^2.1.8",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@trpc/client": ">=11.0.0",
+    "@trpc/server": ">=11.0.0",
+    "electron": ">19.0.0"
+  }
+}

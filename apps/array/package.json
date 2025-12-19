@@ -145,7 +145,7 @@
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "tippy.js": "^6.3.7",
-    "trpc-electron": "^0.1.2",
+    "@posthog/electron-trpc": "workspace:*",
     "uuid": "^9.0.1",
     "vscode-icons-js": "^11.6.1",
     "zod": "^4.1.12",
