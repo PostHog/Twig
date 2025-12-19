@@ -23,7 +23,7 @@ const Kbd = ({ children }: { children: string }) => (
 );
 
 const CONTAINER_CLASS =
-  "flex min-w-[300px] max-w-[400px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-[12px] shadow-lg";
+  "flex w-max min-w-[300px] max-w-[600px] flex-col rounded border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] font-mono text-[12px] shadow-lg";
 
 export const SuggestionList = forwardRef<
   SuggestionListRef,
