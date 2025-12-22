@@ -126,7 +126,7 @@ export class Agent {
   }
 
   /**
-   * Configure LLM gateway environment variables for Claude Code CLI
+   * Configure LLM gateway environment variables for Claude Code CLI.
    */
   private async _configureLlmGateway(): Promise<void> {
     if (!this.posthogAPI) {
@@ -134,8 +134,7 @@ export class Agent {
     }
 
     try {
-      const gatewayUrl =
-        process.env.LLM_GATEWAY_URL || this.posthogAPI.getLlmGatewayUrl();
+      const gatewayUrl = this.posthogAPI.getLlmGatewayUrl();
       const apiKey = this.posthogAPI.getApiKey();
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;

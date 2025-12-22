@@ -68,6 +68,7 @@ export type {
 } from "./src/types.js";
 export { PermissionMode } from "./src/types.js";
 
+export { getLlmGatewayUrl } from "./src/utils/gateway.js";
 export type { LoggerConfig } from "./src/utils/logger.js";
 export { Logger, LogLevel } from "./src/utils/logger.js";
 
