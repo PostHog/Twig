@@ -144,7 +144,9 @@ async function testAgent() {
           POSTHOG_AUTH_HEADER: `Bearer ${process.env.POSTHOG_API_KEY}`,
           ANTHROPIC_API_KEY: process.env.POSTHOG_API_KEY,
           ANTHROPIC_AUTH_TOKEN: process.env.POSTHOG_API_KEY,
-          ANTHROPIC_BASE_URL: getLlmGatewayUrl(process.env.POSTHOG_API_URL || ""),
+          ANTHROPIC_BASE_URL: getLlmGatewayUrl(
+            process.env.POSTHOG_API_URL || "",
+          ),
         },
       },
     });
