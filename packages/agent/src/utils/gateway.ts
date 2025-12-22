@@ -1,0 +1,15 @@
+export function getLlmGatewayUrl(posthogHost: string): string {
+  const url = new URL(posthogHost);
+  const hostname = url.hostname;
+
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return `${url.protocol}//localhost:3308`;
+  }
+
+  // Extract region from hostname (us.posthog.com, eu.posthog.com)
+  // app.posthog.com is legacy US
+  const regionMatch = hostname.match(/^(us|eu)\.posthog\.com$/);
+  const region = regionMatch ? regionMatch[1] : "us";
+
+  return `https://gateway.${region}.posthog.com`;
+}

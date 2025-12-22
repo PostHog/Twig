@@ -10,7 +10,7 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
-import { Agent, type OnLogCallback } from "@posthog/agent";
+import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
 import { injectable } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
@@ -457,10 +457,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     process.env.ANTHROPIC_API_KEY = token;
     process.env.ANTHROPIC_AUTH_TOKEN = token;
 
-    const llmGatewayUrl =
-      process.env.LLM_GATEWAY_URL ||
-      `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
-    process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
+    process.env.ANTHROPIC_BASE_URL = getLlmGatewayUrl(credentials.apiHost);
 
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
