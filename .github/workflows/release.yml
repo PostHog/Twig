@@ -24,8 +24,6 @@ jobs:
   publish:
     runs-on: macos-latest
     env:
-      GH_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
-      GITHUB_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
       NODE_ENV: production
       APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -35,11 +33,18 @@ jobs:
       APPLE_CODESIGN_CERT_PASSWORD: ${{ secrets.APPLE_CODESIGN_CERT_PASSWORD }}
       APPLE_CODESIGN_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_CODESIGN_KEYCHAIN_PASSWORD }}
     steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.POSTHOG_BOT_PAT }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -102,10 +107,12 @@ jobs:
       - name: Create tag
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           TAG="v$APP_VERSION"
           git tag -a "$TAG" -m "Release $TAG"
-          git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} "$TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$REPOSITORY" "$TAG"
 
       - name: Build native modules
         run: pnpm --filter array run build-native
