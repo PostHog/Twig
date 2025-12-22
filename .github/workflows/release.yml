@@ -78,6 +78,11 @@ jobs:
           # Count commits since the base tag
           PATCH=$(git rev-list "$LATEST_TAG"..HEAD --count)
 
+          if [ "$PATCH" -eq 0 ]; then
+            echo "No commits since $LATEST_TAG. Nothing to release."
+            exit 1
+          fi
+
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "Version: $NEW_VERSION (from base tag $LATEST_TAG + $PATCH commits)"
 
