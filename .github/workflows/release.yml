@@ -13,9 +13,6 @@ on:
       - "turbo.json"
       - ".github/workflows/release.yml"
 
-permissions:
-  contents: write
-
 concurrency:
   group: release
   cancel-in-progress: true
@@ -120,4 +117,5 @@ jobs:
       - name: Publish with Electron Forge
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: pnpm --filter array run publish
