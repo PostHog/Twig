@@ -58,6 +58,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       insertChip,
     } = useTiptapEditor({
       sessionId,
+      taskId,
       placeholder,
       disabled,
       isCloud,
