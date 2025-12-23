@@ -21,6 +21,7 @@ interface TaskInputEditorProps {
   canSubmit: boolean;
   onSubmit: () => void;
   hasDirectory: boolean;
+  onEmptyChange?: (isEmpty: boolean) => void;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -38,6 +39,7 @@ export const TaskInputEditor = forwardRef<
       canSubmit,
       onSubmit,
       hasDirectory,
+      onEmptyChange,
     },
     ref,
   ) => {
@@ -67,6 +69,7 @@ export const TaskInputEditor = forwardRef<
           onSubmit();
         }
       },
+      onEmptyChange,
     });
 
     useImperativeHandle(

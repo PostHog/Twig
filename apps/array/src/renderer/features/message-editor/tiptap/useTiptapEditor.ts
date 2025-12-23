@@ -1,6 +1,6 @@
 import { toast } from "@renderer/utils/toast";
 import { useEditor } from "@tiptap/react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { MentionChip } from "../utils/content";
 import { contentToXml } from "../utils/content";
 import { getEditorExtensions } from "./extensions";
@@ -21,6 +21,7 @@ export interface UseTiptapEditorOptions {
   onSubmit?: (text: string) => void;
   onBashCommand?: (command: string) => void;
   onBashModeChange?: (isBashMode: boolean) => void;
+  onEmptyChange?: (isEmpty: boolean) => void;
 }
 
 const EDITOR_CLASS =
@@ -38,6 +39,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onSubmit,
     onBashCommand,
     onBashModeChange,
+    onEmptyChange,
   } = options;
 
   const {
@@ -46,12 +48,26 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     bashMode: enableBashMode = true,
   } = capabilities;
 
-  const callbackRefs = useRef({ onSubmit, onBashCommand, onBashModeChange });
-  callbackRefs.current = { onSubmit, onBashCommand, onBashModeChange };
+  const callbackRefs = useRef({
+    onSubmit,
+    onBashCommand,
+    onBashModeChange,
+    onEmptyChange,
+  });
+  callbackRefs.current = {
+    onSubmit,
+    onBashCommand,
+    onBashModeChange,
+    onEmptyChange,
+  };
 
   const prevBashModeRef = useRef(false);
+  const prevIsEmptyRef = useRef(true);
   const submitRef = useRef<() => void>(() => {});
   const draftRef = useRef<ReturnType<typeof useDraftSync> | null>(null);
+
+  // Track isEmpty state to trigger re-renders when content changes
+  const [isEmptyState, setIsEmptyState] = useState(true);
 
   const handleCommandSubmit = useCallback((text: string) => {
     callbackRefs.current.onSubmit?.(text);
@@ -86,13 +102,28 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
           return false;
         },
       },
+      onCreate: ({ editor: e }) => {
+        const newIsEmpty = !e.getText().trim();
+        setIsEmptyState(newIsEmpty);
+        prevIsEmptyRef.current = newIsEmpty;
+        callbackRefs.current.onEmptyChange?.(newIsEmpty);
+      },
       onUpdate: ({ editor: e }) => {
         const text = e.getText();
+        const trimmedText = text.trim();
         const newBashMode = enableBashMode && text.trimStart().startsWith("!");
 
         if (newBashMode !== prevBashModeRef.current) {
           prevBashModeRef.current = newBashMode;
           callbackRefs.current.onBashModeChange?.(newBashMode);
+        }
+
+        const newIsEmpty = !trimmedText;
+        setIsEmptyState(newIsEmpty);
+
+        if (newIsEmpty !== prevIsEmptyRef.current) {
+          prevIsEmptyRef.current = newIsEmpty;
+          callbackRefs.current.onEmptyChange?.(newIsEmpty);
         }
 
         draftRef.current?.saveDraft(e);
@@ -159,7 +190,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     [editor, draft],
   );
 
-  const isEmpty = !editor || editor.isEmpty;
+  const isEmpty = !editor || isEmptyState;
   const isBashMode =
     enableBashMode && (editor?.getText().trimStart().startsWith("!") ?? false);
 
