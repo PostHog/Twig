@@ -7,13 +7,11 @@ on:
     paths:
       - "apps/array/**"
       - "packages/agent/**"
+      - "packages/electron-trpc/**"
       - "pnpm-lock.yaml"
       - "package.json"
       - "turbo.json"
       - ".github/workflows/release.yml"
-
-permissions:
-  contents: write
 
 concurrency:
   group: release
@@ -23,8 +21,6 @@ jobs:
   publish:
     runs-on: macos-latest
     env:
-      GH_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
-      GITHUB_TOKEN: ${{ secrets.POSTHOG_BOT_PAT }}
       NODE_ENV: production
       APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -34,11 +30,18 @@ jobs:
       APPLE_CODESIGN_CERT_PASSWORD: ${{ secrets.APPLE_CODESIGN_CERT_PASSWORD }}
       APPLE_CODESIGN_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_CODESIGN_KEYCHAIN_PASSWORD }}
     steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.POSTHOG_BOT_PAT }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,27 +52,56 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
-      - name: Bump minor version
+      - name: Compute version from git tags
         id: version
         run: |
-          CURRENT_VERSION=$(jq -r .version apps/array/package.json)
-          MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
-          MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
-          NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
-          echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
+          # Find the latest minor version tag (vX.Y format - exactly 2 parts)
+          # These are manually created to mark new minor releases
+          # Release tags (vX.Y.Z) are ignored for base version calculation
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1)
 
-          jq --arg v "$NEW_VERSION" '.version = $v' apps/array/package.json > tmp.json && mv tmp.json apps/array/package.json
+          # Fall back to vX.Y.0 format if no vX.Y tags exist (backward compat)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.0' --sort=-v:refname | head -1)
+          fi
 
-          git config user.name "posthog-bot"
-          git config user.email "infra@posthog.com"
-          git add apps/array/package.json
-          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
-          git push
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No version tag found. Create one with: git tag v0.15 && git push origin v0.15"
+            exit 1
+          fi
+
+          # Extract major.minor from tag
+          VERSION_PART=${LATEST_TAG#v}
+          MAJOR=$(echo "$VERSION_PART" | cut -d. -f1)
+          MINOR=$(echo "$VERSION_PART" | cut -d. -f2)
+
+          # Count commits since the base tag
+          PATCH=$(git rev-list "$LATEST_TAG"..HEAD --count)
+
+          if [ "$PATCH" -eq 0 ]; then
+            echo "No commits since $LATEST_TAG. Nothing to release."
+            exit 1
+          fi
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "Version: $NEW_VERSION (from base tag $LATEST_TAG + $PATCH commits)"
 
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in package.json
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Update package.json for the build (not committed)
+          jq --arg v "$APP_VERSION" '.version = $v' apps/array/package.json > tmp.json && mv tmp.json apps/array/package.json
+          echo "Set apps/array/package.json version to $APP_VERSION"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
 
       - name: Build agent package
         run: pnpm --filter @posthog/agent run build
@@ -98,10 +130,12 @@ jobs:
       - name: Create tag
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           TAG="v$APP_VERSION"
           git tag -a "$TAG" -m "Release $TAG"
-          git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} "$TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$REPOSITORY" "$TAG"
 
       - name: Build native modules
         run: pnpm --filter array run build-native
@@ -109,4 +143,5 @@ jobs:
       - name: Publish with Electron Forge
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: pnpm --filter array run publish

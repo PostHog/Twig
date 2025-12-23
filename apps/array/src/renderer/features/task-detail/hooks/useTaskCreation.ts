@@ -1,8 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
-import {
-  extractFileMentions,
-  tiptapToMarkdown,
-} from "@features/editor/utils/tiptap-converter";
+import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import type { EditorContent } from "@features/message-editor/utils/content";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { get } from "@renderer/di/container";
@@ -14,19 +12,19 @@ import type {
 } from "@renderer/services/task/service";
 import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import type { Editor } from "@tiptap/react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 const log = logger.scope("task-creation");
 
 interface UseTaskCreationOptions {
-  editor: Editor | null;
+  editorRef: React.RefObject<MessageEditorHandle | null>;
   selectedDirectory: string;
   selectedRepository?: string | null;
   githubIntegrationId?: number;
   workspaceMode: WorkspaceMode;
   branch?: string | null;
+  editorIsEmpty: boolean;
 }
 
 interface UseTaskCreationReturn {
@@ -35,11 +33,45 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-/**
- * Helper function to prepare saga input from editor state
- */
+function contentToXml(content: EditorContent): string {
+  return content.segments
+    .map((seg) => {
+      if (seg.type === "text") return seg.text;
+      const chip = seg.chip;
+      switch (chip.type) {
+        case "file":
+          return `<file path="${chip.id}" />`;
+        case "command":
+          return `/${chip.label}`;
+        case "error":
+          return `<error id="${chip.id}" />`;
+        case "experiment":
+          return `<experiment id="${chip.id}" />`;
+        case "insight":
+          return `<insight id="${chip.id}" />`;
+        case "feature_flag":
+          return `<feature_flag id="${chip.id}" />`;
+        default:
+          return `@${chip.label}`;
+      }
+    })
+    .join("");
+}
+
+function extractFileMentionsFromContent(content: EditorContent): string[] {
+  const filePaths: string[] = [];
+  for (const seg of content.segments) {
+    if (seg.type === "chip" && seg.chip.type === "file") {
+      if (!filePaths.includes(seg.chip.id)) {
+        filePaths.push(seg.chip.id);
+      }
+    }
+  }
+  return filePaths;
+}
+
 function prepareTaskInput(
-  editor: Editor,
+  content: EditorContent,
   options: {
     selectedDirectory: string;
     selectedRepository?: string | null;
@@ -49,10 +81,9 @@ function prepareTaskInput(
     autoRun: boolean;
   },
 ): TaskCreationInput {
-  const editorJson = editor.getJSON();
   return {
-    content: tiptapToMarkdown(editorJson).trim(),
-    filePaths: extractFileMentions(editorJson),
+    content: contentToXml(content).trim(),
+    filePaths: extractFileMentionsFromContent(content),
     repoPath: options.selectedDirectory,
     repository: options.selectedRepository,
     githubIntegrationId: options.githubIntegrationId,
@@ -62,9 +93,6 @@ function prepareTaskInput(
   };
 }
 
-/**
- * Get user-friendly error message from failed step
- */
 function getErrorMessage(failedStep: string, error: string): string {
   const messages: Record<string, string> = {
     validation: error,
@@ -77,23 +105,14 @@ function getErrorMessage(failedStep: string, error: string): string {
   return messages[failedStep] ?? error;
 }
 
-/**
- * Hook for creating tasks with workspace provisioning.
- *
- * This hook is intentionally thin - it only handles:
- * - Preparing input from editor state
- * - Calling TaskService (which owns the saga)
- * - Handling UI effects (clear editor, navigate, show toast)
- *
- * Business logic is handled by TaskService + TaskCreationSaga.
- */
 export function useTaskCreation({
-  editor,
+  editorRef,
   selectedDirectory,
   selectedRepository,
   githubIntegrationId,
   workspaceMode,
   branch,
+  editorIsEmpty,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -103,19 +122,21 @@ export function useTaskCreation({
 
   const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
-    !!editor &&
+    !!editorRef.current &&
     isAuthenticated &&
     (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
     !isCreatingTask &&
-    !editor.isEmpty;
+    !editorIsEmpty;
 
   const handleSubmit = useCallback(async () => {
+    const editor = editorRef.current;
     if (!canSubmit || !editor) return;
 
     setIsCreatingTask(true);
 
     try {
-      const input = prepareTaskInput(editor, {
+      const content = editor.getContent();
+      const input = prepareTaskInput(content, {
         selectedDirectory,
         selectedRepository,
         githubIntegrationId,
@@ -137,7 +158,7 @@ export function useTaskCreation({
         navigateToTask(task);
 
         // Clear editor
-        editor.commands.clearContent();
+        editor.clear();
 
         log.info("Task created successfully", { taskId: task.id });
       } else {
@@ -149,7 +170,6 @@ export function useTaskCreation({
         });
       }
     } catch (error) {
-      // Unexpected error (not from saga)
       const message = error instanceof Error ? error.message : "Unknown error";
       toast.error(`Failed to create task: ${message}`);
       log.error("Unexpected error during task creation", { error });
@@ -158,7 +178,7 @@ export function useTaskCreation({
     }
   }, [
     canSubmit,
-    editor,
+    editorRef,
     selectedDirectory,
     selectedRepository,
     githubIntegrationId,

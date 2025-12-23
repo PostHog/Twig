@@ -34,7 +34,7 @@ export function DiffEditorPanel({
     (s) => s.closeDiffTabsForFile,
   );
 
-  const { data: changedFiles = [] } = useQuery({
+  const { data: changedFiles = [], isLoading: loadingChangelist } = useQuery({
     queryKey: ["changed-files-head", repoPath],
     queryFn: () =>
       trpcVanilla.git.getChangedFilesHead.query({
@@ -96,7 +96,9 @@ export function DiffEditorPanel({
   );
 
   const isLoading =
-    (!isDeleted && loadingModified) || (!isNew && loadingOriginal);
+    loadingChangelist ||
+    (!isDeleted && loadingModified) ||
+    (!isNew && loadingOriginal);
 
   const hasNoChanges =
     !!repoPath &&

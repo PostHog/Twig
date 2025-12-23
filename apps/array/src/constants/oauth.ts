@@ -9,6 +9,7 @@ export const OAUTH_SCOPES = [
   "user:read",
   "project:read",
   "task:write",
+  "llm_gateway:read",
   "integration:read",
   "introspection",
   "dashboard:read",

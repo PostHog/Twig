@@ -9,9 +9,8 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
-  type SessionNotification,
 } from "@agentclientprotocol/sdk";
-import { Agent, type OnLogCallback } from "@posthog/agent";
+import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
 import { injectable } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
@@ -461,9 +460,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     process.env.ANTHROPIC_API_KEY = token;
     process.env.ANTHROPIC_AUTH_TOKEN = token;
 
-    const llmGatewayUrl =
-      process.env.LLM_GATEWAY_URL ||
-      `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
+    const llmGatewayUrl = getLlmGatewayUrl(credentials.apiHost);
     process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
 
     const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
@@ -471,7 +468,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       : `${llmGatewayUrl}/v1`;
     process.env.OPENAI_BASE_URL = openaiBaseUrl;
     process.env.OPENAI_API_KEY = token;
-    // Store the resolved gateway URL so agents can access it
     process.env.LLM_GATEWAY_URL = llmGatewayUrl;
 
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
@@ -561,8 +557,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         };
       },
 
-      async sessionUpdate(_params: SessionNotification): Promise<void> {
-        // No-op: session/update notifications are captured by the stream tap
+      async sessionUpdate() {
+        // session/update notifications flow through the tapped stream
       },
 
       extNotification: async (

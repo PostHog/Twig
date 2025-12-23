@@ -1,0 +1,8 @@
+/* Tiptap placeholder - targets empty first paragraph */
+.cli-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--gray-11);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}

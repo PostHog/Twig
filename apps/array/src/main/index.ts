@@ -8,6 +8,7 @@ import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createIPCHandler } from "@posthog/electron-trpc/main";
 import {
   app,
   BrowserWindow,
@@ -17,7 +18,6 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
-import { createIPCHandler } from "trpc-electron/main";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { container } from "./di/container.js";

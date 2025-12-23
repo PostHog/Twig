@@ -1,4 +1,5 @@
 import type {
+  AvailableCommand,
   ContentBlock,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
@@ -711,6 +712,93 @@ export const useSessionForTask = (taskId: string | undefined) =>
       : undefined,
   );
 export const getSessionActions = () => useStore.getState().actions;
+
+function extractAvailableCommandsFromEvents(
+  events: AcpMessage[],
+): AvailableCommand[] {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i].message;
+    if (
+      "method" in msg &&
+      msg.method === "session/update" &&
+      !("id" in msg) &&
+      "params" in msg
+    ) {
+      const params = msg.params as SessionNotification | undefined;
+      const update = params?.update;
+      if (update?.sessionUpdate === "available_commands_update") {
+        return update.availableCommands || [];
+      }
+    }
+  }
+  return [];
+}
+
+export const useAvailableCommandsForTask = (
+  taskId: string | undefined,
+): AvailableCommand[] => {
+  return useStore((s) => {
+    if (!taskId) return [];
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    if (!session?.events) return [];
+    return extractAvailableCommandsFromEvents(session.events);
+  });
+};
+
+export function getAvailableCommandsForTask(
+  taskId: string | undefined,
+): AvailableCommand[] {
+  if (!taskId) return [];
+  const sessions = useStore.getState().sessions;
+  const session = Object.values(sessions).find(
+    (sess) => sess.taskId === taskId,
+  );
+  if (!session?.events) return [];
+  return extractAvailableCommandsFromEvents(session.events);
+}
+
+/**
+ * Extract user prompts from session events.
+ * Returns an array of user prompt strings, most recent last.
+ */
+function extractUserPromptsFromEvents(events: AcpMessage[]): string[] {
+  const prompts: string[] = [];
+
+  for (const event of events) {
+    const msg = event.message;
+    if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
+      const params = msg.params as { prompt?: ContentBlock[] };
+      if (params?.prompt?.length) {
+        // Find first visible text block (skip hidden context blocks)
+        const textBlock = params.prompt.find((b) => {
+          if (b.type !== "text") return false;
+          const meta = (b as { _meta?: { ui?: { hidden?: boolean } } })._meta;
+          return !meta?.ui?.hidden;
+        });
+        if (textBlock && textBlock.type === "text") {
+          prompts.push(textBlock.text);
+        }
+      }
+    }
+  }
+
+  return prompts;
+}
+
+/**
+ * Get user prompts for a task, most recent last.
+ */
+export function getUserPromptsForTask(taskId: string | undefined): string[] {
+  if (!taskId) return [];
+  const sessions = useStore.getState().sessions;
+  const session = Object.values(sessions).find(
+    (sess) => sess.taskId === taskId,
+  );
+  if (!session?.events) return [];
+  return extractUserPromptsFromEvents(session.events);
+}
 
 // Token refresh subscription
 let lastKnownToken: string | null = null;

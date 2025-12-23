@@ -70,9 +70,11 @@ export function RightSidebarContent({
       </Flex>
       <Box flexGrow="1" overflow="hidden">
         {activeTab === "changes" && (
-          <ChangesPanel taskId={taskId} task={task} />
+          <ChangesPanel key={taskId} taskId={taskId} task={task} />
         )}
-        {activeTab === "files" && <FileTreePanel taskId={taskId} task={task} />}
+        {activeTab === "files" && (
+          <FileTreePanel key={taskId} taskId={taskId} task={task} />
+        )}
       </Box>
     </Flex>
   );

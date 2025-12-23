@@ -7,6 +7,7 @@ import { config } from "dotenv";
 config();
 
 import { Agent, PermissionMode } from "./src/agent.js";
+import { getLlmGatewayUrl } from "./src/utils/gateway.js";
 
 function hasUncommittedChanges(repoPath: string): boolean {
   try {
@@ -143,9 +144,9 @@ async function testAgent() {
           POSTHOG_AUTH_HEADER: `Bearer ${process.env.POSTHOG_API_KEY}`,
           ANTHROPIC_API_KEY: process.env.POSTHOG_API_KEY,
           ANTHROPIC_AUTH_TOKEN: process.env.POSTHOG_API_KEY,
-          ANTHROPIC_BASE_URL:
-            process.env.LLM_GATEWAY_URL ||
-            `${process.env.POSTHOG_API_URL}/api/projects/${process.env.POSTHOG_PROJECT_ID}/llm_gateway`,
+          ANTHROPIC_BASE_URL: getLlmGatewayUrl(
+            process.env.POSTHOG_API_URL || "",
+          ),
         },
       },
     });

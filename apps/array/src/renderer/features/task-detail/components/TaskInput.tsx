@@ -1,4 +1,5 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { RepositoryPicker } from "@features/repository-picker/components/RepositoryPicker";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
@@ -8,8 +9,7 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useEffect, useState } from "react";
-import { useEditorSetup } from "../hooks/useEditorSetup";
+import { useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { BranchSelect } from "./BranchSelect";
 import { type RunMode, RunModeSelect } from "./RunModeSelect";
@@ -28,6 +28,8 @@ export function TaskInput() {
   const { folders } = useRegisteredFoldersStore();
   const { lastUsedRunMode, lastUsedLocalWorkspaceMode } = useSettingsStore();
 
+  const editorRef = useRef<MessageEditorHandle>(null);
+
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
@@ -40,6 +42,7 @@ export function TaskInput() {
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [editorIsEmpty, setEditorIsEmpty] = useState(true);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -56,23 +59,18 @@ export function TaskInput() {
     setSelectedDirectory(newPath);
   };
 
-  const editor = useEditorSetup({
-    onSubmit: () => handleSubmit(),
-    isDisabled: false,
-    repoPath: selectedDirectory,
-  });
-
   // Compute the effective workspace mode for task creation
   const effectiveWorkspaceMode: WorkspaceMode =
     runMode === "cloud" ? "cloud" : localWorkspaceMode;
 
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
-    editor,
+    editorRef,
     selectedDirectory,
     selectedRepository,
     githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
+    editorIsEmpty,
   });
 
   return (
@@ -154,7 +152,9 @@ export function TaskInput() {
         </Flex>
 
         <TaskInputEditor
-          editor={editor}
+          ref={editorRef}
+          sessionId="task-input"
+          repoPath={selectedDirectory}
           isCreatingTask={isCreatingTask}
           runMode={runMode}
           localWorkspaceMode={localWorkspaceMode}
@@ -164,9 +164,10 @@ export function TaskInput() {
           hasDirectory={
             runMode === "cloud" ? !!selectedRepository : !!selectedDirectory
           }
+          onEmptyChange={setEditorIsEmpty}
         />
 
-        <SuggestedTasks editor={editor} />
+        <SuggestedTasks editorRef={editorRef} />
       </Flex>
     </Flex>
   );
