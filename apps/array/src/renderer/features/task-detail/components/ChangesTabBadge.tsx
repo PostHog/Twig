@@ -26,6 +26,7 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   if (!diffStats || diffStats.filesChanged === 0) {
