@@ -84,7 +84,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
 
     const handleContainerClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest("button")) {
+      if (!target.closest("button") && !target.closest(".ProseMirror")) {
         focus();
       }
     };
