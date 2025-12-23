@@ -24,6 +24,7 @@ interface UseTaskCreationOptions {
   githubIntegrationId?: number;
   workspaceMode: WorkspaceMode;
   branch?: string | null;
+  editorIsEmpty: boolean;
 }
 
 interface UseTaskCreationReturn {
@@ -111,6 +112,7 @@ export function useTaskCreation({
   githubIntegrationId,
   workspaceMode,
   branch,
+  editorIsEmpty,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -119,7 +121,6 @@ export function useTaskCreation({
   const { invalidateTasks } = useCreateTask();
 
   const isCloudMode = workspaceMode === "cloud";
-  const editorIsEmpty = editorRef.current?.isEmpty() ?? true;
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&

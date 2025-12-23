@@ -42,6 +42,7 @@ export function TaskInput() {
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [editorIsEmpty, setEditorIsEmpty] = useState(true);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -69,6 +70,7 @@ export function TaskInput() {
     githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
+    editorIsEmpty,
   });
 
   return (
@@ -162,6 +164,7 @@ export function TaskInput() {
           hasDirectory={
             runMode === "cloud" ? !!selectedRepository : !!selectedDirectory
           }
+          onEmptyChange={setEditorIsEmpty}
         />
 
         <SuggestedTasks editorRef={editorRef} />
