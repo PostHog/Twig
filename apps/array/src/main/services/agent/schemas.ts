@@ -9,7 +9,7 @@ export const credentialsSchema = z.object({
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 
-// Agent framework schema (defined early as it's referenced by other schemas)
+// Agent framework schema
 export const agentFrameworkSchema = z.enum(["claude", "codex"]);
 export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
 

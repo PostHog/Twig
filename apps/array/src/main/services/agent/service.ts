@@ -466,8 +466,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
     process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
 
-    // Also set OpenAI env vars for Codex agent
-    // OpenAI/Codex expects base URL to include /v1 suffix
     const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
       ? llmGatewayUrl
       : `${llmGatewayUrl}/v1`;
