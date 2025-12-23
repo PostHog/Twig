@@ -104,7 +104,10 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
             return true;
           }
 
-          if (taskId && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+          if (
+            taskId &&
+            (event.key === "ArrowUp" || event.key === "ArrowDown")
+          ) {
             const currentText = view.state.doc.textContent;
             const isEmpty = !currentText.trim();
             const { from } = view.state.selection;
