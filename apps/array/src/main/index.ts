@@ -3,6 +3,27 @@ declare const __BUILD_DATE__: string | undefined;
 
 import "reflect-metadata";
 import dns from "node:dns";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath as fileURLToPathEarly } from "node:url";
+import { config as loadEnvConfig } from "dotenv";
+
+// Load .env file for local development
+// Try multiple paths to find .env
+const __dirnameEarly = dirname(fileURLToPathEarly(import.meta.url));
+const possibleEnvPaths = [
+  resolve(__dirnameEarly, "../../../../.env"), // From src/main/index.ts
+  resolve(__dirnameEarly, "../../../.env"), // From build output
+  resolve(process.cwd(), ".env"), // From working directory
+  resolve(process.cwd(), "../.env"), // One level up from working directory
+];
+
+for (const envPath of possibleEnvPaths) {
+  const result = loadEnvConfig({ path: envPath });
+  if (!result.error) {
+    break;
+  }
+}
+
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";

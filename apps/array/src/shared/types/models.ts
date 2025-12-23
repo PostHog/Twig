@@ -65,6 +65,33 @@ export const AVAILABLE_MODELS: ModelOption[] = [
 
 export const DEFAULT_MODEL = "claude-opus-4-5";
 
+// Agent frameworks
+export type AgentFramework = "claude" | "codex";
+
+export interface FrameworkOption {
+  id: AgentFramework;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+export const AVAILABLE_FRAMEWORKS: FrameworkOption[] = [
+  {
+    id: "claude",
+    name: "Claude Code",
+    description: "Anthropic's Claude Code agent",
+    enabled: true,
+  },
+  {
+    id: "codex",
+    name: "OpenAI Codex",
+    description: "OpenAI's Codex agent",
+    enabled: true,
+  },
+];
+
+export const DEFAULT_FRAMEWORK: AgentFramework = "claude";
+
 export function getModelById(id: string): ModelOption | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === id && m.enabled);
 }

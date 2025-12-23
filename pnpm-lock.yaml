@@ -200,6 +200,9 @@ importers:
       detect-libc:
         specifier: ^1.0.3
         version: 1.0.3
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       electron-log:
         specifier: ^5.4.3
         version: 5.4.3
@@ -393,6 +396,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.23.0
         version: 1.23.0(zod@3.25.76)
+      '@openai/codex-sdk':
+        specifier: 0.60.1
+        version: 0.60.1
       diff:
         specifier: ^8.0.2
         version: 8.0.2
@@ -1817,6 +1823,10 @@ packages:
 
   '@octokit/types@6.41.0':
     resolution: {integrity: sha512-eJ2jbzjdijiL3B4PrSQaSjuF2sPEQPVCPzBvTHJD9Nz+9dw2SGH4K4xeQJ77YfTq5bRQ+bD8wT11JbeDPmxmGg==}
+
+  '@openai/codex-sdk@0.60.1':
+    resolution: {integrity: sha512-w7FhUXfqpzw9igTZFfKS7cUNW1FK+tT426ZkClG2X8vufW0jyGqfgPd6Uq8+gJgSTLxayF9I802FDW2KjYcfYQ==}
+    engines: {node: '>=18'}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -8889,6 +8899,8 @@ snapshots:
   '@octokit/types@6.41.0':
     dependencies:
       '@octokit/openapi-types': 12.11.0
+
+  '@openai/codex-sdk@0.60.1': {}
 
   '@opentelemetry/api@1.9.0': {}
 

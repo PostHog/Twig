@@ -9,7 +9,7 @@ import { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 import {
   createAcpConnection,
   type InProcessAcpConnection,
-} from "./adapters/claude/claude.js";
+} from "./adapters/connection.js";
 import { PostHogFileManager } from "./file-manager.js";
 import { GitManager } from "./git-manager.js";
 import { PostHogAPIClient } from "./posthog-api.js";
@@ -273,6 +273,7 @@ export class Agent {
     this.currentRunId = taskRunId;
 
     this.acpConnection = createAcpConnection({
+      framework: options.framework,
       sessionStore: this.sessionStore,
       sessionId: taskRunId,
       taskId: task.id,

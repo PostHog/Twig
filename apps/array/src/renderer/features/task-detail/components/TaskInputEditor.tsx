@@ -1,3 +1,4 @@
+import { FrameworkSelector } from "@features/sessions/components/FrameworkSelector";
 import { ModelSelector } from "@features/sessions/components/ModelSelector";
 import { ArrowUpIcon, GitBranchIcon, Paperclip } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -163,6 +164,7 @@ export function TaskInputEditor({
               <Paperclip size={16} weight="bold" />
             </IconButton>
           </Tooltip>
+          <FrameworkSelector disabled={isCreatingTask} />
           <ModelSelector disabled={isCreatingTask} />
         </Flex>
 
