@@ -56,7 +56,6 @@ export function ConversationView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
-  const lastTurnComplete = lastTurn?.isComplete ?? true;
 
   // Scroll to bottom on initial mount
   const hasScrolledRef = useRef(false);
@@ -89,7 +88,7 @@ export function ConversationView({
         )}
       </div>
       <SessionFooter
-        isPromptPending={isPromptPending || !lastTurnComplete}
+        isPromptPending={isPromptPending}
         lastGenerationDuration={
           lastTurn?.isComplete ? lastTurn.durationMs : null
         }
