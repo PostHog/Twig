@@ -111,7 +111,12 @@ export const TaskInputEditor = forwardRef<
             overflow: "visible",
             zIndex: 1,
           }}
-          onClick={() => focus()}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest(".ProseMirror")) {
+              focus();
+            }
+          }}
         >
           <Flex
             align="start"
