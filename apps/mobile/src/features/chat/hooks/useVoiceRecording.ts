@@ -1,6 +1,7 @@
 import { Audio } from "expo-av";
 import { File } from "expo-file-system";
 import { useCallback, useRef, useState } from "react";
+import { useAuthStore } from "../../auth";
 
 type RecordingStatus = "idle" | "recording" | "transcribing" | "error";
 
@@ -74,29 +75,36 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
         return null;
       }
 
-      const openaiApiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-      if (!openaiApiKey) {
-        setError("EXPO_PUBLIC_OPENAI_API_KEY not set");
+      const {
+        oauthAccessToken,
+        cloudRegion,
+        projectId,
+        getCloudUrlFromRegion,
+      } = useAuthStore.getState();
+
+      if (!oauthAccessToken || !cloudRegion || !projectId) {
+        setError("Not authenticated");
         setStatus("error");
         return null;
       }
+
+      const cloudUrl = getCloudUrlFromRegion(cloudRegion);
 
       // Create form data with the recording file
       const formData = new FormData();
       formData.append("file", {
         uri,
-        type: "audio/m4a",
+        type: "audio/mp4",
         name: "recording.m4a",
       } as unknown as Blob);
-      formData.append("model", "gpt-4o-transcribe");
 
-      // Call OpenAI transcription API
+      // Call PostHog LLM Gateway transcription API
       const response = await fetch(
-        "https://api.openai.com/v1/audio/transcriptions",
+        `${cloudUrl}/api/projects/${projectId}/llm_gateway/v1/audio/transcriptions`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${openaiApiKey}`,
+            Authorization: `Bearer ${oauthAccessToken}`,
           },
           body: formData,
         },
