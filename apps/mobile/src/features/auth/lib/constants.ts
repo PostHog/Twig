@@ -1,7 +1,7 @@
 import type { CloudRegion } from "../types";
 
 export const POSTHOG_US_CLIENT_ID = "a5TY7w9IjFYfes6dkPgZe6envclWw3bm2UD8ZTlm";
-export const POSTHOG_EU_CLIENT_ID = "AIvijgMS0dxKEmr5z6odvRd8Pkh5vts3nPTzgzU9"; // TODO: Update this
+export const POSTHOG_EU_CLIENT_ID = "1A7vO138Fh5sYmJislicN4F5HnttI6urmFttxPDU";
 export const POSTHOG_DEV_CLIENT_ID = "DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ";
 
 export const OAUTH_SCOPES = [
