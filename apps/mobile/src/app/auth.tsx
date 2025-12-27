@@ -1,20 +1,27 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type CloudRegion, useAuthStore } from "../features/auth";
 
-const REGIONS: { value: CloudRegion; label: string }[] = [
+type RegionOption = { value: CloudRegion; label: string };
+
+const PRODUCTION_REGIONS: RegionOption[] = [
   { value: "us", label: "US Cloud" },
   { value: "eu", label: "EU Cloud" },
 ];
 
-// Add dev region in development
-if (__DEV__) {
-  REGIONS.push({ value: "dev", label: "Development" });
-}
+const DEV_REGIONS: RegionOption[] = [
+  ...PRODUCTION_REGIONS,
+  { value: "dev", label: "Development" },
+];
 
 export default function AuthScreen() {
+  // Only show dev region in development builds
+  const regions = useMemo<RegionOption[]>(
+    () => (__DEV__ ? DEV_REGIONS : PRODUCTION_REGIONS),
+    [],
+  );
   const [selectedRegion, setSelectedRegion] = useState<CloudRegion>("us");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +73,7 @@ export default function AuthScreen() {
 
           {/* Region Picker */}
           <View className="mb-4 flex-row gap-3">
-            {REGIONS.map((region) => (
+            {regions.map((region) => (
               <TouchableOpacity
                 key={region.value}
                 className={`flex-1 items-center rounded-lg border px-4 py-3 ${
