@@ -29,10 +29,6 @@ export async function exchangeCodeForToken(
   const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
   const redirectUri = getRedirectUri();
 
-  console.log("[OAuth Token Exchange] URL:", `${cloudUrl}/oauth/token`);
-  console.log("[OAuth Token Exchange] Redirect URI:", redirectUri);
-  console.log("[OAuth Token Exchange] Code:", code);
-
   const response = await fetch(`${cloudUrl}/oauth/token`, {
     method: "POST",
     headers: {
@@ -95,9 +91,6 @@ export async function performOAuthFlow(
     const redirectUri = getRedirectUri();
     const clientId = getOauthClientIdFromRegion(config.cloudRegion);
 
-    console.log("[OAuth] Redirect URI:", redirectUri);
-    console.log("[OAuth] Client ID:", clientId);
-
     const discovery: AuthSession.DiscoveryDocument = {
       authorizationEndpoint: getAuthorizationEndpoint(config.cloudRegion),
       tokenEndpoint: getTokenEndpoint(config.cloudRegion),
@@ -116,8 +109,6 @@ export async function performOAuthFlow(
 
     // promptAsync will load the request internally and generate PKCE
     const authResult = await authRequest.promptAsync(discovery);
-
-    console.log("[OAuth] Code Verifier:", authRequest.codeVerifier);
 
     if (authResult.type === "cancel" || authResult.type === "dismiss") {
       return {
