@@ -212,6 +212,10 @@ function createWindow(): void {
             ]
           : []),
         { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
         {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
@@ -278,6 +282,15 @@ function createWindow(): void {
             container.get<UIService>(MAIN_TOKENS.UIService).resetLayout();
           },
         },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { type: "separator" },
+        { role: "front" },
       ],
     },
   ];
