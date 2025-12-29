@@ -121,6 +121,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.3.1",
     "detect-libc": "^1.0.3",
+    "dotenv": "^17.2.3",
     "electron-log": "^5.4.3",
     "electron-store": "^11.0.0",
     "file-icon": "^6.0.0",

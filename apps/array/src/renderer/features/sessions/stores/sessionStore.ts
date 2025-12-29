@@ -39,6 +39,7 @@ export interface AgentSession {
   logUrl?: string;
   processedLineCount?: number;
   model?: string;
+  framework?: "claude" | "codex";
 }
 
 interface SessionState {
@@ -267,6 +268,7 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
+  framework?: "claude" | "codex",
 ): AgentSession {
   return {
     taskRunId,
@@ -277,6 +279,7 @@ function createBaseSession(
     status: "connecting",
     isPromptPending: false,
     isCloud,
+    framework,
   };
 }
 
@@ -471,7 +474,7 @@ const useStore = create<SessionStore>()(
         return;
       }
 
-      const defaultModel = useSettingsStore.getState().defaultModel;
+      const { defaultModel, defaultFramework } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -480,9 +483,15 @@ const useStore = create<SessionStore>()(
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         model: defaultModel,
+        framework: defaultFramework,
       });
 
-      const session = createBaseSession(taskRun.id, taskId, false);
+      const session = createBaseSession(
+        taskRun.id,
+        taskId,
+        false,
+        defaultFramework,
+      );
       session.channel = result.channel;
       session.status = "connected";
       session.model = defaultModel;

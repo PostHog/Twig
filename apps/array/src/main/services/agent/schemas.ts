@@ -9,6 +9,10 @@ export const credentialsSchema = z.object({
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 
+// Agent framework schema
+export const agentFrameworkSchema = z.enum(["claude", "codex"]);
+export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
+
 // Session config schema
 export const sessionConfigSchema = z.object({
   taskId: z.string(),
@@ -18,11 +22,13 @@ export const sessionConfigSchema = z.object({
   logUrl: z.string().optional(),
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
+  framework: agentFrameworkSchema.optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
 
 // Start session input/output
+
 export const startSessionInput = z.object({
   taskId: z.string(),
   taskRunId: z.string(),
@@ -33,6 +39,7 @@ export const startSessionInput = z.object({
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
+  framework: agentFrameworkSchema.optional().default("claude"),
   executionMode: z.enum(["plan"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),

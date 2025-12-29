@@ -129,6 +129,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
+  framework?: "claude" | "codex";
 }
 
 interface ManagedSession {
@@ -230,6 +231,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl,
       sdkSessionId,
       model,
+      framework,
     } = config;
 
     if (!isRetry) {
@@ -255,6 +257,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     try {
       const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
         skipGitBranch: true,
+        framework,
       });
 
       const connection = this.createClientConnection(
@@ -457,7 +460,15 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     process.env.ANTHROPIC_API_KEY = token;
     process.env.ANTHROPIC_AUTH_TOKEN = token;
 
-    process.env.ANTHROPIC_BASE_URL = getLlmGatewayUrl(credentials.apiHost);
+    const llmGatewayUrl = getLlmGatewayUrl(credentials.apiHost);
+    process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
+
+    const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
+      ? llmGatewayUrl
+      : `${llmGatewayUrl}/v1`;
+    process.env.OPENAI_BASE_URL = openaiBaseUrl;
+    process.env.OPENAI_API_KEY = token;
+    process.env.LLM_GATEWAY_URL = llmGatewayUrl;
 
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
@@ -599,6 +610,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl: "logUrl" in params ? params.logUrl : undefined,
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
+      framework: "framework" in params ? params.framework : "claude",
     };
   }
 

@@ -1,5 +1,9 @@
 import type { WorkspaceMode } from "@shared/types";
-import { DEFAULT_MODEL } from "@shared/types/models";
+import {
+  type AgentFramework,
+  DEFAULT_FRAMEWORK,
+  DEFAULT_MODEL,
+} from "@shared/types/models";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -14,6 +18,7 @@ interface SettingsStore {
   lastUsedWorkspaceMode: WorkspaceMode;
   createPR: boolean;
   defaultModel: string;
+  defaultFramework: AgentFramework;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -22,6 +27,7 @@ interface SettingsStore {
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
   setCreatePR: (createPR: boolean) => void;
   setDefaultModel: (model: string) => void;
+  setDefaultFramework: (framework: AgentFramework) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -34,6 +40,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedWorkspaceMode: "worktree",
       createPR: true,
       defaultModel: DEFAULT_MODEL,
+      defaultFramework: DEFAULT_FRAMEWORK,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -43,6 +50,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
       setCreatePR: (createPR) => set({ createPR }),
       setDefaultModel: (model) => set({ defaultModel: model }),
+      setDefaultFramework: (framework) => set({ defaultFramework: framework }),
     }),
     {
       name: "settings-storage",

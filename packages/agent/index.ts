@@ -14,9 +14,10 @@ export type {
 export { POSTHOG_NOTIFICATIONS } from "./src/acp-extensions.js";
 export type {
   AcpConnectionConfig,
+  AgentFramework,
   InProcessAcpConnection,
-} from "./src/adapters/claude/claude.js";
-export { createAcpConnection } from "./src/adapters/claude/claude.js";
+} from "./src/adapters/connection.js";
+export { createAcpConnection } from "./src/adapters/connection.js";
 export { Agent } from "./src/agent.js";
 export type {
   AgentEvent,

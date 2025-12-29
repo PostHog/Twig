@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   type Agent,
-  AgentSideConnection,
+  type AgentSideConnection,
   type AuthenticateRequest,
   type AvailableCommand,
   type CancelNotification,
@@ -21,7 +21,6 @@ import {
   type LoadSessionResponse,
   type NewSessionRequest,
   type NewSessionResponse,
-  ndJsonStream,
   type PromptRequest,
   type PromptResponse,
   type ReadTextFileRequest,
@@ -58,7 +57,6 @@ import type {
   SessionStore,
 } from "@/session-store.js";
 import { Logger } from "@/utils/logger.js";
-import { createTappedWritableStream } from "@/utils/tapped-stream.js";
 import packageJson from "../../../package.json" with { type: "json" };
 import { createMcpServer, EDIT_TOOL_NAMES, toolNames } from "./mcp-server.js";
 import {
@@ -69,12 +67,7 @@ import {
   toolInfoFromToolUse,
   toolUpdateFromToolResult,
 } from "./tools.js";
-import {
-  createBidirectionalStreams,
-  Pushable,
-  type StreamPair,
-  unreachable,
-} from "./utils.js";
+import { Pushable, unreachable } from "./utils.js";
 
 /**
  * Clears the statsig cache to work around a claude-agent-sdk bug where cached
@@ -1469,75 +1462,7 @@ export function streamEventToAcpNotifications(
   }
 }
 
-export type AcpConnectionConfig = {
-  sessionStore?: SessionStore;
-  sessionId?: string;
-  taskId?: string;
-};
-
-export type InProcessAcpConnection = {
-  agentConnection: AgentSideConnection;
-  clientStreams: StreamPair;
-};
-
-export function createAcpConnection(
-  config: AcpConnectionConfig = {},
-): InProcessAcpConnection {
-  const logger = new Logger({ debug: true, prefix: "[AcpConnection]" });
-  const streams = createBidirectionalStreams();
-
-  const { sessionStore } = config;
-
-  // Tap both streams for automatic persistence
-  // All messages (bidirectional) will be persisted as they flow through
-  let agentWritable = streams.agent.writable;
-  let clientWritable = streams.client.writable;
-
-  if (config.sessionId && sessionStore) {
-    // Register session for persistence BEFORE tapping streams
-    // This ensures all messages from the start get persisted
-    if (!sessionStore.isRegistered(config.sessionId)) {
-      sessionStore.register(config.sessionId, {
-        taskId: config.taskId ?? config.sessionId,
-        runId: config.sessionId,
-        logUrl: "", // Will be updated when we get the real logUrl
-      });
-    }
-
-    // Tap agent→client stream
-    agentWritable = createTappedWritableStream(streams.agent.writable, {
-      onMessage: (line) => {
-        sessionStore.appendRawLine(config.sessionId!, line);
-      },
-      logger,
-    });
-
-    // Tap client→agent stream
-    clientWritable = createTappedWritableStream(streams.client.writable, {
-      onMessage: (line) => {
-        sessionStore.appendRawLine(config.sessionId!, line);
-      },
-      logger,
-    });
-  } else {
-    logger.info("Tapped streams NOT enabled", {
-      hasSessionId: !!config.sessionId,
-      hasSessionStore: !!sessionStore,
-    });
-  }
-
-  const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
-
-  const agentConnection = new AgentSideConnection(
-    (client) => new ClaudeAcpAgent(client, sessionStore),
-    agentStream,
-  );
-
-  return {
-    agentConnection,
-    clientStreams: {
-      readable: streams.client.readable,
-      writable: clientWritable,
-    },
-  };
-}
+// Note: createAcpConnection has been moved to ../connection.ts
+// to support multiple agent frameworks (Claude, Codex).
+// Import from there instead:
+// import { createAcpConnection } from "../connection.js";
