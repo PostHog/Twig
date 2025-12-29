@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { logger } from "../../../lib/logger";
 import { appendTaskRunLog, fetchS3Logs, runTaskInCloud } from "../api";
 import type {
   SessionEvent,
@@ -51,13 +52,13 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
     const taskDescription = task.description;
 
     if (connectAttempts.has(taskId)) {
-      console.log("Connection already in progress", { taskId });
+      logger.debug("Connection already in progress", { taskId });
       return;
     }
 
     const existing = get().getSessionForTask(taskId);
     if (existing && existing.status === "connected") {
-      console.log("Already connected to task", { taskId });
+      logger.debug("Already connected to task", { taskId });
       return;
     }
 
@@ -65,14 +66,13 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
 
     try {
       if (!latestRunId || !latestRunLogUrl) {
-        console.log("Task has no run yet, starting cloud run", { taskId });
-
+        logger.debug("Task has no run yet, starting cloud run", { taskId });
         const updatedTask = await runTaskInCloud(taskId);
         const newRunId = updatedTask.latest_run?.id;
         const newLogUrl = updatedTask.latest_run?.log_url;
 
         if (!newRunId || !newLogUrl) {
-          console.error("Failed to start cloud run");
+          logger.error("Failed to start cloud run");
           return;
         }
 
@@ -105,23 +105,20 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
         }));
 
         get()._startCloudPolling(newRunId, newLogUrl);
-        console.log("Started new cloud session", {
+        logger.debug("Started new cloud session", {
           taskId,
           taskRunId: newRunId,
         });
         return;
       }
 
-      console.log("Fetching cloud session history from S3", {
+      logger.debug("Fetching cloud session history from S3", {
         taskId,
         latestRunId,
-        logUrl: latestRunLogUrl,
       });
-
       const content = await fetchS3Logs(latestRunLogUrl);
       const { notifications, rawEntries } = parseSessionLogs(content);
-
-      console.log("Loaded cloud historical logs", {
+      logger.debug("Loaded cloud historical logs", {
         notifications: notifications.length,
         rawEntries: rawEntries.length,
       });
@@ -164,9 +161,9 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
       }));
 
       get()._startCloudPolling(latestRunId, latestRunLogUrl);
-      console.log("Connected to cloud session", { taskId, latestRunId });
+      logger.debug("Connected to cloud session", { taskId, latestRunId });
     } catch (error) {
-      console.error("Failed to connect to task", error);
+      logger.error("Failed to connect to task", error);
     } finally {
       connectAttempts.delete(taskId);
     }
@@ -182,8 +179,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
       const { [session.taskRunId]: _, ...rest } = state.sessions;
       return { sessions: rest };
     });
-
-    console.log("Disconnected from task", { taskId });
+    logger.debug("Disconnected from task", { taskId });
   },
 
   sendPrompt: async (taskId: string, prompt: string) => {
@@ -208,7 +204,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
     };
 
     await appendTaskRunLog(taskId, session.taskRunId, [notification]);
-    console.log("Sent cloud message via S3", {
+    logger.debug("Sent cloud message via S3", {
       taskId,
       runId: session.taskRunId,
     });
@@ -252,7 +248,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
 
     try {
       await appendTaskRunLog(taskId, session.taskRunId, [cancelNotification]);
-      console.log("Sent cancel request via S3", {
+      logger.debug("Sent cancel request via S3", {
         taskId,
         runId: session.taskRunId,
       });
@@ -268,7 +264,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
       }));
       return true;
     } catch (error) {
-      console.error("Failed to send cancel request", error);
+      logger.error("Failed to send cancel request", error);
       return false;
     }
   },
@@ -296,8 +292,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
 
   _startCloudPolling: (taskRunId: string, logUrl: string) => {
     if (cloudPollers.has(taskRunId)) return;
-
-    console.log("Starting cloud S3 polling", { taskRunId });
+    logger.debug("Starting cloud S3 polling", { taskRunId });
 
     const pollS3 = async () => {
       try {
@@ -389,7 +384,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
           }));
         }
       } catch (err) {
-        console.warn("Cloud polling error", { error: err });
+        logger.warn("Cloud polling error", { error: err });
       }
     };
 
@@ -403,7 +398,7 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
     if (interval) {
       clearInterval(interval);
       cloudPollers.delete(taskRunId);
-      console.log("Stopped cloud S3 polling", { taskRunId });
+      logger.debug("Stopped cloud S3 polling", { taskRunId });
     }
   },
 }));

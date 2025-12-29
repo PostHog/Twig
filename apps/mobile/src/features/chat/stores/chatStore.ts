@@ -1,5 +1,6 @@
 import { fetch } from "expo/fetch";
 import { create } from "zustand";
+import { logger } from "../../../lib/logger";
 import { useAuthStore } from "../../auth";
 import {
   AssistantEventType,
@@ -72,7 +73,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       !authState.cloudRegion ||
       !authState.projectId
     ) {
-      console.error("Not authenticated");
+      logger.error("Not authenticated");
       return;
     }
 
@@ -121,7 +122,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
 
       if (!response.ok) {
-        console.log(await response.text());
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -165,10 +165,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (error) {
       if ((error as Error).name === "AbortError") {
-        // Request was cancelled, don't show error
-        console.log("Request cancelled");
+        logger.debug("Request cancelled");
       } else {
-        console.error("Stream error:", error);
+        logger.error("Stream error:", error);
         const currentThread = get().thread;
         const lastMessage = currentThread[currentThread.length - 1];
 
@@ -247,7 +246,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       !authState.cloudRegion ||
       !authState.projectId
     ) {
-      console.error("Not authenticated");
+      logger.error("Not authenticated");
       return;
     }
 
@@ -299,7 +298,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         thread,
       });
     } catch (error) {
-      console.error("Failed to load conversation:", error);
+      logger.error("Failed to load conversation:", error);
       throw error;
     } finally {
       set({ conversationLoading: false });
