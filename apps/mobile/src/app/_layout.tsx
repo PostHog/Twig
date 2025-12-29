@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useAuthStore } from "../features/auth";
+import { useAuthStore } from "@/features/auth";
 
 const queryClient = new QueryClient();
 

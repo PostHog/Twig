@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useAuthStore } from "../../features/auth";
+import { useAuthStore } from "@/features/auth";
 
 export default function SettingsScreen() {
   const { logout, cloudRegion } = useAuthStore();

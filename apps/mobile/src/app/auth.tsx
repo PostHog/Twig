@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { type CloudRegion, useAuthStore } from "../features/auth";
+import { type CloudRegion, useAuthStore } from "@/features/auth";
 
 type RegionOption = { value: CloudRegion; label: string };
 

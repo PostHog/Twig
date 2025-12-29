@@ -1,5 +1,5 @@
 import { fetch } from "expo/fetch";
-import { useAuthStore } from "../auth";
+import { useAuthStore } from "@/features/auth";
 import type { ConversationDetail } from "./types";
 
 function getAuthHeaders(): { Authorization: string; "Content-Type": string } {

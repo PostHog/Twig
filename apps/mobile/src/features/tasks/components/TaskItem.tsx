@@ -1,7 +1,7 @@
+import { Text } from "@components/text";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { memo } from "react";
 import { Pressable, View } from "react-native";
-import { Text } from "../../../components/text";
 import type { Task } from "../types";
 
 interface TaskItemProps {

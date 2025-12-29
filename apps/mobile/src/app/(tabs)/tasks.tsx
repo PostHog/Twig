@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Text } from "../../components/text";
-import { TaskList } from "../../features/tasks";
+import { Text } from "@components/text";
+import { TaskList } from "@/features/tasks";
 
 export default function TasksScreen() {
   const router = useRouter();

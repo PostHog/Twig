@@ -1,7 +1,7 @@
 import { fetch } from "expo/fetch";
 import { create } from "zustand";
-import { logger } from "../../../lib/logger";
-import { useAuthStore } from "../../auth";
+import { useAuthStore } from "@/features/auth";
+import { logger } from "@/lib/logger";
 import {
   AssistantEventType,
   type AssistantGenerationStatusEvent,

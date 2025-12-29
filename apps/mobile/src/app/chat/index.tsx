@@ -8,7 +8,7 @@ import {
   MessagesList,
   useChatStore,
   useGradualAnimation,
-} from "../../features/chat";
+} from "@/features/chat";
 
 export default function NewChatScreen() {
   const insets = useSafeAreaInsets();

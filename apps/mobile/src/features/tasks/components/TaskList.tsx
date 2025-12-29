@@ -1,3 +1,4 @@
+import { Text } from "@components/text";
 import {
   ActivityIndicator,
   FlatList,
@@ -5,7 +6,6 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { Text } from "../../../components/text";
 import { useTasks } from "../hooks/useTasks";
 import type { Task } from "../types";
 import { TaskItem } from "./TaskItem";

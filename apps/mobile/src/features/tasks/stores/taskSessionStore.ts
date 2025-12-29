@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { logger } from "../../../lib/logger";
+import { logger } from "@/lib/logger";
 import { appendTaskRunLog, fetchS3Logs, runTaskInCloud } from "../api";
 import type {
   SessionEvent,

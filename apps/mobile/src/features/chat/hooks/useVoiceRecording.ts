@@ -1,7 +1,7 @@
 import { Audio } from "expo-av";
 import { File } from "expo-file-system";
 import { useCallback, useRef, useState } from "react";
-import { useAuthStore } from "../../auth";
+import { useAuthStore } from "@/features/auth";
 
 type RecordingStatus = "idle" | "recording" | "transcribing" | "error";
 

@@ -14,7 +14,7 @@ import {
   MessagesList,
   useChatStore,
   useGradualAnimation,
-} from "../../features/chat";
+} from "@/features/chat";
 
 export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

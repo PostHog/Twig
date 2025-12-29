@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { useAuthStore } from "../../auth";
+import { useAuthStore } from "@/features/auth";
 import type {
   ArtifactMessage,
   MessageStatus,

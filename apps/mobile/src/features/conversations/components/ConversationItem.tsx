@@ -1,7 +1,7 @@
+import { Text } from "@components/text";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { memo } from "react";
 import { Pressable, View } from "react-native";
-import { Text } from "../../../components/text";
 import {
   AssistantMessageType,
   type ConversationDetail,
@@ -113,5 +113,3 @@ function ConversationItemComponent({
 }
 
 export const ConversationItem = memo(ConversationItemComponent);
-
-

@@ -7,13 +7,13 @@ import {
   Pressable,
   View,
 } from "react-native";
-import { Text } from "../../components/text";
+import { Text } from "@components/text";
 import {
   getTask,
   TaskSessionView,
   useTaskSessionStore,
   type Task,
-} from "../../features/tasks";
+} from "@/features/tasks";
 
 export default function TaskDetailScreen() {
   const { id: taskId } = useLocalSearchParams<{ id: string }>();

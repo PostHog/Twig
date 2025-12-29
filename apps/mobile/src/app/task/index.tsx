@@ -7,14 +7,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Text } from "../../components/text";
+import { Text } from "@components/text";
 import {
   createTask,
   getGithubRepositories,
   getIntegrations,
   runTaskInCloud,
   type Integration,
-} from "../../features/tasks";
+} from "@/features/tasks";
 
 export default function NewTaskScreen() {
   const router = useRouter();

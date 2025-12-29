@@ -6,7 +6,7 @@ import {
   HumanMessage,
   ToolMessage,
   type ToolStatus,
-} from "../../chat";
+} from "@/features/chat";
 import type { SessionEvent, SessionNotification } from "../types";
 
 interface TaskSessionViewProps {

@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Text } from "../../components/text";
+import { Text } from "@components/text";
 import {
   type ConversationDetail,
   ConversationList,
-} from "../../features/conversations";
+} from "@/features/conversations";
 
 export default function ConversationsScreen() {
   const router = useRouter();

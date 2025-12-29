@@ -1,3 +1,4 @@
+import { Text } from "@components/text";
 import {
   ActivityIndicator,
   FlatList,
@@ -5,7 +6,6 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { Text } from "../../../components/text";
 import { useConversations } from "../hooks/useConversations";
 import type { ConversationDetail } from "../types";
 import { ConversationItem } from "./ConversationItem";
@@ -82,5 +82,3 @@ export function ConversationList({
     />
   );
 }
-
-
