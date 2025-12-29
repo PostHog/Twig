@@ -11,7 +11,6 @@ export { useTasks } from "./hooks/useTasks";
 // Stores
 export {
   type TaskSession,
-  useAgentSessionStore,
   useTaskSessionStore,
 } from "./stores/taskSessionStore";
 export { useTaskStore } from "./stores/taskStore";

@@ -19,7 +19,7 @@ export { useGradualAnimation } from "./hooks/useGradualAnimation";
 export { useVoiceRecording } from "./hooks/useVoiceRecording";
 
 // Store
-export { useChatStore, useMaxStore } from "./stores/chatStore";
+export { useChatStore } from "./stores/chatStore";
 
 // Types
 export * from "./types";

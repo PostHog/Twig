@@ -402,6 +402,3 @@ export const useTaskSessionStore = create<TaskSessionStore>((set, get) => ({
     }
   },
 }));
-
-// Backwards compatibility alias
-export const useAgentSessionStore = useTaskSessionStore;

@@ -1,4 +1,5 @@
 import { fetch } from "expo/fetch";
+import * as Crypto from "expo-crypto";
 import { create } from "zustand";
 import { useAuthStore } from "@/features/auth";
 import { logger } from "@/lib/logger";
@@ -43,17 +44,9 @@ interface ChatState {
   loadConversation: (conversationId: string) => Promise<void>;
 }
 
-function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
 export const useChatStore = create<ChatState>((set, get) => ({
   conversation: {
-    id: generateUUID(),
+    id: Crypto.randomUUID(),
     title: "New chat",
     status: ConversationStatus.Idle,
     created_at: new Date().toISOString(),
@@ -97,11 +90,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const cloudUrl = authState.getCloudUrlFromRegion(authState.cloudRegion);
-      const traceId = generateUUID();
+      const traceId = Crypto.randomUUID();
 
       // Include conversation ID - prefer explicit param over store state, fallback to new UUID
       const effectiveConversationId =
-        conversationId ?? get().conversation?.id ?? generateUUID();
+        conversationId ?? get().conversation?.id ?? Crypto.randomUUID();
 
       const requestBody: Record<string, unknown> = {
         content: prompt,
@@ -175,14 +168,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({
             thread: [
               ...currentThread.slice(0, -1),
-              { ...FAILURE_MESSAGE, id: generateUUID() },
+              { ...FAILURE_MESSAGE, id: Crypto.randomUUID() },
             ],
           });
         } else {
           set({
             thread: [
               ...currentThread,
-              { ...FAILURE_MESSAGE, id: generateUUID() },
+              { ...FAILURE_MESSAGE, id: Crypto.randomUUID() },
             ],
           });
         }
@@ -223,7 +216,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     get().stopGeneration();
     set({
       conversation: {
-        id: generateUUID(),
+        id: Crypto.randomUUID(),
         title: "New chat",
         status: ConversationStatus.Idle,
         created_at: new Date().toISOString(),
@@ -467,6 +460,3 @@ async function processSSEEvent(
     }
   }
 }
-
-// For backwards compatibility, also export as useMaxStore
-export const useMaxStore = useChatStore;

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { logger } from "@/lib/logger";
 import {
   getCloudUrlFromRegion,
   OAUTH_SCOPES,
@@ -150,14 +151,14 @@ export const useAuthStore = create<AuthState>()(
             get()
               .refreshAccessToken()
               .catch((error) => {
-                console.error("Proactive token refresh failed:", error);
+                logger.error("Proactive token refresh failed:", error);
               });
           }, timeUntilRefresh);
         } else {
           get()
             .refreshAccessToken()
             .catch((error) => {
-              console.error("Immediate token refresh failed:", error);
+              logger.error("Immediate token refresh failed:", error);
             });
         }
       },
@@ -188,7 +189,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               await get().refreshAccessToken();
             } catch (error) {
-              console.error("Failed to refresh expired token:", error);
+              logger.error("Failed to refresh expired token:", error);
               await deleteTokens();
               set({ isLoading: false, isAuthenticated: false });
               return false;
@@ -199,7 +200,7 @@ export const useAuthStore = create<AuthState>()(
           get().scheduleTokenRefresh();
           return true;
         } catch (error) {
-          console.error("Failed to initialize auth:", error);
+          logger.error("Failed to initialize auth:", error);
           set({ isLoading: false, isAuthenticated: false });
           return false;
         }
