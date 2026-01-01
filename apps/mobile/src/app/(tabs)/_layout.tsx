@@ -1,23 +1,26 @@
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { DynamicColorIOS, Platform } from "react-native";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export default function TabsLayout() {
+  const themeColors = useThemeColors();
+
   // Dynamic colors for liquid glass effect on iOS
   const dynamicTextColor =
     Platform.OS === "ios"
       ? DynamicColorIOS({
-          dark: "white",
-          light: "black",
+          dark: themeColors.gray[12],
+          light: themeColors.gray[12],
         })
-      : "white";
+      : themeColors.gray[12];
 
   const dynamicTintColor =
     Platform.OS === "ios"
       ? DynamicColorIOS({
-          dark: "#f97316", // orange-500
-          light: "#ea580c", // orange-600
+          dark: themeColors.accent[9],
+          light: themeColors.accent[9],
         })
-      : "#f97316";
+      : themeColors.accent[9];
 
   return (
     <NativeTabs

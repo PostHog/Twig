@@ -15,10 +15,10 @@ interface ConversationItemProps {
 }
 
 const statusColorMap: Record<string, { bg: string; text: string }> = {
-  [ConversationStatus.Idle]: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  [ConversationStatus.Idle]: { bg: "bg-gray-5/20", text: "text-gray-9" },
   [ConversationStatus.InProgress]: {
-    bg: "bg-blue-500/20",
-    text: "text-blue-400",
+    bg: "bg-status-info/20",
+    text: "text-status-info",
   },
 };
 
@@ -58,12 +58,12 @@ function ConversationItemComponent({
   return (
     <Pressable
       onPress={() => onPress(conversation)}
-      className="border-dark-border border-b px-3 py-3 active:bg-dark-surface"
+      className="border-gray-6 border-b px-3 py-3 active:bg-gray-3"
     >
       <View className="flex-row items-center gap-2">
         {/* Type badge */}
-        <View className="rounded bg-purple-500/20 px-1.5 py-0.5">
-          <Text className="text-purple-400 text-xs">
+        <View className="rounded bg-accent-3 px-1.5 py-0.5">
+          <Text className="text-accent-11 text-xs">
             {typeDisplayMap[conversation.type] || conversation.type}
           </Text>
         </View>
@@ -76,14 +76,14 @@ function ConversationItemComponent({
         )}
 
         {/* Message count */}
-        <Text className="text-gray-500 text-xs">
+        <Text className="text-gray-9 text-xs">
           {messageCount} {messageCount === 1 ? "message" : "messages"}
         </Text>
       </View>
 
       {/* Title */}
       <Text
-        className="mt-1 font-medium text-sm text-white"
+        className="mt-1 font-medium text-gray-12 text-sm"
         numberOfLines={1}
         ellipsizeMode="tail"
       >
@@ -92,7 +92,7 @@ function ConversationItemComponent({
 
       {/* Preview */}
       <Text
-        className="mt-0.5 text-gray-400 text-xs"
+        className="mt-0.5 text-gray-11 text-xs"
         numberOfLines={2}
         ellipsizeMode="tail"
       >
@@ -101,12 +101,10 @@ function ConversationItemComponent({
 
       {/* Bottom row: agent mode + time */}
       <View className="mt-1.5 flex-row items-center justify-between">
-        <Text className="text-gray-500 text-xs">
+        <Text className="text-gray-9 text-xs">
           {conversation.agent_mode || "General"}
         </Text>
-        <Text className="flex-shrink-0 text-gray-600 text-xs">
-          {timeDisplay}
-        </Text>
+        <Text className="flex-shrink-0 text-gray-8 text-xs">{timeDisplay}</Text>
       </View>
     </Pressable>
   );

@@ -7,6 +7,7 @@ import {
   ToolMessage,
   type ToolStatus,
 } from "@/features/chat";
+import { useThemeColors } from "@/lib/useThemeColors";
 import type { SessionEvent, SessionNotification } from "../types";
 
 interface TaskSessionViewProps {
@@ -168,6 +169,7 @@ export function TaskSessionView({
   onOpenTask,
 }: TaskSessionViewProps) {
   const messages = useMemo(() => processEvents(events), [events]);
+  const themeColors = useThemeColors();
 
   const renderMessage = useCallback(
     ({ item }: { item: ParsedMessage }) => {
@@ -175,7 +177,9 @@ export function TaskSessionView({
         case "user":
           return <HumanMessage content={item.content} />;
         case "agent":
-          return <AgentMessage content={item.content} onOpenTask={onOpenTask} />;
+          return (
+            <AgentMessage content={item.content} onOpenTask={onOpenTask} />
+          );
         case "tool":
           return item.toolData ? (
             <ToolMessage
@@ -207,8 +211,8 @@ export function TaskSessionView({
         ListHeaderComponent={
           isPromptPending ? (
             <View className="mb-2 flex-row items-center gap-2">
-              <ActivityIndicator size="small" color="#f1a82c" />
-              <Text className="font-mono text-[13px] text-neutral-400 italic">
+              <ActivityIndicator size="small" color={themeColors.accent[9]} />
+              <Text className="font-mono text-[13px] text-gray-11 italic">
                 Thinking...
               </Text>
             </View>
@@ -220,4 +224,3 @@ export function TaskSessionView({
     </View>
   );
 }
-

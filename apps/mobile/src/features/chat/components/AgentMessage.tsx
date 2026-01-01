@@ -38,11 +38,11 @@ export function AgentMessage({
       {(content || isLoading) && (
         <View className="max-w-[95%] px-4 py-1">
           {isLoading && !content ? (
-            <Text className="font-mono text-[13px] text-neutral-400 italic">
+            <Text className="font-mono text-[13px] text-gray-11 italic">
               {thinkingText || "Generating..."}
             </Text>
           ) : (
-            <Text className="font-mono text-[13px] text-neutral-200 leading-5">
+            <Text className="font-mono text-[13px] text-gray-12 leading-5">
               {content}
             </Text>
           )}

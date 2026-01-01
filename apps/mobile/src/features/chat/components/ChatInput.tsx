@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useThemeColors } from "@/lib/useThemeColors";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 interface ChatInputProps {
@@ -24,6 +25,7 @@ export function ChatInput({
   placeholder = "Message",
 }: ChatInputProps) {
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const [message, setMessage] = useState("");
   const textFieldRef = useRef<TextFieldRef>(null);
   const { status, startRecording, stopRecording, cancelRecording } =
@@ -118,13 +120,13 @@ export function ChatInput({
 
             {/* Icon */}
             {isTranscribing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={themeColors.gray[12]} />
             ) : canSend ? (
-              <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+              <ArrowUp size={20} color={themeColors.gray[12]} weight="bold" />
             ) : isRecording ? (
-              <Stop size={20} color="#EF4444" weight="fill" />
+              <Stop size={20} color={themeColors.status.error} weight="fill" />
             ) : (
-              <Microphone size={20} color="#FFFFFF" />
+              <Microphone size={20} color={themeColors.gray[12]} />
             )}
           </TouchableOpacity>
         </View>
@@ -132,7 +134,7 @@ export function ChatInput({
     );
   }
 
-  // Android fallback - matching Telegram dark theme
+  // Android fallback
   return (
     <View
       style={{
@@ -143,16 +145,16 @@ export function ChatInput({
     >
       <View className="flex-row items-end gap-2">
         {/* Input field */}
-        <View className="min-h-[36px] flex-1 justify-center rounded-[18px] bg-[#1C1C1E] px-4 py-2">
+        <View className="min-h-[36px] flex-1 justify-center rounded-[18px] bg-gray-3 px-4 py-2">
           <TextInput
             value={message}
             onChangeText={setMessage}
             placeholder={placeholder}
-            placeholderTextColor="#6b6b6b"
+            placeholderTextColor={themeColors.gray[9]}
             editable={!disabled}
             multiline
             numberOfLines={5}
-            className="text-base text-white"
+            className="text-base text-gray-12"
             style={{ maxHeight: 120 }}
           />
         </View>
@@ -162,17 +164,17 @@ export function ChatInput({
           onPress={canSend ? handleSend : handleMicPress}
           onLongPress={handleMicLongPress}
           disabled={isTranscribing || disabled}
-          className={`h-[34px] w-[34px] items-center justify-center rounded-full ${isRecording ? "bg-red-500/20" : "bg-white/10"}`}
+          className={`h-[34px] w-[34px] items-center justify-center rounded-full ${isRecording ? "bg-status-error/20" : "bg-gray-5"}`}
           activeOpacity={0.7}
         >
           {isTranscribing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={themeColors.gray[12]} />
           ) : canSend ? (
-            <ArrowUp size={20} color="#FFFFFF" weight="bold" />
+            <ArrowUp size={20} color={themeColors.gray[12]} weight="bold" />
           ) : isRecording ? (
-            <Stop size={20} color="#EF4444" weight="fill" />
+            <Stop size={20} color={themeColors.status.error} weight="fill" />
           ) : (
-            <Microphone size={20} color="#FFFFFF" />
+            <Microphone size={20} color={themeColors.gray[12]} />
           )}
         </TouchableOpacity>
       </View>

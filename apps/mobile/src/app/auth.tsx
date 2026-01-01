@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type CloudRegion, useAuthStore } from "@/features/auth";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 type RegionOption = { value: CloudRegion; label: string };
 
@@ -17,6 +18,8 @@ const DEV_REGIONS: RegionOption[] = [
 ];
 
 export default function AuthScreen() {
+  const themeColors = useThemeColors();
+
   // Only show dev region in development builds
   const regions = useMemo<RegionOption[]>(
     () => (__DEV__ ? DEV_REGIONS : PRODUCTION_REGIONS),
@@ -53,21 +56,21 @@ export default function AuthScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-bg">
+    <SafeAreaView className="flex-1 bg-gray-1">
       <View className="flex-1 px-6 pt-16">
         {/* Header */}
         <View className="mb-10">
-          <Text className="mb-2 font-bold text-3xl text-white">
+          <Text className="mb-2 font-bold text-3xl text-gray-12">
             PostHog Mobile
           </Text>
-          <Text className="text-base text-dark-text-muted">
+          <Text className="text-base text-gray-11">
             Sign in with your PostHog account
           </Text>
         </View>
 
         {/* Form */}
         <View className="gap-4">
-          <Text className="mb-2 font-medium text-dark-text-muted text-sm">
+          <Text className="mb-2 font-medium text-gray-11 text-sm">
             PostHog region
           </Text>
 
@@ -78,16 +81,16 @@ export default function AuthScreen() {
                 key={region.value}
                 className={`flex-1 items-center rounded-lg border px-4 py-3 ${
                   selectedRegion === region.value
-                    ? "border-orange-500 bg-orange-500/10"
-                    : "border-dark-border bg-dark-surface"
+                    ? "border-accent-9 bg-accent-3"
+                    : "border-gray-6 bg-gray-3"
                 }`}
                 onPress={() => setSelectedRegion(region.value)}
               >
                 <Text
                   className={`font-medium text-sm ${
                     selectedRegion === region.value
-                      ? "text-orange-500"
-                      : "text-dark-text-muted"
+                      ? "text-accent-11"
+                      : "text-gray-11"
                   }`}
                 >
                   {region.label}
@@ -98,15 +101,15 @@ export default function AuthScreen() {
 
           {/* Error Message */}
           {error && (
-            <View className="rounded-lg border border-red-500 bg-red-500/10 p-3">
-              <Text className="text-red-500 text-sm">{error}</Text>
+            <View className="rounded-lg border border-status-error bg-status-error/10 p-3">
+              <Text className="text-sm text-status-error">{error}</Text>
             </View>
           )}
 
           {/* Loading Message */}
           {isLoading && (
-            <View className="rounded-lg border border-blue-500 bg-blue-500/10 p-3">
-              <Text className="text-blue-500 text-sm">
+            <View className="rounded-lg border border-status-info bg-status-info/10 p-3">
+              <Text className="text-sm text-status-info">
                 Waiting for authorization in your browser...
               </Text>
             </View>
@@ -115,15 +118,15 @@ export default function AuthScreen() {
           {/* Sign In Button */}
           <TouchableOpacity
             className={`mt-2 items-center rounded-lg py-4 ${
-              isLoading ? "bg-gray-600" : "bg-orange-500"
+              isLoading ? "bg-gray-7" : "bg-accent-9"
             }`}
             onPress={handleSignIn}
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={themeColors.gray[12]} />
             ) : (
-              <Text className="font-semibold text-base text-white">
+              <Text className="font-semibold text-accent-contrast text-base">
                 Sign in with PostHog
               </Text>
             )}

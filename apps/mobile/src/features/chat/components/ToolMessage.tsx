@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export type ToolStatus = "pending" | "running" | "completed" | "error";
 export type ToolKind =
@@ -102,6 +103,7 @@ function CreateTaskPreview({
   onOpenTask?: (taskId: string) => void;
 }) {
   const router = useRouter();
+  const themeColors = useThemeColors();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,18 +139,18 @@ function CreateTaskPreview({
   };
 
   return (
-    <View className="mt-2 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-800/50">
+    <View className="mt-2 overflow-hidden rounded-lg border border-gray-7 bg-gray-3">
       {/* Header */}
-      <View className="flex-row items-center gap-2 border-neutral-700 border-b px-3 py-2">
-        <ListChecks size={14} color="#f1a82c" />
-        <Text className="font-mono text-[12px] text-neutral-400">New task</Text>
+      <View className="flex-row items-center gap-2 border-b border-gray-7 px-3 py-2">
+        <ListChecks size={14} color={themeColors.accent[9]} />
+        <Text className="font-mono text-[12px] text-gray-11">New task</Text>
       </View>
 
       {/* Content */}
       <View className="px-3 py-3">
         {/* Title */}
         {args.title && (
-          <Text className="mb-2 font-medium text-[14px] text-white">
+          <Text className="mb-2 font-medium text-[14px] text-gray-12">
             {args.title}
           </Text>
         )}
@@ -156,7 +158,7 @@ function CreateTaskPreview({
         {/* Description */}
         {args.description && (
           <Text
-            className="mb-3 text-[13px] text-neutral-300 leading-5"
+            className="mb-3 text-[13px] text-gray-11 leading-5"
             numberOfLines={4}
           >
             {args.description}
@@ -172,8 +174,8 @@ function CreateTaskPreview({
                 : "flex-row items-center gap-1.5"
             }
           >
-            <GitBranch size={12} color="#6e6e6b" />
-            <Text className="font-mono text-[12px] text-neutral-500">
+            <GitBranch size={12} color={themeColors.gray[9]} />
+            <Text className="font-mono text-[12px] text-gray-9">
               {args.repository}
             </Text>
           </View>
@@ -181,8 +183,8 @@ function CreateTaskPreview({
 
         {/* Error message */}
         {error && (
-          <View className="mb-3 rounded bg-red-900/30 px-2 py-1.5">
-            <Text className="text-[12px] text-red-400">{error}</Text>
+          <View className="mb-3 rounded bg-status-error/20 px-2 py-1.5">
+            <Text className="text-[12px] text-status-error">{error}</Text>
           </View>
         )}
 
@@ -192,16 +194,23 @@ function CreateTaskPreview({
             onPress={handleRunTask}
             disabled={isRunning || !args.description}
             className={`flex-row items-center justify-center gap-2 rounded-lg px-4 py-2.5 ${
-              isRunning ? "bg-orange-500/50" : "bg-orange-500"
+              isRunning ? "bg-accent-9/50" : "bg-accent-9"
             }`}
             activeOpacity={0.7}
           >
             {isRunning ? (
-              <ActivityIndicator size={14} color="#fff" />
+              <ActivityIndicator
+                size={14}
+                color={themeColors.accent.contrast}
+              />
             ) : (
-              <Play size={14} color="#fff" weight="fill" />
+              <Play
+                size={14}
+                color={themeColors.accent.contrast}
+                weight="fill"
+              />
             )}
-            <Text className="font-medium text-[13px] text-white">
+            <Text className="font-medium text-[13px] text-accent-contrast">
               {isRunning ? "Starting..." : "Open this task"}
             </Text>
           </TouchableOpacity>
@@ -220,6 +229,7 @@ export function ToolMessage({
   hasHumanMessageAfter,
   onOpenTask,
 }: ToolMessageProps) {
+  const themeColors = useThemeColors();
   const [isOpen, setIsOpen] = useState(false);
 
   const isLoading = status === "pending" || status === "running";
@@ -237,11 +247,11 @@ export function ToolMessage({
       <View className="px-4 py-1">
         <View className="mb-1 flex-row items-center gap-2">
           {isLoading ? (
-            <ActivityIndicator size={12} color="#6e6e6b" />
+            <ActivityIndicator size={12} color={themeColors.gray[9]} />
           ) : (
-            <ListChecks size={12} color="#f1a82c" />
+            <ListChecks size={12} color={themeColors.accent[9]} />
           )}
-          <Text className="font-mono text-[13px] text-neutral-400">
+          <Text className="font-mono text-[13px] text-gray-11">
             create_task
           </Text>
         </View>
@@ -263,24 +273,19 @@ export function ToolMessage({
       >
         {/* Status indicator */}
         {isLoading ? (
-          <ActivityIndicator size={12} color="#6e6e6b" />
+          <ActivityIndicator size={12} color={themeColors.gray[9]} />
         ) : (
-          <KindIcon size={12} color="#6e6e6b" />
+          <KindIcon size={12} color={themeColors.gray[9]} />
         )}
 
         {/* Tool name */}
-        <Text
-          className="font-mono text-[13px] text-neutral-200"
-          numberOfLines={1}
-        >
+        <Text className="font-mono text-[13px] text-gray-12" numberOfLines={1}>
           {displayTitle}
         </Text>
 
         {/* Failed indicator */}
         {isFailed && (
-          <Text className="font-mono text-[13px] text-neutral-500">
-            (Failed)
-          </Text>
+          <Text className="font-mono text-[13px] text-gray-9">(Failed)</Text>
         )}
       </Pressable>
 
@@ -289,11 +294,11 @@ export function ToolMessage({
         <View className="mt-2 ml-4">
           {args && (
             <View className="mb-2">
-              <Text className="mb-1 font-mono text-[13px] text-neutral-400">
+              <Text className="mb-1 font-mono text-[13px] text-gray-11">
                 Arguments
               </Text>
-              <View className="rounded bg-amber-500/20 p-2">
-                <Text className="font-mono text-[13px] text-amber-100">
+              <View className="rounded bg-accent-3 p-2">
+                <Text className="font-mono text-[13px] text-accent-12">
                   {JSON.stringify(args, null, 2)}
                 </Text>
               </View>
@@ -301,12 +306,12 @@ export function ToolMessage({
           )}
           {result !== undefined && (
             <View>
-              <Text className="mb-1 font-mono text-[13px] text-neutral-400">
+              <Text className="mb-1 font-mono text-[13px] text-gray-11">
                 Result
               </Text>
-              <View className="rounded bg-neutral-800/50 p-2">
+              <View className="rounded bg-gray-3 p-2">
                 <Text
-                  className="font-mono text-[13px] text-neutral-300"
+                  className="font-mono text-[13px] text-gray-11"
                   numberOfLines={10}
                 >
                   {typeof result === "string"

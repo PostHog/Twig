@@ -1,3 +1,4 @@
+import { Text } from "@components/text";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -7,17 +8,18 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Text } from "@components/text";
 import {
   createTask,
   getGithubRepositories,
   getIntegrations,
-  runTaskInCloud,
   type Integration,
+  runTaskInCloud,
 } from "@/features/tasks";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export default function NewTaskScreen() {
   const router = useRouter();
+  const themeColors = useThemeColors();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [repositories, setRepositories] = useState<string[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -76,48 +78,50 @@ export default function NewTaskScreen() {
     }
   }, [prompt, selectedRepo, integrations, router]);
 
+  const canSubmit = prompt.trim() && selectedRepo && !creating;
+
   return (
     <>
       <Stack.Screen
         options={{
           headerShown: true,
-          headerTitle: "New Task",
-          headerStyle: { backgroundColor: "#09090b" },
-          headerTintColor: "#f97316",
+          headerTitle: "New task",
+          headerStyle: { backgroundColor: themeColors.background },
+          headerTintColor: themeColors.accent[9],
           presentation: "modal",
         }}
       />
-      <View className="flex-1 bg-dark px-3 pt-4">
-        <Text className="mb-2 text-gray-500 text-xs">Repository</Text>
+      <View className="flex-1 bg-background px-3 pt-4">
+        <Text className="mb-2 text-gray-9 text-xs">Repository</Text>
         {loadingRepos ? (
-          <View className="mb-4 items-center rounded-lg border border-dark-border p-4">
-            <ActivityIndicator size="small" color="#f97316" />
-            <Text className="mt-2 text-dark-text-muted text-sm">
+          <View className="mb-4 items-center rounded-lg border border-gray-6 p-4">
+            <ActivityIndicator size="small" color={themeColors.accent[9]} />
+            <Text className="mt-2 text-gray-11 text-sm">
               Loading repositories...
             </Text>
           </View>
         ) : repositories.length === 0 ? (
-          <View className="mb-4 rounded-lg border border-dark-border p-4">
-            <Text className="text-center text-dark-text-muted text-sm">
+          <View className="mb-4 rounded-lg border border-gray-6 p-4">
+            <Text className="text-center text-gray-11 text-sm">
               No GitHub integrations found. Please add a GitHub integration in
               PostHog settings.
             </Text>
           </View>
         ) : (
-          <View className="mb-4 max-h-48 rounded-lg border border-dark-border">
+          <View className="mb-4 max-h-48 rounded-lg border border-gray-6">
             <FlatList
               data={repositories}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
                 <Pressable
                   onPress={() => setSelectedRepo(item)}
-                  className={`border-dark-border border-b px-3 py-3 ${
-                    selectedRepo === item ? "bg-amber-500/20" : ""
+                  className={`border-gray-6 border-b px-3 py-3 ${
+                    selectedRepo === item ? "bg-accent-3" : ""
                   }`}
                 >
                   <Text
                     className={`text-sm ${
-                      selectedRepo === item ? "text-amber-400" : "text-gray-400"
+                      selectedRepo === item ? "text-accent-11" : "text-gray-11"
                     }`}
                   >
                     {item}
@@ -128,11 +132,11 @@ export default function NewTaskScreen() {
           </View>
         )}
 
-        <Text className="mb-2 text-gray-500 text-xs">Task description</Text>
+        <Text className="mb-2 text-gray-9 text-xs">Task description</Text>
         <TextInput
-          className="mb-4 min-h-[100px] rounded-lg border border-dark-border px-3 py-3 font-mono text-sm text-white"
+          className="mb-4 min-h-[100px] rounded-lg border border-gray-6 px-3 py-3 font-mono text-gray-12 text-sm"
           placeholder="What would you like the agent to do?"
-          placeholderTextColor="#6b7280"
+          placeholderTextColor={themeColors.gray[9]}
           value={prompt}
           onChangeText={setPrompt}
           multiline
@@ -141,19 +145,18 @@ export default function NewTaskScreen() {
 
         <Pressable
           onPress={handleCreateTask}
-          disabled={!prompt.trim() || !selectedRepo || creating}
-          className={`rounded-lg py-3 ${
-            prompt.trim() && selectedRepo && !creating
-              ? "bg-orange-500"
-              : "bg-dark-surface"
-          }`}
+          disabled={!canSubmit}
+          className={`rounded-lg py-3 ${canSubmit ? "bg-accent-9" : "bg-gray-3"}`}
         >
           {creating ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator
+              size="small"
+              color={themeColors.accent.contrast}
+            />
           ) : (
             <Text
               className={`text-center font-medium ${
-                prompt.trim() && selectedRepo ? "text-white" : "text-gray-500"
+                canSubmit ? "text-accent-contrast" : "text-gray-9"
               }`}
             >
               Create task
@@ -164,4 +167,3 @@ export default function NewTaskScreen() {
     </>
   );
 }
-

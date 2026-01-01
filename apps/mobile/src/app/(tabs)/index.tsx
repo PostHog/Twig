@@ -1,6 +1,6 @@
+import { Text } from "@components/text";
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Text } from "@components/text";
 import {
   type ConversationDetail,
   ConversationList,
@@ -18,21 +18,23 @@ export default function ConversationsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-dark-bg">
+    <View className="flex-1 bg-background">
       {/* Header */}
-      <View className="border-dark-border border-b px-4 pt-16 pb-4">
+      <View className="border-gray-6 border-b px-4 pt-16 pb-4">
         <View className="flex-row items-center justify-between">
           <View>
-            <Text className="font-bold text-2xl text-white">Conversations</Text>
-            <Text className="text-dark-text-muted text-sm">
-              Your Max AI chats
+            <Text className="font-bold text-2xl text-gray-12">
+              Conversations
             </Text>
+            <Text className="text-gray-11 text-sm">Your Max AI chats</Text>
           </View>
           <Pressable
             onPress={handleNewChat}
-            className="rounded-lg bg-orange-500 px-4 py-2 active:bg-orange-600"
+            className="rounded-lg bg-accent-9 px-4 py-2"
           >
-            <Text className="font-semibold text-sm text-white">New chat</Text>
+            <Text className="font-semibold text-accent-contrast text-sm">
+              New chat
+            </Text>
           </Pressable>
         </View>
       </View>

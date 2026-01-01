@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { useAuthStore } from "@/features/auth";
+import { useThemeColors } from "@/lib/useThemeColors";
 import type {
   ArtifactMessage,
   MessageStatus,
@@ -18,6 +19,7 @@ export function VisualizationArtifact({
   content,
 }: VisualizationArtifactProps) {
   const webViewRef = useRef<WebView>(null);
+  const themeColors = useThemeColors();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -161,8 +163,8 @@ export function VisualizationArtifact({
   if (!renderQueryUrl || !projectId || !accessToken) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] rounded bg-red-900/50 px-4 py-3">
-          <Text className="font-mono text-[13px] text-red-300">
+        <View className="max-w-[85%] rounded bg-status-error/20 px-4 py-3">
+          <Text className="font-mono text-[13px] text-status-error">
             Unable to load visualization: Not authenticated
           </Text>
         </View>
@@ -173,8 +175,8 @@ export function VisualizationArtifact({
   if (hasError) {
     return (
       <View className="items-start px-4 py-3">
-        <View className="max-w-[85%] rounded bg-red-900/50 px-4 py-3">
-          <Text className="font-mono text-[13px] text-red-300">
+        <View className="max-w-[85%] rounded bg-status-error/20 px-4 py-3">
+          <Text className="font-mono text-[13px] text-status-error">
             {errorMessage || "Failed to load visualization"}
           </Text>
         </View>
@@ -186,17 +188,17 @@ export function VisualizationArtifact({
   if (!queryResults) {
     return (
       <View className="w-full items-start px-4 py-3">
-        <View className="w-full overflow-hidden rounded bg-dark-border">
+        <View className="w-full overflow-hidden rounded bg-gray-6">
           {content.name && (
-            <View className="border-gray-700 border-b px-4 py-2">
-              <Text className="font-mono text-[13px] text-white">
+            <View className="border-b border-gray-7 px-4 py-2">
+              <Text className="font-mono text-[13px] text-gray-12">
                 {content.name}
               </Text>
             </View>
           )}
           <View className="h-80 w-full items-center justify-center">
-            <ActivityIndicator size="large" color="#f1a82c" />
-            <Text className="mt-2 font-mono text-[13px] text-neutral-500">
+            <ActivityIndicator size="large" color={themeColors.accent[9]} />
+            <Text className="mt-2 font-mono text-[13px] text-gray-9">
               Fetching data...
             </Text>
           </View>
@@ -207,11 +209,11 @@ export function VisualizationArtifact({
 
   return (
     <View className="w-full items-start px-4 py-3">
-      <View className="w-full overflow-hidden rounded bg-dark-border">
+      <View className="w-full overflow-hidden rounded bg-gray-6">
         {/* Header with title */}
         {content.name && (
-          <View className="border-gray-700 border-b px-4 py-2">
-            <Text className="font-mono text-[13px] text-white">
+          <View className="border-b border-gray-7 px-4 py-2">
+            <Text className="font-mono text-[13px] text-gray-12">
               {content.name}
             </Text>
           </View>
@@ -220,9 +222,9 @@ export function VisualizationArtifact({
         {/* WebView container */}
         <View className="relative h-80 w-full">
           {isLoading && (
-            <View className="absolute inset-0 z-10 items-center justify-center bg-dark-border">
-              <ActivityIndicator size="large" color="#f1a82c" />
-              <Text className="mt-2 font-mono text-[13px] text-neutral-500">
+            <View className="absolute inset-0 z-10 items-center justify-center bg-gray-6">
+              <ActivityIndicator size="large" color={themeColors.accent[9]} />
+              <Text className="mt-2 font-mono text-[13px] text-gray-9">
                 Loading visualization...
               </Text>
             </View>
@@ -238,15 +240,15 @@ export function VisualizationArtifact({
             domStorageEnabled
             startInLoadingState={false}
             scalesPageToFit
-            style={{ flex: 1, backgroundColor: "#1d1f27" }}
+            style={{ flex: 1, backgroundColor: themeColors.gray[2] }}
             containerStyle={{ flex: 1 }}
           />
         </View>
 
         {/* Artifact name */}
         {content.name && (
-          <View className="border-gray-700 border-t px-4 py-2">
-            <Text className="font-mono text-[11px] text-neutral-500">
+          <View className="border-t border-gray-7 px-4 py-2">
+            <Text className="font-mono text-[11px] text-gray-9">
               {content.name}
             </Text>
           </View>

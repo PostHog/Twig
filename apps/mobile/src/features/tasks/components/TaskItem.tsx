@@ -10,11 +10,11 @@ interface TaskItemProps {
 }
 
 const statusColorMap: Record<string, { bg: string; text: string }> = {
-  completed: { bg: "bg-green-500/20", text: "text-green-400" },
-  failed: { bg: "bg-red-500/20", text: "text-red-400" },
-  in_progress: { bg: "bg-blue-500/20", text: "text-blue-400" },
-  started: { bg: "bg-amber-500/20", text: "text-amber-400" },
-  backlog: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  completed: { bg: "bg-status-success/20", text: "text-status-success" },
+  failed: { bg: "bg-status-error/20", text: "text-status-error" },
+  in_progress: { bg: "bg-status-info/20", text: "text-status-info" },
+  started: { bg: "bg-status-warning/20", text: "text-status-warning" },
+  backlog: { bg: "bg-gray-5/20", text: "text-gray-9" },
 };
 
 const statusDisplayMap: Record<string, string> = {
@@ -43,11 +43,11 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
   return (
     <Pressable
       onPress={() => onPress(task)}
-      className="border-dark-border border-b px-3 py-3 active:bg-dark-surface"
+      className="border-b border-gray-6 px-3 py-3 active:bg-gray-3"
     >
       <View className="flex-row items-center gap-2">
         {/* Slug */}
-        <Text className="flex-shrink-0 text-gray-500 text-xs">{task.slug}</Text>
+        <Text className="flex-shrink-0 text-gray-9 text-xs">{task.slug}</Text>
 
         {/* Status Badge */}
         <View className={`rounded px-1.5 py-0.5 ${statusColors.bg}`}>
@@ -59,14 +59,14 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
         {/* Cloud indicator */}
         {isCloudTask && (
           <View className="flex-row items-center gap-1 opacity-70">
-            <Text className="text-gray-500 text-xs">☁️</Text>
+            <Text className="text-gray-9 text-xs">☁️</Text>
           </View>
         )}
       </View>
 
       {/* Title */}
       <Text
-        className="mt-1 font-medium text-sm text-white"
+        className="mt-1 font-medium text-sm text-gray-12"
         numberOfLines={1}
         ellipsizeMode="tail"
       >
@@ -76,7 +76,7 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
       {/* Description preview */}
       {task.description && (
         <Text
-          className="mt-0.5 text-gray-400 text-xs"
+          className="mt-0.5 text-gray-11 text-xs"
           numberOfLines={2}
           ellipsizeMode="tail"
         >
@@ -86,12 +86,10 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
 
       {/* Bottom row: repo + time */}
       <View className="mt-1.5 flex-row items-center justify-between">
-        <Text className="text-gray-500 text-xs" numberOfLines={1}>
+        <Text className="text-gray-9 text-xs" numberOfLines={1}>
           {task.repository || "No repository"}
         </Text>
-        <Text className="flex-shrink-0 text-gray-600 text-xs">
-          {timeDisplay}
-        </Text>
+        <Text className="flex-shrink-0 text-gray-8 text-xs">{timeDisplay}</Text>
       </View>
     </Pressable>
   );

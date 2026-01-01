@@ -1,6 +1,7 @@
+import { Text } from "@components/text";
 import { Stack } from "expo-router";
 import { useCallback } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -9,9 +10,11 @@ import {
   useChatStore,
   useGradualAnimation,
 } from "@/features/chat";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export default function NewChatScreen() {
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const { thread, streamingActive, askMax, stopGeneration, resetThread } =
     useChatStore();
 
@@ -26,14 +29,14 @@ export default function NewChatScreen() {
     if (streamingActive) {
       return (
         <TouchableOpacity onPress={stopGeneration} className="px-2">
-          <Text className="font-medium text-red-500">Stop</Text>
+          <Text className="font-medium text-status-error">Stop</Text>
         </TouchableOpacity>
       );
     }
     if (thread.length > 0) {
       return (
         <TouchableOpacity onPress={resetThread} className="px-2">
-          <Text className="font-medium text-orange-500">New</Text>
+          <Text className="font-medium text-accent-9">New</Text>
         </TouchableOpacity>
       );
     }
@@ -55,15 +58,15 @@ export default function NewChatScreen() {
           headerShown: true,
           headerTitle: "Chat",
           headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#09090b" },
-          headerTintColor: "#fff",
+          headerStyle: { backgroundColor: themeColors.background },
+          headerTintColor: themeColors.gray[12],
           headerTitleStyle: {
             fontWeight: "600",
           },
           headerRight,
         }}
       />
-      <Animated.View className="flex-1 bg-dark-bg" style={[contentPosition]}>
+      <Animated.View className="flex-1 bg-background" style={contentPosition}>
         <MessagesList
           messages={thread}
           streamingActive={streamingActive}

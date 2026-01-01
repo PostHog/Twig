@@ -1,9 +1,9 @@
+import { Text } from "@components/text";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -15,11 +15,13 @@ import {
   useChatStore,
   useGradualAnimation,
 } from "@/features/chat";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const {
@@ -66,7 +68,7 @@ export default function ChatDetailScreen() {
     if (streamingActive) {
       return (
         <TouchableOpacity onPress={stopGeneration} className="px-2">
-          <Text className="font-medium text-red-500">Stop</Text>
+          <Text className="font-medium text-status-error">Stop</Text>
         </TouchableOpacity>
       );
     }
@@ -89,17 +91,19 @@ export default function ChatDetailScreen() {
             headerShown: true,
             headerTitle: "Error",
             headerBackTitle: "Back",
-            headerStyle: { backgroundColor: "#09090b" },
-            headerTintColor: "#fff",
+            headerStyle: { backgroundColor: themeColors.background },
+            headerTintColor: themeColors.gray[12],
           }}
         />
-        <View className="flex-1 items-center justify-center bg-dark-bg px-4">
-          <Text className="mb-4 text-center text-red-400">{loadError}</Text>
+        <View className="flex-1 items-center justify-center bg-background px-4">
+          <Text className="mb-4 text-center text-status-error">
+            {loadError}
+          </Text>
           <Pressable
             onPress={() => router.back()}
-            className="rounded-lg bg-dark-surface px-4 py-2"
+            className="rounded-lg bg-gray-3 px-4 py-2"
           >
-            <Text className="text-white">Go Back</Text>
+            <Text className="text-gray-12">Go back</Text>
           </Pressable>
         </View>
       </>
@@ -114,15 +118,13 @@ export default function ChatDetailScreen() {
             headerShown: true,
             headerTitle: "Loading...",
             headerBackTitle: "Back",
-            headerStyle: { backgroundColor: "#09090b" },
-            headerTintColor: "#fff",
+            headerStyle: { backgroundColor: themeColors.background },
+            headerTintColor: themeColors.gray[12],
           }}
         />
-        <View className="flex-1 items-center justify-center bg-dark-bg">
-          <ActivityIndicator size="large" color="#f97316" />
-          <Text className="mt-4 text-dark-text-muted">
-            Loading conversation...
-          </Text>
+        <View className="flex-1 items-center justify-center bg-background">
+          <ActivityIndicator size="large" color={themeColors.accent[9]} />
+          <Text className="mt-4 text-gray-11">Loading conversation...</Text>
         </View>
       </>
     );
@@ -135,15 +137,15 @@ export default function ChatDetailScreen() {
           headerShown: true,
           headerTitle: conversation?.title || "Conversation",
           headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#09090b" },
-          headerTintColor: "#fff",
+          headerStyle: { backgroundColor: themeColors.background },
+          headerTintColor: themeColors.gray[12],
           headerTitleStyle: {
             fontWeight: "600",
           },
           headerRight,
         }}
       />
-      <Animated.View className="flex-1 bg-dark-bg" style={[contentPosition]}>
+      <Animated.View className="flex-1 bg-background" style={contentPosition}>
         <MessagesList
           messages={thread}
           streamingActive={streamingActive}
@@ -163,4 +165,3 @@ export default function ChatDetailScreen() {
     </>
   );
 }
-

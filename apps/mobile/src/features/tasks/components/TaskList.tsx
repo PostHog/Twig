@@ -6,6 +6,7 @@ import {
   RefreshControl,
   View,
 } from "react-native";
+import { useThemeColors } from "@/lib/useThemeColors";
 import { useTasks } from "../hooks/useTasks";
 import type { Task } from "../types";
 import { TaskItem } from "./TaskItem";
@@ -16,6 +17,7 @@ interface TaskListProps {
 
 export function TaskList({ onTaskPress }: TaskListProps) {
   const { tasks, isLoading, error, refetch } = useTasks();
+  const themeColors = useThemeColors();
 
   const handleTaskPress = (task: Task) => {
     onTaskPress?.(task.id);
@@ -24,12 +26,9 @@ export function TaskList({ onTaskPress }: TaskListProps) {
   if (error) {
     return (
       <View className="flex-1 items-center justify-center p-6">
-        <Text className="mb-4 text-center text-red-400">{error}</Text>
-        <Pressable
-          onPress={refetch}
-          className="rounded-lg bg-dark-surface px-4 py-2"
-        >
-          <Text className="text-white">Retry</Text>
+        <Text className="mb-4 text-center text-status-error">{error}</Text>
+        <Pressable onPress={refetch} className="rounded-lg bg-gray-3 px-4 py-2">
+          <Text className="text-gray-12">Retry</Text>
         </Pressable>
       </View>
     );
@@ -38,8 +37,8 @@ export function TaskList({ onTaskPress }: TaskListProps) {
   if (isLoading && tasks.length === 0) {
     return (
       <View className="flex-1 items-center justify-center">
-        <ActivityIndicator size="large" color="#f97316" />
-        <Text className="mt-4 text-dark-text-muted">Loading tasks...</Text>
+        <ActivityIndicator size="large" color={themeColors.accent[9]} />
+        <Text className="mt-4 text-gray-11">Loading tasks...</Text>
       </View>
     );
   }
@@ -47,8 +46,8 @@ export function TaskList({ onTaskPress }: TaskListProps) {
   if (tasks.length === 0) {
     return (
       <View className="flex-1 items-center justify-center p-6">
-        <Text className="text-center text-dark-text-muted">No tasks yet</Text>
-        <Text className="mt-2 text-center text-gray-600 text-sm">
+        <Text className="text-center text-gray-11">No tasks yet</Text>
+        <Text className="mt-2 text-center text-gray-9 text-sm">
           Create a new task to get started
         </Text>
       </View>
@@ -66,7 +65,7 @@ export function TaskList({ onTaskPress }: TaskListProps) {
         <RefreshControl
           refreshing={isLoading}
           onRefresh={refetch}
-          tintColor="#f97316"
+          tintColor={themeColors.accent[9]}
         />
       }
       contentContainerStyle={{ paddingBottom: 100 }}

@@ -1,3 +1,85 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Gray scale */
+  --gray-1: 234 234 234;
+  --gray-2: 229 229 229;
+  --gray-3: 219 219 219;
+  --gray-4: 210 210 210;
+  --gray-5: 202 202 202;
+  --gray-6: 193 193 193;
+  --gray-7: 181 181 181;
+  --gray-8: 162 162 162;
+  --gray-9: 116 116 116;
+  --gray-10: 106 106 106;
+  --gray-11: 78 78 78;
+  --gray-12: 31 31 31;
+
+  /* Accent colors */
+  --accent-1: 236 235 233;
+  --accent-2: 241 229 213;
+  --accent-3: 252 217 172;
+  --accent-4: 255 203 129;
+  --accent-5: 255 189 87;
+  --accent-6: 241 177 84;
+  --accent-7: 222 159 65;
+  --accent-8: 206 133 0;
+  --accent-9: 220 147 0;
+  --accent-10: 208 136 0;
+  --accent-11: 138 84 0;
+  --accent-12: 77 54 22;
+  --accent-contrast: 255 255 255;
+
+  /* Status colors */
+  --status-success: 34 197 94;
+  --status-error: 239 68 68;
+  --status-warning: 245 158 11;
+  --status-info: 59 130 246;
+
+  /* Background */
+  --background: 238 239 233;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Gray scale */
+    --gray-1: 21 21 21;
+    --gray-2: 28 28 28;
+    --gray-3: 36 36 36;
+    --gray-4: 43 43 40;
+    --gray-5: 50 50 49;
+    --gray-6: 59 59 56;
+    --gray-7: 72 72 70;
+    --gray-8: 96 96 92;
+    --gray-9: 110 110 107;
+    --gray-10: 123 123 123;
+    --gray-11: 180 180 177;
+    --gray-12: 238 238 234;
+
+    /* Accent colors */
+    --accent-1: 24 20 16;
+    --accent-2: 30 25 17;
+    --accent-3: 46 33 14;
+    --accent-4: 63 39 0;
+    --accent-5: 76 49 1;
+    --accent-6: 90 62 19;
+    --accent-7: 110 80 34;
+    --accent-8: 141 102 45;
+    --accent-9: 241 168 44;
+    --accent-10: 230 157 24;
+    --accent-11: 249 184 88;
+    --accent-12: 251 227 196;
+    --accent-contrast: 45 31 10;
+
+    /* Status colors */
+    --status-success: 74 222 128;
+    --status-error: 248 113 113;
+    --status-warning: 251 191 36;
+    --status-info: 96 165 250;
+
+    /* Background */
+    --background: 21 21 21;
+  }
+}

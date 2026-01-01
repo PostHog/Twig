@@ -11,43 +11,45 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-dark-bg">
+    <ScrollView className="flex-1 bg-background">
       <View className="px-6 pt-16 pb-32">
         {/* Header */}
         <View className="mb-10">
-          <Text className="mb-2 font-bold text-3xl text-white">Profile</Text>
-          <Text className="text-base text-dark-text-muted">
-            Your account settings
-          </Text>
+          <Text className="mb-2 font-bold text-3xl text-gray-12">Profile</Text>
+          <Text className="text-base text-gray-11">Your account settings</Text>
         </View>
 
         {/* Account Info */}
-        <View className="mb-6 rounded-xl bg-dark-surface p-4">
-          <Text className="mb-4 font-semibold text-lg text-white">Account</Text>
+        <View className="mb-6 rounded-xl bg-gray-2 p-4">
+          <Text className="mb-4 font-semibold text-gray-12 text-lg">
+            Account
+          </Text>
           <View className="flex-row justify-between py-2">
-            <Text className="text-dark-text-muted text-sm">Region</Text>
-            <Text className="font-medium text-sm text-white">
+            <Text className="text-gray-11 text-sm">Region</Text>
+            <Text className="font-medium text-gray-12 text-sm">
               {cloudRegion?.toUpperCase() || "N/A"}
             </Text>
           </View>
         </View>
 
         {/* Placeholder Content */}
-        <View className="mb-6 rounded-xl bg-dark-surface p-4">
-          <Text className="mb-4 font-semibold text-lg text-white">
+        <View className="mb-6 rounded-xl bg-gray-2 p-4">
+          <Text className="mb-4 font-semibold text-gray-12 text-lg">
             Preferences
           </Text>
-          <Text className="text-center text-dark-text-muted text-sm">
+          <Text className="text-center text-gray-11 text-sm">
             More settings coming soon...
           </Text>
         </View>
 
         {/* Logout Button */}
         <TouchableOpacity
-          className="items-center rounded-lg border border-red-500/30 bg-red-500/10 py-4"
+          className="items-center rounded-lg border border-status-error bg-status-error/10 py-4"
           onPress={handleLogout}
         >
-          <Text className="font-semibold text-base text-red-500">Sign out</Text>
+          <Text className="font-semibold text-base text-status-error">
+            Sign out
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
