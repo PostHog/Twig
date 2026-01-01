@@ -14,7 +14,7 @@ import {
   TaskSessionView,
   useTaskSessionStore,
 } from "@/features/tasks";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 
 export default function TaskDetailScreen() {
   const { id: taskId } = useLocalSearchParams<{ id: string }>();

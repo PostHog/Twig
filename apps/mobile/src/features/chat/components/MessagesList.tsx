@@ -7,7 +7,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 import {
   AssistantMessageType,
   isArtifactMessage,

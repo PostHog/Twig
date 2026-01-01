@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 interface ChatInputProps {

@@ -15,7 +15,7 @@ import {
   type Integration,
   runTaskInCloud,
 } from "@/features/tasks";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 
 export default function NewTaskScreen() {
   const router = useRouter();

@@ -7,7 +7,7 @@ import {
   ToolMessage,
   type ToolStatus,
 } from "@/features/chat";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 import type { SessionEvent, SessionNotification } from "../types";
 
 interface TaskSessionViewProps {

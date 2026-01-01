@@ -9,7 +9,7 @@ import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthStore } from "@/features/auth";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { darkTheme, lightTheme, useThemeColors } from "@/lib/theme";
 
 const queryClient = new QueryClient();
 
@@ -86,12 +86,15 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const { colorScheme } = useColorScheme();
+  const themeVars = colorScheme === "dark" ? darkTheme : lightTheme;
 
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
         <QueryClientProvider client={queryClient}>
-          <RootLayoutNav />
+          <View style={themeVars} className="flex-1">
+            <RootLayoutNav />
+          </View>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </QueryClientProvider>
       </KeyboardProvider>

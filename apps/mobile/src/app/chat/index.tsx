@@ -10,7 +10,7 @@ import {
   useChatStore,
   useGradualAnimation,
 } from "@/features/chat";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 
 export default function NewChatScreen() {
   const insets = useSafeAreaInsets();

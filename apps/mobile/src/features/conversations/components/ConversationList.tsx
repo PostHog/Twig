@@ -6,7 +6,7 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 import { useConversations } from "../hooks/useConversations";
 import type { ConversationDetail } from "../types";
 import { ConversationItem } from "./ConversationItem";

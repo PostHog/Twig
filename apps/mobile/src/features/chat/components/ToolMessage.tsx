@@ -22,7 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 
 export type ToolStatus = "pending" | "running" | "completed" | "error";
 export type ToolKind =

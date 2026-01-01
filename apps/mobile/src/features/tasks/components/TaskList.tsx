@@ -6,7 +6,7 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useThemeColors } from "@/lib/theme";
 import { useTasks } from "../hooks/useTasks";
 import type { Task } from "../types";
 import { TaskItem } from "./TaskItem";
