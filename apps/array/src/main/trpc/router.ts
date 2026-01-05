@@ -1,4 +1,5 @@
 import { agentRouter } from "./routers/agent.js";
+import { analyticsRouter } from "./routers/analytics.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
 import { dockBadgeRouter } from "./routers/dock-badge.js";
@@ -20,6 +21,7 @@ import { router } from "./trpc.js";
 
 export const trpcRouter = router({
   agent: agentRouter,
+  analytics: analyticsRouter,
   contextMenu: contextMenuRouter,
   dockBadge: dockBadgeRouter,
   encryption: encryptionRouter,

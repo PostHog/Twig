@@ -5,6 +5,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import type {
@@ -21,6 +22,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { trpcVanilla } from "@/renderer/trpc";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -202,7 +204,9 @@ function shellExecutesToContextBlocks(
 ): ContentBlock[] {
   return shellExecutes.map((cmd) => ({
     type: "text" as const,
-    text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${cmd.result.stdout || cmd.result.stderr || "(no output)"}`,
+    text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${
+      cmd.result.stdout || cmd.result.stderr || "(no output)"
+    }`,
     _meta: { ui: { hidden: true } },
   }));
 }
@@ -419,6 +423,11 @@ const useStore = create<SessionStore>()(
 
       addSession(session);
       startCloudPolling(taskRunId, logUrl);
+
+      track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
+        task_id: taskId,
+        execution_type: "cloud",
+      });
     };
 
     const reconnectToLocalSession = async (
@@ -498,6 +507,13 @@ const useStore = create<SessionStore>()(
 
       addSession(session);
       subscribeToChannel(taskRun.id);
+
+      track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
+        task_id: taskId,
+        execution_type: "local",
+        model: defaultModel,
+        framework: defaultFramework,
+      });
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -643,6 +659,20 @@ const useStore = create<SessionStore>()(
             blocks = [...contextBlocks, ...blocks];
           }
 
+          const promptText =
+            typeof prompt === "string"
+              ? prompt
+              : blocks
+                  .filter((b) => b.type === "text")
+                  .map((b) => (b as { text: string }).text)
+                  .join("");
+          track(ANALYTICS_EVENTS.PROMPT_SENT, {
+            task_id: taskId,
+            is_initial: session.events.length === 0,
+            execution_type: session.isCloud ? "cloud" : "local",
+            prompt_length_chars: promptText.length,
+          });
+
           return session.isCloud
             ? sendCloudPrompt(session, taskId, blocks)
             : sendLocalPrompt(session, blocks);
@@ -653,9 +683,26 @@ const useStore = create<SessionStore>()(
           if (!session) return false;
 
           try {
-            return await trpcVanilla.agent.cancelPrompt.mutate({
+            const result = await trpcVanilla.agent.cancelPrompt.mutate({
               sessionId: session.taskRunId,
             });
+
+            // Track task run cancelled
+            const durationSeconds = Math.round(
+              (Date.now() - session.startedAt) / 1000,
+            );
+            const promptCount = session.events.filter(
+              (e) =>
+                "method" in e.message && e.message.method === "session/prompt",
+            ).length;
+            track(ANALYTICS_EVENTS.TASK_RUN_CANCELLED, {
+              task_id: taskId,
+              execution_type: session.isCloud ? "cloud" : "local",
+              duration_seconds: durationSeconds,
+              prompts_sent: promptCount,
+            });
+
+            return result;
           } catch (error) {
             log.error("Failed to cancel prompt", error);
             return false;

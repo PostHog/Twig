@@ -11,6 +11,7 @@ const forceDevMode = process.env.FORCE_DEV_MODE === "1";
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  envDir: path.resolve(__dirname, "../.."), // Load .env from monorepo root
   define: forceDevMode
     ? {
         "import.meta.env.DEV": "true",

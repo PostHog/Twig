@@ -22,6 +22,8 @@ export function initializePostHog() {
     ui_host: uiHost,
     capture_pageview: false,
     capture_pageleave: false,
+    disable_session_recording: false,
+    debug: true, // Enable debug mode for now (TODO: turn this off before launch)
   });
 
   isInitialized = true;

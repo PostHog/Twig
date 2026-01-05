@@ -133,6 +133,14 @@ export const useAuthStore = create<AuthState>()(
               project_id: projectId.toString(),
               region,
             });
+
+            trpcVanilla.analytics.setUserId.mutate({
+              userId: user.uuid,
+              properties: {
+                project_id: projectId.toString(),
+                region,
+              },
+            });
           } catch {
             throw new Error("Failed to authenticate with PostHog");
           }
@@ -306,6 +314,14 @@ export const useAuthStore = create<AuthState>()(
                 region: tokens.cloudRegion,
               });
 
+              trpcVanilla.analytics.setUserId.mutate({
+                userId: user.uuid,
+                properties: {
+                  project_id: projectId.toString(),
+                  region: tokens.cloudRegion,
+                },
+              });
+
               return true;
             } catch (error) {
               log.error("Failed to validate OAuth session:", error);
@@ -320,6 +336,8 @@ export const useAuthStore = create<AuthState>()(
         logout: () => {
           track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
           resetUser();
+
+          trpcVanilla.analytics.resetUser.mutate();
 
           if (refreshTimeoutId) {
             window.clearTimeout(refreshTimeoutId);
