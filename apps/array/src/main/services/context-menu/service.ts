@@ -10,6 +10,8 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { getMainWindow } from "../../trpc/context.js";
 import type { ExternalAppsService } from "../external-apps/service.js";
 import type {
+  ConfirmDeleteTaskInput,
+  ConfirmDeleteTaskResult,
   FileAction,
   FileContextMenuInput,
   FileContextMenuResult,
@@ -49,30 +51,31 @@ export class ContextMenuService {
     return { apps, lastUsedAppId: lastUsed.lastUsedApp };
   }
 
+  async confirmDeleteTask(
+    input: ConfirmDeleteTaskInput,
+  ): Promise<ConfirmDeleteTaskResult> {
+    const confirmed = await this.confirm({
+      title: "Delete Task",
+      message: `Delete "${input.taskTitle}"?`,
+      detail: input.hasWorktree
+        ? "This will permanently delete the task and its associated worktree."
+        : "This will permanently delete the task.",
+      confirmLabel: "Delete",
+    });
+    return { confirmed };
+  }
+
   async showTaskContextMenu(
     input: TaskContextMenuInput,
   ): Promise<TaskContextMenuResult> {
-    const { taskTitle, worktreePath } = input;
+    const { worktreePath } = input;
     const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<TaskAction>([
       this.item("Rename", { type: "rename" }),
       this.item("Duplicate", { type: "duplicate" }),
       this.separator(),
-      this.item(
-        "Delete",
-        { type: "delete" },
-        {
-          confirm: {
-            title: "Delete Task",
-            message: `Delete "${taskTitle}"?`,
-            detail: worktreePath
-              ? "This will permanently delete the task and its associated worktree."
-              : "This will permanently delete the task.",
-            confirmLabel: "Delete",
-          },
-        },
-      ),
+      this.item("Delete", { type: "delete" }),
       ...(worktreePath
         ? [
             this.separator(),
