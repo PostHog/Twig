@@ -8,6 +8,8 @@ import {
   getFoldersOutput,
   removeFolderInput,
   updateFolderAccessedInput,
+  updateFolderPathInput,
+  updateFolderPathOutput,
 } from "../../services/folders/schemas.js";
 import type { FoldersService } from "../../services/folders/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -37,6 +39,13 @@ export const foldersRouter = router({
     .input(updateFolderAccessedInput)
     .mutation(({ input }) => {
       return getService().updateFolderAccessed(input.folderId);
+    }),
+
+  updateFolderPath: publicProcedure
+    .input(updateFolderPathInput)
+    .output(updateFolderPathOutput)
+    .mutation(({ input }) => {
+      return getService().updateFolderPath(input.folderId, input.newPath);
     }),
 
   cleanupOrphanedWorktrees: publicProcedure

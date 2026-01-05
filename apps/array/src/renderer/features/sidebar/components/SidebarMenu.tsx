@@ -25,7 +25,12 @@ import { SidebarFooter } from "./SidebarFooter";
 import { SortableFolderSection } from "./SortableFolderSection";
 
 function SidebarMenuComponent() {
-  const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
+  const {
+    view,
+    navigateToTask,
+    navigateToTaskInput,
+    navigateToFolderSettings,
+  } = useNavigationStore();
 
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const { data: currentUser } = useMeQuery();
@@ -128,6 +133,10 @@ function SidebarMenuComponent() {
     navigateToTaskInput(folderId);
   };
 
+  const handleFolderSettings = (folderId: string) => {
+    navigateToFolderSettings(folderId);
+  };
+
   const handleFolderContextMenu = async (
     folderId: string,
     e: React.MouseEvent,
@@ -212,6 +221,7 @@ function SidebarMenuComponent() {
                       }
                       isExpanded={isExpanded}
                       onToggle={() => toggleSection(folder.id)}
+                      onSettingsClick={() => handleFolderSettings(folder.id)}
                       onContextMenu={(e) =>
                         handleFolderContextMenu(folder.id, e)
                       }

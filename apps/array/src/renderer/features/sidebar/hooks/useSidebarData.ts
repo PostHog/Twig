@@ -59,7 +59,7 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings";
+  type: "task-detail" | "task-input" | "settings" | "folder-settings";
   data?: Task;
 }
 

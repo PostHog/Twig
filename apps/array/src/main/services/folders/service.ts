@@ -131,6 +131,37 @@ export class FoldersService {
     }
   }
 
+  async updateFolderPath(
+    folderId: string,
+    newPath: string,
+  ): Promise<RegisteredFolder> {
+    const folders = foldersStore.get("folders", []);
+    const folder = folders.find((f) => f.id === folderId);
+
+    if (!folder) {
+      throw new Error(`Folder with ID ${folderId} not found`);
+    }
+
+    // Validate the new path exists
+    if (!fs.existsSync(newPath)) {
+      throw new Error(`Path does not exist: ${newPath}`);
+    }
+
+    // Check if it's a git repository
+    const isRepo = await isGitRepository(newPath);
+    if (!isRepo) {
+      throw new Error("The selected folder is not a git repository");
+    }
+
+    // Update the folder
+    folder.path = newPath;
+    folder.name = path.basename(newPath);
+    folder.lastAccessed = new Date().toISOString();
+    foldersStore.set("folders", folders);
+
+    return folder;
+  }
+
   async cleanupOrphanedWorktrees(
     mainRepoPath: string,
   ): Promise<CleanupOrphanedWorktreesOutput> {
