@@ -181,7 +181,7 @@ export function FolderSettingsView() {
                   </Text>
                   <Text size="1" color="gray">
                     This will remove the repository from Array, including all
-                    associated tasks and workspaces. This action cannot be
+                    associated tasks and their workspaces. This action cannot be
                     undone.
                   </Text>
                 </Flex>
