@@ -162,13 +162,17 @@ export default defineConfig({
     copyAgentTemplates(),
     copyClaudeExecutable(),
   ],
-  define: forceDevMode
-    ? {
-        "import.meta.env.DEV": "true",
-        "import.meta.env.PROD": "false",
-        "import.meta.env.MODE": '"development"',
-      }
-    : undefined,
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(_getGitCommit()),
+    __BUILD_DATE__: JSON.stringify(_getBuildDate()),
+    ...(forceDevMode
+      ? {
+          "import.meta.env.DEV": "true",
+          "import.meta.env.PROD": "false",
+          "import.meta.env.MODE": '"development"',
+        }
+      : {}),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
