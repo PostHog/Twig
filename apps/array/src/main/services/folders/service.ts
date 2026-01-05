@@ -168,6 +168,22 @@ export class FoldersService {
     folder.lastAccessed = new Date().toISOString();
     foldersStore.set("folders", folders);
 
+    // Update all task associations that reference this folder
+    const associations = foldersStore.get("taskAssociations", []);
+    let hasChanges = false;
+    for (const assoc of associations) {
+      if (assoc.folderId === folderId) {
+        assoc.folderPath = newPath;
+        hasChanges = true;
+      }
+    }
+    if (hasChanges) {
+      foldersStore.set("taskAssociations", associations);
+      log.debug(
+        `Updated folder path for ${associations.filter((a) => a.folderId === folderId).length} task associations`,
+      );
+    }
+
     return { ...folder, exists: true };
   }
 

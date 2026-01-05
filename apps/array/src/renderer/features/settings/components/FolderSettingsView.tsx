@@ -1,4 +1,5 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Warning } from "@phosphor-icons/react";
 import {
@@ -47,10 +48,20 @@ export function FolderSettingsView() {
         newPath: path,
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_, newPath) => {
       await loadFolders();
       queryClient.invalidateQueries({ queryKey: ["folders"] });
       setError(null);
+
+      if (folderId) {
+        const { workspaces, updateWorkspace } = useWorkspaceStore.getState();
+        for (const [taskId, workspace] of Object.entries(workspaces)) {
+          if (workspace.folderId === folderId) {
+            updateWorkspace(taskId, { ...workspace, folderPath: newPath });
+          }
+        }
+        await useWorkspaceStore.getState().loadWorkspaces();
+      }
     },
     onError: (err) => {
       log.error("Failed to update folder path:", err);
