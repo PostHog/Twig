@@ -56,9 +56,11 @@ export function SettingsView() {
     autoRunTasks,
     defaultRunMode,
     createPR,
+    desktopNotifications,
     setAutoRunTasks,
     setDefaultRunMode,
     setCreatePR,
+    setDesktopNotifications,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -245,6 +247,30 @@ export function SettingsView() {
                 <Button variant="soft" size="1" onClick={openShortcutsSheet}>
                   {formatHotkey("mod+/")}
                 </Button>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          {/* Chat Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Chat</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    Desktop notifications
+                  </Text>
+                  <Text size="1" color="gray">
+                    Show notifications when the agent finishes working on a task
+                  </Text>
+                </Flex>
+                <Switch
+                  checked={desktopNotifications}
+                  onCheckedChange={setDesktopNotifications}
+                  size="1"
+                />
               </Flex>
             </Card>
           </Flex>
