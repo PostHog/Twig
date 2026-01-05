@@ -57,14 +57,35 @@ export function ConversationView({
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
 
-  // Scroll to bottom on initial mount
-  const hasScrolledRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const prevItemsLengthRef = useRef(0);
+
+  // Update isNearBottom on scroll
   useLayoutEffect(() => {
-    if (hasScrolledRef.current) return;
     const el = scrollRef.current;
-    if (el && items.length > 0) {
+    if (!el) return;
+
+    const handleScroll = () => {
+      const threshold = 100;
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = distanceFromBottom <= threshold;
+    };
+
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to bottom on first render and when new content arrives
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const isNewContent = items.length > prevItemsLengthRef.current;
+    prevItemsLengthRef.current = items.length;
+
+    if (isNearBottomRef.current || isNewContent) {
       el.scrollTop = el.scrollHeight;
-      hasScrolledRef.current = true;
     }
   }, [items]);
 
