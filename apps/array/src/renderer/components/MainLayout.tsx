@@ -10,9 +10,11 @@ import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
+import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
@@ -20,7 +22,7 @@ import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
 export function MainLayout() {
-  const { view, hydrateTask } = useNavigationStore();
+  const { view, hydrateTask, navigateToFolderSettings } = useNavigationStore();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
   const {
     isOpen: shortcutsSheetOpen,
@@ -28,6 +30,8 @@ export function MainLayout() {
     close: closeShortcutsSheet,
   } = useShortcutsSheetStore();
   const { data: tasks } = useTasks();
+  const folders = useRegisteredFoldersStore((state) => state.folders);
+  const workspaces = useWorkspaceStore.use.workspaces();
 
   useIntegrations();
   useTaskDeepLink();
@@ -37,6 +41,19 @@ export function MainLayout() {
       hydrateTask(tasks);
     }
   }, [tasks, hydrateTask]);
+
+  // Check if current task's folder became invalid (e.g., moved while app was open)
+  useEffect(() => {
+    if (view.type !== "task-detail" || !view.data) return;
+
+    const workspace = workspaces[view.data.id];
+    if (!workspace?.folderId) return;
+
+    const folder = folders.find((f) => f.id === workspace.folderId);
+    if (folder && folder.exists === false) {
+      navigateToFolderSettings(folder.id);
+    }
+  }, [view, folders, workspaces, navigateToFolderSettings]);
 
   const handleToggleCommandMenu = useCallback(() => {
     setCommandMenuOpen((prev) => !prev);

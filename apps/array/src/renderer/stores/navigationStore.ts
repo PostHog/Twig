@@ -79,6 +79,34 @@ export const useNavigationStore = create<NavigationStore>()(
           });
 
           const repoKey = getTaskRepository(task) ?? undefined;
+
+          // Check if this task has an existing workspace with a folder
+          const existingWorkspace =
+            useWorkspaceStore.getState().workspaces[task.id];
+          if (existingWorkspace?.folderId) {
+            const folder = useRegisteredFoldersStore
+              .getState()
+              .folders.find((f) => f.id === existingWorkspace.folderId);
+
+            if (folder && folder.exists === false) {
+              log.info("Folder path is stale, redirecting to folder settings", {
+                folderId: folder.id,
+                path: folder.path,
+              });
+              navigate({ type: "folder-settings", folderId: folder.id });
+              return;
+            }
+
+            if (folder) {
+              if (repoKey) {
+                useTaskDirectoryStore
+                  .getState()
+                  .setRepoDirectory(repoKey, folder.path);
+              }
+              return;
+            }
+          }
+
           const directory = useTaskDirectoryStore
             .getState()
             .getTaskDirectory(task.id, repoKey);

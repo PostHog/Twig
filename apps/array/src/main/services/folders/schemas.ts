@@ -8,13 +8,17 @@ export const registeredFolderSchema = z.object({
   createdAt: z.string(),
 });
 
-export const getFoldersOutput = z.array(registeredFolderSchema);
+export const registeredFolderWithExistsSchema = registeredFolderSchema.extend({
+  exists: z.boolean(),
+});
+
+export const getFoldersOutput = z.array(registeredFolderWithExistsSchema);
 
 export const addFolderInput = z.object({
   folderPath: z.string().min(2, "Folder path must be a valid directory path"),
 });
 
-export const addFolderOutput = registeredFolderSchema;
+export const addFolderOutput = registeredFolderWithExistsSchema;
 
 export const removeFolderInput = z.object({
   folderId: z.string(),
@@ -29,7 +33,7 @@ export const updateFolderPathInput = z.object({
   newPath: z.string(),
 });
 
-export const updateFolderPathOutput = registeredFolderSchema;
+export const updateFolderPathOutput = registeredFolderWithExistsSchema;
 
 export const cleanupOrphanedWorktreesInput = z.object({
   mainRepoPath: z.string(),

@@ -58,6 +58,13 @@ export function FolderSettingsView() {
     },
   });
 
+  const handlePathChange = async (path: string) => {
+    setNewPath(path);
+    if (folder && !folder.exists && path !== folder.path) {
+      await updatePathMutation.mutateAsync(path);
+    }
+  };
+
   const handleUpdatePath = async () => {
     if (!newPath || newPath === folder?.path) return;
     await updatePathMutation.mutateAsync(newPath);
@@ -101,17 +108,19 @@ export function FolderSettingsView() {
           </Flex>
 
           {!folder.exists && (
-            <Callout.Root color="red">
+            <Callout.Root color="amber">
               <Callout.Icon>
                 <Warning />
               </Callout.Icon>
               <Callout.Text>
                 <Flex direction="column" gap="1">
-                  <Text weight="medium">Repository not found</Text>
+                  <Text weight="medium">
+                    Repository path needs to be updated
+                  </Text>
                   <Text size="1">
-                    The root directory for this repository was not found at the
-                    expected location. You can update the path below or remove
-                    this repository.
+                    The folder at "{folder.path}" was not found. If you moved
+                    this repository, select the new location below to continue
+                    working on tasks in this repository.
                   </Text>
                 </Flex>
               </Callout.Text>
@@ -134,15 +143,16 @@ export function FolderSettingsView() {
                   </Text>
                   <FolderPicker
                     value={newPath}
-                    onChange={setNewPath}
+                    onChange={handlePathChange}
                     placeholder={folder.path}
                     size="1"
+                    skipRegister
                   />
                   <Text size="1" color="gray">
                     The main repository directory
                   </Text>
                 </Flex>
-                {newPath && newPath !== folder.path && (
+                {newPath && newPath !== folder.path && folder.exists && (
                   <Button
                     variant="classic"
                     size="1"
