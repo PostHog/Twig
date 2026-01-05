@@ -7,14 +7,6 @@ interface SettingsSchema {
   worktreeLocation: string;
 }
 
-function getStorePath(): string {
-  const userDataPath = app.getPath("userData");
-  if (userDataPath.includes("@posthog")) {
-    return path.join(path.dirname(userDataPath), "Array");
-  }
-  return userDataPath;
-}
-
 function getDefaultWorktreeLocation(): string {
   return path.join(os.homedir(), ".array");
 }
@@ -29,7 +21,7 @@ const schema = {
 export const settingsStore = new Store<SettingsSchema>({
   name: "settings",
   schema,
-  cwd: getStorePath(),
+  cwd: app.getPath("userData"),
   defaults: {
     worktreeLocation: getDefaultWorktreeLocation(),
   },

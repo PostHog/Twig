@@ -2,7 +2,7 @@
   "name": "@posthog/array",
   "version": "0.0.0-dev",
   "description": "Array - PostHog desktop task manager",
-  "main": ".vite/build/index.js",
+  "main": ".vite/build/bootstrap.js",
   "versionHash": "dynamic",
   "engines": {
     "node": ">=22.0.0",
@@ -22,7 +22,7 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "test": "vitest run",
-    "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true"
+    "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/array/scripts/patch-electron-name.sh"
   },
   "keywords": [
     "posthog",
