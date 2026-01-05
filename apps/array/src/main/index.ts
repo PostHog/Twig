@@ -52,9 +52,6 @@ let mainWindow: BrowserWindow | null = null;
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
 
-// Set app name to ensure consistent userData path across platforms
-app.setName("Array");
-
 // Single instance lock must be acquired FIRST before any other app setup
 // This ensures deep links go to the existing instance, not a new one
 // In development, we need to pass the same args that setAsDefaultProtocolClient uses
