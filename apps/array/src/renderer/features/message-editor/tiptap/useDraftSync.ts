@@ -58,7 +58,7 @@ function editorContentToTiptapJson(content: EditorContent): JSONContent {
         if (i > 0) {
           flushParagraph();
         }
-        const lineParts = paragraphParts[i].split(/  \n|\n/);
+        const lineParts = paragraphParts[i].split(/ {2}\n|\n/);
         for (let j = 0; j < lineParts.length; j++) {
           if (j > 0) {
             currentParagraphContent.push({ type: "hardBreak" });
