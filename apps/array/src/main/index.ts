@@ -1,6 +1,11 @@
 declare const __BUILD_COMMIT__: string | undefined;
 declare const __BUILD_DATE__: string | undefined;
 
+import { fixPath } from "./lib/fixPath.js";
+
+// Call fixPath early to ensure PATH is correct for any child processes
+fixPath();
+
 import "reflect-metadata";
 import dns from "node:dns";
 
