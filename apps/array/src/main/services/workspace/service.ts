@@ -99,8 +99,15 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
   }
 
   async createWorkspace(options: CreateWorkspaceInput): Promise<WorkspaceInfo> {
-    const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
-      options;
+    const {
+      taskId,
+      mainRepoPath,
+      folderId,
+      folderPath,
+      mode,
+      branch,
+      fetchLatest,
+    } = options;
     log.info(
       `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode})`,
     );
@@ -273,6 +280,30 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
             taskId,
             "Workspace is empty",
             "No files are committed yet. Commit your files to see them in workspaces.",
+          );
+        }
+      }
+
+      // Fetch latest from origin if requested - pull from the base branch the user selected
+      if (fetchLatest) {
+        const baseBranch = branch ?? worktree.baseBranch;
+        if (baseBranch) {
+          try {
+            log.info(
+              `Fetching latest from origin/${baseBranch} for task ${taskId}`,
+            );
+            await execAsync("git fetch origin", { cwd: worktree.worktreePath });
+            await execAsync(`git pull origin ${baseBranch}`, {
+              cwd: worktree.worktreePath,
+            });
+            log.info(`Successfully fetched latest for task ${taskId}`);
+          } catch (error) {
+            log.warn(`Failed to fetch latest for task ${taskId}:`, error);
+            // Don't fail workspace creation, just warn
+          }
+        } else {
+          log.info(
+            `Skipping fetch latest for task ${taskId}: no base branch specified`,
           );
         }
       }

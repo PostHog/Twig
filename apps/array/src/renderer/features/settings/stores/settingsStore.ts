@@ -20,6 +20,7 @@ interface SettingsStore {
   defaultModel: string;
   defaultFramework: AgentFramework;
   desktopNotifications: boolean;
+  fetchLatestOnNewTask: boolean;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -30,6 +31,7 @@ interface SettingsStore {
   setDefaultModel: (model: string) => void;
   setDefaultFramework: (framework: AgentFramework) => void;
   setDesktopNotifications: (enabled: boolean) => void;
+  setFetchLatestOnNewTask: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -44,6 +46,7 @@ export const useSettingsStore = create<SettingsStore>()(
       defaultModel: DEFAULT_MODEL,
       defaultFramework: DEFAULT_FRAMEWORK,
       desktopNotifications: true,
+      fetchLatestOnNewTask: true,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -56,6 +59,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setDefaultFramework: (framework) => set({ defaultFramework: framework }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
+      setFetchLatestOnNewTask: (enabled) =>
+        set({ fetchLatestOnNewTask: enabled }),
     }),
     {
       name: "settings-storage",

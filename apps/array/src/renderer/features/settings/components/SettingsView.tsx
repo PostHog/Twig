@@ -57,10 +57,12 @@ export function SettingsView() {
     defaultRunMode,
     createPR,
     desktopNotifications,
+    fetchLatestOnNewTask,
     setAutoRunTasks,
     setDefaultRunMode,
     setCreatePR,
     setDesktopNotifications,
+    setFetchLatestOnNewTask,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -334,6 +336,23 @@ export function SettingsView() {
                   <Switch
                     checked={createPR}
                     onCheckedChange={setCreatePR}
+                    size="1"
+                  />
+                </Flex>
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Fetch latest on new task
+                    </Text>
+                    <Text size="1" color="gray">
+                      Pull the latest changes from origin after creating a
+                      workspace
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={fetchLatestOnNewTask}
+                    onCheckedChange={setFetchLatestOnNewTask}
                     size="1"
                   />
                 </Flex>

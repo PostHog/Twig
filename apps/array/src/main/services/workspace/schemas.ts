@@ -58,6 +58,7 @@ export const createWorkspaceInput = z.object({
   folderPath: z.string().min(2, "Folder path must be a valid directory path"),
   mode: workspaceModeSchema,
   branch: z.string().optional(),
+  fetchLatest: z.boolean().optional(),
 });
 
 export const deleteWorkspaceInput = z.object({

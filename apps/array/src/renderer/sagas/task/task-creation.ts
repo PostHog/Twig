@@ -1,6 +1,7 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
 import { getSessionActions } from "@features/sessions/stores/sessionStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
@@ -108,6 +109,7 @@ export class TaskCreationSaga extends Saga<
         });
       }
 
+      const fetchLatest = useSettingsStore.getState().fetchLatestOnNewTask;
       const workspaceInfo = await this.step({
         name: "workspace_creation",
         execute: async () => {
@@ -118,6 +120,7 @@ export class TaskCreationSaga extends Saga<
             folderPath: repoPath,
             mode: workspaceMode,
             branch: branch ?? undefined,
+            fetchLatest,
           });
         },
         rollback: async () => {
