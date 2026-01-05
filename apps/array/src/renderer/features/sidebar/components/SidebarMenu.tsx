@@ -153,6 +153,13 @@ function SidebarMenuComponent() {
     if (!result.action) return;
 
     if (result.action.type === "remove") {
+      // Check if we're currently viewing a task that uses this folder
+      if (view.type === "task-detail" && view.taskId) {
+        const workspace = workspaces[view.taskId];
+        if (workspace?.folderId === folderId) {
+          navigateToTaskInput();
+        }
+      }
       await removeFolder(folderId);
     } else if (result.action.type === "external-app") {
       const { handleExternalAppAction } = await import(
