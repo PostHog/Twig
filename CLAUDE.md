@@ -33,6 +33,8 @@
 
 ## Code Style
 
+- Prefer writing our own solution over adding external packages when the fix is simple
+- Keep functions focused with single responsibility
 - Biome for linting and formatting (not ESLint/Prettier)
 - 2-space indentation, double quotes
 - No `console.*` in source - use logger instead (logger files exempt)
