@@ -180,7 +180,7 @@ function SidebarMenuComponent() {
               onClick={handleHomeClick}
             />
 
-            <div className="mx-2 my-1 border-gray-6 border-t" />
+            <div className="mx-2 my-2 border-gray-6 border-t" />
 
             <DragDropProvider
               onDragOver={handleDragOver}
@@ -197,7 +197,7 @@ function SidebarMenuComponent() {
                 return (
                   <div key={folder.id}>
                     {index > 0 && (
-                      <div className="mx-2 my-1 border-gray-6 border-t" />
+                      <div className="mx-2 my-2 border-gray-6 border-t" />
                     )}
                     <SortableFolderSection
                       id={folder.id}

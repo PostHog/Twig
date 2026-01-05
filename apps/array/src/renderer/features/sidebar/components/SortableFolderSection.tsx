@@ -42,7 +42,7 @@ export function SortableFolderSection({
           <button
             ref={handleRef}
             type="button"
-            className="flex w-full cursor-grab items-center justify-between border-0 bg-transparent px-2 py-1 text-left font-mono text-[12px] text-gray-11 transition-colors hover:bg-gray-3"
+            className="flex w-full cursor-grab items-center justify-between border-0 bg-transparent px-2 py-1.5 text-left font-mono text-[12px] text-gray-11 transition-colors hover:bg-gray-3"
             style={{ paddingLeft: "8px" }}
             onContextMenu={onContextMenu}
           >
