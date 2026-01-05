@@ -3,8 +3,8 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
-import { XCircle } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { ArrowDown, XCircle } from "@phosphor-icons/react";
+import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -12,7 +12,14 @@ import {
   isJsonRpcResponse,
   type UserShellExecuteParams,
 } from "@shared/types/session-events";
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -47,6 +54,9 @@ interface ConversationViewProps {
   isCloud?: boolean;
 }
 
+const SCROLL_THRESHOLD = 100;
+const SHOW_BUTTON_THRESHOLD = 300;
+
 export function ConversationView({
   events,
   isPromptPending,
@@ -59,6 +69,7 @@ export function ConversationView({
 
   const isNearBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Update isNearBottom on scroll
   useLayoutEffect(() => {
@@ -66,10 +77,10 @@ export function ConversationView({
     if (!el) return;
 
     const handleScroll = () => {
-      const threshold = 100;
       const distanceFromBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight;
-      isNearBottomRef.current = distanceFromBottom <= threshold;
+      isNearBottomRef.current = distanceFromBottom <= SCROLL_THRESHOLD;
+      setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
     };
 
     el.addEventListener("scroll", handleScroll);
@@ -89,32 +100,49 @@ export function ConversationView({
     }
   }, [items]);
 
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, []);
+
   return (
-    <div
-      ref={scrollRef}
-      className="scrollbar-hide flex-1 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
-    >
-      <div className="flex flex-col gap-3">
-        {items.map((item) =>
-          item.type === "turn" ? (
-            <TurnView
-              key={item.id}
-              turn={item}
-              repoPath={repoPath}
-              isCloud={isCloud}
-            />
-          ) : (
-            <UserShellExecuteView key={item.id} item={item} />
-          ),
-        )}
+    <div className="relative flex-1">
+      <div
+        ref={scrollRef}
+        className="scrollbar-hide absolute inset-0 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
+      >
+        <div className="flex flex-col gap-3">
+          {items.map((item) =>
+            item.type === "turn" ? (
+              <TurnView
+                key={item.id}
+                turn={item}
+                repoPath={repoPath}
+                isCloud={isCloud}
+              />
+            ) : (
+              <UserShellExecuteView key={item.id} item={item} />
+            ),
+          )}
+        </div>
+        <SessionFooter
+          isPromptPending={isPromptPending}
+          lastGenerationDuration={
+            lastTurn?.isComplete ? lastTurn.durationMs : null
+          }
+          lastStopReason={lastTurn?.stopReason}
+        />
       </div>
-      <SessionFooter
-        isPromptPending={isPromptPending}
-        lastGenerationDuration={
-          lastTurn?.isComplete ? lastTurn.durationMs : null
-        }
-        lastStopReason={lastTurn?.stopReason}
-      />
+      {showScrollButton && (
+        <Box className="absolute right-4 bottom-4 z-10">
+          <Button size="1" variant="solid" onClick={scrollToBottom}>
+            <ArrowDown size={14} weight="bold" />
+            Scroll to bottom
+          </Button>
+        </Box>
+      )}
     </div>
   );
 }
