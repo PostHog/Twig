@@ -5,6 +5,7 @@ import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
+  isJsonRpcRequest,
 } from "@shared/types/session-events";
 import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -57,7 +58,18 @@ export function SessionView({
   ]);
 
   const latestPlan = useMemo((): Plan | null => {
+    // Find the index of the last user prompt - only show plans after that
+    let lastPromptIndex = -1;
     for (let i = events.length - 1; i >= 0; i--) {
+      const msg = events[i].message;
+      if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
+        lastPromptIndex = i;
+        break;
+      }
+    }
+
+    // Search for plans only after the last user prompt
+    for (let i = events.length - 1; i > lastPromptIndex; i--) {
       const msg = events[i].message;
       if (isJsonRpcNotification(msg) && msg.method === "session/update") {
         const update = (msg.params as { update?: { sessionUpdate?: string } })
