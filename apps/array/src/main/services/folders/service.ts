@@ -140,53 +140,6 @@ export class FoldersService {
     }
   }
 
-  async updateFolderPath(
-    folderId: string,
-    newPath: string,
-  ): Promise<RegisteredFolder & { exists: boolean }> {
-    const folders = foldersStore.get("folders", []);
-    const folder = folders.find((f) => f.id === folderId);
-
-    if (!folder) {
-      throw new Error(`Folder with ID ${folderId} not found`);
-    }
-
-    // Validate the new path exists
-    if (!fs.existsSync(newPath)) {
-      throw new Error(`Path does not exist: ${newPath}`);
-    }
-
-    // Check if it's a git repository
-    const isRepo = await isGitRepository(newPath);
-    if (!isRepo) {
-      throw new Error("The selected folder is not a git repository");
-    }
-
-    // Update the folder
-    folder.path = newPath;
-    folder.name = path.basename(newPath);
-    folder.lastAccessed = new Date().toISOString();
-    foldersStore.set("folders", folders);
-
-    // Update all task associations that reference this folder
-    const associations = foldersStore.get("taskAssociations", []);
-    let hasChanges = false;
-    for (const assoc of associations) {
-      if (assoc.folderId === folderId) {
-        assoc.folderPath = newPath;
-        hasChanges = true;
-      }
-    }
-    if (hasChanges) {
-      foldersStore.set("taskAssociations", associations);
-      log.debug(
-        `Updated folder path for ${associations.filter((a) => a.folderId === folderId).length} task associations`,
-      );
-    }
-
-    return { ...folder, exists: true };
-  }
-
   async cleanupOrphanedWorktrees(
     mainRepoPath: string,
   ): Promise<CleanupOrphanedWorktreesOutput> {

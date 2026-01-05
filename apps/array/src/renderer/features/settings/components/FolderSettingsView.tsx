@@ -1,5 +1,3 @@
-import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Warning } from "@phosphor-icons/react";
 import {
@@ -7,6 +5,7 @@ import {
   Button,
   Callout,
   Card,
+  Code,
   Flex,
   Heading,
   Text,
@@ -14,9 +13,7 @@ import {
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { trpcVanilla } from "@renderer/trpc";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const log = logger.scope("folder-settings");
 
@@ -24,62 +21,12 @@ export function FolderSettingsView() {
   useSetHeaderContent(null);
 
   const { view, navigateToTaskInput } = useNavigationStore();
-  const { folders, removeFolder, loadFolders } = useRegisteredFoldersStore();
-  const queryClient = useQueryClient();
+  const { folders, removeFolder } = useRegisteredFoldersStore();
 
   const folderId = view.type === "folder-settings" ? view.folderId : undefined;
   const folder = folders.find((f) => f.id === folderId);
 
-  const [newPath, setNewPath] = useState(folder?.path ?? "");
   const [error, setError] = useState<string | null>(null);
-
-  // Reset form when folder changes
-  useEffect(() => {
-    if (folder) {
-      setNewPath(folder.path);
-    }
-  }, [folder]);
-
-  const updatePathMutation = useMutation({
-    mutationFn: async (path: string) => {
-      if (!folderId) throw new Error("No folder selected");
-      return await trpcVanilla.folders.updateFolderPath.mutate({
-        folderId,
-        newPath: path,
-      });
-    },
-    onSuccess: async (_, newPath) => {
-      await loadFolders();
-      queryClient.invalidateQueries({ queryKey: ["folders"] });
-      setError(null);
-
-      if (folderId) {
-        const { workspaces, updateWorkspace } = useWorkspaceStore.getState();
-        for (const [taskId, workspace] of Object.entries(workspaces)) {
-          if (workspace.folderId === folderId) {
-            updateWorkspace(taskId, { ...workspace, folderPath: newPath });
-          }
-        }
-        await useWorkspaceStore.getState().loadWorkspaces();
-      }
-    },
-    onError: (err) => {
-      log.error("Failed to update folder path:", err);
-      setError(err instanceof Error ? err.message : "Failed to update path");
-    },
-  });
-
-  const handlePathChange = async (path: string) => {
-    setNewPath(path);
-    if (folder && !folder.exists && path !== folder.path) {
-      await updatePathMutation.mutateAsync(path);
-    }
-  };
-
-  const handleUpdatePath = async () => {
-    if (!newPath || newPath === folder?.path) return;
-    await updatePathMutation.mutateAsync(newPath);
-  };
 
   const handleRemoveFolder = async () => {
     if (!folderId) return;
@@ -107,6 +54,87 @@ export function FolderSettingsView() {
     );
   }
 
+  // When folder doesn't exist, show message to restore or remove
+  if (!folder.exists) {
+    return (
+      <Box height="100%" overflowY="auto">
+        <Box p="6" style={{ maxWidth: "600px", margin: "0 auto" }}>
+          <Flex direction="column" gap="6">
+            <Flex direction="column" gap="2">
+              <Heading size="4">Repository Not Found</Heading>
+              <Text size="1" color="gray">
+                {folder.name}
+              </Text>
+            </Flex>
+
+            <Callout.Root color="amber">
+              <Callout.Icon>
+                <Warning />
+              </Callout.Icon>
+              <Callout.Text>
+                <Flex direction="column" gap="1">
+                  <Text weight="medium">
+                    The repository folder could not be found
+                  </Text>
+                  <Text size="1">
+                    The folder at <Code>{folder.path}</Code> no longer exists or
+                    has been moved.
+                  </Text>
+                </Flex>
+              </Callout.Text>
+            </Callout.Root>
+
+            {error && (
+              <Callout.Root color="red">
+                <Callout.Text>{error}</Callout.Text>
+              </Callout.Root>
+            )}
+
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Option 1: Restore the folder
+                  </Text>
+                  <Text size="1" color="gray">
+                    Move or restore the repository folder back to its original
+                    location:
+                  </Text>
+                  <Code size="1">{folder.path}</Code>
+                </Flex>
+              </Flex>
+            </Card>
+
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Option 2: Remove the repository
+                  </Text>
+                  <Text size="1" color="gray">
+                    This will remove the repository from Array, including all
+                    associated tasks and their workspaces. This action cannot be
+                    undone.
+                  </Text>
+                </Flex>
+                <Button
+                  variant="soft"
+                  color="red"
+                  size="1"
+                  onClick={handleRemoveFolder}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  Remove repository
+                </Button>
+              </Flex>
+            </Card>
+          </Flex>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Normal settings view when folder exists
   return (
     <Box height="100%" overflowY="auto">
       <Box p="6" style={{ maxWidth: "600px", margin: "0 auto" }}>
@@ -118,26 +146,6 @@ export function FolderSettingsView() {
             </Text>
           </Flex>
 
-          {!folder.exists && (
-            <Callout.Root color="amber">
-              <Callout.Icon>
-                <Warning />
-              </Callout.Icon>
-              <Callout.Text>
-                <Flex direction="column" gap="1">
-                  <Text weight="medium">
-                    Repository path needs to be updated
-                  </Text>
-                  <Text size="1">
-                    The folder at "{folder.path}" was not found. If you moved
-                    this repository, select the new location below to continue
-                    working on tasks in this repository.
-                  </Text>
-                </Flex>
-              </Callout.Text>
-            </Callout.Root>
-          )}
-
           {error && (
             <Callout.Root color="red">
               <Callout.Text>{error}</Callout.Text>
@@ -147,35 +155,11 @@ export function FolderSettingsView() {
           <Flex direction="column" gap="3">
             <Heading size="3">Location</Heading>
             <Card>
-              <Flex direction="column" gap="4">
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Root path
-                  </Text>
-                  <FolderPicker
-                    value={newPath}
-                    onChange={handlePathChange}
-                    placeholder={folder.path}
-                    size="1"
-                    skipRegister
-                  />
-                  <Text size="1" color="gray">
-                    The main repository directory
-                  </Text>
-                </Flex>
-                {newPath && newPath !== folder.path && folder.exists && (
-                  <Button
-                    variant="classic"
-                    size="1"
-                    onClick={handleUpdatePath}
-                    disabled={updatePathMutation.isPending}
-                    style={{ alignSelf: "flex-start" }}
-                  >
-                    {updatePathMutation.isPending
-                      ? "Updating..."
-                      : "Update path"}
-                  </Button>
-                )}
+              <Flex direction="column" gap="2">
+                <Text size="1" weight="medium">
+                  Root path
+                </Text>
+                <Code size="1">{folder.path}</Code>
               </Flex>
             </Card>
           </Flex>

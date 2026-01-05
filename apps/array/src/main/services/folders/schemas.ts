@@ -28,13 +28,6 @@ export const updateFolderAccessedInput = z.object({
   folderId: z.string(),
 });
 
-export const updateFolderPathInput = z.object({
-  folderId: z.string(),
-  newPath: z.string(),
-});
-
-export const updateFolderPathOutput = registeredFolderWithExistsSchema;
-
 export const cleanupOrphanedWorktreesInput = z.object({
   mainRepoPath: z.string(),
 });
@@ -57,8 +50,6 @@ export type RemoveFolderInput = z.infer<typeof removeFolderInput>;
 export type UpdateFolderAccessedInput = z.infer<
   typeof updateFolderAccessedInput
 >;
-export type UpdateFolderPathInput = z.infer<typeof updateFolderPathInput>;
-export type UpdateFolderPathOutput = z.infer<typeof updateFolderPathOutput>;
 export type CleanupOrphanedWorktreesInput = z.infer<
   typeof cleanupOrphanedWorktreesInput
 >;

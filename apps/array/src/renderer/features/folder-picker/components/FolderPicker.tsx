@@ -14,7 +14,6 @@ interface FolderPickerProps {
   onChange: (path: string) => void;
   placeholder?: string;
   size?: Responsive<"1" | "2">;
-  skipRegister?: boolean;
 }
 
 export function FolderPicker({
@@ -22,7 +21,6 @@ export function FolderPicker({
   onChange,
   placeholder = "Select folder...",
   size = "1",
-  skipRegister = false,
 }: FolderPickerProps) {
   const recentFolders = useRegisteredFoldersStore((state) =>
     state.getRecentFolders(),
@@ -49,9 +47,7 @@ export function FolderPicker({
   const handleOpenFilePicker = async () => {
     const selectedPath = await trpcVanilla.os.selectDirectory.query();
     if (selectedPath) {
-      if (!skipRegister) {
-        await addFolder(selectedPath);
-      }
+      await addFolder(selectedPath);
       onChange(selectedPath);
     }
   };
