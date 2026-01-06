@@ -19,6 +19,7 @@ interface SettingsStore {
   createPR: boolean;
   defaultModel: string;
   defaultFramework: AgentFramework;
+  desktopNotifications: boolean;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -28,6 +29,7 @@ interface SettingsStore {
   setCreatePR: (createPR: boolean) => void;
   setDefaultModel: (model: string) => void;
   setDefaultFramework: (framework: AgentFramework) => void;
+  setDesktopNotifications: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -41,6 +43,7 @@ export const useSettingsStore = create<SettingsStore>()(
       createPR: true,
       defaultModel: DEFAULT_MODEL,
       defaultFramework: DEFAULT_FRAMEWORK,
+      desktopNotifications: true,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -51,6 +54,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setCreatePR: (createPR) => set({ createPR }),
       setDefaultModel: (model) => set({ defaultModel: model }),
       setDefaultFramework: (framework) => set({ defaultFramework: framework }),
+      setDesktopNotifications: (enabled) =>
+        set({ desktopNotifications: enabled }),
     }),
     {
       name: "settings-storage",
