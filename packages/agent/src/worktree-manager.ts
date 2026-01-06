@@ -1,4 +1,4 @@
-import { exec, execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -6,7 +6,6 @@ import { promisify } from "node:util";
 import type { WorktreeInfo } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 export interface WorktreeConfig {
@@ -512,14 +511,14 @@ export class WorktreeManager {
     return this.worktreeBasePath !== null;
   }
 
-  private async runGitCommand(command: string): Promise<string> {
+  private async runGitCommand(args: string[]): Promise<string> {
     try {
-      const { stdout } = await execAsync(`git ${command}`, {
+      const { stdout } = await execFileAsync("git", args, {
         cwd: this.mainRepoPath,
       });
       return stdout.trim();
     } catch (error) {
-      throw new Error(`Git command failed: ${command}\n${error}`);
+      throw new Error(`Git command failed: git ${args.join(" ")}\n${error}`);
     }
   }
 
@@ -607,9 +606,9 @@ export class WorktreeManager {
   private async getDefaultBranch(): Promise<string> {
     // Try all methods in parallel for speed
     const [symbolicRef, mainExists, masterExists] = await Promise.allSettled([
-      this.runGitCommand("symbolic-ref refs/remotes/origin/HEAD"),
-      this.runGitCommand("rev-parse --verify main"),
-      this.runGitCommand("rev-parse --verify master"),
+      this.runGitCommand(["symbolic-ref", "refs/remotes/origin/HEAD"]),
+      this.runGitCommand(["rev-parse", "--verify", "main"]),
+      this.runGitCommand(["rev-parse", "--verify", "master"]),
     ]);
 
     // Prefer symbolic ref (most accurate)
@@ -681,15 +680,27 @@ export class WorktreeManager {
     const gitStart = Date.now();
     if (this.usesExternalPath()) {
       // Use absolute path for external worktrees
-      await this.runGitCommand(
-        `worktree add --quiet -b "${branchName}" "${worktreePath}" "${baseBranch}"`,
-      );
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        branchName,
+        worktreePath,
+        baseBranch,
+      ]);
     } else {
       // Use relative path from repo root for in-repo worktrees
-      const relativePath = `${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-      await this.runGitCommand(
-        `worktree add --quiet -b "${branchName}" "./${relativePath}" "${baseBranch}"`,
-      );
+      const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        branchName,
+        relativePath,
+        baseBranch,
+      ]);
     }
     const gitTime = Date.now() - gitStart;
 
@@ -784,7 +795,7 @@ export class WorktreeManager {
       try {
         await fs.rm(worktreePath, { recursive: true, force: true });
         // Also prune the worktree list
-        await this.runGitCommand("worktree prune");
+        await this.runGitCommand(["worktree", "prune"]);
         this.logger.info("Worktree cleaned up manually", { worktreePath });
       } catch (cleanupError) {
         this.logger.error("Failed to cleanup worktree", {
@@ -799,7 +810,11 @@ export class WorktreeManager {
   async getWorktreeInfo(worktreePath: string): Promise<WorktreeInfo | null> {
     try {
       // Parse the worktree list to find info about this worktree
-      const output = await this.runGitCommand("worktree list --porcelain");
+      const output = await this.runGitCommand([
+        "worktree",
+        "list",
+        "--porcelain",
+      ]);
       const worktrees = this.parseWorktreeList(output);
 
       const worktree = worktrees.find((w) => w.worktreePath === worktreePath);
@@ -812,7 +827,11 @@ export class WorktreeManager {
 
   async listWorktrees(): Promise<WorktreeInfo[]> {
     try {
-      const output = await this.runGitCommand("worktree list --porcelain");
+      const output = await this.runGitCommand([
+        "worktree",
+        "list",
+        "--porcelain",
+      ]);
       return this.parseWorktreeList(output);
     } catch (error) {
       this.logger.debug("Failed to list worktrees", { error });
@@ -862,8 +881,9 @@ export class WorktreeManager {
 
   async isWorktree(repoPath: string): Promise<boolean> {
     try {
-      const { stdout } = await execAsync(
-        "git rev-parse --is-inside-work-tree",
+      const { stdout } = await execFileAsync(
+        "git",
+        ["rev-parse", "--is-inside-work-tree"],
         { cwd: repoPath },
       );
       if (stdout.trim() !== "true") {
