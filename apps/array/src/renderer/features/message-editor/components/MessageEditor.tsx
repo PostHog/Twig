@@ -3,6 +3,7 @@ import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
@@ -81,6 +82,21 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         setContent,
       }),
       [focus, blur, clear, isEmpty, getContent, getText, setContent],
+    );
+
+    useHotkeys(
+      "escape",
+      (e) => {
+        if (isLoading && onCancel) {
+          e.preventDefault();
+          onCancel();
+        }
+      },
+      {
+        enableOnFormTags: true,
+        enableOnContentEditable: true,
+      },
+      [isLoading, onCancel],
     );
 
     const handleContainerClick = (e: React.MouseEvent) => {
