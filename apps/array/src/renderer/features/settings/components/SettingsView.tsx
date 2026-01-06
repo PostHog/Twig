@@ -1,8 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import {
-  useSettingsStore,
-} from "@features/settings/stores/settingsStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -53,12 +51,8 @@ export function SettingsView() {
     useAuthStore();
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
-  const {
-    autoRunTasks,
-    createPR,
-    setAutoRunTasks,
-    setCreatePR,
-  } = useSettingsStore();
+  const { autoRunTasks, createPR, setAutoRunTasks, setCreatePR } =
+    useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
   );
