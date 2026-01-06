@@ -63,7 +63,9 @@ export class TaskCreationSaga extends Saga<
 
     // Step 2: Resolve repoPath - input takes precedence, then stored mappings
     // Wait for workspace store to load first (it loads async on init)
-    await this.waitForWorkspacesLoaded();
+    await this.readOnlyStep("wait_workspaces_loaded", () =>
+      this.waitForWorkspacesLoaded(),
+    );
 
     const repoKey = getTaskRepository(task);
     const repoPath =
@@ -99,14 +101,20 @@ export class TaskCreationSaga extends Saga<
       const branch = input.branch ?? task.latest_run?.branch ?? null;
 
       // Get or create folder registration first
-      const folders = await trpcVanilla.folders.getFolders.query();
-      let folder = folders.find((f) => f.path === repoPath);
+      const folder = await this.readOnlyStep(
+        "folder_registration",
+        async () => {
+          const folders = await trpcVanilla.folders.getFolders.query();
+          let existingFolder = folders.find((f) => f.path === repoPath);
 
-      if (!folder) {
-        folder = await trpcVanilla.folders.addFolder.mutate({
-          folderPath: repoPath,
-        });
-      }
+          if (!existingFolder) {
+            existingFolder = await trpcVanilla.folders.addFolder.mutate({
+              folderPath: repoPath,
+            });
+          }
+          return existingFolder;
+        },
+      );
 
       const workspaceInfo = await this.step({
         name: "workspace_creation",
@@ -167,10 +175,12 @@ export class TaskCreationSaga extends Saga<
     if (shouldConnect) {
       const initialPrompt =
         !input.taskId && input.autoRun && input.content
-          ? await buildPromptBlocks(
-              input.content,
-              input.filePaths ?? [],
-              agentCwd ?? "",
+          ? await this.readOnlyStep("build_prompt_blocks", () =>
+              buildPromptBlocks(
+                input.content!,
+                input.filePaths ?? [],
+                agentCwd ?? "",
+              ),
             )
           : undefined;
 

@@ -299,22 +299,20 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
     foldersStore.set("taskAssociations", associations);
 
-    // Load config and run init scripts
-    const { config } = await loadConfig(
-      worktree.worktreePath,
-      worktree.worktreeName,
-    );
+    // Load config and build env in parallel
+    const [{ config }, workspaceEnv] = await Promise.all([
+      loadConfig(worktree.worktreePath, worktree.worktreeName),
+      buildWorkspaceEnv({
+        taskId,
+        folderPath,
+        worktreePath: worktree.worktreePath,
+        worktreeName: worktree.worktreeName,
+        mode,
+      }),
+    ]);
+
     const initScripts = normalizeScripts(config?.scripts?.init);
-
     let terminalSessionIds: string[] = [];
-
-    const workspaceEnv = await buildWorkspaceEnv({
-      taskId,
-      folderPath,
-      worktreePath: worktree.worktreePath,
-      worktreeName: worktree.worktreeName,
-      mode,
-    });
 
     if (initScripts.length > 0) {
       log.info(
