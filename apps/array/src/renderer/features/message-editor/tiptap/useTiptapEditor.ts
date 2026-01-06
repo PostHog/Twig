@@ -143,6 +143,42 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
           return false;
         },
+        handleDrop: (view, event, _slice, moved) => {
+          if (moved) return false;
+
+          const files = event.dataTransfer?.files;
+          if (!files || files.length === 0) return false;
+
+          const paths: string[] = [];
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            // In Electron, File objects have a 'path' property
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const path = (file as any).path;
+            if (path) {
+              paths.push(path);
+            }
+          }
+
+          if (paths.length > 0) {
+            event.preventDefault();
+
+            const coordinates = view.posAtCoords({
+              left: event.clientX,
+              top: event.clientY,
+            });
+            const pos = coordinates
+              ? coordinates.pos
+              : view.state.selection.from;
+
+            const textToInsert = paths.map((p) => `"${p}"`).join(" ");
+
+            view.dispatch(view.state.tr.insertText(textToInsert + " ", pos));
+            return true;
+          }
+
+          return false;
+        },
       },
       onCreate: ({ editor: e }) => {
         const newIsEmpty = !e.getText().trim();
