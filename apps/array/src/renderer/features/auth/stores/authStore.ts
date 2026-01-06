@@ -124,8 +124,11 @@ export const useAuthStore = create<AuthState>()(
 
             get().scheduleTokenRefresh();
 
-            // Track user login
-            identifyUser(user.uuid, {
+            // Track user login - use distinct_id to match web sessions (same as PostHog web app)
+            const distinctId = user.distinct_id || user.email;
+            identifyUser(distinctId, {
+              email: user.email,
+              uuid: user.uuid,
               project_id: projectId.toString(),
               region,
             });
@@ -135,8 +138,10 @@ export const useAuthStore = create<AuthState>()(
             });
 
             trpcVanilla.analytics.setUserId.mutate({
-              userId: user.uuid,
+              userId: distinctId,
               properties: {
+                email: user.email,
+                uuid: user.uuid,
                 project_id: projectId.toString(),
                 region,
               },
@@ -309,14 +314,20 @@ export const useAuthStore = create<AuthState>()(
 
               get().scheduleTokenRefresh();
 
-              identifyUser(user.uuid, {
+              // Use distinct_id to match web sessions (same as PostHog web app)
+              const distinctId = user.distinct_id || user.email;
+              identifyUser(distinctId, {
+                email: user.email,
+                uuid: user.uuid,
                 project_id: projectId.toString(),
                 region: tokens.cloudRegion,
               });
 
               trpcVanilla.analytics.setUserId.mutate({
-                userId: user.uuid,
+                userId: distinctId,
                 properties: {
+                  email: user.email,
+                  uuid: user.uuid,
                   project_id: projectId.toString(),
                   region: tokens.cloudRegion,
                 },

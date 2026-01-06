@@ -53,7 +53,8 @@ export interface RepositorySelectProperties {
 }
 
 export interface UserIdentifyProperties {
-  user_id?: string;
+  email?: string;
+  uuid?: string;
   project_id?: string;
   region?: string;
 }
