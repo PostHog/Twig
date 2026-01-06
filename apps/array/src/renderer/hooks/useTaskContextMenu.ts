@@ -3,7 +3,6 @@ import {
   useDuplicateTask,
 } from "@features/tasks/hooks/useTasks";
 import { logger } from "@renderer/lib/logger";
-import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
@@ -15,8 +14,7 @@ export function useTaskContextMenu() {
   const [renameTask, setRenameTask] = useState<Task | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const duplicateTask = useDuplicateTask();
-  const deleteTask = useDeleteTask();
-  const { view, navigateToTaskInput } = useNavigationStore();
+  const { deleteWithConfirm } = useDeleteTask();
 
   const showContextMenu = useCallback(
     async (task: Task, event: React.MouseEvent, worktreePath?: string) => {
@@ -42,10 +40,11 @@ export function useTaskContextMenu() {
             await duplicateTask.mutateAsync(task.id);
             break;
           case "delete":
-            if (view.type === "task-detail" && view.data?.id === task.id) {
-              navigateToTaskInput();
-            }
-            await deleteTask.mutateAsync(task.id);
+            await deleteWithConfirm({
+              taskId: task.id,
+              taskTitle: task.title,
+              hasWorktree: !!worktreePath,
+            });
             break;
           case "external-app":
             if (worktreePath) {
@@ -61,7 +60,7 @@ export function useTaskContextMenu() {
         log.error("Failed to show context menu", error);
       }
     },
-    [duplicateTask, deleteTask, view, navigateToTaskInput],
+    [duplicateTask, deleteWithConfirm],
   );
 
   return {

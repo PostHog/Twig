@@ -113,7 +113,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         onClick={handleContainerClick}
         style={{ cursor: "text" }}
       >
-        <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
+        <div className="max-h-[200px] min-h-[50px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </div>
 

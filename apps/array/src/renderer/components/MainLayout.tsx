@@ -4,6 +4,7 @@ import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
+import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
@@ -55,6 +56,8 @@ export function MainLayout() {
           )}
 
           {view.type === "settings" && <SettingsView />}
+
+          {view.type === "folder-settings" && <FolderSettingsView />}
         </Box>
 
         {view.type === "task-detail" && view.data && (
