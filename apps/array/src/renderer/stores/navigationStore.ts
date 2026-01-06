@@ -106,6 +106,7 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToSettings: () => {
           navigate({ type: "settings" });
+          track(ANALYTICS_EVENTS.SETTINGS_VIEWED);
         },
 
         toggleSettings: () => {

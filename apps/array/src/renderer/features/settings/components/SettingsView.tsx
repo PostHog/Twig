@@ -21,14 +21,16 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
+import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { trpcReact, trpcVanilla } from "@/renderer/trpc";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -96,6 +98,64 @@ export function SettingsView() {
       setLocalWorktreeLocation(worktreeLocation);
     }
   }, [worktreeLocation]);
+
+  // Tracked settings handlers
+  const handleAutoRunChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "auto_run_tasks",
+        new_value: checked,
+        old_value: autoRunTasks,
+      });
+      setAutoRunTasks(checked);
+    },
+    [autoRunTasks, setAutoRunTasks],
+  );
+
+  const handleRunModeChange = useCallback(
+    (value: DefaultRunMode) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "default_run_mode",
+        new_value: value,
+        old_value: defaultRunMode,
+      });
+      setDefaultRunMode(value);
+    },
+    [defaultRunMode, setDefaultRunMode],
+  );
+
+  const handleCreatePRChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "create_pr",
+        new_value: checked,
+        old_value: createPR,
+      });
+      setCreatePR(checked);
+    },
+    [createPR, setCreatePR],
+  );
+
+  const handleDarkModeChange = useCallback(() => {
+    track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+      setting_name: "dark_mode",
+      new_value: !isDarkMode,
+      old_value: isDarkMode,
+    });
+    toggleDarkMode();
+  }, [isDarkMode, toggleDarkMode]);
+
+  const handleTerminalLayoutChange = useCallback(
+    (value: "split" | "tabbed") => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "terminal_layout",
+        new_value: value,
+        old_value: terminalLayoutMode,
+      });
+      setTerminalLayout(value);
+    },
+    [terminalLayoutMode, setTerminalLayout],
+  );
 
   const handleWorktreeLocationChange = async (newLocation: string) => {
     setLocalWorktreeLocation(newLocation);
@@ -197,7 +257,7 @@ export function SettingsView() {
                   </Text>
                   <Switch
                     checked={isDarkMode}
-                    onCheckedChange={toggleDarkMode}
+                    onCheckedChange={handleDarkModeChange}
                     size="1"
                   />
                 </Flex>
@@ -209,7 +269,7 @@ export function SettingsView() {
                   <Select.Root
                     value={terminalLayoutMode}
                     onValueChange={(value) =>
-                      setTerminalLayout(value as "split" | "tabbed")
+                      handleTerminalLayoutChange(value as "split" | "tabbed")
                     }
                     size="1"
                   >
@@ -267,7 +327,7 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={autoRunTasks}
-                    onCheckedChange={setAutoRunTasks}
+                    onCheckedChange={handleAutoRunChange}
                     size="1"
                   />
                 </Flex>
@@ -279,7 +339,7 @@ export function SettingsView() {
                   <Select.Root
                     value={defaultRunMode}
                     onValueChange={(value) =>
-                      setDefaultRunMode(value as DefaultRunMode)
+                      handleRunModeChange(value as DefaultRunMode)
                     }
                     size="1"
                   >
@@ -307,7 +367,7 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={createPR}
-                    onCheckedChange={setCreatePR}
+                    onCheckedChange={handleCreatePRChange}
                     size="1"
                   />
                 </Flex>

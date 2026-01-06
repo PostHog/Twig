@@ -11,11 +11,13 @@ import {
   ViewVerticalIcon,
 } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
+import { track } from "@renderer/lib/analytics";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { ANALYTICS_EVENTS, type CommandMenuAction } from "@/types/analytics";
 
 interface CommandMenuProps {
   open: boolean;
@@ -32,14 +34,30 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
+  const trackAction = useCallback((action: CommandMenuAction) => {
+    track(ANALYTICS_EVENTS.COMMAND_MENU_ACTION, { action_type: action });
+  }, []);
+
   const runAndClose = useCallback(
-    <T extends unknown[]>(fn: (...args: T) => void) =>
+    <T extends unknown[]>(
+      fn: (...args: T) => void,
+      action?: CommandMenuAction,
+    ) =>
       (...args: T) => {
+        if (action) {
+          trackAction(action);
+        }
         fn(...args);
         close();
       },
-    [close],
+    [close, trackAction],
   );
+
+  useEffect(() => {
+    if (open) {
+      track(ANALYTICS_EVENTS.COMMAND_MENU_OPENED);
+    }
+  }, [open]);
 
   useHotkeys("escape", close, {
     enabled: open,
@@ -107,14 +125,14 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
             <Command.Group heading="Navigation">
               <Command.Item
                 value="Home"
-                onSelect={runAndClose(navigateToTaskInput)}
+                onSelect={runAndClose(navigateToTaskInput, "home")}
               >
                 <HomeIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Home</Text>
               </Command.Item>
               <Command.Item
                 value="Settings"
-                onSelect={runAndClose(navigateToSettings)}
+                onSelect={runAndClose(navigateToSettings, "settings")}
               >
                 <GearIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Settings</Text>
@@ -124,7 +142,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
             <Command.Group heading="Actions">
               <Command.Item
                 value="Toggle theme dark light mode"
-                onSelect={runAndClose(toggleDarkMode)}
+                onSelect={runAndClose(toggleDarkMode, "toggle-theme")}
               >
                 {isDarkMode ? (
                   <SunIcon className="mr-3 h-3 w-3 text-gray-11" />
@@ -135,21 +153,24 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </Command.Item>
               <Command.Item
                 value="Toggle left sidebar"
-                onSelect={runAndClose(toggleLeftSidebar)}
+                onSelect={runAndClose(toggleLeftSidebar, "toggle-left-sidebar")}
               >
                 <ViewVerticalIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Toggle left sidebar</Text>
               </Command.Item>
               <Command.Item
                 value="Toggle right sidebar"
-                onSelect={runAndClose(toggleRightSidebar)}
+                onSelect={runAndClose(
+                  toggleRightSidebar,
+                  "toggle-right-sidebar",
+                )}
               >
                 <ViewVerticalIcon className="mr-3 h-3 w-3 rotate-180 text-gray-11" />
                 <Text size="1">Toggle right sidebar</Text>
               </Command.Item>
               <Command.Item
                 value="Create new task"
-                onSelect={runAndClose(navigateToTaskInput)}
+                onSelect={runAndClose(navigateToTaskInput, "new-task")}
               >
                 <FileTextIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">New task</Text>
@@ -162,7 +183,10 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                   <Command.Item
                     key={folder.id}
                     value={`New task in ${folder.name} folder ${folder.path}`}
-                    onSelect={runAndClose(() => navigateToTaskInput(folder.id))}
+                    onSelect={runAndClose(
+                      () => navigateToTaskInput(folder.id),
+                      "new-task",
+                    )}
                   >
                     <FileTextIcon className="mr-3 h-3 w-3 text-gray-11" />
                     <Text size="1">

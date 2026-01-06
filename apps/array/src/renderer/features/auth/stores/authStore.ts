@@ -124,14 +124,27 @@ export const useAuthStore = create<AuthState>()(
 
             get().scheduleTokenRefresh();
 
-            // Track user login
-            identifyUser(user.uuid, {
+            // Track user login - use distinct_id to match web sessions (same as PostHog web app)
+            const distinctId = user.distinct_id || user.email;
+            identifyUser(distinctId, {
+              email: user.email,
+              uuid: user.uuid,
               project_id: projectId.toString(),
               region,
             });
             track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
               project_id: projectId.toString(),
               region,
+            });
+
+            trpcVanilla.analytics.setUserId.mutate({
+              userId: distinctId,
+              properties: {
+                email: user.email,
+                uuid: user.uuid,
+                project_id: projectId.toString(),
+                region,
+              },
             });
           } catch {
             throw new Error("Failed to authenticate with PostHog");
@@ -301,9 +314,23 @@ export const useAuthStore = create<AuthState>()(
 
               get().scheduleTokenRefresh();
 
-              identifyUser(user.uuid, {
+              // Use distinct_id to match web sessions (same as PostHog web app)
+              const distinctId = user.distinct_id || user.email;
+              identifyUser(distinctId, {
+                email: user.email,
+                uuid: user.uuid,
                 project_id: projectId.toString(),
                 region: tokens.cloudRegion,
+              });
+
+              trpcVanilla.analytics.setUserId.mutate({
+                userId: distinctId,
+                properties: {
+                  email: user.email,
+                  uuid: user.uuid,
+                  project_id: projectId.toString(),
+                  region: tokens.cloudRegion,
+                },
               });
 
               return true;
@@ -320,6 +347,8 @@ export const useAuthStore = create<AuthState>()(
         logout: () => {
           track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
           resetUser();
+
+          trpcVanilla.analytics.resetUser.mutate();
 
           if (refreshTimeoutId) {
             window.clearTimeout(refreshTimeoutId);
