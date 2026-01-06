@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+concurrency:
+  group: agent-release
+  cancel-in-progress: false
+
 jobs:
   check-package-version:
     name: Check package version and detect an update
