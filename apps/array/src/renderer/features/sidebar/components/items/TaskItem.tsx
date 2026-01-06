@@ -10,6 +10,7 @@ import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 function useCurrentBranch(repoPath?: string, worktreeName?: string) {
@@ -183,21 +184,24 @@ export function TaskItem({
     <GitBranchIcon size={12} />
   );
 
-  const endContent = (
-    <span className="flex items-center gap-1">
-      {!isCloudTask && worktreePath && (
-        <span className="group-hover:hidden">
-          <DiffStatsDisplay worktreePath={worktreePath} />
-        </span>
-      )}
-      {onDelete && onTogglePin && (
-        <TaskHoverToolbar
-          isPinned={isPinned}
-          onDelete={onDelete}
-          onTogglePin={onTogglePin}
-        />
-      )}
-    </span>
+  const endContent = useMemo(
+    () => (
+      <span className="flex items-center gap-1">
+        {!isCloudTask && worktreePath && (
+          <span className="group-hover:hidden">
+            <DiffStatsDisplay worktreePath={worktreePath} />
+          </span>
+        )}
+        {onDelete && onTogglePin && (
+          <TaskHoverToolbar
+            isPinned={isPinned}
+            onDelete={onDelete}
+            onTogglePin={onTogglePin}
+          />
+        )}
+      </span>
+    ),
+    [isCloudTask, worktreePath, onDelete, onTogglePin, isPinned],
   );
 
   return (
