@@ -3,6 +3,7 @@ import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
+import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -100,6 +101,15 @@ export function GlobalEventHandlers({
       window.removeEventListener("mouseup", handleMouseButton);
     };
   }, [goBack, goForward]);
+
+  // Reload folders when window regains focus to detect moved/deleted folders
+  useEffect(() => {
+    const handleFocus = () => {
+      useRegisteredFoldersStore.getState().loadFolders();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, []);
 
   trpcReact.ui.onOpenSettings.useSubscription(undefined, {
     onData: handleOpenSettings,
