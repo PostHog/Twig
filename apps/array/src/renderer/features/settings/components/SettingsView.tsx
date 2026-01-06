@@ -53,11 +53,9 @@ export function SettingsView() {
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
   const {
     autoRunTasks,
-    defaultRunMode,
     createPR,
     desktopNotifications,
     setAutoRunTasks,
-    setDefaultRunMode,
     setCreatePR,
     setDesktopNotifications,
   } = useSettingsStore();
