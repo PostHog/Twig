@@ -1,9 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import {
-  type DefaultRunMode,
-  useSettingsStore,
-} from "@features/settings/stores/settingsStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -54,14 +51,8 @@ export function SettingsView() {
     useAuthStore();
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
-  const {
-    autoRunTasks,
-    defaultRunMode,
-    createPR,
-    setAutoRunTasks,
-    setDefaultRunMode,
-    setCreatePR,
-  } = useSettingsStore();
+  const { autoRunTasks, createPR, setAutoRunTasks, setCreatePR } =
+    useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
   );
@@ -110,18 +101,6 @@ export function SettingsView() {
       setAutoRunTasks(checked);
     },
     [autoRunTasks, setAutoRunTasks],
-  );
-
-  const handleRunModeChange = useCallback(
-    (value: DefaultRunMode) => {
-      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-        setting_name: "default_run_mode",
-        new_value: value,
-        old_value: defaultRunMode,
-      });
-      setDefaultRunMode(value);
-    },
-    [defaultRunMode, setDefaultRunMode],
   );
 
   const handleCreatePRChange = useCallback(
@@ -330,29 +309,6 @@ export function SettingsView() {
                     onCheckedChange={handleAutoRunChange}
                     size="1"
                   />
-                </Flex>
-
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Default run environment
-                  </Text>
-                  <Select.Root
-                    value={defaultRunMode}
-                    onValueChange={(value) =>
-                      handleRunModeChange(value as DefaultRunMode)
-                    }
-                    size="1"
-                  >
-                    <Select.Trigger />
-                    <Select.Content>
-                      <Select.Item value="local">Local</Select.Item>
-                      <Select.Item value="cloud">Cloud</Select.Item>
-                      <Select.Item value="last_used">Last used</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                  <Text size="1" color="gray">
-                    Choose which environment to use when running tasks
-                  </Text>
                 </Flex>
 
                 <Flex align="center" justify="between">

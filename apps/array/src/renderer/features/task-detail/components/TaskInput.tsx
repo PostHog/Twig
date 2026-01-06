@@ -1,6 +1,5 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { RepositoryPicker } from "@features/repository-picker/components/RepositoryPicker";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -12,7 +11,6 @@ import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { BranchSelect } from "./BranchSelect";
-import { type RunMode, RunModeSelect } from "./RunModeSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 
@@ -26,19 +24,15 @@ export function TaskInput() {
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
   const { folders } = useRegisteredFoldersStore();
-  const { lastUsedRunMode, lastUsedLocalWorkspaceMode } = useSettingsStore();
+  const { lastUsedLocalWorkspaceMode } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
 
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  const [selectedRepository, setSelectedRepository] = useState<string | null>(
-    null,
-  );
-  const [runMode, setRunMode] = useState<RunMode>(
-    import.meta.env.DEV ? lastUsedRunMode : "local",
-  );
+  // We're temporarily removing the cloud/local toggle, so hardcode to local
+  const runMode = "local";
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -60,13 +54,11 @@ export function TaskInput() {
   };
 
   // Compute the effective workspace mode for task creation
-  const effectiveWorkspaceMode: WorkspaceMode =
-    runMode === "cloud" ? "cloud" : localWorkspaceMode;
+  const effectiveWorkspaceMode: WorkspaceMode = localWorkspaceMode;
 
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editorRef,
     selectedDirectory,
-    selectedRepository,
     githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
@@ -123,24 +115,12 @@ export function TaskInput() {
         }}
       >
         <Flex gap="2" align="center">
-          {runMode === "cloud" ? (
-            <RepositoryPicker
-              value={selectedRepository}
-              onChange={setSelectedRepository}
-              placeholder="Select repository..."
-              size="1"
-            />
-          ) : (
-            <FolderPicker
-              value={selectedDirectory}
-              onChange={handleDirectoryChange}
-              placeholder="Select working directory..."
-              size="1"
-            />
-          )}
-          {import.meta.env.DEV && (
-            <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
-          )}
+          <FolderPicker
+            value={selectedDirectory}
+            onChange={handleDirectoryChange}
+            placeholder="Select working directory..."
+            size="1"
+          />
           {selectedDirectory && (
             <BranchSelect
               value={selectedBranch}
@@ -161,9 +141,7 @@ export function TaskInput() {
           onLocalWorkspaceModeChange={setLocalWorkspaceMode}
           canSubmit={canSubmit}
           onSubmit={handleSubmit}
-          hasDirectory={
-            runMode === "cloud" ? !!selectedRepository : !!selectedDirectory
-          }
+          hasDirectory={!!selectedDirectory}
           onEmptyChange={setEditorIsEmpty}
         />
 
