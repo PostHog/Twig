@@ -1,6 +1,7 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
@@ -24,8 +25,14 @@ export function GlobalEventHandlers({
   const navigateToTaskInput = useNavigationStore(
     (state) => state.navigateToTaskInput,
   );
+  const navigateToFolderSettings = useNavigationStore(
+    (state) => state.navigateToFolderSettings,
+  );
+  const view = useNavigationStore((state) => state.view);
   const goBack = useNavigationStore((state) => state.goBack);
   const goForward = useNavigationStore((state) => state.goForward);
+  const folders = useRegisteredFoldersStore((state) => state.folders);
+  const workspaces = useWorkspaceStore.use.workspaces();
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
@@ -110,6 +117,19 @@ export function GlobalEventHandlers({
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, []);
+
+  // Check if current task's folder became invalid (e.g., moved while app was open)
+  useEffect(() => {
+    if (view.type !== "task-detail" || !view.data) return;
+
+    const workspace = workspaces[view.data.id];
+    if (!workspace?.folderId) return;
+
+    const folder = folders.find((f) => f.id === workspace.folderId);
+    if (folder && folder.exists === false) {
+      navigateToFolderSettings(folder.id);
+    }
+  }, [view, folders, workspaces, navigateToFolderSettings]);
 
   trpcReact.ui.onOpenSettings.useSubscription(undefined, {
     onData: handleOpenSettings,
