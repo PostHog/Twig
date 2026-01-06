@@ -173,7 +173,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             const textToInsert = paths.map((p) => `"${p}"`).join(" ");
 
-            view.dispatch(view.state.tr.insertText(textToInsert + " ", pos));
+            view.dispatch(view.state.tr.insertText(`${textToInsert} `, pos));
             return true;
           }
 
