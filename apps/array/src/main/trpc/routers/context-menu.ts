@@ -1,6 +1,8 @@
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
+  confirmDeleteTaskInput,
+  confirmDeleteTaskOutput,
   fileContextMenuInput,
   fileContextMenuOutput,
   folderContextMenuInput,
@@ -18,6 +20,11 @@ const getService = () =>
   container.get<ContextMenuService>(MAIN_TOKENS.ContextMenuService);
 
 export const contextMenuRouter = router({
+  confirmDeleteTask: publicProcedure
+    .input(confirmDeleteTaskInput)
+    .output(confirmDeleteTaskOutput)
+    .mutation(({ input }) => getService().confirmDeleteTask(input)),
+
   showTaskContextMenu: publicProcedure
     .input(taskContextMenuInput)
     .output(taskContextMenuOutput)

@@ -189,8 +189,6 @@ export class Agent {
   ): Promise<InProcessAcpConnection> {
     await this._configureLlmGateway();
 
-    const task = await this.fetchTask(taskId);
-    const taskSlug = (task as any).slug || task.id;
     const isCloudMode = options.isCloudMode ?? false;
     const _cwd = options.repositoryPath || this.workingDirectory;
 
@@ -201,7 +199,7 @@ export class Agent {
       framework: options.framework,
       sessionStore: this.sessionStore,
       sessionId: taskRunId,
-      taskId: task.id,
+      taskId,
     });
 
     const sendNotification: SendNotification = async (method, params) => {
@@ -217,7 +215,10 @@ export class Agent {
       runId: taskRunId,
     });
 
+    // Only fetch task when we need the slug for git branch creation
     if (!options.skipGitBranch) {
+      const task = options.task ?? (await this.fetchTask(taskId));
+      const taskSlug = (task as any).slug || task.id;
       try {
         await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
       } catch (error) {

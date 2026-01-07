@@ -1,4 +1,5 @@
 import { exec } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { WorktreeManager } from "@posthog/agent";
@@ -20,13 +21,21 @@ const log = logger.scope("folders-service");
 
 @injectable()
 export class FoldersService {
-  async getFolders(): Promise<RegisteredFolder[]> {
+  async getFolders(): Promise<(RegisteredFolder & { exists: boolean })[]> {
     const folders = foldersStore.get("folders", []);
     // Filter out any folders with empty names (from invalid paths like "/")
-    return folders.filter((f) => f.name && f.path);
+    // Also add exists property to check if path is valid on disk
+    return folders
+      .filter((f) => f.name && f.path)
+      .map((f) => ({
+        ...f,
+        exists: fs.existsSync(f.path),
+      }));
   }
 
-  async addFolder(folderPath: string): Promise<RegisteredFolder> {
+  async addFolder(
+    folderPath: string,
+  ): Promise<RegisteredFolder & { exists: boolean }> {
     // Validate the path before proceeding
     const folderName = path.basename(folderPath);
     if (!folderPath || !folderName) {
@@ -69,7 +78,7 @@ export class FoldersService {
     if (existing) {
       existing.lastAccessed = new Date().toISOString();
       foldersStore.set("folders", folders);
-      return existing;
+      return { ...existing, exists: true };
     }
 
     const newFolder: RegisteredFolder = {
@@ -83,7 +92,7 @@ export class FoldersService {
     folders.push(newFolder);
     foldersStore.set("folders", folders);
 
-    return newFolder;
+    return { ...newFolder, exists: true };
   }
 
   async removeFolder(folderId: string): Promise<void> {

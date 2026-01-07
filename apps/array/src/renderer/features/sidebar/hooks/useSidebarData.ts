@@ -15,6 +15,7 @@ import {
   getTaskRepository,
   parseRepository,
 } from "@/renderer/utils/repository";
+import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 
@@ -42,6 +43,7 @@ export interface TaskData {
   lastActivityAt?: number;
   isGenerating?: boolean;
   isUnread?: boolean;
+  isPinned?: boolean;
 }
 
 export interface SidebarData {
@@ -57,7 +59,7 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings";
+  type: "task-detail" | "task-input" | "settings" | "folder-settings";
   data?: Task;
 }
 
@@ -181,6 +183,7 @@ export function useSidebarData({
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);
   const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
+  const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
   const isHomeActive = activeView.type === "task-input";
@@ -221,36 +224,48 @@ export function useSidebarData({
       const lastActivityAt = localActivity
         ? Math.max(apiUpdatedAt, localActivity)
         : apiUpdatedAt;
+      const isPinned = pinnedTaskIds.has(task.id);
       return {
         task,
         lastActivityAt,
         isGenerating: session?.isPromptPending ?? false,
+        isPinned,
       };
     });
 
-    tasksWithActivity.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    // Sort by pinned first, then by most recent activity
+    tasksWithActivity.sort((a, b) => {
+      // Pinned tasks come first
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      // Then sort by most recent activity
+      return b.lastActivityAt - a.lastActivityAt;
+    });
 
     return {
       id: folder.id,
       name: folder.name,
       path: folder.path,
-      tasks: tasksWithActivity.map(({ task, lastActivityAt, isGenerating }) => {
-        const taskLastViewedAt = lastViewedAt[task.id];
-        const isCurrentlyViewing = activeTaskId === task.id;
-        // Only show unread if: user has viewed it before AND there's new activity since
-        const isUnread =
-          !isCurrentlyViewing &&
-          taskLastViewedAt !== undefined &&
-          lastActivityAt > taskLastViewedAt;
+      tasks: tasksWithActivity.map(
+        ({ task, lastActivityAt, isGenerating, isPinned }) => {
+          const taskLastViewedAt = lastViewedAt[task.id];
+          const isCurrentlyViewing = activeTaskId === task.id;
+          // Only show unread if: user has viewed it before AND there's new activity since
+          const isUnread =
+            !isCurrentlyViewing &&
+            taskLastViewedAt !== undefined &&
+            lastActivityAt > taskLastViewedAt;
 
-        return {
-          id: task.id,
-          title: task.title,
-          lastActivityAt,
-          isGenerating,
-          isUnread,
-        };
-      }),
+          return {
+            id: task.id,
+            title: task.title,
+            lastActivityAt,
+            isGenerating,
+            isUnread,
+            isPinned,
+          };
+        },
+      ),
     };
   });
 

@@ -605,48 +605,68 @@ export class WorktreeManager {
   }
 
   private async getDefaultBranch(): Promise<string> {
-    try {
-      const remoteBranch = await this.runGitCommand(
-        "symbolic-ref refs/remotes/origin/HEAD",
-      );
-      return remoteBranch.replace("refs/remotes/origin/", "");
-    } catch {
-      // Fallback: check if main exists, otherwise use master
-      try {
-        await this.runGitCommand("rev-parse --verify main");
-        return "main";
-      } catch {
-        try {
-          await this.runGitCommand("rev-parse --verify master");
-          return "master";
-        } catch {
-          throw new Error(
-            "Cannot determine default branch. No main or master branch found.",
-          );
-        }
-      }
+    // Try all methods in parallel for speed
+    const [symbolicRef, mainExists, masterExists] = await Promise.allSettled([
+      this.runGitCommand("symbolic-ref refs/remotes/origin/HEAD"),
+      this.runGitCommand("rev-parse --verify main"),
+      this.runGitCommand("rev-parse --verify master"),
+    ]);
+
+    // Prefer symbolic ref (most accurate)
+    if (symbolicRef.status === "fulfilled") {
+      return symbolicRef.value.replace("refs/remotes/origin/", "");
     }
+
+    // Fallback to main if it exists
+    if (mainExists.status === "fulfilled") {
+      return "main";
+    }
+
+    // Fallback to master if it exists
+    if (masterExists.status === "fulfilled") {
+      return "master";
+    }
+
+    throw new Error(
+      "Cannot determine default branch. No main or master branch found.",
+    );
   }
 
   async createWorktree(options?: {
     baseBranch?: string;
   }): Promise<WorktreeInfo> {
+    const totalStart = Date.now();
+
+    // Run setup tasks in parallel for speed
+    const setupPromises: Promise<unknown>[] = [];
+
     // Only modify .git/info/exclude when using in-repo storage
     if (!this.usesExternalPath()) {
-      await this.ensureArrayDirIgnored();
-    }
-
-    // Ensure the worktree folder exists when using external path
-    if (this.usesExternalPath()) {
+      setupPromises.push(this.ensureArrayDirIgnored());
+    } else {
+      // Ensure the worktree folder exists when using external path
       const folderPath = this.getWorktreeFolderPath();
-      await fs.mkdir(folderPath, { recursive: true });
+      setupPromises.push(fs.mkdir(folderPath, { recursive: true }));
     }
 
-    // Generate unique worktree name
-    const worktreeName = await this.generateUniqueWorktreeName();
+    // Generate unique worktree name (in parallel with above)
+    const worktreeNamePromise = this.generateUniqueWorktreeName();
+    setupPromises.push(worktreeNamePromise);
+
+    // Get default branch in parallel if not provided
+    const baseBranchPromise = options?.baseBranch
+      ? Promise.resolve(options.baseBranch)
+      : this.getDefaultBranch();
+    setupPromises.push(baseBranchPromise);
+
+    // Wait for all setup to complete
+    await Promise.all(setupPromises);
+    const setupTime = Date.now() - totalStart;
+
+    const worktreeName = await worktreeNamePromise;
+    const baseBranch = await baseBranchPromise;
     const worktreePath = this.getWorktreePath(worktreeName);
     const branchName = `array/${worktreeName}`;
-    const baseBranch = options?.baseBranch ?? (await this.getDefaultBranch());
 
     this.logger.info("Creating worktree", {
       worktreeName,
@@ -654,21 +674,24 @@ export class WorktreeManager {
       branchName,
       baseBranch,
       external: this.usesExternalPath(),
+      setupTimeMs: setupTime,
     });
 
     // Create the worktree with a new branch
+    const gitStart = Date.now();
     if (this.usesExternalPath()) {
       // Use absolute path for external worktrees
       await this.runGitCommand(
-        `worktree add -b "${branchName}" "${worktreePath}" "${baseBranch}"`,
+        `worktree add --quiet -b "${branchName}" "${worktreePath}" "${baseBranch}"`,
       );
     } else {
       // Use relative path from repo root for in-repo worktrees
       const relativePath = `${WORKTREE_FOLDER_NAME}/${worktreeName}`;
       await this.runGitCommand(
-        `worktree add -b "${branchName}" "./${relativePath}" "${baseBranch}"`,
+        `worktree add --quiet -b "${branchName}" "./${relativePath}" "${baseBranch}"`,
       );
     }
+    const gitTime = Date.now() - gitStart;
 
     const createdAt = new Date().toISOString();
 
@@ -676,6 +699,9 @@ export class WorktreeManager {
       worktreeName,
       worktreePath,
       branchName,
+      setupTimeMs: setupTime,
+      gitWorktreeAddMs: gitTime,
+      totalMs: Date.now() - totalStart,
     });
 
     return {
