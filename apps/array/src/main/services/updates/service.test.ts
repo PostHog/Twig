@@ -151,7 +151,7 @@ describe("UpdatesService", () => {
 
       expect(mockApp.on).toHaveBeenCalledWith(
         "browser-window-focus",
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(mockApp.whenReady).toHaveBeenCalled();
     });
@@ -278,7 +278,7 @@ describe("UpdatesService", () => {
 
       // Simulate completion
       const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-not-available"
+        ([event]) => event === "update-not-available",
       )?.[1];
 
       if (notAvailableHandler) {
@@ -302,7 +302,7 @@ describe("UpdatesService", () => {
 
       // Simulate update downloaded
       const updateDownloadedHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-downloaded"
+        ([event]) => event === "update-downloaded",
       )?.[1];
 
       if (updateDownloadedHandler) {
@@ -319,7 +319,7 @@ describe("UpdatesService", () => {
 
       // Simulate update downloaded
       const updateDownloadedHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-downloaded"
+        ([event]) => event === "update-downloaded",
       )?.[1];
 
       if (updateDownloadedHandler) {
@@ -353,7 +353,7 @@ describe("UpdatesService", () => {
 
     it("registers all required event handlers", () => {
       const registeredEvents = mockAutoUpdater.on.mock.calls.map(
-        ([event]) => event
+        ([event]) => event,
       );
 
       expect(registeredEvents).toContain("error");
@@ -373,7 +373,7 @@ describe("UpdatesService", () => {
 
       // Simulate no update available
       const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-not-available"
+        ([event]) => event === "update-not-available",
       )?.[1];
 
       if (notAvailableHandler) {
@@ -393,7 +393,7 @@ describe("UpdatesService", () => {
 
       // Simulate update downloaded with version
       const downloadedHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-downloaded"
+        ([event]) => event === "update-downloaded",
       )?.[1];
 
       if (downloadedHandler) {
@@ -413,7 +413,7 @@ describe("UpdatesService", () => {
 
       // Simulate error
       const errorHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "error"
+        ([event]) => event === "error",
       )?.[1];
 
       if (errorHandler) {
@@ -432,7 +432,7 @@ describe("UpdatesService", () => {
 
       // Simulate error without starting a check
       const errorHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "error"
+        ([event]) => event === "error",
       )?.[1];
 
       expect(() => {
@@ -476,7 +476,7 @@ describe("UpdatesService", () => {
 
       // Simulate response before timeout
       const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-not-available"
+        ([event]) => event === "update-not-available",
       )?.[1];
 
       if (notAvailableHandler) {
@@ -504,7 +504,7 @@ describe("UpdatesService", () => {
 
       // Simulate error before timeout
       const errorHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "error"
+        ([event]) => event === "error",
       )?.[1];
 
       if (errorHandler) {
@@ -532,7 +532,7 @@ describe("UpdatesService", () => {
 
       // Simulate update downloaded
       const downloadedHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-downloaded"
+        ([event]) => event === "update-downloaded",
       )?.[1];
 
       if (downloadedHandler) {
@@ -544,7 +544,7 @@ describe("UpdatesService", () => {
 
       // Get the browser-window-focus callback and call it
       const focusCallback = mockApp.on.mock.calls.find(
-        ([event]) => event === "browser-window-focus"
+        ([event]) => event === "browser-window-focus",
       )?.[1];
 
       // Reset the handler count
@@ -569,20 +569,21 @@ describe("UpdatesService", () => {
     it("performs check every 6 hours", async () => {
       await initializeService(service);
 
-      const initialCallCount = mockAutoUpdater.checkForUpdates.mock.calls.length;
+      const initialCallCount =
+        mockAutoUpdater.checkForUpdates.mock.calls.length;
 
       // Advance 6 hours
       await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
 
       expect(mockAutoUpdater.checkForUpdates.mock.calls.length).toBe(
-        initialCallCount + 1
+        initialCallCount + 1,
       );
 
       // Advance another 6 hours
       await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
 
       expect(mockAutoUpdater.checkForUpdates.mock.calls.length).toBe(
-        initialCallCount + 2
+        initialCallCount + 2,
       );
     });
   });

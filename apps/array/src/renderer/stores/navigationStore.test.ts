@@ -12,7 +12,9 @@ vi.mock("@features/task-detail/stores/taskExecutionStore", () => ({
   },
 }));
 vi.mock("@features/workspace/stores/workspaceStore", () => ({
-  useWorkspaceStore: { getState: () => ({ ensureWorkspace: vi.fn(), workspaces: {} }) },
+  useWorkspaceStore: {
+    getState: () => ({ ensureWorkspace: vi.fn(), workspaces: {} }),
+  },
 }));
 vi.mock("@stores/registeredFoldersStore", () => ({
   useRegisteredFoldersStore: { getState: () => ({ addFolder: vi.fn() }) },

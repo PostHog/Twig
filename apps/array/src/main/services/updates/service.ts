@@ -128,10 +128,8 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     autoUpdater.on("checking-for-update", () => this.handleCheckingForUpdate());
     autoUpdater.on("update-available", () => this.handleUpdateAvailable());
     autoUpdater.on("update-not-available", () => this.handleNoUpdate());
-    autoUpdater.on(
-      "update-downloaded",
-      (_event, _releaseNotes, releaseName) =>
-        this.handleUpdateDownloaded(releaseName),
+    autoUpdater.on("update-downloaded", (_event, _releaseNotes, releaseName) =>
+      this.handleUpdateDownloaded(releaseName),
     );
 
     // Perform initial check
