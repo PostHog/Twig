@@ -22,7 +22,9 @@ jobs:
       is-new-version: ${{ steps.check-package-version.outputs.is-new-version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Check package version and detect an update
         id: check-package-version
@@ -40,22 +42,28 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: "pnpm"
           registry-url: https://registry.npmjs.org
-
-      - name: Install pnpm
-        run: npm install -g pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build the package
         run: pnpm --filter agent run build
+
+      - name: Run tests
+        run: pnpm --filter agent run test
 
       - name: Publish the package to npm registry
         working-directory: packages/agent
