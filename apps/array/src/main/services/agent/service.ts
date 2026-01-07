@@ -130,6 +130,7 @@ interface SessionConfig {
   sdkSessionId?: string;
   model?: string;
   framework?: "claude" | "codex";
+  executionMode?: "plan";
 }
 
 interface ManagedSession {
@@ -152,14 +153,54 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
+interface PendingPermission {
+  resolve: (response: RequestPermissionResponse) => void;
+  reject: (error: Error) => void;
+  sessionId: string;
+  toolCallId: string;
+}
+
+// Tools that always require user interaction, never auto-approve
+const ALWAYS_PROMPT_TOOLS = ["AskUserQuestion", "ExitPlanMode"];
+
 @injectable()
 export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
+  private pendingPermissions = new Map<string, PendingPermission>();
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
     log.info("Session token updated");
+  }
+
+  /**
+   * Respond to a pending permission request from the UI.
+   * This resolves the promise that the agent is waiting on.
+   */
+  public respondToPermission(
+    sessionId: string,
+    toolCallId: string,
+    optionId: string,
+  ): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found", { sessionId, toolCallId });
+      return;
+    }
+
+    log.info("Permission response received", { sessionId, toolCallId, optionId });
+
+    pending.resolve({
+      outcome: {
+        outcome: "selected",
+        optionId,
+      },
+    });
+
+    this.pendingPermissions.delete(key);
   }
 
   private getToken(fallback: string): string {
@@ -232,6 +273,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sdkSessionId,
       model,
       framework,
+      executionMode,
     } = config;
 
     if (!isRetry) {
@@ -289,7 +331,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         await connection.newSession({
           cwd: repoPath,
           mcpServers,
-          _meta: { sessionId: taskRunId, model },
+          _meta: {
+            sessionId: taskRunId,
+            model,
+            ...(executionMode && { initialModeId: executionMode }),
+          },
         });
       }
 
@@ -515,6 +561,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     _channel: string,
     clientStreams: { readable: ReadableStream; writable: WritableStream },
   ): ClientSideConnection {
+    // Capture service reference for use in client callbacks
+    const service = this;
+
     const emitToRenderer = (payload: unknown) => {
       // Emit event via TypedEventEmitter for tRPC subscription
       this.emit(AgentServiceEvent.SessionEvent, {
@@ -546,6 +595,78 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       async requestPermission(
         params: RequestPermissionRequest,
       ): Promise<RequestPermissionResponse> {
+        // Extract tool name from the raw input (if available)
+        const toolName =
+          (params.toolCall?.rawInput as { toolName?: string } | undefined)
+            ?.toolName || "";
+        const toolCallId = params.toolCall?.toolCallId || "";
+
+        log.info("requestPermission called", {
+          sessionId: taskRunId,
+          toolCallId,
+          toolName,
+          title: params.toolCall?.title,
+          optionCount: params.options.length,
+        });
+
+        // Check if this tool requires user interaction
+        const requiresUserInput = ALWAYS_PROMPT_TOOLS.some(
+          (name) =>
+            toolName === name ||
+            params.toolCall?.title?.includes(name) ||
+            // ExitPlanMode has special option structure
+            params.options.some(
+              (o) =>
+                o.name?.includes("auto-accept") ||
+                o.name?.includes("keep planning"),
+            ),
+        );
+
+        if (requiresUserInput && toolCallId) {
+          log.info("Permission request requires user input", {
+            sessionId: taskRunId,
+            toolCallId,
+            toolName,
+            title: params.toolCall?.title,
+          });
+
+          // Create promise that will be resolved when user responds
+          return new Promise((resolve, reject) => {
+            const key = `${taskRunId}:${toolCallId}`;
+            service.pendingPermissions.set(key, {
+              resolve,
+              reject,
+              sessionId: taskRunId,
+              toolCallId,
+            });
+
+            // Emit permission request event to renderer
+            log.info("Emitting permission request to renderer", {
+              sessionId: taskRunId,
+              toolCallId,
+            });
+            service.emit(AgentServiceEvent.PermissionRequest, {
+              sessionId: taskRunId,
+              toolCallId,
+              title: params.toolCall?.title || "Permission Required",
+              options: params.options.map((o) => ({
+                kind: o.kind,
+                name: o.name,
+                optionId: o.optionId,
+                description: (o as { description?: string }).description,
+              })),
+              rawInput: params.toolCall?.rawInput,
+            });
+          });
+        }
+
+        log.info("Auto-approving permission request", {
+          sessionId: taskRunId,
+          toolCallId,
+          toolName,
+          requiresUserInput,
+        });
+        // Auto-approve for non-interactive tools
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );
@@ -611,6 +732,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
       framework: "framework" in params ? params.framework : "claude",
+      executionMode:
+        "executionMode" in params ? params.executionMode : undefined,
     };
   }
 

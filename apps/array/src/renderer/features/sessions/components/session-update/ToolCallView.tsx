@@ -4,6 +4,7 @@ import {
   ArrowsClockwise,
   ArrowsLeftRight,
   Brain,
+  ChatCircle,
   FileText,
   Globe,
   type Icon,
@@ -25,6 +26,7 @@ const kindIcons: Record<ToolKind, Icon> = {
   think: Brain,
   fetch: Globe,
   switch_mode: ArrowsClockwise,
+  ask: ChatCircle,
   other: Wrench,
 };
 

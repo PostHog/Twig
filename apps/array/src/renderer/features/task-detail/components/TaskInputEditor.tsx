@@ -3,7 +3,7 @@ import { EditorToolbar } from "@features/message-editor/components/EditorToolbar
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import { FrameworkSelector } from "@features/sessions/components/FrameworkSelector";
-import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
+import { ArrowUp, GitBranchIcon, Notepad } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
@@ -23,6 +23,8 @@ interface TaskInputEditorProps {
   onSubmit: () => void;
   hasDirectory: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
+  isPlanMode?: boolean;
+  onPlanModeChange?: (isPlanMode: boolean) => void;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -41,6 +43,8 @@ export const TaskInputEditor = forwardRef<
       onSubmit,
       hasDirectory,
       onEmptyChange,
+      isPlanMode = false,
+      onPlanModeChange,
     },
     ref,
   ) => {
@@ -184,6 +188,31 @@ export const TaskInputEditor = forwardRef<
           </Flex>
 
           <Flex align="center" gap="4">
+            {!isCloudMode && onPlanModeChange && (
+              <Tooltip
+                content={
+                  isPlanMode
+                    ? "Plan Mode: Agent will plan first, then ask for approval before making changes"
+                    : "Normal Mode: Agent will execute changes directly"
+                }
+              >
+                <IconButton
+                  size="1"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlanModeChange(!isPlanMode);
+                  }}
+                  className="plan-mode-toggle-button"
+                  data-active={isPlanMode}
+                >
+                  <Notepad
+                    size={16}
+                    weight={isPlanMode ? "fill" : "regular"}
+                  />
+                </IconButton>
+              </Tooltip>
+            )}
             {!isCloudMode && (
               <Tooltip
                 content={

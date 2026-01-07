@@ -37,6 +37,7 @@ export function TaskInput() {
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
+  const [isPlanMode, setIsPlanMode] = useState(false);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -63,6 +64,7 @@ export function TaskInput() {
     workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
     editorIsEmpty,
+    executionMode: isPlanMode ? "plan" : undefined,
   });
 
   return (
@@ -143,6 +145,8 @@ export function TaskInput() {
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}
           onEmptyChange={setEditorIsEmpty}
+          isPlanMode={isPlanMode}
+          onPlanModeChange={setIsPlanMode}
         />
 
         <SuggestedTasks editorRef={editorRef} />

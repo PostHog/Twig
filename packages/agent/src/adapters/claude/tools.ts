@@ -389,6 +389,23 @@ export function toolInfoFromToolUse(
           : [],
       };
 
+    case "AskUserQuestion":
+      return {
+        title: input?.questions?.[0]?.question || "Question",
+        kind: "ask" as ToolKind,
+        content: input?.questions
+          ? [
+              {
+                type: "content",
+                content: {
+                  type: "text",
+                  text: JSON.stringify(input.questions, null, 2),
+                },
+              },
+            ]
+          : [],
+      };
+
     case "Other": {
       let output: string;
       try {
@@ -491,6 +508,25 @@ export function toolUpdateFromToolResult(
 
     case "ExitPlanMode": {
       return { title: "Exited Plan Mode" };
+    }
+    case "AskUserQuestion": {
+      // The answer is returned in the tool result
+      const content = toolResult.content;
+      if (Array.isArray(content) && content.length > 0) {
+        const firstItem = content[0];
+        if (typeof firstItem === "object" && firstItem !== null && "text" in firstItem) {
+          return {
+            title: "Answer received",
+            content: [
+              {
+                type: "content",
+                content: { type: "text", text: String(firstItem.text) },
+              },
+            ],
+          };
+        }
+      }
+      return { title: "Question answered" };
     }
     default: {
       return toAcpContentUpdate(

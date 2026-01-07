@@ -29,6 +29,21 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 
 // --- Types ---
 
+export interface PermissionRequest {
+  toolCallId: string;
+  title: string;
+  options: Array<{
+    kind: string;
+    name: string;
+    optionId: string;
+    description?: string;
+  }>;
+  rawInput: unknown;
+  receivedAt: number;
+}
+
+export type ExecutionMode = "plan" | "default" | "acceptEdits";
+
 export interface AgentSession {
   taskRunId: string;
   taskId: string;
@@ -42,6 +57,10 @@ export interface AgentSession {
   processedLineCount?: number;
   model?: string;
   framework?: "claude" | "codex";
+  // Current execution mode (plan = read-only, default = manual approve, acceptEdits = auto-approve edits)
+  currentMode: ExecutionMode;
+  // Permission requests waiting for user response
+  pendingPermissions: Map<string, PermissionRequest>;
 }
 
 interface SessionState {
@@ -53,6 +72,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
+    executionMode?: "plan";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -66,6 +86,11 @@ interface SessionActions {
     command: string,
     cwd: string,
     result: { stdout: string; stderr: string; exitCode: number },
+  ) => Promise<void>;
+  respondToPermission: (
+    taskId: string,
+    toolCallId: string,
+    optionId: string,
   ) => Promise<void>;
 }
 
@@ -81,7 +106,10 @@ type SessionStore = SessionState & { actions: SessionActions };
 const connectAttempts = new Set<string>();
 const cloudPollers = new Map<string, NodeJS.Timeout>();
 // Track active tRPC subscriptions for cleanup
-const subscriptions = new Map<string, { unsubscribe: () => void }>();
+const subscriptions = new Map<
+  string,
+  { event: { unsubscribe: () => void }; permission?: { unsubscribe: () => void } }
+>();
 
 /**
  * Subscribe to agent session events via tRPC subscription.
@@ -90,7 +118,7 @@ const subscriptions = new Map<string, { unsubscribe: () => void }>();
 function subscribeToChannel(taskRunId: string) {
   if (subscriptions.has(taskRunId)) return;
 
-  const subscription = trpcVanilla.agent.onSessionEvent.subscribe(
+  const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
     { sessionId: taskRunId },
     {
       onData: (payload: unknown) => {
@@ -98,6 +126,23 @@ function subscribeToChannel(taskRunId: string) {
           const session = state.sessions[taskRunId];
           if (session) {
             session.events.push(payload as AcpMessage);
+
+            // Handle mode updates from ExitPlanMode approval
+            const msg = (payload as AcpMessage).message;
+            if (
+              "method" in msg &&
+              msg.method === "session/update" &&
+              "params" in msg
+            ) {
+              const params = msg.params as { update?: { sessionUpdate?: string; currentModeId?: string } };
+              if (params?.update?.sessionUpdate === "current_mode_update" && params.update.currentModeId) {
+                const newMode = params.update.currentModeId as ExecutionMode;
+                if (newMode === "default" || newMode === "acceptEdits") {
+                  session.currentMode = newMode;
+                  log.info("Session mode updated", { taskRunId, newMode });
+                }
+              }
+            }
           }
         });
       },
@@ -107,12 +152,68 @@ function subscribeToChannel(taskRunId: string) {
     },
   );
 
-  subscriptions.set(taskRunId, subscription);
+  // Subscribe to permission requests (for AskUserQuestion, ExitPlanMode, etc.)
+  const permissionSubscription = trpcVanilla.agent.onPermissionRequest.subscribe(
+    { sessionId: taskRunId },
+    {
+      onData: (payload) => {
+        log.info("Permission request received in renderer", {
+          taskRunId,
+          toolCallId: payload.toolCallId,
+          title: payload.title,
+          optionCount: payload.options?.length,
+        });
+
+        // Get current state and update outside of Immer (Maps don't work well with Immer proxies)
+        const state = useStore.getState();
+        const session = state.sessions[taskRunId];
+
+        if (session) {
+          // Create a new Map with the new permission
+          const newPermissions = new Map(session.pendingPermissions);
+          newPermissions.set(payload.toolCallId, {
+            toolCallId: payload.toolCallId,
+            title: payload.title,
+            options: payload.options,
+            rawInput: payload.rawInput,
+            receivedAt: Date.now(),
+          });
+
+          log.info("Updating pendingPermissions in store", {
+            taskRunId,
+            toolCallId: payload.toolCallId,
+            newMapSize: newPermissions.size,
+          });
+
+          // Update using setState with a new sessions object to trigger re-render
+          useStore.setState((draft) => {
+            if (draft.sessions[taskRunId]) {
+              draft.sessions[taskRunId].pendingPermissions = newPermissions;
+            }
+          });
+        } else {
+          log.warn("Session not found for permission request", {
+            taskRunId,
+            availableSessions: Object.keys(state.sessions),
+          });
+        }
+      },
+      onError: (err) => {
+        log.error("Permission subscription error", { taskRunId, error: err });
+      },
+    },
+  );
+
+  subscriptions.set(taskRunId, {
+    event: eventSubscription,
+    permission: permissionSubscription,
+  });
 }
 
 function unsubscribeFromChannel(taskRunId: string) {
   const subscription = subscriptions.get(taskRunId);
-  subscription?.unsubscribe();
+  subscription?.event.unsubscribe();
+  subscription?.permission?.unsubscribe();
   subscriptions.delete(taskRunId);
 }
 
@@ -273,6 +374,7 @@ function createBaseSession(
   taskId: string,
   isCloud: boolean,
   framework?: "claude" | "codex",
+  executionMode?: "plan",
 ): AgentSession {
   return {
     taskRunId,
@@ -284,6 +386,8 @@ function createBaseSession(
     isPromptPending: false,
     isCloud,
     framework,
+    currentMode: executionMode ?? "default",
+    pendingPermissions: new Map(),
   };
 }
 
@@ -471,6 +575,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
+      executionMode?: "plan",
     ) => {
       if (!auth.client) {
         log.error("API client not available");
@@ -493,6 +598,7 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         model: defaultModel,
         framework: defaultFramework,
+        executionMode,
       });
 
       const session = createBaseSession(
@@ -500,6 +606,7 @@ const useStore = create<SessionStore>()(
         taskId,
         false,
         defaultFramework,
+        executionMode,
       );
       session.channel = result.channel;
       session.status = "connected";
@@ -569,7 +676,7 @@ const useStore = create<SessionStore>()(
       sessions: {},
 
       actions: {
-        connectToTask: async ({ task, repoPath, initialPrompt }) => {
+        connectToTask: async ({ task, repoPath, initialPrompt, executionMode }) => {
           const {
             id: taskId,
             latest_run: latestRun,
@@ -611,6 +718,7 @@ const useStore = create<SessionStore>()(
                 repoPath,
                 auth,
                 initialPrompt,
+                executionMode,
               );
             }
           } catch (error) {
@@ -745,6 +853,45 @@ const useStore = create<SessionStore>()(
 
           await appendAndPersist(taskId, session, event, storedEntry);
         },
+
+        respondToPermission: async (taskId, toolCallId, optionId) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) {
+            log.error("No session found for permission response", { taskId });
+            return;
+          }
+
+          try {
+            await trpcVanilla.agent.respondToPermission.mutate({
+              sessionId: session.taskRunId,
+              toolCallId,
+              optionId,
+            });
+
+            // Remove from pending permissions after successful response
+            // Create new Map outside of Immer (Maps don't work well with Immer proxies)
+            const currentState = get();
+            const sess = currentState.sessions[session.taskRunId];
+            if (sess) {
+              const newPermissions = new Map(sess.pendingPermissions);
+              newPermissions.delete(toolCallId);
+              set((draft) => {
+                if (draft.sessions[session.taskRunId]) {
+                  draft.sessions[session.taskRunId].pendingPermissions = newPermissions;
+                }
+              });
+            }
+
+            log.info("Permission response sent", { taskId, toolCallId, optionId });
+          } catch (error) {
+            log.error("Failed to respond to permission", {
+              taskId,
+              toolCallId,
+              optionId,
+              error,
+            });
+          }
+        },
       },
     };
   }),
@@ -846,6 +993,51 @@ export function getUserPromptsForTask(taskId: string | undefined): string[] {
   if (!session?.events) return [];
   return extractUserPromptsFromEvents(session.events);
 }
+
+/**
+ * Hook to get pending permissions for a task.
+ * Returns a Map of toolCallId -> PermissionRequest.
+ */
+export const usePendingPermissionsForTask = (
+  taskId: string | undefined,
+): Map<string, PermissionRequest> => {
+  return useStore((s) => {
+    if (!taskId) return new Map();
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.pendingPermissions ?? new Map();
+  });
+};
+
+/**
+ * Get pending permissions for a task (non-hook version).
+ */
+export function getPendingPermissionsForTask(
+  taskId: string | undefined,
+): Map<string, PermissionRequest> {
+  if (!taskId) return new Map();
+  const sessions = useStore.getState().sessions;
+  const session = Object.values(sessions).find(
+    (sess) => sess.taskId === taskId,
+  );
+  return session?.pendingPermissions ?? new Map();
+}
+
+/**
+ * Hook to get the current execution mode for a task.
+ */
+export const useCurrentModeForTask = (
+  taskId: string | undefined,
+): ExecutionMode | undefined => {
+  return useStore((s) => {
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.currentMode;
+  });
+};
 
 // Token refresh subscription
 let lastKnownToken: string | null = null;

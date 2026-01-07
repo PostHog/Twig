@@ -25,8 +25,14 @@ import type {
   TaskExecutionOptions,
 } from "./types.js";
 import { Logger } from "./utils/logger.js";
-import { TASK_WORKFLOW } from "./workflow/config.js";
-import type { SendNotification, WorkflowRuntime } from "./workflow/types.js";
+
+/**
+ * Type for sending ACP notifications
+ */
+type SendNotification = (
+  method: string,
+  params: Record<string, unknown>,
+) => Promise<void>;
 
 export class Agent {
   private workingDirectory: string;
@@ -155,98 +161,18 @@ export class Agent {
     return this.acpConnection;
   }
 
-  // Adaptive task execution orchestrated via workflow steps
+  /**
+   * @deprecated Use runTaskV2() for local execution or runTaskCloud() for cloud execution.
+   * This method used the old workflow system which has been removed.
+   */
   async runTask(
-    taskId: string,
-    taskRunId: string,
-    options: import("./types.js").TaskExecutionOptions = {},
+    _taskId: string,
+    _taskRunId: string,
+    _options: import("./types.js").TaskExecutionOptions = {},
   ): Promise<void> {
-    // await this._configureLlmGateway();
-
-    const task = await this.fetchTask(taskId);
-    const cwd = options.repositoryPath || this.workingDirectory;
-    const isCloudMode = options.isCloudMode ?? false;
-    const taskSlug = (task as any).slug || task.id;
-
-    // Use taskRunId as sessionId - they are the same identifier
-    this.currentRunId = taskRunId;
-
-    this.logger.info("Starting adaptive task execution", {
-      taskId: task.id,
-      taskSlug,
-      taskRunId,
-      isCloudMode,
-    });
-
-    const connection = this.getOrCreateConnection();
-
-    // Create sendNotification using ACP connection's extNotification
-    const sendNotification: SendNotification = async (method, params) => {
-      this.logger.debug(`Notification: ${method}`, params);
-      await connection.agentConnection.extNotification?.(method, params);
-    };
-
-    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
-      sessionId: taskRunId,
-      runId: taskRunId,
-    });
-
-    await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
-
-    let taskError: Error | undefined;
-    try {
-      const workflowContext: WorkflowRuntime = {
-        task,
-        taskSlug,
-        runId: taskRunId,
-        cwd,
-        isCloudMode,
-        options,
-        logger: this.logger,
-        fileManager: this.fileManager,
-        gitManager: this.gitManager,
-        promptBuilder: this.promptBuilder,
-        connection: connection.agentConnection,
-        sessionId: taskRunId,
-        sendNotification,
-        mcpServers: this.mcpServers,
-        posthogAPI: this.posthogAPI,
-        stepResults: {},
-      };
-
-      for (const step of TASK_WORKFLOW) {
-        const result = await step.run({ step, context: workflowContext });
-        if (result.halt) {
-          return;
-        }
-      }
-
-      const shouldCreatePR = options.createPR ?? isCloudMode;
-      if (shouldCreatePR) {
-        await this.ensurePullRequest(
-          task,
-          workflowContext.stepResults,
-          sendNotification,
-        );
-      }
-
-      this.logger.info("Task execution complete", { taskId: task.id });
-      await sendNotification(POSTHOG_NOTIFICATIONS.TASK_COMPLETE, {
-        sessionId: taskRunId,
-        taskId: task.id,
-      });
-    } catch (error) {
-      taskError = error instanceof Error ? error : new Error(String(error));
-      this.logger.error("Task execution failed", {
-        taskId: task.id,
-        error: taskError.message,
-      });
-      await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
-        sessionId: taskRunId,
-        message: taskError.message,
-      });
-      throw taskError;
-    }
+    throw new Error(
+      "runTask() is deprecated. Use runTaskV2() for local execution or runTaskCloud() for cloud execution.",
+    );
   }
 
   /**
@@ -755,60 +681,6 @@ This PR implements the changes described in the task.`;
     }
   }
 
-  private async ensurePullRequest(
-    task: Task,
-    stepResults: Record<string, any>,
-    sendNotification: SendNotification,
-  ): Promise<void> {
-    const latestRun = task.latest_run;
-    const existingPr =
-      latestRun?.output && typeof latestRun.output === "object"
-        ? (latestRun.output as any).pr_url
-        : null;
-
-    if (existingPr) {
-      this.logger.info("PR already exists, skipping creation", {
-        taskId: task.id,
-        prUrl: existingPr,
-      });
-      return;
-    }
-
-    const buildResult = stepResults.build;
-    if (!buildResult?.commitCreated) {
-      this.logger.warn(
-        "Build step did not produce a commit; skipping PR creation",
-        { taskId: task.id },
-      );
-      return;
-    }
-
-    const branchName = await this.gitManager.getCurrentBranch();
-    const finalizeResult = stepResults.finalize;
-    const prBody = finalizeResult?.prBody;
-
-    const prUrl = await this.createPullRequest(
-      task.id,
-      branchName,
-      task.title,
-      task.description ?? "",
-      prBody,
-    );
-
-    await sendNotification(POSTHOG_NOTIFICATIONS.PR_CREATED, { prUrl });
-
-    try {
-      await this.attachPullRequestToTask(task.id, prUrl, branchName);
-      this.logger.info("PR attached to task successfully", {
-        taskId: task.id,
-        prUrl,
-      });
-    } catch (error) {
-      this.logger.warn("Could not attach PR to task", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
 }
 
 export type {

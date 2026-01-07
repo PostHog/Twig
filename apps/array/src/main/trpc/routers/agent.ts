@@ -8,6 +8,7 @@ import {
   promptInput,
   promptOutput,
   reconnectSessionInput,
+  respondToPermissionInput,
   sessionResponseSchema,
   setModelInput,
   startSessionInput,
@@ -72,4 +73,33 @@ export const agentRouter = router({
         }
       }
     }),
+
+  // Permission request subscription - yields when tools need user input
+  onPermissionRequest: publicProcedure
+    .input(subscribeSessionInput)
+    .subscription(async function* (opts) {
+      const service = getService();
+      const targetSessionId = opts.input.sessionId;
+      const iterable = service.toIterable(
+        AgentServiceEvent.PermissionRequest,
+        { signal: opts.signal },
+      );
+
+      for await (const event of iterable) {
+        if (event.sessionId === targetSessionId) {
+          yield event;
+        }
+      }
+    }),
+
+  // Respond to a permission request from the UI
+  respondToPermission: publicProcedure
+    .input(respondToPermissionInput)
+    .mutation(({ input }) =>
+      getService().respondToPermission(
+        input.sessionId,
+        input.toolCallId,
+        input.optionId,
+      ),
+    ),
 });

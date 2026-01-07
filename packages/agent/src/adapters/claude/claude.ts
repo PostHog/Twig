@@ -316,7 +316,60 @@ export class ClaudeAcpAgent implements Agent {
       }
     }
 
-    const permissionMode = "default";
+    // Use initialModeId from _meta if provided (e.g., "plan" for plan mode), otherwise default
+    // IMPORTANT: The SDK doesn't support "plan" mode natively, so we:
+    // 1. Track our own mode on the session for enforcement in canUseTool
+    // 2. Always pass "default" to the SDK so canUseTool is always invoked
+    const initialModeId = (params._meta as { initialModeId?: string } | undefined)
+      ?.initialModeId;
+    const ourPermissionMode = (initialModeId ?? "default") as PermissionMode;
+    // Always use "default" for SDK so canUseTool is called for all tools
+    const sdkPermissionMode: PermissionMode = "default";
+
+    // If starting in plan mode, append instructions to the system prompt
+    if (ourPermissionMode === "plan") {
+      const planModeInstructions = `
+
+# Plan Mode - IMPORTANT
+
+You are starting in PLAN MODE. This is critical - read carefully:
+
+## What you CANNOT do (these will be blocked):
+- Edit files (Edit tool will fail)
+- Write files (Write tool will fail)
+- Run bash commands that modify the filesystem
+- Make any changes to the codebase
+
+## What you CAN do:
+- Read files with the Read tool
+- Search with Glob and Grep tools
+- Explore the codebase to understand the structure
+- Use WebFetch and WebSearch for research
+
+## Your workflow in plan mode:
+1. Read and explore the codebase to understand the current implementation
+2. Analyze the user's request and identify what needs to change
+3. Create a detailed, step-by-step implementation plan
+4. Present your plan clearly in your response
+5. **IMPORTANT**: When your plan is complete, you MUST call the ExitPlanMode tool
+
+## Using ExitPlanMode:
+When you have finished planning, call the ExitPlanMode tool. This will:
+- Present your plan to the user for review
+- Ask the user to approve before you can make any changes
+- Grant you write permissions once approved
+
+Example:
+\`\`\`
+<tool>ExitPlanMode</tool>
+\`\`\`
+
+Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without user approval.
+`;
+      if (typeof systemPrompt === "object" && "type" in systemPrompt) {
+        systemPrompt.append = (systemPrompt.append || "") + planModeInstructions;
+      }
+    }
 
     // Extract options from _meta if provided
     const userProvidedOptions = (params._meta as NewSessionMeta | undefined)
@@ -334,7 +387,8 @@ export class ClaudeAcpAgent implements Agent {
       // If we want bypassPermissions to be an option, we have to allow it here.
       // But it doesn't work in root mode, so we only activate it if it will work.
       allowDangerouslySkipPermissions: !IS_ROOT,
-      permissionMode,
+      // Use "default" for SDK - we enforce plan mode ourselves in canUseTool
+      permissionMode: sdkPermissionMode,
       canUseTool: this.canUseTool(sessionId),
       // Use "node" to resolve via PATH where a symlink to Electron exists.
       // This avoids launching the Electron binary directly from the app bundle,
@@ -425,7 +479,8 @@ export class ClaudeAcpAgent implements Agent {
       options,
     });
 
-    this.createSession(sessionId, q, input, permissionMode);
+    // Store OUR permission mode on session (not SDK's) so canUseTool can enforce plan mode
+    this.createSession(sessionId, q, input, ourPermissionMode);
 
     // Register for S3 persistence if config provided
     const persistence = params._meta?.persistence as
@@ -495,7 +550,7 @@ export class ClaudeAcpAgent implements Agent {
       sessionId,
       models,
       modes: {
-        currentModeId: permissionMode,
+        currentModeId: ourPermissionMode,
         availableModes,
       },
     };
@@ -805,7 +860,7 @@ export class ClaudeAcpAgent implements Agent {
           sessionId,
           toolCall: {
             toolCallId: toolUseID,
-            rawInput: toolInput,
+            rawInput: { ...toolInput, toolName },
             title: toolInfoFromToolUse(
               { name: toolName, input: toolInput },
               this.fileContentCache,
@@ -840,12 +895,102 @@ export class ClaudeAcpAgent implements Agent {
             ],
           };
         } else {
+          // User chose "No, keep planning" - stay in plan mode and let agent continue
           return {
             behavior: "deny",
-            message: "User rejected request to exit plan mode.",
+            message:
+              "User wants to continue planning. Please refine your plan based on any feedback provided, or ask clarifying questions if needed.",
+            interrupt: false,
+          };
+        }
+      }
+
+      // AskUserQuestion always prompts user - never auto-approve
+      if (toolName === "AskUserQuestion") {
+        const questions = (toolInput as any)?.questions || [];
+        const firstQuestion = questions[0];
+
+        if (!firstQuestion) {
+          return {
+            behavior: "deny",
+            message: "No question provided",
             interrupt: true,
           };
         }
+
+        // Convert question options to permission options
+        const options = firstQuestion.options.map(
+          (opt: { label: string; description?: string }, idx: number) => ({
+            kind: "allow_once" as const,
+            name: opt.label,
+            optionId: `option_${idx}`,
+            description: opt.description,
+          }),
+        );
+
+        // Add "Other" option if multiSelect is not enabled
+        if (!firstQuestion.multiSelect) {
+          options.push({
+            kind: "allow_once" as const,
+            name: "Other",
+            optionId: "other",
+            description: "Provide a custom response",
+          });
+        }
+
+        const response = await this.client.requestPermission({
+          options,
+          sessionId,
+          toolCall: {
+            toolCallId: toolUseID,
+            rawInput: { ...toolInput, toolName },
+            title: firstQuestion.question,
+          },
+        });
+
+        if (response.outcome?.outcome === "selected") {
+          const selectedOptionId = response.outcome.optionId;
+          const selectedIdx = parseInt(selectedOptionId.replace("option_", ""), 10);
+          const selectedOption = firstQuestion.options[selectedIdx];
+
+          // Return the answer in updatedInput so it flows back to Claude
+          return {
+            behavior: "allow",
+            updatedInput: {
+              ...toolInput,
+              answers: {
+                [firstQuestion.question]: selectedOption?.label || selectedOptionId,
+              },
+            },
+          };
+        } else {
+          return {
+            behavior: "deny",
+            message: "User did not answer the question",
+            interrupt: true,
+          };
+        }
+      }
+
+      // In plan mode, deny all write/edit tools
+      // This includes both MCP-wrapped tools and built-in SDK tools
+      const WRITE_TOOL_NAMES = [
+        ...EDIT_TOOL_NAMES,
+        "Edit",
+        "Write",
+        "Bash",
+        "NotebookEdit",
+      ];
+      if (
+        session.permissionMode === "plan" &&
+        WRITE_TOOL_NAMES.includes(toolName)
+      ) {
+        return {
+          behavior: "deny",
+          message:
+            "Cannot use write tools in plan mode. Use ExitPlanMode to request permission to make changes.",
+          interrupt: false,
+        };
       }
 
       if (

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { extname, join } from "node:path";
 import z from "zod";
-import type { ResearchEvaluation, SupportingFile } from "./types.js";
+import type { SupportingFile } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export interface TaskFile {
@@ -160,39 +160,6 @@ export class PostHogFileManager {
 
   async readRequirements(taskId: string): Promise<string | null> {
     return await this.readTaskFile(taskId, "requirements.md");
-  }
-
-  async writeResearch(taskId: string, data: ResearchEvaluation): Promise<void> {
-    this.logger.debug("Writing research", {
-      taskId,
-      score: data.actionabilityScore,
-      hasQuestions: !!data.questions,
-      questionCount: data.questions?.length ?? 0,
-      answered: data.answered ?? false,
-    });
-
-    await this.writeTaskFile(taskId, {
-      name: "research.json",
-      content: JSON.stringify(data, null, 2),
-      type: "artifact",
-    });
-
-    this.logger.info("Research file written", {
-      taskId,
-      score: data.actionabilityScore,
-      hasQuestions: !!data.questions,
-      answered: data.answered ?? false,
-    });
-  }
-
-  async readResearch(taskId: string): Promise<ResearchEvaluation | null> {
-    try {
-      const content = await this.readTaskFile(taskId, "research.json");
-      return content ? (JSON.parse(content) as ResearchEvaluation) : null;
-    } catch (error) {
-      this.logger.debug("Failed to parse research.json", { error });
-      return null;
-    }
   }
 
   async writeTodos(taskId: string, data: unknown): Promise<void> {

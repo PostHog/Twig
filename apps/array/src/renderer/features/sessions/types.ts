@@ -3,10 +3,13 @@ import type {
   ToolCallContent,
   ToolCallLocation,
   ToolCallStatus,
-  ToolKind,
+  ToolKind as SdkToolKind,
 } from "@agentclientprotocol/sdk";
 
-export type { ToolKind, ToolCallContent, ToolCallStatus, ToolCallLocation };
+// Extend SDK ToolKind with custom kinds
+export type ToolKind = SdkToolKind | "ask";
+
+export type { ToolCallContent, ToolCallStatus, ToolCallLocation };
 
 export interface ToolCall {
   _meta?: { [key: string]: unknown } | null;
