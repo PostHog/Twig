@@ -27,6 +27,9 @@ npm install -g pnpm
 # Install dependencies for all packages
 pnpm install
 
+# Build the app
+pnpm build
+
 # Build the agent package
 pnpm --filter agent build
 ```
