@@ -17,6 +17,7 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 const log = logger.scope("auth-store");
 
 let refreshPromise: Promise<void> | null = null;
+let initializePromise: Promise<boolean> | null = null;
 
 const REFRESH_MAX_RETRIES = 3;
 const REFRESH_INITIAL_DELAY_MS = 1000;
@@ -305,124 +306,138 @@ export const useAuthStore = create<AuthState>()(
         },
 
         initializeOAuth: async () => {
-          // Wait for zustand hydration from async storage
-          if (!useAuthStore.persist.hasHydrated()) {
-            await new Promise<void>((resolve) => {
-              useAuthStore.persist.onFinishHydration(() => resolve());
-            });
+          // If initialization is already in progress, wait for it
+          if (initializePromise) {
+            log.debug("OAuth initialization already in progress, waiting...");
+            return initializePromise;
           }
 
-          const state = get();
-
-          if (state.storedTokens) {
-            const tokens = state.storedTokens;
-            const now = Date.now();
-            const isExpired = tokens.expiresAt <= now;
-
-            set({
-              oauthAccessToken: tokens.accessToken,
-              oauthRefreshToken: tokens.refreshToken,
-              tokenExpiry: tokens.expiresAt,
-              cloudRegion: tokens.cloudRegion,
-            });
-
-            if (isExpired) {
-              try {
-                await get().refreshAccessToken();
-              } catch (error) {
-                log.error("Failed to refresh expired token:", error);
-                set({ storedTokens: null, isAuthenticated: false });
-                return false;
-              }
+          const doInitialize = async (): Promise<boolean> => {
+            // Wait for zustand hydration from async storage
+            if (!useAuthStore.persist.hasHydrated()) {
+              await new Promise<void>((resolve) => {
+                useAuthStore.persist.onFinishHydration(() => resolve());
+              });
             }
 
-            // Re-fetch tokens after potential refresh to get updated values
-            const currentTokens = get().storedTokens;
-            if (!currentTokens) {
-              return false;
-            }
+            const state = get();
 
-            const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
-            const projectId = currentTokens.scopedTeams?.[0];
-
-            if (!projectId) {
-              log.error("No project ID found in stored tokens");
-              get().logout();
-              return false;
-            }
-
-            const client = new PostHogAPIClient(
-              currentTokens.accessToken,
-              apiHost,
-              async () => {
-                await get().refreshAccessToken();
-                const token = get().oauthAccessToken;
-                if (!token) {
-                  throw new Error("No access token after refresh");
-                }
-                return token;
-              },
-              projectId,
-            );
-
-            try {
-              const user = await client.getCurrentUser();
+            if (state.storedTokens) {
+              const tokens = state.storedTokens;
+              const now = Date.now();
+              const isExpired = tokens.expiresAt <= now;
 
               set({
-                isAuthenticated: true,
-                client,
-                projectId,
+                oauthAccessToken: tokens.accessToken,
+                oauthRefreshToken: tokens.refreshToken,
+                tokenExpiry: tokens.expiresAt,
+                cloudRegion: tokens.cloudRegion,
               });
 
-              get().scheduleTokenRefresh();
+              if (isExpired) {
+                try {
+                  await get().refreshAccessToken();
+                } catch (error) {
+                  log.error("Failed to refresh expired token:", error);
+                  set({ storedTokens: null, isAuthenticated: false });
+                  return false;
+                }
+              }
 
-              // Use distinct_id to match web sessions (same as PostHog web app)
-              const distinctId = user.distinct_id || user.email;
-              identifyUser(distinctId, {
-                email: user.email,
-                uuid: user.uuid,
-                project_id: projectId.toString(),
-                region: tokens.cloudRegion,
-              });
+              // Re-fetch tokens after potential refresh to get updated values
+              const currentTokens = get().storedTokens;
+              if (!currentTokens) {
+                return false;
+              }
 
-              trpcVanilla.analytics.setUserId.mutate({
-                userId: distinctId,
-                properties: {
-                  email: user.email,
-                  uuid: user.uuid,
-                  project_id: projectId.toString(),
-                  region: tokens.cloudRegion,
+              const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
+              const projectId = currentTokens.scopedTeams?.[0];
+
+              if (!projectId) {
+                log.error("No project ID found in stored tokens");
+                get().logout();
+                return false;
+              }
+
+              const client = new PostHogAPIClient(
+                currentTokens.accessToken,
+                apiHost,
+                async () => {
+                  await get().refreshAccessToken();
+                  const token = get().oauthAccessToken;
+                  if (!token) {
+                    throw new Error("No access token after refresh");
+                  }
+                  return token;
                 },
-              });
+                projectId,
+              );
 
-              return true;
-            } catch (error) {
-              log.error("Failed to validate OAuth session:", error);
+              try {
+                const user = await client.getCurrentUser();
 
-              // Network errors from fetch are TypeError, wrapped by fetcher.ts as cause
-              const isNetworkError =
-                error instanceof Error && error.cause instanceof TypeError;
-
-              if (isNetworkError) {
-                log.warn(
-                  "Network error during session validation - keeping session active",
-                );
                 set({
                   isAuthenticated: true,
                   client,
                   projectId,
                 });
+
                 get().scheduleTokenRefresh();
+
+                // Use distinct_id to match web sessions (same as PostHog web app)
+                const distinctId = user.distinct_id || user.email;
+                identifyUser(distinctId, {
+                  email: user.email,
+                  uuid: user.uuid,
+                  project_id: projectId.toString(),
+                  region: tokens.cloudRegion,
+                });
+
+                trpcVanilla.analytics.setUserId.mutate({
+                  userId: distinctId,
+                  properties: {
+                    email: user.email,
+                    uuid: user.uuid,
+                    project_id: projectId.toString(),
+                    region: tokens.cloudRegion,
+                  },
+                });
+
                 return true;
+              } catch (error) {
+                log.error("Failed to validate OAuth session:", error);
+
+                // Network errors from fetch are TypeError, wrapped by fetcher.ts as cause
+                const isNetworkError =
+                  error instanceof Error && error.cause instanceof TypeError;
+
+                if (isNetworkError) {
+                  log.warn(
+                    "Network error during session validation - keeping session active",
+                  );
+                  set({
+                    isAuthenticated: true,
+                    client,
+                    projectId,
+                  });
+                  get().scheduleTokenRefresh();
+                  return true;
+                }
+
+                // For auth errors (401/403) or unknown errors, clear the session
+                set({ storedTokens: null, isAuthenticated: false });
+                return false;
               }
-
-              // For auth errors (401/403) or unknown errors, clear the session
-              set({ storedTokens: null, isAuthenticated: false });
-              return false;
             }
-          }
 
-          return state.isAuthenticated;
+            return state.isAuthenticated;
+          };
+
+          initializePromise = doInitialize().finally(() => {
+            initializePromise = null;
+          });
+
+          return initializePromise;
         },
 
         logout: () => {
