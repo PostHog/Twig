@@ -3,6 +3,19 @@ import { z } from "zod";
 export const cloudRegion = z.enum(["us", "eu", "dev"]);
 export type CloudRegion = z.infer<typeof cloudRegion>;
 
+/**
+ * Error codes for OAuth operations.
+ * - network_error: Transient network issue, should retry
+ * - auth_error: Authentication failed (invalid token, 401/403), should logout
+ * - unknown_error: Other errors
+ */
+export const oAuthErrorCode = z.enum([
+  "network_error",
+  "auth_error",
+  "unknown_error",
+]);
+export type OAuthErrorCode = z.infer<typeof oAuthErrorCode>;
+
 export const oAuthTokenResponse = z.object({
   access_token: z.string(),
   expires_in: z.number(),
@@ -23,6 +36,7 @@ export const startFlowOutput = z.object({
   success: z.boolean(),
   data: oAuthTokenResponse.optional(),
   error: z.string().optional(),
+  errorCode: oAuthErrorCode.optional(),
 });
 export type StartFlowOutput = z.infer<typeof startFlowOutput>;
 
@@ -36,6 +50,7 @@ export const refreshTokenOutput = z.object({
   success: z.boolean(),
   data: oAuthTokenResponse.optional(),
   error: z.string().optional(),
+  errorCode: oAuthErrorCode.optional(),
 });
 export type RefreshTokenOutput = z.infer<typeof refreshTokenOutput>;
 
