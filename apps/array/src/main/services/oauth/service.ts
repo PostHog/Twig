@@ -178,7 +178,13 @@ export class OAuthService {
       });
 
       if (!response.ok) {
-        throw new Error(`Token refresh failed: ${response.statusText}`);
+        // 401/403 are auth errors - the token is invalid
+        const isAuthError = response.status === 401 || response.status === 403;
+        return {
+          success: false,
+          error: `Token refresh failed: ${response.statusText}`,
+          errorCode: isAuthError ? "auth_error" : "unknown_error",
+        };
       }
 
       const tokenResponse: OAuthTokenResponse = await response.json();
@@ -187,10 +193,11 @@ export class OAuthService {
         success: true,
         data: tokenResponse,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Network error",
+        errorCode: "network_error",
       };
     }
   }
