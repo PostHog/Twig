@@ -1,4 +1,4 @@
-name: Publish Release
+name: Release Array
 
 on:
   push:
@@ -14,8 +14,8 @@ on:
       - ".github/workflows/release.yml"
 
 concurrency:
-  group: release
-  cancel-in-progress: true
+  group: array-release
+  cancel-in-progress: false
 
 jobs:
   publish:
