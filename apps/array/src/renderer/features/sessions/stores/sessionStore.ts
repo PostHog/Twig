@@ -459,7 +459,11 @@ const useStore = create<SessionStore>()(
       });
 
       if (result) {
-        updateSession(taskRunId, { status: "connected" });
+        // Set isPromptPending true - the resumed agent may still be generating
+        updateSession(taskRunId, {
+          status: "connected",
+          isPromptPending: true,
+        });
       } else {
         unsubscribeFromChannel(taskRunId);
         removeSession(taskRunId);
@@ -894,3 +898,24 @@ useAuthStore.subscribe(
     }
   },
 );
+
+// Listen for connectivity changes and handle session state
+trpcVanilla.connectivity.onStatusChange.subscribe(undefined, {
+  onData: (status) => {
+    if (!status.isOnline) {
+      log.info("Connectivity lost - marking sessions as disconnected");
+
+      useStore.setState((state) => {
+        for (const session of Object.values(state.sessions)) {
+          if (
+            session.status === "connected" ||
+            session.status === "connecting"
+          ) {
+            session.status = "disconnected";
+            session.isPromptPending = false;
+          }
+        }
+      });
+    }
+  },
+});

@@ -12,6 +12,7 @@ import {
   useWorkspaceStore,
 } from "@features/workspace/stores/workspaceStore";
 import { Box } from "@radix-ui/themes";
+import { useConnectivity } from "@renderer/hooks/useConnectivity";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
@@ -34,6 +35,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
+  const { isOnline } = useConnectivity();
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -47,6 +49,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
+    if (!isOnline) return;
 
     // Don't reconnect if already connected, connecting, or in error state
     if (
@@ -81,7 +84,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     }).finally(() => {
       isConnecting.current = false;
     });
-  }, [task, repoPath, session, connectToTask, markActivity]);
+  }, [task, repoPath, session, connectToTask, markActivity, isOnline]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
