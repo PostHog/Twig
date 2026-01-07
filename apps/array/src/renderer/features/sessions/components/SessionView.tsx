@@ -5,7 +5,7 @@ import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
-  isJsonRpcRequest,
+  isJsonRpcResponse,
 } from "@shared/types/session-events";
 import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -58,28 +58,38 @@ export function SessionView({
   ]);
 
   const latestPlan = useMemo((): Plan | null => {
-    // Find the index of the last user prompt - only show plans after that
-    let lastPromptIndex = -1;
+    let planIndex = -1;
+    let plan: Plan | null = null;
+    let responseIndex = -1;
+
+    // Find the most recent plan and response in one pass
     for (let i = events.length - 1; i >= 0; i--) {
       const msg = events[i].message;
-      if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
-        lastPromptIndex = i;
-        break;
-      }
-    }
 
-    // Search for plans only after the last user prompt
-    for (let i = events.length - 1; i > lastPromptIndex; i--) {
-      const msg = events[i].message;
-      if (isJsonRpcNotification(msg) && msg.method === "session/update") {
+      if (responseIndex === -1 && isJsonRpcResponse(msg)) {
+        responseIndex = i;
+      }
+
+      if (
+        planIndex === -1 &&
+        isJsonRpcNotification(msg) &&
+        msg.method === "session/update"
+      ) {
         const update = (msg.params as { update?: { sessionUpdate?: string } })
           ?.update;
         if (update?.sessionUpdate === "plan") {
-          return update as Plan;
+          planIndex = i;
+          plan = update as Plan;
         }
       }
+
+      if (planIndex !== -1 && responseIndex !== -1) break;
     }
-    return null;
+
+    // Plan is stale if the most recent response came after it (turn completed)
+    if (responseIndex > planIndex) return null;
+
+    return plan;
   }, [events]);
 
   const handleSubmit = useCallback(
