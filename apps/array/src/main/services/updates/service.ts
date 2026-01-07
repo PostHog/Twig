@@ -17,12 +17,16 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   private static readonly REPO_OWNER = "PostHog";
   private static readonly REPO_NAME = "Array";
   private static readonly CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+  private static readonly CHECK_TIMEOUT_MS = 60 * 1000; // 1 minute timeout for checks
   private static readonly DISABLE_ENV_FLAG = "ELECTRON_DISABLE_AUTO_UPDATE";
   private static readonly SUPPORTED_PLATFORMS = ["darwin", "win32"];
 
   private updateReady = false;
   private pendingNotification = false;
   private checkingForUpdates = false;
+  private checkTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private downloadedVersion: string | null = null;
+  private initialized = false;
 
   get isEnabled(): boolean {
     return (
@@ -46,6 +50,8 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
         !UpdatesService.SUPPORTED_PLATFORMS.includes(process.platform)
       ) {
         log.info("Auto updates only supported on macOS and Windows");
+      } else if (!app.isPackaged) {
+        log.info("Auto updates only available in packaged builds");
       }
       return;
     }
@@ -79,28 +85,94 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
 
   installUpdate(): InstallUpdateOutput {
     if (!this.updateReady) {
+      log.warn("installUpdate called but no update is ready");
       return { installed: false };
     }
-    autoUpdater.quitAndInstall();
-    return { installed: true };
+
+    log.info("Installing update and restarting...", {
+      downloadedVersion: this.downloadedVersion,
+    });
+
+    try {
+      autoUpdater.quitAndInstall();
+      return { installed: true };
+    } catch (error) {
+      log.error("Failed to quit and install update", error);
+      return { installed: false };
+    }
   }
 
   private setupAutoUpdater(): void {
-    autoUpdater.setFeedURL({ url: this.feedUrl });
+    if (this.initialized) {
+      log.warn("setupAutoUpdater called multiple times, ignoring");
+      return;
+    }
 
-    autoUpdater.on("error", (error) => log.error("Auto update error", error));
-    autoUpdater.on("update-available", () =>
-      log.info("Update available, downloading..."),
-    );
+    this.initialized = true;
+    const feedUrl = this.feedUrl;
+    log.info("Setting up auto updater", {
+      feedUrl,
+      currentVersion: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+    });
+
+    try {
+      autoUpdater.setFeedURL({ url: feedUrl });
+    } catch (error) {
+      log.error("Failed to set feed URL", error);
+      return;
+    }
+
+    autoUpdater.on("error", (error) => this.handleError(error));
+    autoUpdater.on("checking-for-update", () => this.handleCheckingForUpdate());
+    autoUpdater.on("update-available", () => this.handleUpdateAvailable());
     autoUpdater.on("update-not-available", () => this.handleNoUpdate());
-    autoUpdater.on("update-downloaded", () => this.handleUpdateDownloaded());
+    autoUpdater.on(
+      "update-downloaded",
+      (_event, _releaseNotes, releaseName) =>
+        this.handleUpdateDownloaded(releaseName),
+    );
 
+    // Perform initial check
     this.performCheck();
+
+    // Set up periodic checks
     setInterval(() => this.performCheck(), UpdatesService.CHECK_INTERVAL_MS);
   }
 
+  private handleError(error: Error): void {
+    this.clearCheckTimeout();
+    log.error("Auto update error", {
+      message: error.message,
+      stack: error.stack,
+      feedUrl: this.feedUrl,
+    });
+
+    // Reset checking state on error so user can retry
+    if (this.checkingForUpdates) {
+      this.checkingForUpdates = false;
+      this.emitStatus({
+        checking: false,
+        error: error.message,
+      });
+    }
+  }
+
+  private handleCheckingForUpdate(): void {
+    log.info("Checking for updates...");
+  }
+
+  private handleUpdateAvailable(): void {
+    this.clearCheckTimeout();
+    log.info("Update available, downloading...");
+    // Keep checkingForUpdates true while downloading
+    // The download is now in progress
+  }
+
   private handleNoUpdate(): void {
-    log.info("No updates available");
+    this.clearCheckTimeout();
+    log.info("No updates available", { currentVersion: app.getVersion() });
     if (this.checkingForUpdates) {
       this.checkingForUpdates = false;
       this.emitStatus({
@@ -111,8 +183,16 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     }
   }
 
-  private handleUpdateDownloaded(): void {
-    log.info("Update downloaded, awaiting user confirmation");
+  private handleUpdateDownloaded(releaseName?: string): void {
+    this.clearCheckTimeout();
+    this.checkingForUpdates = false;
+    this.downloadedVersion = releaseName ?? null;
+
+    log.info("Update downloaded, awaiting user confirmation", {
+      currentVersion: app.getVersion(),
+      downloadedVersion: this.downloadedVersion,
+    });
+
     this.updateReady = true;
     this.pendingNotification = true;
     this.flushPendingNotification();
@@ -120,6 +200,9 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
 
   private flushPendingNotification(): void {
     if (this.updateReady && this.pendingNotification) {
+      log.info("Notifying user that update is ready", {
+        downloadedVersion: this.downloadedVersion,
+      });
       this.emit(UpdatesEvent.Ready, true);
       this.pendingNotification = false;
     }
@@ -129,15 +212,40 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     checking: boolean;
     upToDate?: boolean;
     version?: string;
+    error?: string;
   }): void {
     this.emit(UpdatesEvent.Status, status);
   }
 
   private performCheck(): void {
+    // Clear any existing timeout
+    this.clearCheckTimeout();
+
+    // Set a timeout to reset the checking state if the check takes too long
+    this.checkTimeoutId = setTimeout(() => {
+      if (this.checkingForUpdates) {
+        log.warn("Update check timed out after 60 seconds");
+        this.checkingForUpdates = false;
+        this.emitStatus({
+          checking: false,
+          error: "Update check timed out. Please try again.",
+        });
+      }
+    }, UpdatesService.CHECK_TIMEOUT_MS);
+
     try {
       autoUpdater.checkForUpdates();
     } catch (error) {
+      this.clearCheckTimeout();
       log.error("Failed to check for updates", error);
+      this.checkingForUpdates = false;
+    }
+  }
+
+  private clearCheckTimeout(): void {
+    if (this.checkTimeoutId) {
+      clearTimeout(this.checkTimeoutId);
+      this.checkTimeoutId = null;
     }
   }
 }
