@@ -1,7 +1,15 @@
 import type { Engine } from "../engine";
 import { mergePR, updatePR, waitForMergeable } from "../github/pr-actions";
 import { getPRForBranch } from "../github/pr-status";
-import { getTrunk, list, push, rebase, runJJ, status } from "../jj";
+import {
+  deleteBookmark,
+  getTrunk,
+  list,
+  push,
+  rebase,
+  runJJ,
+  status,
+} from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import type { MergeOptions, MergeResult, PRToMerge } from "../types";
 
@@ -172,10 +180,16 @@ export async function mergeStack(
 
     merged.push(prItem);
 
-    // Abandon this commit immediately after merge, before rebasing next
-    // Must do this before rebase because rebase -r changes descendant changeIds
+    // Clean up the merged commit (same as arr sync does):
+    // 1. Abandon the commit (must do before rebase because rebase -r changes changeIds)
+    // 2. Delete the local bookmark
+    // 3. Untrack from engine
     if (prItem.changeId) {
       await runJJ(["abandon", prItem.changeId]);
+    }
+    await deleteBookmark(prItem.bookmarkName);
+    if (engine.isTracked(prItem.bookmarkName)) {
+      engine.untrack(prItem.bookmarkName);
     }
 
     if (nextPR) {
