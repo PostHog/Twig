@@ -38,24 +38,30 @@ interface ToolUpdate {
   locations?: ToolCallLocation[];
 }
 
+interface ToolUse {
+  name: string;
+  input?: unknown;
+}
+
 export function toolInfoFromToolUse(
-  toolUse: any,
+  toolUse: ToolUse,
   cachedFileContent: { [key: string]: string },
   logger: Logger = new Logger({ debug: false, prefix: "[ClaudeTools]" }),
 ): ToolInfo {
   const name = toolUse.name;
-  const input = toolUse.input;
+  // Cast input to allow property access - each case handles its expected properties
+  const input = toolUse.input as Record<string, unknown> | undefined;
 
   switch (name) {
     case "Task":
       return {
-        title: input?.description ? input.description : "Task",
+        title: input?.description ? String(input.description) : "Task",
         kind: "think",
         content: input?.prompt
           ? [
               {
                 type: "content",
-                content: { type: "text", text: input.prompt },
+                content: { type: "text", text: String(input.prompt) },
               },
             ]
           : [],
@@ -64,42 +70,46 @@ export function toolInfoFromToolUse(
     case "NotebookRead":
       return {
         title: input?.notebook_path
-          ? `Read Notebook ${input.notebook_path}`
+          ? `Read Notebook ${String(input.notebook_path)}`
           : "Read Notebook",
         kind: "read",
         content: [],
-        locations: input?.notebook_path ? [{ path: input.notebook_path }] : [],
+        locations: input?.notebook_path
+          ? [{ path: String(input.notebook_path) }]
+          : [],
       };
 
     case "NotebookEdit":
       return {
         title: input?.notebook_path
-          ? `Edit Notebook ${input.notebook_path}`
+          ? `Edit Notebook ${String(input.notebook_path)}`
           : "Edit Notebook",
         kind: "edit",
         content: input?.new_source
           ? [
               {
                 type: "content",
-                content: { type: "text", text: input.new_source },
+                content: { type: "text", text: String(input.new_source) },
               },
             ]
           : [],
-        locations: input?.notebook_path ? [{ path: input.notebook_path }] : [],
+        locations: input?.notebook_path
+          ? [{ path: String(input.notebook_path) }]
+          : [],
       };
 
     case "Bash":
     case toolNames.bash:
       return {
         title: input?.command
-          ? `\`${input.command.replaceAll("`", "\\`")}\``
+          ? `\`${String(input.command).replaceAll("`", "\\`")}\``
           : "Terminal",
         kind: "execute",
         content: input?.description
           ? [
               {
                 type: "content",
-                content: { type: "text", text: input.description },
+                content: { type: "text", text: String(input.description) },
               },
             ]
           : [],
@@ -123,24 +133,21 @@ export function toolInfoFromToolUse(
 
     case toolNames.read: {
       let limit = "";
-      if (input.limit) {
-        limit =
-          " (" +
-          ((input.offset ?? 0) + 1) +
-          " - " +
-          ((input.offset ?? 0) + input.limit) +
-          ")";
-      } else if (input.offset) {
-        limit = ` (from line ${input.offset + 1})`;
+      const inputLimit = input?.limit as number | undefined;
+      const inputOffset = (input?.offset as number | undefined) ?? 0;
+      if (inputLimit) {
+        limit = ` (${inputOffset + 1} - ${inputOffset + inputLimit})`;
+      } else if (inputOffset) {
+        limit = ` (from line ${inputOffset + 1})`;
       }
       return {
-        title: `Read ${input.file_path ?? "File"}${limit}`,
+        title: `Read ${input?.file_path ? String(input.file_path) : "File"}${limit}`,
         kind: "read",
-        locations: input.file_path
+        locations: input?.file_path
           ? [
               {
-                path: input.file_path,
-                line: input.offset ?? 0,
+                path: String(input.file_path),
+                line: inputOffset,
               },
             ]
           : [],
@@ -153,11 +160,11 @@ export function toolInfoFromToolUse(
         title: "Read File",
         kind: "read",
         content: [],
-        locations: input.file_path
+        locations: input?.file_path
           ? [
               {
-                path: input.file_path,
-                line: input.offset ?? 0,
+                path: String(input.file_path),
+                line: (input?.offset as number | undefined) ?? 0,
               },
             ]
           : [],
@@ -165,7 +172,7 @@ export function toolInfoFromToolUse(
 
     case "LS":
       return {
-        title: `List the ${input?.path ? `\`${input.path}\`` : "current"} directory's contents`,
+        title: `List the ${input?.path ? `\`${String(input.path)}\`` : "current"} directory's contents`,
         kind: "search",
         content: [],
         locations: [],
@@ -173,9 +180,9 @@ export function toolInfoFromToolUse(
 
     case toolNames.edit:
     case "Edit": {
-      const path = input?.file_path ?? input?.file_path;
-      let oldText = input.old_string ?? null;
-      let newText = input.new_string ?? "";
+      const path = input?.file_path ? String(input.file_path) : undefined;
+      let oldText = input?.old_string ? String(input.old_string) : null;
+      let newText = input?.new_string ? String(input.new_string) : "";
       let affectedLines: number[] = [];
 
       if (path && oldText) {
@@ -218,86 +225,92 @@ export function toolInfoFromToolUse(
     }
 
     case toolNames.write: {
-      let content: ToolCallContent[] = [];
-      if (input?.file_path) {
-        content = [
+      let contentResult: ToolCallContent[] = [];
+      const filePath = input?.file_path ? String(input.file_path) : undefined;
+      const contentStr = input?.content ? String(input.content) : undefined;
+      if (filePath) {
+        contentResult = [
           {
             type: "diff",
-            path: input.file_path,
+            path: filePath,
             oldText: null,
-            newText: input.content,
+            newText: contentStr ?? "",
           },
         ];
-      } else if (input?.content) {
-        content = [
+      } else if (contentStr) {
+        contentResult = [
           {
             type: "content",
-            content: { type: "text", text: input.content },
+            content: { type: "text", text: contentStr },
           },
         ];
       }
       return {
-        title: input?.file_path ? `Write ${input.file_path}` : "Write",
+        title: filePath ? `Write ${filePath}` : "Write",
         kind: "edit",
-        content,
-        locations: input?.file_path ? [{ path: input.file_path }] : [],
+        content: contentResult,
+        locations: filePath ? [{ path: filePath }] : [],
       };
     }
 
-    case "Write":
+    case "Write": {
+      const filePath = input?.file_path ? String(input.file_path) : undefined;
+      const contentStr = input?.content ? String(input.content) : "";
       return {
-        title: input?.file_path ? `Write ${input.file_path}` : "Write",
+        title: filePath ? `Write ${filePath}` : "Write",
         kind: "edit",
-        content: input?.file_path
+        content: filePath
           ? [
               {
                 type: "diff",
-                path: input.file_path,
+                path: filePath,
                 oldText: null,
-                newText: input.content,
+                newText: contentStr,
               },
             ]
           : [],
-        locations: input?.file_path ? [{ path: input.file_path }] : [],
+        locations: filePath ? [{ path: filePath }] : [],
       };
+    }
 
     case "Glob": {
       let label = "Find";
-      if (input.path) {
-        label += ` \`${input.path}\``;
+      const pathStr = input?.path ? String(input.path) : undefined;
+      if (pathStr) {
+        label += ` \`${pathStr}\``;
       }
-      if (input.pattern) {
-        label += ` \`${input.pattern}\``;
+      if (input?.pattern) {
+        label += ` \`${String(input.pattern)}\``;
       }
       return {
         title: label,
         kind: "search",
         content: [],
-        locations: input.path ? [{ path: input.path }] : [],
+        locations: pathStr ? [{ path: pathStr }] : [],
       };
     }
 
     case "Grep": {
       let label = "grep";
 
-      if (input["-i"]) {
+      if (input?.["-i"]) {
         label += " -i";
       }
-      if (input["-n"]) {
+      if (input?.["-n"]) {
         label += " -n";
       }
 
-      if (input["-A"] !== undefined) {
+      if (input?.["-A"] !== undefined) {
         label += ` -A ${input["-A"]}`;
       }
-      if (input["-B"] !== undefined) {
+      if (input?.["-B"] !== undefined) {
         label += ` -B ${input["-B"]}`;
       }
-      if (input["-C"] !== undefined) {
+      if (input?.["-C"] !== undefined) {
         label += ` -C ${input["-C"]}`;
       }
 
-      if (input.output_mode) {
+      if (input?.output_mode) {
         switch (input.output_mode) {
           case "FilesWithMatches":
             label += " -l";
@@ -310,26 +323,26 @@ export function toolInfoFromToolUse(
         }
       }
 
-      if (input.head_limit !== undefined) {
+      if (input?.head_limit !== undefined) {
         label += ` | head -${input.head_limit}`;
       }
 
-      if (input.glob) {
-        label += ` --include="${input.glob}"`;
+      if (input?.glob) {
+        label += ` --include="${String(input.glob)}"`;
       }
 
-      if (input.type) {
-        label += ` --type=${input.type}`;
+      if (input?.type) {
+        label += ` --type=${String(input.type)}`;
       }
 
-      if (input.multiline) {
+      if (input?.multiline) {
         label += " -P";
       }
 
-      label += ` "${input.pattern}"`;
+      label += ` "${input?.pattern ? String(input.pattern) : ""}"`;
 
-      if (input.path) {
-        label += ` ${input.path}`;
+      if (input?.path) {
+        label += ` ${String(input.path)}`;
       }
 
       return {
@@ -341,27 +354,29 @@ export function toolInfoFromToolUse(
 
     case "WebFetch":
       return {
-        title: input?.url ? `Fetch ${input.url}` : "Fetch",
+        title: input?.url ? `Fetch ${String(input.url)}` : "Fetch",
         kind: "fetch",
         content: input?.prompt
           ? [
               {
                 type: "content",
-                content: { type: "text", text: input.prompt },
+                content: { type: "text", text: String(input.prompt) },
               },
             ]
           : [],
       };
 
     case "WebSearch": {
-      let label = `"${input.query}"`;
+      let label = `"${input?.query ? String(input.query) : ""}"`;
+      const allowedDomains = input?.allowed_domains as string[] | undefined;
+      const blockedDomains = input?.blocked_domains as string[] | undefined;
 
-      if (input.allowed_domains && input.allowed_domains.length > 0) {
-        label += ` (allowed: ${input.allowed_domains.join(", ")})`;
+      if (allowedDomains && allowedDomains.length > 0) {
+        label += ` (allowed: ${allowedDomains.join(", ")})`;
       }
 
-      if (input.blocked_domains && input.blocked_domains.length > 0) {
-        label += ` (blocked: ${input.blocked_domains.join(", ")})`;
+      if (blockedDomains && blockedDomains.length > 0) {
+        label += ` (blocked: ${blockedDomains.join(", ")})`;
       }
 
       return {
@@ -374,7 +389,7 @@ export function toolInfoFromToolUse(
     case "TodoWrite":
       return {
         title: Array.isArray(input?.todos)
-          ? `Update TODOs: ${input.todos.map((todo: any) => todo.content).join(", ")}`
+          ? `Update TODOs: ${input.todos.map((todo: { content?: string }) => todo.content).join(", ")}`
           : "Update TODOs",
         kind: "think",
         content: [],
@@ -385,9 +400,35 @@ export function toolInfoFromToolUse(
         title: "Ready to code?",
         kind: "switch_mode",
         content: input?.plan
-          ? [{ type: "content", content: { type: "text", text: input.plan } }]
+          ? [
+              {
+                type: "content",
+                content: { type: "text", text: String(input.plan) },
+              },
+            ]
           : [],
       };
+
+    case "AskUserQuestion": {
+      const questions = input?.questions as
+        | Array<{ question?: string }>
+        | undefined;
+      return {
+        title: questions?.[0]?.question || "Question",
+        kind: "ask" as ToolKind,
+        content: questions
+          ? [
+              {
+                type: "content",
+                content: {
+                  type: "text",
+                  text: JSON.stringify(questions, null, 2),
+                },
+              },
+            ]
+          : [],
+      };
+    }
 
     case "Other": {
       let output: string;
@@ -431,25 +472,32 @@ export function toolUpdateFromToolResult(
     | BetaTextEditorCodeExecutionToolResultBlockParam
     | BetaRequestMCPToolResultBlockParam
     | BetaToolSearchToolResultBlockParam,
-  toolUse: any | undefined,
+  toolUse: ToolUse | undefined,
 ): ToolUpdate {
   switch (toolUse?.name) {
     case "Read":
     case toolNames.read:
       if (Array.isArray(toolResult.content) && toolResult.content.length > 0) {
         return {
-          content: toolResult.content.map((content: any) => ({
-            type: "content",
-            content:
-              content.type === "text"
-                ? {
-                    type: "text",
-                    text: markdownEscape(
-                      content.text.replace(SYSTEM_REMINDER, ""),
-                    ),
-                  }
-                : content,
-          })),
+          content: toolResult.content.map((item) => {
+            const itemObj = item as { type?: string; text?: string };
+            if (itemObj.type === "text") {
+              return {
+                type: "content" as const,
+                content: {
+                  type: "text" as const,
+                  text: markdownEscape(
+                    (itemObj.text ?? "").replace(SYSTEM_REMINDER, ""),
+                  ),
+                },
+              };
+            }
+            // For non-text content, return as-is with proper typing
+            return {
+              type: "content" as const,
+              content: item as { type: "text"; text: string },
+            };
+          }),
         };
       } else if (
         typeof toolResult.content === "string" &&
@@ -492,6 +540,29 @@ export function toolUpdateFromToolResult(
     case "ExitPlanMode": {
       return { title: "Exited Plan Mode" };
     }
+    case "AskUserQuestion": {
+      // The answer is returned in the tool result
+      const content = toolResult.content;
+      if (Array.isArray(content) && content.length > 0) {
+        const firstItem = content[0];
+        if (
+          typeof firstItem === "object" &&
+          firstItem !== null &&
+          "text" in firstItem
+        ) {
+          return {
+            title: "Answer received",
+            content: [
+              {
+                type: "content",
+                content: { type: "text", text: String(firstItem.text) },
+              },
+            ],
+          };
+        }
+      }
+      return { title: "Question answered" };
+    }
     default: {
       return toAcpContentUpdate(
         toolResult.content,
@@ -502,21 +573,27 @@ export function toolUpdateFromToolResult(
 }
 
 function toAcpContentUpdate(
-  content: any,
+  content: unknown,
   isError: boolean = false,
 ): { content?: ToolCallContent[] } {
   if (Array.isArray(content) && content.length > 0) {
     return {
-      content: content.map((content: any) => ({
-        type: "content",
-        content:
-          isError && content.type === "text"
-            ? {
-                ...content,
-                text: `\`\`\`\n${content.text}\n\`\`\``,
-              }
-            : content,
-      })),
+      content: content.map((item) => {
+        const itemObj = item as { type?: string; text?: string };
+        if (isError && itemObj.type === "text") {
+          return {
+            type: "content" as const,
+            content: {
+              type: "text" as const,
+              text: `\`\`\`\n${itemObj.text ?? ""}\n\`\`\``,
+            },
+          };
+        }
+        return {
+          type: "content" as const,
+          content: item as { type: "text"; text: string },
+        };
+      }),
     };
   } else if (typeof content === "string" && content.length > 0) {
     return {

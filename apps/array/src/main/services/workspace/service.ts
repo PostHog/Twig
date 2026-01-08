@@ -89,6 +89,7 @@ export interface WorkspaceServiceEvents {
 @injectable()
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   private scriptRunner: ScriptRunner;
+  private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
 
   constructor() {
     super();
@@ -100,6 +101,28 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
   }
 
   async createWorkspace(options: CreateWorkspaceInput): Promise<WorkspaceInfo> {
+    // Prevent concurrent workspace creation for the same task
+    const existingPromise = this.creatingWorkspaces.get(options.taskId);
+    if (existingPromise) {
+      log.warn(
+        `Workspace creation already in progress for task ${options.taskId}, waiting for existing operation`,
+      );
+      return existingPromise;
+    }
+
+    const promise = this.doCreateWorkspace(options);
+    this.creatingWorkspaces.set(options.taskId, promise);
+
+    try {
+      return await promise;
+    } finally {
+      this.creatingWorkspaces.delete(options.taskId);
+    }
+  }
+
+  private async doCreateWorkspace(
+    options: CreateWorkspaceInput,
+  ): Promise<WorkspaceInfo> {
     const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
       options;
     log.info(

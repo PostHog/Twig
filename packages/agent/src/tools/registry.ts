@@ -84,6 +84,11 @@ const TOOL_DEFINITIONS: Record<string, Tool> = {
     category: "assistant",
     description: "Exit plan mode and present plan to user",
   },
+  AskUserQuestion: {
+    name: "AskUserQuestion",
+    category: "assistant",
+    description: "Ask the user a clarifying question with options",
+  },
   SlashCommand: {
     name: "SlashCommand",
     category: "assistant",

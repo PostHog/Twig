@@ -1,12 +1,9 @@
 export type {
-  ArtifactNotificationPayload,
   BranchCreatedPayload,
   ConsoleNotificationPayload,
   ErrorNotificationPayload,
-  PhaseNotificationPayload,
   PostHogNotificationPayload,
   PostHogNotificationType,
-  PrCreatedPayload,
   RunStartedPayload,
   SdkSessionPayload,
   TaskCompletePayload,
@@ -33,6 +30,7 @@ export type { TodoItem, TodoList } from "./src/todo-manager.js";
 export { TodoManager } from "./src/todo-manager.js";
 export { ToolRegistry } from "./src/tools/registry.js";
 export type {
+  AskUserQuestionTool,
   BashOutputTool,
   BashTool,
   EditTool,
@@ -58,7 +56,6 @@ export type {
   LogLevel as LogLevelType,
   McpServerConfig,
   OnLogCallback,
-  ResearchEvaluation,
   SessionNotification,
   StoredEntry,
   StoredNotification,
