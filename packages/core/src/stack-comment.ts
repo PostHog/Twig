@@ -33,9 +33,7 @@ export function generateStackComment(options: StackCommentOptions): string {
   lines.push("");
   lines.push("---");
   lines.push("");
-  lines.push("**Merge order:** bottom → top, or use `arr merge`");
-  lines.push("");
-  lines.push("*Managed by [Array](https://github.com/posthog/array)*");
+  lines.push("Merge from bottom to top, or use `arr merge`");
 
   return lines.join("\n");
 }

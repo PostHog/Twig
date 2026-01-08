@@ -5,6 +5,12 @@
   "type": "module",
   "exports": {
     "./commands/*": "./src/commands/*.ts",
+    "./engine": "./src/engine/index.ts",
+    "./git/*": "./src/git/*.ts",
+    "./jj": "./src/jj/index.ts",
+    "./jj/*": "./src/jj/*.ts",
+    "./stacks": "./src/stacks/index.ts",
+    "./stacks/*": "./src/stacks/*.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {

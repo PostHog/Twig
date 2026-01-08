@@ -1,7 +1,14 @@
+import type { Engine } from "../engine";
+import { fetchMetadataRefs } from "../git/refs";
 import { abandon, getTrunk, list, runJJ, status } from "../jj";
 import { ok, type Result } from "../result";
-import { cleanupMergedChanges, updateStackComments } from "../stacks";
+import {
+  findMergedChanges,
+  type MergedChange,
+  updateStackComments,
+} from "../stacks";
 import type { AbandonedChange } from "../types";
+import { syncPRInfo } from "./sync-pr-info";
 import type { Command } from "./types";
 
 interface SyncResult {
@@ -10,9 +17,14 @@ interface SyncResult {
   hasConflicts: boolean;
   merged: AbandonedChange[];
   empty: AbandonedChange[];
-  cleanedUpPrs: number[];
+  /** Changes with merged PRs pending cleanup - caller should prompt before cleanup */
+  pendingCleanup: MergedChange[];
   updatedComments: number;
   stacksBehind: number;
+}
+
+interface SyncOptions {
+  engine: Engine;
 }
 
 /**
@@ -102,11 +114,20 @@ async function getStacksBehindTrunk(): Promise<Result<number>> {
  * Sync with remote: fetch, rebase, cleanup merged PRs, update stack comments.
  * Returns info about what was synced. Does NOT automatically restack - caller
  * should prompt user and call restack() if desired.
+ * Untracks bookmarks for merged PRs.
  */
-export async function sync(): Promise<Result<SyncResult>> {
+export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
+  const { engine } = options;
+
+  // Refresh PR info from GitHub for all tracked bookmarks
+  await syncPRInfo({ engine });
+
   // Fetch from remote
   const fetchResult = await runJJ(["git", "fetch"]);
   if (!fetchResult.ok) return fetchResult;
+
+  // Fetch arr metadata refs from remote
+  fetchMetadataRefs();
 
   // Update local trunk bookmark to match remote
   const trunk = await getTrunk();
@@ -152,11 +173,9 @@ export async function sync(): Promise<Result<SyncResult>> {
   const merged = abandoned.filter((a) => a.reason === "merged");
   const empty = abandoned.filter((a) => a.reason === "empty");
 
-  // Check for changes with merged PRs that weren't caught by rebase
-  const cleanupResult = await cleanupMergedChanges();
-  const cleanedUpPrs = cleanupResult.ok
-    ? cleanupResult.value.abandoned.map((a) => a.prNumber)
-    : [];
+  // Find changes with merged PRs - don't auto-cleanup, let caller prompt
+  const mergedResult = await findMergedChanges();
+  const pendingCleanup = mergedResult.ok ? mergedResult.value : [];
 
   // Update stack comments
   const updateResult = await updateStackComments();
@@ -172,13 +191,13 @@ export async function sync(): Promise<Result<SyncResult>> {
     hasConflicts,
     merged,
     empty,
-    cleanedUpPrs,
+    pendingCleanup,
     updatedComments,
     stacksBehind,
   });
 }
 
-export const syncCommand: Command<SyncResult> = {
+export const syncCommand: Command<SyncResult, [SyncOptions]> = {
   meta: {
     name: "sync",
     description:

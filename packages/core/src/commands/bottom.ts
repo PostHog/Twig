@@ -1,6 +1,7 @@
-import { runJJ, status } from "../jj";
-import { createError, err, ok, type Result } from "../result";
+import { runJJ } from "../jj";
+import { createError, err, type Result } from "../result";
 import type { NavigationResult } from "../types";
+import { getNavigationResult } from "./navigation";
 import type { Command } from "./types";
 
 /**
@@ -18,16 +19,6 @@ export async function bottom(): Promise<Result<NavigationResult>> {
     return editResult;
   }
   return getNavigationResult();
-}
-
-async function getNavigationResult(): Promise<Result<NavigationResult>> {
-  const statusResult = await status();
-  if (!statusResult.ok) return statusResult;
-  return ok({
-    changeId: statusResult.value.workingCopy.changeId,
-    changeIdPrefix: statusResult.value.workingCopy.changeIdPrefix,
-    description: statusResult.value.workingCopy.description,
-  });
 }
 
 export const bottomCommand: Command<NavigationResult> = {

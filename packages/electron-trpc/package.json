@@ -23,15 +23,11 @@
     "build": "vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && pnpm build:types",
     "build:types": "tsc -p tsconfig.build.json",
     "dev": "pnpm build",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run -c vitest.config.ts",
-    "test:ci": "vitest run -c vitest.config.ts --coverage"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@trpc/client": "^11.8.0",
     "@trpc/server": "^11.8.0",
-    "superjson": "^2.2.2",
-    "zod": "^3.24.1",
     "@types/node": "^20.3.1",
     "@vitest/coverage-v8": "^0.34.0",
     "builtin-modules": "^3.3.0",

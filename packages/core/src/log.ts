@@ -67,7 +67,7 @@ export interface LogResult {
   uncommittedWork: UncommittedWork | null;
 }
 
-export function formatDescriptionWithDate(
+function _formatDescriptionWithDate(
   description: string,
   timestamp: Date,
 ): string {
@@ -84,7 +84,7 @@ export function formatDescriptionWithDate(
   return description;
 }
 
-export function formatRelativeTime(date: Date): string {
+function _formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSecs = Math.floor(diffMs / 1000);

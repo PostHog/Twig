@@ -1,6 +1,7 @@
 import { jjNew, runJJ, status } from "../jj";
-import { createError, err, ok, type Result } from "../result";
+import { createError, err, type Result } from "../result";
 import type { NavigationResult } from "../types";
+import { getNavigationResult } from "./navigation";
 import type { Command } from "./types";
 
 export async function up(): Promise<Result<NavigationResult>> {
@@ -49,33 +50,6 @@ export async function up(): Promise<Result<NavigationResult>> {
     return result;
   }
   return getNavigationResult();
-}
-
-async function getNavigationResult(
-  target: "current" | "parent" = "current",
-): Promise<Result<NavigationResult>> {
-  if (target === "parent") {
-    const result = await runJJ([
-      "log",
-      "-r",
-      "@-",
-      "--no-graph",
-      "-T",
-      'change_id.short() ++ "\\t" ++ change_id.shortest().prefix() ++ "\\t" ++ description.first_line()',
-    ]);
-    if (!result.ok) return result;
-    const [changeId, changeIdPrefix, description] = result.value.stdout
-      .trim()
-      .split("\t");
-    return ok({ changeId, changeIdPrefix, description: description || "" });
-  }
-  const statusResult = await status();
-  if (!statusResult.ok) return statusResult;
-  return ok({
-    changeId: statusResult.value.workingCopy.changeId,
-    changeIdPrefix: statusResult.value.workingCopy.changeIdPrefix,
-    description: statusResult.value.workingCopy.description,
-  });
 }
 
 export const upCommand: Command<NavigationResult> = {

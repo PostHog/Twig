@@ -1,4 +1,4 @@
-import { getPRForBranch, type PRStatus } from "./github";
+import { getPRForBranch, type PRStatus } from "./github/pr-status";
 import { createError, err, ok, type Result } from "./result";
 
 /** Maximum number of suffix attempts before giving up on conflict resolution */

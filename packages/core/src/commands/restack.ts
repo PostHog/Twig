@@ -1,3 +1,4 @@
+import { fetchMetadataRefs } from "../git/refs";
 import { getBookmarkTracking, push, runJJ } from "../jj";
 import { ok, type Result } from "../result";
 import type { Command } from "./types";
@@ -76,6 +77,9 @@ export async function restack(): Promise<Result<RestackResult>> {
   // Fetch latest first
   const fetchResult = await runJJ(["git", "fetch"]);
   if (!fetchResult.ok) return fetchResult;
+
+  // Fetch arr metadata refs from remote
+  fetchMetadataRefs();
 
   // Restack all changes onto trunk
   const restackResult = await restackAll();

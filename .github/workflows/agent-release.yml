@@ -56,6 +56,12 @@ jobs:
           cache: "pnpm"
           registry-url: https://registry.npmjs.org
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

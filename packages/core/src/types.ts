@@ -51,8 +51,6 @@ export interface WorkspaceInfo {
 export interface ListOptions {
   revset?: string;
   limit?: number;
-  /** Include diff stats in the result (slower) */
-  includeStats?: boolean;
 }
 
 export interface NewOptions {

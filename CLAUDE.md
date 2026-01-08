@@ -46,9 +46,12 @@
 
 ### Avoid Barrel Files
 
+- Do not make use of index.ts
+
 Barrel files:
+
 - Break tree-shaking
-- Create circular dependency risks  
+- Create circular dependency risks
 - Hide the true source of imports
 - Make refactoring harder
 
@@ -74,6 +77,17 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tR
 - PostHog API integration in `posthog-api.ts`
 - Task execution and session management
 
+### CLI Package (packages/cli)
+
+- **Dumb shell, imperative core**: CLI commands should be thin wrappers that call `@array/core`
+- All business logic belongs in `@array/core`, not in CLI command files
+- CLI only handles: argument parsing, calling core, formatting output
+- No data transformation, tree building, or complex logic in CLI
+
+### Core Package (packages/core)
+
+- Shared business logic for jj/GitHub operations
+
 ## Key Libraries
 
 - React 18, Radix UI Themes, Tailwind CSS
@@ -91,6 +105,5 @@ TODO: Update me
 
 ## Testing
 
-- Tests use vitest with jsdom environment
-- Test helpers in `src/test/`
-- Run specific test: `pnpm --filter array test -- path/to/test`
+- `pnpm test` - Run tests across all packages
+- Array app: Vitest with jsdom, helpers in `apps/array/src/test/`

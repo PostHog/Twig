@@ -1,45 +1,66 @@
-import { abandon, edit, list, runJJ, status } from "../jj";
+import type { Engine } from "../engine";
+import { abandon, edit, findChange, list, runJJ, status } from "../jj";
+import type { Changeset } from "../parser";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
 
 interface DeleteResult {
   movedTo: string | null;
+  untrackedBookmarks: string[];
+  /** The change that was deleted (for CLI display) */
+  change: Changeset;
+}
+
+interface DeleteOptions {
+  /** Change ID, bookmark name, or search query (required) */
+  id: string;
+  engine: Engine;
 }
 
 /**
  * Delete a change, discarding its work.
  * If the change has children, they are rebased onto the parent.
  * If deleting the current change, moves to parent.
+ * Untracks any bookmarks on the deleted change from the engine.
  */
 export async function deleteChange(
-  changeId: string,
+  options: DeleteOptions,
 ): Promise<Result<DeleteResult>> {
+  const { id, engine } = options;
+
   const statusBefore = await status();
   if (!statusBefore.ok) return statusBefore;
 
-  const wasOnChange =
-    statusBefore.value.workingCopy.changeId === changeId ||
-    statusBefore.value.workingCopy.changeId.startsWith(changeId);
-
-  const changeResult = await list({ revset: changeId, limit: 1 });
-  if (!changeResult.ok) return changeResult;
-  if (changeResult.value.length === 0) {
+  // Resolve the change
+  const findResult = await findChange(id, { includeBookmarks: true });
+  if (!findResult.ok) return findResult;
+  if (findResult.value.status === "none") {
+    return err(createError("INVALID_REVISION", `Change not found: ${id}`));
+  }
+  if (findResult.value.status === "multiple") {
     return err(
-      createError("INVALID_REVISION", `Change not found: ${changeId}`),
+      createError(
+        "AMBIGUOUS_REVISION",
+        `Multiple changes match "${id}". Use a more specific identifier.`,
+      ),
     );
   }
+  const change = findResult.value.change;
 
-  const change = changeResult.value[0];
+  const wasOnChange =
+    statusBefore.value.workingCopy.changeId === change.changeId;
   const parentId = change.parents[0];
 
-  const childrenResult = await list({ revset: `children(${changeId})` });
+  const childrenResult = await list({
+    revset: `children(${change.changeId})`,
+  });
   const hasChildren = childrenResult.ok && childrenResult.value.length > 0;
 
   if (hasChildren) {
     const rebaseResult = await runJJ([
       "rebase",
       "-s",
-      `children(${changeId})`,
+      `children(${change.changeId})`,
       "-d",
       parentId || "trunk()",
     ]);
@@ -57,6 +78,15 @@ export async function deleteChange(
   const abandonResult = await abandon(change.changeId);
   if (!abandonResult.ok) return abandonResult;
 
+  // Untrack any bookmarks on the deleted change
+  const untrackedBookmarks: string[] = [];
+  for (const bookmark of change.bookmarks) {
+    if (engine.isTracked(bookmark)) {
+      engine.untrack(bookmark);
+      untrackedBookmarks.push(bookmark);
+    }
+  }
+
   let movedTo: string | null = null;
   if (wasOnChange && parentId) {
     const editResult = await edit(parentId);
@@ -65,10 +95,10 @@ export async function deleteChange(
     }
   }
 
-  return ok({ movedTo });
+  return ok({ movedTo, untrackedBookmarks, change });
 }
 
-export const deleteCommand: Command<DeleteResult, [string]> = {
+export const deleteCommand: Command<DeleteResult, [DeleteOptions]> = {
   meta: {
     name: "delete",
     args: "<id>",

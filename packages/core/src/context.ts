@@ -1,5 +1,5 @@
 import { isRepoInitialized } from "./config";
-import { isInGitRepo } from "./git";
+import { isInGitRepo } from "./git/repo";
 import { checkPrerequisites, isJjInitialized } from "./init";
 
 export type ContextLevel = "none" | "jj" | "array";

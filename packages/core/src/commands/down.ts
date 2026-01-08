@@ -1,6 +1,7 @@
-import { getTrunk, jjNew, runJJ, status } from "../jj";
-import { ok, type Result } from "../result";
+import { getTrunk, runJJ, status } from "../jj";
+import type { Result } from "../result";
 import type { NavigationResult } from "../types";
+import { getNavigationResult, newOnTrunk } from "./navigation";
 import type { Command } from "./types";
 
 /**
@@ -30,25 +31,6 @@ export async function down(): Promise<Result<NavigationResult>> {
     return result;
   }
   return getNavigationResult();
-}
-
-async function newOnTrunk(): Promise<Result<NavigationResult>> {
-  const trunk = await getTrunk();
-  const newResult = await jjNew({ parents: [trunk] });
-  if (!newResult.ok) return newResult;
-  const navResult = await getNavigationResult();
-  if (!navResult.ok) return navResult;
-  return ok({ ...navResult.value, createdOnTrunk: true });
-}
-
-async function getNavigationResult(): Promise<Result<NavigationResult>> {
-  const statusResult = await status();
-  if (!statusResult.ok) return statusResult;
-  return ok({
-    changeId: statusResult.value.workingCopy.changeId,
-    changeIdPrefix: statusResult.value.workingCopy.changeIdPrefix,
-    description: statusResult.value.workingCopy.description,
-  });
 }
 
 export const downCommand: Command<NavigationResult> = {
