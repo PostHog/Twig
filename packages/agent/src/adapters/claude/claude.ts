@@ -164,7 +164,7 @@ type ToolUseCache = {
     type: "tool_use" | "server_tool_use" | "mcp_tool_use";
     id: string;
     name: string;
-    input: any;
+    input: unknown;
   };
 };
 
@@ -221,7 +221,10 @@ export class ClaudeAcpAgent implements Agent {
 
       if (update.sessionUpdate === "agent_message_chunk") {
         started = true;
-        const content = update.content as { type?: string; text?: string } | null;
+        const content = update.content as {
+          type?: string;
+          text?: string;
+        } | null;
         if (content?.type === "text" && content.text) {
           chunks.push(content.text);
         }
@@ -256,7 +259,7 @@ export class ClaudeAcpAgent implements Agent {
     this.clientCapabilities = request.clientCapabilities;
 
     // Default authMethod
-    const authMethod: any = {
+    const authMethod: { description: string; name: string; id: string } = {
       description: "Run `claude /login` in the terminal",
       name: "Log in with Claude Code",
       id: "claude-login",
@@ -367,8 +370,9 @@ export class ClaudeAcpAgent implements Agent {
     }
 
     // Use initialModeId from _meta if provided (e.g., "plan" for plan mode), otherwise default
-    const initialModeId = (params._meta as { initialModeId?: string } | undefined)
-      ?.initialModeId;
+    const initialModeId = (
+      params._meta as { initialModeId?: string } | undefined
+    )?.initialModeId;
     const ourPermissionMode = (initialModeId ?? "default") as PermissionMode;
     const sdkPermissionMode: PermissionMode = ourPermissionMode;
 
@@ -599,7 +603,7 @@ export class ClaudeAcpAgent implements Agent {
       }
       this.logger.debug("SDK message received", {
         type: message.type,
-        subtype: (message as any).subtype,
+        subtype: (message as { subtype?: string }).subtype,
       });
 
       switch (message.type) {
@@ -884,7 +888,8 @@ export class ClaudeAcpAgent implements Agent {
             ? this.fileContentCache[session.lastPlanFilePath]
             : undefined);
         const hasPlan =
-          typeof (toolInput as { plan?: unknown } | undefined)?.plan === "string";
+          typeof (toolInput as { plan?: unknown } | undefined)?.plan ===
+          "string";
         if (!hasPlan) {
           const fallbackPlan = planFromFile
             ? planFromFile
@@ -996,7 +1001,14 @@ export class ClaudeAcpAgent implements Agent {
 
       // AskUserQuestion always prompts user - never auto-approve
       if (toolName === "AskUserQuestion") {
-        const questions = (toolInput as any)?.questions || [];
+        interface AskUserQuestionInput {
+          questions?: Array<{
+            question: string;
+            options: Array<{ label: string; description?: string }>;
+            multiSelect?: boolean;
+          }>;
+        }
+        const questions = (toolInput as AskUserQuestionInput)?.questions || [];
         const firstQuestion = questions[0];
 
         if (!firstQuestion) {
@@ -1039,7 +1051,10 @@ export class ClaudeAcpAgent implements Agent {
 
         if (response.outcome?.outcome === "selected") {
           const selectedOptionId = response.outcome.optionId;
-          const selectedIdx = parseInt(selectedOptionId.replace("option_", ""), 10);
+          const selectedIdx = parseInt(
+            selectedOptionId.replace("option_", ""),
+            10,
+          );
           const selectedOption = firstQuestion.options[selectedIdx];
 
           // Return the answer in updatedInput so it flows back to Claude
@@ -1048,7 +1063,8 @@ export class ClaudeAcpAgent implements Agent {
             updatedInput: {
               ...toolInput,
               answers: {
-                [firstQuestion.question]: selectedOption?.label || selectedOptionId,
+                [firstQuestion.question]:
+                  selectedOption?.label || selectedOptionId,
               },
             },
           };
@@ -1075,12 +1091,12 @@ export class ClaudeAcpAgent implements Agent {
         WRITE_TOOL_NAMES.includes(toolName)
       ) {
         // Allow writes to Claude Code's plan files
-        const filePath = (toolInput as any)?.file_path;
+        const filePath = (toolInput as { file_path?: string })?.file_path;
         const isPlanFile = isClaudePlanFilePath(filePath);
 
         if (isPlanFile) {
           session.lastPlanFilePath = filePath;
-          const content = (toolInput as any)?.content;
+          const content = (toolInput as { content?: string })?.content;
           if (typeof content === "string") {
             session.lastPlanContent = content;
           }
@@ -1407,8 +1423,8 @@ function formatUriAsLink(uri: string): string {
 }
 
 export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
-  const content: any[] = [];
-  const context: any[] = [];
+  const content: ContentBlockParam[] = [];
+  const context: ContentBlockParam[] = [];
 
   for (const chunk of prompt.prompt) {
     switch (chunk.type) {
@@ -1453,7 +1469,11 @@ export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
             source: {
               type: "base64",
               data: chunk.data,
-              media_type: chunk.mimeType,
+              media_type: chunk.mimeType as
+                | "image/jpeg"
+                | "image/png"
+                | "image/gif"
+                | "image/webp",
             },
           });
         } else if (chunk.uri?.startsWith("http")) {
