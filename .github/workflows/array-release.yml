@@ -1,4 +1,4 @@
-name: Publish Release
+name: Release Array
 
 on:
   push:
@@ -11,11 +11,11 @@ on:
       - "pnpm-lock.yaml"
       - "package.json"
       - "turbo.json"
-      - ".github/workflows/release.yml"
+      - ".github/workflows/array-release.yml"
 
 concurrency:
-  group: release
-  cancel-in-progress: true
+  group: array-release
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -42,6 +42,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
