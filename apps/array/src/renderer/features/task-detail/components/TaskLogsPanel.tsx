@@ -154,6 +154,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
           hasError={hasError}
+          isOffline={!isOnline}
         />
       </Box>
     </BackgroundWrapper>

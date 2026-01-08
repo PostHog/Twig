@@ -43,6 +43,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
     const isCloud = context?.isCloud ?? false;
+    const isOffline = context?.isOffline ?? false;
     const repoPath = context?.repoPath;
 
     const {
@@ -63,6 +64,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       placeholder,
       disabled,
       isCloud,
+      isOffline,
       autoFocus,
       context: { taskId, repoPath },
       onSubmit,
@@ -147,7 +149,11 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             ) : (
               <Tooltip
                 content={
-                  disabled || isEmpty ? "Enter a message" : "Send message"
+                  isOffline
+                    ? "You're offline"
+                    : disabled || isEmpty
+                      ? "Enter a message"
+                      : "Send message"
                 }
               >
                 <IconButton
@@ -157,12 +163,17 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
                     e.stopPropagation();
                     submit();
                   }}
-                  disabled={disabled || isEmpty}
+                  disabled={disabled || isEmpty || isOffline}
                   loading={isLoading}
                   style={{
                     backgroundColor:
-                      disabled || isEmpty ? "var(--accent-a4)" : undefined,
-                    color: disabled || isEmpty ? "var(--accent-8)" : undefined,
+                      disabled || isEmpty || isOffline
+                        ? "var(--accent-a4)"
+                        : undefined,
+                    color:
+                      disabled || isEmpty || isOffline
+                        ? "var(--accent-8)"
+                        : undefined,
                   }}
                 >
                   <ArrowUp size={14} weight="bold" />

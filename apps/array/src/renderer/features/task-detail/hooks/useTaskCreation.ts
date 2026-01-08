@@ -3,6 +3,7 @@ import type { MessageEditorHandle } from "@features/message-editor/components/Me
 import type { EditorContent } from "@features/message-editor/utils/content";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { get } from "@renderer/di/container";
 import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
@@ -119,11 +120,13 @@ export function useTaskCreation({
   const { isAuthenticated } = useAuthStore();
   const { autoRunTasks } = useSettingsStore();
   const { invalidateTasks } = useCreateTask();
+  const { isOnline } = useConnectivity();
 
   const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&
+    isOnline &&
     (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
     !isCreatingTask &&
     !editorIsEmpty;

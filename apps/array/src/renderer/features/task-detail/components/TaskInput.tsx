@@ -1,6 +1,7 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Flex } from "@radix-ui/themes";
@@ -39,6 +40,7 @@ export function TaskInput() {
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
 
   const { githubIntegration } = useRepositoryIntegration();
+  const { isOnline } = useConnectivity();
 
   useEffect(() => {
     if (view.folderId) {
@@ -143,6 +145,7 @@ export function TaskInput() {
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}
           onEmptyChange={setEditorIsEmpty}
+          isOffline={!isOnline}
         />
 
         <SuggestedTasks editorRef={editorRef} />

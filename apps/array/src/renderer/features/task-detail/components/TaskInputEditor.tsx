@@ -23,6 +23,7 @@ interface TaskInputEditorProps {
   onSubmit: () => void;
   hasDirectory: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
+  isOffline?: boolean;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -41,6 +42,7 @@ export const TaskInputEditor = forwardRef<
       onSubmit,
       hasDirectory,
       onEmptyChange,
+      isOffline = false,
     },
     ref,
   ) => {
@@ -89,6 +91,7 @@ export const TaskInputEditor = forwardRef<
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
+      if (isOffline) return "You're offline";
       if (isEmpty) return "Enter a task description";
       if (!hasDirectory) return "Select a folder first";
       if (!canSubmit) return "Missing required fields";

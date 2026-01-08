@@ -13,6 +13,7 @@ export interface EditorContext {
   disabled: boolean;
   isLoading: boolean;
   isCloud: boolean;
+  isOffline: boolean;
 }
 
 interface DraftState {
@@ -71,6 +72,7 @@ export const useDraftStore = create<DraftStore>()(
               disabled: context.disabled ?? existing?.disabled ?? false,
               isLoading: context.isLoading ?? existing?.isLoading ?? false,
               isCloud: context.isCloud ?? existing?.isCloud ?? false,
+              isOffline: context.isOffline ?? existing?.isOffline ?? false,
             };
           }),
 

@@ -28,6 +28,7 @@ interface SessionViewProps {
   repoPath?: string | null;
   isCloud?: boolean;
   hasError?: boolean;
+  isOffline?: boolean;
 }
 
 export function SessionView({
@@ -41,6 +42,7 @@ export function SessionView({
   repoPath,
   isCloud = false,
   hasError = false,
+  isOffline = false,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -53,6 +55,7 @@ export function SessionView({
     disabled: !isRunning,
     isLoading: isPromptPending,
     isCloud,
+    isOffline,
   });
 
   useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [

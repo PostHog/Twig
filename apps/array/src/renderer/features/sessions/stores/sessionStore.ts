@@ -899,23 +899,35 @@ useAuthStore.subscribe(
   },
 );
 
-// Listen for connectivity changes and handle session state
-trpcVanilla.connectivity.onStatusChange.subscribe(undefined, {
-  onData: (status) => {
-    if (!status.isOnline) {
-      log.info("Connectivity lost - marking sessions as disconnected");
+// Listen for connectivity changes via the connectivity store
+// This runs after the store is initialized in App.tsx
+import("@renderer/stores/connectivityStore").then(
+  ({ useConnectivityStore }) => {
+    useConnectivityStore.subscribe(
+      (state) => state.isOnline,
+      (isOnline, wasOnline) => {
+        if (!isOnline && wasOnline) {
+          // Going offline - mark sessions as disconnected
+          log.info("Connectivity lost - marking sessions as disconnected");
 
-      useStore.setState((state) => {
-        for (const session of Object.values(state.sessions)) {
-          if (
-            session.status === "connected" ||
-            session.status === "connecting"
-          ) {
-            session.status = "disconnected";
-            session.isPromptPending = false;
-          }
+          useStore.setState((state) => {
+            for (const session of Object.values(state.sessions)) {
+              if (
+                session.status === "connected" ||
+                session.status === "connecting"
+              ) {
+                session.status = "disconnected";
+                session.isPromptPending = false;
+              }
+            }
+          });
+        } else if (isOnline && !wasOnline) {
+          // Coming back online - log the event
+          // TaskLogsPanel will detect disconnected sessions and reconnect them
+          // via its useEffect that depends on isOnline and session status
+          log.info("Connectivity restored - sessions can be reconnected");
         }
-      });
-    }
+      },
+    );
   },
-});
+);

@@ -1,3 +1,4 @@
+import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { StatusBar } from "@components/StatusBar";
@@ -10,6 +11,7 @@ import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -28,6 +30,7 @@ export function MainLayout() {
     close: closeShortcutsSheet,
   } = useShortcutsSheetStore();
   const { data: tasks } = useTasks();
+  const { showPrompt, isChecking, check, dismiss } = useConnectivity();
 
   useIntegrations();
   useTaskDeepLink();
@@ -75,6 +78,12 @@ export function MainLayout() {
         onOpenChange={(open) => (open ? null : closeShortcutsSheet())}
       />
       <UpdatePrompt />
+      <ConnectivityPrompt
+        open={showPrompt}
+        isChecking={isChecking}
+        onRetry={check}
+        onDismiss={dismiss}
+      />
       <GlobalEventHandlers
         onToggleCommandMenu={handleToggleCommandMenu}
         onToggleShortcutsSheet={toggleShortcutsSheet}
