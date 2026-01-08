@@ -1,3 +1,4 @@
+import { useConnectivityStore } from "@stores/connectivityStore";
 import { toast } from "@renderer/utils/toast";
 import { useEditor } from "@tiptap/react";
 import { useCallback, useRef, useState } from "react";
@@ -13,7 +14,6 @@ export interface UseTiptapEditorOptions {
   placeholder?: string;
   disabled?: boolean;
   isCloud?: boolean;
-  isOffline?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
   capabilities?: {
@@ -37,7 +37,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     placeholder = "",
     disabled = false,
     isCloud = false,
-    isOffline = false,
     autoFocus = false,
     context,
     capabilities = {},
@@ -46,6 +45,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onBashModeChange,
     onEmptyChange,
   } = options;
+
+  const isOffline = useConnectivityStore((s) => !s.isOnline);
 
   const {
     fileMentions = true,

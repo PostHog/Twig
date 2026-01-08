@@ -1,6 +1,7 @@
 import "./message-editor.css";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
+import { useConnectivityStore } from "@stores/connectivityStore";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -43,8 +44,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
     const isCloud = context?.isCloud ?? false;
-    const isOffline = context?.isOffline ?? false;
     const repoPath = context?.repoPath;
+
+    const isOffline = useConnectivityStore((s) => !s.isOnline);
 
     const {
       editor,
@@ -64,7 +66,6 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       placeholder,
       disabled,
       isCloud,
-      isOffline,
       autoFocus,
       context: { taskId, repoPath },
       onSubmit,
