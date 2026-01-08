@@ -125,7 +125,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   bottom: () => bottom(),
   log: (p, ctx) => log(ctx!, { debug: !!p.flags.debug }),
   sync: (_p, ctx) => sync(ctx!),
-  restack: () => restack(),
+  restack: (_p, ctx) => restack(ctx!),
   checkout: (p) => checkout(p.args[0]),
   delete: (p, ctx) =>
     deleteChange(p.args[0], ctx!, { yes: !!p.flags.yes || !!p.flags.y }),

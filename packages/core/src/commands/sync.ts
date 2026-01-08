@@ -1,18 +1,11 @@
 import type { Engine } from "../engine";
-import {
-  getTrunk,
-  list,
-  runJJ,
-  runJJWithMutableConfigVoid,
-  status,
-} from "../jj";
+import { getTrunk, runJJ, runJJWithMutableConfigVoid, status } from "../jj";
 import { ok, type Result } from "../result";
 import {
   findMergedChanges,
   type MergedChange,
   updateStackComments,
 } from "../stacks";
-import type { AbandonedChange } from "../types";
 import { syncPRInfo } from "./sync-pr-info";
 import type { Command } from "./types";
 
@@ -20,9 +13,7 @@ interface SyncResult {
   fetched: boolean;
   rebased: boolean;
   hasConflicts: boolean;
-  merged: AbandonedChange[];
-  empty: AbandonedChange[];
-  /** Changes with merged PRs pending cleanup - caller should prompt before cleanup */
+  /** Changes with merged/closed PRs pending cleanup - caller should prompt before cleanup */
   pendingCleanup: MergedChange[];
   updatedComments: number;
   stacksBehind: number;
@@ -136,61 +127,55 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
   const trunk = await getTrunk();
   await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
 
-  // Rebase onto trunk (use mutable config for potentially pushed commits)
-  const rebaseResult = await runJJWithMutableConfigVoid([
-    "rebase",
-    "-s",
-    "roots(trunk()..@)",
-    "-d",
-    "trunk()",
-  ]);
+  // Rebase WC onto new trunk if it's behind (empty WC on old trunk ancestor)
+  await runJJWithMutableConfigVoid(["rebase", "-r", "@", "-d", "trunk()"]);
+
+  // Rebase only tracked bookmarks onto trunk (not all mutable commits)
+  // This prevents rebasing unrelated orphaned commits from the repo history
+  const trackedBookmarks = engine.getTrackedBookmarks();
+  let rebaseOk = true;
+  let rebaseError: string | undefined;
+
+  for (const bookmark of trackedBookmarks) {
+    // Only rebase if bookmark exists and is mutable
+    const checkResult = await runJJ([
+      "log",
+      "-r",
+      `bookmarks(exact:"${bookmark}") & mutable()`,
+      "--no-graph",
+      "-T",
+      "change_id",
+    ]);
+
+    if (checkResult.ok && checkResult.value.stdout.trim()) {
+      const result = await runJJWithMutableConfigVoid([
+        "rebase",
+        "-b",
+        bookmark,
+        "-d",
+        "trunk()",
+      ]);
+      if (!result.ok) {
+        rebaseOk = false;
+        rebaseError = result.error.message;
+        break;
+      }
+    }
+  }
 
   // Check for conflicts
   let hasConflicts = false;
-  if (rebaseResult.ok) {
+  if (rebaseOk) {
     const statusResult = await status();
     if (statusResult.ok) {
       hasConflicts = statusResult.value.workingCopy.hasConflicts;
     }
   } else {
-    hasConflicts = rebaseResult.error.message.includes("conflict");
+    hasConflicts = rebaseError?.includes("conflict") ?? false;
   }
 
-  // Find empty changes, but exclude the current working copy
-  const emptyResult = await list({ revset: "(trunk()..@) & empty() & ~@" });
-  const abandoned: AbandonedChange[] = [];
-
-  if (emptyResult.ok) {
-    for (const change of emptyResult.value) {
-      // If change has bookmarks, check cached PR info from engine
-      if (change.bookmarks.length > 0) {
-        const hasOpenPR = change.bookmarks.some((bookmark) => {
-          const meta = engine.getMeta(bookmark);
-          return meta?.prInfo?.state === "OPEN";
-        });
-
-        // Skip if there's still an open PR
-        if (hasOpenPR) {
-          continue;
-        }
-      }
-
-      const abandonResult = await runJJWithMutableConfigVoid([
-        "abandon",
-        change.changeId,
-      ]);
-      if (abandonResult.ok) {
-        const reason = change.description.trim() !== "" ? "merged" : "empty";
-        abandoned.push({ changeId: change.changeId, reason });
-      }
-    }
-  }
-
-  // Clean up orphaned bookmarks
+  // Clean up orphaned bookmarks (bookmarks with no target)
   await cleanupOrphanedBookmarks();
-
-  const merged = abandoned.filter((a) => a.reason === "merged");
-  const empty = abandoned.filter((a) => a.reason === "empty");
 
   // Find changes with merged PRs - don't auto-cleanup, let caller prompt
   const mergedResult = await findMergedChanges();
@@ -206,10 +191,8 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
 
   return ok({
     fetched: true,
-    rebased: rebaseResult.ok,
+    rebased: rebaseOk,
     hasConflicts,
-    merged,
-    empty,
     pendingCleanup,
     updatedComments,
     stacksBehind,

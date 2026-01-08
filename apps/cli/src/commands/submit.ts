@@ -33,7 +33,7 @@ export async function submit(
     process.exit(1);
   }
 
-  status("Submitting stack as linked PRs...");
+  status("Submitting active stack as linked PRs...");
   blank();
 
   const result = unwrap(

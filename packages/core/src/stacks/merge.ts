@@ -131,24 +131,19 @@ export async function mergeStack(
     }
   }
 
-  const baseUpdates: Promise<Result<void>>[] = [];
-  for (const prItem of prs) {
-    if (prItem.baseRefName !== trunk) {
-      baseUpdates.push(updatePR(prItem.prNumber, { base: trunk }));
-    }
-  }
-  if (baseUpdates.length > 0) {
-    const updateResults = await Promise.all(baseUpdates);
-    for (const result of updateResults) {
-      if (!result.ok) return result;
-    }
-  }
-
   for (let i = 0; i < prs.length; i++) {
     const prItem = prs[i];
     const nextPR = prs[i + 1];
 
     callbacks?.onMerging?.(prItem, nextPR);
+
+    // Update base to trunk right before merging this PR
+    // (Don't do this upfront for all PRs - that can cause GitHub to auto-close them)
+    if (prItem.baseRefName !== trunk) {
+      const baseUpdateResult = await updatePR(prItem.prNumber, { base: trunk });
+      if (!baseUpdateResult.ok) return baseUpdateResult;
+    }
+
     callbacks?.onWaiting?.(prItem);
 
     const mergeableResult = await waitForMergeable(prItem.prNumber, {

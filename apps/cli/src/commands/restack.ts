@@ -1,11 +1,13 @@
 import { restack as coreRestack } from "@array/core/commands/restack";
+import type { ArrContext } from "@array/core/engine";
 import { formatSuccess, message, status } from "../utils/output";
 import { unwrap } from "../utils/run";
 
-export async function restack(): Promise<void> {
+export async function restack(ctx: ArrContext): Promise<void> {
   status("Restacking all changes onto trunk...");
 
-  const result = unwrap(await coreRestack());
+  const trackedBookmarks = ctx.engine.getTrackedBookmarks();
+  const result = unwrap(await coreRestack({ trackedBookmarks }));
 
   if (result.restacked === 0) {
     message("All stacks already up to date with trunk");

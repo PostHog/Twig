@@ -12,47 +12,69 @@ interface RestackResult {
   pushed: string[];
 }
 
-/**
- * Check if there are mutable changes not based on current trunk.
- */
-async function getStacksBehindTrunk(): Promise<Result<number>> {
-  const result = await runJJ([
-    "log",
-    "-r",
-    "roots(mutable() ~ trunk()..)",
-    "--no-graph",
-    "-T",
-    `change_id ++ "\\n"`,
-  ]);
-  if (!result.ok) return result;
-  const roots = result.value.stdout
-    .split("\n")
-    .filter((line) => line.trim() !== "");
-  return ok(roots.length);
+interface RestackOptions {
+  /** Tracked bookmarks to consider for restacking */
+  trackedBookmarks: string[];
 }
 
 /**
- * Rebase all mutable stacks onto trunk.
+ * Find tracked bookmarks that are behind trunk (not based on current trunk tip).
  */
-async function restackAll(): Promise<Result<{ restacked: number }>> {
-  const countResult = await getStacksBehindTrunk();
-  if (!countResult.ok) return countResult;
+async function getBookmarksBehindTrunk(
+  trackedBookmarks: string[],
+): Promise<Result<string[]>> {
+  if (trackedBookmarks.length === 0) {
+    return ok([]);
+  }
 
-  if (countResult.value === 0) {
+  const behindBookmarks: string[] = [];
+
+  for (const bookmark of trackedBookmarks) {
+    // Check if this bookmark exists and is not a descendant of trunk
+    const result = await runJJ([
+      "log",
+      "-r",
+      `bookmarks(exact:"${bookmark}") & mutable() ~ trunk()::`,
+      "--no-graph",
+      "-T",
+      `change_id ++ "\\n"`,
+    ]);
+
+    if (result.ok && result.value.stdout.trim()) {
+      behindBookmarks.push(bookmark);
+    }
+  }
+
+  return ok(behindBookmarks);
+}
+
+/**
+ * Rebase tracked bookmarks that are behind trunk.
+ */
+async function restackTracked(
+  trackedBookmarks: string[],
+): Promise<Result<{ restacked: number }>> {
+  const behindResult = await getBookmarksBehindTrunk(trackedBookmarks);
+  if (!behindResult.ok) return behindResult;
+
+  const behind = behindResult.value;
+  if (behind.length === 0) {
     return ok({ restacked: 0 });
   }
 
-  // Use mutable config for rebase on potentially pushed commits
-  const result = await runJJWithMutableConfigVoid([
-    "rebase",
-    "-s",
-    "roots(mutable())",
-    "-d",
-    "trunk()",
-  ]);
-  if (!result.ok) return result;
+  // Rebase each behind bookmark onto trunk
+  for (const bookmark of behind) {
+    const result = await runJJWithMutableConfigVoid([
+      "rebase",
+      "-b",
+      bookmark,
+      "-d",
+      "trunk()",
+    ]);
+    if (!result.ok) return result;
+  }
 
-  return ok({ restacked: countResult.value });
+  return ok({ restacked: behind.length });
 }
 
 /**
@@ -76,15 +98,19 @@ async function pushAllUnpushed(): Promise<Result<{ pushed: string[] }>> {
 }
 
 /**
- * Fetch from remote, restack all changes onto trunk, and push rebased bookmarks.
+ * Fetch from remote, restack tracked bookmarks onto trunk, and push rebased bookmarks.
  */
-export async function restack(): Promise<Result<RestackResult>> {
+export async function restack(
+  options: RestackOptions,
+): Promise<Result<RestackResult>> {
+  const { trackedBookmarks } = options;
+
   // Fetch latest first
   const fetchResult = await runJJ(["git", "fetch"]);
   if (!fetchResult.ok) return fetchResult;
 
-  // Restack all changes onto trunk
-  const restackResult = await restackAll();
+  // Restack only tracked bookmarks that are behind trunk
+  const restackResult = await restackTracked(trackedBookmarks);
   if (!restackResult.ok) return restackResult;
 
   // Push all unpushed bookmarks
@@ -97,10 +123,10 @@ export async function restack(): Promise<Result<RestackResult>> {
   });
 }
 
-export const restackCommand: Command<RestackResult> = {
+export const restackCommand: Command<RestackResult, [RestackOptions]> = {
   meta: {
     name: "restack",
-    description: "Rebase all stacks onto trunk and push updated bookmarks",
+    description: "Rebase tracked stacks onto trunk and push updated bookmarks",
     category: "workflow",
   },
   run: restack,

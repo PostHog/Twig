@@ -21,6 +21,7 @@ interface PRInfo {
   number: number;
   state: "OPEN" | "CLOSED" | "MERGED";
   url: string;
+  title: string;
 }
 
 interface LogFlags {
@@ -67,22 +68,21 @@ export async function log(
     return;
   }
 
-  // Get tracked bookmarks with OPEN PRs
-  const trackedBookmarks = engine.getTrackedBookmarks().filter((bookmark) => {
-    const meta = engine.getMeta(bookmark);
-    if (!meta?.prInfo) return true;
-    return meta.prInfo.state === "OPEN";
-  });
+  // Get all tracked bookmarks (show all, not just OPEN PRs)
+  const trackedBookmarks = engine.getTrackedBookmarks();
 
-  // Build revset: tracked bookmarks + their ancestors down to trunk + WC
+  // Build revset: trunk + mutable tracked bookmarks + fork points + WC
   let revset: string;
   if (trackedBookmarks.length === 0) {
-    revset = `${trunkName}:: & ::@`;
+    revset = `${trunkName} | @`;
   } else {
     const bookmarkRevsets = trackedBookmarks
       .map((b) => `bookmarks(exact:"${b}")`)
       .join(" | ");
-    revset = `(${trunkName}:: & ::(${bookmarkRevsets})) | @`;
+    // Show: trunk, mutable tracked bookmarks, their fork points (parents that are ancestors of trunk), and WC
+    const mutableBookmarks = `((${bookmarkRevsets}) & mutable())`;
+    const forkPoints = `((${mutableBookmarks})- & ::${trunkName})`;
+    revset = `${trunkName} | ${mutableBookmarks} | ${forkPoints} | @`;
   }
 
   // Run jj log with our template
@@ -108,6 +108,7 @@ export async function log(
   // Build enhancement data
   const prInfoMap = buildPRInfoMap(engine, trackedBookmarks);
   const modifiedBookmarks = await getModifiedBookmarks(cwd);
+  const behindTrunkChanges = await getBehindTrunkChanges(cwd);
 
   // Check if empty state (just on trunk with empty WC)
   const lines = result.value.stdout.split("\n");
@@ -129,6 +130,7 @@ export async function log(
     prInfoMap,
     modifiedBookmarks,
     trackedBookmarks,
+    behindTrunkChanges,
   );
   message(output);
 
@@ -152,6 +154,7 @@ function renderEnhancedOutput(
   prInfoMap: Map<string, PRInfo>,
   modifiedBookmarks: Set<string>,
   trackedBookmarks: string[],
+  behindTrunkChanges: Set<string>,
 ): string {
   const lines = rawOutput.split("\n");
   const output: string[] = [];
@@ -161,27 +164,21 @@ function renderEnhancedOutput(
   let currentIsTracked = false;
   let currentIsModified = false;
   let currentIsTrunk = false;
-  let wcParentName: string | null = null;
+  let currentIsForkPoint = false; // Immutable commit included only for graph connectivity
+  let currentIsBehindTrunk = false; // Mutable commit whose parent is not current trunk
   let pendingHints: string[] = []; // Buffer hints to output after COMMIT
 
-  // First pass: find WC parent for modify hint
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  // Check if WC parent is a tracked bookmark (for modify hint)
+  // We only show "arr modify" if WC is on top of a tracked change
+  const wcParentBookmark: string | null = null;
+  for (const line of lines) {
     if (line.includes("HINT:empty")) {
-      // Find the next CHANGE line to get parent name
-      for (let j = i + 1; j < lines.length; j++) {
-        const nextLine = lines[j];
-        const changeMatch = nextLine.match(
-          /CHANGE:([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|/,
-        );
-        if (changeMatch) {
-          const bookmarks = changeMatch[5];
-          const description = changeMatch[6];
-          const bookmark = parseBookmark(bookmarks, trunkName);
-          wcParentName = bookmark || description || changeMatch[1].slice(0, 8);
-          break;
-        }
-      }
+      // WC is empty - check if parent is a tracked bookmark by looking at graph structure
+      // The parent in jj graph is indicated by the line connecting @ to the next commit
+      // But we can't reliably parse this from output, so check tracked bookmarks
+      // If there's exactly one tracked bookmark that's a direct parent of @, use it
+      // For now, we'll be conservative and not show modify hint unless we're certain
+      // TODO: Query jj for @- to get actual parent
       break;
     }
   }
@@ -235,6 +232,19 @@ function renderEnhancedOutput(
         currentIsTracked = bookmarks.some((b) => trackedBookmarks.includes(b));
         currentIsModified = bookmarks.some((b) => modifiedBookmarks.has(b));
         currentIsTrunk = isTrunk;
+        // Fork point: immutable commit that's not trunk (included for graph connectivity)
+        currentIsForkPoint = isImmutable && !isTrunk;
+        currentIsBehindTrunk = behindTrunkChanges.has(changeId);
+
+        // Skip rendering fork points - just keep graph lines
+        if (currentIsForkPoint) {
+          // Only output the graph connector line
+          const connectorOnly = graphPrefix.replace(/[◆○@]/g, "│");
+          if (connectorOnly.trim()) {
+            output.push(connectorOnly);
+          }
+          break;
+        }
 
         // Replace the marker in graphPrefix with our styled version
         // jj uses: @ for WC, ○ for mutable, ◆ for immutable
@@ -260,6 +270,7 @@ function renderEnhancedOutput(
           const shortId = formatChangeId(changeId, changeIdPrefix);
 
           const badges: string[] = [];
+          if (currentIsBehindTrunk) badges.push(yellow("behind trunk"));
           if (currentIsModified) badges.push(yellow("local changes"));
           if (hasConflict) badges.push(yellow("conflicts"));
           const badgeStr =
@@ -273,6 +284,9 @@ function renderEnhancedOutput(
       }
 
       case "TIME:": {
+        // Skip for fork points
+        if (currentIsForkPoint) break;
+
         const timestamp = new Date(data);
         const timeStr = formatRelativeTime(timestamp);
         output.push(`${graphPrefix}${dim(timeStr)}`);
@@ -286,12 +300,15 @@ function renderEnhancedOutput(
       case "HINT:": {
         if (data === "empty") {
           // Buffer hints to output after COMMIT line
+          // Use a clean "│  " prefix, not the graph prefix which may have ~ terminators
+          const hintPrefix = "│  ";
           pendingHints.push(
-            `${graphPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
+            `${hintPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
           );
-          if (wcParentName) {
+          // Only show modify hint if WC parent is a tracked bookmark
+          if (wcParentBookmark) {
             pendingHints.push(
-              `${graphPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentName}`)}`,
+              `${hintPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentBookmark}`)}`,
             );
           }
         }
@@ -299,18 +316,30 @@ function renderEnhancedOutput(
       }
 
       case "PR:": {
-        const [bookmarksStr, description] = data.split("|");
+        // Skip for fork points
+        if (currentIsForkPoint) break;
+
+        const [bookmarksStr] = data.split("|");
         const bookmark = parseBookmark(bookmarksStr, trunkName);
 
-        if (bookmark && bookmark !== trunkName && currentIsTracked) {
+        // Don't show PR info for trunk or if the change is immutable (already merged into trunk)
+        if (
+          bookmark &&
+          bookmark !== trunkName &&
+          currentIsTracked &&
+          !currentIsTrunk
+        ) {
           const prInfo = prInfoMap.get(bookmark);
           if (prInfo) {
-            output.push(`${graphPrefix}${formatPRLine(prInfo, description)}`);
-            output.push(`${graphPrefix}${cyan(prInfo.url)}`);
-            if (currentIsModified) {
-              pendingHints.push(
-                `${graphPrefix}${arr(COMMANDS.submit)} ${dim("to push local changes")}`,
-              );
+            // Don't show merged/closed PRs that are now part of trunk
+            if (prInfo.state === "OPEN") {
+              output.push(`${graphPrefix}${formatPRLine(prInfo)}`);
+              output.push(`${graphPrefix}${cyan(prInfo.url)}`);
+              if (currentIsModified) {
+                pendingHints.push(
+                  `${graphPrefix}${arr(COMMANDS.submit)} ${dim("to push local changes")}`,
+                );
+              }
             }
           } else {
             output.push(`${graphPrefix}${dim("Not submitted")}`);
@@ -323,10 +352,21 @@ function renderEnhancedOutput(
       }
 
       case "COMMIT:": {
+        // Skip for fork points
+        if (currentIsForkPoint) break;
+
         const [commitId, commitIdPrefix, description] = data.split("|");
         const commitIdFormatted = formatCommitId(commitId, commitIdPrefix);
-        // For trunk, we need to add the │ connector since there's no PR section
-        const prefix = currentIsTrunk ? "│  " : graphPrefix;
+        // Ensure we always have a │ prefix - jj may give us empty/wrong prefix for some lines
+        // Especially for lines after merges or when WC is a child
+        let prefix = graphPrefix;
+        if (
+          !prefix.includes("│") &&
+          !prefix.includes("├") &&
+          !prefix.includes("╯")
+        ) {
+          prefix = "│  ";
+        }
         output.push(
           `${prefix}${commitIdFormatted} ${dim(`- ${description || "(no description)"}`)}`,
         );
@@ -382,6 +422,7 @@ function buildPRInfoMap(
         number: meta.prInfo.number,
         state: meta.prInfo.state,
         url: meta.prInfo.url,
+        title: meta.prInfo.title,
       });
     }
   }
@@ -401,6 +442,34 @@ async function getModifiedBookmarks(cwd: string): Promise<Set<string>> {
   return modifiedBookmarks;
 }
 
+/**
+ * Get change IDs that are "behind trunk" (mutable but not descendants of current trunk).
+ */
+async function getBehindTrunkChanges(cwd: string): Promise<Set<string>> {
+  const result = await runJJ(
+    [
+      "log",
+      "-r",
+      "mutable() ~ trunk()::",
+      "--no-graph",
+      "-T",
+      'change_id.short() ++ "\\n"',
+    ],
+    cwd,
+  );
+
+  const behindChanges = new Set<string>();
+  if (result.ok) {
+    for (const line of result.value.stdout.split("\n")) {
+      const changeId = line.trim();
+      if (changeId) {
+        behindChanges.add(changeId);
+      }
+    }
+  }
+  return behindChanges;
+}
+
 function formatChangeId(changeId: string, prefix: string): string {
   const short = changeId.slice(0, 8);
   if (prefix && short.startsWith(prefix)) {
@@ -417,12 +486,12 @@ function formatCommitId(commitId: string, prefix: string): string {
   return cyan(short);
 }
 
-function formatPRLine(prInfo: PRInfo, description: string): string {
+function formatPRLine(prInfo: PRInfo): string {
   const stateColor =
     prInfo.state === "MERGED" ? magenta : prInfo.state === "OPEN" ? green : red;
   const stateLabel =
     prInfo.state.charAt(0) + prInfo.state.slice(1).toLowerCase();
-  return `${stateColor(`PR #${prInfo.number}`)} ${dim(`(${stateLabel})`)} ${description}`;
+  return `${stateColor(`PR #${prInfo.number}`)} ${dim(`(${stateLabel})`)} ${prInfo.title}`;
 }
 
 function formatRelativeTime(date: Date): string {

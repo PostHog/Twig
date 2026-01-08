@@ -1,7 +1,7 @@
 import { restack as coreRestack } from "@array/core/commands/restack";
 import { sync as coreSync } from "@array/core/commands/sync";
 import type { ArrContext, Engine } from "@array/core/engine";
-import { type MergedChange, reparentAndCleanup } from "@array/core/stacks";
+import { deleteBookmark } from "@array/core/jj";
 import { COMMANDS } from "../registry";
 import {
   arr,
@@ -16,50 +16,71 @@ import {
 import { confirm } from "../utils/prompt";
 import { unwrap } from "../utils/run";
 
-interface CleanupStats {
-  cleanedUp: number;
-  reparented: number;
-  prBasesUpdated: number;
+interface StaleBookmark {
+  bookmark: string;
+  prNumber: number;
+  title: string;
+  state: "MERGED" | "CLOSED";
 }
 
 /**
- * Prompt user for each merged/closed PR and cleanup if confirmed.
- * Reparents children to grandparent before cleanup.
+ * Find tracked bookmarks with MERGED or CLOSED PRs that should be cleaned up.
  */
-async function promptAndCleanupMerged(
-  pending: MergedChange[],
-  engine: Engine,
-): Promise<CleanupStats> {
-  if (pending.length === 0) {
-    return { cleanedUp: 0, reparented: 0, prBasesUpdated: 0 };
-  }
+function findStaleTrackedBookmarks(engine: Engine): StaleBookmark[] {
+  const stale: StaleBookmark[] = [];
+  const trackedBookmarks = engine.getTrackedBookmarks();
 
-  let cleanedUp = 0;
-  let reparented = 0;
-  let prBasesUpdated = 0;
-
-  for (const change of pending) {
-    const prLabel = magenta(`PR #${change.prNumber}`);
-    const branchLabel = dim(`(${change.bookmark})`);
-    const desc = change.description || "(no description)";
-    const stateLabel = change.reason === "merged" ? "merged" : "closed";
-
-    const confirmed = await confirm(
-      `Delete ${stateLabel} branch ${prLabel} ${branchLabel}: ${desc}?`,
-      { default: true },
-    );
-
-    if (confirmed) {
-      const result = await reparentAndCleanup(change, engine);
-      if (result.ok) {
-        cleanedUp++;
-        reparented += result.value.reparentedChildren.length;
-        prBasesUpdated += result.value.prBasesUpdated;
+  for (const bookmark of trackedBookmarks) {
+    const meta = engine.getMeta(bookmark);
+    if (meta?.prInfo) {
+      if (meta.prInfo.state === "MERGED" || meta.prInfo.state === "CLOSED") {
+        stale.push({
+          bookmark,
+          prNumber: meta.prInfo.number,
+          title: meta.prInfo.title,
+          state: meta.prInfo.state,
+        });
       }
     }
   }
 
-  return { cleanedUp, reparented, prBasesUpdated };
+  return stale;
+}
+
+/**
+ * Prompt user to clean up stale bookmarks (merged/closed PRs).
+ * This untrracks from arr and deletes the jj bookmark if it exists.
+ */
+async function promptAndCleanupStale(
+  stale: StaleBookmark[],
+  engine: Engine,
+): Promise<number> {
+  if (stale.length === 0) return 0;
+
+  let cleanedUp = 0;
+
+  for (const item of stale) {
+    const prLabel = magenta(`PR #${item.prNumber}`);
+    const branchLabel = dim(`(${item.bookmark})`);
+    const stateLabel = item.state === "MERGED" ? "merged" : "closed";
+
+    const confirmed = await confirm(
+      `Clean up ${stateLabel} ${prLabel} ${branchLabel}: ${item.title}?`,
+      { default: true },
+    );
+
+    if (confirmed) {
+      // Untrack from arr
+      engine.untrack(item.bookmark);
+
+      // Delete the jj bookmark if it exists
+      await deleteBookmark(item.bookmark);
+
+      cleanedUp++;
+    }
+  }
+
+  return cleanedUp;
 }
 
 export async function sync(ctx: ArrContext): Promise<void> {
@@ -68,55 +89,33 @@ export async function sync(ctx: ArrContext): Promise<void> {
   const result = unwrap(await coreSync({ engine: ctx.engine }));
 
   // Check if anything actually happened
-  const hadChanges =
-    result.fetched ||
-    result.rebased ||
-    result.merged.length > 0 ||
-    result.empty.length > 0 ||
-    result.hasConflicts;
+  const hadChanges = result.fetched || result.rebased || result.hasConflicts;
 
-  if (!hadChanges && result.pendingCleanup.length === 0) {
+  if (!hadChanges) {
     message(formatSuccess("Already up to date"));
   } else {
-    if (result.fetched && !result.hasConflicts && result.merged.length === 0) {
+    if (result.fetched && !result.hasConflicts) {
       message(formatSuccess("Synced with remote"));
     }
     if (result.hasConflicts) {
       warning("Rebase resulted in conflicts");
       hint(`Resolve conflicts and run ${arr(COMMANDS.sync)} again`);
     }
-
-    if (result.merged.length > 0) {
-      message(
-        formatSuccess(`Cleaned up ${result.merged.length} merged change(s)`),
-      );
-    }
-
-    if (result.empty.length > 0) {
-      hint(`Removed ${result.empty.length} empty change(s)`);
-    }
   }
 
-  // Prompt for each merged/closed PR cleanup
-  const cleanupStats = await promptAndCleanupMerged(
-    result.pendingCleanup,
+  // Find and prompt to clean up stale bookmarks (merged/closed PRs)
+  const staleBookmarks = findStaleTrackedBookmarks(ctx.engine);
+  const cleanedUpCount = await promptAndCleanupStale(
+    staleBookmarks,
     ctx.engine,
   );
 
-  if (cleanupStats.cleanedUp > 0) {
-    const prLabel = cleanupStats.cleanedUp === 1 ? "PR" : "PRs";
-    message(formatSuccess(`Cleaned up ${cleanupStats.cleanedUp} ${prLabel}`));
-
-    if (cleanupStats.reparented > 0) {
-      const childLabel = cleanupStats.reparented === 1 ? "child" : "children";
-      hint(`Reparented ${cleanupStats.reparented} ${childLabel} to new parent`);
-    }
-
-    if (cleanupStats.prBasesUpdated > 0) {
-      const baseLabel =
-        cleanupStats.prBasesUpdated === 1 ? "PR base" : "PR bases";
-      hint(`Updated ${cleanupStats.prBasesUpdated} ${baseLabel} on GitHub`);
-    }
+  if (cleanedUpCount > 0) {
+    message(
+      formatSuccess(
+        `Cleaned up ${cleanedUpCount} ${cleanedUpCount === 1 ? "branch" : "branches"}`,
+      ),
+    );
   }
 
   if (result.updatedComments > 0) {
@@ -132,7 +131,8 @@ export async function sync(ctx: ArrContext): Promise<void> {
     );
     if (confirmed) {
       status("Restacking and pushing...");
-      const restackResult = unwrap(await coreRestack());
+      const trackedBookmarks = ctx.engine.getTrackedBookmarks();
+      const restackResult = unwrap(await coreRestack({ trackedBookmarks }));
 
       if (restackResult.restacked > 0) {
         message(
