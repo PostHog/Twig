@@ -1,7 +1,7 @@
 import { restack as coreRestack } from "@array/core/commands/restack";
 import { sync as coreSync } from "@array/core/commands/sync";
 import type { ArrContext, Engine } from "@array/core/engine";
-import { deleteBookmark } from "@array/core/jj";
+import { type MergedChange, reparentAndCleanup } from "@array/core/stacks";
 import { COMMANDS } from "../registry";
 import {
   arr,
@@ -16,67 +16,34 @@ import {
 import { confirm } from "../utils/prompt";
 import { unwrap } from "../utils/run";
 
-interface StaleBookmark {
-  bookmark: string;
-  prNumber: number;
-  title: string;
-  state: "MERGED" | "CLOSED";
-}
-
 /**
- * Find tracked bookmarks with MERGED or CLOSED PRs that should be cleaned up.
+ * Prompt user to clean up merged/closed changes.
+ * Properly reparents children and abandons the change.
  */
-function findStaleTrackedBookmarks(engine: Engine): StaleBookmark[] {
-  const stale: StaleBookmark[] = [];
-  const trackedBookmarks = engine.getTrackedBookmarks();
-
-  for (const bookmark of trackedBookmarks) {
-    const meta = engine.getMeta(bookmark);
-    if (meta?.prInfo) {
-      if (meta.prInfo.state === "MERGED" || meta.prInfo.state === "CLOSED") {
-        stale.push({
-          bookmark,
-          prNumber: meta.prInfo.number,
-          title: meta.prInfo.title,
-          state: meta.prInfo.state,
-        });
-      }
-    }
-  }
-
-  return stale;
-}
-
-/**
- * Prompt user to clean up stale bookmarks (merged/closed PRs).
- * This untrracks from arr and deletes the jj bookmark if it exists.
- */
-async function promptAndCleanupStale(
-  stale: StaleBookmark[],
+async function promptAndCleanupMerged(
+  pending: MergedChange[],
   engine: Engine,
 ): Promise<number> {
-  if (stale.length === 0) return 0;
+  if (pending.length === 0) return 0;
 
   let cleanedUp = 0;
 
-  for (const item of stale) {
+  for (const item of pending) {
     const prLabel = magenta(`PR #${item.prNumber}`);
     const branchLabel = dim(`(${item.bookmark})`);
-    const stateLabel = item.state === "MERGED" ? "merged" : "closed";
+    const stateLabel = item.reason === "merged" ? "merged" : "closed";
 
     const confirmed = await confirm(
-      `Clean up ${stateLabel} ${prLabel} ${branchLabel}: ${item.title}?`,
+      `Clean up ${stateLabel} ${prLabel} ${branchLabel}: ${item.description}?`,
       { default: true },
     );
 
     if (confirmed) {
-      // Untrack from arr
-      engine.untrack(item.bookmark);
-
-      // Delete the jj bookmark if it exists
-      await deleteBookmark(item.bookmark);
-
-      cleanedUp++;
+      // Reparent children, abandon change, delete bookmark, untrack
+      const result = await reparentAndCleanup(item, engine);
+      if (result.ok) {
+        cleanedUp++;
+      }
     }
   }
 
@@ -103,10 +70,9 @@ export async function sync(ctx: ArrContext): Promise<void> {
     }
   }
 
-  // Find and prompt to clean up stale bookmarks (merged/closed PRs)
-  const staleBookmarks = findStaleTrackedBookmarks(ctx.engine);
-  const cleanedUpCount = await promptAndCleanupStale(
-    staleBookmarks,
+  // Find and prompt to clean up merged/closed changes
+  const cleanedUpCount = await promptAndCleanupMerged(
+    result.pendingCleanup,
     ctx.engine,
   );
 

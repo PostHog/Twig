@@ -10,6 +10,7 @@ export { list } from "./list";
 export { getLog } from "./log";
 export { jjNew } from "./new";
 export { push } from "./push";
+export { rebase } from "./rebase";
 export {
   getTrunk,
   runJJ,

@@ -1,6 +1,7 @@
 import type { Engine } from "../engine";
-import { getTrunk, list, status } from "../jj";
+import { ensureBookmark, findChange, getTrunk, list, status } from "../jj";
 import { createError, err, ok, type Result } from "../result";
+import { datePrefixedLabel } from "../slugify";
 import type { Command } from "./types";
 
 interface TrackResult {
@@ -10,39 +11,91 @@ interface TrackResult {
 
 interface TrackOptions {
   engine: Engine;
-  /** Bookmark to track. If not provided, uses current working copy's bookmark */
-  bookmark?: string;
-  /** Parent branch name. If not provided, auto-detects or prompts */
+  /**
+   * Target to track. Can be:
+   * - A bookmark name (existing)
+   * - A change ID (will create bookmark from description)
+   * - A description search (will create bookmark from description)
+   * - Undefined (uses current change @-)
+   */
+  target?: string;
+  /** Parent branch name. If not provided, auto-detects */
   parent?: string;
 }
 
 /**
- * Track a bookmark with arr.
- * This adds the bookmark to the engine's tracking system.
+ * Track a change with arr.
+ * Creates a bookmark if needed, then adds to the engine's tracking system.
  */
 export async function track(
   options: TrackOptions,
 ): Promise<Result<TrackResult>> {
-  const { engine, parent } = options;
-  let { bookmark } = options;
+  const { engine, parent, target } = options;
 
   const trunk = await getTrunk();
 
-  // If no bookmark provided, get from current change (the parent of WC)
-  if (!bookmark) {
+  // Resolve the target to a change
+  let changeId: string;
+  let description: string;
+  let existingBookmark: string | undefined;
+  let timestamp: Date;
+
+  if (!target) {
+    // No target - use current change (@-)
     const statusResult = await status();
     if (!statusResult.ok) return statusResult;
 
-    const currentBookmark = statusResult.value.parents[0]?.bookmarks[0];
-    if (!currentBookmark) {
+    const current = statusResult.value.parents[0];
+    if (!current) {
+      return err(createError("INVALID_STATE", "No current change"));
+    }
+    changeId = current.changeId;
+    description = current.description;
+    existingBookmark = current.bookmarks[0];
+    timestamp = current.timestamp;
+  } else {
+    // Try to find the change by ID, bookmark, or description
+    const findResult = await findChange(target, { includeBookmarks: true });
+    if (!findResult.ok) return findResult;
+
+    if (findResult.value.status === "none") {
+      return err(
+        createError("INVALID_REVISION", `Change not found: ${target}`),
+      );
+    }
+    if (findResult.value.status === "multiple") {
       return err(
         createError(
-          "INVALID_STATE",
-          "No bookmark on current change. Create a bookmark first with jj bookmark create.",
+          "AMBIGUOUS_REVISION",
+          `Multiple changes match "${target}". Use a more specific identifier.`,
         ),
       );
     }
-    bookmark = currentBookmark;
+
+    const change = findResult.value.change;
+    changeId = change.changeId;
+    description = change.description;
+    existingBookmark = change.bookmarks[0];
+    timestamp = change.timestamp;
+  }
+
+  // Check if change has no description
+  if (!description.trim()) {
+    return err(
+      createError(
+        "INVALID_STATE",
+        "Change has no description. Add a description before tracking.",
+      ),
+    );
+  }
+
+  // Use existing bookmark or create one from description
+  let bookmark: string;
+  if (existingBookmark) {
+    bookmark = existingBookmark;
+  } else {
+    bookmark = datePrefixedLabel(description, timestamp);
+    await ensureBookmark(bookmark, changeId);
   }
 
   // Check if already tracked
@@ -55,20 +108,11 @@ export async function track(
   // Determine parent branch
   let parentBranch = parent;
   if (!parentBranch) {
-    // Auto-detect parent from the change's parent
-    const changeResult = await list({
-      revset: `bookmarks(exact:"${bookmark}")`,
-      limit: 1,
-    });
+    const changeResult = await list({ revset: changeId, limit: 1 });
     if (!changeResult.ok) return changeResult;
-    if (changeResult.value.length === 0) {
-      return err(
-        createError("INVALID_STATE", `Bookmark "${bookmark}" not found`),
-      );
-    }
 
     const change = changeResult.value[0];
-    const parentChangeId = change.parents[0];
+    const parentChangeId = change?.parents[0];
 
     if (parentChangeId) {
       // Check if parent is trunk
@@ -85,16 +129,12 @@ export async function track(
         parentBranch = trunk;
       } else {
         // Find parent's bookmark
-        const parentResult = await list({
-          revset: parentChangeId,
-          limit: 1,
-        });
+        const parentResult = await list({ revset: parentChangeId, limit: 1 });
         if (parentResult.ok && parentResult.value.length > 0) {
           const parentBookmark = parentResult.value[0].bookmarks[0];
           if (parentBookmark && engine.isTracked(parentBookmark)) {
             parentBranch = parentBookmark;
           } else {
-            // Parent is not tracked - default to trunk
             parentBranch = trunk;
           }
         } else {

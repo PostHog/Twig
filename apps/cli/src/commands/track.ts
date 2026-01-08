@@ -4,13 +4,13 @@ import { cyan, dim, formatSuccess, indent, message } from "../utils/output";
 import { unwrap } from "../utils/run";
 
 export async function track(
-  bookmark: string | undefined,
+  target: string | undefined,
   ctx: ArrContext,
 ): Promise<void> {
   const result = unwrap(
     await trackCmd({
       engine: ctx.engine,
-      bookmark,
+      target,
     }),
   );
 

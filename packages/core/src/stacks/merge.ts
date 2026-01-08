@@ -1,12 +1,7 @@
 import type { Engine } from "../engine";
-import {
-  mergePR,
-  updatePR,
-  updatePRBranch,
-  waitForMergeable,
-} from "../github/pr-actions";
+import { mergePR, updatePR, waitForMergeable } from "../github/pr-actions";
 import { getPRForBranch } from "../github/pr-status";
-import { getTrunk, sync as jjSync, runJJ, status } from "../jj";
+import { getTrunk, list, push, rebase, runJJ, status } from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import type { MergeOptions, MergeResult, PRToMerge } from "../types";
 
@@ -79,7 +74,15 @@ export async function getMergeStack(): Promise<Result<PRToMerge[]>> {
     }
 
     currentBookmark = prItem.base;
-    currentChangeId = null;
+    // Look up the changeId for this bookmark
+    const listResult = await list({
+      revset: `bookmarks(exact:"${currentBookmark}")`,
+      limit: 1,
+    });
+    currentChangeId =
+      listResult.ok && listResult.value.length > 0
+        ? listResult.value[0].changeId
+        : null;
   }
 
   return ok(prsToMerge);
@@ -123,11 +126,20 @@ export async function mergeStack(
 
     callbacks?.onMerging?.(prItem, nextPR);
 
-    // Update base to trunk right before merging this PR
+    // Update this PR's base to trunk right before merging
     // (Don't do this upfront for all PRs - that can cause GitHub to auto-close them)
     if (prItem.baseRefName !== trunk) {
       const baseUpdateResult = await updatePR(prItem.prNumber, { base: trunk });
       if (!baseUpdateResult.ok) return baseUpdateResult;
+    }
+
+    // Update next PR's base to trunk BEFORE merging (and deleting the branch)
+    // Otherwise GitHub auto-closes the next PR when its base branch disappears
+    if (nextPR) {
+      const nextBaseUpdateResult = await updatePR(nextPR.prNumber, {
+        base: trunk,
+      });
+      if (!nextBaseUpdateResult.ok) return nextBaseUpdateResult;
     }
 
     callbacks?.onWaiting?.(prItem);
@@ -158,30 +170,42 @@ export async function mergeStack(
 
     callbacks?.onMerged?.(prItem);
 
-    // Update next PR's base to trunk BEFORE the merged branch gets deleted on GitHub
-    // Otherwise GitHub auto-closes the next PR when its base branch disappears
-    if (nextPR) {
-      const nextBaseUpdateResult = await updatePR(nextPR.prNumber, {
-        base: trunk,
-      });
-      if (!nextBaseUpdateResult.ok) return nextBaseUpdateResult;
-    }
-
-    // Don't delete local bookmark or abandon change here - that's sync's responsibility.
-    // The PR state in engine will be updated to MERGED by syncPRInfo.
-
     merged.push(prItem);
 
+    // Abandon this commit immediately after merge, before rebasing next
+    // Must do this before rebase because rebase -r changes descendant changeIds
+    if (prItem.changeId) {
+      await runJJ(["abandon", prItem.changeId]);
+    }
+
     if (nextPR) {
-      await updatePRBranch(nextPR.prNumber, { rebase: true });
+      // Fetch to get the merged commit into local main
       await runJJ(["git", "fetch"]);
+      // Update local trunk bookmark to match remote
+      await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
+
+      // Rebase just the next PR's commit onto trunk (not its ancestors)
+      // Using "revision" mode (-r) ensures we skip the just-merged commit
+      const rebaseResult = await rebase({
+        source: nextPR.bookmarkName,
+        destination: trunk,
+        mode: "revision",
+      });
+      if (!rebaseResult.ok) return rebaseResult;
+
+      // Push the rebased branch to GitHub
+      const pushResult = await push({ bookmark: nextPR.bookmarkName });
+      if (!pushResult.ok) return pushResult;
     }
   }
 
-  const syncResult = await jjSync();
+  // Final sync: fetch, update main, move WC to trunk
+  await runJJ(["git", "fetch"]);
+  await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
+  await runJJ(["new", trunk]);
 
   return ok({
     merged,
-    synced: syncResult.ok,
+    synced: true,
   });
 }
