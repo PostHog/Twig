@@ -126,7 +126,9 @@ export function findPendingPermissions(
 
   for (const entry of entries) {
     const method = entry.notification?.method;
-    const params = entry.notification?.params as Record<string, unknown> | undefined;
+    const params = entry.notification?.params as
+      | Record<string, unknown>
+      | undefined;
 
     if (method === "_array/permission_request" && params?.toolCallId) {
       requests.set(params.toolCallId as string, entry);

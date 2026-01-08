@@ -1,9 +1,9 @@
 import type {
+  ToolKind as SdkToolKind,
   SessionNotification,
   ToolCallContent,
   ToolCallLocation,
   ToolCallStatus,
-  ToolKind as SdkToolKind,
 } from "@agentclientprotocol/sdk";
 
 // Extend SDK ToolKind with custom kinds

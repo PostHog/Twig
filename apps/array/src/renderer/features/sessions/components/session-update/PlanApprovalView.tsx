@@ -1,6 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import type { ToolCall } from "@features/sessions/types";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
+import type { ToolCall } from "@features/sessions/types";
 import { CheckCircle, ClockCounterClockwise } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useMemo } from "react";
@@ -24,7 +24,8 @@ export function PlanApprovalView({
   const pendingPermission = pendingPermissions.get(toolCallId);
   const isComplete = status === "completed";
   const isPending = !!pendingPermission && !isComplete;
-  const wasCancelled = (status === "pending" || status === "in_progress") && turnCancelled;
+  const wasCancelled =
+    (status === "pending" || status === "in_progress") && turnCancelled;
 
   // Extract plan text from content or rawInput
   const planText = useMemo(() => {
@@ -36,7 +37,9 @@ export function PlanApprovalView({
     if (!content || content.length === 0) return null;
     const textContent = content.find((c) => c.type === "content");
     if (textContent && "content" in textContent) {
-      const inner = textContent.content as { type?: string; text?: string } | undefined;
+      const inner = textContent.content as
+        | { type?: string; text?: string }
+        | undefined;
       if (inner?.type === "text" && inner.text) {
         return inner.text;
       }
@@ -48,7 +51,7 @@ export function PlanApprovalView({
     <Box className="my-3">
       {/* Plan content in highlighted box */}
       {planText && (
-        <Box className="rounded-lg border-2 border-amber-6 bg-amber-2 p-4 mb-3">
+        <Box className="mb-3 rounded-lg border-2 border-amber-6 bg-amber-2 p-4">
           <Flex align="center" gap="2" className="mb-2">
             <Text size="2" weight="bold" className="text-amber-11">
               Implementation Plan

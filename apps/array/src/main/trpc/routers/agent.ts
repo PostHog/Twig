@@ -81,10 +81,9 @@ export const agentRouter = router({
     .subscription(async function* (opts) {
       const service = getService();
       const targetSessionId = opts.input.sessionId;
-      const iterable = service.toIterable(
-        AgentServiceEvent.PermissionRequest,
-        { signal: opts.signal },
-      );
+      const iterable = service.toIterable(AgentServiceEvent.PermissionRequest, {
+        signal: opts.signal,
+      });
 
       for await (const event of iterable) {
         if (event.sessionId === targetSessionId) {

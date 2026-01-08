@@ -188,7 +188,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       return;
     }
 
-    log.info("Permission response received", { sessionId, toolCallId, optionId });
+    log.info("Permission response received", {
+      sessionId,
+      toolCallId,
+      optionId,
+    });
 
     pending.resolve({
       outcome: {
@@ -209,7 +213,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const pending = this.pendingPermissions.get(key);
 
     if (!pending) {
-      log.warn("No pending permission found to cancel", { sessionId, toolCallId });
+      log.warn("No pending permission found to cancel", {
+        sessionId,
+        toolCallId,
+      });
       return;
     }
 
@@ -616,7 +623,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       async requestPermission(
         params: RequestPermissionRequest,
       ): Promise<RequestPermissionResponse> {
-        // Extract tool name from the raw input (if available)
         const toolName =
           (params.toolCall?.rawInput as { toolName?: string } | undefined)
             ?.toolName || "";
@@ -641,7 +647,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             title: params.toolCall?.title,
           });
 
-          // Create promise that will be resolved when user responds
           return new Promise((resolve, reject) => {
             const key = `${taskRunId}:${toolCallId}`;
             service.pendingPermissions.set(key, {
@@ -651,7 +656,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               toolCallId,
             });
 
-            // Emit permission request event to renderer
             log.info("Emitting permission request to renderer", {
               sessionId: taskRunId,
               toolCallId,

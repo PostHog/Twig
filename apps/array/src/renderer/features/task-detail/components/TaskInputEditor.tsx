@@ -206,10 +206,7 @@ export const TaskInputEditor = forwardRef<
                   className="plan-mode-toggle-button"
                   data-active={isPlanMode}
                 >
-                  <Notepad
-                    size={16}
-                    weight={isPlanMode ? "fill" : "regular"}
-                  />
+                  <Notepad size={16} weight={isPlanMode ? "fill" : "regular"} />
                 </IconButton>
               </Tooltip>
             )}

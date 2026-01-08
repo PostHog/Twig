@@ -13,10 +13,8 @@ import {
 import { PostHogFileManager } from "./file-manager.js";
 import { GitManager } from "./git-manager.js";
 import { PostHogAPIClient } from "./posthog-api.js";
-import { PromptBuilder } from "./prompt-builder.js";
 import { SessionStore } from "./session-store.js";
 import { TaskManager } from "./task-manager.js";
-import { TemplateManager } from "./template-manager.js";
 import type {
   AgentConfig,
   CanUseTool,
@@ -40,10 +38,8 @@ export class Agent {
   private posthogAPI?: PostHogAPIClient;
   private fileManager: PostHogFileManager;
   private gitManager: GitManager;
-  private templateManager: TemplateManager;
   private logger: Logger;
   private acpConnection?: InProcessAcpConnection;
-  private promptBuilder: PromptBuilder;
   private mcpServers?: Record<string, any>;
   private canUseTool?: CanUseTool;
   private currentRunId?: string;
@@ -95,7 +91,6 @@ export class Agent {
       repositoryPath: this.workingDirectory,
       logger: this.logger.child("GitManager"),
     });
-    this.templateManager = new TemplateManager();
 
     if (
       config.posthogApiUrl &&
@@ -114,13 +109,6 @@ export class Agent {
         this.logger.child("SessionStore"),
       );
     }
-
-    this.promptBuilder = new PromptBuilder({
-      getTaskFiles: (taskId: string) => this.getTaskFiles(taskId),
-      generatePlanTemplate: (vars) => this.templateManager.generatePlan(vars),
-      posthogClient: this.posthogAPI,
-      logger: this.logger.child("PromptBuilder"),
-    });
   }
 
   /**
@@ -150,15 +138,6 @@ export class Agent {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;
     }
-  }
-
-  private getOrCreateConnection(): InProcessAcpConnection {
-    if (!this.acpConnection) {
-      this.acpConnection = createAcpConnection({
-        sessionStore: this.sessionStore,
-      });
-    }
-    return this.acpConnection;
   }
 
   /**
@@ -681,7 +660,6 @@ This PR implements the changes described in the task.`;
       throw error;
     }
   }
-
 }
 
 export type {

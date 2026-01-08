@@ -1,10 +1,10 @@
 import { MessageEditor } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
-import type { Plan } from "@features/sessions/types";
 import {
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
+import type { Plan } from "@features/sessions/types";
 import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
   type AcpMessage,
@@ -101,7 +101,6 @@ export function SessionView({
 
   const [isBashMode, setIsBashMode] = useState(false);
 
-  // Get the first pending permission (if any)
   const firstPendingPermission = useMemo(() => {
     const entries = Array.from(pendingPermissions.entries());
     if (entries.length === 0) return null;
@@ -115,11 +114,19 @@ export function SessionView({
 
       // If custom input provided, send it as a prompt after selecting "keep planning"
       if (customInput) {
-        await respondToPermission(taskId, firstPendingPermission.toolCallId, optionId);
+        await respondToPermission(
+          taskId,
+          firstPendingPermission.toolCallId,
+          optionId,
+        );
         // Send the custom input as a follow-up prompt
         onSendPrompt(customInput);
       } else {
-        await respondToPermission(taskId, firstPendingPermission.toolCallId, optionId);
+        await respondToPermission(
+          taskId,
+          firstPendingPermission.toolCallId,
+          optionId,
+        );
       }
     },
     [firstPendingPermission, taskId, respondToPermission, onSendPrompt],
@@ -139,7 +146,7 @@ export function SessionView({
               px="3"
               py="2"
               justify="end"
-              className="border-b border-gray-4"
+              className="border-gray-4 border-b"
             >
               <ModeIndicator taskId={taskId} />
             </Flex>
@@ -158,7 +165,6 @@ export function SessionView({
 
           <PlanStatusBar plan={latestPlan} />
 
-          {/* Show permission selector or message editor */}
           {firstPendingPermission ? (
             <InlinePermissionSelector
               title={firstPendingPermission.title}

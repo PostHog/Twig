@@ -103,7 +103,10 @@ const cloudPollers = new Map<string, NodeJS.Timeout>();
 // Track active tRPC subscriptions for cleanup
 const subscriptions = new Map<
   string,
-  { event: { unsubscribe: () => void }; permission?: { unsubscribe: () => void } }
+  {
+    event: { unsubscribe: () => void };
+    permission?: { unsubscribe: () => void };
+  }
 >();
 
 /**
@@ -129,8 +132,13 @@ function subscribeToChannel(taskRunId: string) {
               msg.method === "session/update" &&
               "params" in msg
             ) {
-              const params = msg.params as { update?: { sessionUpdate?: string; currentModeId?: string } };
-              if (params?.update?.sessionUpdate === "current_mode_update" && params.update.currentModeId) {
+              const params = msg.params as {
+                update?: { sessionUpdate?: string; currentModeId?: string };
+              };
+              if (
+                params?.update?.sessionUpdate === "current_mode_update" &&
+                params.update.currentModeId
+              ) {
                 const newMode = params.update.currentModeId as ExecutionMode;
                 if (newMode === "default" || newMode === "acceptEdits") {
                   session.currentMode = newMode;
@@ -148,87 +156,87 @@ function subscribeToChannel(taskRunId: string) {
   );
 
   // Subscribe to permission requests (for AskUserQuestion, ExitPlanMode, etc.)
-  const permissionSubscription = trpcVanilla.agent.onPermissionRequest.subscribe(
-    { sessionId: taskRunId },
-    {
-      onData: async (payload) => {
-        log.info("Permission request received in renderer", {
-          taskRunId,
-          toolCallId: payload.toolCallId,
-          title: payload.title,
-          optionCount: payload.options?.length,
-        });
-
-        // Get current state and update outside of Immer (Maps don't work well with Immer proxies)
-        const state = useStore.getState();
-        const session = state.sessions[taskRunId];
-
-        if (session) {
-          // Create a new Map with the new permission
-          const newPermissions = new Map(session.pendingPermissions);
-          newPermissions.set(payload.toolCallId, {
+  const permissionSubscription =
+    trpcVanilla.agent.onPermissionRequest.subscribe(
+      { sessionId: taskRunId },
+      {
+        onData: async (payload) => {
+          log.info("Permission request received in renderer", {
+            taskRunId,
             toolCallId: payload.toolCallId,
             title: payload.title,
-            options: payload.options,
-            rawInput: payload.rawInput,
-            receivedAt: Date.now(),
+            optionCount: payload.options?.length,
           });
 
-          log.info("Updating pendingPermissions in store", {
-            taskRunId,
-            toolCallId: payload.toolCallId,
-            newMapSize: newPermissions.size,
-          });
+          // Get current state and update outside of Immer (Maps don't work well with Immer proxies)
+          const state = useStore.getState();
+          const session = state.sessions[taskRunId];
 
-          // Update using setState with a new sessions object to trigger re-render
-          useStore.setState((draft) => {
-            if (draft.sessions[taskRunId]) {
-              draft.sessions[taskRunId].pendingPermissions = newPermissions;
-            }
-          });
+          if (session) {
+            const newPermissions = new Map(session.pendingPermissions);
+            newPermissions.set(payload.toolCallId, {
+              toolCallId: payload.toolCallId,
+              title: payload.title,
+              options: payload.options,
+              rawInput: payload.rawInput,
+              receivedAt: Date.now(),
+            });
 
-          // Persist permission request to logs for recovery on reconnect
-          const auth = useAuthStore.getState();
-          if (auth.client && session.taskId) {
-            const storedEntry: StoredLogEntry = {
-              type: "notification",
-              timestamp: new Date().toISOString(),
-              notification: {
-                method: "_array/permission_request",
-                params: {
-                  toolCallId: payload.toolCallId,
-                  title: payload.title,
-                  options: payload.options,
-                  rawInput: payload.rawInput,
+            log.info("Updating pendingPermissions in store", {
+              taskRunId,
+              toolCallId: payload.toolCallId,
+              newMapSize: newPermissions.size,
+            });
+
+            // Update using setState with a new sessions object to trigger re-render
+            useStore.setState((draft) => {
+              if (draft.sessions[taskRunId]) {
+                draft.sessions[taskRunId].pendingPermissions = newPermissions;
+              }
+            });
+
+            // Persist permission request to logs for recovery on reconnect
+            const auth = useAuthStore.getState();
+            if (auth.client && session.taskId) {
+              const storedEntry: StoredLogEntry = {
+                type: "notification",
+                timestamp: new Date().toISOString(),
+                notification: {
+                  method: "_array/permission_request",
+                  params: {
+                    toolCallId: payload.toolCallId,
+                    title: payload.title,
+                    options: payload.options,
+                    rawInput: payload.rawInput,
+                  },
                 },
-              },
-            };
-            try {
-              await auth.client.appendTaskRunLog(session.taskId, taskRunId, [
-                storedEntry,
-              ]);
-              log.info("Permission request persisted to logs", {
-                taskRunId,
-                toolCallId: payload.toolCallId,
-              });
-            } catch (error) {
-              log.warn("Failed to persist permission request to logs", {
-                error,
-              });
+              };
+              try {
+                await auth.client.appendTaskRunLog(session.taskId, taskRunId, [
+                  storedEntry,
+                ]);
+                log.info("Permission request persisted to logs", {
+                  taskRunId,
+                  toolCallId: payload.toolCallId,
+                });
+              } catch (error) {
+                log.warn("Failed to persist permission request to logs", {
+                  error,
+                });
+              }
             }
+          } else {
+            log.warn("Session not found for permission request", {
+              taskRunId,
+              availableSessions: Object.keys(state.sessions),
+            });
           }
-        } else {
-          log.warn("Session not found for permission request", {
-            taskRunId,
-            availableSessions: Object.keys(state.sessions),
-          });
-        }
+        },
+        onError: (err) => {
+          log.error("Permission subscription error", { taskRunId, error: err });
+        },
       },
-      onError: (err) => {
-        log.error("Permission subscription error", { taskRunId, error: err });
-      },
-    },
-  );
+    );
 
   subscriptions.set(taskRunId, {
     event: eventSubscription,
@@ -713,7 +721,12 @@ const useStore = create<SessionStore>()(
       sessions: {},
 
       actions: {
-        connectToTask: async ({ task, repoPath, initialPrompt, executionMode }) => {
+        connectToTask: async ({
+          task,
+          repoPath,
+          initialPrompt,
+          executionMode,
+        }) => {
           const {
             id: taskId,
             latest_run: latestRun,
@@ -905,7 +918,6 @@ const useStore = create<SessionStore>()(
               optionId,
             });
 
-            // Remove from pending permissions after successful response
             // Create new Map outside of Immer (Maps don't work well with Immer proxies)
             const currentState = get();
             const sess = currentState.sessions[session.taskRunId];
@@ -914,12 +926,17 @@ const useStore = create<SessionStore>()(
               newPermissions.delete(toolCallId);
               set((draft) => {
                 if (draft.sessions[session.taskRunId]) {
-                  draft.sessions[session.taskRunId].pendingPermissions = newPermissions;
+                  draft.sessions[session.taskRunId].pendingPermissions =
+                    newPermissions;
                 }
               });
             }
 
-            log.info("Permission response sent", { taskId, toolCallId, optionId });
+            log.info("Permission response sent", {
+              taskId,
+              toolCallId,
+              optionId,
+            });
 
             // Persist permission response to logs for recovery tracking
             const auth = useAuthStore.getState();
@@ -962,7 +979,9 @@ const useStore = create<SessionStore>()(
         cancelPermission: async (taskId, toolCallId) => {
           const session = getSessionByTaskId(taskId);
           if (!session) {
-            log.error("No session found for permission cancellation", { taskId });
+            log.error("No session found for permission cancellation", {
+              taskId,
+            });
             return;
           }
 
@@ -972,7 +991,6 @@ const useStore = create<SessionStore>()(
               toolCallId,
             });
 
-            // Remove from pending permissions after successful cancellation
             const currentState = get();
             const sess = currentState.sessions[session.taskRunId];
             if (sess) {
@@ -980,7 +998,8 @@ const useStore = create<SessionStore>()(
               newPermissions.delete(toolCallId);
               set((draft) => {
                 if (draft.sessions[session.taskRunId]) {
-                  draft.sessions[session.taskRunId].pendingPermissions = newPermissions;
+                  draft.sessions[session.taskRunId].pendingPermissions =
+                    newPermissions;
                 }
               });
             }
@@ -1016,7 +1035,11 @@ const useStore = create<SessionStore>()(
               }
             }
           } catch (error) {
-            log.error("Failed to cancel permission", { taskId, toolCallId, error });
+            log.error("Failed to cancel permission", {
+              taskId,
+              toolCallId,
+              error,
+            });
           }
         },
       },

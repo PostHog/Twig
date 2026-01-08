@@ -1,9 +1,9 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import type { ToolCall } from "@features/sessions/types";
 import {
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
+import type { ToolCall } from "@features/sessions/types";
 import { ChatCircle, CheckCircle } from "@phosphor-icons/react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import { useState } from "react";
@@ -41,7 +41,8 @@ export function InlineQuestionView({
   const pendingPermission = pendingPermissions.get(toolCallId);
   const isComplete = status === "completed";
   const isPending = !!pendingPermission && !isComplete;
-  const wasCancelled = (status === "pending" || status === "in_progress") && turnCancelled;
+  const wasCancelled =
+    (status === "pending" || status === "in_progress") && turnCancelled;
 
   const firstQuestion = input?.questions?.[0];
   const questionText = firstQuestion?.question ?? "Question";
@@ -60,7 +61,11 @@ export function InlineQuestionView({
   return (
     <Box className="my-2 max-w-xl overflow-hidden rounded-lg border border-accent-6 bg-accent-2">
       {/* Header */}
-      <Flex align="center" gap="2" className="border-accent-6 border-b px-3 py-2">
+      <Flex
+        align="center"
+        gap="2"
+        className="border-accent-6 border-b px-3 py-2"
+      >
         {isPending && !isResponding ? (
           <ChatCircle size={14} weight="fill" className="text-accent-9" />
         ) : isComplete ? (
@@ -82,7 +87,11 @@ export function InlineQuestionView({
 
       {/* Options or Answer */}
       {isPending && pendingPermission.options.length > 0 ? (
-        <Flex gap="2" wrap="wrap" className="border-accent-6 border-t px-3 py-3">
+        <Flex
+          gap="2"
+          wrap="wrap"
+          className="border-accent-6 border-t px-3 py-3"
+        >
           {pendingPermission.options.map((option) => (
             <Button
               key={option.optionId}

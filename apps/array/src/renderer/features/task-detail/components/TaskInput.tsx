@@ -54,7 +54,6 @@ export function TaskInput() {
     setSelectedDirectory(newPath);
   };
 
-  // Compute the effective workspace mode for task creation
   const effectiveWorkspaceMode: WorkspaceMode = localWorkspaceMode;
 
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
