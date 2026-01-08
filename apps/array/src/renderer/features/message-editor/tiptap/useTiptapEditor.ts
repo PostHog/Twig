@@ -1,5 +1,5 @@
-import { useConnectivityStore } from "@stores/connectivityStore";
 import { toast } from "@renderer/utils/toast";
+import { useConnectivityStore } from "@stores/connectivityStore";
 import { useEditor } from "@tiptap/react";
 import { useCallback, useRef, useState } from "react";
 import { usePromptHistoryStore } from "../stores/promptHistoryStore";
