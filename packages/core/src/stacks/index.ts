@@ -5,5 +5,7 @@ export {
   cleanupMergedChange,
   findMergedChanges,
   type MergedChange,
+  type ReparentResult,
+  reparentAndCleanup,
 } from "./merged";
 export { submitStack } from "./submit";

@@ -1,5 +1,9 @@
-import { fetchMetadataRefs } from "../git/refs";
-import { getBookmarkTracking, push, runJJ } from "../jj";
+import {
+  getBookmarkTracking,
+  push,
+  runJJ,
+  runJJWithMutableConfigVoid,
+} from "../jj";
 import { ok, type Result } from "../result";
 import type { Command } from "./types";
 
@@ -38,7 +42,8 @@ async function restackAll(): Promise<Result<{ restacked: number }>> {
     return ok({ restacked: 0 });
   }
 
-  const result = await runJJ([
+  // Use mutable config for rebase on potentially pushed commits
+  const result = await runJJWithMutableConfigVoid([
     "rebase",
     "-s",
     "roots(mutable())",
@@ -77,9 +82,6 @@ export async function restack(): Promise<Result<RestackResult>> {
   // Fetch latest first
   const fetchResult = await runJJ(["git", "fetch"]);
   if (!fetchResult.ok) return fetchResult;
-
-  // Fetch arr metadata refs from remote
-  fetchMetadataRefs();
 
   // Restack all changes onto trunk
   const restackResult = await restackAll();

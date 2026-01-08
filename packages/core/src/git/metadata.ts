@@ -1,17 +1,37 @@
 import { z } from "zod";
 import { REFS_PREFIX, runGitSync, runGitSyncLines } from "./runner";
 
+/**
+ * PR state - matches GitHub GraphQL API (uppercase)
+ */
+export type PRState = "OPEN" | "CLOSED" | "MERGED";
+
+/**
+ * Review decision - matches GitHub GraphQL API (uppercase)
+ */
+export type ReviewDecision =
+  | "APPROVED"
+  | "REVIEW_REQUIRED"
+  | "CHANGES_REQUESTED";
+
 const prInfoSchema = z.object({
+  // Required fields
   number: z.number(),
   url: z.string(),
   state: z.enum(["OPEN", "CLOSED", "MERGED"]),
   base: z.string(),
-  title: z.string().optional(),
+  title: z.string(),
+
+  // Optional fields
+  head: z.string().optional(),
   body: z.string().optional(),
   reviewDecision: z
     .enum(["APPROVED", "REVIEW_REQUIRED", "CHANGES_REQUESTED"])
+    .nullable()
     .optional(),
   isDraft: z.boolean().optional(),
+  /** Number of times PR was submitted (1 = initial, 2+ = updated via force-push) */
+  version: z.number().optional(),
 });
 
 const branchMetaSchema = z.object({

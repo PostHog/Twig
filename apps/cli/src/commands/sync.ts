@@ -1,7 +1,7 @@
 import { restack as coreRestack } from "@array/core/commands/restack";
 import { sync as coreSync } from "@array/core/commands/sync";
 import type { ArrContext, Engine } from "@array/core/engine";
-import { cleanupMergedChange, type MergedChange } from "@array/core/stacks";
+import { type MergedChange, reparentAndCleanup } from "@array/core/stacks";
 import { COMMANDS } from "../registry";
 import {
   arr,
@@ -16,37 +16,50 @@ import {
 import { confirm } from "../utils/prompt";
 import { unwrap } from "../utils/run";
 
+interface CleanupStats {
+  cleanedUp: number;
+  reparented: number;
+  prBasesUpdated: number;
+}
+
 /**
- * Prompt user for each merged PR and cleanup if confirmed.
- * Returns number of PRs cleaned up.
+ * Prompt user for each merged/closed PR and cleanup if confirmed.
+ * Reparents children to grandparent before cleanup.
  */
 async function promptAndCleanupMerged(
   pending: MergedChange[],
   engine: Engine,
-): Promise<number> {
-  if (pending.length === 0) return 0;
+): Promise<CleanupStats> {
+  if (pending.length === 0) {
+    return { cleanedUp: 0, reparented: 0, prBasesUpdated: 0 };
+  }
 
   let cleanedUp = 0;
+  let reparented = 0;
+  let prBasesUpdated = 0;
 
   for (const change of pending) {
     const prLabel = magenta(`PR #${change.prNumber}`);
     const branchLabel = dim(`(${change.bookmark})`);
     const desc = change.description || "(no description)";
+    const stateLabel = change.reason === "merged" ? "merged" : "closed";
 
     const confirmed = await confirm(
-      `Delete merged branch ${prLabel} ${branchLabel}: ${desc}?`,
+      `Delete ${stateLabel} branch ${prLabel} ${branchLabel}: ${desc}?`,
       { default: true },
     );
 
     if (confirmed) {
-      const result = await cleanupMergedChange(change, engine);
+      const result = await reparentAndCleanup(change, engine);
       if (result.ok) {
         cleanedUp++;
+        reparented += result.value.reparentedChildren.length;
+        prBasesUpdated += result.value.prBasesUpdated;
       }
     }
   }
 
-  return cleanedUp;
+  return { cleanedUp, reparented, prBasesUpdated };
 }
 
 export async function sync(ctx: ArrContext): Promise<void> {
@@ -84,14 +97,26 @@ export async function sync(ctx: ArrContext): Promise<void> {
     }
   }
 
-  // Prompt for each merged PR cleanup
-  const cleanedUp = await promptAndCleanupMerged(
+  // Prompt for each merged/closed PR cleanup
+  const cleanupStats = await promptAndCleanupMerged(
     result.pendingCleanup,
     ctx.engine,
   );
 
-  if (cleanedUp > 0) {
-    message(formatSuccess(`Cleaned up ${cleanedUp} merged PR(s)`));
+  if (cleanupStats.cleanedUp > 0) {
+    const prLabel = cleanupStats.cleanedUp === 1 ? "PR" : "PRs";
+    message(formatSuccess(`Cleaned up ${cleanupStats.cleanedUp} ${prLabel}`));
+
+    if (cleanupStats.reparented > 0) {
+      const childLabel = cleanupStats.reparented === 1 ? "child" : "children";
+      hint(`Reparented ${cleanupStats.reparented} ${childLabel} to new parent`);
+    }
+
+    if (cleanupStats.prBasesUpdated > 0) {
+      const baseLabel =
+        cleanupStats.prBasesUpdated === 1 ? "PR base" : "PR bases";
+      hint(`Updated ${cleanupStats.prBasesUpdated} ${baseLabel} on GitHub`);
+    }
   }
 
   if (result.updatedComments > 0) {

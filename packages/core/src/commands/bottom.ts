@@ -1,24 +1,48 @@
-import { runJJ } from "../jj";
+import { list, status } from "../jj";
 import { createError, err, type Result } from "../result";
 import type { NavigationResult } from "../types";
-import { getNavigationResult } from "./navigation";
+import { navigateTo } from "./navigation";
 import type { Command } from "./types";
 
 /**
  * Navigate to the bottom of the current stack.
  */
 export async function bottom(): Promise<Result<NavigationResult>> {
-  // Use roots(trunk()..@) to find the bottom of the current stack
-  const editResult = await runJJ(["edit", "roots(trunk()..@)"]);
-  if (!editResult.ok) {
-    if (editResult.error.message.includes("empty revision")) {
+  // Find roots of the current stack (changes between trunk and @)
+  const rootsResult = await list({ revset: "roots(trunk()..@)" });
+  if (!rootsResult.ok) return rootsResult;
+
+  const roots = rootsResult.value.filter(
+    (c) => !c.changeId.startsWith("zzzzzzzz"),
+  );
+
+  if (roots.length === 0) {
+    // Check if we're already at the bottom
+    const statusResult = await status();
+    if (!statusResult.ok) return statusResult;
+
+    // If we're on an empty undescribed WC directly on trunk, that's the bottom
+    const wc = statusResult.value.workingCopy;
+    if (wc.isEmpty && wc.description.trim() === "") {
       return err(
         createError("NAVIGATION_FAILED", "Already at bottom of stack"),
       );
     }
-    return editResult;
+
+    return err(createError("NAVIGATION_FAILED", "Already at bottom of stack"));
   }
-  return getNavigationResult();
+
+  if (roots.length > 1) {
+    return err(
+      createError(
+        "NAVIGATION_FAILED",
+        "Stack has multiple roots - cannot determine bottom",
+      ),
+    );
+  }
+
+  // Navigate to the root (handles immutability correctly)
+  return navigateTo(roots[0]);
 }
 
 export const bottomCommand: Command<NavigationResult> = {

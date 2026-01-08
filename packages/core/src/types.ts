@@ -97,6 +97,7 @@ export interface StackPR {
   prNumber: number;
   prUrl: string;
   base: string;
+  title: string;
   position: number;
   status: PRSubmitStatus;
 }
@@ -126,11 +127,19 @@ export interface SyncResult {
   hasConflicts: boolean;
 }
 
+export type NavigationPosition =
+  | "editing" // On a branch, editing it directly
+  | "on-top" // At top of stack, ready for new work
+  | "on-trunk"; // On trunk, starting fresh
+
 export interface NavigationResult {
   changeId: string;
   changeIdPrefix: string;
   description: string;
-  createdOnTrunk?: boolean;
+  /** The bookmark/branch name if on a tracked branch */
+  bookmark?: string;
+  /** Where we ended up */
+  position: NavigationPosition;
 }
 
 export interface FindOptions {

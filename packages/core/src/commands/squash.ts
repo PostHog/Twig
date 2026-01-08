@@ -1,5 +1,11 @@
 import type { Engine } from "../engine";
-import { abandon, edit, findChange, list, runJJ, status } from "../jj";
+import {
+  edit,
+  findChange,
+  list,
+  runJJWithMutableConfigVoid,
+  status,
+} from "../jj";
 import type { Changeset } from "../parser";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
@@ -62,8 +68,9 @@ export async function squash(
   });
   const hasChildren = childrenResult.ok && childrenResult.value.length > 0;
 
+  // Use mutable config for operations on potentially pushed commits
   if (hasChildren) {
-    const rebaseResult = await runJJ([
+    const rebaseResult = await runJJWithMutableConfigVoid([
       "rebase",
       "-s",
       `children(${change.changeId})`,
@@ -74,7 +81,10 @@ export async function squash(
   }
 
   // Squash preserves work - just abandon without restoring
-  const abandonResult = await abandon(change.changeId);
+  const abandonResult = await runJJWithMutableConfigVoid([
+    "abandon",
+    change.changeId,
+  ]);
   if (!abandonResult.ok) return abandonResult;
 
   // Untrack any bookmarks on the squashed change

@@ -1,4 +1,4 @@
-import { getPRForBranch, type PRStatus } from "./github/pr-status";
+import { getPRForBranch, type PRInfo } from "./github/pr-status";
 import { createError, err, ok, type Result } from "./result";
 
 /** Maximum number of suffix attempts before giving up on conflict resolution */
@@ -27,12 +27,12 @@ interface BookmarkConflictResult {
  */
 export async function resolveBookmarkConflict(
   bookmark: string,
-  prCache?: Map<string, PRStatus>,
+  prCache?: Map<string, PRInfo>,
   assignedNames?: Set<string>,
   cwd = process.cwd(),
 ): Promise<Result<BookmarkConflictResult>> {
   // Check cache first, otherwise fetch from GitHub
-  let existingPR: PRStatus | null = null;
+  let existingPR: PRInfo | null = null;
   if (prCache) {
     existingPR = prCache.get(bookmark) ?? null;
   } else {
@@ -42,7 +42,7 @@ export async function resolveBookmarkConflict(
   }
 
   // No conflict if PR doesn't exist or is open
-  if (!existingPR || existingPR.state === "open") {
+  if (!existingPR || existingPR.state === "OPEN") {
     return ok({
       originalName: bookmark,
       resolvedName: bookmark,
@@ -64,7 +64,7 @@ export async function resolveBookmarkConflict(
     }
 
     // Check if this candidate has an existing PR
-    let candidatePR: PRStatus | null = null;
+    let candidatePR: PRInfo | null = null;
     if (prCache) {
       candidatePR = prCache.get(candidateName) ?? null;
     } else {

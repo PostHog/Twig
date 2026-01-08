@@ -17,22 +17,21 @@ export const CHANGESET_JSON_TEMPLATE =
  * We replace jj's markers with styled versions in post-processing.
  *
  * Output format per change:
- * - Immutable (trunk): {{TRUNK:bookmark}} + time + commit (no trailing blank line)
- * - Mutable: {{LABEL:...}} + time + hints + PR info + commit
+ * {{LABEL:changeId|prefix|timestamp|description|conflict|wc|empty|immutable|localBookmarks|remoteBookmarks}}
+ *
+ * The CLI handles:
+ * - Hiding empty undescribed WC (abstracted away)
+ * - Showing green marker on "current" branch (parent of empty WC)
+ * - Showing "(uncommitted)" badge when WC has changes
  */
 export const LOG_GRAPH_TEMPLATE = `
-if(immutable,
-  "{{TRUNK:" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "}}\\n" ++
-  "{{TIME:" ++ committer.timestamp().format("%s") ++ "}}\\n" ++
-  "{{COMMIT:" ++ commit_id.short(8) ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ if(description, description.first_line(), "") ++ "}}",
-  "{{LABEL:" ++ change_id.short(8) ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ committer.timestamp().format("%s") ++ "|" ++ if(description, description.first_line(), "") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ if(current_working_copy, "1", "0") ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "|" ++ remote_bookmarks.map(|b| b.name()).join(",") ++ "}}\\n" ++
-  "{{TIME:" ++ committer.timestamp().format("%s") ++ "}}\\n" ++
-  if(current_working_copy && empty && !description, "{{HINT_EMPTY}}\\n", "") ++
-  if(current_working_copy && !empty && !description, "{{HINT_UNCOMMITTED}}\\n", "") ++
-  if(current_working_copy && description && local_bookmarks, "{{HINT_SUBMIT}}\\n", "") ++
-  "\\n" ++
-  if(local_bookmarks, "{{PR:" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "|" ++ if(description, description.first_line(), "") ++ "}}\\n{{PRURL:" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "}}\\n", "") ++
-  "{{COMMIT:" ++ commit_id.short(8) ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ if(description, description.first_line(), "") ++ "}}\\n" ++
-  "\\n"
-)
+"{{LABEL:" ++ change_id.short(8) ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ committer.timestamp().format("%s") ++ "|" ++ if(description, description.first_line(), "") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ if(current_working_copy, "1", "0") ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "|" ++ remote_bookmarks.map(|b| b.name()).join(",") ++ "}}\\n" ++
+"{{TIME:" ++ committer.timestamp().format("%s") ++ "}}\\n" ++
+if(current_working_copy && empty && !description, "{{HINT_EMPTY}}\\n", "") ++
+if(current_working_copy && !empty && !description, "{{HINT_UNCOMMITTED}}\\n", "") ++
+if(current_working_copy && description && local_bookmarks, "{{HINT_SUBMIT}}\\n", "") ++
+"\\n" ++
+if(local_bookmarks, "{{PR:" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "|" ++ if(description, description.first_line(), "") ++ "}}\\n{{PRURL:" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "}}\\n", "") ++
+"{{COMMIT:" ++ commit_id.short(8) ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ if(description, description.first_line(), "") ++ "}}\\n" ++
+"\\n"
 `.trim();

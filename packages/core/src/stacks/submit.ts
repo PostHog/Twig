@@ -3,7 +3,7 @@ import { upsertStackComment } from "../github/comments";
 import { closePR, createPR, updatePR } from "../github/pr-actions";
 import {
   batchGetPRsForBranches,
-  getMultiplePRStatuses,
+  getMultiplePRInfos,
 } from "../github/pr-status";
 import {
   deleteBookmark,
@@ -209,13 +209,15 @@ export async function submitStack(
         prNumber: existingPR.number,
         prUrl: existingPR.url,
         base: previousBookmark,
+        title: existingPR.title,
         position: i,
         status: prStatus,
       });
     } else {
+      const title = change.description || "Untitled";
       const prResult = await createPR({
         head: bookmark,
-        title: change.description || "Untitled",
+        title,
         base: previousBookmark,
         draft: options?.draft,
       });
@@ -241,6 +243,7 @@ export async function submitStack(
         prNumber: prResult.value.number,
         prUrl: prResult.value.url,
         base: previousBookmark,
+        title,
         position: i,
         status: prStatus,
       });
@@ -263,20 +266,20 @@ async function addStackComments(
   if (prs.length === 0) return { succeeded: 0, failed: 0 };
 
   const prNumbersList = prs.map((p) => p.prNumber);
-  const statusesResult = await getMultiplePRStatuses(prNumbersList);
-  const statuses = statusesResult.ok ? statusesResult.value : new Map();
+  const infosResult = await getMultiplePRInfos(prNumbersList);
+  const infos = infosResult.ok ? infosResult.value : new Map();
 
   const commentUpserts = prs.map((prItem, i) => {
     const stackEntries: StackEntry[] = prs.map((p, idx) => {
-      const prStatus = statuses.get(p.prNumber);
+      const prInfo = infos.get(p.prNumber);
       let entryStatus: StackEntry["status"] = "waiting";
 
       if (idx === i) {
         entryStatus = "this";
-      } else if (prStatus) {
+      } else if (prInfo) {
         entryStatus = mapReviewDecisionToStatus(
-          prStatus.reviewDecision,
-          prStatus.state,
+          prInfo.reviewDecision ?? null,
+          prInfo.state,
         );
       }
 

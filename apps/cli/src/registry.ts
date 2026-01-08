@@ -3,8 +3,9 @@ import { checkoutCommand } from "@array/core/commands/checkout";
 import { createCommand } from "@array/core/commands/create";
 import { deleteCommand } from "@array/core/commands/delete";
 import { downCommand } from "@array/core/commands/down";
-import { logCommand } from "@array/core/commands/log";
+import { getCommand } from "@array/core/commands/get";
 import { mergeCommand } from "@array/core/commands/merge";
+import { modifyCommand } from "@array/core/commands/modify";
 import { restackCommand } from "@array/core/commands/restack";
 import { squashCommand } from "@array/core/commands/squash";
 import { statusCommand } from "@array/core/commands/status";
@@ -27,9 +28,11 @@ import { create } from "./commands/create";
 import { deleteChange } from "./commands/delete";
 import { down } from "./commands/down";
 import { exit, meta as exitMeta } from "./commands/exit";
+import { get } from "./commands/get";
 import { init, meta as initMeta } from "./commands/init";
 import { log } from "./commands/log";
 import { merge } from "./commands/merge";
+import { modify } from "./commands/modify";
 import { restack } from "./commands/restack";
 import { squash } from "./commands/squash";
 import { status } from "./commands/status";
@@ -69,6 +72,14 @@ const versionMeta: CommandMeta = {
   category: "setup",
 };
 
+const logMeta: CommandMeta = {
+  name: "log",
+  description: "Show a visual overview of the current stack with PR status",
+  aliases: ["l"],
+  category: "info",
+  core: true,
+};
+
 export const COMMANDS = {
   auth: authMeta,
   init: initMeta,
@@ -76,6 +87,7 @@ export const COMMANDS = {
   submit: submitCommand.meta,
   sync: syncCommand.meta,
   restack: restackCommand.meta,
+  get: getCommand.meta,
   track: trackCommand.meta,
   bottom: bottomCommand.meta,
   checkout: checkoutCommand.meta,
@@ -83,9 +95,10 @@ export const COMMANDS = {
   top: topCommand.meta,
   trunk: trunkCommand.meta,
   up: upCommand.meta,
-  log: logCommand.meta,
+  log: logMeta,
   status: statusCommand.meta,
   delete: deleteCommand.meta,
+  modify: modifyCommand.meta,
   squash: squashCommand.meta,
   merge: mergeCommand.meta,
   undo: undoCommand.meta,
@@ -103,18 +116,20 @@ export const HANDLERS: Record<string, CommandHandler> = {
   status: () => status(),
   create: (p, ctx) => create(p.args.join(" "), ctx!),
   submit: (p, ctx) => submit(p.flags, ctx!),
+  get: (p, ctx) => get(ctx!, p.args[0]),
   track: (p, ctx) => track(p.args[0], ctx!),
   up: () => up(),
   down: () => down(),
   top: () => top(),
   trunk: () => trunk(),
   bottom: () => bottom(),
-  log: (_p, ctx) => log(ctx!),
+  log: (p, ctx) => log(ctx!, { debug: !!p.flags.debug }),
   sync: (_p, ctx) => sync(ctx!),
   restack: () => restack(),
   checkout: (p) => checkout(p.args[0]),
   delete: (p, ctx) =>
     deleteChange(p.args[0], ctx!, { yes: !!p.flags.yes || !!p.flags.y }),
+  modify: () => modify(),
   squash: (p, ctx) => squash(p.args[0], ctx!),
   merge: (p, ctx) => merge(p.flags, ctx!),
   undo: () => undo(),

@@ -1,6 +1,11 @@
 import type { Engine } from "../engine";
-import { fetchMetadataRefs } from "../git/refs";
-import { abandon, getTrunk, list, runJJ, status } from "../jj";
+import {
+  getTrunk,
+  list,
+  runJJ,
+  runJJWithMutableConfigVoid,
+  status,
+} from "../jj";
 import { ok, type Result } from "../result";
 import {
   findMergedChanges,
@@ -126,15 +131,12 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
   const fetchResult = await runJJ(["git", "fetch"]);
   if (!fetchResult.ok) return fetchResult;
 
-  // Fetch arr metadata refs from remote
-  fetchMetadataRefs();
-
   // Update local trunk bookmark to match remote
   const trunk = await getTrunk();
   await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
 
-  // Rebase onto trunk
-  const rebaseResult = await runJJ([
+  // Rebase onto trunk (use mutable config for potentially pushed commits)
+  const rebaseResult = await runJJWithMutableConfigVoid([
     "rebase",
     "-s",
     "roots(trunk()..@)",
@@ -159,7 +161,23 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
 
   if (emptyResult.ok) {
     for (const change of emptyResult.value) {
-      const abandonResult = await abandon(change.changeId);
+      // If change has bookmarks, check cached PR info from engine
+      if (change.bookmarks.length > 0) {
+        const hasOpenPR = change.bookmarks.some((bookmark) => {
+          const meta = engine.getMeta(bookmark);
+          return meta?.prInfo?.state === "OPEN";
+        });
+
+        // Skip if there's still an open PR
+        if (hasOpenPR) {
+          continue;
+        }
+      }
+
+      const abandonResult = await runJJWithMutableConfigVoid([
+        "abandon",
+        change.changeId,
+      ]);
       if (abandonResult.ok) {
         const reason = change.description.trim() !== "" ? "merged" : "empty";
         abandoned.push({ changeId: change.changeId, reason });

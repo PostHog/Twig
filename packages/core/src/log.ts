@@ -15,14 +15,15 @@ interface LogEntry {
   isModified: boolean;
 }
 
-export interface PRInfo {
+/** Minimal PR info for log display */
+export interface LogPRInfo {
   number: number;
-  state: "open" | "merged" | "closed";
+  state: "OPEN" | "MERGED" | "CLOSED";
   url: string;
 }
 
 export interface EnrichedLogEntry extends LogEntry {
-  prInfo: PRInfo | null;
+  prInfo: LogPRInfo | null;
   diffStats: {
     filesChanged: number;
     insertions: number;

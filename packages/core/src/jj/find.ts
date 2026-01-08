@@ -7,10 +7,13 @@ export async function findChange(
   options: { includeBookmarks?: boolean } = {},
   cwd = process.cwd(),
 ): Promise<Result<FindResult>> {
-  // First, try direct revset lookup (handles change IDs, shortest prefixes, etc.)
-  // Only try if query looks like it could be a change ID (lowercase alphanumeric)
-  const isRevsetLike = /^[a-z][a-z0-9]*$/.test(query);
-  if (isRevsetLike) {
+  // First, try direct revset lookup (handles change IDs, commit IDs, shortest prefixes, etc.)
+  // Change IDs: lowercase letters + digits (e.g., xnkxvwyk)
+  // Commit IDs: hex digits (e.g., 1af471ab)
+  const isChangeId = /^[a-z][a-z0-9]*$/.test(query);
+  const isCommitId = /^[0-9a-f]+$/.test(query);
+
+  if (isChangeId || isCommitId) {
     const idResult = await list({ revset: query, limit: 1 }, cwd);
     if (idResult.ok && idResult.value.length === 1) {
       return ok({ status: "found", change: idResult.value[0] });

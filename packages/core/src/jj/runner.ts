@@ -68,3 +68,34 @@ export async function runJJVoid(
   if (!result.ok) return result;
   return ok(undefined);
 }
+
+/**
+ * Config override to make remote bookmarks mutable.
+ * Only trunk and tags remain immutable.
+ */
+const MUTABLE_CONFIG =
+  'revset-aliases."immutable_heads()"="present(trunk()) | tags()"';
+
+/**
+ * Run a JJ command with immutability override via --config.
+ * Use when operating on commits that may have been pushed to remote.
+ * This is a fallback for repos that weren't initialized with arr init.
+ */
+export async function runJJWithMutableConfig(
+  args: string[],
+  cwd = process.cwd(),
+): Promise<Result<CommandResult>> {
+  return runJJ(["--config", MUTABLE_CONFIG, ...args], cwd);
+}
+
+/**
+ * Run a JJ command with immutability override, returning void.
+ */
+export async function runJJWithMutableConfigVoid(
+  args: string[],
+  cwd = process.cwd(),
+): Promise<Result<void>> {
+  const result = await runJJWithMutableConfig(args, cwd);
+  if (!result.ok) return result;
+  return ok(undefined);
+}

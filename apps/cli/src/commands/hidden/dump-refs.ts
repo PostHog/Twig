@@ -1,4 +1,4 @@
-import { $ } from "bun";
+import { getTrackedBranchNames, readMetadata } from "@array/core/git/metadata";
 
 /**
  * Hidden debug command to dump all arr refs metadata.
@@ -8,23 +8,20 @@ import { $ } from "bun";
  * metadata about changes (PR info, etc.).
  */
 export async function dumpRefs(): Promise<void> {
-  const result =
-    await $`git for-each-ref refs/arr --format='%(refname:short)'`.quiet();
-  const refs = result.stdout.toString().trim().split("\n").filter(Boolean);
+  const branches = getTrackedBranchNames();
 
-  if (refs.length === 0) {
+  if (branches.length === 0) {
     console.log("No arr refs found.");
     return;
   }
 
-  for (const ref of refs) {
-    console.log(`=== ${ref} ===`);
-    const blob = await $`git cat-file blob refs/${ref}`.quiet();
-    const content = blob.stdout.toString().trim();
-    try {
-      console.log(JSON.stringify(JSON.parse(content), null, 2));
-    } catch {
-      console.log(content);
+  for (const branchName of branches) {
+    console.log(`=== arr/${branchName} ===`);
+    const meta = readMetadata(branchName);
+    if (meta) {
+      console.log(JSON.stringify(meta, null, 2));
+    } else {
+      console.log("(failed to read metadata)");
     }
     console.log();
   }

@@ -73,17 +73,10 @@ export async function getMergeStack(): Promise<Result<PRToMerge[]>> {
       );
     }
 
-    if (prItem.state === "merged") {
+    // Both merged and closed PRs signal the end of the chain.
+    // Closed PRs are treated like merged - the sync command will handle cleanup.
+    if (prItem.state === "MERGED" || prItem.state === "CLOSED") {
       break;
-    }
-
-    if (prItem.state === "closed") {
-      return err(
-        createError(
-          "INVALID_STATE",
-          `PR #${prItem.number} is closed (not merged)`,
-        ),
-      );
     }
 
     prsToMerge.unshift({
@@ -92,14 +85,14 @@ export async function getMergeStack(): Promise<Result<PRToMerge[]>> {
       prUrl: prItem.url,
       bookmarkName: currentBookmark,
       changeId: currentChangeId,
-      baseRefName: prItem.baseRefName,
+      baseRefName: prItem.base,
     });
 
-    if (prItem.baseRefName === trunk) {
+    if (prItem.base === trunk) {
       break;
     }
 
-    currentBookmark = prItem.baseRefName;
+    currentBookmark = prItem.base;
     currentChangeId = null;
   }
 

@@ -31,6 +31,7 @@ export type JJErrorCode =
   | "NAVIGATION_FAILED"
   | "MERGE_BLOCKED"
   | "ALREADY_MERGED"
+  | "NOT_FOUND"
   | "UNKNOWN";
 
 export function createError(

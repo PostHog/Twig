@@ -1,6 +1,6 @@
 import { batchGetPRsForBranches } from "../github/pr-status";
 import { getDiffStats, getLog } from "../jj";
-import type { EnrichedLogEntry, EnrichedLogResult, PRInfo } from "../log";
+import type { EnrichedLogEntry, EnrichedLogResult, LogPRInfo } from "../log";
 import { ok, type Result } from "../result";
 
 export async function getEnrichedLog(): Promise<Result<EnrichedLogResult>> {
@@ -26,7 +26,7 @@ export async function getEnrichedLog(): Promise<Result<EnrichedLogResult>> {
   }
   const bookmarksList = Array.from(bookmarkToChangeId.keys());
 
-  const prInfoMap = new Map<string, PRInfo>();
+  const prInfoMap = new Map<string, LogPRInfo>();
   if (bookmarksList.length > 0) {
     const prsResult = await batchGetPRsForBranches(bookmarksList);
     if (prsResult.ok) {

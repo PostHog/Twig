@@ -37,13 +37,19 @@ export async function submit(
   const result = await submitStack({ draft: options.draft });
   if (!result.ok) return result;
 
-  // Track all submitted PRs with their PR info
+  // Update PR info for all submitted PRs
+  // The bookmark should already exist in jj after submission, so refresh from jj
+  // then update with PR info
   for (const pr of result.value.prs) {
-    await engine.track(pr.bookmarkName, {
+    // Refresh from jj to get latest changeId/commitId/parentBranchName
+    await engine.refreshFromJJ(pr.bookmarkName);
+    // Update PR info
+    engine.updatePRInfo(pr.bookmarkName, {
       number: pr.prNumber,
       state: "OPEN",
       url: pr.prUrl,
       base: pr.base,
+      title: pr.title,
     });
   }
 

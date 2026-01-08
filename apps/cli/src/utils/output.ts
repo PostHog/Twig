@@ -1,4 +1,5 @@
 import type { CommandMeta } from "@array/core/commands/types";
+import type { NavigationResult } from "@array/core/types";
 
 const colors = {
   reset: "\x1b[0m",
@@ -70,19 +71,28 @@ export function formatSuccess(message: string): string {
   return `${green("✓")} ${message}`;
 }
 
-interface NavInfo {
-  changeId: string;
-  changeIdPrefix?: string;
-  description: string;
-}
+/**
+ * Print navigation result with consistent formatting.
+ *
+ * Messages:
+ * - editing: "Editing branch-name"
+ * - on-top: "Working on top of branch-name"
+ * - on-trunk: "Starting fresh on main"
+ */
+export function printNavResult(nav: NavigationResult): void {
+  const label = nav.bookmark || nav.description || nav.changeId.slice(0, 8);
 
-export function printNav(direction: "up" | "down", nav: NavInfo): void {
-  const arrow = direction === "up" ? "↑" : "↓";
-  const shortId = nav.changeIdPrefix
-    ? formatChangeId(nav.changeId.slice(0, 8), nav.changeIdPrefix)
-    : dim(nav.changeId.slice(0, 8));
-  const desc = nav.description || dim("(empty)");
-  console.log(`${arrow} ${green(desc)} ${shortId}`);
+  switch (nav.position) {
+    case "editing":
+      console.log(`Editing ${green(label)}`);
+      break;
+    case "on-top":
+      console.log(`Working on top of ${green(label)}`);
+      break;
+    case "on-trunk":
+      console.log(`Starting fresh on ${cyan(label)}`);
+      break;
+  }
 }
 
 export function blank(): void {

@@ -1,9 +1,9 @@
 import type { Result } from "../result";
-import { runJJVoid } from "./runner";
+import { runJJWithMutableConfigVoid } from "./runner";
 
 export async function edit(
   revision: string,
   cwd = process.cwd(),
 ): Promise<Result<void>> {
-  return runJJVoid(["edit", revision], cwd);
+  return runJJWithMutableConfigVoid(["edit", revision], cwd);
 }

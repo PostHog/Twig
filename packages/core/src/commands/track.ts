@@ -113,8 +113,11 @@ export async function track(
     }
   }
 
-  // Track the bookmark
-  await engine.track(bookmark);
+  // Track the bookmark by refreshing from jj
+  const refreshResult = await engine.refreshFromJJ(bookmark);
+  if (!refreshResult.ok) {
+    return refreshResult;
+  }
 
   return ok({ bookmark, parent: parentBranch });
 }

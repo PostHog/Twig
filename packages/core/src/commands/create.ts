@@ -73,8 +73,12 @@ export async function create(
   const exportResult = await runJJ(["git", "export"]);
   if (!exportResult.ok) return exportResult;
 
-  // Track the new bookmark in the engine
-  await engine.track(bookmarkName);
+  // Track the new bookmark in the engine by refreshing from jj
+  const refreshResult = await engine.refreshFromJJ(bookmarkName);
+  if (!refreshResult.ok) {
+    // This shouldn't happen since we just created the bookmark, but handle gracefully
+    return refreshResult;
+  }
 
   return ok({ changeId: createdChangeId, bookmarkName });
 }

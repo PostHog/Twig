@@ -1,4 +1,4 @@
-import type { Engine, PRInfo } from "../engine";
+import type { Engine } from "../engine";
 import { batchGetPRsForBranches } from "../github/pr-status";
 import { ok, type Result } from "../result";
 
@@ -36,27 +36,7 @@ export async function syncPRInfo(
 
   // Update engine with fresh PR info
   const updated: string[] = [];
-  for (const [bookmark, prStatus] of prsResult.value) {
-    const prInfo: PRInfo = {
-      number: prStatus.number,
-      state:
-        prStatus.state === "open"
-          ? "OPEN"
-          : prStatus.state === "merged"
-            ? "MERGED"
-            : "CLOSED",
-      url: prStatus.url,
-      base: prStatus.baseRefName,
-      title: prStatus.title,
-      reviewDecision:
-        prStatus.reviewDecision === "approved"
-          ? "APPROVED"
-          : prStatus.reviewDecision === "changes_requested"
-            ? "CHANGES_REQUESTED"
-            : prStatus.reviewDecision === "review_required"
-              ? "REVIEW_REQUIRED"
-              : undefined,
-    };
+  for (const [bookmark, prInfo] of prsResult.value) {
     engine.updatePRInfo(bookmark, prInfo);
     updated.push(bookmark);
   }

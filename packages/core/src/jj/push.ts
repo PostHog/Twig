@@ -1,4 +1,3 @@
-import { pushBranchMetadata } from "../git/refs";
 import type { Result } from "../result";
 import type { PushOptions } from "../types";
 import { runJJ, runJJVoid } from "./runner";
@@ -23,12 +22,5 @@ export async function push(
     args.push("--bookmark", options.bookmark);
   }
 
-  const result = await runJJVoid(args, cwd);
-
-  // Push metadata ref for the bookmark if push succeeded
-  if (result.ok && options?.bookmark) {
-    pushBranchMetadata(options.bookmark, remote, cwd);
-  }
-
-  return result;
+  return runJJVoid(args, cwd);
 }

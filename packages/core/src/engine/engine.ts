@@ -7,6 +7,7 @@ import {
   writeMetadata,
 } from "../git/metadata";
 import { getTrunk, list } from "../jj";
+import { createError, ok, type Result } from "../result";
 import type { TreeNode } from "./types";
 
 export type { PRInfo };
@@ -32,9 +33,34 @@ export interface Engine {
   getParent(bookmark: string): string | null;
   getChildren(bookmark: string): string[];
 
-  // Mutations - engine derives changeId/commitId/parentBranchName internally
+  // Mutations
+  /**
+   * Set metadata directly for a bookmark.
+   * Use this when you already have the full metadata (e.g., from remote refs).
+   */
+  setMeta(bookmark: string, meta: BranchMeta): void;
+
+  /**
+   * Refresh a bookmark's changeId/commitId/parentBranchName from jj.
+   * Preserves existing prInfo if present.
+   * Returns error if bookmark not found in jj.
+   */
+  refreshFromJJ(bookmark: string): Promise<Result<void>>;
+
+  /**
+   * Track a new bookmark by looking up its info from jj.
+   * @deprecated Use setMeta() for explicit metadata or refreshFromJJ() for jj lookup
+   */
   track(bookmark: string, prInfo?: PRInfo): Promise<void>;
+
+  /**
+   * Untrack a bookmark (delete metadata).
+   */
   untrack(bookmark: string): void;
+
+  /**
+   * Update PR info for a tracked bookmark.
+   */
   updatePRInfo(bookmark: string, prInfo: PRInfo): void;
 
   // Tree building
@@ -134,8 +160,95 @@ export function createEngine(cwd: string = process.cwd()): Engine {
     },
 
     /**
+     * Set metadata directly for a bookmark.
+     * Use this when you already have the full metadata (e.g., from remote refs).
+     */
+    setMeta(bookmark: string, meta: BranchMeta): void {
+      branches.set(bookmark, meta);
+      dirty.add(bookmark);
+      deleted.delete(bookmark);
+    },
+
+    /**
+     * Refresh a bookmark's changeId/commitId/parentBranchName from jj.
+     * Preserves existing prInfo if present.
+     * Returns error if bookmark not found in jj.
+     */
+    async refreshFromJJ(bookmark: string): Promise<Result<void>> {
+      const trunk = await getTrunk(cwd);
+      const existing = branches.get(bookmark);
+
+      // Get the change for this bookmark
+      const changeResult = await list(
+        { revset: `bookmarks(exact:"${bookmark}")`, limit: 1 },
+        cwd,
+      );
+      if (!changeResult.ok) {
+        return {
+          ok: false,
+          error: createError("COMMAND_FAILED", changeResult.error.message),
+        };
+      }
+      if (changeResult.value.length === 0) {
+        return {
+          ok: false,
+          error: createError(
+            "NOT_FOUND",
+            `Bookmark "${bookmark}" not found in jj`,
+          ),
+        };
+      }
+
+      const change = changeResult.value[0];
+      const parentChangeId = change.parents[0];
+
+      // Determine parent branch name
+      let parentBranchName = trunk;
+
+      if (parentChangeId) {
+        // Check if parent is trunk
+        const trunkResult = await list(
+          { revset: `bookmarks(exact:"${trunk}")`, limit: 1 },
+          cwd,
+        );
+        const isTrunkParent =
+          trunkResult.ok &&
+          trunkResult.value.length > 0 &&
+          trunkResult.value[0].changeId === parentChangeId;
+
+        if (!isTrunkParent) {
+          // Find parent's bookmark
+          const parentResult = await list(
+            { revset: parentChangeId, limit: 1 },
+            cwd,
+          );
+          if (parentResult.ok && parentResult.value.length > 0) {
+            const parentBookmark = parentResult.value[0].bookmarks[0];
+            if (parentBookmark) {
+              parentBranchName = parentBookmark;
+            }
+          }
+        }
+      }
+
+      const meta: BranchMeta = {
+        changeId: change.changeId,
+        commitId: change.commitId,
+        parentBranchName,
+        prInfo: existing?.prInfo, // Preserve existing prInfo
+      };
+
+      branches.set(bookmark, meta);
+      dirty.add(bookmark);
+      deleted.delete(bookmark);
+
+      return ok(undefined);
+    },
+
+    /**
      * Track a bookmark. Derives changeId, commitId, parentBranchName from jj.
      * If already tracked, updates the metadata (upsert behavior).
+     * @deprecated Use setMeta() for explicit metadata or refreshFromJJ() for jj lookup
      */
     async track(bookmark: string, prInfo?: PRInfo): Promise<void> {
       const trunk = await getTrunk(cwd);

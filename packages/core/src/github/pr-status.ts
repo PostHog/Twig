@@ -1,18 +1,11 @@
 import { graphql } from "@octokit/graphql";
 import type { PullRequestReviewState } from "@octokit/graphql-schema";
+import type { PRInfo, ReviewDecision } from "../git/metadata";
 import { createError, err, ok, type Result } from "../result";
 import { getRepoInfo, getToken } from "./client";
 
-export interface PRStatus {
-  number: number;
-  state: "open" | "closed" | "merged";
-  reviewDecision: "approved" | "changes_requested" | "review_required" | null;
-  title: string;
-  baseRefName: string;
-  url: string;
-  /** Number of times PR was submitted (1 = initial, 2+ = updated via force-push) */
-  version: number;
-}
+// Re-export PRInfo as the unified type for PR data
+export type { PRInfo };
 
 /** GraphQL fields for fetching PR status - shared between queries */
 const PR_STATUS_FIELDS = `
@@ -21,6 +14,7 @@ const PR_STATUS_FIELDS = `
   state
   merged
   baseRefName
+  headRefName
   url
   reviews(last: 50) {
     nodes {
@@ -40,6 +34,7 @@ interface GraphQLPRNode {
   state: "OPEN" | "CLOSED" | "MERGED";
   merged: boolean;
   baseRefName: string;
+  headRefName: string;
   url: string;
   reviews: {
     nodes: Array<{
@@ -54,7 +49,7 @@ interface GraphQLPRNode {
 
 function computeReviewDecision(
   reviews: GraphQLPRNode["reviews"]["nodes"],
-): PRStatus["reviewDecision"] {
+): ReviewDecision | null {
   const latestByUser = new Map<string, PullRequestReviewState>();
   for (const review of reviews) {
     if (review.state !== "PENDING" && review.state !== "COMMENTED") {
@@ -63,43 +58,44 @@ function computeReviewDecision(
   }
 
   const states = [...latestByUser.values()];
-  if (states.includes("CHANGES_REQUESTED")) return "changes_requested";
-  if (states.includes("APPROVED")) return "approved";
+  if (states.includes("CHANGES_REQUESTED")) return "CHANGES_REQUESTED";
+  if (states.includes("APPROVED")) return "APPROVED";
   return null;
 }
 
-/** Map a GraphQL PR node to our PRStatus type */
-function mapPRNodeToStatus(pr: GraphQLPRNode): PRStatus {
+/** Map a GraphQL PR node to our PRInfo type */
+function mapPRNodeToInfo(pr: GraphQLPRNode): PRInfo {
   const forcePushCount = pr.timelineItems?.totalCount ?? 0;
   return {
     number: pr.number,
     title: pr.title,
-    state: pr.merged ? "merged" : (pr.state.toLowerCase() as "open" | "closed"),
+    state: pr.merged ? "MERGED" : pr.state,
     reviewDecision: computeReviewDecision(pr.reviews.nodes),
-    baseRefName: pr.baseRefName,
+    base: pr.baseRefName,
+    head: pr.headRefName,
     url: pr.url,
     version: 1 + forcePushCount,
   };
 }
 
-async function _getPRStatus(
+async function _getPRInfo(
   prNumber: number,
   cwd = process.cwd(),
-): Promise<Result<PRStatus>> {
-  const result = await getMultiplePRStatuses([prNumber], cwd);
+): Promise<Result<PRInfo>> {
+  const result = await getMultiplePRInfos([prNumber], cwd);
   if (!result.ok) return result;
 
-  const status = result.value.get(prNumber);
-  if (!status) {
+  const info = result.value.get(prNumber);
+  if (!info) {
     return err(createError("COMMAND_FAILED", `PR #${prNumber} not found`));
   }
-  return ok(status);
+  return ok(info);
 }
 
-export async function getMultiplePRStatuses(
+export async function getMultiplePRInfos(
   prNumbers: number[],
   cwd = process.cwd(),
-): Promise<Result<Map<number, PRStatus>>> {
+): Promise<Result<Map<number, PRInfo>>> {
   if (prNumbers.length === 0) {
     return ok(new Map());
   }
@@ -137,26 +133,24 @@ export async function getMultiplePRStatuses(
       headers: { authorization: `token ${token}` },
     });
 
-    const statuses = new Map<number, PRStatus>();
+    const infos = new Map<number, PRInfo>();
     for (let i = 0; i < prNumbers.length; i++) {
       const pr = response.repository[`pr${i}`];
       if (pr) {
-        statuses.set(pr.number, mapPRNodeToStatus(pr));
+        infos.set(pr.number, mapPRNodeToInfo(pr));
       }
     }
 
-    return ok(statuses);
+    return ok(infos);
   } catch (e) {
-    return err(
-      createError("COMMAND_FAILED", `Failed to get PR statuses: ${e}`),
-    );
+    return err(createError("COMMAND_FAILED", `Failed to get PR info: ${e}`));
   }
 }
 
 export async function getPRForBranch(
   branchName: string,
   cwd = process.cwd(),
-): Promise<Result<PRStatus | null>> {
+): Promise<Result<PRInfo | null>> {
   const result = await batchGetPRsForBranches([branchName], cwd);
   if (!result.ok) return result;
   return ok(result.value.get(branchName) ?? null);
@@ -165,7 +159,7 @@ export async function getPRForBranch(
 export async function batchGetPRsForBranches(
   branchNames: string[],
   cwd = process.cwd(),
-): Promise<Result<Map<string, PRStatus>>> {
+): Promise<Result<Map<string, PRInfo>>> {
   if (branchNames.length === 0) {
     return ok(new Map());
   }
@@ -205,14 +199,14 @@ export async function batchGetPRsForBranches(
       headers: { authorization: `token ${token}` },
     });
 
-    const prMap = new Map<string, PRStatus>();
+    const prMap = new Map<string, PRInfo>();
     for (let i = 0; i < branchNames.length; i++) {
       const branchData = response.repository[`branch${i}`];
       const prs = branchData?.nodes ?? [];
       // Prefer open PR, otherwise take first (most recent)
       const pr = prs.find((p) => p.state === "OPEN") ?? prs[0];
       if (pr) {
-        prMap.set(branchNames[i], mapPRNodeToStatus(pr));
+        prMap.set(branchNames[i], mapPRNodeToInfo(pr));
       }
     }
 

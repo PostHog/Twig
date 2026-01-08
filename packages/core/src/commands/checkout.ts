@@ -1,15 +1,8 @@
-import { edit, findChange, jjNew, status } from "../jj";
-import type { Changeset } from "../parser";
-import { createError, err, ok, type Result } from "../result";
+import { findChange } from "../jj";
+import { createError, err, type Result } from "../result";
+import type { NavigationResult } from "../types";
+import { navigateTo, newOnTrunk } from "./navigation";
 import type { Command } from "./types";
-
-interface CheckoutResult {
-  changeId: string;
-  description: string;
-  createdNew: boolean;
-  /** The change that was checked out (for CLI display) */
-  change: Changeset;
-}
 
 /**
  * Checkout a change by its ID, bookmark, or search query.
@@ -17,22 +10,11 @@ interface CheckoutResult {
  */
 export async function checkout(
   target: string,
-): Promise<Result<CheckoutResult>> {
+): Promise<Result<NavigationResult>> {
   // Handle trunk checkout - creates new empty change on main
   if (target === "main" || target === "master" || target === "trunk") {
-    const revision = target === "trunk" ? "trunk()" : target;
-    const result = await jjNew({ parents: [revision] });
-    if (!result.ok) return result;
-
-    const statusResult = await status();
-    if (!statusResult.ok) return statusResult;
-
-    return ok({
-      changeId: statusResult.value.workingCopy.changeId,
-      description: "",
-      createdNew: true,
-      change: statusResult.value.workingCopy,
-    });
+    const trunkName = target === "trunk" ? "main" : target;
+    return newOnTrunk(trunkName);
   }
 
   // Resolve the change
@@ -51,22 +33,11 @@ export async function checkout(
   }
   const change = findResult.value.change;
 
-  // Regular checkout - edit the change
-  const editResult = await edit(change.changeId);
-  if (!editResult.ok) return editResult;
-
-  const statusResult = await status();
-  if (!statusResult.ok) return statusResult;
-
-  return ok({
-    changeId: statusResult.value.workingCopy.changeId,
-    description: statusResult.value.workingCopy.description,
-    createdNew: false,
-    change: statusResult.value.workingCopy,
-  });
+  // Navigate to the change (handles immutability correctly)
+  return navigateTo(change);
 }
 
-export const checkoutCommand: Command<CheckoutResult, [string]> = {
+export const checkoutCommand: Command<NavigationResult, [string]> = {
   meta: {
     name: "checkout",
     args: "[id]",
