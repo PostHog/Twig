@@ -13,6 +13,7 @@ export interface UseTiptapEditorOptions {
   placeholder?: string;
   disabled?: boolean;
   isCloud?: boolean;
+  isOffline?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
   capabilities?: {
@@ -36,6 +37,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     placeholder = "",
     disabled = false,
     isCloud = false,
+    isOffline = false,
     autoFocus = false,
     context,
     capabilities = {},
@@ -215,6 +217,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const submit = useCallback(() => {
     if (!editor) return;
+    if (isOffline) return;
 
     const text = editor.getText().trim();
     if (!text) return;
@@ -234,7 +237,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     editor.commands.clearContent();
     prevBashModeRef.current = false;
     draft.clearDraft();
-  }, [editor, isCloud, draft]);
+  }, [editor, isCloud, isOffline, draft]);
 
   submitRef.current = submit;
 
