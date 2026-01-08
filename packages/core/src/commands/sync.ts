@@ -82,10 +82,11 @@ async function cleanupOrphanedBookmarks(): Promise<Result<string[]>> {
 
   const forgotten: string[] = [];
   for (const [name, info] of bookmarksByName) {
+    // Only forget bookmarks that have been deleted (no local target)
+    // Don't forget empty changes - the user may want to add content to them
     const isDeleted = !info.hasLocalTarget;
-    const isOrphaned = !info.hasOrigin && info.isEmpty;
 
-    if (isDeleted || isOrphaned) {
+    if (isDeleted) {
       const forgetResult = await runJJ(["bookmark", "forget", name]);
       if (forgetResult.ok) {
         forgotten.push(name);

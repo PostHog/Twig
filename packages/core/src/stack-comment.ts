@@ -39,11 +39,11 @@ export function generateStackComment(options: StackCommentOptions): string {
 }
 
 export function mapReviewDecisionToStatus(
-  reviewDecision: "approved" | "changes_requested" | "review_required" | null,
-  state: "open" | "closed" | "merged",
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null,
+  state: "OPEN" | "CLOSED" | "MERGED",
 ): StackEntryStatus {
-  if (state === "merged") return "merged";
-  if (state === "closed") return "closed";
-  if (reviewDecision === "approved") return "approved";
+  if (state === "MERGED") return "merged";
+  if (state === "CLOSED") return "closed";
+  if (reviewDecision === "APPROVED") return "approved";
   return "waiting";
 }

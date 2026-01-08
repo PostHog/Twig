@@ -64,19 +64,20 @@ export async function updateStackComments(): Promise<
     return ok({ updated: 0 });
   }
 
-  type ReviewDecision =
-    | "approved"
-    | "changes_requested"
-    | "review_required"
-    | null;
-  type PRState = "open" | "closed" | "merged";
   const statuses = new Map<
     number,
-    { reviewDecision: ReviewDecision; state: PRState }
+    {
+      reviewDecision:
+        | "APPROVED"
+        | "CHANGES_REQUESTED"
+        | "REVIEW_REQUIRED"
+        | null;
+      state: "OPEN" | "CLOSED" | "MERGED";
+    }
   >();
   for (const [, prItem] of prCache) {
     statuses.set(prItem.number, {
-      reviewDecision: prItem.reviewDecision,
+      reviewDecision: prItem.reviewDecision ?? null,
       state: prItem.state,
     });
   }

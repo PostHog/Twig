@@ -78,7 +78,7 @@ export async function status(): Promise<void> {
     message(
       `Edit files, then run ${arr(COMMANDS.create)} to start a new stack`,
     );
-    hint(`Or run ${arr(COMMANDS.top)} to return to your previous stack`);
+    hint(`Or ${arr(COMMANDS.top)} to return to your previous stack`);
   } else {
     switch (action) {
       case "continue":
@@ -86,18 +86,18 @@ export async function status(): Promise<void> {
         break;
       case "create":
         if (reason === "unsaved") {
-          message(`Run ${arr(COMMANDS.create)} to save as a new change`);
+          message(`${arr(COMMANDS.create)} to save as a new change`);
         } else {
           message(`Edit files, then run ${arr(COMMANDS.create)}`);
         }
         break;
       case "submit":
         message(
-          `Run ${arr(COMMANDS.submit)} to ${reason === "update_pr" ? "update PR" : "create PR"}`,
+          `${arr(COMMANDS.submit)} to ${reason === "update_pr" ? "update PR" : "create PR"}`,
         );
         break;
       case "up":
-        message(`Run ${arr(COMMANDS.up)} to start a new change`);
+        message(`${arr(COMMANDS.up)} to start a new change`);
         break;
     }
   }

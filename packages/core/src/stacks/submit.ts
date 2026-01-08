@@ -184,7 +184,7 @@ export async function submitStack(
 
     let prStatus: PRSubmitStatus;
 
-    if (existingPR && existingPR.state === "open") {
+    if (existingPR && existingPR.state === "OPEN") {
       const updateResult = await updatePR(existingPR.number, {
         base: previousBookmark,
       });

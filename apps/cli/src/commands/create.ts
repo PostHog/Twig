@@ -26,9 +26,13 @@ export async function create(msg: string, ctx: ArrContext): Promise<void> {
   );
 
   message(formatSuccess(`Created ${cyan(result.bookmarkName)}`));
+  message("");
+  indent(dim("Now on empty working copy"));
+  indent(`${arr(COMMANDS.submit)} ${dim("to create a PR")}`);
   indent(
-    `${dim("Run")} ${arr(COMMANDS.submit)} ${dim("to create a PR, or keep editing")}`,
+    `${arr(COMMANDS.down)} ${dim(`to add more changes to ${result.bookmarkName}`)}`,
   );
+  message("");
 
   await showTip("create");
 }
