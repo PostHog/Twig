@@ -6,6 +6,7 @@ import { downCommand } from "@array/core/commands/down";
 import { getCommand } from "@array/core/commands/get";
 import { mergeCommand } from "@array/core/commands/merge";
 import { modifyCommand } from "@array/core/commands/modify";
+import { resolveCommand } from "@array/core/commands/resolve";
 import { restackCommand } from "@array/core/commands/restack";
 import { squashCommand } from "@array/core/commands/squash";
 import { statusCommand } from "@array/core/commands/status";
@@ -33,6 +34,7 @@ import { init, meta as initMeta } from "./commands/init";
 import { log } from "./commands/log";
 import { merge } from "./commands/merge";
 import { modify } from "./commands/modify";
+import { resolve } from "./commands/resolve";
 import { restack } from "./commands/restack";
 import { squash } from "./commands/squash";
 import { status } from "./commands/status";
@@ -99,6 +101,7 @@ export const COMMANDS = {
   status: statusCommand.meta,
   delete: deleteCommand.meta,
   modify: modifyCommand.meta,
+  resolve: resolveCommand.meta,
   squash: squashCommand.meta,
   merge: mergeCommand.meta,
   undo: undoCommand.meta,
@@ -130,6 +133,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   delete: (p, ctx) =>
     deleteChange(p.args[0], ctx!, { yes: !!p.flags.yes || !!p.flags.y }),
   modify: () => modify(),
+  resolve: () => resolve(),
   squash: (p, ctx) => squash(p.args[0], ctx!),
   merge: (p, ctx) => merge(p.flags, ctx!),
   undo: () => undo(),

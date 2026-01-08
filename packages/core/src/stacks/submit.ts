@@ -184,7 +184,14 @@ export async function submitStack(
 
     let prStatus: PRSubmitStatus;
 
-    if (existingPR && existingPR.state === "OPEN") {
+    if (
+      existingPR &&
+      (existingPR.state === "MERGED" || existingPR.state === "CLOSED")
+    ) {
+      // Skip merged/closed PRs silently - they'll be cleaned up by arr sync
+      previousBookmark = bookmark;
+      continue;
+    } else if (existingPR && existingPR.state === "OPEN") {
       const updateResult = await updatePR(existingPR.number, {
         base: previousBookmark,
       });

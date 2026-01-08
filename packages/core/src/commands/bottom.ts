@@ -8,8 +8,23 @@ import type { Command } from "./types";
  * Navigate to the bottom of the current stack.
  */
 export async function bottom(): Promise<Result<NavigationResult>> {
-  // Find roots of the current stack (changes between trunk and @)
-  const rootsResult = await list({ revset: "roots(trunk()..@)" });
+  const statusResult = await status();
+  if (!statusResult.ok) return statusResult;
+
+  const hasChanges = statusResult.value.modifiedFiles.length > 0;
+
+  if (hasChanges) {
+    return err(
+      createError(
+        "NAVIGATION_FAILED",
+        'You have unsaved changes. Run `arr create "message"` to save them.',
+      ),
+    );
+  }
+
+  // Find roots of the current stack (changes between trunk and @-)
+  // Use @- since that's the current change (WC is on top)
+  const rootsResult = await list({ revset: "roots(trunk()..@-)" });
   if (!rootsResult.ok) return rootsResult;
 
   const roots = rootsResult.value.filter(
@@ -17,18 +32,6 @@ export async function bottom(): Promise<Result<NavigationResult>> {
   );
 
   if (roots.length === 0) {
-    // Check if we're already at the bottom
-    const statusResult = await status();
-    if (!statusResult.ok) return statusResult;
-
-    // If we're on an empty undescribed WC directly on trunk, that's the bottom
-    const wc = statusResult.value.workingCopy;
-    if (wc.isEmpty && wc.description.trim() === "") {
-      return err(
-        createError("NAVIGATION_FAILED", "Already at bottom of stack"),
-      );
-    }
-
     return err(createError("NAVIGATION_FAILED", "Already at bottom of stack"));
   }
 
@@ -41,7 +44,6 @@ export async function bottom(): Promise<Result<NavigationResult>> {
     );
   }
 
-  // Navigate to the root (handles immutability correctly)
   return navigateTo(roots[0]);
 }
 

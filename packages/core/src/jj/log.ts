@@ -4,11 +4,17 @@ import { getBookmarkTracking } from "./bookmark-tracking";
 import { getDiffStats } from "./diff";
 import { list } from "./list";
 import { getTrunk } from "./runner";
+import { status } from "./status";
 
 export async function getLog(cwd = process.cwd()): Promise<Result<LogResult>> {
   // Fetch all mutable changes (all stacks) plus trunk
   const result = await list({ revset: "mutable() | trunk()" }, cwd);
   if (!result.ok) return result;
+
+  // Get status for modified files info
+  const statusResult = await status(cwd);
+  const modifiedFiles = statusResult.ok ? statusResult.value.modifiedFiles : [];
+  const hasUncommittedWork = modifiedFiles.length > 0;
 
   const trunkBranch = await getTrunk(cwd);
   const trunk =
@@ -20,45 +26,20 @@ export async function getLog(cwd = process.cwd()): Promise<Result<LogResult>> {
   const trunkId = trunk?.changeId ?? "";
   const wcChangeId = workingCopy?.changeId ?? null;
 
-  const wcIsEmpty =
-    workingCopy?.isEmpty &&
-    workingCopy.description.trim() === "" &&
-    !workingCopy.hasConflicts;
+  // Current change is the parent of WC
+  const currentChangeId = workingCopy?.parents[0] ?? null;
+  const isOnTrunk = currentChangeId === trunkId;
 
-  // Uncommitted work: has file changes but no description
-  const wcHasUncommittedWork =
-    workingCopy !== null &&
-    !workingCopy.isEmpty &&
-    workingCopy.description.trim() === "" &&
-    !workingCopy.hasConflicts;
-
-  const isOnTrunk =
-    wcIsEmpty && workingCopy !== null && workingCopy.parents[0] === trunkId;
-
-  // Uncommitted work directly on trunk (not in a stack)
-  const uncommittedWorkOnTrunk =
-    wcHasUncommittedWork &&
-    workingCopy !== null &&
-    workingCopy.parents[0] === trunkId;
-
-  // Filter changes to display in the log
+  // Filter changes to display in the log - exclude the WC itself
   const changes = allChanges.filter((c) => {
-    // Always show changes with description or conflicts
     if (c.description.trim() !== "" || c.hasConflicts) {
       return true;
     }
-    // Exclude the current working copy (shown separately as uncommitted work)
     if (c.changeId === wcChangeId) {
       return false;
     }
-    // Show undescribed changes only if they have file changes
     return !c.isEmpty;
   });
-
-  let displayCurrentId = wcChangeId;
-  if (wcIsEmpty || wcHasUncommittedWork) {
-    displayCurrentId = workingCopy?.parents[0] ?? null;
-  }
 
   // Get bookmark tracking to find modified (unpushed) bookmarks
   const trackingResult = await getBookmarkTracking(cwd);
@@ -72,14 +53,11 @@ export async function getLog(cwd = process.cwd()): Promise<Result<LogResult>> {
   }
 
   const roots = buildTree(changes, trunkId);
-  const entries = flattenTree(roots, displayCurrentId, modifiedBookmarks);
-
-  // Empty working copy above the stack (not on trunk)
-  const hasEmptyWorkingCopy = wcIsEmpty === true && !isOnTrunk;
+  const entries = flattenTree(roots, currentChangeId, modifiedBookmarks);
 
   // Fetch diff stats for uncommitted work if present
   let uncommittedWork: LogResult["uncommittedWork"] = null;
-  if (wcHasUncommittedWork && workingCopy) {
+  if (hasUncommittedWork && workingCopy) {
     const statsResult = await getDiffStats(
       workingCopy.changeId,
       undefined,
@@ -88,7 +66,7 @@ export async function getLog(cwd = process.cwd()): Promise<Result<LogResult>> {
     uncommittedWork = {
       changeId: workingCopy.changeId,
       changeIdPrefix: workingCopy.changeIdPrefix,
-      isOnTrunk: uncommittedWorkOnTrunk,
+      isOnTrunk,
       diffStats: statsResult.ok ? statsResult.value : null,
     };
   }
@@ -102,10 +80,12 @@ export async function getLog(cwd = process.cwd()): Promise<Result<LogResult>> {
       description: trunk?.description ?? "",
       timestamp: trunk?.timestamp ?? new Date(),
     },
-    currentChangeId: wcChangeId,
-    currentChangeIdPrefix: workingCopy?.changeIdPrefix ?? null,
-    isOnTrunk: isOnTrunk === true,
-    hasEmptyWorkingCopy,
+    currentChangeId,
+    currentChangeIdPrefix:
+      changes.find((c) => c.changeId === currentChangeId)?.changeIdPrefix ??
+      null,
+    isOnTrunk,
+    hasEmptyWorkingCopy: false, // Always false now - WC is always empty on top
     uncommittedWork,
   });
 }

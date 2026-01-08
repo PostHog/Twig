@@ -1,9 +1,9 @@
+import { hasResolvedConflict } from "@array/core/commands/resolve";
 import { status as statusCmd } from "@array/core/commands/status";
 import { COMMANDS } from "../registry";
 import {
   arr,
   blank,
-  cmd,
   cyan,
   dim,
   formatChangeId,
@@ -21,6 +21,8 @@ import { unwrap } from "../utils/run";
 export async function status(): Promise<void> {
   const { info, stats } = unwrap(await statusCmd());
   const statsStr = stats ? ` ${formatDiffStats(stats)}` : "";
+  const resolvedResult = await hasResolvedConflict();
+  const hasResolved = resolvedResult.ok && resolvedResult.value;
 
   // Check if on main with no stack above (fresh start)
   const isOnMainFresh =
@@ -82,7 +84,11 @@ export async function status(): Promise<void> {
   } else {
     switch (action) {
       case "continue":
-        message(`Fix conflicts, then run ${cmd("jj squash")}`);
+        if (hasResolved) {
+          message(`${arr(COMMANDS.resolve)} to apply conflict resolution`);
+        } else {
+          message(`Fix conflicts, then run ${arr(COMMANDS.resolve)}`);
+        }
         break;
       case "create":
         if (reason === "unsaved") {

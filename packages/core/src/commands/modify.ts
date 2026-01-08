@@ -12,10 +12,10 @@ export async function modify(): Promise<Result<NavigationResult>> {
   const statusResult = await status();
   if (!statusResult.ok) return statusResult;
 
-  const wc = statusResult.value.workingCopy;
   const parents = statusResult.value.parents;
+  const hasChanges = statusResult.value.modifiedFiles.length > 0;
 
-  if (wc.isEmpty) {
+  if (!hasChanges) {
     return err(
       createError(
         "INVALID_STATE",
@@ -39,7 +39,7 @@ export async function modify(): Promise<Result<NavigationResult>> {
     changeIdPrefix: parent.changeIdPrefix,
     description: parent.description,
     bookmark: parent.bookmarks[0],
-    position: "editing",
+    position: "on-top",
   });
 }
 

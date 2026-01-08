@@ -51,31 +51,15 @@ export async function create(
     );
   }
 
-  let createdChangeId: string;
+  // Describe the WC with the message (converts it from scratch to real change)
+  const describeResult = await runJJ(["describe", "-m", message]);
+  if (!describeResult.ok) return describeResult;
 
-  if (wc.description.trim() !== "") {
-    // Working copy already has a description - create new change with message
-    const newResult = await runJJ(["new", "-m", message]);
-    if (!newResult.ok) return newResult;
+  const createdChangeId = wc.changeId;
 
-    const newStatus = await status();
-    if (!newStatus.ok) return newStatus;
-    createdChangeId = newStatus.value.parents[0]?.changeId || wc.changeId;
-
-    // Create empty working copy on top
-    const emptyResult = await runJJ(["new"]);
-    if (!emptyResult.ok) return emptyResult;
-  } else {
-    // Working copy is empty - describe it with message
-    const describeResult = await runJJ(["describe", "-m", message]);
-    if (!describeResult.ok) return describeResult;
-
-    createdChangeId = wc.changeId;
-
-    // Create empty working copy on top
-    const newResult = await runJJ(["new"]);
-    if (!newResult.ok) return newResult;
-  }
+  // Create new empty WC on top
+  const newResult = await runJJ(["new"]);
+  if (!newResult.ok) return newResult;
 
   // Create bookmark pointing to the change
   const bookmarkResult = await ensureBookmark(bookmarkName, createdChangeId);

@@ -28,28 +28,21 @@ export async function track(
 
   const trunk = await getTrunk();
 
-  // If no bookmark provided, get from current working copy
+  // If no bookmark provided, get from current change (the parent of WC)
   if (!bookmark) {
     const statusResult = await status();
     if (!statusResult.ok) return statusResult;
 
-    const wc = statusResult.value.workingCopy;
-    if (wc.bookmarks.length === 0) {
-      // Check parent for bookmark
-      const parentBookmark = statusResult.value.parents[0]?.bookmarks[0];
-      if (parentBookmark) {
-        bookmark = parentBookmark;
-      } else {
-        return err(
-          createError(
-            "INVALID_STATE",
-            "No bookmark on current change. Create a bookmark first with jj bookmark create.",
-          ),
-        );
-      }
-    } else {
-      bookmark = wc.bookmarks[0];
+    const currentBookmark = statusResult.value.parents[0]?.bookmarks[0];
+    if (!currentBookmark) {
+      return err(
+        createError(
+          "INVALID_STATE",
+          "No bookmark on current change. Create a bookmark first with jj bookmark create.",
+        ),
+      );
     }
+    bookmark = currentBookmark;
   }
 
   // Check if already tracked

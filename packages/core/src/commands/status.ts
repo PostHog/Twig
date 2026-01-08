@@ -35,32 +35,18 @@ export async function status(): Promise<Result<StatusResult>> {
   const workingCopy = logResult.value.find((c) => c.isWorkingCopy) ?? null;
   const allChanges = logResult.value.filter((c) => !c.isImmutable);
   const trunkId = trunk?.changeId ?? "";
+
+  // Current change is the parent (@-)
+  const currentChangeId = workingCopy?.parents[0] ?? null;
+  const isOnTrunk = currentChangeId === trunkId;
+
+  // Filter changes - exclude the WC itself (it's always empty/scratch)
   const wcChangeId = workingCopy?.changeId ?? null;
-
-  const wcIsEmpty =
-    workingCopy?.isEmpty &&
-    workingCopy.description.trim() === "" &&
-    !workingCopy.hasConflicts;
-
-  const isOnTrunk =
-    wcIsEmpty && workingCopy !== null && workingCopy.parents[0] === trunkId;
-
-  // Filter changes
   const changes = allChanges.filter((c) => {
     if (c.description.trim() !== "" || c.hasConflicts) return true;
     if (c.changeId === wcChangeId) return false;
     return !c.isEmpty;
   });
-
-  let displayCurrentId = wcChangeId;
-  const wcHasUncommittedWork =
-    workingCopy !== null &&
-    !workingCopy.isEmpty &&
-    workingCopy.description.trim() === "" &&
-    !workingCopy.hasConflicts;
-  if (wcIsEmpty || wcHasUncommittedWork) {
-    displayCurrentId = workingCopy?.parents[0] ?? null;
-  }
 
   // Get bookmark tracking to find modified bookmarks
   const trackingResult = await getBookmarkTracking();
@@ -72,14 +58,16 @@ export async function status(): Promise<Result<StatusResult>> {
   }
 
   const roots = buildTree(changes, trunkId);
-  const entries = flattenTree(roots, displayCurrentId, modifiedBookmarks);
+  const entries = flattenTree(roots, currentChangeId, modifiedBookmarks);
 
   const { modifiedFiles, conflicts, parents } = statusResult.value;
-  const wc = statusResult.value.workingCopy;
 
-  const isUndescribed = wc.description.trim() === "";
-  const hasChanges = !wc.isEmpty;
+  // Current change is the parent, not the WC
+  const currentChange = parents[0] ?? null;
+  const hasChanges = modifiedFiles.length > 0;
   const hasConflicts = conflicts.length > 0;
+  const parentHasConflicts = currentChange?.hasConflicts ?? false;
+  const isUndescribed = currentChange?.description.trim() === "";
 
   // Build stack path
   const stackPath: string[] = [];
@@ -99,7 +87,7 @@ export async function status(): Promise<Result<StatusResult>> {
 
   // Determine next action
   let nextAction: NextAction;
-  if (hasConflicts) {
+  if (hasConflicts || parentHasConflicts) {
     nextAction = { action: "continue", reason: "conflicts" };
   } else if (isUndescribed && hasChanges) {
     nextAction = { action: "create", reason: "unsaved" };
@@ -123,11 +111,13 @@ export async function status(): Promise<Result<StatusResult>> {
     }
   }
 
+  const currentBookmark = currentChange?.bookmarks[0];
+
   const info: StatusInfo = {
-    changeId: wc.changeId,
-    changeIdPrefix: wc.changeIdPrefix,
-    name: wc.bookmarks[0] || wc.description || "",
-    isUndescribed,
+    changeId: currentChange?.changeId ?? "",
+    changeIdPrefix: currentChange?.changeIdPrefix ?? "",
+    name: currentBookmark || currentChange?.description || "",
+    isUndescribed: isUndescribed ?? true,
     hasChanges,
     hasConflicts,
     stackPath,
@@ -136,12 +126,8 @@ export async function status(): Promise<Result<StatusResult>> {
     nextAction,
   };
 
-  // Get diff stats for current change
-  // If on a bookmark with origin, show diff since last push; otherwise show full commit diff
-  const currentBookmark = wc.bookmarks[0];
-  const statsResult = await getDiffStats("@", {
-    fromBookmark: currentBookmark,
-  });
+  // Get diff stats for uncommitted work in WC
+  const statsResult = await getDiffStats("@");
   const stats = statsResult.ok ? statsResult.value : null;
 
   return ok({ info, stats });

@@ -1,69 +1,47 @@
-import { edit, getTrunk, jjNew, runJJ, status } from "../jj";
+import { getTrunk, jjNew, runJJ, status } from "../jj";
 import type { Changeset } from "../parser";
 import { ok, type Result } from "../result";
 import type { NavigationResult } from "../types";
 
 /**
- * Navigate to a change, handling immutability correctly.
+ * Navigate to a change by creating a new WC on top of it.
+ * WC is always an empty commit on top of the target change.
+ * Returns info about the change we're now "on" (the parent).
  *
- * - Mutable commits: use `jj edit` to edit directly (position: "editing")
- * - Immutable commits (pushed): use `jj new` to create working copy on top (position: "editing")
- *
- * Returns info about the change we're now "on".
- *
- * Note: jj automatically abandons empty undescribed changes when we navigate away,
- * so no explicit cleanup is needed.
+ * Note: jj automatically abandons empty undescribed changes when we navigate away.
  */
 export async function navigateTo(
   change: Changeset,
 ): Promise<Result<NavigationResult>> {
   const bookmark = change.bookmarks[0];
 
-  if (change.isImmutable) {
-    // Check if we're already on an empty WC with this as parent
-    const statusResult = await status();
-    if (statusResult.ok) {
-      const wc = statusResult.value.workingCopy;
-      const parents = statusResult.value.parents;
-      const isParent = parents.some((p) => p.changeId === change.changeId);
-      const isEmptyUndescribed = wc.isEmpty && wc.description.trim() === "";
+  // Check if we're already on top of this change
+  const statusResult = await status();
+  if (statusResult.ok) {
+    const parents = statusResult.value.parents;
+    const isParent = parents.some((p) => p.changeId === change.changeId);
 
-      if (isParent && isEmptyUndescribed) {
-        // Already positioned - return target info
-        return ok({
-          changeId: change.changeId,
-          changeIdPrefix: change.changeIdPrefix,
-          description: change.description,
-          bookmark,
-          position: "editing",
-        });
-      }
+    if (isParent) {
+      return ok({
+        changeId: change.changeId,
+        changeIdPrefix: change.changeIdPrefix,
+        description: change.description,
+        bookmark,
+        position: "on-top",
+      });
     }
-
-    // Create new working copy on top (jj auto-abandons empty undescribed WC)
-    const newResult = await jjNew({ parents: [change.changeId] });
-    if (!newResult.ok) return newResult;
-
-    // Return the target change info (what we're logically "on")
-    return ok({
-      changeId: change.changeId,
-      changeIdPrefix: change.changeIdPrefix,
-      description: change.description,
-      bookmark,
-      position: "editing",
-    });
   }
 
-  // For mutable commits, edit directly (jj auto-abandons empty undescribed WC)
-  const editResult = await edit(change.changeId);
-  if (!editResult.ok) return editResult;
+  // Create new working copy on top (jj auto-abandons empty undescribed WC)
+  const newResult = await jjNew({ parents: [change.changeId] });
+  if (!newResult.ok) return newResult;
 
   return ok({
     changeId: change.changeId,
     changeIdPrefix: change.changeIdPrefix,
     description: change.description,
     bookmark,
-    position: "editing",
+    position: "on-top",
   });
 }
 

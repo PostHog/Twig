@@ -179,23 +179,25 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
     }
   }
 
-  // Rebase WC onto trunk if it's not on a tracked bookmark
-  // (If WC is on a tracked bookmark, it was already rebased above)
+  // Rebase WC onto trunk if the current change is not a tracked bookmark
+  // (If current change is on a tracked bookmark, it was already rebased above)
   const wcStatusResult = await status();
   if (wcStatusResult.ok) {
-    const wcBookmarks = wcStatusResult.value.workingCopy.bookmarks;
-    const wcOnTracked = wcBookmarks.some((b) => trackedBookmarks.includes(b));
-    if (!wcOnTracked) {
+    const currentBookmarks = wcStatusResult.value.parents[0]?.bookmarks ?? [];
+    const currentOnTracked = currentBookmarks.some((b) =>
+      trackedBookmarks.includes(b),
+    );
+    if (!currentOnTracked) {
       await runJJWithMutableConfigVoid(["rebase", "-r", "@", "-d", "trunk()"]);
     }
   }
 
-  // Check for conflicts
+  // Check for conflicts on current change (the parent)
   let hasConflicts = false;
   if (rebaseOk) {
     const statusResult = await status();
     if (statusResult.ok) {
-      hasConflicts = statusResult.value.workingCopy.hasConflicts;
+      hasConflicts = statusResult.value.parents[0]?.hasConflicts ?? false;
     }
   } else {
     hasConflicts = rebaseError?.includes("conflict") ?? false;

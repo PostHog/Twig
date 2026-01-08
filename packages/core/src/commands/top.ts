@@ -1,4 +1,4 @@
-import { jjNew, list, status } from "../jj";
+import { list, status } from "../jj";
 import { createError, err, type Result } from "../result";
 import type { NavigationResult } from "../types";
 import { getOnTopNavigationResult, navigateTo } from "./navigation";
@@ -6,7 +6,6 @@ import type { Command } from "./types";
 
 /**
  * Navigate to the top of the current stack.
- * Creates a new empty change at the top for new work.
  */
 export async function top(): Promise<Result<NavigationResult>> {
   const statusResult = await status();
@@ -14,37 +13,27 @@ export async function top(): Promise<Result<NavigationResult>> {
 
   const wc = statusResult.value.workingCopy;
   const parents = statusResult.value.parents;
-  const isUndescribed = wc.description.trim() === "";
+  const hasChanges = statusResult.value.modifiedFiles.length > 0;
 
-  // Check if already at top (empty undescribed WC with no children)
-  if (wc.isEmpty && isUndescribed) {
-    const childrenResult = await list({ revset: "@+" });
-    if (childrenResult.ok) {
-      const children = childrenResult.value.filter(
-        (c) => !c.changeId.startsWith("zzzzzzzz"),
-      );
-      if (children.length === 0) {
-        return getOnTopNavigationResult();
-      }
-    }
+  if (hasChanges) {
+    return err(
+      createError(
+        "NAVIGATION_FAILED",
+        'You have unsaved changes. Run `arr create "message"` to save them.',
+      ),
+    );
   }
 
-  // Check if we're "on" a branch (hidden WC) - need to find heads from parent
-  const isOnBranch =
-    isUndescribed &&
-    parents.length > 0 &&
-    (parents[0].description.trim() !== "" || parents[0].bookmarks.length > 0);
-
-  let headsRevset: string;
-  if (isOnBranch) {
-    // Look for heads from the parent (the branch we're "on")
-    headsRevset = `heads(descendants(${parents[0].changeId}))`;
-  } else {
-    // Look for heads from current position
-    headsRevset = "heads(descendants(@))";
+  if (parents.length === 0) {
+    return getOnTopNavigationResult();
   }
 
-  const headsResult = await list({ revset: headsRevset });
+  const current = parents[0];
+
+  // Find heads of stack from current position
+  const headsResult = await list({
+    revset: `heads(descendants(${current.changeId}))`,
+  });
   if (!headsResult.ok) return headsResult;
 
   const heads = headsResult.value.filter(
@@ -65,17 +54,7 @@ export async function top(): Promise<Result<NavigationResult>> {
     );
   }
 
-  const head = heads[0];
-
-  // Navigate to head (handles immutability correctly)
-  const navResult = await navigateTo(head);
-  if (!navResult.ok) return navResult;
-
-  // Create new WC for new work
-  const newResult = await jjNew();
-  if (!newResult.ok) return newResult;
-
-  return getOnTopNavigationResult();
+  return navigateTo(heads[0]);
 }
 
 export const topCommand: Command<NavigationResult> = {

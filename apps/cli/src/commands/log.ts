@@ -1,6 +1,7 @@
+import { hasResolvedConflict } from "@array/core/commands/resolve";
 import type { ArrContext, Engine } from "@array/core/engine";
 import { getCurrentGitBranch } from "@array/core/git/status";
-import { getBookmarkTracking, runJJ } from "@array/core/jj";
+import { getDiffStats, runJJ } from "@array/core/jj";
 import { COMMANDS } from "../registry";
 import {
   arr,
@@ -107,8 +108,11 @@ export async function log(
 
   // Build enhancement data
   const prInfoMap = buildPRInfoMap(engine, trackedBookmarks);
-  const modifiedBookmarks = await getModifiedBookmarks(cwd);
+  const modifiedBookmarks = await getModifiedBookmarks(trackedBookmarks, cwd);
   const behindTrunkChanges = await getBehindTrunkChanges(cwd);
+  const wcParentBookmark = await getWCParentBookmark(trackedBookmarks, cwd);
+  const resolvedConflictResult = await hasResolvedConflict(cwd);
+  const hasResolved = resolvedConflictResult.ok && resolvedConflictResult.value;
 
   // Check if empty state (just on trunk with empty WC)
   const lines = result.value.stdout.split("\n");
@@ -131,6 +135,8 @@ export async function log(
     modifiedBookmarks,
     trackedBookmarks,
     behindTrunkChanges,
+    wcParentBookmark,
+    hasResolved,
   );
   message(output);
 
@@ -155,6 +161,8 @@ function renderEnhancedOutput(
   modifiedBookmarks: Set<string>,
   trackedBookmarks: string[],
   behindTrunkChanges: Set<string>,
+  wcParentBookmark: string | null,
+  hasResolvedConflict: boolean,
 ): string {
   const lines = rawOutput.split("\n");
   const output: string[] = [];
@@ -169,26 +177,6 @@ function renderEnhancedOutput(
   let currentIsWorkingCopy = false; // Whether this is the @ commit
   let _currentIsEmpty = false; // Whether the change has no file modifications
   let pendingHints: string[] = []; // Buffer hints to output after COMMIT
-
-  // Find WC parent bookmark for modify hint by looking at the next CHANGE after WC
-  let wcParentBookmark: string | null = null;
-  let foundWC = false;
-  for (const line of lines) {
-    if (line.includes("@") && line.includes("CHANGE:")) {
-      foundWC = true;
-      continue;
-    }
-    if (foundWC && line.includes("CHANGE:")) {
-      // This is the first change after WC - check if it has a tracked bookmark
-      const match = line.match(/CHANGE:[^|]+\|[^|]*\|[^|]*\|[^|]*\|([^|]*)\|/);
-      if (match) {
-        const bookmarks = parseBookmarks(match[1]);
-        wcParentBookmark =
-          bookmarks.find((b) => trackedBookmarks.includes(b)) || null;
-      }
-      break;
-    }
-  }
 
   for (const line of lines) {
     // Skip the ~ line at end
@@ -246,6 +234,11 @@ function renderEnhancedOutput(
         currentIsWorkingCopy = isWorkingCopy;
         _currentIsEmpty = isEmpty;
 
+        // Check if this is a merged or closed PR
+        const prInfo = currentBookmark ? prInfoMap.get(currentBookmark) : null;
+        const isMerged = prInfo?.state === "MERGED";
+        const isClosed = prInfo?.state === "CLOSED";
+
         // Skip rendering fork points - just keep graph lines
         if (currentIsForkPoint) {
           // Only output the graph connector line
@@ -261,6 +254,12 @@ function renderEnhancedOutput(
         let styledPrefix = graphPrefix;
         if (isWorkingCopy) {
           styledPrefix = graphPrefix.replace("@", green("◉"));
+        } else if (isMerged) {
+          // Merged PRs get a filled marker to indicate they're done
+          styledPrefix = graphPrefix.replace(/[◆○]/g, magenta("◆"));
+        } else if (isClosed) {
+          // Closed PRs get a red X marker
+          styledPrefix = graphPrefix.replace(/[◆○]/g, red("×"));
         } else if (graphPrefix.includes("◆")) {
           styledPrefix = graphPrefix.replace("◆", "◯");
         } else if (graphPrefix.includes("○")) {
@@ -280,8 +279,11 @@ function renderEnhancedOutput(
           const shortId = formatChangeId(changeId, changeIdPrefix);
 
           const badges: string[] = [];
-          if (currentIsBehindTrunk) badges.push(yellow("behind trunk"));
-          if (currentIsModified) badges.push(yellow("local changes"));
+          if (isMerged) badges.push(magenta("merged"));
+          else if (isClosed) badges.push(red("closed"));
+          else if (currentIsBehindTrunk) badges.push(yellow("behind trunk"));
+          if (currentIsModified && !isMerged && !isClosed)
+            badges.push(yellow("local changes"));
           if (hasConflict) badges.push(yellow("conflicts"));
           const badgeStr =
             badges.length > 0
@@ -329,7 +331,6 @@ function renderEnhancedOutput(
         ) {
           const prInfo = prInfoMap.get(bookmark);
           if (prInfo) {
-            // Don't show merged/closed PRs that are now part of trunk
             if (prInfo.state === "OPEN") {
               output.push(`${graphPrefix}${formatPRLine(prInfo)}`);
               output.push(`${graphPrefix}${cyan(prInfo.url)}`);
@@ -338,6 +339,18 @@ function renderEnhancedOutput(
                   `${graphPrefix}${arr(COMMANDS.submit)} ${dim("to push local changes")}`,
                 );
               }
+            } else if (prInfo.state === "MERGED") {
+              output.push(`${graphPrefix}${formatPRLine(prInfo)}`);
+              output.push(`${graphPrefix}${cyan(prInfo.url)}`);
+              pendingHints.push(
+                `${graphPrefix}${arr(COMMANDS.sync)} ${dim("to clean up merged changes")}`,
+              );
+            } else if (prInfo.state === "CLOSED") {
+              output.push(`${graphPrefix}${formatPRLine(prInfo)}`);
+              output.push(`${graphPrefix}${cyan(prInfo.url)}`);
+              pendingHints.push(
+                `${graphPrefix}${arr(COMMANDS.sync)} ${dim("to clean up closed PR")}`,
+              );
             }
           } else {
             output.push(`${graphPrefix}${dim("Not submitted")}`);
@@ -372,13 +385,20 @@ function renderEnhancedOutput(
         // Add hints for WC without a bookmark (whether empty or with changes)
         if (currentIsWorkingCopy && !currentBookmark) {
           const hintPrefix = "│  ";
-          pendingHints.push(
-            `${hintPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
-          );
-          if (wcParentBookmark) {
+          if (hasResolvedConflict) {
+            // Show resolve hint when conflict has been resolved in WC
             pendingHints.push(
-              `${hintPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentBookmark}`)}`,
+              `${hintPrefix}${arr(COMMANDS.resolve)} ${dim("to apply conflict resolution")}`,
             );
+          } else {
+            pendingHints.push(
+              `${hintPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
+            );
+            if (wcParentBookmark) {
+              pendingHints.push(
+                `${hintPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentBookmark}`)}`,
+              );
+            }
           }
         }
 
@@ -441,16 +461,26 @@ function buildPRInfoMap(
   return prInfoMap;
 }
 
-async function getModifiedBookmarks(cwd: string): Promise<Set<string>> {
-  const trackingResult = await getBookmarkTracking(cwd);
+async function getModifiedBookmarks(
+  trackedBookmarks: string[],
+  cwd: string,
+): Promise<Set<string>> {
   const modifiedBookmarks = new Set<string>();
-  if (trackingResult.ok) {
-    for (const t of trackingResult.value) {
-      if (t.aheadCount > 0) {
-        modifiedBookmarks.add(t.name);
+
+  for (const bookmark of trackedBookmarks) {
+    const diffResult = await getDiffStats(
+      `bookmarks(exact:"${bookmark}")`,
+      { fromBookmark: bookmark },
+      cwd,
+    );
+    if (diffResult.ok) {
+      const { filesChanged, insertions, deletions } = diffResult.value;
+      if (filesChanged > 0 || insertions > 0 || deletions > 0) {
+        modifiedBookmarks.add(bookmark);
       }
     }
   }
+
   return modifiedBookmarks;
 }
 
@@ -480,6 +510,33 @@ async function getBehindTrunkChanges(cwd: string): Promise<Set<string>> {
     }
   }
   return behindChanges;
+}
+
+/**
+ * Get the bookmark of the WC's parent (@-) if it's tracked.
+ */
+async function getWCParentBookmark(
+  trackedBookmarks: string[],
+  cwd: string,
+): Promise<string | null> {
+  const result = await runJJ(
+    [
+      "log",
+      "-r",
+      "@-",
+      "--no-graph",
+      "-T",
+      'local_bookmarks.map(|b| b.name()).join(",")',
+    ],
+    cwd,
+  );
+  if (!result.ok) return null;
+
+  const bookmarks = result.value.stdout
+    .trim()
+    .split(",")
+    .filter((b) => b.trim());
+  return bookmarks.find((b) => trackedBookmarks.includes(b)) || null;
 }
 
 function formatChangeId(changeId: string, prefix: string): string {

@@ -6,14 +6,7 @@ import {
   waitForMergeable,
 } from "../github/pr-actions";
 import { getPRForBranch } from "../github/pr-status";
-import {
-  abandon,
-  deleteBookmark,
-  getTrunk,
-  sync as jjSync,
-  runJJ,
-  status,
-} from "../jj";
+import { getTrunk, sync as jjSync, runJJ, status } from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import type { MergeOptions, MergeResult, PRToMerge } from "../types";
 
@@ -22,23 +15,16 @@ export async function getMergeStack(): Promise<Result<PRToMerge[]>> {
   const statusResult = await status();
   if (!statusResult.ok) return statusResult;
 
-  const { workingCopy, parents } = statusResult.value;
+  const { parents } = statusResult.value;
 
-  let bookmarkName: string | null = null;
-  let changeId: string | null = null;
-
-  if (workingCopy.bookmarks.length > 0) {
-    bookmarkName = workingCopy.bookmarks[0];
-    changeId = workingCopy.changeId;
-  } else if (workingCopy.isEmpty && workingCopy.description.trim() === "") {
-    for (const parent of parents) {
-      if (parent.bookmarks.length > 0) {
-        bookmarkName = parent.bookmarks[0];
-        changeId = parent.changeId;
-        break;
-      }
-    }
+  // Current change is the parent of WC
+  const current = parents[0];
+  if (!current) {
+    return err(createError("INVALID_STATE", "No current change"));
   }
+
+  const bookmarkName = current.bookmarks[0];
+  const changeId = current.changeId;
 
   if (!bookmarkName) {
     return err(createError("INVALID_STATE", "No bookmark on current change"));
@@ -172,15 +158,17 @@ export async function mergeStack(
 
     callbacks?.onMerged?.(prItem);
 
-    await deleteBookmark(prItem.bookmarkName);
-    if (prItem.changeId) {
-      await abandon(prItem.changeId);
+    // Update next PR's base to trunk BEFORE the merged branch gets deleted on GitHub
+    // Otherwise GitHub auto-closes the next PR when its base branch disappears
+    if (nextPR) {
+      const nextBaseUpdateResult = await updatePR(nextPR.prNumber, {
+        base: trunk,
+      });
+      if (!nextBaseUpdateResult.ok) return nextBaseUpdateResult;
     }
 
-    // Untrack the merged bookmark from the engine
-    if (engine.isTracked(prItem.bookmarkName)) {
-      engine.untrack(prItem.bookmarkName);
-    }
+    // Don't delete local bookmark or abandon change here - that's sync's responsibility.
+    // The PR state in engine will be updated to MERGED by syncPRInfo.
 
     merged.push(prItem);
 
