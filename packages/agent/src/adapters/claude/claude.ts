@@ -74,10 +74,23 @@ import { Pushable, unreachable } from "./utils.js";
  * tool definitions include input_examples which causes API errors.
  * See: https://github.com/anthropics/claude-code/issues/11678
  */
+function getClaudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+}
+
+function getClaudePlansDir(): string {
+  return path.join(getClaudeConfigDir(), "plans");
+}
+
+function isClaudePlanFilePath(filePath: string | undefined): boolean {
+  if (!filePath) return false;
+  const resolved = path.resolve(filePath);
+  const plansDir = path.resolve(getClaudePlansDir());
+  return resolved === plansDir || resolved.startsWith(plansDir + path.sep);
+}
+
 function clearStatsigCache(): void {
-  const configDir =
-    process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
-  const statsigPath = path.join(configDir, "statsig");
+  const statsigPath = path.join(getClaudeConfigDir(), "statsig");
 
   try {
     if (fs.existsSync(statsigPath)) {
@@ -95,6 +108,8 @@ type Session = {
   permissionMode: PermissionMode;
   notificationHistory: SessionNotification[];
   sdkSessionId?: string;
+  lastPlanFilePath?: string;
+  lastPlanContent?: string;
 };
 
 type BackgroundTerminal =
@@ -192,6 +207,41 @@ export class ClaudeAcpAgent implements Agent {
     };
     this.sessions[sessionId] = session;
     return session;
+  }
+
+  private getLatestAssistantText(
+    notifications: SessionNotification[],
+  ): string | null {
+    const chunks: string[] = [];
+    let started = false;
+
+    for (let i = notifications.length - 1; i >= 0; i -= 1) {
+      const update = notifications[i]?.update;
+      if (!update) continue;
+
+      if (update.sessionUpdate === "agent_message_chunk") {
+        started = true;
+        const content = update.content as { type?: string; text?: string } | null;
+        if (content?.type === "text" && content.text) {
+          chunks.push(content.text);
+        }
+        continue;
+      }
+
+      if (started) {
+        break;
+      }
+    }
+
+    if (chunks.length === 0) return null;
+    return chunks.reverse().join("");
+  }
+
+  private isPlanReady(plan: string | undefined): boolean {
+    if (!plan) return false;
+    const trimmed = plan.trim();
+    if (trimmed.length < 40) return false;
+    return /(^|\n)#{1,6}\s+\S/.test(trimmed);
   }
 
   appendNotification(
@@ -317,59 +367,10 @@ export class ClaudeAcpAgent implements Agent {
     }
 
     // Use initialModeId from _meta if provided (e.g., "plan" for plan mode), otherwise default
-    // IMPORTANT: The SDK doesn't support "plan" mode natively, so we:
-    // 1. Track our own mode on the session for enforcement in canUseTool
-    // 2. Always pass "default" to the SDK so canUseTool is always invoked
     const initialModeId = (params._meta as { initialModeId?: string } | undefined)
       ?.initialModeId;
     const ourPermissionMode = (initialModeId ?? "default") as PermissionMode;
-    // Always use "default" for SDK so canUseTool is called for all tools
-    const sdkPermissionMode: PermissionMode = "default";
-
-    // If starting in plan mode, append instructions to the system prompt
-    if (ourPermissionMode === "plan") {
-      const planModeInstructions = `
-
-# Plan Mode - IMPORTANT
-
-You are starting in PLAN MODE. This is critical - read carefully:
-
-## What you CANNOT do (these will be blocked):
-- Edit files (Edit tool will fail)
-- Write files (Write tool will fail)
-- Run bash commands that modify the filesystem
-- Make any changes to the codebase
-
-## What you CAN do:
-- Read files with the Read tool
-- Search with Glob and Grep tools
-- Explore the codebase to understand the structure
-- Use WebFetch and WebSearch for research
-
-## Your workflow in plan mode:
-1. Read and explore the codebase to understand the current implementation
-2. Analyze the user's request and identify what needs to change
-3. Create a detailed, step-by-step implementation plan
-4. Present your plan clearly in your response
-5. **IMPORTANT**: When your plan is complete, you MUST call the ExitPlanMode tool
-
-## Using ExitPlanMode:
-When you have finished planning, call the ExitPlanMode tool. This will:
-- Present your plan to the user for review
-- Ask the user to approve before you can make any changes
-- Grant you write permissions once approved
-
-Example:
-\`\`\`
-<tool>ExitPlanMode</tool>
-\`\`\`
-
-Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without user approval.
-`;
-      if (typeof systemPrompt === "object" && "type" in systemPrompt) {
-        systemPrompt.append = (systemPrompt.append || "") + planModeInstructions;
-      }
-    }
+    const sdkPermissionMode: PermissionMode = ourPermissionMode;
 
     // Extract options from _meta if provided
     const userProvidedOptions = (params._meta as NewSessionMeta | undefined)
@@ -387,7 +388,7 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
       // If we want bypassPermissions to be an option, we have to allow it here.
       // But it doesn't work in root mode, so we only activate it if it will work.
       allowDangerouslySkipPermissions: !IS_ROOT,
-      // Use "default" for SDK - we enforce plan mode ourselves in canUseTool
+      // Use the requested permission mode (including plan mode)
       permissionMode: sdkPermissionMode,
       canUseTool: this.canUseTool(sessionId),
       // Use "node" to resolve via PATH where a symlink to Electron exists.
@@ -458,6 +459,11 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
       );
     }
 
+    // ExitPlanMode should only be available during plan mode
+    if (ourPermissionMode !== "plan") {
+      disallowedTools.push("ExitPlanMode");
+    }
+
     if (allowedTools.length > 0) {
       options.allowedTools = allowedTools;
     }
@@ -479,7 +485,6 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
       options,
     });
 
-    // Store OUR permission mode on session (not SDK's) so canUseTool can enforce plan mode
     this.createSession(sessionId, q, input, ourPermissionMode);
 
     // Register for S3 persistence if config provided
@@ -567,7 +572,8 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
 
     this.sessions[params.sessionId].cancelled = false;
 
-    const { query, input } = this.sessions[params.sessionId];
+    const session = this.sessions[params.sessionId];
+    const { query, input } = session;
 
     // Capture and store user message for replay
     for (const chunk of params.prompt) {
@@ -582,7 +588,7 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
       this.appendNotification(params.sessionId, userNotification);
     }
 
-    input.push(promptToClaude(params));
+    input.push(promptToClaude({ ...params, prompt: params.prompt }));
     while (true) {
       const { value: message, done } = await query.next();
       if (done || !message) {
@@ -838,7 +844,88 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
         };
       }
 
+      // Helper to emit a tool denial notification so the UI shows the reason
+      const emitToolDenial = async (message: string) => {
+        this.logger.info(`[canUseTool] Tool denied: ${toolName}`, { message });
+        await this.client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "tool_call_update",
+            toolCallId: toolUseID,
+            status: "failed",
+            content: [
+              {
+                type: "content",
+                content: {
+                  type: "text",
+                  text: message,
+                },
+              },
+            ],
+          },
+        });
+      };
+
       if (toolName === "ExitPlanMode") {
+        // If we're already not in plan mode, just allow the tool without prompting
+        // This handles the case where mode was already changed by a previous ExitPlanMode call
+        // (Claude may call ExitPlanMode again after writing the plan file)
+        if (session.permissionMode !== "plan") {
+          return {
+            behavior: "allow",
+            updatedInput: toolInput,
+          };
+        }
+
+        let updatedInput = toolInput;
+        const planFromFile =
+          session.lastPlanContent ||
+          (session.lastPlanFilePath
+            ? this.fileContentCache[session.lastPlanFilePath]
+            : undefined);
+        const hasPlan =
+          typeof (toolInput as { plan?: unknown } | undefined)?.plan === "string";
+        if (!hasPlan) {
+          const fallbackPlan = planFromFile
+            ? planFromFile
+            : this.getLatestAssistantText(session.notificationHistory);
+          if (fallbackPlan) {
+            updatedInput = {
+              ...(toolInput as Record<string, unknown>),
+              plan: fallbackPlan,
+            };
+          }
+        }
+
+        const planText =
+          typeof (updatedInput as { plan?: unknown } | undefined)?.plan ===
+          "string"
+            ? String((updatedInput as { plan?: unknown }).plan)
+            : undefined;
+        if (!planText) {
+          const message = `Plan not ready. Provide the full markdown plan in ExitPlanMode or write it to ${getClaudePlansDir()} before requesting approval.`;
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+        if (!this.isPlanReady(planText)) {
+          const message =
+            "Plan not ready. Provide the full markdown plan in ExitPlanMode before requesting approval.";
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+
+        // ExitPlanMode is a signal to show the permission dialog
+        // The plan content should already be in the agent's text response
+        // Note: The SDK's ExitPlanMode tool includes a plan parameter, so ensure it is present
+
         const response = await this.client.requestPermission({
           options: [
             {
@@ -860,9 +947,9 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
           sessionId,
           toolCall: {
             toolCallId: toolUseID,
-            rawInput: { ...toolInput, toolName },
+            rawInput: { ...updatedInput, toolName },
             title: toolInfoFromToolUse(
-              { name: toolName, input: toolInput },
+              { name: toolName, input: updatedInput },
               this.fileContentCache,
               this.logger,
             ).title,
@@ -885,7 +972,7 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
 
           return {
             behavior: "allow",
-            updatedInput: toolInput,
+            updatedInput,
             updatedPermissions: suggestions ?? [
               {
                 type: "setMode",
@@ -896,10 +983,12 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
           };
         } else {
           // User chose "No, keep planning" - stay in plan mode and let agent continue
+          const message =
+            "User wants to continue planning. Please refine your plan based on any feedback provided, or ask clarifying questions if needed.";
+          await emitToolDenial(message);
           return {
             behavior: "deny",
-            message:
-              "User wants to continue planning. Please refine your plan based on any feedback provided, or ask clarifying questions if needed.",
+            message,
             interrupt: false,
           };
         }
@@ -972,7 +1061,7 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
         }
       }
 
-      // In plan mode, deny all write/edit tools
+      // In plan mode, deny write/edit tools except for Claude's plan files
       // This includes both MCP-wrapped tools and built-in SDK tools
       const WRITE_TOOL_NAMES = [
         ...EDIT_TOOL_NAMES,
@@ -985,10 +1074,28 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
         session.permissionMode === "plan" &&
         WRITE_TOOL_NAMES.includes(toolName)
       ) {
+        // Allow writes to Claude Code's plan files
+        const filePath = (toolInput as any)?.file_path;
+        const isPlanFile = isClaudePlanFilePath(filePath);
+
+        if (isPlanFile) {
+          session.lastPlanFilePath = filePath;
+          const content = (toolInput as any)?.content;
+          if (typeof content === "string") {
+            session.lastPlanContent = content;
+          }
+          return {
+            behavior: "allow",
+            updatedInput: toolInput,
+          };
+        }
+
+        const message =
+          "Cannot use write tools in plan mode. Use ExitPlanMode to request permission to make changes.";
+        await emitToolDenial(message);
         return {
           behavior: "deny",
-          message:
-            "Cannot use write tools in plan mode. Use ExitPlanMode to request permission to make changes.",
+          message,
           interrupt: false,
         };
       }
@@ -1058,9 +1165,11 @@ Do NOT skip the ExitPlanMode step. You cannot proceed to implementation without 
           updatedInput: toolInput,
         };
       } else {
+        const message = "User refused permission to run tool";
+        await emitToolDenial(message);
         return {
           behavior: "deny",
-          message: "User refused permission to run tool",
+          message,
           interrupt: true,
         };
       }

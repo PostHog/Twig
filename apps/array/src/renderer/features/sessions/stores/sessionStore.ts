@@ -23,24 +23,18 @@ import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+import {
+  findPendingPermissions,
+  type PermissionRequest,
+} from "../utils/parseSessionLogs";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
 
 // --- Types ---
 
-export interface PermissionRequest {
-  toolCallId: string;
-  title: string;
-  options: Array<{
-    kind: string;
-    name: string;
-    optionId: string;
-    description?: string;
-  }>;
-  rawInput: unknown;
-  receivedAt: number;
-}
+// Re-export for external consumers
+export type { PermissionRequest };
 
 export type ExecutionMode = "plan" | "default" | "acceptEdits";
 
@@ -92,6 +86,7 @@ interface SessionActions {
     toolCallId: string,
     optionId: string,
   ) => Promise<void>;
+  cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
 }
 
 interface AuthCredentials {
@@ -156,7 +151,7 @@ function subscribeToChannel(taskRunId: string) {
   const permissionSubscription = trpcVanilla.agent.onPermissionRequest.subscribe(
     { sessionId: taskRunId },
     {
-      onData: (payload) => {
+      onData: async (payload) => {
         log.info("Permission request received in renderer", {
           taskRunId,
           toolCallId: payload.toolCallId,
@@ -191,6 +186,37 @@ function subscribeToChannel(taskRunId: string) {
               draft.sessions[taskRunId].pendingPermissions = newPermissions;
             }
           });
+
+          // Persist permission request to logs for recovery on reconnect
+          const auth = useAuthStore.getState();
+          if (auth.client && session.taskId) {
+            const storedEntry: StoredLogEntry = {
+              type: "notification",
+              timestamp: new Date().toISOString(),
+              notification: {
+                method: "_array/permission_request",
+                params: {
+                  toolCallId: payload.toolCallId,
+                  title: payload.title,
+                  options: payload.options,
+                  rawInput: payload.rawInput,
+                },
+              },
+            };
+            try {
+              await auth.client.appendTaskRunLog(session.taskId, taskRunId, [
+                storedEntry,
+              ]);
+              log.info("Permission request persisted to logs", {
+                taskRunId,
+                toolCallId: payload.toolCallId,
+              });
+            } catch (error) {
+              log.warn("Failed to persist permission request to logs", {
+                error,
+              });
+            }
+          }
         } else {
           log.warn("Session not found for permission request", {
             taskRunId,
@@ -544,9 +570,20 @@ const useStore = create<SessionStore>()(
       const { rawEntries, sdkSessionId } = await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries);
 
+      // Restore pending permissions from logs
+      const pendingPermissions = findPendingPermissions(rawEntries);
+      if (pendingPermissions.size > 0) {
+        log.info("Restoring pending permissions from logs", {
+          taskRunId,
+          count: pendingPermissions.size,
+          toolCallIds: Array.from(pendingPermissions.keys()),
+        });
+      }
+
       const session = createBaseSession(taskRunId, taskId, false);
       session.events = events;
       session.logUrl = logUrl;
+      session.pendingPermissions = pendingPermissions;
 
       addSession(session);
       subscribeToChannel(taskRunId);
@@ -883,6 +920,35 @@ const useStore = create<SessionStore>()(
             }
 
             log.info("Permission response sent", { taskId, toolCallId, optionId });
+
+            // Persist permission response to logs for recovery tracking
+            const auth = useAuthStore.getState();
+            if (auth.client) {
+              const storedEntry: StoredLogEntry = {
+                type: "notification",
+                timestamp: new Date().toISOString(),
+                notification: {
+                  method: "_array/permission_response",
+                  params: {
+                    toolCallId,
+                    optionId,
+                  },
+                },
+              };
+              try {
+                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
+                  storedEntry,
+                ]);
+                log.info("Permission response persisted to logs", {
+                  taskId,
+                  toolCallId,
+                });
+              } catch (persistError) {
+                log.warn("Failed to persist permission response to logs", {
+                  error: persistError,
+                });
+              }
+            }
           } catch (error) {
             log.error("Failed to respond to permission", {
               taskId,
@@ -890,6 +956,67 @@ const useStore = create<SessionStore>()(
               optionId,
               error,
             });
+          }
+        },
+
+        cancelPermission: async (taskId, toolCallId) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) {
+            log.error("No session found for permission cancellation", { taskId });
+            return;
+          }
+
+          try {
+            await trpcVanilla.agent.cancelPermission.mutate({
+              sessionId: session.taskRunId,
+              toolCallId,
+            });
+
+            // Remove from pending permissions after successful cancellation
+            const currentState = get();
+            const sess = currentState.sessions[session.taskRunId];
+            if (sess) {
+              const newPermissions = new Map(sess.pendingPermissions);
+              newPermissions.delete(toolCallId);
+              set((draft) => {
+                if (draft.sessions[session.taskRunId]) {
+                  draft.sessions[session.taskRunId].pendingPermissions = newPermissions;
+                }
+              });
+            }
+
+            log.info("Permission cancelled", { taskId, toolCallId });
+
+            // Persist permission cancellation to logs for recovery tracking
+            const auth = useAuthStore.getState();
+            if (auth.client) {
+              const storedEntry: StoredLogEntry = {
+                type: "notification",
+                timestamp: new Date().toISOString(),
+                notification: {
+                  method: "_array/permission_response",
+                  params: {
+                    toolCallId,
+                    optionId: "_cancelled",
+                  },
+                },
+              };
+              try {
+                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
+                  storedEntry,
+                ]);
+                log.info("Permission cancellation persisted to logs", {
+                  taskId,
+                  toolCallId,
+                });
+              } catch (persistError) {
+                log.warn("Failed to persist permission cancellation to logs", {
+                  error: persistError,
+                });
+              }
+            }
+          } catch (error) {
+            log.error("Failed to cancel permission", { taskId, toolCallId, error });
           }
         },
       },

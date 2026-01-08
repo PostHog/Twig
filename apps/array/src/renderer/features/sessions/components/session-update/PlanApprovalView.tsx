@@ -5,6 +5,7 @@ import { CheckCircle, ClockCounterClockwise } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface PlanApprovalViewProps {
   toolCall: ToolCall;
@@ -53,8 +54,10 @@ export function PlanApprovalView({
               Implementation Plan
             </Text>
           </Flex>
-          <Box className="prose prose-sm prose-invert max-w-none text-amber-12">
-            <ReactMarkdown>{planText}</ReactMarkdown>
+          <Box className="plan-markdown text-amber-12">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {planText}
+            </ReactMarkdown>
           </Box>
         </Box>
       )}

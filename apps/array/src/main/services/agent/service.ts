@@ -160,9 +160,6 @@ interface PendingPermission {
   toolCallId: string;
 }
 
-// Tools that always require user interaction, never auto-approve
-const ALWAYS_PROMPT_TOOLS = ["AskUserQuestion", "ExitPlanMode"];
-
 @injectable()
 export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
@@ -197,6 +194,30 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       outcome: {
         outcome: "selected",
         optionId,
+      },
+    });
+
+    this.pendingPermissions.delete(key);
+  }
+
+  /**
+   * Cancel a pending permission request.
+   * This resolves the promise with a "cancelled" outcome per ACP spec.
+   */
+  public cancelPermission(sessionId: string, toolCallId: string): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found to cancel", { sessionId, toolCallId });
+      return;
+    }
+
+    log.info("Permission cancelled", { sessionId, toolCallId });
+
+    pending.resolve({
+      outcome: {
+        outcome: "cancelled",
       },
     });
 
@@ -609,20 +630,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           optionCount: params.options.length,
         });
 
-        // Check if this tool requires user interaction
-        const requiresUserInput = ALWAYS_PROMPT_TOOLS.some(
-          (name) =>
-            toolName === name ||
-            params.toolCall?.title?.includes(name) ||
-            // ExitPlanMode has special option structure
-            params.options.some(
-              (o) =>
-                o.name?.includes("auto-accept") ||
-                o.name?.includes("keep planning"),
-            ),
-        );
-
-        if (requiresUserInput && toolCallId) {
+        // If we have a toolCallId, always prompt the user for permission.
+        // The claude.ts adapter only calls requestPermission when user input is needed.
+        // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
+        if (toolCallId) {
           log.info("Permission request requires user input", {
             sessionId: taskRunId,
             toolCallId,
@@ -660,13 +671,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           });
         }
 
-        log.info("Auto-approving permission request", {
+        // Fallback: no toolCallId means we can't track the response, auto-approve
+        log.warn("No toolCallId in permission request, auto-approving", {
           sessionId: taskRunId,
-          toolCallId,
           toolName,
-          requiresUserInput,
         });
-        // Auto-approve for non-interactive tools
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );

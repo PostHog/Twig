@@ -49,7 +49,7 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const { respondToPermission } = useSessionActions();
+  const { respondToPermission, cancelPermission } = useSessionActions();
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -104,10 +104,8 @@ export function SessionView({
   // Get the first pending permission (if any)
   const firstPendingPermission = useMemo(() => {
     const entries = Array.from(pendingPermissions.entries());
-    console.log("[SessionView] pendingPermissions size:", pendingPermissions.size, "entries:", entries.length);
     if (entries.length === 0) return null;
     const [toolCallId, permission] = entries[0];
-    console.log("[SessionView] firstPendingPermission:", { toolCallId, title: permission.title, optionsCount: permission.options?.length });
     return { ...permission, toolCallId };
   }, [pendingPermissions]);
 
@@ -126,6 +124,11 @@ export function SessionView({
     },
     [firstPendingPermission, taskId, respondToPermission, onSendPrompt],
   );
+
+  const handlePermissionCancel = useCallback(async () => {
+    if (!firstPendingPermission || !taskId) return;
+    await cancelPermission(taskId, firstPendingPermission.toolCallId);
+  }, [firstPendingPermission, taskId, cancelPermission]);
 
   return (
     <ContextMenu.Root>
@@ -161,8 +164,8 @@ export function SessionView({
               title={firstPendingPermission.title}
               options={firstPendingPermission.options}
               onSelect={handlePermissionSelect}
-              onCancel={onCancelPrompt}
-              disabled={isPromptPending}
+              onCancel={handlePermissionCancel}
+              disabled={false}
             />
           ) : (
             <Box

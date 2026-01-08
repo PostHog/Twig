@@ -3,6 +3,7 @@ import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   AgentServiceEvent,
+  cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
   promptInput,
@@ -101,5 +102,12 @@ export const agentRouter = router({
         input.toolCallId,
         input.optionId,
       ),
+    ),
+
+  // Cancel a permission request (e.g., user pressed Escape)
+  cancelPermission: publicProcedure
+    .input(cancelPermissionInput)
+    .mutation(({ input }) =>
+      getService().cancelPermission(input.sessionId, input.toolCallId),
     ),
 });

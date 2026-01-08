@@ -28,11 +28,23 @@ export function InlinePermissionSelector({
   const [isCustomInputMode, setIsCustomInputMode] = useState(false);
   const [customInput, setCustomInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Add "Type feedback" as the last option
+  // Auto-focus the container when component mounts to capture keyboard events
+  useEffect(() => {
+    if (!disabled && containerRef.current) {
+      containerRef.current.focus();
+    }
+  }, [disabled]);
+
+  // Filter to only show: allow_always (Accept All), allow_once (Accept), and custom input
+  // The custom input uses reject_once under the hood to send feedback
+  const filteredOptions = options.filter(
+    (o) => o.kind === "allow_always" || o.kind === "allow_once",
+  );
   const allOptions = [
-    ...options,
-    { optionId: "_custom", name: "Type feedback", description: "", kind: "custom" },
+    ...filteredOptions,
+    { optionId: "_custom", name: "Other", description: "", kind: "custom" },
   ];
 
   const numOptions = allOptions.length;
@@ -68,33 +80,13 @@ export function InlinePermissionSelector({
   // Keyboard navigation using useHotkeys
   const isEnabled = !disabled && !isCustomInputMode;
 
-  const moveUpWithLog = useCallback(() => {
-    console.log("[InlinePermissionSelector] moveUp triggered");
-    moveUp();
-  }, [moveUp]);
-
-  const moveDownWithLog = useCallback(() => {
-    console.log("[InlinePermissionSelector] moveDown triggered");
-    moveDown();
-  }, [moveDown]);
-
-  const selectCurrentWithLog = useCallback(() => {
-    console.log("[InlinePermissionSelector] selectCurrent triggered");
-    selectCurrent();
-  }, [selectCurrent]);
-
-  useHotkeys("up", moveUpWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveUpWithLog, isEnabled]);
-  useHotkeys("down", moveDownWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDownWithLog, isEnabled]);
-  useHotkeys("left", moveUpWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveUpWithLog, isEnabled]);
-  useHotkeys("right", moveDownWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDownWithLog, isEnabled]);
-  useHotkeys("tab", moveDownWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDownWithLog, isEnabled]);
-  useHotkeys("enter", selectCurrentWithLog, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [selectCurrentWithLog, isEnabled]);
+  useHotkeys("up", moveUp, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveUp, isEnabled]);
+  useHotkeys("down", moveDown, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDown, isEnabled]);
+  useHotkeys("left", moveUp, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveUp, isEnabled]);
+  useHotkeys("right", moveDown, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDown, isEnabled]);
+  useHotkeys("tab", moveDown, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [moveDown, isEnabled]);
+  useHotkeys("enter", selectCurrent, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [selectCurrent, isEnabled]);
   useHotkeys("escape", handleCancel, { enabled: isEnabled, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }, [handleCancel, isEnabled]);
-
-  // Debug: log when component renders with enabled state
-  useEffect(() => {
-    console.log("[InlinePermissionSelector] Mounted/updated, isEnabled:", isEnabled, "disabled:", disabled, "isCustomInputMode:", isCustomInputMode);
-  }, [isEnabled, disabled, isCustomInputMode]);
 
   const handleCustomInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -125,9 +117,13 @@ export function InlinePermissionSelector({
   };
 
   return (
-    <Box className="border-t border-gray-6 bg-gray-2 px-4 py-3">
+    <Box
+      ref={containerRef}
+      tabIndex={0}
+      className="border-t border-gray-6 bg-gray-2 px-4 py-3 outline-none"
+    >
       {/* Question/Title */}
-      <Text size="2" weight="medium" className="text-amber-11 mb-2 block">
+      <Text size="1" weight="medium" className="text-amber-11 mb-2 block">
         {title}
       </Text>
 
@@ -139,8 +135,8 @@ export function InlinePermissionSelector({
 
           if (isCustom && isCustomInputMode) {
             return (
-              <Flex key={option.optionId} align="center" gap="2" className="py-1">
-                <Text size="2" className="text-green-9">›</Text>
+              <Flex key={option.optionId} align="center" gap="2" className="py-0.5">
+                <span className="inline-block w-3 text-xs text-green-9">›</span>
                 <input
                   ref={inputRef}
                   type="text"
@@ -148,7 +144,7 @@ export function InlinePermissionSelector({
                   onChange={(e) => setCustomInput(e.target.value)}
                   onKeyDown={handleCustomInputKeyDown}
                   placeholder="Type your feedback and press Enter..."
-                  className="flex-1 bg-transparent border-none text-sm text-gray-12 outline-none placeholder:text-gray-9"
+                  className="flex-1 bg-transparent border-none text-xs text-gray-12 outline-none placeholder:text-gray-9"
                   disabled={disabled}
                 />
               </Flex>
@@ -160,23 +156,21 @@ export function InlinePermissionSelector({
               key={option.optionId}
               align="center"
               gap="2"
-              className={`cursor-pointer py-1 ${isSelected ? "text-gray-12" : "text-gray-10"}`}
+              className={`cursor-pointer py-0.5 ${isSelected ? "text-gray-12" : "text-gray-10"}`}
               onClick={() => handleOptionClick(index)}
             >
-              <Text size="2" className={isSelected ? "text-green-9" : "text-gray-8"}>
-                {isSelected ? "›" : " "}
-              </Text>
-              <Text size="2">
-                [{isSelected ? "✓" : " "}] {option.name}
-              </Text>
+              <span className={`inline-block w-3 text-xs ${isSelected ? "text-green-9" : "text-transparent"}`}>
+                ›
+              </span>
+              <Text size="1">{option.name}</Text>
             </Flex>
           );
         })}
       </Flex>
 
       {/* Keyboard hints */}
-      <Text size="1" className="text-gray-9 mt-2 block">
-        Enter to select · Arrow keys to navigate · Esc to cancel
+      <Text size="1" className="text-gray-9 mt-1 block">
+        Enter to select · ↑↓ to navigate · Esc to cancel
       </Text>
     </Box>
   );

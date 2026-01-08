@@ -161,3 +161,11 @@ export const respondToPermissionInput = z.object({
 });
 
 export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;
+
+// Permission cancellation input for tRPC
+export const cancelPermissionInput = z.object({
+  sessionId: z.string(),
+  toolCallId: z.string(),
+});
+
+export type CancelPermissionInput = z.infer<typeof cancelPermissionInput>;
