@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -30,6 +30,7 @@ import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 function getTaskAssociations(): TaskFolderAssociation[] {
   return foldersStore.get("taskAssociations", []);
@@ -88,6 +89,7 @@ export interface WorkspaceServiceEvents {
 @injectable()
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   private scriptRunner: ScriptRunner;
+  private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
 
   constructor() {
     super();
@@ -99,6 +101,28 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
   }
 
   async createWorkspace(options: CreateWorkspaceInput): Promise<WorkspaceInfo> {
+    // Prevent concurrent workspace creation for the same task
+    const existingPromise = this.creatingWorkspaces.get(options.taskId);
+    if (existingPromise) {
+      log.warn(
+        `Workspace creation already in progress for task ${options.taskId}, waiting for existing operation`,
+      );
+      return existingPromise;
+    }
+
+    const promise = this.doCreateWorkspace(options);
+    this.creatingWorkspaces.set(options.taskId, promise);
+
+    try {
+      return await promise;
+    } finally {
+      this.creatingWorkspaces.delete(options.taskId);
+    }
+  }
+
+  private async doCreateWorkspace(
+    options: CreateWorkspaceInput,
+  ): Promise<WorkspaceInfo> {
     const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
       options;
     log.info(
@@ -136,13 +160,29 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       // try to create the branch, if it already exists just switch to it
       if (branch) {
         try {
-          log.info(`Creating/switching to branch ${branch} for task ${taskId}`);
-          try {
-            await execAsync(`git checkout -b "${branch}"`, { cwd: folderPath });
-            log.info(`Created and switched to new branch ${branch}`);
-          } catch (_error) {
-            await execAsync(`git checkout "${branch}"`, { cwd: folderPath });
-            log.info(`Switched to existing branch ${branch}`);
+          // Check if already on the target branch
+          const { stdout: currentBranch } = await execFileAsync(
+            "git",
+            ["rev-parse", "--abbrev-ref", "HEAD"],
+            { cwd: folderPath },
+          );
+          if (currentBranch.trim() === branch) {
+            log.info(`Already on branch ${branch}, skipping checkout`);
+          } else {
+            log.info(
+              `Creating/switching to branch ${branch} for task ${taskId}`,
+            );
+            try {
+              await execFileAsync("git", ["checkout", "-b", branch], {
+                cwd: folderPath,
+              });
+              log.info(`Created and switched to new branch ${branch}`);
+            } catch (_error) {
+              await execFileAsync("git", ["checkout", branch], {
+                cwd: folderPath,
+              });
+              log.info(`Switched to existing branch ${branch}`);
+            }
           }
         } catch (error) {
           const message = `Could not switch to branch "${branch}". Please commit or stash your changes first.`;

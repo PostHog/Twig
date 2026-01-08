@@ -31,6 +31,8 @@ export interface TaskCreationInput {
   branch?: string | null;
   githubIntegrationId?: number;
   autoRun?: boolean;
+  // Execution mode: "plan" starts in plan mode (read-only), undefined starts in default mode
+  executionMode?: "plan";
 }
 
 export interface TaskCreationOutput {
@@ -200,6 +202,7 @@ export class TaskCreationSaga extends Saga<
               task,
               repoPath: agentCwd ?? "",
               initialPrompt,
+              executionMode: input.executionMode,
             });
           }
           return { taskId: task.id };

@@ -130,6 +130,7 @@ interface SessionConfig {
   sdkSessionId?: string;
   model?: string;
   framework?: "claude" | "codex";
+  executionMode?: "plan";
 }
 
 interface ManagedSession {
@@ -152,14 +153,82 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
+interface PendingPermission {
+  resolve: (response: RequestPermissionResponse) => void;
+  reject: (error: Error) => void;
+  sessionId: string;
+  toolCallId: string;
+}
+
 @injectable()
 export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
+  private pendingPermissions = new Map<string, PendingPermission>();
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
     log.info("Session token updated");
+  }
+
+  /**
+   * Respond to a pending permission request from the UI.
+   * This resolves the promise that the agent is waiting on.
+   */
+  public respondToPermission(
+    sessionId: string,
+    toolCallId: string,
+    optionId: string,
+  ): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found", { sessionId, toolCallId });
+      return;
+    }
+
+    log.info("Permission response received", {
+      sessionId,
+      toolCallId,
+      optionId,
+    });
+
+    pending.resolve({
+      outcome: {
+        outcome: "selected",
+        optionId,
+      },
+    });
+
+    this.pendingPermissions.delete(key);
+  }
+
+  /**
+   * Cancel a pending permission request.
+   * This resolves the promise with a "cancelled" outcome per ACP spec.
+   */
+  public cancelPermission(sessionId: string, toolCallId: string): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found to cancel", {
+        sessionId,
+        toolCallId,
+      });
+      return;
+    }
+
+    log.info("Permission cancelled", { sessionId, toolCallId });
+
+    pending.resolve({
+      outcome: {
+        outcome: "cancelled",
+      },
+    });
+
+    this.pendingPermissions.delete(key);
   }
 
   private getToken(fallback: string): string {
@@ -232,6 +301,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sdkSessionId,
       model,
       framework,
+      executionMode,
     } = config;
 
     if (!isRetry) {
@@ -289,7 +359,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         await connection.newSession({
           cwd: repoPath,
           mcpServers,
-          _meta: { sessionId: taskRunId, model },
+          _meta: {
+            sessionId: taskRunId,
+            model,
+            ...(executionMode && { initialModeId: executionMode }),
+          },
         });
       }
 
@@ -515,6 +589,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     _channel: string,
     clientStreams: { readable: ReadableStream; writable: WritableStream },
   ): ClientSideConnection {
+    // Capture service reference for use in client callbacks
+    const service = this;
+
     const emitToRenderer = (payload: unknown) => {
       // Emit event via TypedEventEmitter for tRPC subscription
       this.emit(AgentServiceEvent.SessionEvent, {
@@ -546,6 +623,63 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       async requestPermission(
         params: RequestPermissionRequest,
       ): Promise<RequestPermissionResponse> {
+        const toolName =
+          (params.toolCall?.rawInput as { toolName?: string } | undefined)
+            ?.toolName || "";
+        const toolCallId = params.toolCall?.toolCallId || "";
+
+        log.info("requestPermission called", {
+          sessionId: taskRunId,
+          toolCallId,
+          toolName,
+          title: params.toolCall?.title,
+          optionCount: params.options.length,
+        });
+
+        // If we have a toolCallId, always prompt the user for permission.
+        // The claude.ts adapter only calls requestPermission when user input is needed.
+        // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
+        if (toolCallId) {
+          log.info("Permission request requires user input", {
+            sessionId: taskRunId,
+            toolCallId,
+            toolName,
+            title: params.toolCall?.title,
+          });
+
+          return new Promise((resolve, reject) => {
+            const key = `${taskRunId}:${toolCallId}`;
+            service.pendingPermissions.set(key, {
+              resolve,
+              reject,
+              sessionId: taskRunId,
+              toolCallId,
+            });
+
+            log.info("Emitting permission request to renderer", {
+              sessionId: taskRunId,
+              toolCallId,
+            });
+            service.emit(AgentServiceEvent.PermissionRequest, {
+              sessionId: taskRunId,
+              toolCallId,
+              title: params.toolCall?.title || "Permission Required",
+              options: params.options.map((o) => ({
+                kind: o.kind,
+                name: o.name,
+                optionId: o.optionId,
+                description: (o as { description?: string }).description,
+              })),
+              rawInput: params.toolCall?.rawInput,
+            });
+          });
+        }
+
+        // Fallback: no toolCallId means we can't track the response, auto-approve
+        log.warn("No toolCallId in permission request, auto-approving", {
+          sessionId: taskRunId,
+          toolName,
+        });
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );
@@ -611,6 +745,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
       framework: "framework" in params ? params.framework : "claude",
+      executionMode:
+        "executionMode" in params ? params.executionMode : undefined,
     };
   }
 

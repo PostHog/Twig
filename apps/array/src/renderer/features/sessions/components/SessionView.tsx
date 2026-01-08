@@ -1,5 +1,9 @@
 import { MessageEditor } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
+import {
+  usePendingPermissionsForTask,
+  useSessionActions,
+} from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { Box, ContextMenu, Flex } from "@radix-ui/themes";
 import {
@@ -14,6 +18,8 @@ import {
   useShowRawLogs,
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
+import { InlinePermissionSelector } from "./InlinePermissionSelector";
+import { ModeIndicator } from "./ModeIndicator";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
@@ -42,6 +48,8 @@ export function SessionView({
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
+  const pendingPermissions = usePendingPermissionsForTask(taskId);
+  const { respondToPermission, cancelPermission } = useSessionActions();
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -103,10 +111,56 @@ export function SessionView({
 
   const [isBashMode, setIsBashMode] = useState(false);
 
+  const firstPendingPermission = useMemo(() => {
+    const entries = Array.from(pendingPermissions.entries());
+    if (entries.length === 0) return null;
+    const [toolCallId, permission] = entries[0];
+    return { ...permission, toolCallId };
+  }, [pendingPermissions]);
+
+  const handlePermissionSelect = useCallback(
+    async (optionId: string, customInput?: string) => {
+      if (!firstPendingPermission || !taskId) return;
+
+      // If custom input provided, send it as a prompt after selecting "keep planning"
+      if (customInput) {
+        await respondToPermission(
+          taskId,
+          firstPendingPermission.toolCallId,
+          optionId,
+        );
+        // Send the custom input as a follow-up prompt
+        onSendPrompt(customInput);
+      } else {
+        await respondToPermission(
+          taskId,
+          firstPendingPermission.toolCallId,
+          optionId,
+        );
+      }
+    },
+    [firstPendingPermission, taskId, respondToPermission, onSendPrompt],
+  );
+
+  const handlePermissionCancel = useCallback(async () => {
+    if (!firstPendingPermission || !taskId) return;
+    await cancelPermission(taskId, firstPendingPermission.toolCallId);
+  }, [firstPendingPermission, taskId, cancelPermission]);
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Flex direction="column" height="100%" className="bg-gray-1">
+          {taskId && (
+            <Flex
+              px="3"
+              py="2"
+              justify="end"
+              className="border-gray-4 border-b"
+            >
+              <ModeIndicator taskId={taskId} />
+            </Flex>
+          )}
           {showRawLogs ? (
             <RawLogsView events={events} />
           ) : (
@@ -115,27 +169,38 @@ export function SessionView({
               isPromptPending={isPromptPending}
               repoPath={repoPath}
               isCloud={isCloud}
+              taskId={taskId}
             />
           )}
 
           <PlanStatusBar plan={latestPlan} />
 
-          <Box
-            className={
-              isBashMode
-                ? "border border-accent-9 p-2"
-                : "border-gray-4 border-t p-2"
-            }
-          >
-            <MessageEditor
-              sessionId={sessionId}
-              placeholder="Type a message... @ to mention files, ! for bash mode"
-              onSubmit={handleSubmit}
-              onBashCommand={onBashCommand}
-              onBashModeChange={setIsBashMode}
-              onCancel={onCancelPrompt}
+          {firstPendingPermission ? (
+            <InlinePermissionSelector
+              title={firstPendingPermission.title}
+              options={firstPendingPermission.options}
+              onSelect={handlePermissionSelect}
+              onCancel={handlePermissionCancel}
+              disabled={false}
             />
-          </Box>
+          ) : (
+            <Box
+              className={
+                isBashMode
+                  ? "border border-accent-9 p-2"
+                  : "border-gray-4 border-t p-2"
+              }
+            >
+              <MessageEditor
+                sessionId={sessionId}
+                placeholder="Type a message... @ to mention files, ! for bash mode"
+                onSubmit={handleSubmit}
+                onBashCommand={onBashCommand}
+                onBashModeChange={setIsBashMode}
+                onCancel={onCancelPrompt}
+              />
+            </Box>
+          )}
         </Flex>
       </ContextMenu.Trigger>
       <ContextMenu.Content size="1">

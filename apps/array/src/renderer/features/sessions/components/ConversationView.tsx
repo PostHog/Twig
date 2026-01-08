@@ -52,6 +52,7 @@ interface ConversationViewProps {
   isPromptPending: boolean;
   repoPath?: string | null;
   isCloud?: boolean;
+  taskId?: string;
 }
 
 const SCROLL_THRESHOLD = 100;
@@ -62,6 +63,7 @@ export function ConversationView({
   isPromptPending,
   repoPath,
   isCloud = false,
+  taskId,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => buildConversationItems(events), [events]);
@@ -121,6 +123,7 @@ export function ConversationView({
                 turn={item}
                 repoPath={repoPath}
                 isCloud={isCloud}
+                taskId={taskId}
               />
             ) : (
               <UserShellExecuteView key={item.id} item={item} />
@@ -151,12 +154,14 @@ interface TurnViewProps {
   turn: Turn;
   repoPath?: string | null;
   isCloud?: boolean;
+  taskId?: string;
 }
 
 const TurnView = memo(function TurnView({
   turn,
   repoPath,
   isCloud = false,
+  taskId,
 }: TurnViewProps) {
   const wasCancelled = turn.stopReason === "cancelled";
   const gitAction = parseGitActionMessage(turn.userContent);
@@ -175,6 +180,7 @@ const TurnView = memo(function TurnView({
           key={`${item.sessionUpdate}-${i}`}
           item={item}
           toolCalls={turn.toolCalls}
+          taskId={taskId}
           turnCancelled={wasCancelled}
         />
       ))}

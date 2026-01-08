@@ -18,12 +18,14 @@ export type RenderItem =
 interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
+  taskId?: string;
   turnCancelled?: boolean;
 }
 
 export function SessionUpdateView({
   item,
   toolCalls,
+  taskId,
   turnCancelled,
 }: SessionUpdateViewProps) {
   switch (item.sessionUpdate) {
@@ -41,6 +43,7 @@ export function SessionUpdateView({
       return (
         <ToolCallBlock
           toolCall={toolCalls?.get(item.toolCallId) ?? item}
+          taskId={taskId}
           turnCancelled={turnCancelled}
         />
       );

@@ -13,6 +13,10 @@ export type Credentials = z.infer<typeof credentialsSchema>;
 export const agentFrameworkSchema = z.enum(["claude", "codex"]);
 export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
 
+// Execution mode schema
+export const executionModeSchema = z.enum(["plan"]);
+export type ExecutionMode = z.infer<typeof executionModeSchema>;
+
 // Session config schema
 export const sessionConfigSchema = z.object({
   taskId: z.string(),
@@ -23,6 +27,7 @@ export const sessionConfigSchema = z.object({
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
   framework: agentFrameworkSchema.optional(),
+  executionMode: executionModeSchema.optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
@@ -120,6 +125,7 @@ export const subscribeSessionInput = z.object({
 // Agent events
 export const AgentServiceEvent = {
   SessionEvent: "session-event",
+  PermissionRequest: "permission-request",
 } as const;
 
 export interface AgentSessionEventPayload {
@@ -127,6 +133,39 @@ export interface AgentSessionEventPayload {
   payload: unknown;
 }
 
+export interface PermissionOption {
+  kind: "allow_once" | "allow_always" | "reject_once" | "reject_always";
+  name: string;
+  optionId: string;
+  description?: string;
+}
+
+export interface PermissionRequestPayload {
+  sessionId: string;
+  toolCallId: string;
+  title: string;
+  options: PermissionOption[];
+  rawInput: unknown;
+}
+
 export interface AgentServiceEvents {
   [AgentServiceEvent.SessionEvent]: AgentSessionEventPayload;
+  [AgentServiceEvent.PermissionRequest]: PermissionRequestPayload;
 }
+
+// Permission response input for tRPC
+export const respondToPermissionInput = z.object({
+  sessionId: z.string(),
+  toolCallId: z.string(),
+  optionId: z.string(),
+});
+
+export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;
+
+// Permission cancellation input for tRPC
+export const cancelPermissionInput = z.object({
+  sessionId: z.string(),
+  toolCallId: z.string(),
+});
+
+export type CancelPermissionInput = z.infer<typeof cancelPermissionInput>;
