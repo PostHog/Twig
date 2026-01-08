@@ -32,6 +32,10 @@ export function cyan(text: string): string {
   return `${colors.cyan}${text}${colors.reset}`;
 }
 
+export function blue(text: string): string {
+  return `${colors.brightBlue}${text}${colors.reset}`;
+}
+
 export function magenta(text: string): string {
   return `${colors.magenta}${text}${colors.reset}`;
 }

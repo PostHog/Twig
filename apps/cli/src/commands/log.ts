@@ -5,6 +5,7 @@ import { COMMANDS } from "../registry";
 import {
   arr,
   blank,
+  blue,
   cyan,
   dim,
   green,
@@ -115,7 +116,7 @@ export async function log(
     // Only WC and trunk
     const wcLine = changeLines.find((l) => l.includes("|1|0|0|")); // empty, not immutable
     if (wcLine) {
-      message(`${green("◉")} ${trunkName} ${dim("(current)")}`);
+      message(`${green("◉")} ${blue(trunkName)} ${dim("(current)")}`);
       hint(`${cyan("arr create")} to start a new stack`);
       return;
     }
@@ -161,6 +162,7 @@ function renderEnhancedOutput(
   let currentIsModified = false;
   let currentIsTrunk = false;
   let wcParentName: string | null = null;
+  let pendingHints: string[] = []; // Buffer hints to output after COMMIT
 
   // First pass: find WC parent for modify hint
   for (let i = 0; i < lines.length; i++) {
@@ -248,12 +250,13 @@ function renderEnhancedOutput(
         // Build the label
         if (isEmpty && !description && !isImmutable) {
           // Empty WC
-          output.push(`${styledPrefix}${dim("(working copy)")}`);
+          output.push(`${styledPrefix}${blue("(working copy)")}`);
         } else if (isTrunk) {
-          output.push(`${styledPrefix}${trunkName}`);
+          output.push(`${styledPrefix}${blue(trunkName)}`);
         } else {
-          const label =
-            currentBookmark || description || dim("(no description)");
+          const label = currentBookmark
+            ? blue(currentBookmark)
+            : description || dim("(no description)");
           const shortId = formatChangeId(changeId, changeIdPrefix);
 
           const badges: string[] = [];
@@ -282,11 +285,12 @@ function renderEnhancedOutput(
 
       case "HINT:": {
         if (data === "empty") {
-          output.push(
+          // Buffer hints to output after COMMIT line
+          pendingHints.push(
             `${graphPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
           );
           if (wcParentName) {
-            output.push(
+            pendingHints.push(
               `${graphPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentName}`)}`,
             );
           }
@@ -304,13 +308,13 @@ function renderEnhancedOutput(
             output.push(`${graphPrefix}${formatPRLine(prInfo, description)}`);
             output.push(`${graphPrefix}${cyan(prInfo.url)}`);
             if (currentIsModified) {
-              output.push(
+              pendingHints.push(
                 `${graphPrefix}${arr(COMMANDS.submit)} ${dim("to push local changes")}`,
               );
             }
           } else {
             output.push(`${graphPrefix}${dim("Not submitted")}`);
-            output.push(
+            pendingHints.push(
               `${graphPrefix}${arr(COMMANDS.submit)} ${dim("to create a PR")}`,
             );
           }
@@ -326,10 +330,15 @@ function renderEnhancedOutput(
         output.push(
           `${prefix}${commitIdFormatted} ${dim(`- ${description || "(no description)"}`)}`,
         );
-        // Add blank line after commit for trunk
-        if (currentIsTrunk) {
-          output.push("│");
+        // Output any pending hints after commit
+        if (pendingHints.length > 0) {
+          for (const hint of pendingHints) {
+            output.push(hint);
+          }
+          pendingHints = [];
         }
+        // Add blank line after commit
+        output.push("│");
         break;
       }
     }
@@ -438,7 +447,7 @@ function formatRelativeTime(date: Date): string {
 }
 
 function renderUnmanagedBranch(branch: string, trunkName: string): void {
-  message(`${green("◉")} ${trunkName} ${dim("(current)")}`);
+  message(`${green("◉")} ${blue(trunkName)} ${dim("(current)")}`);
   blank();
   message(yellow(`⚠ You're on git branch '${branch}'.`));
   blank();
