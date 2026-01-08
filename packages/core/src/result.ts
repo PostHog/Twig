@@ -32,6 +32,7 @@ export type JJErrorCode =
   | "MERGE_BLOCKED"
   | "ALREADY_MERGED"
   | "NOT_FOUND"
+  | "EMPTY_CHANGE"
   | "UNKNOWN";
 
 export function createError(

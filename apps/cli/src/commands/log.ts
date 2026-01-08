@@ -166,19 +166,26 @@ function renderEnhancedOutput(
   let currentIsTrunk = false;
   let currentIsForkPoint = false; // Immutable commit included only for graph connectivity
   let currentIsBehindTrunk = false; // Mutable commit whose parent is not current trunk
+  let currentIsWorkingCopy = false; // Whether this is the @ commit
+  let _currentIsEmpty = false; // Whether the change has no file modifications
   let pendingHints: string[] = []; // Buffer hints to output after COMMIT
 
-  // Check if WC parent is a tracked bookmark (for modify hint)
-  // We only show "arr modify" if WC is on top of a tracked change
-  const wcParentBookmark: string | null = null;
+  // Find WC parent bookmark for modify hint by looking at the next CHANGE after WC
+  let wcParentBookmark: string | null = null;
+  let foundWC = false;
   for (const line of lines) {
-    if (line.includes("HINT:empty")) {
-      // WC is empty - check if parent is a tracked bookmark by looking at graph structure
-      // The parent in jj graph is indicated by the line connecting @ to the next commit
-      // But we can't reliably parse this from output, so check tracked bookmarks
-      // If there's exactly one tracked bookmark that's a direct parent of @, use it
-      // For now, we'll be conservative and not show modify hint unless we're certain
-      // TODO: Query jj for @- to get actual parent
+    if (line.includes("@") && line.includes("CHANGE:")) {
+      foundWC = true;
+      continue;
+    }
+    if (foundWC && line.includes("CHANGE:")) {
+      // This is the first change after WC - check if it has a tracked bookmark
+      const match = line.match(/CHANGE:[^|]+\|[^|]*\|[^|]*\|[^|]*\|([^|]*)\|/);
+      if (match) {
+        const bookmarks = parseBookmarks(match[1]);
+        wcParentBookmark =
+          bookmarks.find((b) => trackedBookmarks.includes(b)) || null;
+      }
       break;
     }
   }
@@ -223,6 +230,7 @@ function renderEnhancedOutput(
         const isEmpty = emptyFlag === "1";
         const isImmutable = immutableFlag === "1";
         const hasConflict = conflictFlag === "1";
+        const isWorkingCopy = graphPrefix.includes("@");
 
         // Update context for subsequent lines (TIME, PR, COMMIT)
         currentBookmark =
@@ -235,6 +243,8 @@ function renderEnhancedOutput(
         // Fork point: immutable commit that's not trunk (included for graph connectivity)
         currentIsForkPoint = isImmutable && !isTrunk;
         currentIsBehindTrunk = behindTrunkChanges.has(changeId);
+        currentIsWorkingCopy = isWorkingCopy;
+        _currentIsEmpty = isEmpty;
 
         // Skip rendering fork points - just keep graph lines
         if (currentIsForkPoint) {
@@ -249,7 +259,7 @@ function renderEnhancedOutput(
         // Replace the marker in graphPrefix with our styled version
         // jj uses: @ for WC, ○ for mutable, ◆ for immutable
         let styledPrefix = graphPrefix;
-        if (graphPrefix.includes("@")) {
+        if (isWorkingCopy) {
           styledPrefix = graphPrefix.replace("@", green("◉"));
         } else if (graphPrefix.includes("◆")) {
           styledPrefix = graphPrefix.replace("◆", "◯");
@@ -258,8 +268,8 @@ function renderEnhancedOutput(
         }
 
         // Build the label
-        if (isEmpty && !description && !isImmutable) {
-          // Empty WC
+        if (isWorkingCopy && !currentBookmark) {
+          // Working copy without a bookmark - show "(working copy)"
           output.push(`${styledPrefix}${blue("(working copy)")}`);
         } else if (isTrunk) {
           output.push(`${styledPrefix}${blue(trunkName)}`);
@@ -298,20 +308,8 @@ function renderEnhancedOutput(
       }
 
       case "HINT:": {
-        if (data === "empty") {
-          // Buffer hints to output after COMMIT line
-          // Use a clean "│  " prefix, not the graph prefix which may have ~ terminators
-          const hintPrefix = "│  ";
-          pendingHints.push(
-            `${hintPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
-          );
-          // Only show modify hint if WC parent is a tracked bookmark
-          if (wcParentBookmark) {
-            pendingHints.push(
-              `${hintPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentBookmark}`)}`,
-            );
-          }
-        }
+        // Hints are now handled in COMMIT case for all WC states
+        // This case is kept for potential future use
         break;
       }
 
@@ -370,6 +368,20 @@ function renderEnhancedOutput(
         output.push(
           `${prefix}${commitIdFormatted} ${dim(`- ${description || "(no description)"}`)}`,
         );
+
+        // Add hints for WC without a bookmark (whether empty or with changes)
+        if (currentIsWorkingCopy && !currentBookmark) {
+          const hintPrefix = "│  ";
+          pendingHints.push(
+            `${hintPrefix}${arr(COMMANDS.create)} ${dim('"message"')} ${dim("to save as new change")}`,
+          );
+          if (wcParentBookmark) {
+            pendingHints.push(
+              `${hintPrefix}${arr(COMMANDS.modify)} ${dim(`to update ${wcParentBookmark}`)}`,
+            );
+          }
+        }
+
         // Output any pending hints after commit
         if (pendingHints.length > 0) {
           for (const hint of pendingHints) {

@@ -36,7 +36,7 @@ export async function getDiffStats(
         "diff",
         "--from",
         `${options.fromBookmark}@origin`,
-        "-r",
+        "--to",
         revision,
         "--stat",
       ],

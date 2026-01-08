@@ -127,39 +127,66 @@ export async function sync(options: SyncOptions): Promise<Result<SyncResult>> {
   const trunk = await getTrunk();
   await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
 
-  // Rebase WC onto new trunk if it's behind (empty WC on old trunk ancestor)
-  await runJJWithMutableConfigVoid(["rebase", "-r", "@", "-d", "trunk()"]);
-
   // Rebase only tracked bookmarks onto trunk (not all mutable commits)
   // This prevents rebasing unrelated orphaned commits from the repo history
   const trackedBookmarks = engine.getTrackedBookmarks();
   let rebaseOk = true;
   let rebaseError: string | undefined;
 
-  for (const bookmark of trackedBookmarks) {
-    // Only rebase if bookmark exists and is mutable
-    const checkResult = await runJJ([
+  // Build revset for all tracked bookmarks
+  if (trackedBookmarks.length > 0) {
+    const bookmarkRevsets = trackedBookmarks
+      .map((b) => `bookmarks(exact:"${b}")`)
+      .join(" | ");
+
+    // Find roots of tracked bookmarks - those whose parent is NOT another tracked bookmark
+    // roots(X) gives us commits in X that have no ancestors also in X
+    const rootsRevset = `roots((${bookmarkRevsets}) & mutable())`;
+
+    const rootsResult = await runJJ([
       "log",
       "-r",
-      `bookmarks(exact:"${bookmark}") & mutable()`,
+      rootsRevset,
       "--no-graph",
       "-T",
-      "change_id",
+      'local_bookmarks.map(|b| b.name()).join(",") ++ "\\n"',
     ]);
 
-    if (checkResult.ok && checkResult.value.stdout.trim()) {
-      const result = await runJJWithMutableConfigVoid([
-        "rebase",
-        "-b",
-        bookmark,
-        "-d",
-        "trunk()",
-      ]);
-      if (!result.ok) {
-        rebaseOk = false;
-        rebaseError = result.error.message;
-        break;
+    if (rootsResult.ok) {
+      const rootBookmarks = rootsResult.value.stdout
+        .trim()
+        .split("\n")
+        .filter((line) => line.trim())
+        .flatMap((line) => line.split(",").filter((b) => b.trim()));
+
+      // Only rebase root bookmarks - descendants will follow
+      for (const bookmark of rootBookmarks) {
+        if (!trackedBookmarks.includes(bookmark)) continue;
+
+        const result = await runJJWithMutableConfigVoid([
+          "rebase",
+          "-b",
+          bookmark,
+          "-d",
+          "trunk()",
+        ]);
+        if (!result.ok) {
+          rebaseOk = false;
+          rebaseError = result.error.message;
+          break;
+        }
       }
+    }
+  }
+
+  // Rebase WC onto trunk if it's not on a tracked bookmark
+  // (If WC is on a tracked bookmark, it was already rebased above)
+  const wcStatusResult = await status();
+  if (wcStatusResult.ok) {
+    const wcBookmarks = wcStatusResult.value.workingCopy.bookmarks;
+    const wcOnTracked = wcBookmarks.some((b) => trackedBookmarks.includes(b));
+    if (!wcOnTracked) {
+      await runJJWithMutableConfigVoid(["rebase", "-r", "@", "-d", "trunk()"]);
     }
   }
 

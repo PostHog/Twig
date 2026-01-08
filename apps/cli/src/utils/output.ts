@@ -80,7 +80,7 @@ export function formatSuccess(message: string): string {
  *
  * Messages:
  * - editing: "Editing branch-name"
- * - on-top: "Working on top of branch-name"
+ * - on-top: "Now above branch-name"
  * - on-trunk: "Starting fresh on main"
  */
 export function printNavResult(nav: NavigationResult): void {
@@ -91,7 +91,7 @@ export function printNavResult(nav: NavigationResult): void {
       console.log(`Editing ${green(label)}`);
       break;
     case "on-top":
-      console.log(`Working on top of ${green(label)}`);
+      console.log(`Now above ${green(label)}`);
       break;
     case "on-trunk":
       console.log(`Starting fresh on ${cyan(label)}`);

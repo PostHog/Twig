@@ -18,52 +18,64 @@ interface RestackOptions {
 }
 
 /**
- * Find tracked bookmarks that are behind trunk (not based on current trunk tip).
+ * Find root bookmarks that are behind trunk.
+ * Roots are tracked bookmarks whose parent is NOT another tracked bookmark.
+ * We only rebase roots - descendants will follow automatically.
  */
-async function getBookmarksBehindTrunk(
+async function getRootBookmarksBehindTrunk(
   trackedBookmarks: string[],
 ): Promise<Result<string[]>> {
   if (trackedBookmarks.length === 0) {
     return ok([]);
   }
 
-  const behindBookmarks: string[] = [];
+  const bookmarkRevsets = trackedBookmarks
+    .map((b) => `bookmarks(exact:"${b}")`)
+    .join(" | ");
 
-  for (const bookmark of trackedBookmarks) {
-    // Check if this bookmark exists and is not a descendant of trunk
-    const result = await runJJ([
-      "log",
-      "-r",
-      `bookmarks(exact:"${bookmark}") & mutable() ~ trunk()::`,
-      "--no-graph",
-      "-T",
-      `change_id ++ "\\n"`,
-    ]);
+  // Find roots of tracked bookmarks that are behind trunk
+  // roots(X) gives commits in X with no ancestors also in X
+  // ~ trunk():: filters to only those not already on trunk
+  const rootsRevset = `roots((${bookmarkRevsets}) & mutable()) ~ trunk()::`;
 
-    if (result.ok && result.value.stdout.trim()) {
-      behindBookmarks.push(bookmark);
-    }
-  }
+  const result = await runJJ([
+    "log",
+    "-r",
+    rootsRevset,
+    "--no-graph",
+    "-T",
+    'local_bookmarks.map(|b| b.name()).join(",") ++ "\\n"',
+  ]);
 
-  return ok(behindBookmarks);
+  if (!result.ok) return result;
+
+  const rootBookmarks = result.value.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.trim())
+    .flatMap((line) => line.split(",").filter((b) => b.trim()))
+    .filter((b) => trackedBookmarks.includes(b));
+
+  return ok(rootBookmarks);
 }
 
 /**
- * Rebase tracked bookmarks that are behind trunk.
+ * Rebase root tracked bookmarks that are behind trunk.
+ * Only rebases roots - descendants follow automatically.
  */
 async function restackTracked(
   trackedBookmarks: string[],
 ): Promise<Result<{ restacked: number }>> {
-  const behindResult = await getBookmarksBehindTrunk(trackedBookmarks);
-  if (!behindResult.ok) return behindResult;
+  const rootsResult = await getRootBookmarksBehindTrunk(trackedBookmarks);
+  if (!rootsResult.ok) return rootsResult;
 
-  const behind = behindResult.value;
-  if (behind.length === 0) {
+  const roots = rootsResult.value;
+  if (roots.length === 0) {
     return ok({ restacked: 0 });
   }
 
-  // Rebase each behind bookmark onto trunk
-  for (const bookmark of behind) {
+  // Rebase each root bookmark onto trunk - descendants will follow
+  for (const bookmark of roots) {
     const result = await runJJWithMutableConfigVoid([
       "rebase",
       "-b",
@@ -74,7 +86,7 @@ async function restackTracked(
     if (!result.ok) return result;
   }
 
-  return ok({ restacked: behind.length });
+  return ok({ restacked: roots.length });
 }
 
 /**

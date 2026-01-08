@@ -137,7 +137,11 @@ export async function status(): Promise<Result<StatusResult>> {
   };
 
   // Get diff stats for current change
-  const statsResult = await getDiffStats("@");
+  // If on a bookmark with origin, show diff since last push; otherwise show full commit diff
+  const currentBookmark = wc.bookmarks[0];
+  const statsResult = await getDiffStats("@", {
+    fromBookmark: currentBookmark,
+  });
   const stats = statsResult.ok ? statsResult.value : null;
 
   return ok({ info, stats });

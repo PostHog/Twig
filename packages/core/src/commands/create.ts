@@ -1,7 +1,7 @@
 import { resolveBookmarkConflict } from "../bookmark-utils";
 import type { Engine } from "../engine";
 import { ensureBookmark, runJJ, status } from "../jj";
-import { ok, type Result } from "../result";
+import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
 import type { Command } from "./types";
 
@@ -39,6 +39,18 @@ export async function create(
   if (!statusResult.ok) return statusResult;
 
   const wc = statusResult.value.workingCopy;
+  const hasChanges = statusResult.value.modifiedFiles.length > 0;
+
+  // Don't allow creating empty changes
+  if (!hasChanges) {
+    return err(
+      createError(
+        "EMPTY_CHANGE",
+        "No file changes to create. Make some changes first.",
+      ),
+    );
+  }
+
   let createdChangeId: string;
 
   if (wc.description.trim() !== "") {
