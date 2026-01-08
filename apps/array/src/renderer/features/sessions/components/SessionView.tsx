@@ -1,7 +1,7 @@
 import { MessageEditor } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import type { Plan } from "@features/sessions/types";
-import { Box, ContextMenu, Flex } from "@radix-ui/themes";
+import { Box, Callout, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -27,6 +27,7 @@ interface SessionViewProps {
   onCancelPrompt: () => void;
   repoPath?: string | null;
   isCloud?: boolean;
+  hasError?: boolean;
 }
 
 export function SessionView({
@@ -39,6 +40,7 @@ export function SessionView({
   onCancelPrompt,
   repoPath,
   isCloud = false,
+  hasError = false,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -119,6 +121,17 @@ export function SessionView({
           )}
 
           <PlanStatusBar plan={latestPlan} />
+
+          {hasError && (
+            <Callout.Root color="red" size="1" className="m-2">
+              <Callout.Text>
+                <Text size="2">
+                  Failed to resume this session. The working directory may have
+                  been deleted. Please start a new task.
+                </Text>
+              </Callout.Text>
+            </Callout.Root>
+          )}
 
           <Box
             className={

@@ -37,6 +37,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
+  const hasError = session?.status === "error";
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
@@ -47,7 +48,12 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (!repoPath) return;
     if (isConnecting.current) return;
 
-    if (session?.status === "connected" || session?.status === "connecting") {
+    // Don't reconnect if already connected, connecting, or in error state
+    if (
+      session?.status === "connected" ||
+      session?.status === "connecting" ||
+      session?.status === "error"
+    ) {
       return;
     }
 
@@ -144,6 +150,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
+          hasError={hasError}
         />
       </Box>
     </BackgroundWrapper>
