@@ -66,7 +66,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: "plan";
+    executionMode?: "plan" | "acceptEdits";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -75,6 +75,7 @@ interface SessionActions {
   ) => Promise<{ stopReason: string }>;
   cancelPrompt: (taskId: string) => Promise<boolean>;
   setSessionModel: (taskId: string, modelId: string) => Promise<void>;
+  setSessionMode: (taskId: string, modeId: ExecutionMode) => Promise<void>;
   appendUserShellExecute: (
     taskId: string,
     command: string,
@@ -140,7 +141,11 @@ function subscribeToChannel(taskRunId: string) {
                 params.update.currentModeId
               ) {
                 const newMode = params.update.currentModeId as ExecutionMode;
-                if (newMode === "default" || newMode === "acceptEdits") {
+                if (
+                  newMode === "plan" ||
+                  newMode === "default" ||
+                  newMode === "acceptEdits"
+                ) {
                   session.currentMode = newMode;
                   log.info("Session mode updated", { taskRunId, newMode });
                 }
@@ -408,7 +413,7 @@ function createBaseSession(
   taskId: string,
   isCloud: boolean,
   framework?: "claude" | "codex",
-  executionMode?: "plan",
+  executionMode?: "plan" | "acceptEdits",
 ): AgentSession {
   return {
     taskRunId,
@@ -620,7 +625,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: "plan",
+      executionMode?: "plan" | "acceptEdits",
     ) => {
       if (!auth.client) {
         log.error("API client not available");
@@ -881,6 +886,25 @@ const useStore = create<SessionStore>()(
             log.error("Failed to change session model", {
               taskId,
               modelId,
+              error,
+            });
+          }
+        },
+
+        setSessionMode: async (taskId, modeId) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session || session.isCloud) return;
+
+          try {
+            await trpcVanilla.agent.setMode.mutate({
+              sessionId: session.taskRunId,
+              modeId,
+            });
+            updateSession(session.taskRunId, { currentMode: modeId });
+          } catch (error) {
+            log.error("Failed to change session mode", {
+              taskId,
+              modeId,
               error,
             });
           }

@@ -1,6 +1,8 @@
 import { MessageEditor } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
+  type ExecutionMode,
+  useCurrentModeForTask,
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
@@ -22,6 +24,14 @@ import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { ModeIndicator } from "./ModeIndicator";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
+
+const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+
+function cycleMode(current: ExecutionMode): ExecutionMode {
+  const currentIndex = EXECUTION_MODES.indexOf(current);
+  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
+  return EXECUTION_MODES[nextIndex];
+}
 
 interface SessionViewProps {
   events: AcpMessage[];
@@ -49,7 +59,17 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const { respondToPermission, cancelPermission } = useSessionActions();
+  const { respondToPermission, cancelPermission, setSessionMode } =
+    useSessionActions();
+  const sessionMode = useCurrentModeForTask(taskId);
+  // Default to "default" mode if session not yet available
+  const currentMode: ExecutionMode = sessionMode ?? "default";
+
+  const handleModeChange = useCallback(() => {
+    if (!taskId || isCloud) return;
+    const nextMode = cycleMode(currentMode);
+    setSessionMode(taskId, nextMode);
+  }, [taskId, currentMode, isCloud, setSessionMode]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -64,6 +84,23 @@ export function SessionView({
   useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [
     onCancelPrompt,
   ]);
+
+  // Mode cycling with Shift+Tab
+  useHotkeys(
+    "shift+tab",
+    (e) => {
+      e.preventDefault();
+      if (!taskId || isCloud) return;
+      const nextMode = cycleMode(currentMode);
+      setSessionMode(taskId, nextMode);
+    },
+    {
+      enableOnFormTags: true,
+      enableOnContentEditable: true,
+      enabled: !isCloud && isRunning,
+    },
+    [taskId, currentMode, isCloud, isRunning, setSessionMode],
+  );
 
   const latestPlan = useMemo((): Plan | null => {
     let planIndex = -1;
@@ -198,6 +235,8 @@ export function SessionView({
                 onBashCommand={onBashCommand}
                 onBashModeChange={setIsBashMode}
                 onCancel={onCancelPrompt}
+                currentMode={currentMode}
+                onModeChange={!isCloud ? handleModeChange : undefined}
               />
             </Box>
           )}
