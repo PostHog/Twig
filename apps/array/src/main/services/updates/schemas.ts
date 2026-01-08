@@ -28,6 +28,7 @@ export type UpdatesStatusPayload = {
   checking: boolean;
   upToDate?: boolean;
   version?: string;
+  error?: string;
 };
 
 export interface UpdatesEvents {

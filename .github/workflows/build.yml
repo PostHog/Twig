@@ -2,9 +2,10 @@ name: Build
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+
+concurrency:
+  group: build-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -16,19 +17,24 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: "pnpm"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Build electron-trpc
         run: pnpm --filter @posthog/electron-trpc build
+
       - name: Build agent
         run: pnpm --filter agent build
+
       - name: Build array
         run: pnpm --filter array build

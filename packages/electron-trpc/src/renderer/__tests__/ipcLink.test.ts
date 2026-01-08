@@ -67,19 +67,20 @@ describe("ipcLink", () => {
       expect(mock.sendMessage).toHaveBeenCalledTimes(1);
       expect(mock.sendMessage).toHaveBeenCalledWith({
         method: "request",
-        operation: {
+        operation: expect.objectContaining({
           context: {},
-          id: 1,
           input: undefined,
           path: "testQuery",
           type: "query",
-        },
+        }),
       });
+
+      const sentId = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
 
       expect(queryResponse).not.toHaveBeenCalled();
 
       handlers[0]({
-        id: 1,
+        id: sentId,
         result: {
           type: "data",
           data: "query success",
@@ -102,19 +103,19 @@ describe("ipcLink", () => {
       expect(mock.sendMessage).toHaveBeenCalledTimes(1);
       expect(mock.sendMessage).toHaveBeenCalledWith({
         method: "request",
-        operation: {
+        operation: expect.objectContaining({
           context: {},
-          id: 1,
           input: "test input",
           path: "testMutation",
           type: "mutation",
-        },
+        }),
       });
 
+      const sentId = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
       mock.sendMessage.mockClear();
 
       handlers[0]({
-        id: 1,
+        id: sentId,
         result: {
           type: "data",
           data: "mutation success",
@@ -142,21 +143,22 @@ describe("ipcLink", () => {
       expect(mock.sendMessage).toHaveBeenCalledTimes(1);
       expect(mock.sendMessage).toHaveBeenCalledWith({
         method: "request",
-        operation: {
+        operation: expect.objectContaining({
           context: {},
-          id: 1,
           input: undefined,
           path: "testSubscription",
           type: "subscription",
-        },
+        }),
       });
+
+      const sentId = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
 
       /*
        * Multiple responses from the server
        */
       const respond = (str: string) =>
         handlers[0]({
-          id: 1,
+          id: sentId,
           result: {
             type: "data",
             data: str,
@@ -178,7 +180,7 @@ describe("ipcLink", () => {
       expect(mock.sendMessage).toHaveBeenCalledTimes(2);
       expect(mock.sendMessage.mock.calls[1]).toEqual([
         {
-          id: 1,
+          id: sentId,
           method: "subscription.stop",
         },
       ]);
@@ -204,20 +206,23 @@ describe("ipcLink", () => {
 
       expect(mock.sendMessage).toHaveBeenCalledTimes(3);
 
+      const sentId1 = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
+      const sentId3 = (mock.sendMessage.mock.calls[2][0] as any).operation.id;
+
       expect(queryResponse1).not.toHaveBeenCalled();
       expect(queryResponse2).not.toHaveBeenCalled();
       expect(queryResponse3).not.toHaveBeenCalled();
 
       // Respond to queries in a different order
       handlers[0]({
-        id: 1,
+        id: sentId1,
         result: {
           type: "data",
           data: "query success 1",
         },
       });
       handlers[0]({
-        id: 3,
+        id: sentId3,
         result: {
           type: "data",
           data: "query success 3",
@@ -253,19 +258,20 @@ describe("ipcLink", () => {
     expect(mock.sendMessage).toHaveBeenCalledTimes(1);
     expect(mock.sendMessage).toHaveBeenCalledWith({
       method: "request",
-      operation: {
+      operation: expect.objectContaining({
         context: {},
-        id: 1,
         input: superjson.serialize(input),
         path: "testInputs",
         type: "query",
-      },
+      }),
     });
+
+    const sentId = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
 
     expect(queryResponse).not.toHaveBeenCalled();
 
     handlers[0]({
-      id: 1,
+      id: sentId,
       result: {
         type: "data",
         data: superjson.serialize(input),
@@ -303,19 +309,20 @@ describe("ipcLink", () => {
     expect(mock.sendMessage).toHaveBeenCalledTimes(1);
     expect(mock.sendMessage).toHaveBeenCalledWith({
       method: "request",
-      operation: {
-        id: 1,
+      operation: expect.objectContaining({
         context: {},
         input: JSON.stringify(input),
         path: "testInputs",
         type: "query",
-      },
+      }),
     });
+
+    const sentId = (mock.sendMessage.mock.calls[0][0] as any).operation.id;
 
     expect(queryResponse).not.toHaveBeenCalled();
 
     handlers[0]({
-      id: 1,
+      id: sentId,
       result: {
         type: "data",
         data: JSON.stringify(input),

@@ -26,9 +26,17 @@ export function makeAsyncResource<T>(
 ): T & AsyncDisposable {
   const it = thing as T & AsyncDisposable;
 
+  // If Symbol.asyncDispose already exists (e.g., on native async generators),
+  // wrap the existing dispose with our custom dispose
   // eslint-disable-next-line no-restricted-syntax
   if (it[Symbol.asyncDispose]) {
-    throw new Error("Symbol.asyncDispose already exists");
+    const originalDispose = it[Symbol.asyncDispose].bind(it);
+    // eslint-disable-next-line no-restricted-syntax
+    it[Symbol.asyncDispose] = async () => {
+      await dispose();
+      await originalDispose();
+    };
+    return it;
   }
 
   // eslint-disable-next-line no-restricted-syntax

@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -30,6 +30,7 @@ import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 function getTaskAssociations(): TaskFolderAssociation[] {
   return foldersStore.get("taskAssociations", []);
@@ -159,13 +160,29 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       // try to create the branch, if it already exists just switch to it
       if (branch) {
         try {
-          log.info(`Creating/switching to branch ${branch} for task ${taskId}`);
-          try {
-            await execAsync(`git checkout -b "${branch}"`, { cwd: folderPath });
-            log.info(`Created and switched to new branch ${branch}`);
-          } catch (_error) {
-            await execAsync(`git checkout "${branch}"`, { cwd: folderPath });
-            log.info(`Switched to existing branch ${branch}`);
+          // Check if already on the target branch
+          const { stdout: currentBranch } = await execFileAsync(
+            "git",
+            ["rev-parse", "--abbrev-ref", "HEAD"],
+            { cwd: folderPath },
+          );
+          if (currentBranch.trim() === branch) {
+            log.info(`Already on branch ${branch}, skipping checkout`);
+          } else {
+            log.info(
+              `Creating/switching to branch ${branch} for task ${taskId}`,
+            );
+            try {
+              await execFileAsync("git", ["checkout", "-b", branch], {
+                cwd: folderPath,
+              });
+              log.info(`Created and switched to new branch ${branch}`);
+            } catch (_error) {
+              await execFileAsync("git", ["checkout", branch], {
+                cwd: folderPath,
+              });
+              log.info(`Switched to existing branch ${branch}`);
+            }
           }
         } catch (error) {
           const message = `Could not switch to branch "${branch}". Please commit or stash your changes first.`;

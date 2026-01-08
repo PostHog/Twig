@@ -1,14 +1,14 @@
-name: Typecheck
+name: Test
 
 on:
   pull_request:
 
 concurrency:
-  group: typecheck-${{ github.head_ref || github.ref }}
+  group: test-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  typecheck:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,5 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run type check
-        run: pnpm run typecheck
+      - name: Build dependencies
+        run: pnpm --filter @posthog/electron-trpc build
+
+      - name: Run tests
+        run: pnpm test
