@@ -1,5 +1,6 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -8,11 +9,19 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { BranchSelect } from "./BranchSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
+
+const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+
+function cycleMode(current: ExecutionMode): ExecutionMode {
+  const currentIndex = EXECUTION_MODES.indexOf(current);
+  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
+  return EXECUTION_MODES[nextIndex];
+}
 
 const DOT_FILL = "var(--gray-6)";
 
@@ -37,7 +46,11 @@ export function TaskInput() {
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
-  const [isPlanMode, setIsPlanMode] = useState(false);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
+
+  const handleModeChange = useCallback(() => {
+    setExecutionMode((current) => cycleMode(current));
+  }, []);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -63,7 +76,7 @@ export function TaskInput() {
     workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
     editorIsEmpty,
-    executionMode: isPlanMode ? "plan" : undefined,
+    executionMode: executionMode === "default" ? undefined : executionMode,
   });
 
   return (
@@ -144,8 +157,8 @@ export function TaskInput() {
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}
           onEmptyChange={setEditorIsEmpty}
-          isPlanMode={isPlanMode}
-          onPlanModeChange={setIsPlanMode}
+          executionMode={executionMode}
+          onModeChange={handleModeChange}
         />
 
         <SuggestedTasks editorRef={editorRef} />

@@ -1,4 +1,5 @@
 import "./message-editor.css";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
@@ -9,6 +10,7 @@ import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
 import { EditorToolbar } from "./EditorToolbar";
+import { ModeIndicatorInput } from "./ModeIndicatorInput";
 
 export type { EditorHandle as MessageEditorHandle };
 export type { EditorContentType as EditorContent };
@@ -22,6 +24,8 @@ interface MessageEditorProps {
   onCancel?: () => void;
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
+  currentMode?: ExecutionMode;
+  onModeChange?: () => void;
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -35,6 +39,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onCancel,
       onAttachFiles,
       autoFocus = false,
+      currentMode,
+      onModeChange,
     },
     ref,
   ) => {
@@ -97,6 +103,20 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         enableOnContentEditable: true,
       },
       [isLoading, onCancel],
+    );
+
+    useHotkeys(
+      "shift+tab",
+      (e) => {
+        e.preventDefault();
+        onModeChange?.();
+      },
+      {
+        enableOnFormTags: true,
+        enableOnContentEditable: true,
+        enabled: !disabled && !!onModeChange,
+      },
+      [onModeChange, disabled],
     );
 
     const handleContainerClick = (e: React.MouseEvent) => {
@@ -171,6 +191,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             )}
           </Flex>
         </Flex>
+        {onModeChange && currentMode && (
+          <ModeIndicatorInput mode={currentMode} />
+        )}
       </Flex>
     );
   },

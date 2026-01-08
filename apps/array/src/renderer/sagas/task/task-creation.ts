@@ -31,8 +31,8 @@ export interface TaskCreationInput {
   branch?: string | null;
   githubIntegrationId?: number;
   autoRun?: boolean;
-  // Execution mode: "plan" starts in plan mode (read-only), undefined starts in default mode
-  executionMode?: "plan";
+  // Execution mode: "plan" starts in plan mode (read-only), "acceptEdits" auto-approves edits, undefined starts in default mode
+  executionMode?: "plan" | "acceptEdits";
 }
 
 export interface TaskCreationOutput {

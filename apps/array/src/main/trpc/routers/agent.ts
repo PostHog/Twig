@@ -11,6 +11,7 @@ import {
   reconnectSessionInput,
   respondToPermissionInput,
   sessionResponseSchema,
+  setModeInput,
   setModelInput,
   startSessionInput,
   subscribeSessionInput,
@@ -57,6 +58,12 @@ export const agentRouter = router({
     .input(setModelInput)
     .mutation(({ input }) =>
       getService().setSessionModel(input.sessionId, input.modelId),
+    ),
+
+  setMode: publicProcedure
+    .input(setModeInput)
+    .mutation(({ input }) =>
+      getService().setSessionMode(input.sessionId, input.modeId),
     ),
 
   onSessionEvent: publicProcedure

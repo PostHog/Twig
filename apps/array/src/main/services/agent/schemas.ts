@@ -14,7 +14,7 @@ export const agentFrameworkSchema = z.enum(["claude", "codex"]);
 export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
 
 // Execution mode schema
-export const executionModeSchema = z.enum(["plan"]);
+export const executionModeSchema = z.enum(["plan", "acceptEdits"]);
 export type ExecutionMode = z.infer<typeof executionModeSchema>;
 
 // Session config schema
@@ -45,7 +45,7 @@ export const startSessionInput = z.object({
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
   framework: agentFrameworkSchema.optional().default("claude"),
-  executionMode: z.enum(["plan"]).optional(),
+  executionMode: z.enum(["plan", "acceptEdits"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),
 });
@@ -115,6 +115,12 @@ export const tokenRefreshInput = z.object({
 export const setModelInput = z.object({
   sessionId: z.string(),
   modelId: z.string(),
+});
+
+// Set mode input
+export const setModeInput = z.object({
+  sessionId: z.string(),
+  modeId: z.enum(["plan", "default", "acceptEdits"]),
 });
 
 // Subscribe to session events input
