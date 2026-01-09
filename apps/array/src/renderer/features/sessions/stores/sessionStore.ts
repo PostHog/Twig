@@ -86,6 +86,8 @@ interface SessionActions {
     taskId: string,
     toolCallId: string,
     optionId: string,
+    selectedOptionIds?: string[],
+    customInput?: string,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
 }
@@ -928,7 +930,13 @@ const useStore = create<SessionStore>()(
           await appendAndPersist(taskId, session, event, storedEntry);
         },
 
-        respondToPermission: async (taskId, toolCallId, optionId) => {
+        respondToPermission: async (
+          taskId,
+          toolCallId,
+          optionId,
+          selectedOptionIds,
+          customInput,
+        ) => {
           const session = getSessionByTaskId(taskId);
           if (!session) {
             log.error("No session found for permission response", { taskId });
@@ -940,6 +948,8 @@ const useStore = create<SessionStore>()(
               sessionId: session.taskRunId,
               toolCallId,
               optionId,
+              selectedOptionIds,
+              customInput,
             });
 
             // Create new Map outside of Immer (Maps don't work well with Immer proxies)
@@ -960,6 +970,8 @@ const useStore = create<SessionStore>()(
               taskId,
               toolCallId,
               optionId,
+              selectedOptionIds,
+              hasCustomInput: !!customInput,
             });
 
             // Persist permission response to logs for recovery tracking
@@ -973,6 +985,8 @@ const useStore = create<SessionStore>()(
                   params: {
                     toolCallId,
                     optionId,
+                    ...(selectedOptionIds && { selectedOptionIds }),
+                    ...(customInput && { customInput }),
                   },
                 },
               };

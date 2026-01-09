@@ -509,7 +509,12 @@ export class ClaudeAcpAgent implements Agent {
       executable: "node",
       // Prevent spawned Electron processes from showing in dock/tray.
       // Must merge with process.env since SDK replaces rather than merges.
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      // Enable AskUserQuestion tool via environment variable (required by SDK feature flag)
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: "true",
+      },
       ...(process.env.CLAUDE_CODE_EXECUTABLE && {
         pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
       }),
@@ -524,8 +529,9 @@ export class ClaudeAcpAgent implements Agent {
       },
     };
 
-    const allowedTools = [];
-    const disallowedTools = [];
+    // AskUserQuestion must be explicitly allowed for the agent to use it
+    const allowedTools: string[] = ["AskUserQuestion"];
+    const disallowedTools: string[] = [];
 
     // Check if built-in tools should be disabled
     const disableBuiltInTools = params._meta?.disableBuiltInTools === true;
@@ -1109,80 +1115,145 @@ export class ClaudeAcpAgent implements Agent {
 
       // AskUserQuestion always prompts user - never auto-approve
       if (toolName === "AskUserQuestion") {
-        interface AskUserQuestionInput {
-          questions?: Array<{
-            question: string;
-            options: Array<{ label: string; description?: string }>;
-            multiSelect?: boolean;
-          }>;
+        interface QuestionItem {
+          question: string;
+          header?: string;
+          options: Array<{ label: string; description?: string }>;
+          multiSelect?: boolean;
         }
-        const questions = (toolInput as AskUserQuestionInput)?.questions || [];
-        const firstQuestion = questions[0];
+        interface AskUserQuestionInput {
+          // Full format: array of questions with options
+          questions?: QuestionItem[];
+          // Simple format: just a question string (used when Claude doesn't have proper schema)
+          question?: string;
+          header?: string;
+          options?: Array<{ label: string; description?: string }>;
+          multiSelect?: boolean;
+        }
+        const input = toolInput as AskUserQuestionInput;
 
-        if (!firstQuestion) {
+        // Normalize to questions array format
+        // Support both: { questions: [...] } and { question: "..." }
+        let questions: QuestionItem[];
+        if (input.questions && input.questions.length > 0) {
+          // Full format with questions array
+          questions = input.questions;
+        } else if (input.question) {
+          // Simple format - convert to array
+          // If no options provided, just use "Other" for free-form input
+          questions = [
+            {
+              question: input.question,
+              header: input.header,
+              options: input.options || [],
+              multiSelect: input.multiSelect,
+            },
+          ];
+        } else {
           return {
             behavior: "deny",
-            message: "No question provided",
+            message: "No questions provided",
             interrupt: true,
           };
         }
 
-        // Convert question options to permission options
-        const options = firstQuestion.options.map(
-          (opt: { label: string; description?: string }, idx: number) => ({
-            kind: "allow_once" as const,
-            name: opt.label,
-            optionId: `option_${idx}`,
-            description: opt.description,
-          }),
-        );
+        // Collect all answers from all questions
+        const allAnswers: Record<string, string | string[]> = {};
 
-        // Add "Other" option if multiSelect is not enabled
-        if (!firstQuestion.multiSelect) {
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
+
+          // Convert question options to permission options
+          const options = (question.options || []).map(
+            (opt: { label: string; description?: string }, idx: number) => ({
+              kind: "allow_once" as const,
+              name: opt.label,
+              optionId: `option_${idx}`,
+              description: opt.description,
+            }),
+          );
+
+          // Add "Other" option for free-form response
           options.push({
             kind: "allow_once" as const,
             name: "Other",
             optionId: "other",
             description: "Provide a custom response",
           });
-        }
 
-        const response = await this.client.requestPermission({
-          options,
-          sessionId,
-          toolCall: {
-            toolCallId: toolUseID,
-            rawInput: { ...toolInput, toolName },
-            title: firstQuestion.question,
-          },
-        });
-
-        if (response.outcome?.outcome === "selected") {
-          const selectedOptionId = response.outcome.optionId;
-          const selectedIdx = parseInt(
-            selectedOptionId.replace("option_", ""),
-            10,
-          );
-          const selectedOption = firstQuestion.options[selectedIdx];
-
-          // Return the answer in updatedInput so it flows back to Claude
-          return {
-            behavior: "allow",
-            updatedInput: {
-              ...toolInput,
-              answers: {
-                [firstQuestion.question]:
-                  selectedOption?.label || selectedOptionId,
+          const response = await this.client.requestPermission({
+            options,
+            sessionId,
+            toolCall: {
+              toolCallId: toolUseID,
+              rawInput: {
+                ...toolInput,
+                toolName,
+                // Include full question data for UI rendering
+                currentQuestion: question,
+                questionIndex: i,
+                totalQuestions: questions.length,
               },
+              // Use the full question text as title for the selection input
+              title: question.question,
             },
-          };
-        } else {
-          return {
-            behavior: "deny",
-            message: "User did not answer the question",
-            interrupt: true,
-          };
+          });
+
+          if (response.outcome?.outcome === "selected") {
+            const selectedOptionId = response.outcome.optionId;
+            // Type assertion for extended outcome fields
+            const extendedOutcome = response.outcome as {
+              optionId: string;
+              selectedOptionIds?: string[];
+              customInput?: string;
+            };
+
+            if (selectedOptionId === "other" && extendedOutcome.customInput) {
+              // "Other" was selected with custom text
+              allAnswers[question.question] = extendedOutcome.customInput;
+            } else if (selectedOptionId === "other") {
+              // "Other" was selected but no custom text - just record "other"
+              allAnswers[question.question] = "other";
+            } else if (
+              question.multiSelect &&
+              extendedOutcome.selectedOptionIds
+            ) {
+              // Multi-select: collect all selected option labels
+              const selectedLabels = extendedOutcome.selectedOptionIds
+                .map((id: string) => {
+                  const idx = parseInt(id.replace("option_", ""), 10);
+                  return question.options?.[idx]?.label;
+                })
+                .filter(Boolean) as string[];
+              allAnswers[question.question] = selectedLabels;
+            } else {
+              // Single select
+              const selectedIdx = parseInt(
+                selectedOptionId.replace("option_", ""),
+                10,
+              );
+              const selectedOption = question.options?.[selectedIdx];
+              allAnswers[question.question] =
+                selectedOption?.label || selectedOptionId;
+            }
+          } else {
+            // User cancelled or did not answer
+            return {
+              behavior: "deny",
+              message: "User did not complete all questions",
+              interrupt: true,
+            };
+          }
         }
+
+        // Return all answers in updatedInput
+        return {
+          behavior: "allow",
+          updatedInput: {
+            ...toolInput,
+            answers: allAnswers,
+          },
+        };
       }
 
       // In plan mode, deny write/edit tools except for Claude's plan files

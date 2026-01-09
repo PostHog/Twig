@@ -159,15 +159,26 @@ export function SessionView({
     async (optionId: string, customInput?: string) => {
       if (!firstPendingPermission || !taskId) return;
 
-      // If custom input provided, send it as a prompt after selecting "keep planning"
       if (customInput) {
-        await respondToPermission(
-          taskId,
-          firstPendingPermission.toolCallId,
-          optionId,
-        );
-        // Send the custom input as a follow-up prompt
-        onSendPrompt(customInput);
+        // Check if this is an "other" option (AskUserQuestion) or plan feedback
+        if (optionId === "other") {
+          // For AskUserQuestion "Other" - pass customInput to the permission response
+          await respondToPermission(
+            taskId,
+            firstPendingPermission.toolCallId,
+            optionId,
+            undefined,
+            customInput,
+          );
+        } else {
+          // For plan mode feedback - respond and send as follow-up prompt
+          await respondToPermission(
+            taskId,
+            firstPendingPermission.toolCallId,
+            optionId,
+          );
+          onSendPrompt(customInput);
+        }
       } else {
         await respondToPermission(
           taskId,

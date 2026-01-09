@@ -130,7 +130,7 @@ interface SessionConfig {
   sdkSessionId?: string;
   model?: string;
   framework?: "claude" | "codex";
-  executionMode?: "plan" | "acceptEdits";
+  executionMode?: "plan" | "acceptEdits" | "default";
 }
 
 interface ManagedSession {
@@ -179,6 +179,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     sessionId: string,
     toolCallId: string,
     optionId: string,
+    selectedOptionIds?: string[],
+    customInput?: string,
   ): void {
     const key = `${sessionId}:${toolCallId}`;
     const pending = this.pendingPermissions.get(key);
@@ -192,12 +194,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sessionId,
       toolCallId,
       optionId,
+      selectedOptionIds,
+      hasCustomInput: !!customInput,
     });
 
     pending.resolve({
       outcome: {
         outcome: "selected",
         optionId,
+        // Include multi-select and custom input in the response
+        ...(selectedOptionIds && { selectedOptionIds }),
+        ...(customInput && { customInput }),
       },
     });
 
