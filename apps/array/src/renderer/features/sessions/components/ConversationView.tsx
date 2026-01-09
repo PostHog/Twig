@@ -2,6 +2,7 @@ import type {
   ContentBlock,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { ArrowDown, XCircle } from "@phosphor-icons/react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
@@ -69,8 +70,13 @@ export function ConversationView({
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
 
+  // Track pending permissions for scroll triggering
+  const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
+  const pendingPermissionsCount = pendingPermissions.size;
+
   const isNearBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(0);
+  const prevPendingCountRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Update isNearBottom on scroll
@@ -89,18 +95,20 @@ export function ConversationView({
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll to bottom on first render and when new content arrives
+  // Scroll to bottom on first render, new content, or new pending permissions
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
     const isNewContent = items.length > prevItemsLengthRef.current;
+    const isNewPending = pendingPermissionsCount > prevPendingCountRef.current;
     prevItemsLengthRef.current = items.length;
+    prevPendingCountRef.current = pendingPermissionsCount;
 
-    if (isNearBottomRef.current || isNewContent) {
+    if (isNearBottomRef.current || isNewContent || isNewPending) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [items]);
+  }, [items, pendingPermissionsCount]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;

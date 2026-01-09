@@ -14,7 +14,7 @@ export const agentFrameworkSchema = z.enum(["claude", "codex"]);
 export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
 
 // Execution mode schema
-export const executionModeSchema = z.enum(["plan", "acceptEdits"]);
+export const executionModeSchema = z.enum(["plan", "acceptEdits", "default"]);
 export type ExecutionMode = z.infer<typeof executionModeSchema>;
 
 // Session config schema
@@ -45,7 +45,7 @@ export const startSessionInput = z.object({
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
   framework: agentFrameworkSchema.optional().default("claude"),
-  executionMode: z.enum(["plan", "acceptEdits"]).optional(),
+  executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),
 });
@@ -164,6 +164,10 @@ export const respondToPermissionInput = z.object({
   sessionId: z.string(),
   toolCallId: z.string(),
   optionId: z.string(),
+  // For multi-select mode: array of selected option IDs
+  selectedOptionIds: z.array(z.string()).optional(),
+  // For "Other" option: custom text input from user
+  customInput: z.string().optional(),
 });
 
 export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;
