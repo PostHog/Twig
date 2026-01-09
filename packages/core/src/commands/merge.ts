@@ -7,8 +7,8 @@ import type { Command } from "./types";
 interface MergeOptions {
   method?: "merge" | "squash" | "rebase";
   engine: Engine;
-  onMerging?: (pr: PRToMerge, nextPr?: PRToMerge) => void;
-  onWaiting?: () => void;
+  onWaitingForCI?: (pr: PRToMerge) => void;
+  onMerging?: (pr: PRToMerge) => void;
   onMerged?: (pr: PRToMerge) => void;
 }
 
@@ -20,7 +20,8 @@ export async function getMergeablePrs(): Promise<Result<PRToMerge[]>> {
 }
 
 /**
- * Merge the stack of PRs.
+ * Merge the stack of PRs sequentially.
+ * Waits for CI to pass on each PR before merging, then updates the next PR's base.
  * Untracks merged bookmarks from the engine.
  */
 export async function merge(
@@ -31,8 +32,8 @@ export async function merge(
     prs,
     { method: options.method ?? "squash", engine: options.engine },
     {
+      onWaitingForCI: options.onWaitingForCI,
       onMerging: options.onMerging,
-      onWaiting: options.onWaiting,
       onMerged: options.onMerged,
     },
   );

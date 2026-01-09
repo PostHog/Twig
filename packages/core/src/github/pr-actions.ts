@@ -194,19 +194,31 @@ export async function updatePRBranch(
   }
 }
 
+export interface WaitForMergeableOptions {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  /** Callback when status changes, for UI updates */
+  onStatusChange?: (status: {
+    mergeable: boolean | null;
+    state: string;
+    checksComplete: boolean;
+  }) => void;
+}
+
 export function waitForMergeable(
   prNumber: number,
-  options?: { timeoutMs?: number; pollIntervalMs?: number },
+  options?: WaitForMergeableOptions,
   cwd = process.cwd(),
 ): Promise<Result<{ mergeable: boolean; reason?: string }>> {
-  const timeoutMs = options?.timeoutMs ?? 30000;
-  const pollIntervalMs = options?.pollIntervalMs ?? 2000;
+  const timeoutMs = options?.timeoutMs ?? 300000; // 5 minutes default
+  const pollIntervalMs = options?.pollIntervalMs ?? 5000;
 
   return withGitHub(
     cwd,
     "check mergeable status",
     async ({ octokit, owner, repo }) => {
       const startTime = Date.now();
+      let lastState = "";
 
       while (Date.now() - startTime < timeoutMs) {
         const { data: pr } = await octokit.pulls.get({
@@ -215,23 +227,58 @@ export function waitForMergeable(
           pull_number: prNumber,
         });
 
-        if (pr.mergeable === true) {
+        // mergeable_state values:
+        // - "clean": can merge, all checks passed
+        // - "blocked": checks pending or required reviews missing
+        // - "dirty": has conflicts
+        // - "unstable": has failing checks but can still merge
+        // - "unknown": GitHub is computing
+        const state = pr.mergeable_state || "unknown";
+        const checksComplete = state !== "blocked" && state !== "unknown";
+
+        // Notify caller of status change
+        if (state !== lastState) {
+          options?.onStatusChange?.({
+            mergeable: pr.mergeable,
+            state,
+            checksComplete,
+          });
+          lastState = state;
+        }
+
+        // "clean" means mergeable AND all required checks passed
+        if (state === "clean" && pr.mergeable === true) {
           return { mergeable: true };
         }
 
-        if (pr.mergeable === false) {
+        // "unstable" means checks failed but PR is still mergeable (non-required checks)
+        if (state === "unstable" && pr.mergeable === true) {
+          return { mergeable: true };
+        }
+
+        // Has conflicts
+        if (state === "dirty") {
           return {
             mergeable: false,
-            reason: pr.mergeable_state || "Has conflicts or other issues",
+            reason: "Has merge conflicts",
           };
         }
 
+        // Explicit not mergeable
+        if (pr.mergeable === false && state !== "unknown") {
+          return {
+            mergeable: false,
+            reason: state || "Not mergeable",
+          };
+        }
+
+        // "blocked" or "unknown" - keep waiting
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
       return {
         mergeable: false,
-        reason: "Timeout waiting for merge status",
+        reason: "Timeout waiting for CI checks",
       };
     },
   );

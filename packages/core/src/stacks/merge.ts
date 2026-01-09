@@ -1,15 +1,9 @@
 import type { Engine } from "../engine";
-import { mergePR, updatePR, waitForMergeable } from "../github/pr-actions";
+import { shellExecutor } from "../executor";
+import { getRepoInfo } from "../github/client";
+import { updatePR } from "../github/pr-actions";
 import { getPRForBranch } from "../github/pr-status";
-import {
-  deleteBookmark,
-  getTrunk,
-  list,
-  push,
-  rebase,
-  runJJ,
-  status,
-} from "../jj";
+import { getTrunk, list, status } from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import type { MergeOptions, MergeResult, PRToMerge } from "../types";
 
@@ -100,21 +94,68 @@ interface MergeStackOptions extends MergeOptions {
   engine: Engine;
 }
 
+async function pollForMerge(
+  prNumber: number,
+  repoFlag: string,
+  timeoutMs = 600000, // 10 minutes
+  intervalMs = 5000,
+): Promise<Result<void>> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const result = await shellExecutor.execute(
+      "gh",
+      ["pr", "view", String(prNumber), "--json", "state", repoFlag],
+      { cwd: process.cwd() },
+    );
+
+    if (result.exitCode === 0) {
+      try {
+        const data = JSON.parse(result.stdout);
+        if (data.state === "MERGED") {
+          return ok(undefined);
+        }
+        if (data.state === "CLOSED") {
+          return err(
+            createError(
+              "COMMAND_FAILED",
+              `PR #${prNumber} was closed without merging`,
+            ),
+          );
+        }
+      } catch {
+        // JSON parse error, continue polling
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  return err(
+    createError(
+      "COMMAND_FAILED",
+      `Timeout waiting for PR #${prNumber} to merge`,
+    ),
+  );
+}
+
 export async function mergeStack(
   prs: PRToMerge[],
   options: MergeStackOptions,
   callbacks?: {
-    onMerging?: (pr: PRToMerge, nextPr?: PRToMerge) => void;
-    onWaiting?: (pr: PRToMerge) => void;
+    onWaitingForCI?: (pr: PRToMerge) => void;
+    onMerging?: (pr: PRToMerge) => void;
     onMerged?: (pr: PRToMerge) => void;
   },
 ): Promise<Result<MergeResult>> {
   const { engine } = options;
-  await runJJ(["git", "fetch"]);
-
   const trunk = await getTrunk();
   const method = options.method ?? "squash";
-  const merged: PRToMerge[] = [];
+
+  const repoResult = await getRepoInfo(process.cwd());
+  if (!repoResult.ok) return repoResult;
+  const { owner, repo } = repoResult.value;
+  const repoFlag = `-R=${owner}/${repo}`;
 
   const protectedBranches = [trunk, "main", "master", "develop"];
   for (const prItem of prs) {
@@ -128,98 +169,95 @@ export async function mergeStack(
     }
   }
 
+  const merged: PRToMerge[] = [];
+
+  // Merge PRs one at a time, sequentially
   for (let i = 0; i < prs.length; i++) {
     const prItem = prs[i];
-    const nextPR = prs[i + 1];
+    const nextPr = prs[i + 1];
 
-    callbacks?.onMerging?.(prItem, nextPR);
-
-    // Update this PR's base to trunk right before merging
-    // (Don't do this upfront for all PRs - that can cause GitHub to auto-close them)
+    // Update this PR's base to trunk if needed (should already be trunk for first PR)
     if (prItem.baseRefName !== trunk) {
       const baseUpdateResult = await updatePR(prItem.prNumber, { base: trunk });
       if (!baseUpdateResult.ok) return baseUpdateResult;
     }
 
-    // Update next PR's base to trunk BEFORE merging (and deleting the branch)
-    // Otherwise GitHub auto-closes the next PR when its base branch disappears
-    if (nextPR) {
-      const nextBaseUpdateResult = await updatePR(nextPR.prNumber, {
-        base: trunk,
-      });
-      if (!nextBaseUpdateResult.ok) return nextBaseUpdateResult;
-    }
+    // Wait for all CI checks to complete (don't fail on non-required failures)
+    callbacks?.onWaitingForCI?.(prItem);
+    await shellExecutor.execute(
+      "gh",
+      ["pr", "checks", String(prItem.prNumber), "--watch", repoFlag],
+      { cwd: process.cwd(), timeout: 1800000 }, // 30 minutes
+    );
+    // We ignore the exit code - some checks may fail but merge might still be allowed
+    // The actual merge command will fail if required checks haven't passed
 
-    callbacks?.onWaiting?.(prItem);
+    // Merge the PR
+    callbacks?.onMerging?.(prItem);
+    let mergeResult = await shellExecutor.execute(
+      "gh",
+      ["pr", "merge", String(prItem.prNumber), `--${method}`, repoFlag],
+      { cwd: process.cwd() },
+    );
 
-    const mergeableResult = await waitForMergeable(prItem.prNumber, {
-      timeoutMs: 60000,
-      pollIntervalMs: 2000,
-    });
+    // If direct merge fails due to branch protection, use --auto and wait
+    if (
+      mergeResult.exitCode !== 0 &&
+      mergeResult.stderr.includes("not mergeable")
+    ) {
+      callbacks?.onWaitingForCI?.(prItem);
+      mergeResult = await shellExecutor.execute(
+        "gh",
+        [
+          "pr",
+          "merge",
+          String(prItem.prNumber),
+          `--${method}`,
+          "--auto",
+          repoFlag,
+        ],
+        { cwd: process.cwd() },
+      );
 
-    if (!mergeableResult.ok) return mergeableResult;
+      if (mergeResult.exitCode !== 0) {
+        return err(
+          createError(
+            "COMMAND_FAILED",
+            `Failed to enable auto-merge for PR #${prItem.prNumber}: ${mergeResult.stderr}`,
+          ),
+        );
+      }
 
-    if (!mergeableResult.value.mergeable) {
+      // Poll until PR is merged
+      const pollResult = await pollForMerge(prItem.prNumber, repoFlag);
+      if (!pollResult.ok) return pollResult;
+    } else if (mergeResult.exitCode !== 0) {
       return err(
         createError(
-          "MERGE_BLOCKED",
-          `PR #${prItem.prNumber} is not mergeable: ${mergeableResult.value.reason}`,
+          "COMMAND_FAILED",
+          `Failed to merge PR #${prItem.prNumber}: ${mergeResult.stderr}`,
         ),
       );
     }
 
-    const mergeResult = await mergePR(prItem.prNumber, {
-      method,
-      deleteHead: true,
-      headRef: prItem.bookmarkName,
-    });
-
-    if (!mergeResult.ok) return mergeResult;
-
     callbacks?.onMerged?.(prItem);
-
     merged.push(prItem);
 
-    // Clean up the merged commit (same as arr sync does):
-    // 1. Abandon the commit (must do before rebase because rebase -r changes changeIds)
-    // 2. Delete the local bookmark
-    // 3. Untrack from engine
-    if (prItem.changeId) {
-      await runJJ(["abandon", prItem.changeId]);
-    }
-    await deleteBookmark(prItem.bookmarkName);
+    // Untrack locally
     if (engine.isTracked(prItem.bookmarkName)) {
       engine.untrack(prItem.bookmarkName);
     }
 
-    if (nextPR) {
-      // Fetch to get the merged commit into local main
-      await runJJ(["git", "fetch"]);
-      // Update local trunk bookmark to match remote
-      await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
-
-      // Rebase just the next PR's commit onto trunk (not its ancestors)
-      // Using "revision" mode (-r) ensures we skip the just-merged commit
-      const rebaseResult = await rebase({
-        source: nextPR.bookmarkName,
-        destination: trunk,
-        mode: "revision",
-      });
-      if (!rebaseResult.ok) return rebaseResult;
-
-      // Push the rebased branch to GitHub
-      const pushResult = await push({ bookmark: nextPR.bookmarkName });
-      if (!pushResult.ok) return pushResult;
+    // Update next PR's base to trunk (so it's ready for next iteration)
+    if (nextPr && nextPr.baseRefName !== trunk) {
+      const nextBaseResult = await updatePR(nextPr.prNumber, { base: trunk });
+      if (!nextBaseResult.ok) return nextBaseResult;
+      nextPr.baseRefName = trunk;
     }
   }
 
-  // Final sync: fetch, update main, move WC to trunk
-  await runJJ(["git", "fetch"]);
-  await runJJ(["bookmark", "set", trunk, "-r", `${trunk}@origin`]);
-  await runJJ(["new", trunk]);
-
   return ok({
     merged,
-    synced: true,
+    synced: false,
   });
 }

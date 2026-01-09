@@ -16,4 +16,7 @@ export async function track(
 
   message(formatSuccess(`Now tracking ${cyan(result.bookmark)}`));
   indent(`${dim("Parent:")} ${result.parent}`);
+  if (result.linkedPr) {
+    indent(`${dim("Linked:")} PR #${result.linkedPr}`);
+  }
 }

@@ -33,6 +33,7 @@ export type JJErrorCode =
   | "ALREADY_MERGED"
   | "NOT_FOUND"
   | "EMPTY_CHANGE"
+  | "CI_FAILED"
   | "UNKNOWN";
 
 export function createError(
