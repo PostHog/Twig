@@ -23,7 +23,14 @@ export function parseArgs(argv: string[]): ParsedCommand {
         flags[key] = true;
       }
     } else if (arg.startsWith("-") && arg.length === 2) {
-      flags[arg.slice(1)] = true;
+      const key = arg.slice(1);
+      const nextArg = allArgs[i + 1];
+      if (nextArg && !nextArg.startsWith("-")) {
+        flags[key] = nextArg;
+        i++;
+      } else {
+        flags[key] = true;
+      }
     } else if (command === "__guided") {
       command = arg;
     } else {

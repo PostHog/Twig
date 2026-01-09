@@ -57,6 +57,31 @@ export async function confirm(
   return result === "yes";
 }
 
+export async function textInput(message: string): Promise<string | null> {
+  const { stdin, stdout } = process;
+  const readline = await import("node:readline");
+
+  if (!stdin.isTTY) {
+    return null;
+  }
+
+  const rl = readline.createInterface({
+    input: stdin,
+    output: stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`${cyan("?")} ${bold(message)} ${dim("›")} `, (answer) => {
+      rl.close();
+      if (answer.trim() === "") {
+        resolve(null);
+      } else {
+        resolve(answer.trim());
+      }
+    });
+  });
+}
+
 export async function select<T extends string>(
   message: string,
   options: { label: string; value: T; hint?: string }[],

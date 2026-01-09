@@ -8,6 +8,7 @@ import { mergeCommand } from "@array/core/commands/merge";
 import { modifyCommand } from "@array/core/commands/modify";
 import { resolveCommand } from "@array/core/commands/resolve";
 import { restackCommand } from "@array/core/commands/restack";
+import { splitCommand } from "@array/core/commands/split";
 import { squashCommand } from "@array/core/commands/squash";
 import { statusCommand } from "@array/core/commands/status";
 import { submitCommand } from "@array/core/commands/submit";
@@ -36,6 +37,7 @@ import { merge } from "./commands/merge";
 import { modify } from "./commands/modify";
 import { resolve } from "./commands/resolve";
 import { restack } from "./commands/restack";
+import { split } from "./commands/split";
 import { squash } from "./commands/squash";
 import { status } from "./commands/status";
 import { submit } from "./commands/submit";
@@ -102,6 +104,7 @@ export const COMMANDS = {
   delete: deleteCommand.meta,
   modify: modifyCommand.meta,
   resolve: resolveCommand.meta,
+  split: splitCommand.meta,
   squash: squashCommand.meta,
   merge: mergeCommand.meta,
   undo: undoCommand.meta,
@@ -134,6 +137,12 @@ export const HANDLERS: Record<string, CommandHandler> = {
     deleteChange(p.args[0], ctx!, { yes: !!p.flags.yes || !!p.flags.y }),
   modify: () => modify(),
   resolve: () => resolve(),
+  split: (p, ctx) =>
+    split(
+      p.args,
+      { message: (p.flags.message ?? p.flags.m) as string | undefined },
+      ctx!,
+    ),
   squash: (p, ctx) => squash(p.args[0], ctx!),
   merge: (p, ctx) => merge(p.flags, ctx!),
   undo: () => undo(),
