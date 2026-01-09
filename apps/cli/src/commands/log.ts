@@ -1,7 +1,7 @@
 import { hasResolvedConflict } from "@array/core/commands/resolve";
 import type { ArrContext, Engine } from "@array/core/engine";
 import { getCurrentGitBranch } from "@array/core/git/status";
-import { getDiffStats, runJJ } from "@array/core/jj";
+import { runJJ } from "@array/core/jj";
 import { COMMANDS } from "../registry";
 import {
   arr,
@@ -32,8 +32,8 @@ interface LogFlags {
 // Template for jj log - jj handles graph rendering and adds correct prefixes for each \n
 // We output tagged lines that we parse and enhance with colors/PR info
 const JJ_TEMPLATE = [
-  // CHANGE line: changeId|prefix|commitId|prefix|bookmarks|description|empty|immutable|conflict|timestamp
-  '"CHANGE:" ++ change_id.short() ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ commit_id.short() ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ bookmarks.join(",") ++ "|" ++ description.first_line() ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ committer.timestamp() ++ "\\n"',
+  // CHANGE line: changeId|prefix|commitId|prefix|bookmarks|description|empty|immutable|conflict|timestamp|unsyncedBookmarks
+  '"CHANGE:" ++ change_id.short() ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ commit_id.short() ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ bookmarks.join(",") ++ "|" ++ description.first_line() ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ committer.timestamp() ++ "|" ++ local_bookmarks.filter(|b| !b.synced()).map(|b| b.name()).join(",") ++ "\\n"',
   // TIME line
   '"TIME:" ++ committer.timestamp() ++ "\\n"',
   // HINT line for empty WC
@@ -57,9 +57,12 @@ export async function log(
 ): Promise<void> {
   const { engine, trunk: trunkName, cwd } = ctx;
   const debug = flags.debug ?? false;
+  const timings: Record<string, number> = {};
 
   // Check for unmanaged git branch first
+  let t0 = Date.now();
   const gitBranch = await getCurrentGitBranch(cwd);
+  timings.gitBranch = Date.now() - t0;
   if (
     gitBranch !== null &&
     gitBranch !== trunkName &&
@@ -87,10 +90,12 @@ export async function log(
   }
 
   // Run jj log with our template
+  t0 = Date.now();
   const result = await runJJ(
     ["log", "--color=never", "-r", revset, "-T", JJ_TEMPLATE],
     cwd,
   );
+  timings.jjLog = Date.now() - t0;
 
   if (!result.ok) {
     message(red("Failed to get log"));
@@ -106,12 +111,23 @@ export async function log(
     console.log("=== END RAW ===\n");
   }
 
-  // Build enhancement data
+  // Extract unsynced bookmarks directly from jj output (no extra jj calls needed)
+  const unsyncedBookmarks = extractUnsyncedBookmarks(result.value.stdout);
+
+  // Build enhancement data (run independent calls in parallel)
+  t0 = Date.now();
   const prInfoMap = buildPRInfoMap(engine, trackedBookmarks);
-  const modifiedBookmarks = await getModifiedBookmarks(trackedBookmarks, cwd);
-  const behindTrunkChanges = await getBehindTrunkChanges(cwd);
-  const wcParentBookmark = await getWCParentBookmark(trackedBookmarks, cwd);
-  const resolvedConflictResult = await hasResolvedConflict(cwd);
+  timings.prInfoMap = Date.now() - t0;
+
+  t0 = Date.now();
+  const [behindTrunkChanges, wcParentBookmark, resolvedConflictResult] =
+    await Promise.all([
+      getBehindTrunkChanges(cwd),
+      getWCParentBookmark(trackedBookmarks, cwd),
+      hasResolvedConflict(cwd),
+    ]);
+  timings.parallelCalls = Date.now() - t0;
+
   const hasResolved = resolvedConflictResult.ok && resolvedConflictResult.value;
 
   // Check if empty state (just on trunk with empty WC)
@@ -132,7 +148,7 @@ export async function log(
     result.value.stdout,
     trunkName,
     prInfoMap,
-    modifiedBookmarks,
+    unsyncedBookmarks,
     trackedBookmarks,
     behindTrunkChanges,
     wcParentBookmark,
@@ -141,6 +157,17 @@ export async function log(
   message(output);
 
   message("│");
+
+  if (debug) {
+    console.log("\n=== TIMINGS (ms) ===");
+    for (const [key, value] of Object.entries(timings)) {
+      console.log(`  ${key}: ${value}`);
+    }
+    console.log(
+      `  TOTAL: ${Object.values(timings).reduce((a, b) => a + b, 0)}`,
+    );
+    console.log("=== END TIMINGS ===");
+  }
 }
 
 /**
@@ -435,6 +462,29 @@ function parseBookmarks(bookmarksStr: string): string[] {
     .filter((b) => b.length > 0);
 }
 
+/**
+ * Extract unsynced bookmarks from jj log output.
+ * The template includes unsynced bookmarks as the last field in CHANGE lines.
+ */
+function extractUnsyncedBookmarks(rawOutput: string): Set<string> {
+  const unsynced = new Set<string>();
+
+  for (const line of rawOutput.split("\n")) {
+    if (line.includes("CHANGE:")) {
+      const parts = line.split("CHANGE:")[1]?.split("|");
+      // Last field (index 10) contains unsynced bookmarks
+      if (parts?.[10]) {
+        const bookmarks = parts[10].trim().split(",").filter(Boolean);
+        for (const b of bookmarks) {
+          unsynced.add(b);
+        }
+      }
+    }
+  }
+
+  return unsynced;
+}
+
 function parseBookmark(bookmarksStr: string, trunkName: string): string | null {
   const bookmarks = parseBookmarks(bookmarksStr);
   // Prefer non-trunk bookmark
@@ -459,29 +509,6 @@ function buildPRInfoMap(
     }
   }
   return prInfoMap;
-}
-
-async function getModifiedBookmarks(
-  trackedBookmarks: string[],
-  cwd: string,
-): Promise<Set<string>> {
-  const modifiedBookmarks = new Set<string>();
-
-  for (const bookmark of trackedBookmarks) {
-    const diffResult = await getDiffStats(
-      `bookmarks(exact:"${bookmark}")`,
-      { fromBookmark: bookmark },
-      cwd,
-    );
-    if (diffResult.ok) {
-      const { filesChanged, insertions, deletions } = diffResult.value;
-      if (filesChanged > 0 || insertions > 0 || deletions > 0) {
-        modifiedBookmarks.add(bookmark);
-      }
-    }
-  }
-
-  return modifiedBookmarks;
 }
 
 /**
