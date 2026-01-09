@@ -12,7 +12,6 @@ import {
   formatSuccess,
   hint,
   message,
-  status,
   warning,
 } from "../utils/output";
 import { unwrap } from "../utils/run";
@@ -24,8 +23,6 @@ interface MergeFlags {
 }
 
 export async function merge(flags: MergeFlags, ctx: ArrContext): Promise<void> {
-  const trunk = ctx.trunk;
-
   const prsResult = await getMergeablePrs();
 
   if (!prsResult.ok) {
@@ -62,25 +59,22 @@ export async function merge(flags: MergeFlags, ctx: ArrContext): Promise<void> {
   if (flags.merge) method = "merge";
   if (flags.rebase) method = "rebase";
 
-  message(`Merging ${prs.length} PR${prs.length > 1 ? "s" : ""} from stack...`);
+  message(`Merging ${prs.length} PR${prs.length > 1 ? "s" : ""}...`);
   blank();
 
   const result = await mergeCmd(prs, {
     method,
     engine: ctx.engine,
-    onMerging: (pr: PRToMerge, nextPr?: PRToMerge) => {
-      message(`Merging PR #${cyan(String(pr.prNumber))}: ${pr.prTitle}`);
-      hint(`Branch: ${pr.bookmarkName} → ${pr.baseRefName}`);
-      if (nextPr) {
-        hint(`Rebasing PR #${nextPr.prNumber} onto ${trunk}...`);
-      }
+    onWaitingForCI: (pr: PRToMerge) => {
+      message(`PR #${cyan(String(pr.prNumber))}: ${pr.prTitle}`);
+      message(dim("  Waiting for CI checks..."));
     },
-    onWaiting: () => {
-      process.stdout.write(dim("  Waiting for GitHub..."));
+    onMerging: (_pr: PRToMerge) => {
+      message(dim("  Merging..."));
     },
     onMerged: (pr: PRToMerge) => {
-      process.stdout.write(`\r${" ".repeat(30)}\r`);
-      message(formatSuccess(`Merged PR #${pr.prNumber}`));
+      message(formatSuccess(`  Merged PR #${pr.prNumber}`));
+      blank();
     },
   });
 
@@ -89,7 +83,10 @@ export async function merge(flags: MergeFlags, ctx: ArrContext): Promise<void> {
     process.exit(1);
   }
 
-  blank();
-  status("Syncing to update local state...");
-  message(formatSuccess("Done! All PRs merged and synced."));
+  message(
+    formatSuccess(
+      `Merged ${result.value.merged.length} PR${result.value.merged.length > 1 ? "s" : ""}!`,
+    ),
+  );
+  hint("Run 'arr sync' to update local state.");
 }

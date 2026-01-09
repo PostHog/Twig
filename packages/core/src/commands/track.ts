@@ -1,4 +1,5 @@
 import type { Engine } from "../engine";
+import { getPRForBranch } from "../github/pr-status";
 import { ensureBookmark, getTrunk, list, resolveChange } from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
@@ -7,6 +8,8 @@ import type { Command } from "./types";
 interface TrackResult {
   bookmark: string;
   parent: string;
+  /** PR number if an existing PR was found and linked */
+  linkedPr?: number;
 }
 
 interface TrackOptions {
@@ -126,7 +129,14 @@ export async function track(
     return refreshResult;
   }
 
-  return ok({ bookmark, parent: parentBranch });
+  // Check if this bookmark has an existing PR on GitHub
+  let linkedPr: number | undefined;
+  const prResult = await getPRForBranch(bookmark);
+  if (prResult.ok && prResult.value && prResult.value.state === "OPEN") {
+    linkedPr = prResult.value.number;
+  }
+
+  return ok({ bookmark, parent: parentBranch, linkedPr });
 }
 
 export const trackCommand: Command<TrackResult, [TrackOptions]> = {

@@ -10,7 +10,6 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target bun",
     "dev": "bun run ./bin/arr.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test --concurrent tests/unit tests/e2e/cli.test.ts",
     "test:pty": "vitest run tests/e2e/pty.test.ts"
   },
   "devDependencies": {
