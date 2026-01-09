@@ -128,7 +128,6 @@ const PanelLayoutRenderer: React.FC<{
             draggingTabPanelId={layoutState.draggingTabPanelId}
             onActiveTabChange={handleSetActiveTab}
             onPanelFocus={handlePanelFocus}
-            focusedPanelId={layoutState.focusedPanelId}
             onAddTerminal={handleAddTerminal}
             onSplitPanel={handleSplitPanel}
           />
