@@ -1,39 +1,168 @@
-import { parseConflicts, parseFileChanges } from "../parser";
-import { createError, err, ok, type Result } from "../result";
-import type { ChangesetStatus } from "../types";
-import { list } from "./list";
+import { parseConflicts } from "../parser";
+import { ok, type Result } from "../result";
+import type { ChangesetStatus, FileChange } from "../types";
 import { runJJ } from "./runner";
 
+// Single template that gets all status info in one jj call
+const STATUS_TEMPLATE = [
+  '"CHANGE:"',
+  "change_id.short()",
+  '"|"',
+  "change_id.shortest().prefix()",
+  '"|"',
+  'if(current_working_copy, "wc", "")',
+  '"|"',
+  'bookmarks.join(",")',
+  '"|"',
+  "description.first_line()",
+  '"|"',
+  'if(conflict, "1", "0")',
+  '"|"',
+  'if(empty, "1", "0")',
+  '"|"',
+  "self.diff().summary()",
+  '"\\n"',
+].join(" ++ ");
+
+interface ParsedChange {
+  changeId: string;
+  changeIdPrefix: string;
+  isWorkingCopy: boolean;
+  bookmarks: string[];
+  description: string;
+  hasConflicts: boolean;
+  isEmpty: boolean;
+  diffSummary: string;
+}
+
+function parseStatusLine(line: string): ParsedChange | null {
+  if (!line.startsWith("CHANGE:")) return null;
+  const data = line.slice(7);
+  const parts = data.split("|");
+
+  return {
+    changeId: parts[0] || "",
+    changeIdPrefix: parts[1] || "",
+    isWorkingCopy: parts[2] === "wc",
+    bookmarks: (parts[3] || "").split(",").filter(Boolean),
+    description: parts[4] || "",
+    hasConflicts: parts[5] === "1",
+    isEmpty: parts[6] === "1",
+    diffSummary: parts[7] || "",
+  };
+}
+
+function parseModifiedFiles(diffSummary: string): FileChange[] {
+  if (!diffSummary.trim()) return [];
+
+  return diffSummary
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const status = line[0];
+      const path = line.slice(2).trim();
+      const statusMap: Record<string, FileChange["status"]> = {
+        M: "modified",
+        A: "added",
+        D: "deleted",
+        R: "renamed",
+        C: "copied",
+      };
+      return { path, status: statusMap[status] || "modified" };
+    });
+}
+
+/**
+ * Get working copy status in a single jj call.
+ */
 export async function status(
   cwd = process.cwd(),
 ): Promise<Result<ChangesetStatus>> {
-  const changesResult = await list({ revset: "(@ | @-)" }, cwd);
-  if (!changesResult.ok) return changesResult;
+  // Single jj call with template - gets WC, parent, and grandparent for stack path
+  const result = await runJJ(
+    ["log", "-r", "@ | @- | @--", "--no-graph", "-T", STATUS_TEMPLATE],
+    cwd,
+  );
 
-  const workingCopy = changesResult.value.find((c) => c.isWorkingCopy);
-  if (!workingCopy) {
-    return err(createError("PARSE_ERROR", "Could not find working copy"));
+  if (!result.ok) return result;
+
+  const lines = result.value.stdout.split("\n").filter(Boolean);
+  const changes = lines.map(parseStatusLine).filter(Boolean) as ParsedChange[];
+
+  const workingCopy = changes.find((c) => c.isWorkingCopy);
+  const parent = changes.find((c) => !c.isWorkingCopy);
+
+  // For hasResolvedConflict, we still need jj status output
+  // But only if parent has conflicts - otherwise skip it
+  let hasResolvedConflict = false;
+  if (parent?.hasConflicts) {
+    const statusResult = await runJJ(["status"], cwd);
+    if (statusResult.ok) {
+      hasResolvedConflict = statusResult.value.stdout.includes(
+        "Conflict in parent commit has been resolved in working copy",
+      );
+    }
   }
 
-  const parents = changesResult.value.filter((c) => !c.isWorkingCopy);
-
-  const [diffResult, statusResult] = await Promise.all([
-    runJJ(["diff", "--summary"], cwd),
-    runJJ(["status"], cwd),
-  ]);
-
-  const modifiedFiles = diffResult.ok
-    ? parseFileChanges(diffResult.value.stdout)
-    : ok([]);
-
-  const conflicts = statusResult.ok
-    ? parseConflicts(statusResult.value.stdout)
-    : ok([]);
+  // Parse conflicts from jj status if there are any
+  let conflicts: { path: string; type: "content" | "delete" | "rename" }[] = [];
+  if (workingCopy?.hasConflicts || parent?.hasConflicts) {
+    const statusResult = await runJJ(["status"], cwd);
+    if (statusResult.ok) {
+      const parsed = parseConflicts(statusResult.value.stdout);
+      if (parsed.ok) conflicts = parsed.value;
+    }
+  }
 
   return ok({
-    workingCopy,
-    parents,
-    modifiedFiles: modifiedFiles.ok ? modifiedFiles.value : [],
-    conflicts: conflicts.ok ? conflicts.value : [],
+    workingCopy: workingCopy
+      ? {
+          changeId: workingCopy.changeId,
+          changeIdPrefix: workingCopy.changeIdPrefix,
+          commitId: "",
+          commitIdPrefix: "",
+          description: workingCopy.description,
+          bookmarks: workingCopy.bookmarks,
+          parents: parent ? [parent.changeId] : [],
+          isWorkingCopy: true,
+          isImmutable: false,
+          isEmpty: workingCopy.isEmpty,
+          hasConflicts: workingCopy.hasConflicts,
+        }
+      : {
+          changeId: "",
+          changeIdPrefix: "",
+          commitId: "",
+          commitIdPrefix: "",
+          description: "",
+          bookmarks: [],
+          parents: [],
+          isWorkingCopy: true,
+          isImmutable: false,
+          isEmpty: true,
+          hasConflicts: false,
+        },
+    parents: parent
+      ? [
+          {
+            changeId: parent.changeId,
+            changeIdPrefix: parent.changeIdPrefix,
+            commitId: "",
+            commitIdPrefix: "",
+            description: parent.description,
+            bookmarks: parent.bookmarks,
+            parents: [],
+            isWorkingCopy: false,
+            isImmutable: false,
+            isEmpty: parent.isEmpty,
+            hasConflicts: parent.hasConflicts,
+          },
+        ]
+      : [],
+    modifiedFiles: workingCopy
+      ? parseModifiedFiles(workingCopy.diffSummary)
+      : [],
+    conflicts,
+    hasResolvedConflict,
   });
 }

@@ -1,4 +1,3 @@
-import { hasResolvedConflict } from "@array/core/commands/resolve";
 import { status as statusCmd } from "@array/core/commands/status";
 import { COMMANDS } from "../registry";
 import {
@@ -18,11 +17,14 @@ import {
 } from "../utils/output";
 import { unwrap } from "../utils/run";
 
-export async function status(): Promise<void> {
-  const { info, stats } = unwrap(await statusCmd());
+export async function status(options: { debug?: boolean } = {}): Promise<void> {
+  const debug = options.debug ?? false;
+  const {
+    info,
+    stats,
+    hasResolvedConflict: hasResolved,
+  } = unwrap(await statusCmd({ debug }));
   const statsStr = stats ? ` ${formatDiffStats(stats)}` : "";
-  const resolvedResult = await hasResolvedConflict();
-  const hasResolved = resolvedResult.ok && resolvedResult.value;
 
   // Check if on main with no stack above (fresh start)
   const isOnMainFresh =

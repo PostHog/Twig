@@ -10,11 +10,27 @@ export interface ConflictInfo {
   type: "content" | "delete" | "rename";
 }
 
+/** Lightweight changeset info for status display */
+export interface StatusChangeset {
+  changeId: string;
+  changeIdPrefix: string;
+  commitId: string;
+  commitIdPrefix: string;
+  description: string;
+  bookmarks: string[];
+  parents: string[];
+  isWorkingCopy: boolean;
+  isImmutable: boolean;
+  isEmpty: boolean;
+  hasConflicts: boolean;
+}
+
 export interface ChangesetStatus {
-  workingCopy: Changeset;
-  parents: Changeset[];
+  workingCopy: StatusChangeset;
+  parents: StatusChangeset[];
   modifiedFiles: FileChange[];
   conflicts: ConflictInfo[];
+  hasResolvedConflict: boolean;
 }
 
 export interface FileChange {

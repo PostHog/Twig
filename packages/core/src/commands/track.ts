@@ -1,5 +1,5 @@
 import type { Engine } from "../engine";
-import { ensureBookmark, findChange, getTrunk, list, status } from "../jj";
+import { ensureBookmark, findChange, getTrunk, list } from "../jj";
 import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
 import type { Command } from "./types";
@@ -42,13 +42,15 @@ export async function track(
 
   if (!target) {
     // No target - use current change (@-)
-    const statusResult = await status();
-    if (!statusResult.ok) return statusResult;
-
-    const current = statusResult.value.parents[0];
-    if (!current) {
+    const findResult = await findChange("@-", { includeBookmarks: true });
+    if (!findResult.ok) return findResult;
+    if (findResult.value.status === "none") {
       return err(createError("INVALID_STATE", "No current change"));
     }
+    if (findResult.value.status === "multiple") {
+      return err(createError("INVALID_STATE", "Unexpected multiple matches"));
+    }
+    const current = findResult.value.change;
     changeId = current.changeId;
     description = current.description;
     existingBookmark = current.bookmarks[0];

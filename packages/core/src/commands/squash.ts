@@ -34,33 +34,31 @@ export async function squash(
 ): Promise<Result<SquashResult>> {
   const { id, engine } = options;
 
+  // Resolve the change - always use findChange for full Changeset info
+  const targetRevset = id || "@-"; // @- is the parent (current change), @ is WC
+  const findResult = await findChange(targetRevset, { includeBookmarks: true });
+  if (!findResult.ok) return findResult;
+  if (findResult.value.status === "none") {
+    return err(
+      createError("INVALID_REVISION", `Change not found: ${id || "current"}`),
+    );
+  }
+  if (findResult.value.status === "multiple") {
+    return err(
+      createError(
+        "AMBIGUOUS_REVISION",
+        `Multiple changes match "${id}". Use a more specific identifier.`,
+      ),
+    );
+  }
+  const change = findResult.value.change;
+
+  // Check if we're currently on this change (need status for WC info)
   const statusBefore = await status();
   if (!statusBefore.ok) return statusBefore;
-
-  // Resolve the change
-  let change: Changeset;
-  if (id) {
-    const findResult = await findChange(id, { includeBookmarks: true });
-    if (!findResult.ok) return findResult;
-    if (findResult.value.status === "none") {
-      return err(createError("INVALID_REVISION", `Change not found: ${id}`));
-    }
-    if (findResult.value.status === "multiple") {
-      return err(
-        createError(
-          "AMBIGUOUS_REVISION",
-          `Multiple changes match "${id}". Use a more specific identifier.`,
-        ),
-      );
-    }
-    change = findResult.value.change;
-  } else {
-    // Use current working copy
-    change = statusBefore.value.workingCopy;
-  }
-
   const wasOnChange =
-    statusBefore.value.workingCopy.changeId === change.changeId;
+    statusBefore.value.workingCopy.changeId === change.changeId ||
+    statusBefore.value.parents[0]?.changeId === change.changeId;
   const parentId = change.parents[0];
 
   const childrenResult = await list({

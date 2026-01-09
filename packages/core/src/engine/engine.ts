@@ -3,7 +3,7 @@ import {
   deleteMetadata,
   listTrackedBranches,
   type PRInfo,
-  readMetadata,
+  readMetadataBatch,
   writeMetadata,
 } from "../git/metadata";
 import { getTrunk, list } from "../jj";
@@ -84,13 +84,11 @@ export function createEngine(cwd: string = process.cwd()): Engine {
     load(): void {
       if (loaded) return;
 
-      // Load metadata from git refs
+      // Load metadata from git refs - single git call for all branches
       const tracked = listTrackedBranches(cwd);
-      for (const [bookmarkName] of tracked) {
-        const meta = readMetadata(bookmarkName, cwd);
-        if (meta) {
-          branches.set(bookmarkName, meta);
-        }
+      const metadataMap = readMetadataBatch(tracked, cwd);
+      for (const [bookmarkName, meta] of metadataMap) {
+        branches.set(bookmarkName, meta);
       }
 
       loaded = true;

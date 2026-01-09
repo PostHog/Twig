@@ -184,7 +184,10 @@ export async function main(): Promise<void> {
     }
 
     // Check prerequisites (git, jj, arr initialized)
+    const debug = !!parsed.flags.debug;
+    let t0 = Date.now();
     const prereqs = await checkContext();
+    if (debug) console.log(`  checkContext: ${Date.now() - t0}ms`);
     if (!isContextValid(prereqs, requiredLevel)) {
       printContextError(prereqs, requiredLevel);
       process.exit(1);
@@ -193,12 +196,16 @@ export async function main(): Promise<void> {
     // Initialize context with engine
     let context: ArrContext | null = null;
     try {
+      t0 = Date.now();
       context = await initContext();
+      if (debug) console.log(`  initContext: ${Date.now() - t0}ms`);
 
       // Trigger background PR refresh (rate-limited)
       triggerBackgroundRefresh(context.cwd);
 
+      t0 = Date.now();
       await handler(parsed, context);
+      if (debug) console.log(`  handler: ${Date.now() - t0}ms`);
     } finally {
       // Auto-persist engine changes
       context?.engine.persist();

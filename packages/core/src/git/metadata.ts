@@ -89,6 +89,89 @@ export function readMetadata(
 }
 
 /**
+ * Batch read metadata for multiple branches in a single git call.
+ * Much faster than calling readMetadata() for each branch individually.
+ */
+export function readMetadataBatch(
+  branches: Map<string, string>,
+  cwd?: string,
+): Map<string, BranchMeta> {
+  const result = new Map<string, BranchMeta>();
+  if (branches.size === 0) return result;
+
+  // Build input: one object ID per line
+  const objectIds = Array.from(branches.values());
+  const input = objectIds.join("\n");
+
+  // Run git cat-file --batch
+  const output = runGitSync(["cat-file", "--batch"], {
+    cwd,
+    input,
+    onError: "ignore",
+  });
+
+  if (!output) return result;
+
+  // Parse batch output format:
+  // <objectId> blob <size>
+  // <content>
+  // (blank line or next header)
+  const branchNames = Array.from(branches.keys());
+  const lines = output.split("\n");
+  let lineIdx = 0;
+  let branchIdx = 0;
+
+  while (lineIdx < lines.length && branchIdx < branchNames.length) {
+    const headerLine = lines[lineIdx];
+    if (!headerLine || headerLine.includes("missing")) {
+      // Object not found, skip this branch
+      lineIdx++;
+      branchIdx++;
+      continue;
+    }
+
+    // Parse header: <objectId> <type> <size>
+    const headerMatch = headerLine.match(/^([a-f0-9]+) (\w+) (\d+)$/);
+    if (!headerMatch) {
+      lineIdx++;
+      branchIdx++;
+      continue;
+    }
+
+    const size = parseInt(headerMatch[3], 10);
+    lineIdx++; // Move past header
+
+    // Read content (may span multiple lines)
+    let content = "";
+    let remaining = size;
+    while (remaining > 0 && lineIdx < lines.length) {
+      const line = lines[lineIdx];
+      content += line;
+      remaining -= line.length;
+      lineIdx++;
+      if (remaining > 0) {
+        content += "\n";
+        remaining -= 1; // Account for newline
+      }
+    }
+
+    // Parse JSON and validate
+    try {
+      const parsed = branchMetaSchema.safeParse(JSON.parse(content));
+      if (parsed.success) {
+        result.set(branchNames[branchIdx], parsed.data);
+      }
+    } catch {
+      // Invalid JSON, skip
+    }
+
+    branchIdx++;
+  }
+
+  return result;
+}
+
+/**
  * Delete metadata for a branch.
  */
 export function deleteMetadata(branchName: string, cwd?: string): void {

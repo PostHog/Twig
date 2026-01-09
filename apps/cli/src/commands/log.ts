@@ -112,10 +112,8 @@ export async function log(
   }
 
   // Extract data directly from jj output (no extra jj calls needed)
-  const { unsyncedBookmarks, behindTrunkChanges, wcParentBookmark } = extractTemplateData(
-    result.value.stdout,
-    trackedBookmarks,
-  );
+  const { unsyncedBookmarks, behindTrunkChanges, wcParentBookmark } =
+    extractTemplateData(result.value.stdout, trackedBookmarks);
 
   // Build enhancement data
   t0 = Date.now();
@@ -546,7 +544,6 @@ function buildPRInfoMap(
   }
   return prInfoMap;
 }
-
 
 function formatChangeId(changeId: string, prefix: string): string {
   const short = changeId.slice(0, 8);
