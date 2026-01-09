@@ -93,15 +93,10 @@ function loadAddons(term: XTerm) {
   const fit = new FitAddon();
   const serialize = new SerializeAddon();
 
-  const activateLink = (event: MouseEvent, uri: string) => {
-    const isMac = /Mac/.test(navigator.platform);
-    const hasModifier = isMac ? event.metaKey : event.ctrlKey;
-
-    if (hasModifier) {
-      trpcVanilla.os.openExternal.mutate({ url: uri }).catch((error: Error) => {
-        log.error("Failed to open link:", uri, error);
-      });
-    }
+  const activateLink = (_event: MouseEvent, uri: string) => {
+    trpcVanilla.os.openExternal.mutate({ url: uri }).catch((error: Error) => {
+      log.error("Failed to open link:", uri, error);
+    });
   };
 
   const webLinks = new WebLinksAddon(activateLink);
