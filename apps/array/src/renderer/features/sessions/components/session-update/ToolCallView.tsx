@@ -36,12 +36,16 @@ interface ToolCallViewProps {
 }
 
 export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
-  const { title, kind, status } = toolCall;
+  const { title, kind, status, locations } = toolCall;
   const isIncomplete = status === "pending" || status === "in_progress";
   const isLoading = isIncomplete && !turnCancelled;
   const isFailed = status === "failed";
   const wasCancelled = isIncomplete && turnCancelled;
   const KindIcon = kind ? kindIcons[kind] : Wrench;
+
+  // For read tool, show file path from locations if available
+  const filePath = kind === "read" && locations?.[0]?.path;
+  const displayText = filePath ? `Read ${filePath}` : title;
 
   return (
     <Flex align="center" gap="2" className="py-0.5 pl-3">
@@ -51,7 +55,7 @@ export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
         <KindIcon size={12} className="text-gray-9" />
       )}
       <Code size="1" color="gray">
-        {title}
+        {displayText}
       </Code>
       {isFailed && (
         <Text size="1" color="gray">
