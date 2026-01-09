@@ -17,7 +17,9 @@
     "typecheck": "turbo typecheck",
     "lint": "biome check --write --unsafe",
     "format": "biome format --write",
-    "test": "pnpm -r test",
+    "test": "turbo test",
+    "test:bun": "turbo test --filter=@array/core --filter=@array/cli",
+    "test:vitest": "pnpm --filter array --filter @posthog/electron-trpc test",
     "clean": "pnpm -r clean",
     "knip": "knip",
     "prepare": "husky"
