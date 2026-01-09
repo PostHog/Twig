@@ -32,7 +32,6 @@ export function TaskInput() {
 
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { folders } = useRegisteredFoldersStore();
   const { lastUsedLocalWorkspaceMode } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
@@ -56,12 +55,14 @@ export function TaskInput() {
 
   useEffect(() => {
     if (view.folderId) {
-      const folder = folders.find((f) => f.id === view.folderId);
+      // Access store directly to avoid folders dependency triggering re-sync
+      const currentFolders = useRegisteredFoldersStore.getState().folders;
+      const folder = currentFolders.find((f) => f.id === view.folderId);
       if (folder) {
         setSelectedDirectory(folder.path);
       }
     }
-  }, [view.folderId, folders]);
+  }, [view.folderId]);
 
   const handleDirectoryChange = (newPath: string) => {
     setSelectedDirectory(newPath);
