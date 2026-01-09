@@ -130,7 +130,7 @@ interface SessionConfig {
   sdkSessionId?: string;
   model?: string;
   framework?: "claude" | "codex";
-  executionMode?: "plan";
+  executionMode?: "plan" | "acceptEdits";
 }
 
 interface ManagedSession {
@@ -498,6 +498,24 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       log.info("Session model updated", { sessionId, modelId });
     } catch (err) {
       log.error("Failed to set session model", { sessionId, modelId, err });
+      throw err;
+    }
+  }
+
+  async setSessionMode(sessionId: string, modeId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    try {
+      await session.connection.extMethod("session/setMode", {
+        sessionId,
+        modeId,
+      });
+      log.info("Session mode updated", { sessionId, modeId });
+    } catch (err) {
+      log.error("Failed to set session mode", { sessionId, modeId, err });
       throw err;
     }
   }

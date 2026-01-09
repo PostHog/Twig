@@ -25,7 +25,7 @@ interface UseTaskCreationOptions {
   workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
-  executionMode?: "plan";
+  executionMode?: "plan" | "acceptEdits";
 }
 
 interface UseTaskCreationReturn {
@@ -80,7 +80,7 @@ function prepareTaskInput(
     workspaceMode: WorkspaceMode;
     branch?: string | null;
     autoRun: boolean;
-    executionMode?: "plan";
+    executionMode?: "plan" | "acceptEdits";
   },
 ): TaskCreationInput {
   return {

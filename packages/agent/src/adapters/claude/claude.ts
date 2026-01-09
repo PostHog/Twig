@@ -89,6 +89,114 @@ function isClaudePlanFilePath(filePath: string | undefined): boolean {
   return resolved === plansDir || resolved.startsWith(plansDir + path.sep);
 }
 
+/**
+ * Whitelist of command prefixes that are considered read-only.
+ * These commands can be used in plan mode since they don't modify files or state.
+ */
+const READ_ONLY_COMMAND_PREFIXES = [
+  // File listing and info
+  "ls",
+  "find",
+  "tree",
+  "stat",
+  "file",
+  "wc",
+  "du",
+  "df",
+  // File reading (non-modifying)
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "bat",
+  // Search
+  "grep",
+  "rg",
+  "ag",
+  "ack",
+  "fzf",
+  // Git read operations
+  "git status",
+  "git log",
+  "git diff",
+  "git show",
+  "git branch",
+  "git remote",
+  "git fetch",
+  "git rev-parse",
+  "git ls-files",
+  "git blame",
+  "git shortlog",
+  "git describe",
+  "git tag -l",
+  "git tag --list",
+  // System info
+  "pwd",
+  "whoami",
+  "which",
+  "where",
+  "type",
+  "printenv",
+  "env",
+  "echo",
+  "printf",
+  "date",
+  "uptime",
+  "uname",
+  "id",
+  "groups",
+  // Process info
+  "ps",
+  "top",
+  "htop",
+  "pgrep",
+  "lsof",
+  // Network read-only
+  "curl",
+  "wget",
+  "ping",
+  "host",
+  "dig",
+  "nslookup",
+  // Package managers (info only)
+  "npm list",
+  "npm ls",
+  "npm view",
+  "npm info",
+  "npm outdated",
+  "pnpm list",
+  "pnpm ls",
+  "pnpm why",
+  "yarn list",
+  "yarn why",
+  "yarn info",
+  // Other read-only
+  "jq",
+  "yq",
+  "xargs",
+  "sort",
+  "uniq",
+  "tr",
+  "cut",
+  "awk",
+  "sed -n",
+];
+
+/**
+ * Checks if a bash command is read-only based on a whitelist of command prefixes.
+ * Used to allow safe bash commands in plan mode.
+ */
+function isReadOnlyBashCommand(command: string): boolean {
+  const trimmed = command.trim();
+  return READ_ONLY_COMMAND_PREFIXES.some(
+    (prefix) =>
+      trimmed === prefix ||
+      trimmed.startsWith(`${prefix} `) ||
+      trimmed.startsWith(`${prefix}\t`),
+  );
+}
+
 function clearStatsigCache(): void {
   const statsigPath = path.join(getClaudeConfigDir(), "statsig");
 
@@ -1083,7 +1191,6 @@ export class ClaudeAcpAgent implements Agent {
         ...EDIT_TOOL_NAMES,
         "Edit",
         "Write",
-        "Bash",
         "NotebookEdit",
       ];
       if (
@@ -1114,6 +1221,25 @@ export class ClaudeAcpAgent implements Agent {
           message,
           interrupt: false,
         };
+      }
+
+      // In plan mode, handle Bash separately - allow read-only commands
+      if (
+        session.permissionMode === "plan" &&
+        (toolName === "Bash" || toolName === toolNames.bash)
+      ) {
+        const command = (toolInput as { command?: string })?.command ?? "";
+        if (!isReadOnlyBashCommand(command)) {
+          const message =
+            "Cannot run write/modify bash commands in plan mode. Use ExitPlanMode to request permission to make changes.";
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+        // Read-only bash commands are allowed - fall through to normal permission flow
       }
 
       if (
@@ -1211,6 +1337,15 @@ export class ClaudeAcpAgent implements Agent {
         modelId: string;
       };
       await this.setSessionModel({ sessionId, modelId });
+      return {};
+    }
+
+    if (method === "session/setMode") {
+      const { sessionId, modeId } = params as {
+        sessionId: string;
+        modeId: string;
+      };
+      await this.setSessionMode({ sessionId, modeId });
       return {};
     }
 
