@@ -107,6 +107,8 @@ export const agentRouter = router({
         input.sessionId,
         input.toolCallId,
         input.optionId,
+        input.selectedOptionIds,
+        input.customInput,
       ),
     ),
 

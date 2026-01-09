@@ -105,20 +105,6 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       [isLoading, onCancel],
     );
 
-    useHotkeys(
-      "shift+tab",
-      (e) => {
-        e.preventDefault();
-        onModeChange?.();
-      },
-      {
-        enableOnFormTags: true,
-        enableOnContentEditable: true,
-        enabled: !disabled && !!onModeChange,
-      },
-      [onModeChange, disabled],
-    );
-
     const handleContainerClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest("button") && !target.closest(".ProseMirror")) {
