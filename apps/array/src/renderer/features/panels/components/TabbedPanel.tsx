@@ -53,7 +53,6 @@ interface TabbedPanelProps {
   onPanelFocus?: (panelId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
-  isFocused?: boolean;
   onAddTerminal?: () => void;
   onSplitPanel?: (direction: SplitDirection) => void;
 }
@@ -68,7 +67,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onPanelFocus,
   draggingTabId = null,
   draggingTabPanelId = null,
-  isFocused = false,
   onAddTerminal,
   onSplitPanel,
 }) => {
@@ -193,37 +191,32 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               />
             )}
           </Flex>
-          {isFocused &&
-            content.droppable &&
-            (onSplitPanel || onAddTerminal) && (
-              <Flex
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  height: "32px",
-                  borderLeft: "1px solid var(--gray-6)",
-                  background: "var(--color-background)",
-                }}
-              >
-                {onSplitPanel && (
-                  <TabBarButton
-                    ariaLabel="Split panel"
-                    onClick={handleSplitClick}
-                  >
-                    <SquareSplitHorizontalIcon width={12} height={12} />
-                  </TabBarButton>
-                )}
-                {onAddTerminal && (
-                  <TabBarButton
-                    ariaLabel="Add terminal"
-                    onClick={onAddTerminal}
-                  >
-                    <PlusIcon width={12} height={12} />
-                  </TabBarButton>
-                )}
-              </Flex>
-            )}
+          {content.droppable && (onSplitPanel || onAddTerminal) && (
+            <Flex
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                height: "32px",
+                borderLeft: "1px solid var(--gray-6)",
+                background: "var(--color-background)",
+              }}
+            >
+              {onSplitPanel && (
+                <TabBarButton
+                  ariaLabel="Split panel"
+                  onClick={handleSplitClick}
+                >
+                  <SquareSplitHorizontalIcon width={12} height={12} />
+                </TabBarButton>
+              )}
+              {onAddTerminal && (
+                <TabBarButton ariaLabel="Add terminal" onClick={onAddTerminal}>
+                  <PlusIcon width={12} height={12} />
+                </TabBarButton>
+              )}
+            </Flex>
+          )}
         </Box>
       )}
 

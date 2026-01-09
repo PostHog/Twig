@@ -17,7 +17,6 @@ interface LeafNodeRendererProps {
   draggingTabPanelId: string | null;
   onActiveTabChange: (panelId: string, tabId: string) => void;
   onPanelFocus: (panelId: string) => void;
-  focusedPanelId: string | null;
   onAddTerminal: (panelId: string) => void;
   onSplitPanel: (panelId: string, direction: SplitDirection) => void;
 }
@@ -34,7 +33,6 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   draggingTabPanelId,
   onActiveTabChange,
   onPanelFocus,
-  focusedPanelId,
   onAddTerminal,
   onSplitPanel,
 }) => {
@@ -62,7 +60,6 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
       onPanelFocus={onPanelFocus}
       draggingTabId={draggingTabId}
       draggingTabPanelId={draggingTabPanelId}
-      isFocused={focusedPanelId === node.id}
       onAddTerminal={() => onAddTerminal(node.id)}
       onSplitPanel={(direction) => onSplitPanel(node.id, direction)}
     />
