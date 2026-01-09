@@ -32,8 +32,8 @@ interface LogFlags {
 // Template for jj log - jj handles graph rendering and adds correct prefixes for each \n
 // We output tagged lines that we parse and enhance with colors/PR info
 const JJ_TEMPLATE = [
-  // CHANGE line: changeId|prefix|commitId|prefix|bookmarks|description|empty|immutable|conflict|timestamp|unsyncedBookmarks
-  '"CHANGE:" ++ change_id.short() ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ commit_id.short() ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ bookmarks.join(",") ++ "|" ++ description.first_line() ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ committer.timestamp() ++ "|" ++ local_bookmarks.filter(|b| !b.synced()).map(|b| b.name()).join(",") ++ "\\n"',
+  // CHANGE line: changeId|prefix|commitId|prefix|bookmarks|description|empty|immutable|conflict|timestamp|unsyncedBookmarks|behindTrunk
+  '"CHANGE:" ++ change_id.short() ++ "|" ++ change_id.shortest().prefix() ++ "|" ++ commit_id.short() ++ "|" ++ commit_id.shortest().prefix() ++ "|" ++ bookmarks.join(",") ++ "|" ++ description.first_line() ++ "|" ++ if(empty, "1", "0") ++ "|" ++ if(immutable, "1", "0") ++ "|" ++ if(conflict, "1", "0") ++ "|" ++ committer.timestamp() ++ "|" ++ local_bookmarks.filter(|b| !b.synced()).map(|b| b.name()).join(",") ++ "|" ++ if(parents.all(|p| p.contained_in("trunk()::")), "0", "1") ++ "\\n"',
   // TIME line
   '"TIME:" ++ committer.timestamp() ++ "\\n"',
   // HINT line for empty WC
@@ -111,21 +111,19 @@ export async function log(
     console.log("=== END RAW ===\n");
   }
 
-  // Extract unsynced bookmarks directly from jj output (no extra jj calls needed)
-  const unsyncedBookmarks = extractUnsyncedBookmarks(result.value.stdout);
+  // Extract data directly from jj output (no extra jj calls needed)
+  const { unsyncedBookmarks, behindTrunkChanges, wcParentBookmark } = extractTemplateData(
+    result.value.stdout,
+    trackedBookmarks,
+  );
 
-  // Build enhancement data (run independent calls in parallel)
+  // Build enhancement data
   t0 = Date.now();
   const prInfoMap = buildPRInfoMap(engine, trackedBookmarks);
   timings.prInfoMap = Date.now() - t0;
 
   t0 = Date.now();
-  const [behindTrunkChanges, wcParentBookmark, resolvedConflictResult] =
-    await Promise.all([
-      getBehindTrunkChanges(cwd),
-      getWCParentBookmark(trackedBookmarks, cwd),
-      hasResolvedConflict(cwd),
-    ]);
+  const resolvedConflictResult = await hasResolvedConflict(cwd);
   timings.parallelCalls = Date.now() - t0;
 
   const hasResolved = resolvedConflictResult.ok && resolvedConflictResult.value;
@@ -463,26 +461,64 @@ function parseBookmarks(bookmarksStr: string): string[] {
 }
 
 /**
- * Extract unsynced bookmarks from jj log output.
- * The template includes unsynced bookmarks as the last field in CHANGE lines.
+ * Extract data embedded in jj log template output.
+ * Fields: changeId|prefix|commitId|prefix|bookmarks|description|empty|immutable|conflict|timestamp|unsyncedBookmarks|behindTrunk
  */
-function extractUnsyncedBookmarks(rawOutput: string): Set<string> {
-  const unsynced = new Set<string>();
+function extractTemplateData(
+  rawOutput: string,
+  trackedBookmarks: string[],
+): {
+  unsyncedBookmarks: Set<string>;
+  behindTrunkChanges: Set<string>;
+  wcParentBookmark: string | null;
+} {
+  const unsyncedBookmarks = new Set<string>();
+  const behindTrunkChanges = new Set<string>();
+  const trackedSet = new Set(trackedBookmarks);
+
+  // Parse all CHANGE lines to find WC and its parent
+  const changes: { isWC: boolean; bookmarks: string[] }[] = [];
 
   for (const line of rawOutput.split("\n")) {
     if (line.includes("CHANGE:")) {
+      const graphPrefix = line.split("CHANGE:")[0];
       const parts = line.split("CHANGE:")[1]?.split("|");
-      // Last field (index 10) contains unsynced bookmarks
-      if (parts?.[10]) {
-        const bookmarks = parts[10].trim().split(",").filter(Boolean);
-        for (const b of bookmarks) {
-          unsynced.add(b);
+      if (!parts) continue;
+
+      const changeId = parts[0];
+      const bookmarksStr = parts[4] || "";
+      const bookmarks = parseBookmarks(bookmarksStr);
+      const isWC = graphPrefix.includes("@");
+
+      changes.push({ isWC, bookmarks });
+
+      // Index 10: unsynced bookmarks
+      if (parts[10]) {
+        const unsynced = parts[10].trim().split(",").filter(Boolean);
+        for (const b of unsynced) {
+          unsyncedBookmarks.add(b);
         }
+      }
+
+      // Index 11: behind trunk flag ("1" = behind)
+      if (parts[11]?.trim() === "1" && changeId) {
+        behindTrunkChanges.add(changeId);
       }
     }
   }
 
-  return unsynced;
+  // Find WC parent's tracked bookmark
+  // In jj log output, parent appears after WC (next CHANGE line after @)
+  let wcParentBookmark: string | null = null;
+  for (let i = 0; i < changes.length; i++) {
+    if (changes[i].isWC && i + 1 < changes.length) {
+      const parentBookmarks = changes[i + 1].bookmarks;
+      wcParentBookmark = parentBookmarks.find((b) => trackedSet.has(b)) || null;
+      break;
+    }
+  }
+
+  return { unsyncedBookmarks, behindTrunkChanges, wcParentBookmark };
 }
 
 function parseBookmark(bookmarksStr: string, trunkName: string): string | null {
@@ -511,60 +547,6 @@ function buildPRInfoMap(
   return prInfoMap;
 }
 
-/**
- * Get change IDs that are "behind trunk" (mutable but not descendants of current trunk).
- */
-async function getBehindTrunkChanges(cwd: string): Promise<Set<string>> {
-  const result = await runJJ(
-    [
-      "log",
-      "-r",
-      "mutable() ~ trunk()::",
-      "--no-graph",
-      "-T",
-      'change_id.short() ++ "\\n"',
-    ],
-    cwd,
-  );
-
-  const behindChanges = new Set<string>();
-  if (result.ok) {
-    for (const line of result.value.stdout.split("\n")) {
-      const changeId = line.trim();
-      if (changeId) {
-        behindChanges.add(changeId);
-      }
-    }
-  }
-  return behindChanges;
-}
-
-/**
- * Get the bookmark of the WC's parent (@-) if it's tracked.
- */
-async function getWCParentBookmark(
-  trackedBookmarks: string[],
-  cwd: string,
-): Promise<string | null> {
-  const result = await runJJ(
-    [
-      "log",
-      "-r",
-      "@-",
-      "--no-graph",
-      "-T",
-      'local_bookmarks.map(|b| b.name()).join(",")',
-    ],
-    cwd,
-  );
-  if (!result.ok) return null;
-
-  const bookmarks = result.value.stdout
-    .trim()
-    .split(",")
-    .filter((b) => b.trim());
-  return bookmarks.find((b) => trackedBookmarks.includes(b)) || null;
-}
 
 function formatChangeId(changeId: string, prefix: string): string {
   const short = changeId.slice(0, 8);
