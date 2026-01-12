@@ -28,6 +28,7 @@ import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -354,6 +355,8 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const pendingPermissions = usePendingPermissionsForTask(taskId);
+  const hasPendingPermissions = pendingPermissions.size > 0;
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -397,8 +400,18 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     [changedFiles, getActiveIndex, openDiff, taskId],
   );
 
-  useHotkeys("up", () => handleKeyNavigation("up"), [handleKeyNavigation]);
-  useHotkeys("down", () => handleKeyNavigation("down"), [handleKeyNavigation]);
+  useHotkeys(
+    "up",
+    () => handleKeyNavigation("up"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
+  useHotkeys(
+    "down",
+    () => handleKeyNavigation("down"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
 
   const isFileActive = (file: ChangedFile): boolean => {
     if (!layout) return false;
