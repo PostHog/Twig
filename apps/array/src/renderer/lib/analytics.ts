@@ -1,8 +1,8 @@
 import posthog from "posthog-js/dist/module.full.no-external";
 // Import the recorder to set up __PosthogExtensions__.initSessionRecording
 // The module.full.no-external bundle includes rrweb but not the initSessionRecording function
-// This import adds the missing piece needed for session replay in Electron
-import "posthog-js/dist/lazy-recorder";
+// posthog-recorder (vs lazy-recorder) ensures recording is ready immediately
+import "posthog-js/dist/posthog-recorder";
 import type {
   EventPropertyMap,
   UserIdentifyProperties,
@@ -27,16 +27,13 @@ export function initializePostHog() {
   posthog.init(apiKey, {
     api_host: apiHost,
     ui_host: uiHost,
-    capture_pageview: false,
-    capture_pageleave: false,
     disable_session_recording: false,
-    debug: true, // Enable debug mode for now (TODO: turn this off before launch)
     loaded: () => {
       log.info("PostHog loaded");
-      // Log session recording status after remote config loads
-      setTimeout(() => {
-        logSessionRecordingStatus();
-      }, 3000);
+      // Start session recording immediately after load
+      // In Electron, we need to explicitly start since there's no page navigation trigger
+      posthog.startSessionRecording();
+      log.info("Session recording started");
     },
   });
 
