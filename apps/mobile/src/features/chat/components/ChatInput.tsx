@@ -1,7 +1,7 @@
-import { Circle, Host, TextField, type TextFieldRef } from "@expo/ui/swift-ui";
-import { clipped, glassEffect, padding } from "@expo/ui/swift-ui/modifiers";
+import { GlassContainer, GlassView } from "expo-glass-effect";
+import { LinearGradient } from "expo-linear-gradient";
 import { ArrowUp, Microphone, Stop } from "phosphor-react-native";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -9,8 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "@/lib/theme";
+import { toRgba, useThemeColors } from "@/lib/theme";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 interface ChatInputProps {
@@ -22,12 +21,10 @@ interface ChatInputProps {
 export function ChatInput({
   onSend,
   disabled = false,
-  placeholder = "Message",
+  placeholder = "Ask a question",
 }: ChatInputProps) {
-  const insets = useSafeAreaInsets();
   const themeColors = useThemeColors();
   const [message, setMessage] = useState("");
-  const textFieldRef = useRef<TextFieldRef>(null);
   const { status, startRecording, stopRecording, cancelRecording } =
     useVoiceRecording();
 
@@ -39,7 +36,6 @@ export function ChatInput({
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setMessage("");
-    textFieldRef.current?.setText("");
   };
 
   const handleMicPress = async () => {
@@ -47,9 +43,6 @@ export function ChatInput({
       const transcript = await stopRecording();
       if (transcript) {
         setMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        textFieldRef.current?.setText(
-          message ? `${message} ${transcript}` : transcript,
-        );
       }
     } else if (!isTranscribing) {
       await startRecording();
@@ -68,33 +61,65 @@ export function ChatInput({
     return (
       <View
         style={{
-          paddingBottom: insets.bottom + 4,
           paddingHorizontal: 8,
-          paddingTop: 8,
         }}
       >
-        <View className="flex-row items-end gap-2">
-          {/* Input field container */}
-          <View className="relative flex-1 overflow-hidden rounded-full">
-            <Host style={{ minHeight: 36, overflow: "hidden" }} matchContents>
-              <TextField
-                ref={textFieldRef}
-                defaultValue=""
-                placeholder={placeholder}
-                onChangeText={setMessage}
-                multiline
-                numberOfLines={5}
-                modifiers={[
-                  padding({ leading: 12, trailing: 12, top: 8, bottom: 8 }),
-                  glassEffect({
-                    shape: "capsule",
-                    glass: { variant: "regular" },
-                  }),
-                  clipped(),
-                ]}
-              />
-            </Host>
-          </View>
+        <LinearGradient
+          colors={[
+            toRgba(themeColors.background, 0),
+            toRgba(themeColors.background, 1),
+          ]}
+          style={{
+            position: "absolute",
+            top: -40,
+            left: 0,
+            right: 0,
+            bottom: -40,
+          }}
+          pointerEvents="none"
+        />
+        <GlassContainer
+          spacing={8}
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
+            gap: 8,
+          }}
+        >
+          {/* Input field with rounded glass background */}
+          <GlassView
+            style={{
+              flex: 1,
+              minHeight: 44,
+              borderRadius: 24,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              justifyContent: "center",
+            }}
+            isInteractive
+          >
+            <TextInput
+              value={message}
+              onChangeText={setMessage}
+              placeholder={
+                isRecording
+                  ? "Recording..."
+                  : isTranscribing
+                    ? "Transcribing..."
+                    : placeholder
+              }
+              placeholderTextColor={themeColors.gray[9]}
+              editable={!disabled && !isRecording}
+              multiline
+              numberOfLines={8}
+              style={{
+                fontSize: 16,
+                color: themeColors.gray[12],
+                paddingTop: 0,
+                paddingBottom: 0,
+              }}
+            />
+          </GlassView>
 
           {/* Mic / Send button */}
           <TouchableOpacity
@@ -102,82 +127,34 @@ export function ChatInput({
             onLongPress={handleMicLongPress}
             activeOpacity={0.7}
             disabled={isTranscribing || disabled}
-            className="h-[34px] w-[34px] items-center justify-center"
           >
-            {/* Glass Background */}
-            <View className="absolute inset-0">
-              <Host style={{ width: 34, height: 34 }}>
-                <Circle
-                  modifiers={[
-                    glassEffect({
-                      shape: "circle",
-                      glass: { variant: "regular" },
-                    }),
-                  ]}
+            <GlassView
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+              isInteractive
+            >
+              {isTranscribing ? (
+                <ActivityIndicator size="small" color={themeColors.gray[12]} />
+              ) : canSend ? (
+                <ArrowUp size={20} color={themeColors.gray[12]} weight="bold" />
+              ) : isRecording ? (
+                <Stop
+                  size={20}
+                  color={themeColors.status.error}
+                  weight="fill"
                 />
-              </Host>
-            </View>
-
-            {/* Icon */}
-            {isTranscribing ? (
-              <ActivityIndicator size="small" color={themeColors.gray[12]} />
-            ) : canSend ? (
-              <ArrowUp size={20} color={themeColors.gray[12]} weight="bold" />
-            ) : isRecording ? (
-              <Stop size={20} color={themeColors.status.error} weight="fill" />
-            ) : (
-              <Microphone size={20} color={themeColors.gray[12]} />
-            )}
+              ) : (
+                <Microphone size={20} color={themeColors.gray[12]} />
+              )}
+            </GlassView>
           </TouchableOpacity>
-        </View>
+        </GlassContainer>
       </View>
     );
   }
-
-  // Android fallback
-  return (
-    <View
-      style={{
-        paddingBottom: insets.bottom + 4,
-        paddingHorizontal: 8,
-        paddingTop: 8,
-      }}
-    >
-      <View className="flex-row items-end gap-2">
-        {/* Input field */}
-        <View className="min-h-[36px] flex-1 justify-center rounded-[18px] bg-gray-3 px-4 py-2">
-          <TextInput
-            value={message}
-            onChangeText={setMessage}
-            placeholder={placeholder}
-            placeholderTextColor={themeColors.gray[9]}
-            editable={!disabled}
-            multiline
-            numberOfLines={5}
-            className="text-base text-gray-12"
-            style={{ maxHeight: 120 }}
-          />
-        </View>
-
-        {/* Mic / Send button */}
-        <TouchableOpacity
-          onPress={canSend ? handleSend : handleMicPress}
-          onLongPress={handleMicLongPress}
-          disabled={isTranscribing || disabled}
-          className={`h-[34px] w-[34px] items-center justify-center rounded-full ${isRecording ? "bg-status-error/20" : "bg-gray-5"}`}
-          activeOpacity={0.7}
-        >
-          {isTranscribing ? (
-            <ActivityIndicator size="small" color={themeColors.gray[12]} />
-          ) : canSend ? (
-            <ArrowUp size={20} color={themeColors.gray[12]} weight="bold" />
-          ) : isRecording ? (
-            <Stop size={20} color={themeColors.status.error} weight="fill" />
-          ) : (
-            <Microphone size={20} color={themeColors.gray[12]} />
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 }

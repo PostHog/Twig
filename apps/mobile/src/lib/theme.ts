@@ -90,6 +90,16 @@ function hexToRgb(hex: string): string {
   return `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`;
 }
 
+// Convert hex to rgba format with alpha
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(result[1], 16);
+  const g = parseInt(result[2], 16);
+  const b = parseInt(result[3], 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // Generate NativeWind vars() from color definitions
 function createThemeVars(theme: (typeof colors)["light" | "dark"]) {
   return vars({
@@ -145,4 +155,12 @@ export type ThemeColors = (typeof colors)["light" | "dark"];
 export function useThemeColors(): ThemeColors {
   const { colorScheme } = useColorScheme();
   return colorScheme === "dark" ? colors.dark : colors.light;
+}
+
+/**
+ * Convert hex color to rgba format.
+ * Useful for creating transparent variants of theme colors (e.g., for gradients).
+ */
+export function toRgba(hex: string, alpha: number): string {
+  return hexToRgba(hex, alpha);
 }

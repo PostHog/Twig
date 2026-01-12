@@ -7,14 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  ChatInput,
-  MessagesList,
-  useChatStore,
-  useGradualAnimation,
-} from "@/features/chat";
+import { ChatInput, MessagesList, useChatStore } from "@/features/chat";
 import { useThemeColors } from "@/lib/theme";
 
 export default function ChatDetailScreen() {
@@ -75,13 +71,21 @@ export default function ChatDetailScreen() {
     return null;
   }, [streamingActive, stopGeneration]);
 
-  const { height } = useGradualAnimation();
+  const { height } = useReanimatedKeyboardAnimation();
 
+  // useReanimatedKeyboardAnimation returns negative height values
+  // e.g., -300 when keyboard is open, 0 when closed
   const contentPosition = useAnimatedStyle(() => {
     return {
-      transform: [{ translateY: -height.value }],
+      transform: [{ translateY: height.value }],
     };
   }, []);
+
+  const inputContainerStyle = useAnimatedStyle(() => {
+    return {
+      marginBottom: height.value < 0 ? 12 : insets.bottom,
+    };
+  }, [insets.bottom]);
 
   if (loadError) {
     return (
@@ -158,9 +162,12 @@ export default function ChatDetailScreen() {
         />
 
         {/* Fixed input at bottom */}
-        <View className="absolute inset-x-0 bottom-0">
+        <Animated.View
+          className="absolute inset-x-0 bottom-0"
+          style={inputContainerStyle}
+        >
           <ChatInput onSend={handleSend} disabled={streamingActive} />
-        </View>
+        </Animated.View>
       </Animated.View>
     </>
   );

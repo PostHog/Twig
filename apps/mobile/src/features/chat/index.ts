@@ -15,7 +15,6 @@ export { ToolMessage } from "./components/ToolMessage";
 export { VisualizationArtifact } from "./components/VisualizationArtifact";
 
 // Hooks
-export { useGradualAnimation } from "./hooks/useGradualAnimation";
 export { useVoiceRecording } from "./hooks/useVoiceRecording";
 
 // Store
