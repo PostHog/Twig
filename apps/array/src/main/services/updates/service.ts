@@ -76,6 +76,17 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       return { success: false, error: "Already checking for updates" };
     }
 
+    // If an update is already downloaded and ready, show the prompt again
+    // instead of checking (which would incorrectly report "up to date")
+    if (this.updateReady) {
+      log.info("Update already downloaded, showing prompt again", {
+        downloadedVersion: this.downloadedVersion,
+      });
+      this.pendingNotification = true;
+      this.flushPendingNotification();
+      return { success: true };
+    }
+
     this.checkingForUpdates = true;
     this.emitStatus({ checking: true });
     this.performCheck();
