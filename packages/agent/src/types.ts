@@ -143,6 +143,7 @@ export interface TaskExecutionOptions {
   skipGitBranch?: boolean; // Skip creating a task-specific git branch
   framework?: "claude" | "codex"; // Agent framework to use (defaults to "claude")
   task?: Task; // Pre-fetched task to avoid redundant API call
+  isReconnect?: boolean; // Session recreation - skip RUN_STARTED notification
 }
 
 export interface ExecutionResult {
