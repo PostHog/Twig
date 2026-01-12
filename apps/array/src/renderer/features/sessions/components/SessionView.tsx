@@ -104,14 +104,20 @@ export function SessionView({
   const latestPlan = useMemo((): Plan | null => {
     let planIndex = -1;
     let plan: Plan | null = null;
-    let responseIndex = -1;
+    let turnEndResponseIndex = -1;
 
-    // Find the most recent plan and response in one pass
+    // Find the most recent plan and turn-ending response in one pass
     for (let i = events.length - 1; i >= 0; i--) {
       const msg = events[i].message;
 
-      if (responseIndex === -1 && isJsonRpcResponse(msg)) {
-        responseIndex = i;
+      // Only consider responses that end a turn (session/prompt responses have stopReason)
+      // Other responses (like tool completions) should not invalidate the plan
+      if (
+        turnEndResponseIndex === -1 &&
+        isJsonRpcResponse(msg) &&
+        (msg.result as { stopReason?: string })?.stopReason !== undefined
+      ) {
+        turnEndResponseIndex = i;
       }
 
       if (
@@ -127,11 +133,11 @@ export function SessionView({
         }
       }
 
-      if (planIndex !== -1 && responseIndex !== -1) break;
+      if (planIndex !== -1 && turnEndResponseIndex !== -1) break;
     }
 
-    // Plan is stale if the most recent response came after it (turn completed)
-    if (responseIndex > planIndex) return null;
+    // Plan is stale only if a turn-ending response came after it
+    if (turnEndResponseIndex > planIndex) return null;
 
     return plan;
   }, [events]);
