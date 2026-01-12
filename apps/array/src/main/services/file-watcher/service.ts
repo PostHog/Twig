@@ -14,8 +14,9 @@ import {
 
 const log = logger.scope("file-watcher");
 
-const IGNORE_PATTERNS = ["**/node_modules/**", "**/.git/**"];
-const DEBOUNCE_MS = 100;
+const IGNORE_PATTERNS = ["**/node_modules/**", "**/.git/**", "**/.jj/**"];
+const DEBOUNCE_MS = 500;
+const BULK_THRESHOLD = 100;
 
 interface PendingChanges {
   dirs: Set<string>;
@@ -177,6 +178,18 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
   }
 
   private flushPending(repoPath: string, pending: PendingChanges): void {
+    const totalChanges = pending.files.size + pending.deletes.size;
+
+    // For bulk changes, emit a single event instead of per-file events
+    if (totalChanges > BULK_THRESHOLD) {
+      this.emit(FileWatcherEvent.GitStateChanged, { repoPath });
+      pending.dirs.clear();
+      pending.files.clear();
+      pending.deletes.clear();
+      pending.timer = null;
+      return;
+    }
+
     for (const dirPath of pending.dirs) {
       this.emit(FileWatcherEvent.DirectoryChanged, { repoPath, dirPath });
     }
