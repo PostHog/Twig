@@ -11,9 +11,6 @@ export const SHORTCUTS = {
   SWITCH_TAB: "mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
   OPEN_IN_EDITOR: "mod+o",
   COPY_PATH: "mod+shift+c",
-  TASK_NAV_UP: "up",
-  TASK_NAV_DOWN: "down",
-  TASK_SELECT: "enter",
   TASK_REFRESH: "mod+r",
   BLUR: "escape",
   SUBMIT_BLUR: "mod+enter",
@@ -23,8 +20,7 @@ export type ShortcutCategory =
   | "general"
   | "navigation"
   | "panels"
-  | "editor"
-  | "taskList";
+  | "editor";
 
 export interface KeyboardShortcut {
   id: string;
@@ -118,20 +114,6 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
     context: "Task detail",
   },
   {
-    id: "task-nav-up",
-    keys: SHORTCUTS.TASK_NAV_UP,
-    description: "Navigate up",
-    category: "taskList",
-    context: "Task list",
-  },
-  {
-    id: "task-nav-down",
-    keys: SHORTCUTS.TASK_NAV_DOWN,
-    description: "Navigate down",
-    category: "taskList",
-    context: "Task list",
-  },
-  {
     id: "editor-bold",
     keys: "mod+b",
     description: "Bold",
@@ -166,7 +148,6 @@ export const CATEGORY_LABELS: Record<ShortcutCategory, string> = {
   navigation: "Navigation",
   panels: "Panels & Tabs",
   editor: "Editor",
-  taskList: "Task List",
 };
 
 export function getShortcutsByCategory(): Record<
@@ -178,7 +159,6 @@ export function getShortcutsByCategory(): Record<
     navigation: [],
     panels: [],
     editor: [],
-    taskList: [],
   };
   for (const shortcut of KEYBOARD_SHORTCUTS) {
     grouped[shortcut.category].push(shortcut);
