@@ -49,12 +49,12 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 │   │   Sync API      │    │    Temporal     │    │   S3 Storage    │    │
 │   │   (FastAPI)     │◄──►│    Workflow     │◄──►│                 │    │
 │   └─────────────────┘    └─────────────────┘    │  - Event logs   │    │
-│                                   │             │  - File content │    │
-│                                   │             └─────────────────┘    │
-└───────────────────────────────────│─────────────────────────────────────┘
-                                   │
-                                   │ Signals + Activities
-                                   ▼
+│                                                 │  - File content │    │
+│                                                 └─────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                         ▲                              │
+                         │ SSE (events)                 │ SSE (commands)
+                         │                              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                              SANDBOX                                     │
 │                                                                          │
@@ -142,10 +142,10 @@ Local file watcher detects change
        └──► POST event: { path, hash, action }
                     │
                     ▼
-            Temporal workflow signals sandbox
+            Backend pushes to agent via SSE
                     │
                     ▼
-            Sandbox fetches from S3, overwrites file
+            Agent fetches from S3, overwrites file
                     │
                     ▼
             Agent sees file changed, adapts
@@ -267,71 +267,77 @@ The agent runs in a message loop rather than single execution:
 - `cancel` — Stop current operation
 - `close` — Shut down gracefully
 
-**The loop:**
-
-```
-while not should_exit:
-    handle_control_signals()      # cancel, close
-
-    for message in pending_messages:
-        if user_message:
-            response = agent.run(message)
-            emit_event('agent_message', response)
-        elif file_sync:
-            notify_agent_files_changed(files)
-
-    if has_pending_question:
-        emit_event('agent_question', question)
-
-    sleep(100ms)
-```
+**How commands reach the agent:** On startup, the agent opens an outbound SSE connection to the backend. Client commands (prompts, cancel, mode switch) are pushed directly through this connection to give as close to a local experience for latency as possible. This bypasses Temporal for real-time operations.
 
 ### Temporal Workflow
 
-The workflow orchestrates the session lifecycle:
+Temporal handles **lifecycle only**, not message routing:
 
 ```python
 @workflow.defn
-class InteractiveSessionWorkflow:
+class CloudSessionWorkflow:
 
     @workflow.signal
-    def send_message(self, message: str): ...
-
-    @workflow.signal
-    def sync_files(self, files: list): ...
-
-    @workflow.signal
-    def cancel(self): ...
-
-    @workflow.signal
-    def close(self): ...
+    def close(self):
+        self.should_close = True
 
     @workflow.run
     async def run(self, input):
         sandbox_id = await provision_sandbox(input)
-        await start_agent_server(sandbox_id)
+        await start_agent_server(sandbox_id)  # Agent connects to backend via SSE
 
+        # Just wait for close or timeout - messages go direct via SSE
         while not self.should_close:
-            await wait_for_interaction(timeout=2_hours)
-
-            if self.should_cancel:
-                await send_cancel_to_sandbox(sandbox_id)
-
-            for files in self.pending_file_syncs:
-                await sync_files_to_sandbox(sandbox_id, files)
-
-            for msg in self.pending_messages:
-                await send_message_to_sandbox(sandbox_id, msg)
+            try:
+                await workflow.wait_condition(
+                    lambda: self.should_close,
+                    timeout=timedelta(minutes=10)
+                )
+            except asyncio.TimeoutError:
+                break  # Inactivity timeout
 
         await cleanup_sandbox(sandbox_id)
 ```
 
 **Key behaviors:**
 
-- Sandbox stays alive while workflow runs
+- Temporal provisions sandbox and handles cleanup
+- Messages/commands go directly via SSE (not through Temporal)
+- 10-min inactivity timeout triggers cleanup
 - Client disconnection doesn't stop the agent
-- 2-hour inactivity timeout (configurable)
-- Signals queue and process in order
+
+---
+
+## Array Integration
+
+In Array, the `AgentService` (main process) talks to agents through a connection. For cloud mode, we swap the transport without changing the rest of the app.
+
+```
+Renderer ──tRPC──► AgentService ──► Connection
+                                        │
+                          ┌─────────────┴─────────────┐
+                          │                           │
+                          ▼                           ▼
+                  LocalConnection             CloudConnection
+                  (in-process SDK)            (SSE to backend)
+```
+
+**The connection interface** (simplified):
+
+```typescript
+interface AgentConnection {
+  prompt(params: { sessionId: string; prompt: string }): AsyncIterable<AcpMessage>
+  cancel(params: { sessionId: string }): Promise<void>
+  setMode(params: { sessionId: string; mode: string }): Promise<void>
+  onEvent(handler: (event: AcpMessage) => void): void
+}
+```
+
+**Key files:**
+
+- `apps/array/src/main/services/agent/service.ts` — AgentService, picks connection type
+- `apps/array/src/main/services/agent/local-connection.ts` — Current ACP/SDK logic (extract)
+- `apps/array/src/main/services/agent/cloud-connection.ts` — New, ~200 lines
 
 ---
 
@@ -390,10 +396,9 @@ data: {"jsonrpc":"2.0","method":"agent_message_chunk","params":{"text":"I found 
 
 ### Why Not WebSocket?
 
-- SSE works with standard HTTP infrastructure (load balancers, CDNs, proxies)
+- SSE will work much better with our infrastructure (load balancing across multiple pods)
 - Built-in resumability via `Last-Event-ID`
-- Native browser reconnection
-- Easier to scale (stateless servers)
+- Easier to manage (stateless servers)
 
 ---
 
@@ -409,7 +414,7 @@ Client                          Backend                         Sandbox
   │◄── file_change ────────────────│◄── file written ──────────────│
   │◄── agent_message ──────────────│◄── agent output ──────────────│
   │                                │                               │
-  │── POST /sync {message} ───────►│── signal workflow ───────────►│
+  │── POST /sync {message} ───────►│── push via SSE ──────────────►│
   │◄── 202 Accepted ───────────────│                               │
 ```
 
