@@ -159,7 +159,6 @@ export function SessionView({
     async (optionId: string, customInput?: string) => {
       if (!firstPendingPermission || !taskId) return;
 
-      // Check if the selected option is "allow_always" and set mode to acceptEdits
       const selectedOption = firstPendingPermission.options.find(
         (o) => o.optionId === optionId,
       );
