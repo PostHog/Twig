@@ -21,7 +21,6 @@ import {
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
 import { InlinePermissionSelector } from "./InlinePermissionSelector";
-import { ModeIndicator } from "./ModeIndicator";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
@@ -199,16 +198,6 @@ export function SessionView({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Flex direction="column" height="100%" className="bg-gray-1">
-          {taskId && (
-            <Flex
-              px="3"
-              py="2"
-              justify="end"
-              className="border-gray-4 border-b"
-            >
-              <ModeIndicator taskId={taskId} />
-            </Flex>
-          )}
           {showRawLogs ? (
             <RawLogsView events={events} />
           ) : (
