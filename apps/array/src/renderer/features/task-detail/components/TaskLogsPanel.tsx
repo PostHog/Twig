@@ -1,4 +1,5 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { SessionView } from "@features/sessions/components/SessionView";
 import {
   useSessionActions,
@@ -34,6 +35,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
+  const requestFocus = useDraftStore((s) => s.actions.requestFocus);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -42,6 +44,11 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isPromptPending = session?.isPromptPending ?? false;
 
   const isConnecting = useRef(false);
+
+  // Focus the message editor when navigating to this task
+  useEffect(() => {
+    requestFocus(taskId);
+  }, [taskId, requestFocus]);
 
   useEffect(() => {
     if (!repoPath) return;
@@ -110,7 +117,8 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const handleCancelPrompt = useCallback(async () => {
     const result = await cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
-  }, [taskId, cancelPrompt]);
+    requestFocus(taskId);
+  }, [taskId, cancelPrompt, requestFocus]);
 
   const { appendUserShellExecute } = useSessionActions();
 
