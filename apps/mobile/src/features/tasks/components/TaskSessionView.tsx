@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import {
   AgentMessage,
-  ChatInput,
+  Composer,
   HumanMessage,
   ToolMessage,
   type ToolStatus,
@@ -220,7 +220,7 @@ export function TaskSessionView({
         }
       />
 
-      <ChatInput onSend={onSendPrompt} disabled={isPromptPending} />
+      <Composer onSend={onSendPrompt} disabled={isPromptPending} />
     </View>
   );
 }

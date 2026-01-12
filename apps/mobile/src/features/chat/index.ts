@@ -2,7 +2,7 @@
 
 // Components
 export { AgentMessage } from "./components/AgentMessage";
-export { ChatInput } from "./components/ChatInput";
+export { Composer } from "./components/Composer";
 export { FailureMessage } from "./components/FailureMessage";
 export { HumanMessage } from "./components/HumanMessage";
 export { MessagesList } from "./components/MessagesList";

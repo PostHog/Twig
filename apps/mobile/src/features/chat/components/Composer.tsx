@@ -12,17 +12,17 @@ import {
 import { toRgba, useThemeColors } from "@/lib/theme";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
-interface ChatInputProps {
+interface ComposerProps {
   onSend: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
-export function ChatInput({
+export function Composer({
   onSend,
   disabled = false,
   placeholder = "Ask a question",
-}: ChatInputProps) {
+}: ComposerProps) {
   const themeColors = useThemeColors();
   const [message, setMessage] = useState("");
   const { status, startRecording, stopRecording, cancelRecording } =

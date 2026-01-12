@@ -10,7 +10,7 @@ import {
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChatInput, MessagesList, useChatStore } from "@/features/chat";
+import { Composer, MessagesList, useChatStore } from "@/features/chat";
 import { useThemeColors } from "@/lib/theme";
 
 export default function ChatDetailScreen() {
@@ -166,7 +166,7 @@ export default function ChatDetailScreen() {
           className="absolute inset-x-0 bottom-0"
           style={inputContainerStyle}
         >
-          <ChatInput onSend={handleSend} disabled={streamingActive} />
+          <Composer onSend={handleSend} disabled={streamingActive} />
         </Animated.View>
       </Animated.View>
     </>
