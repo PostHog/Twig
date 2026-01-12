@@ -19,6 +19,7 @@ interface DraftState {
   drafts: Record<SessionId, EditorContent | string>;
   contexts: Record<SessionId, EditorContext>;
   commands: Record<SessionId, AvailableCommand[]>;
+  focusRequested: Record<SessionId, number>;
   _hasHydrated: boolean;
 }
 
@@ -35,6 +36,8 @@ export interface DraftActions {
   setCommands: (sessionId: SessionId, commands: AvailableCommand[]) => void;
   getCommands: (sessionId: SessionId) => AvailableCommand[];
   clearCommands: (sessionId: SessionId) => void;
+  requestFocus: (sessionId: SessionId) => void;
+  clearFocusRequest: (sessionId: SessionId) => void;
 }
 
 type DraftStore = DraftState & { actions: DraftActions };
@@ -45,6 +48,7 @@ export const useDraftStore = create<DraftStore>()(
       drafts: {},
       contexts: {},
       commands: {},
+      focusRequested: {},
       _hasHydrated: false,
 
       actions: {
@@ -91,6 +95,16 @@ export const useDraftStore = create<DraftStore>()(
         clearCommands: (sessionId) =>
           set((state) => {
             delete state.commands[sessionId];
+          }),
+
+        requestFocus: (sessionId) =>
+          set((state) => {
+            state.focusRequested[sessionId] = Date.now();
+          }),
+
+        clearFocusRequest: (sessionId) =>
+          set((state) => {
+            delete state.focusRequested[sessionId];
           }),
       },
     })),

@@ -71,6 +71,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const historyActions = usePromptHistoryStore.getState();
   const [isEmptyState, setIsEmptyState] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
   const handleCommandSubmit = useCallback((text: string) => {
     callbackRefs.current.onSubmit?.(text);
@@ -181,6 +182,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
         },
       },
       onCreate: ({ editor: e }) => {
+        setIsReady(true);
         const newIsEmpty = !e.getText().trim();
         setIsEmptyState(newIsEmpty);
         prevIsEmptyRef.current = newIsEmpty;
@@ -238,7 +240,11 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   submitRef.current = submit;
 
-  const focus = useCallback(() => editor?.commands.focus("end"), [editor]);
+  const focus = useCallback(() => {
+    if (editor?.view) {
+      editor.commands.focus("end");
+    }
+  }, [editor]);
   const blur = useCallback(() => editor?.commands.blur(), [editor]);
   const clear = useCallback(() => {
     editor?.commands.clearContent();
@@ -274,6 +280,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   return {
     editor,
+    isReady,
     isEmpty,
     isBashMode,
     submit,
