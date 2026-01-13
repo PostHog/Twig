@@ -685,7 +685,7 @@ const useStore = create<SessionStore>()(
         taskId,
         false,
         defaultFramework,
-        effectiveMode,
+        effectiveMode === "default" ? undefined : effectiveMode,
       );
       session.channel = result.channel;
       session.status = "connected";
