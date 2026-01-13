@@ -248,34 +248,35 @@ export function SessionView({
             </Callout.Root>
           )}
 
-          {firstPendingPermission ? (
-            <InlinePermissionSelector
-              title={firstPendingPermission.title}
-              options={firstPendingPermission.options}
-              onSelect={handlePermissionSelect}
-              onCancel={handlePermissionCancel}
-              disabled={false}
-            />
-          ) : (
-            <Box
-              className={
-                isBashMode
-                  ? "border border-accent-9 p-2"
-                  : "border-gray-4 border-t p-2"
-              }
-            >
-              <MessageEditor
-                sessionId={sessionId}
-                placeholder="Type a message... @ to mention files, ! for bash mode"
-                onSubmit={handleSubmit}
-                onBashCommand={onBashCommand}
-                onBashModeChange={setIsBashMode}
-                onCancel={onCancelPrompt}
-                currentMode={currentMode}
-                onModeChange={!isCloud ? handleModeChange : undefined}
+          {!hasError &&
+            (firstPendingPermission ? (
+              <InlinePermissionSelector
+                title={firstPendingPermission.title}
+                options={firstPendingPermission.options}
+                onSelect={handlePermissionSelect}
+                onCancel={handlePermissionCancel}
+                disabled={false}
               />
-            </Box>
-          )}
+            ) : (
+              <Box
+                className={
+                  isBashMode
+                    ? "border border-accent-9 p-2"
+                    : "border-gray-4 border-t p-2"
+                }
+              >
+                <MessageEditor
+                  sessionId={sessionId}
+                  placeholder="Type a message... @ to mention files, ! for bash mode"
+                  onSubmit={handleSubmit}
+                  onBashCommand={onBashCommand}
+                  onBashModeChange={setIsBashMode}
+                  onCancel={onCancelPrompt}
+                  currentMode={currentMode}
+                  onModeChange={!isCloud ? handleModeChange : undefined}
+                />
+              </Box>
+            ))}
         </Flex>
       </ContextMenu.Trigger>
       <ContextMenu.Content size="1">
