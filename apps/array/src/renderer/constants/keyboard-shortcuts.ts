@@ -16,11 +16,7 @@ export const SHORTCUTS = {
   SUBMIT_BLUR: "mod+enter",
 } as const;
 
-export type ShortcutCategory =
-  | "general"
-  | "navigation"
-  | "panels"
-  | "editor";
+export type ShortcutCategory = "general" | "navigation" | "panels" | "editor";
 
 export interface KeyboardShortcut {
   id: string;
