@@ -16,24 +16,24 @@ import {
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
 
-const PREVIEW_TRAILER_KEY = "Preview-Workspace";
+const FOCUS_TRAILER_KEY = "Focus-Workspace";
 
 export interface ConflictInfo {
   file: string;
   workspaces: string[];
 }
 
-export interface PreviewStatus {
-  isPreview: boolean;
+export interface FocusStatus {
+  isFocused: boolean;
   workspaces: string[];
   allWorkspaces: WorkspaceInfo[];
   conflicts: ConflictInfo[];
 }
 
 /**
- * Parse Preview-Workspace trailers from the current commit description
+ * Parse Focus-Workspace trailers from the current commit description
  */
-async function getPreviewWorkspaces(
+async function getFocusWorkspaces(
   cwd = process.cwd(),
 ): Promise<Result<string[]>> {
   // Get the description of the current commit
@@ -50,7 +50,7 @@ async function getPreviewWorkspaces(
   // Parse trailers (Key: Value format at end of description)
   const lines = description.split("\n");
   for (const line of lines) {
-    const match = line.match(new RegExp(`^${PREVIEW_TRAILER_KEY}:\\s*(.+)$`));
+    const match = line.match(new RegExp(`^${FOCUS_TRAILER_KEY}:\\s*(.+)$`));
     if (match) {
       workspaces.push(match[1].trim());
     }
@@ -62,11 +62,11 @@ async function getPreviewWorkspaces(
 /**
  * Build a description with preview trailers
  */
-function buildPreviewDescription(workspaces: string[]): string {
+function buildFocusDescription(workspaces: string[]): string {
   if (workspaces.length === 0) return "";
 
   const trailers = workspaces
-    .map((ws) => `${PREVIEW_TRAILER_KEY}: ${ws}`)
+    .map((ws) => `${FOCUS_TRAILER_KEY}: ${ws}`)
     .join("\n");
 
   return `preview\n\n${trailers}`;
@@ -83,7 +83,7 @@ function buildPreviewDescription(workspaces: string[]): string {
  * All workspaces are siblings on trunk, only merged at preview time.
  * This keeps PRs clean - landing agent-a only lands agent-a's changes.
  */
-async function updatePreview(
+async function updateFocus(
   workspaces: string[],
   cwd = process.cwd(),
 ): Promise<Result<string>> {
@@ -97,7 +97,7 @@ async function updatePreview(
     : null;
 
   // Check if current commit is a preview (has trailers)
-  const currentWorkspaces = await getPreviewWorkspaces(cwd);
+  const currentWorkspaces = await getFocusWorkspaces(cwd);
   const isCurrentPreview =
     currentWorkspaces.ok && currentWorkspaces.value.length > 0;
 
@@ -168,7 +168,7 @@ async function updatePreview(
   }
 
   // Build the description with trailers
-  const description = buildPreviewDescription(workspaces);
+  const description = buildFocusDescription(workspaces);
 
   // Create the merge commit
   // jj new <id1> <id2> ... -m "<description>"
@@ -235,11 +235,11 @@ async function getWorkspacesForFile(
 /**
  * Show current preview state
  */
-export async function previewStatus(
+export async function focusStatus(
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
+): Promise<Result<FocusStatus>> {
   const [previewWorkspaces, allWorkspaces] = await Promise.all([
-    getPreviewWorkspaces(cwd),
+    getFocusWorkspaces(cwd),
     listWorkspaces(cwd),
   ]);
 
@@ -261,7 +261,7 @@ export async function previewStatus(
   }
 
   return ok({
-    isPreview: previewWorkspaces.value.length > 0,
+    isFocused: previewWorkspaces.value.length > 0,
     workspaces: previewWorkspaces.value,
     allWorkspaces: allWorkspaces.value,
     conflicts,
@@ -274,12 +274,12 @@ export async function previewStatus(
  * Checks for file conflicts before adding - if the combined set of workspaces
  * would have files modified by multiple agents, the operation is blocked.
  */
-export async function previewAdd(
+export async function focusAdd(
   workspaces: string[],
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
+): Promise<Result<FocusStatus>> {
   // Get current preview workspaces
-  const currentResult = await getPreviewWorkspaces(cwd);
+  const currentResult = await getFocusWorkspaces(cwd);
   if (!currentResult.ok) return currentResult;
 
   // Add new workspaces (avoiding duplicates)
@@ -307,21 +307,21 @@ export async function previewAdd(
   }
 
   // Update the preview
-  const updateResult = await updatePreview(allWorkspaces, cwd);
+  const updateResult = await updateFocus(allWorkspaces, cwd);
   if (!updateResult.ok) return updateResult;
 
-  return previewStatus(cwd);
+  return focusStatus(cwd);
 }
 
 /**
  * Remove workspaces from preview
  */
-export async function previewRemove(
+export async function focusRemove(
   workspaces: string[],
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
+): Promise<Result<FocusStatus>> {
   // Get current preview workspaces
-  const currentResult = await getPreviewWorkspaces(cwd);
+  const currentResult = await getFocusWorkspaces(cwd);
   if (!currentResult.ok) return currentResult;
 
   // Remove specified workspaces
@@ -329,23 +329,23 @@ export async function previewRemove(
   const remaining = currentResult.value.filter((ws) => !toRemove.has(ws));
 
   // Update the preview
-  const updateResult = await updatePreview(remaining, cwd);
+  const updateResult = await updateFocus(remaining, cwd);
   if (!updateResult.ok) return updateResult;
 
-  return previewStatus(cwd);
+  return focusStatus(cwd);
 }
 
 /**
  * Preview only the specified workspace (exclude all others)
  */
-export async function previewOnly(
+export async function focusOnly(
   workspace: string,
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
-  const updateResult = await updatePreview([workspace], cwd);
+): Promise<Result<FocusStatus>> {
+  const updateResult = await updateFocus([workspace], cwd);
   if (!updateResult.ok) return updateResult;
 
-  return previewStatus(cwd);
+  return focusStatus(cwd);
 }
 
 /**
@@ -354,14 +354,17 @@ export async function previewOnly(
  * Checks for file conflicts before adding - if any workspaces have files
  * modified by multiple agents, the operation is blocked.
  */
-export async function previewAll(
+export async function focusAll(
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
+): Promise<Result<FocusStatus>> {
   // Get all workspaces
   const allResult = await listWorkspaces(cwd);
   if (!allResult.ok) return allResult;
 
-  const workspaceNames = allResult.value.map((ws) => ws.name);
+  // Filter out "unassigned" - it's handled separately by updateFocus via ensureUnassignedWorkspace
+  const workspaceNames = allResult.value
+    .map((ws) => ws.name)
+    .filter((name) => name !== UNASSIGNED_WORKSPACE);
 
   if (workspaceNames.length === 0) {
     return err(createError("WORKSPACE_NOT_FOUND", "No workspaces found"));
@@ -383,17 +386,17 @@ export async function previewAll(
     }
   }
 
-  const updateResult = await updatePreview(workspaceNames, cwd);
+  const updateResult = await updateFocus(workspaceNames, cwd);
   if (!updateResult.ok) return updateResult;
 
-  return previewStatus(cwd);
+  return focusStatus(cwd);
 }
 
 /**
  * Exit preview mode (back to trunk)
  */
-export async function previewNone(cwd = process.cwd()): Promise<Result<void>> {
-  const updateResult = await updatePreview([], cwd);
+export async function focusNone(cwd = process.cwd()): Promise<Result<void>> {
+  const updateResult = await updateFocus([], cwd);
   if (!updateResult.ok) return updateResult;
   return ok(undefined);
 }
@@ -401,86 +404,85 @@ export async function previewNone(cwd = process.cwd()): Promise<Result<void>> {
 /**
  * Enter edit mode for a single workspace.
  *
- * With intelligent edit routing, this is equivalent to `previewOnly` -
+ * With intelligent edit routing, this is equivalent to `focusOnly` -
  * files are always writable, and edits are routed to the single workspace.
  */
-export async function previewEdit(
+export async function focusEdit(
   workspace: string,
   cwd = process.cwd(),
-): Promise<Result<PreviewStatus>> {
+): Promise<Result<FocusStatus>> {
   // Single-workspace preview = edit mode (all edits go to this workspace)
-  const updateResult = await updatePreview([workspace], cwd);
+  const updateResult = await updateFocus([workspace], cwd);
   if (!updateResult.ok) return updateResult;
 
-  return previewStatus(cwd);
+  return focusStatus(cwd);
 }
 
 // Command exports
-export const previewStatusCommand: Command<PreviewStatus, [string?]> = {
+export const focusStatusCommand: Command<FocusStatus, [string?]> = {
   meta: {
-    name: "preview",
-    description: "Show current preview state",
+    name: "focus",
+    description: "Show current focus state",
     category: "workflow",
     core: true,
   },
-  run: previewStatus,
+  run: focusStatus,
 };
 
-export const previewAddCommand: Command<PreviewStatus, [string[], string?]> = {
+export const focusAddCommand: Command<FocusStatus, [string[], string?]> = {
   meta: {
-    name: "preview add",
+    name: "focus add",
     args: "<workspace...>",
-    description: "Add workspaces to preview",
+    description: "Add workspaces to focus",
     category: "workflow",
   },
-  run: previewAdd,
+  run: focusAdd,
 };
 
-export const previewRemoveCommand: Command<PreviewStatus, [string[], string?]> =
-  {
-    meta: {
-      name: "preview remove",
-      args: "<workspace...>",
-      description: "Remove workspaces from preview",
-      category: "workflow",
-    },
-    run: previewRemove,
-  };
-
-export const previewOnlyCommand: Command<PreviewStatus, [string, string?]> = {
+export const focusRemoveCommand: Command<FocusStatus, [string[], string?]> = {
   meta: {
-    name: "preview only",
+    name: "focus remove",
+    args: "<workspace...>",
+    description: "Remove workspaces from focus",
+    category: "workflow",
+  },
+  run: focusRemove,
+};
+
+export const focusOnlyCommand: Command<FocusStatus, [string, string?]> = {
+  meta: {
+    name: "focus only",
     args: "<workspace>",
-    description: "Preview only this workspace",
+    description: "Focus only this workspace",
     category: "workflow",
   },
-  run: previewOnly,
+  run: focusOnly,
 };
 
-export const previewAllCommand: Command<PreviewStatus, [string?]> = {
+export const focusAllCommand: Command<FocusStatus, [string?]> = {
   meta: {
-    name: "preview all",
-    description: "Include all workspaces in preview",
+    name: "focus all",
+    description: "Include all workspaces in focus",
     category: "workflow",
   },
-  run: previewAll,
+  run: focusAll,
 };
 
-export const previewNoneCommand: Command<void, [string?]> = {
+export const focusNoneCommand: Command<void, [string?]> = {
   meta: {
-    name: "preview none",
-    description: "Exit preview mode",
+    name: "focus none",
+    description: "Exit focus mode",
     category: "workflow",
   },
-  run: previewNone,
+  run: focusNone,
 };
 
-export const previewEditCommand: Command<PreviewStatus, [string, string?]> = {
+export const focusEditCommand: Command<FocusStatus, [string, string?]> = {
   meta: {
-    name: "preview edit",
+    name: "focus edit",
     args: "<workspace>",
-    description: "Enter edit mode for a workspace (single-preview, writable)",
+    description: "Enter edit mode for a workspace (single-focus, writable)",
     category: "workflow",
   },
-  run: previewEdit,
+  run: focusEdit,
 };

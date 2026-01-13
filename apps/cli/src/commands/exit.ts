@@ -1,4 +1,4 @@
-import { previewNone, previewStatus } from "@array/core/commands/preview";
+import { focusNone, focusStatus } from "@array/core/commands/focus";
 import type { CommandMeta } from "@array/core/commands/types";
 import { exitToGit } from "@array/core/git/branch";
 import { getTrunk } from "@array/core/jj";
@@ -14,18 +14,18 @@ import {
 
 export const meta: CommandMeta = {
   name: "exit",
-  description: "Exit preview mode, or exit to plain git if not previewing",
+  description: "Exit focus mode, or exit to plain git if not previewing",
   context: "jj",
   category: "management",
 };
 
 export async function exit(): Promise<void> {
-  // Check if we're in preview mode
-  const status = await previewStatus();
-  if (status.ok && status.value.isPreview) {
-    // Exit preview mode
-    coreUnwrap(await previewNone());
-    message(formatSuccess("Exited preview mode"));
+  // Check if we're in focus mode
+  const status = await focusStatus();
+  if (status.ok && status.value.isFocused) {
+    // Exit focus mode
+    coreUnwrap(await focusNone());
+    message(formatSuccess("Exited focus mode"));
     return;
   }
 

@@ -83,6 +83,10 @@ export async function addWorkspace(
   const infoResult = await getWorkspaceInfo(name, cwd);
   if (!infoResult.ok) return infoResult;
 
+  // Automatically add to focus (dynamic import to avoid circular dependency)
+  const { focusAdd } = await import("../commands/focus");
+  await focusAdd([name], cwd);
+
   return ok(infoResult.value);
 }
 
@@ -105,6 +109,17 @@ export async function removeWorkspace(
     return err(
       createError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found`),
     );
+  }
+
+  // If workspace is in focus, remove it from focus first (dynamic import to avoid circular dependency)
+  const { focusStatus, focusRemove } = await import("../commands/focus");
+  const status = await focusStatus(cwd);
+  if (
+    status.ok &&
+    status.value.isFocused &&
+    status.value.workspaces.includes(name)
+  ) {
+    await focusRemove([name], cwd);
   }
 
   // Forget the workspace in jj
@@ -268,9 +283,12 @@ export async function ensureUnassignedWorkspace(
 
   const workspacePath = getWorkspacePath(UNASSIGNED_WORKSPACE, repoPath);
 
-  // If workspace already exists, return its info
+  // If workspace already exists in jj, return its info
   if (existsSync(workspacePath)) {
-    return getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+    const info = await getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+    if (info.ok) return info;
+    // Directory exists but jj doesn't know about it - clean up and recreate
+    await rm(workspacePath, { recursive: true, force: true });
   }
 
   // Ensure the workspaces directory exists

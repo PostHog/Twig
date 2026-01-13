@@ -1,6 +1,6 @@
 import { runJJ } from "../jj/runner";
 import { createError, err, ok, type Result } from "../result";
-import { previewRemove, previewStatus } from "./preview";
+import { focusRemove, focusStatus } from "./focus";
 import type { Command } from "./types";
 
 export interface FileConflict {
@@ -38,11 +38,11 @@ async function getWorkspacesForFile(
 export async function listConflicts(
   cwd = process.cwd(),
 ): Promise<Result<FileConflict[]>> {
-  const status = await previewStatus(cwd);
+  const status = await focusStatus(cwd);
   if (!status.ok) return status;
 
-  if (!status.value.isPreview) {
-    return err(createError("INVALID_STATE", "Not in preview mode"));
+  if (!status.value.isFocused) {
+    return err(createError("INVALID_STATE", "Not in focus mode"));
   }
 
   if (status.value.workspaces.length < 2) {
@@ -85,11 +85,11 @@ export async function getFileConflict(
   file: string,
   cwd = process.cwd(),
 ): Promise<Result<FileConflict | null>> {
-  const status = await previewStatus(cwd);
+  const status = await focusStatus(cwd);
   if (!status.ok) return status;
 
-  if (!status.value.isPreview) {
-    return err(createError("INVALID_STATE", "Not in preview mode"));
+  if (!status.value.isFocused) {
+    return err(createError("INVALID_STATE", "Not in focus mode"));
   }
 
   const workspaces = await getWorkspacesForFile(
@@ -106,7 +106,7 @@ export async function getFileConflict(
 }
 
 /**
- * Resolve a file conflict by keeping one workspace and removing others from preview.
+ * Resolve a file conflict by keeping one workspace and removing others from focus.
  */
 export async function resolveConflict(
   file: string,
@@ -131,12 +131,12 @@ export async function resolveConflict(
     );
   }
 
-  // Remove all other workspaces from preview
+  // Remove all other workspaces from focus
   const toRemove = conflict.value.workspaces.filter(
     (ws) => ws !== keepWorkspace,
   );
 
-  const removeResult = await previewRemove(toRemove, cwd);
+  const removeResult = await focusRemove(toRemove, cwd);
   if (!removeResult.ok) return removeResult;
 
   return ok({
@@ -148,8 +148,8 @@ export async function resolveConflict(
 
 export const listConflictsCommand: Command<FileConflict[], [string?]> = {
   meta: {
-    name: "preview conflicts",
-    description: "List file conflicts in preview",
+    name: "focus conflicts",
+    description: "List file conflicts in focus",
     category: "info",
   },
   run: listConflicts,
@@ -160,7 +160,7 @@ export const resolveConflictCommand: Command<
   [string, string, string?]
 > = {
   meta: {
-    name: "preview resolve",
+    name: "focus resolve",
     args: "<file> <workspace>",
     description: "Resolve a file conflict by keeping one workspace",
     category: "workflow",

@@ -1,14 +1,14 @@
 import {
-  type PreviewStatus,
-  previewAdd,
-  previewAll,
-  previewEdit,
-  previewNone,
-  previewOnly,
-  previewRemove,
-  previewStatus,
-} from "@array/core/commands/preview";
-import { listConflicts } from "@array/core/commands/preview-resolve";
+  type FocusStatus,
+  focusAdd,
+  focusAll,
+  focusEdit,
+  focusNone,
+  focusOnly,
+  focusRemove,
+  focusStatus,
+} from "@array/core/commands/focus";
+import { listConflicts } from "@array/core/commands/focus-resolve";
 import {
   cmd,
   cyan,
@@ -22,17 +22,17 @@ import {
 import { select } from "../utils/prompt";
 import { requireArg, unwrap } from "../utils/run";
 
-function displayPreviewStatus(status: PreviewStatus): void {
-  if (!status.isPreview) {
-    message(dim("Not in preview mode"));
+function displayFocusStatus(status: FocusStatus): void {
+  if (!status.isFocused) {
+    message(dim("Not in focus mode"));
     message("");
     if (status.allWorkspaces.length > 0) {
       message(
         `Available workspaces: ${status.allWorkspaces.map((ws) => cyan(ws.name)).join(", ")}`,
       );
       message("");
-      message(`Start preview with: ${cmd("arr preview add <workspace>")}`);
-      message(`Or preview all:     ${cmd("arr preview all")}`);
+      message(`Start focus with: ${cmd("arr focus add <workspace>")}`);
+      message(`Or focus all:     ${cmd("arr focus all")}`);
     } else {
       message(dim("No workspaces available"));
       message(`Create one with: ${cmd("arr workspace add <name>")}`);
@@ -40,18 +40,16 @@ function displayPreviewStatus(status: PreviewStatus): void {
     return;
   }
 
-  message(`${green("Preview mode")}`);
+  message(`${green("Focus mode")}`);
   message("");
-  message(`Previewing: ${status.workspaces.map((ws) => cyan(ws)).join(", ")}`);
+  message(`Focusing: ${status.workspaces.map((ws) => cyan(ws)).join(", ")}`);
 
-  // Show workspaces not in preview
-  const notInPreview = status.allWorkspaces.filter(
+  // Show workspaces not in focus
+  const notInFocus = status.allWorkspaces.filter(
     (ws) => !status.workspaces.includes(ws.name),
   );
-  if (notInPreview.length > 0) {
-    message(
-      dim(`Not in preview: ${notInPreview.map((ws) => ws.name).join(", ")}`),
-    );
+  if (notInFocus.length > 0) {
+    message(dim(`Not in focus: ${notInFocus.map((ws) => ws.name).join(", ")}`));
   }
 
   // Show conflicts
@@ -66,71 +64,71 @@ function displayPreviewStatus(status: PreviewStatus): void {
       message(`   ${conflict.file} ${dim("←")} ${wsNames}`);
     }
     message("");
-    message(`${dim("Resolve with:")} ${cmd("arr preview resolve")}`);
+    message(`${dim("Resolve with:")} ${cmd("arr focus resolve")}`);
   }
 }
 
-export async function preview(
+export async function focus(
   subcommand: string | undefined,
   args: string[],
 ): Promise<void> {
   // No subcommand = show status
   if (!subcommand || subcommand === "status") {
-    const status = unwrap(await previewStatus());
-    displayPreviewStatus(status);
+    const status = unwrap(await focusStatus());
+    displayFocusStatus(status);
     return;
   }
 
   switch (subcommand) {
     case "add": {
-      requireArg(args[0], "Usage: arr preview add <workspace...>");
-      const result = unwrap(await previewAdd(args));
-      message(formatSuccess(`Added ${args.join(", ")} to preview`));
+      requireArg(args[0], "Usage: arr focus add <workspace...>");
+      const result = unwrap(await focusAdd(args));
+      message(formatSuccess(`Added ${args.join(", ")} to focus`));
       message("");
-      displayPreviewStatus(result);
+      displayFocusStatus(result);
       break;
     }
 
     case "remove":
     case "rm": {
-      requireArg(args[0], "Usage: arr preview remove <workspace...>");
-      const result = unwrap(await previewRemove(args));
-      message(formatSuccess(`Removed ${args.join(", ")} from preview`));
+      requireArg(args[0], "Usage: arr focus remove <workspace...>");
+      const result = unwrap(await focusRemove(args));
+      message(formatSuccess(`Removed ${args.join(", ")} from focus`));
       message("");
-      displayPreviewStatus(result);
+      displayFocusStatus(result);
       break;
     }
 
     case "only": {
-      requireArg(args[0], "Usage: arr preview only <workspace>");
-      const result = unwrap(await previewOnly(args[0]));
-      message(formatSuccess(`Now previewing only ${cyan(args[0])}`));
+      requireArg(args[0], "Usage: arr focus only <workspace>");
+      const result = unwrap(await focusOnly(args[0]));
+      message(formatSuccess(`Now focusing only ${cyan(args[0])}`));
       message("");
-      displayPreviewStatus(result);
+      displayFocusStatus(result);
       break;
     }
 
     case "all": {
-      const result = unwrap(await previewAll());
-      message(formatSuccess("Now previewing all workspaces"));
+      const result = unwrap(await focusAll());
+      message(formatSuccess("Now focusing all workspaces"));
       message("");
-      displayPreviewStatus(result);
+      displayFocusStatus(result);
       break;
     }
 
     case "edit": {
-      requireArg(args[0], "Usage: arr preview edit <workspace>");
-      const result = unwrap(await previewEdit(args[0]));
+      requireArg(args[0], "Usage: arr focus edit <workspace>");
+      const result = unwrap(await focusEdit(args[0]));
       message(formatSuccess(`Editing ${cyan(args[0])} (files are writable)`));
       message("");
-      displayPreviewStatus(result);
+      displayFocusStatus(result);
       break;
     }
 
     case "none":
     case "exit": {
-      unwrap(await previewNone());
-      message(formatSuccess("Exited preview mode"));
+      unwrap(await focusNone());
+      message(formatSuccess("Exited focus mode"));
       break;
     }
 
@@ -151,7 +149,7 @@ export async function preview(
         message(dim(`    Modified by: ${conflict.workspaces.join(", ")}`));
       }
       message("");
-      message(`${dim("Resolve with:")} ${cmd("arr preview resolve")}`);
+      message(`${dim("Resolve with:")} ${cmd("arr focus resolve")}`);
       break;
     }
 
@@ -204,14 +202,14 @@ export async function preview(
         message("");
       }
 
-      // Actually remove the workspaces from preview
+      // Actually remove the workspaces from focus
       if (removedWorkspaces.size > 0) {
-        unwrap(await previewRemove([...removedWorkspaces]));
+        unwrap(await focusRemove([...removedWorkspaces]));
       }
 
       message(
         formatSuccess(
-          `Resolved ${resolved} conflict${resolved === 1 ? "" : "s"}, removed ${[...removedWorkspaces].join(", ")} from preview`,
+          `Resolved ${resolved} conflict${resolved === 1 ? "" : "s"}, removed ${[...removedWorkspaces].join(", ")} from focus`,
         ),
       );
       if (skipped > 0) {
@@ -226,19 +224,19 @@ export async function preview(
 
     default:
       message(
-        "Usage: arr preview [add|remove|only|all|edit|none|resolve] [workspace...]",
+        "Usage: arr focus [add|remove|only|all|edit|none|resolve] [workspace...]",
       );
       message("");
       message("Subcommands:");
-      message("  (none)           Show current preview state");
-      message("  add <ws...>      Add workspaces to preview");
-      message("  remove <ws...>   Remove workspaces from preview");
-      message("  only <ws>        Preview only this workspace");
-      message("  all              Preview all workspaces");
+      message("  (none)           Show current focus state");
+      message("  add <ws...>      Add workspaces to focus");
+      message("  remove <ws...>   Remove workspaces from focus");
+      message("  only <ws>        Focus only this workspace");
+      message("  all              Focus all workspaces");
       message(
         "  edit <ws>        Edit mode (single workspace, files writable)",
       );
-      message("  none             Exit preview mode");
+      message("  none             Exit focus mode");
       message("  conflicts        List file conflicts");
       message("  resolve <file>   Resolve a file conflict interactively");
   }

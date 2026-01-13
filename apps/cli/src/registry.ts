@@ -33,12 +33,12 @@ import { daemon } from "./commands/daemon";
 import { deleteChange } from "./commands/delete";
 import { down } from "./commands/down";
 import { exit, meta as exitMeta } from "./commands/exit";
+import { focus } from "./commands/focus";
 import { get } from "./commands/get";
 import { init, meta as initMeta } from "./commands/init";
 import { log } from "./commands/log";
 import { merge } from "./commands/merge";
 import { modify } from "./commands/modify";
-import { preview } from "./commands/preview";
 import { resolve } from "./commands/resolve";
 import { restack } from "./commands/restack";
 import { split } from "./commands/split";
@@ -99,10 +99,10 @@ const workspaceMeta: CommandMeta = {
   core: true,
 };
 
-const previewMeta: CommandMeta = {
-  name: "preview",
+const focusMeta: CommandMeta = {
+  name: "focus",
   args: "[add|remove|only|all|none|resolve] [workspace...]",
-  description: "Manage live preview of workspace changes",
+  description: "Manage live focus of workspace changes",
   category: "workflow",
   core: true,
 };
@@ -159,7 +159,7 @@ export const COMMANDS = {
   help: helpMeta,
   version: versionMeta,
   workspace: workspaceMeta,
-  preview: previewMeta,
+  focus: focusMeta,
   daemon: daemonMeta,
   assign: assignMeta,
   unassigned: unassignedMeta,
@@ -201,7 +201,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   exit: () => exit(),
   ci: () => ci(),
   workspace: (p) => workspace(p.args[0], p.args.slice(1)),
-  preview: (p) => preview(p.args[0], p.args.slice(1)),
+  focus: (p) => focus(p.args[0], p.args.slice(1)),
   daemon: (p) => daemon(p.args[0]),
   assign: (p) => assign(p.args),
   unassigned: (p) => unassigned(p.args[0], p.args.slice(1)),
