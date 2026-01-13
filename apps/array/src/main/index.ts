@@ -379,14 +379,11 @@ app.on("activate", () => {
 });
 
 // Handle process signals to ensure clean shutdown
-const handleShutdownSignal = async (signal: string) => {
-  console.log(`Received ${signal}, cleaning up agent subprocesses...`);
+const handleShutdownSignal = async (_signal: string) => {
   try {
     const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
     await agentService.cleanupAll();
-  } catch (err) {
-    console.error("Error during signal cleanup:", err);
-  }
+  } catch (_err) {}
   process.exit(0);
 };
 
@@ -395,24 +392,18 @@ process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
 // Handle uncaught exceptions to attempt cleanup before crash
-process.on("uncaughtException", async (error) => {
-  console.error("Uncaught exception, attempting cleanup:", error);
+process.on("uncaughtException", async (_error) => {
   try {
     const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
     await agentService.cleanupAll();
-  } catch (cleanupErr) {
-    console.error("Error during exception cleanup:", cleanupErr);
-  }
+  } catch (_cleanupErr) {}
   process.exit(1);
 });
 
-process.on("unhandledRejection", async (reason) => {
-  console.error("Unhandled rejection, attempting cleanup:", reason);
+process.on("unhandledRejection", async (_reason) => {
   try {
     const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
     await agentService.cleanupAll();
-  } catch (cleanupErr) {
-    console.error("Error during rejection cleanup:", cleanupErr);
-  }
+  } catch (_cleanupErr) {}
   process.exit(1);
 });

@@ -621,7 +621,13 @@ export class ClaudeAcpAgent implements Agent {
       options,
     });
 
-    this.createSession(sessionId, q, input, ourPermissionMode, sessionAbortController);
+    this.createSession(
+      sessionId,
+      q,
+      input,
+      ourPermissionMode,
+      sessionAbortController,
+    );
 
     // Register for S3 persistence if config provided
     const persistence = params._meta?.persistence as
