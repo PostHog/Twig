@@ -40,6 +40,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
   const hasError = session?.status === "error";
+  const errorMessage = session?.errorMessage;
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
@@ -159,6 +160,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
           hasError={hasError}
+          errorMessage={errorMessage}
         />
       </Box>
     </BackgroundWrapper>

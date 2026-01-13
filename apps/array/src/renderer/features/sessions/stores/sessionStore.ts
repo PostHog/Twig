@@ -46,6 +46,7 @@ export interface AgentSession {
   events: AcpMessage[];
   startedAt: number;
   status: "connecting" | "connected" | "disconnected" | "error";
+  errorMessage?: string;
   isPromptPending: boolean;
   isCloud: boolean;
   logUrl?: string;
@@ -160,6 +161,14 @@ function subscribeToChannel(taskRunId: string) {
       },
       onError: (err) => {
         log.error("Session subscription error", { taskRunId, error: err });
+        useStore.setState((state) => {
+          const session = state.sessions[taskRunId];
+          if (session) {
+            session.status = "error";
+            session.errorMessage =
+              "Lost connection to the agent. Please restart the task.";
+          }
+        });
       },
     },
   );
@@ -640,7 +649,11 @@ const useStore = create<SessionStore>()(
         }
       } else {
         unsubscribeFromChannel(taskRunId);
-        removeSession(taskRunId);
+        updateSession(taskRunId, {
+          status: "error",
+          errorMessage:
+            "Failed to reconnect to the agent. Please restart the task.",
+        });
       }
     };
 
@@ -652,14 +665,12 @@ const useStore = create<SessionStore>()(
       executionMode?: "plan" | "acceptEdits",
     ) => {
       if (!auth.client) {
-        log.error("API client not available");
-        return;
+        throw new Error("Unable to reach server. Please check your connection.");
       }
 
       const taskRun = await auth.client.createTaskRun(taskId);
       if (!taskRun?.id) {
-        log.error("Task run created without ID");
-        return;
+        throw new Error("Failed to create task run. Please try again.");
       }
 
       const persistedMode = getPersistedTaskMode(taskId);
@@ -776,6 +787,12 @@ const useStore = create<SessionStore>()(
             const auth = getAuthCredentials();
             if (!auth) {
               log.error("Missing auth credentials");
+              const taskRunId = latestRun?.id ?? `error-${taskId}`;
+              const session = createBaseSession(taskRunId, taskId, isCloud);
+              session.status = "error";
+              session.errorMessage =
+                "Authentication required. Please sign in to continue.";
+              addSession(session);
               return;
             }
 
@@ -803,6 +820,8 @@ const useStore = create<SessionStore>()(
                 session.events = events;
                 session.logUrl = latestRun.log_url;
                 session.status = "error";
+                session.errorMessage =
+                  "The working directory for this task no longer exists. Please start a new task.";
 
                 addSession(session);
                 return;
@@ -828,6 +847,25 @@ const useStore = create<SessionStore>()(
             const message =
               error instanceof Error ? error.message : String(error);
             log.error("Failed to connect to task", { message });
+
+            // Create session in error state so user sees what happened
+            const taskRunId = latestRun?.id ?? `error-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "error";
+            session.errorMessage = `Failed to connect to the agent: ${message}`;
+
+            // Try to load historical logs if available
+            if (latestRun?.log_url) {
+              try {
+                const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+                session.events = convertStoredEntriesToEvents(rawEntries);
+                session.logUrl = latestRun.log_url;
+              } catch {
+                // Ignore log fetch errors - just show error state without logs
+              }
+            }
+
+            addSession(session);
           } finally {
             connectAttempts.delete(taskId);
           }
