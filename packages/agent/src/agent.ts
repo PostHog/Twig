@@ -358,8 +358,8 @@ This PR implements the changes described in the task.`;
     }
   }
 
-  cleanup(): void {
-    this.acpConnection?.cleanup();
+  async cleanup(): Promise<void> {
+    await this.acpConnection?.cleanup();
   }
 
   getTaskExecutionStatus(taskId: string): string | null {

@@ -23,7 +23,7 @@ export type AcpConnectionConfig = {
 export type InProcessAcpConnection = {
   agentConnection: AgentSideConnection;
   clientStreams: StreamPair;
-  cleanup: () => void;
+  cleanup: () => Promise<void>;
 };
 
 /**
@@ -94,9 +94,25 @@ export function createAcpConnection(
       readable: streams.client.readable,
       writable: clientWritable,
     },
-    cleanup: () => {
+    cleanup: async () => {
+      logger.info("Cleaning up ACP connection");
+
+      // First close the agent sessions (aborts any running queries)
       if (claudeAgent) {
         claudeAgent.closeAllSessions();
+      }
+
+      // Then close the streams to properly terminate the ACP connection
+      // This signals the connection to close and cleanup
+      try {
+        await streams.client.writable.close();
+      } catch {
+        // Stream may already be closed
+      }
+      try {
+        await streams.agent.writable.close();
+      } catch {
+        // Stream may already be closed
       }
     },
   };

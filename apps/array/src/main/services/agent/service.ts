@@ -568,7 +568,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
       try {
         // Then cleanup the agent connection and kill any subprocesses
-        session.agent.cleanup();
+        await session.agent.cleanup();
       } catch (err) {
         log.warn("Failed to cleanup agent during shutdown", {
           taskRunId,
