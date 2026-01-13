@@ -4,6 +4,7 @@ import type { MessageEditorHandle } from "@features/message-editor/components/Me
 import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
@@ -52,6 +53,7 @@ export const TaskInputEditor = forwardRef<
   ) => {
     const isWorktreeMode = localWorkspaceMode === "worktree";
     const isCloudMode = runMode === "cloud";
+    const { isOnline } = useConnectivity();
 
     useHotkeys(
       "shift+tab",
@@ -109,6 +111,7 @@ export const TaskInputEditor = forwardRef<
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
+      if (!isOnline) return "You're offline";
       if (isEmpty) return "Enter a task description";
       if (!hasDirectory) return "Select a folder first";
       if (!canSubmit) return "Missing required fields";

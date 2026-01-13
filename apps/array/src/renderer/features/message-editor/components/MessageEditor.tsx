@@ -1,5 +1,6 @@
 import "./message-editor.css";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
@@ -47,11 +48,13 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const context = useDraftStore((s) => s.contexts[sessionId]);
     const focusRequested = useDraftStore((s) => s.focusRequested[sessionId]);
     const clearFocusRequest = useDraftStore((s) => s.actions.clearFocusRequest);
+    const { isOnline } = useConnectivity();
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
     const isCloud = context?.isCloud ?? false;
     const repoPath = context?.repoPath;
+    const isDisabled = disabled || !isOnline;
 
     const {
       editor,
@@ -162,7 +165,11 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             ) : (
               <Tooltip
                 content={
-                  disabled || isEmpty ? "Enter a message" : "Send message"
+                  !isOnline
+                    ? "You're offline"
+                    : isDisabled || isEmpty
+                      ? "Enter a message"
+                      : "Send message"
                 }
               >
                 <IconButton
@@ -172,12 +179,13 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
                     e.stopPropagation();
                     submit();
                   }}
-                  disabled={disabled || isEmpty}
+                  disabled={isDisabled || isEmpty}
                   loading={isLoading}
                   style={{
                     backgroundColor:
-                      disabled || isEmpty ? "var(--accent-a4)" : undefined,
-                    color: disabled || isEmpty ? "var(--accent-8)" : undefined,
+                      isDisabled || isEmpty ? "var(--accent-a4)" : undefined,
+                    color:
+                      isDisabled || isEmpty ? "var(--accent-8)" : undefined,
                   }}
                 >
                   <ArrowUp size={14} weight="bold" />

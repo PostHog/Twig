@@ -21,6 +21,7 @@ import {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import { getIsOnline } from "@/renderer/stores/connectivityStore";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 import {
@@ -784,6 +785,18 @@ const useStore = create<SessionStore>()(
           if (connectAttempts.has(taskId)) return;
           if (getSessionByTaskId(taskId)?.status === "connected") return;
 
+          // Don't try to connect if offline
+          if (!getIsOnline()) {
+            log.info("Skipping connection attempt - offline", { taskId });
+            const taskRunId = latestRun?.id ?? `offline-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "disconnected";
+            session.errorMessage =
+              "No internet connection. Connect when you're back online.";
+            addSession(session);
+            return;
+          }
+
           connectAttempts.add(taskId);
 
           try {
@@ -900,6 +913,13 @@ const useStore = create<SessionStore>()(
         },
 
         sendPrompt: async (taskId, prompt) => {
+          // Check connectivity before attempting to send
+          if (!getIsOnline()) {
+            throw new Error(
+              "No internet connection. Please check your connection and try again.",
+            );
+          }
+
           const session = getSessionByTaskId(taskId);
           if (!session) throw new Error("No active session for task");
 
@@ -1354,3 +1374,4 @@ useAuthStore.subscribe(
     }
   },
 );
+

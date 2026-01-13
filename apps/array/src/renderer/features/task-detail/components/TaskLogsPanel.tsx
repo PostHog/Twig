@@ -13,11 +13,13 @@ import {
   selectWorktreePath,
   useWorkspaceStore,
 } from "@features/workspace/stores/workspaceStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
 
 const log = logger.scope("task-logs-panel");
@@ -39,6 +41,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
   const requestFocus = useDraftStore((s) => s.actions.requestFocus);
+  const { isOnline } = useConnectivity();
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -58,6 +61,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
+    if (!isOnline) return;
 
     // Don't reconnect if already connected, connecting, or in error state
     if (
@@ -92,7 +96,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     }).finally(() => {
       isConnecting.current = false;
     });
-  }, [task, repoPath, session, connectToTask, markActivity]);
+  }, [task, repoPath, session, connectToTask, markActivity, isOnline]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -118,6 +122,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           trpcVanilla.dockBadge.show.mutate();
         }
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to send message";
+        toast.error(message);
         log.error("Failed to send prompt", error);
       }
     },
