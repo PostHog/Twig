@@ -551,8 +551,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   async cleanupAll(): Promise<void> {
+    log.info("Cleaning up all agent sessions", {
+      sessionCount: this.sessions.size,
+    });
+
     for (const [taskRunId, session] of this.sessions) {
       try {
+        // First try to cancel the task gracefully
         session.agent.cancelTask(session.taskId);
       } catch (err) {
         log.warn("Failed to cancel session during cleanup", {
@@ -560,10 +565,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           error: err,
         });
       }
+
+      try {
+        // Then cleanup the agent connection and kill any subprocesses
+        session.agent.cleanup();
+      } catch (err) {
+        log.warn("Failed to cleanup agent during shutdown", {
+          taskRunId,
+          error: err,
+        });
+      }
+
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
     }
 
     this.sessions.clear();
+    log.info("All agent sessions cleaned up");
   }
 
   private setupEnvironment(

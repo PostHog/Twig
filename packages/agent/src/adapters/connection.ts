@@ -23,6 +23,7 @@ export type AcpConnectionConfig = {
 export type InProcessAcpConnection = {
   agentConnection: AgentSideConnection;
   clientStreams: StreamPair;
+  cleanup: () => void;
 };
 
 /**
@@ -79,10 +80,12 @@ export function createAcpConnection(
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
-  // Create the Claude agent
+  // Create the Claude agent - capture reference for cleanup
+  let claudeAgent: ClaudeAcpAgent | null = null;
   const agentConnection = new AgentSideConnection((client) => {
     logger.info("Creating Claude agent");
-    return new ClaudeAcpAgent(client, sessionStore);
+    claudeAgent = new ClaudeAcpAgent(client, sessionStore);
+    return claudeAgent;
   }, agentStream);
 
   return {
@@ -90,6 +93,11 @@ export function createAcpConnection(
     clientStreams: {
       readable: streams.client.readable,
       writable: clientWritable,
+    },
+    cleanup: () => {
+      if (claudeAgent) {
+        claudeAgent.closeAllSessions();
+      }
     },
   };
 }
