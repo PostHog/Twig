@@ -3,6 +3,7 @@ import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
+import { initializeConnectivityStore } from "@renderer/stores/connectivityStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@utils/toast";
 import { useEffect, useState } from "react";
@@ -14,6 +15,11 @@ function App() {
   // Initialize PostHog analytics
   useEffect(() => {
     initializePostHog();
+  }, []);
+
+  // Initialize connectivity monitoring
+  useEffect(() => {
+    return initializeConnectivityStore();
   }, []);
 
   // Global workspace error listener for toasts
