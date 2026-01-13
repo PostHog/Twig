@@ -556,24 +556,40 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
 
     for (const [taskRunId, session] of this.sessions) {
+      // Step 1: Send ACP cancel notification for any ongoing prompt turns
       try {
-        // First try to cancel the task gracefully
-        session.agent.cancelTask(session.taskId);
+        if (!session.connection.signal.aborted) {
+          await session.connection.cancel({ sessionId: taskRunId });
+          log.info("Sent ACP cancel for session", { taskRunId });
+        }
       } catch (err) {
-        log.warn("Failed to cancel session during cleanup", {
-          taskRunId,
-          error: err,
-        });
+        log.warn("Failed to send ACP cancel", { taskRunId, error: err });
       }
 
+      // Step 2: Cancel via agent (triggers AbortController)
       try {
-        // Then cleanup the agent connection and kill any subprocesses
+        session.agent.cancelTask(session.taskId);
+      } catch (err) {
+        log.warn("Failed to cancel task", { taskRunId, error: err });
+      }
+
+      // Step 3: Cleanup agent connection (closes streams, aborts subprocess)
+      try {
         await session.agent.cleanup();
       } catch (err) {
-        log.warn("Failed to cleanup agent during shutdown", {
-          taskRunId,
-          error: err,
-        });
+        log.warn("Failed to cleanup agent", { taskRunId, error: err });
+      }
+
+      // Step 4: Wait for ACP connection to fully close (with timeout)
+      try {
+        if (!session.connection.signal.aborted) {
+          await Promise.race([
+            session.connection.closed,
+            new Promise((resolve) => setTimeout(resolve, 1000)),
+          ]);
+        }
+      } catch {
+        // Connection may already be closed
       }
 
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
