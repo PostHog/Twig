@@ -50,28 +50,6 @@ function fixFilenameCircularRef(): Plugin {
 }
 
 /**
- * Copy agent templates to the build directory
- */
-function copyAgentTemplates(): Plugin {
-  return {
-    name: "copy-agent-templates",
-    writeBundle() {
-      const templateSrc = join(
-        __dirname,
-        "node_modules/@posthog/agent/dist/templates/plan-template.md",
-      );
-      const templateDest = join(
-        __dirname,
-        ".vite/build/templates/plan-template.md",
-      );
-
-      mkdirSync(join(__dirname, ".vite/build/templates"), { recursive: true });
-      copyFileSync(templateSrc, templateDest);
-    },
-  };
-}
-
-/**
  * Copy Claude executable to the build directory
  */
 function copyClaudeExecutable(): Plugin {
@@ -163,7 +141,6 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths(),
       autoServicesPlugin(join(__dirname, "src/main/services")),
       fixFilenameCircularRef(),
-      copyAgentTemplates(),
       copyClaudeExecutable(),
     ],
     define: {
