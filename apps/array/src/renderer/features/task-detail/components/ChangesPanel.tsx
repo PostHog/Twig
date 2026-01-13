@@ -1,6 +1,7 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
@@ -28,7 +29,6 @@ import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import {
   selectWorktreePath,
   useWorkspaceStore,
