@@ -9,6 +9,7 @@ This is the monorepo for PostHog's Array desktop task manager and the agent fram
 ## Projects
 
 - **[apps/array](./apps/array)** - The Array desktop application
+- **[apps/cli](./apps/cli)** - The `arr` CLI for stacked PRs using jj
 - **[packages/agent](./packages/agent)** - The TypeScript agent framework
 
 ## Development
@@ -17,6 +18,8 @@ This is the monorepo for PostHog's Array desktop task manager and the agent fram
 
 - Node.js 22+
 - pnpm 10.23.0
+- [Bun](https://bun.sh/docs/installation) (for the CLI)
+- [jj](https://martinvonz.github.io/jj/latest/install-and-setup/) (for the CLI)
 
 ### Setup
 
@@ -30,6 +33,10 @@ pnpm install
 # Build the agent package
 pnpm --filter agent build
 ```
+
+### Installing the CLI
+
+See the [arr CLI README](./apps/cli/README.md) for installation and usage instructions.
 
 ### Running in Development
 
@@ -63,7 +70,8 @@ pnpm test
 ```
 array-monorepo/
 ├── apps/
-│   └── array/          # Electron desktop app
+│   ├── array/          # Electron desktop app
+│   └── cli/            # arr CLI for stacked PRs
 ├── packages/
 │   └── agent/          # Agent framework
 ├── pnpm-workspace.yaml # Workspace configuration
