@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type SidebarViewMode = "folders" | "history";
+export type SidebarViewMode = "folders" | "history" | "pinned";
 
 interface SidebarStoreState {
   open: boolean;

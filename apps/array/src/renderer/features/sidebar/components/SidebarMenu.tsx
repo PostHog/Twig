@@ -22,6 +22,7 @@ import { HistoryView } from "./HistoryView";
 import { HomeItem } from "./items/HomeItem";
 import { NewTaskItem } from "./items/NewTaskItem";
 import { TaskItem } from "./items/TaskItem";
+import { PinnedView } from "./PinnedView";
 import { SidebarFooter } from "./SidebarFooter";
 import { SortableFolderSection } from "./SortableFolderSection";
 import { ViewModeSelector } from "./ViewModeSelector";
@@ -205,7 +206,7 @@ function SidebarMenuComponent() {
 
             <div className="mx-2 my-2 border-gray-6 border-t" />
 
-            {viewMode === "history" ? (
+            {viewMode === "history" && (
               <HistoryView
                 historyData={sidebarData.historyData}
                 activeTaskId={sidebarData.activeTaskId}
@@ -214,7 +215,20 @@ function SidebarMenuComponent() {
                 onTaskDelete={handleTaskDelete}
                 onTaskTogglePin={handleTaskTogglePin}
               />
-            ) : (
+            )}
+
+            {viewMode === "pinned" && (
+              <PinnedView
+                pinnedData={sidebarData.pinnedData}
+                activeTaskId={sidebarData.activeTaskId}
+                onTaskClick={handleTaskClick}
+                onTaskContextMenu={handleTaskContextMenu}
+                onTaskDelete={handleTaskDelete}
+                onTaskTogglePin={handleTaskTogglePin}
+              />
+            )}
+
+            {viewMode === "folders" && (
               <DragDropProvider
                 onDragOver={handleDragOver}
                 sensors={[

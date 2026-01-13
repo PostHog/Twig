@@ -58,6 +58,10 @@ export interface HistoryData {
   hasMore: boolean;
 }
 
+export interface PinnedData {
+  tasks: TaskData[];
+}
+
 export interface SidebarData {
   userName: string;
   isHomeActive: boolean;
@@ -69,6 +73,7 @@ export interface SidebarData {
   folders: FolderData[];
   activeTaskId: string | null;
   historyData: HistoryData;
+  pinnedData: PinnedData;
 }
 
 interface ViewState {
@@ -253,6 +258,54 @@ function buildHistoryData(
   };
 }
 
+function buildPinnedData(
+  allTasks: Task[],
+  sessions: Record<string, AgentSession>,
+  lastViewedAt: Record<string, number>,
+  localActivityAt: Record<string, number>,
+  pinnedTaskIds: Set<string>,
+  activeTaskId: string | null,
+): PinnedData {
+  const getSessionForTask = (taskId: string): AgentSession | undefined => {
+    return Object.values(sessions).find((s) => s.taskId === taskId);
+  };
+
+  // Filter to only pinned tasks
+  const pinnedTasks = allTasks.filter((task) => pinnedTaskIds.has(task.id));
+
+  // Transform to TaskData
+  const tasks: TaskData[] = pinnedTasks.map((task) => {
+    const session = getSessionForTask(task.id);
+
+    const apiUpdatedAt = new Date(task.updated_at).getTime();
+    const localActivity = localActivityAt[task.id];
+    const lastActivityAt = localActivity
+      ? Math.max(apiUpdatedAt, localActivity)
+      : apiUpdatedAt;
+
+    const taskLastViewedAt = lastViewedAt[task.id];
+    const isCurrentlyViewing = activeTaskId === task.id;
+    const isUnread =
+      !isCurrentlyViewing &&
+      taskLastViewedAt !== undefined &&
+      lastActivityAt > taskLastViewedAt;
+
+    return {
+      id: task.id,
+      title: task.title,
+      lastActivityAt,
+      isGenerating: session?.isPromptPending ?? false,
+      isUnread,
+      isPinned: true,
+    };
+  });
+
+  // Sort by activity
+  tasks.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+
+  return { tasks };
+}
+
 export function useSidebarData({
   activeView,
   activeFilters,
@@ -367,6 +420,15 @@ export function useSidebarData({
     historyVisibleCount,
   );
 
+  const pinnedData = buildPinnedData(
+    allTasks,
+    sessions,
+    lastViewedAt,
+    localActivityAt,
+    pinnedTaskIds,
+    activeTaskId,
+  );
+
   return {
     userName,
     isHomeActive,
@@ -378,5 +440,6 @@ export function useSidebarData({
     folders: folderData,
     activeTaskId,
     historyData,
+    pinnedData,
   };
 }
