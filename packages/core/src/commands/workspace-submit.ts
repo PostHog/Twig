@@ -21,11 +21,12 @@ export interface WorkspaceSubmitResult {
 
 interface SubmitOptions {
   draft?: boolean;
-  title?: string;
+  message?: string;
 }
 
 /**
- * Get the description of a workspace's commit for PR title.
+ * Get the description of a workspace's commit.
+ * Returns empty string if no description.
  */
 async function getWorkspaceDescription(
   workspace: string,
@@ -35,10 +36,9 @@ async function getWorkspaceDescription(
     ["log", "-r", `${workspace}@`, "--no-graph", "-T", "description"],
     cwd,
   );
-  if (!result.ok) return workspace;
+  if (!result.ok) return "";
 
-  const desc = result.value.stdout.trim();
-  return desc || workspace;
+  return result.value.stdout.trim();
 }
 
 /**
@@ -92,6 +92,29 @@ export async function submitWorkspace(
     );
   }
 
+  // Get workspace description - require message if none
+  let description = await getWorkspaceDescription(workspace, cwd);
+  const message = options.message || description;
+
+  if (!message) {
+    return err(
+      createError(
+        "MISSING_MESSAGE",
+        `Workspace '${workspace}' has no description`,
+      ),
+    );
+  }
+
+  // If message provided but no description, set it on the commit
+  if (options.message && !description) {
+    const describeResult = await runJJ(
+      ["describe", "-r", `${workspace}@`, "-m", options.message],
+      cwd,
+    );
+    if (!describeResult.ok) return describeResult;
+    description = options.message;
+  }
+
   // Get or generate bookmark name
   // First check if there's already a bookmark on this change
   const bookmarkResult = await runJJ(
@@ -107,8 +130,7 @@ export async function submitWorkspace(
   if (existingBookmarks.length > 0) {
     bookmark = existingBookmarks[0];
   } else {
-    // Generate a new bookmark name
-    const description = await getWorkspaceDescription(workspace, cwd);
+    // Generate a new bookmark name from description
     bookmark = datePrefixedLabel(description, new Date());
 
     // Create the bookmark
@@ -133,8 +155,6 @@ export async function submitWorkspace(
   // Check if PR already exists
   const existingPR = await getPRForBranch(bookmark, cwd);
   const trunk = await getTrunk();
-  const title =
-    options.title || (await getWorkspaceDescription(workspace, cwd));
 
   if (existingPR.ok && existingPR.value) {
     // Update existing PR
@@ -162,7 +182,7 @@ export async function submitWorkspace(
   // Create new PR
   const prResult = await createPR({
     head: bookmark,
-    title,
+    title: message,
     base: trunk,
     draft: options.draft,
   });
@@ -200,9 +220,9 @@ export const workspaceSubmitCommand: Command<
     flags: [
       { name: "draft", short: "d", description: "Create PR as draft" },
       {
-        name: "title",
-        short: "t",
-        description: "PR title (defaults to commit description)",
+        name: "message",
+        short: "m",
+        description: "Commit message / PR title",
       },
     ],
   },

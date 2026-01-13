@@ -12,6 +12,7 @@ import {
   red,
   yellow,
 } from "../utils/output";
+import { textInput } from "../utils/prompt";
 import { requireArg, unwrap } from "../utils/run";
 
 function formatStatusChar(status: "M" | "A" | "D" | "R"): string {
@@ -108,23 +109,36 @@ export async function workspace(
     }
 
     case "submit": {
-      requireArg(args[0], "Usage: arr workspace submit <name>");
+      requireArg(args[0], "Usage: arr workspace submit <name> [-m <message>]");
 
       const draft = args.includes("--draft") || args.includes("-d");
-      const titleIdx = args.indexOf("--title");
-      const tIdx = args.indexOf("-t");
-      const titleFlagIdx = titleIdx !== -1 ? titleIdx : tIdx;
-      const title = titleFlagIdx !== -1 ? args[titleFlagIdx + 1] : undefined;
+      const msgIdx = args.indexOf("--message");
+      const mIdx = args.indexOf("-m");
+      const msgFlagIdx = msgIdx !== -1 ? msgIdx : mIdx;
+      let msg = msgFlagIdx !== -1 ? args[msgFlagIdx + 1] : undefined;
 
-      const result = unwrap(await submitWorkspace(args[0], { draft, title }));
+      // Try to submit - if missing message, prompt for it
+      let result = await submitWorkspace(args[0], { draft, message: msg });
 
-      if (result.status === "created") {
-        message(formatSuccess(`Created PR for ${cyan(result.workspace)}`));
-      } else {
-        message(formatSuccess(`Updated PR for ${cyan(result.workspace)}`));
+      if (!result.ok && result.error.code === "MISSING_MESSAGE") {
+        const prompted = await textInput("Commit message");
+        if (!prompted) {
+          message(dim("Cancelled"));
+          return;
+        }
+        msg = prompted;
+        result = await submitWorkspace(args[0], { draft, message: msg });
       }
-      message(`  ${dim("PR:")} ${result.prUrl}`);
-      message(`  ${dim("Branch:")} ${result.bookmark}`);
+
+      const value = unwrap(result);
+
+      if (value.status === "created") {
+        message(formatSuccess(`Created PR for ${cyan(value.workspace)}`));
+      } else {
+        message(formatSuccess(`Updated PR for ${cyan(value.workspace)}`));
+      }
+      message(`  ${dim("PR:")} ${value.prUrl}`);
+      message(`  ${dim("Branch:")} ${value.bookmark}`);
       break;
     }
 

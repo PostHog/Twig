@@ -37,6 +37,7 @@ export type JJErrorCode =
   | "ALREADY_MERGED"
   | "NOT_FOUND"
   | "EMPTY_CHANGE"
+  | "MISSING_MESSAGE"
   | "CI_FAILED"
   | "UNKNOWN";
 
