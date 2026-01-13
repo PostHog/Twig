@@ -1105,6 +1105,7 @@ export class ClaudeAcpAgent implements Agent {
             response.outcome.optionId === "acceptEdits")
         ) {
           session.permissionMode = response.outcome.optionId;
+          await session.query.setPermissionMode(response.outcome.optionId);
           await this.client.sessionUpdate({
             sessionId,
             update: {
