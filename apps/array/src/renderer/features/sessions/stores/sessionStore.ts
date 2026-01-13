@@ -785,7 +785,46 @@ const useStore = create<SessionStore>()(
           if (connectAttempts.has(taskId)) return;
           if (getSessionByTaskId(taskId)?.status === "connected") return;
 
-          // Don't try to connect if offline
+          // Check auth first
+          const auth = getAuthCredentials();
+          if (!auth) {
+            log.error("Missing auth credentials");
+            const taskRunId = latestRun?.id ?? `error-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "error";
+            session.errorMessage =
+              "Authentication required. Please sign in to continue.";
+            addSession(session);
+            return;
+          }
+
+          // For non-cloud sessions, check workspace existence (local filesystem check)
+          // This should happen before the offline check so users see workspace errors
+          if (!isCloud && latestRun?.id && latestRun?.log_url) {
+            const workspaceExists = await trpcVanilla.workspace.verify.query({
+              taskId,
+            });
+
+            if (!workspaceExists) {
+              log.warn("Workspace no longer exists, showing error state", {
+                taskId,
+              });
+              const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+              const events = convertStoredEntriesToEvents(rawEntries);
+
+              const session = createBaseSession(latestRun.id, taskId, false);
+              session.events = events;
+              session.logUrl = latestRun.log_url;
+              session.status = "error";
+              session.errorMessage =
+                "The working directory for this task no longer exists. Please start a new task.";
+
+              addSession(session);
+              return;
+            }
+          }
+
+          // Don't try to connect if offline (agent connection requires internet)
           if (!getIsOnline()) {
             log.info("Skipping connection attempt - offline", { taskId });
             const taskRunId = latestRun?.id ?? `offline-${taskId}`;
@@ -800,18 +839,6 @@ const useStore = create<SessionStore>()(
           connectAttempts.add(taskId);
 
           try {
-            const auth = getAuthCredentials();
-            if (!auth) {
-              log.error("Missing auth credentials");
-              const taskRunId = latestRun?.id ?? `error-${taskId}`;
-              const session = createBaseSession(taskRunId, taskId, isCloud);
-              session.status = "error";
-              session.errorMessage =
-                "Authentication required. Please sign in to continue.";
-              addSession(session);
-              return;
-            }
-
             if (isCloud && latestRun?.id && latestRun?.log_url) {
               await connectToCloudSession(
                 taskId,
@@ -820,32 +847,6 @@ const useStore = create<SessionStore>()(
                 taskDescription,
               );
             } else if (latestRun?.id && latestRun?.log_url) {
-              // Check if workspace still exists before attempting reconnect
-              const workspaceExists = await trpcVanilla.workspace.verify.query({
-                taskId,
-              });
-
-              if (!workspaceExists) {
-                // Workspace was deleted - show historical logs in error state
-                log.warn("Workspace no longer exists, showing error state", {
-                  taskId,
-                });
-                const { rawEntries } = await fetchSessionLogs(
-                  latestRun.log_url,
-                );
-                const events = convertStoredEntriesToEvents(rawEntries);
-
-                const session = createBaseSession(latestRun.id, taskId, false);
-                session.events = events;
-                session.logUrl = latestRun.log_url;
-                session.status = "error";
-                session.errorMessage =
-                  "The working directory for this task no longer exists. Please start a new task.";
-
-                addSession(session);
-                return;
-              }
-
               await reconnectToLocalSession(
                 taskId,
                 latestRun.id,
