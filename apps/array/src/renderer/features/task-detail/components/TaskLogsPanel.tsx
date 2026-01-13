@@ -5,6 +5,7 @@ import {
   useSessionActions,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
+import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
@@ -32,7 +33,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const session = useSessionForTask(taskId);
-  const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
+  const { connectToTask, sendPrompt, cancelPrompt, clearSessionError } =
+    useSessionActions();
+  const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
   const requestFocus = useDraftStore((s) => s.actions.requestFocus);
@@ -129,6 +132,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const { appendUserShellExecute } = useSessionActions();
 
+  const handleRetry = useCallback(() => {
+    if (!repoPath) return;
+    clearSessionError(taskId);
+    connectToTask({ task, repoPath });
+  }, [taskId, repoPath, task, clearSessionError, connectToTask]);
+
+  const handleDelete = useCallback(() => {
+    const hasWorktree = !!worktreePath;
+    deleteWithConfirm({
+      taskId,
+      taskTitle: task.title ?? task.description ?? "Untitled",
+      hasWorktree,
+    });
+  }, [taskId, task, worktreePath, deleteWithConfirm]);
+
   const handleBashCommand = useCallback(
     async (command: string) => {
       if (!repoPath) return;
@@ -161,6 +179,8 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           isCloud={session?.isCloud ?? false}
           hasError={hasError}
           errorMessage={errorMessage}
+          onRetry={handleRetry}
+          onDelete={handleDelete}
         />
       </Box>
     </BackgroundWrapper>

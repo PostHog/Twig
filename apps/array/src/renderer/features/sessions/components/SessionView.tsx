@@ -8,7 +8,7 @@ import {
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { Warning } from "@phosphor-icons/react";
-import { Box, ContextMenu, Flex, Text } from "@radix-ui/themes";
+import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -45,6 +45,8 @@ interface SessionViewProps {
   isCloud?: boolean;
   hasError?: boolean;
   errorMessage?: string;
+  onRetry?: () => void;
+  onDelete?: () => void;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -62,6 +64,8 @@ export function SessionView({
   isCloud = false,
   hasError = false,
   errorMessage = DEFAULT_ERROR_MESSAGE,
+  onRetry,
+  onDelete,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -256,6 +260,18 @@ export function SessionView({
               <Text size="2" align="center" className="max-w-md px-4 text-gray-11">
                 {errorMessage}
               </Text>
+              <Flex gap="2" mt="2">
+                {onRetry && (
+                  <Button variant="soft" size="2" onClick={onRetry}>
+                    Retry
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button variant="soft" size="2" color="red" onClick={onDelete}>
+                    Delete Task
+                  </Button>
+                )}
+              </Flex>
             </Flex>
           ) : firstPendingPermission ? (
               <InlinePermissionSelector

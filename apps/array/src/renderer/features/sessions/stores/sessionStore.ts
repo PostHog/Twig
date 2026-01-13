@@ -92,6 +92,7 @@ interface SessionActions {
     customInput?: string,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
+  clearSessionError: (taskId: string) => void;
 }
 
 interface AuthCredentials {
@@ -1164,6 +1165,14 @@ const useStore = create<SessionStore>()(
               error,
             });
           }
+        },
+
+        clearSessionError: (taskId: string) => {
+          const session = getSessionByTaskId(taskId);
+          if (session) {
+            removeSession(session.taskRunId);
+          }
+          connectAttempts.delete(taskId);
         },
       },
     };
