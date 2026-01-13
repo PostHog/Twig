@@ -27,6 +27,7 @@ import {
   findPendingPermissions,
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
+import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -149,6 +150,7 @@ function subscribeToChannel(taskRunId: string) {
                   newMode === "acceptEdits"
                 ) {
                   session.currentMode = newMode;
+                  setPersistedTaskMode(session.taskId, newMode);
                   log.info("Session mode updated", { taskRunId, newMode });
                 }
               }
@@ -593,10 +595,14 @@ const useStore = create<SessionStore>()(
         });
       }
 
+      const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, false);
       session.events = events;
       session.logUrl = logUrl;
       session.pendingPermissions = pendingPermissions;
+      if (persistedMode) {
+        session.currentMode = persistedMode;
+      }
 
       addSession(session);
       subscribeToChannel(taskRunId);
@@ -614,6 +620,24 @@ const useStore = create<SessionStore>()(
 
       if (result) {
         updateSession(taskRunId, { status: "connected" });
+        if (persistedMode) {
+          try {
+            await trpcVanilla.agent.setMode.mutate({
+              sessionId: taskRunId,
+              modeId: persistedMode,
+            });
+            log.info("Restored persisted mode after reconnect", {
+              taskId,
+              taskRunId,
+              mode: persistedMode,
+            });
+          } catch (error) {
+            log.warn("Failed to restore persisted mode after reconnect", {
+              taskId,
+              error,
+            });
+          }
+        }
       } else {
         unsubscribeFromChannel(taskRunId);
         removeSession(taskRunId);
@@ -638,6 +662,9 @@ const useStore = create<SessionStore>()(
         return;
       }
 
+      const persistedMode = getPersistedTaskMode(taskId);
+      const effectiveMode = executionMode ?? persistedMode;
+
       const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
@@ -647,18 +674,21 @@ const useStore = create<SessionStore>()(
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         model: defaultModel,
-        executionMode,
+        executionMode: effectiveMode,
       });
 
       const session = createBaseSession(
         taskRun.id,
         taskId,
         false,
-        executionMode,
+        effectiveMode === "default" ? undefined : effectiveMode,
       );
       session.channel = result.channel;
       session.status = "connected";
       session.model = defaultModel;
+      if (persistedMode && !executionMode) {
+        session.currentMode = persistedMode;
+      }
 
       addSession(session);
       subscribeToChannel(taskRun.id);
@@ -898,6 +928,7 @@ const useStore = create<SessionStore>()(
               modeId,
             });
             updateSession(session.taskRunId, { currentMode: modeId });
+            setPersistedTaskMode(taskId, modeId);
           } catch (error) {
             log.error("Failed to change session mode", {
               taskId,
