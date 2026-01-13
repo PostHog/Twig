@@ -7,7 +7,8 @@ import {
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
-import { Box, Callout, ContextMenu, Flex, Text } from "@radix-ui/themes";
+import { Warning } from "@phosphor-icons/react";
+import { Box, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -240,16 +241,23 @@ export function SessionView({
 
           <PlanStatusBar plan={latestPlan} />
 
-          {hasError && (
-            <Callout.Root color="red" size="1" className="m-2">
-              <Callout.Text>
-                <Text size="2">{errorMessage}</Text>
-              </Callout.Text>
-            </Callout.Root>
-          )}
-
-          {!hasError &&
-            (firstPendingPermission ? (
+          {hasError ? (
+            <Flex
+              align="center"
+              justify="center"
+              direction="column"
+              gap="2"
+              className="absolute inset-0"
+            >
+              <Warning size={32} weight="duotone" color="var(--red-9)" />
+              <Text size="3" weight="medium" color="red">
+                Session Error
+              </Text>
+              <Text size="2" align="center" className="max-w-md px-4 text-gray-11">
+                {errorMessage}
+              </Text>
+            </Flex>
+          ) : firstPendingPermission ? (
               <InlinePermissionSelector
                 title={firstPendingPermission.title}
                 options={firstPendingPermission.options}
@@ -276,7 +284,7 @@ export function SessionView({
                   onModeChange={!isCloud ? handleModeChange : undefined}
                 />
               </Box>
-            ))}
+            )}
         </Flex>
       </ContextMenu.Trigger>
       <ContextMenu.Content size="1">
