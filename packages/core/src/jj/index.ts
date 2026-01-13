@@ -20,3 +20,15 @@ export {
 export { getStack } from "./stack";
 export { status } from "./status";
 export { sync } from "./sync";
+export {
+  addWorkspace,
+  getRepoRoot,
+  getWorkspaceInfo,
+  getWorkspacePath,
+  getWorkspacesDir,
+  getWorkspaceTip,
+  listWorkspaces,
+  removeWorkspace,
+  snapshotWorkspace,
+  type WorkspaceInfo,
+} from "./workspace";

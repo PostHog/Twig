@@ -1,0 +1,351 @@
+import { existsSync, symlinkSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  ensureRepoWorkspacesDir,
+  getWorkspacePath as getGlobalWorkspacePath,
+  getRepoWorkspacesDir,
+} from "../daemon/pid";
+import { createError, err, ok, type Result } from "../result";
+import { runJJ } from "./runner";
+
+/** Special workspace for user edits not yet assigned to an agent */
+export const UNASSIGNED_WORKSPACE = "unassigned";
+
+export interface WorkspaceInfo {
+  name: string;
+  path: string;
+  changeId: string;
+  isStale: boolean;
+}
+
+/**
+ * Get the path to the workspaces directory for a repo
+ */
+export function getWorkspacesDir(repoPath: string): string {
+  return getRepoWorkspacesDir(repoPath);
+}
+
+/**
+ * Get the path to a specific workspace
+ */
+export function getWorkspacePath(name: string, repoPath: string): string {
+  return getGlobalWorkspacePath(repoPath, name);
+}
+
+/**
+ * Create a new jj workspace in ~/.array/workspaces/<repo>/<name>
+ */
+export async function addWorkspace(
+  name: string,
+  cwd = process.cwd(),
+): Promise<Result<WorkspaceInfo>> {
+  // Get repo root to calculate paths correctly
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
+  const workspacePath = getWorkspacePath(name, repoPath);
+
+  // Check if workspace already exists
+  if (existsSync(workspacePath)) {
+    return err(
+      createError("WORKSPACE_EXISTS", `Workspace '${name}' already exists`),
+    );
+  }
+
+  // Ensure the workspaces directory exists
+  ensureRepoWorkspacesDir(repoPath);
+
+  // Create the workspace using jj
+  // jj workspace add <DESTINATION> --name <NAME>
+  const result = await runJJ(
+    ["workspace", "add", workspacePath, "--name", name],
+    cwd,
+  );
+
+  if (!result.ok) return result;
+
+  // Symlink .git to enable editor git integration (diffs, gutters)
+  const gitPath = join(repoPath, ".git");
+  const workspaceGitPath = join(workspacePath, ".git");
+  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
+    symlinkSync(gitPath, workspaceGitPath);
+  }
+
+  // Create .jj/.gitignore to ignore jj internals
+  const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
+  if (!existsSync(workspaceJjGitignorePath)) {
+    writeFileSync(workspaceJjGitignorePath, "/*\n");
+  }
+
+  // Get the workspace info
+  const infoResult = await getWorkspaceInfo(name, cwd);
+  if (!infoResult.ok) return infoResult;
+
+  return ok(infoResult.value);
+}
+
+/**
+ * Remove a workspace (jj workspace forget + rm -rf)
+ */
+export async function removeWorkspace(
+  name: string,
+  cwd = process.cwd(),
+): Promise<Result<void>> {
+  // Get repo root to calculate paths correctly
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
+  const workspacePath = getWorkspacePath(name, repoPath);
+
+  // Check if workspace exists
+  if (!existsSync(workspacePath)) {
+    return err(
+      createError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found`),
+    );
+  }
+
+  // Forget the workspace in jj
+  const forgetResult = await runJJ(["workspace", "forget", name], cwd);
+  if (!forgetResult.ok) return forgetResult;
+
+  // Remove the directory
+  try {
+    await rm(workspacePath, { recursive: true, force: true });
+  } catch (e) {
+    return err(
+      createError(
+        "COMMAND_FAILED",
+        `Failed to remove workspace directory: ${e}`,
+      ),
+    );
+  }
+
+  return ok(undefined);
+}
+
+/**
+ * List all workspaces managed by arr (in ~/.array/workspaces/<repo>/)
+ */
+export async function listWorkspaces(
+  cwd = process.cwd(),
+): Promise<Result<WorkspaceInfo[]>> {
+  // Get repo root to calculate paths correctly
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
+  // Get list of all jj workspaces
+  const result = await runJJ(["workspace", "list"], cwd);
+  if (!result.ok) return result;
+
+  const _workspacesDir = getWorkspacesDir(repoPath);
+  const workspaces: WorkspaceInfo[] = [];
+
+  // Parse jj workspace list output
+  // Format: "name: change_id (stale)" or "name: change_id"
+  const lines = result.value.stdout.trim().split("\n").filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(\S+):\s+(\S+)(?:\s+\(stale\))?/);
+    if (!match) continue;
+
+    const [, name, changeId] = match;
+    const isStale = line.includes("(stale)");
+
+    // Only include workspaces in our managed directory
+    // The default workspace won't have a path in ~/.array/workspaces/<repo>/
+    const expectedPath = getWorkspacePath(name, repoPath);
+    if (existsSync(expectedPath)) {
+      workspaces.push({
+        name,
+        path: expectedPath,
+        changeId,
+        isStale,
+      });
+    }
+  }
+
+  return ok(workspaces);
+}
+
+/**
+ * Get info for a specific workspace
+ */
+export async function getWorkspaceInfo(
+  name: string,
+  cwd = process.cwd(),
+): Promise<Result<WorkspaceInfo>> {
+  // Get repo root to calculate paths correctly
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
+  const workspacePath = getWorkspacePath(name, repoPath);
+
+  if (!existsSync(workspacePath)) {
+    return err(
+      createError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found`),
+    );
+  }
+
+  // Get workspace list to find this workspace's info
+  const listResult = await listWorkspaces(cwd);
+  if (!listResult.ok) return listResult;
+
+  const workspace = listResult.value.find((ws) => ws.name === name);
+  if (!workspace) {
+    return err(
+      createError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found in jj`),
+    );
+  }
+
+  return ok(workspace);
+}
+
+/**
+ * Get the tip change-id for a workspace
+ */
+export async function getWorkspaceTip(
+  name: string,
+  cwd = process.cwd(),
+): Promise<Result<string>> {
+  // Use the workspace@ syntax to get the working copy of that workspace
+  const result = await runJJ(
+    ["log", "-r", `${name}@`, "--no-graph", "-T", "change_id"],
+    cwd,
+  );
+
+  if (!result.ok) return result;
+
+  const changeId = result.value.stdout.trim();
+  if (!changeId) {
+    return err(
+      createError(
+        "WORKSPACE_NOT_FOUND",
+        `Could not get tip for workspace '${name}'`,
+      ),
+    );
+  }
+
+  return ok(changeId);
+}
+
+/**
+ * Trigger a snapshot in a workspace by running jj status
+ */
+export async function snapshotWorkspace(
+  workspacePath: string,
+): Promise<Result<void>> {
+  const result = await runJJ(["status", "--quiet"], workspacePath);
+  if (!result.ok) return result;
+  return ok(undefined);
+}
+
+/**
+ * Get the repo root directory from any path within the repo
+ */
+export async function getRepoRoot(
+  cwd = process.cwd(),
+): Promise<Result<string>> {
+  const result = await runJJ(["root"], cwd);
+  if (!result.ok) return result;
+  return ok(result.value.stdout.trim());
+}
+
+/**
+ * Ensure the unassigned workspace exists, creating it on trunk if needed.
+ * The unassigned workspace holds user edits not yet assigned to any agent.
+ */
+export async function ensureUnassignedWorkspace(
+  cwd = process.cwd(),
+): Promise<Result<WorkspaceInfo>> {
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
+  const workspacePath = getWorkspacePath(UNASSIGNED_WORKSPACE, repoPath);
+
+  // If workspace already exists, return its info
+  if (existsSync(workspacePath)) {
+    return getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+  }
+
+  // Ensure the workspaces directory exists
+  ensureRepoWorkspacesDir(repoPath);
+
+  // Get trunk revision to create workspace at
+  const trunkResult = await runJJ(
+    ["log", "-r", "trunk()", "--no-graph", "-T", "change_id", "--limit", "1"],
+    cwd,
+  );
+  if (!trunkResult.ok) return trunkResult;
+  const trunkChangeId = trunkResult.value.stdout.trim();
+
+  // Create workspace at trunk
+  // jj workspace add <DESTINATION> --name <NAME> -r <REVISION>
+  const createResult = await runJJ(
+    [
+      "workspace",
+      "add",
+      workspacePath,
+      "--name",
+      UNASSIGNED_WORKSPACE,
+      "-r",
+      trunkChangeId,
+    ],
+    cwd,
+  );
+  if (!createResult.ok) return createResult;
+
+  // Symlink .git for editor integration
+  const gitPath = join(repoPath, ".git");
+  const workspaceGitPath = join(workspacePath, ".git");
+  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
+    symlinkSync(gitPath, workspaceGitPath);
+  }
+
+  // Create .jj/.gitignore to ignore jj internals
+  const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
+  if (!existsSync(workspaceJjGitignorePath)) {
+    writeFileSync(workspaceJjGitignorePath, "/*\n");
+  }
+
+  return getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+}
+
+/**
+ * Get files modified in the unassigned workspace (vs trunk).
+ */
+export async function getUnassignedFiles(
+  cwd = process.cwd(),
+): Promise<Result<string[]>> {
+  const result = await runJJ(
+    ["diff", "-r", `${UNASSIGNED_WORKSPACE}@`, "--summary"],
+    cwd,
+  );
+  if (!result.ok) return result;
+
+  const files: string[] = [];
+  for (const line of result.value.stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Match: M path, A path, D path
+    const simpleMatch = trimmed.match(/^[MAD]\s+(.+)$/);
+    if (simpleMatch) {
+      files.push(simpleMatch[1].trim());
+      continue;
+    }
+
+    // Match: R {old => new}
+    const renameMatch = trimmed.match(/^R\s+\{(.+)\s+=>\s+(.+)\}$/);
+    if (renameMatch) {
+      files.push(renameMatch[2].trim()); // Only the new name matters for listing
+    }
+  }
+
+  return ok(files);
+}
