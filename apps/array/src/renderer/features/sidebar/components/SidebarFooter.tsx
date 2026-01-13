@@ -23,7 +23,7 @@ export function SidebarFooter() {
     navigateToTaskInput();
   }, [navigateToTaskInput]);
 
-  const isHistoryView = viewMode === "history";
+  const showNewTaskButton = viewMode !== "folders";
 
   return (
     <Box
@@ -38,7 +38,7 @@ export function SidebarFooter() {
       }}
     >
       <Flex align="center" gap="2" justify="between">
-        {isHistoryView ? (
+        {showNewTaskButton ? (
           <Button size="1" variant="ghost" color="gray" onClick={handleNewTask}>
             <Plus size={14} weight="bold" />
             New task

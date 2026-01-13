@@ -1,10 +1,11 @@
-import { ClockCounterClockwise, Folder } from "@phosphor-icons/react";
+import { ClockCounterClockwise, Folder, PushPin } from "@phosphor-icons/react";
 import { Select, Text } from "@radix-ui/themes";
 import { type SidebarViewMode, useSidebarStore } from "../stores/sidebarStore";
 
 const VIEW_OPTIONS = [
-  { value: "folders" as const, label: "Repositories", Icon: Folder },
   { value: "history" as const, label: "History", Icon: ClockCounterClockwise },
+  { value: "pinned" as const, label: "Pinned", Icon: PushPin },
+  { value: "folders" as const, label: "Repositories", Icon: Folder },
 ];
 
 export function ViewModeSelector() {
