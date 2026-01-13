@@ -1943,6 +1943,5 @@ export function streamEventToAcpNotifications(
 }
 
 // Note: createAcpConnection has been moved to ../connection.ts
-// to support multiple agent frameworks (Claude, Codex).
 // Import from there instead:
 // import { createAcpConnection } from "../connection.js";

@@ -50,7 +50,7 @@ export interface AgentSession {
   logUrl?: string;
   processedLineCount?: number;
   model?: string;
-  framework?: "claude" | "codex";
+  framework?: "claude";
   // Current execution mode (plan = read-only, default = manual approve, acceptEdits = auto-approve edits)
   currentMode: ExecutionMode;
   // Permission requests waiting for user response
@@ -414,7 +414,6 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
-  framework?: "claude" | "codex",
   executionMode?: "plan" | "acceptEdits",
 ): AgentSession {
   return {
@@ -426,7 +425,6 @@ function createBaseSession(
     status: "connecting",
     isPromptPending: false,
     isCloud,
-    framework,
     currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
   };
@@ -640,7 +638,7 @@ const useStore = create<SessionStore>()(
         return;
       }
 
-      const { defaultModel, defaultFramework } = useSettingsStore.getState();
+      const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -649,7 +647,6 @@ const useStore = create<SessionStore>()(
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         model: defaultModel,
-        framework: defaultFramework,
         executionMode,
       });
 
@@ -657,7 +654,6 @@ const useStore = create<SessionStore>()(
         taskRun.id,
         taskId,
         false,
-        defaultFramework,
         executionMode,
       );
       session.channel = result.channel;
@@ -671,7 +667,6 @@ const useStore = create<SessionStore>()(
         task_id: taskId,
         execution_type: "local",
         model: defaultModel,
-        framework: defaultFramework,
       });
 
       if (initialPrompt?.length) {

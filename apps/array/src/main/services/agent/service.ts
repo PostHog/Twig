@@ -129,7 +129,6 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  framework?: "claude" | "codex";
   executionMode?: "plan" | "acceptEdits" | "default";
 }
 
@@ -318,7 +317,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl,
       sdkSessionId,
       model,
-      framework,
       executionMode,
     } = config;
 
@@ -345,7 +343,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     try {
       const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
         skipGitBranch: true,
-        framework,
         isReconnect,
       });
 
@@ -790,7 +787,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl: "logUrl" in params ? params.logUrl : undefined,
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
-      framework: "framework" in params ? params.framework : "claude",
       executionMode:
         "executionMode" in params ? params.executionMode : undefined,
     };

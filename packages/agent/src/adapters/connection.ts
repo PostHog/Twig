@@ -1,8 +1,7 @@
 /**
- * Shared ACP connection factory with framework routing.
+ * Shared ACP connection factory.
  *
- * Creates ACP connections that can use different agent frameworks
- * (Claude Code, OpenAI Codex) based on the configured framework.
+ * Creates ACP connections for the Claude Code agent.
  */
 
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
@@ -11,9 +10,8 @@ import { Logger } from "@/utils/logger.js";
 import { createTappedWritableStream } from "@/utils/tapped-stream.js";
 import { ClaudeAcpAgent } from "./claude/claude.js";
 import { createBidirectionalStreams, type StreamPair } from "./claude/utils.js";
-import { CodexAcpAgent } from "./codex/codex.js";
 
-export type AgentFramework = "claude" | "codex";
+export type AgentFramework = "claude";
 
 export type AcpConnectionConfig = {
   framework?: AgentFramework;
@@ -81,16 +79,10 @@ export function createAcpConnection(
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
-  // Create the appropriate agent based on framework selection
+  // Create the Claude agent
   const agentConnection = new AgentSideConnection((client) => {
-    switch (framework) {
-      case "codex":
-        logger.info("Creating Codex agent");
-        return new CodexAcpAgent(client, sessionStore);
-      default:
-        logger.info("Creating Claude agent");
-        return new ClaudeAcpAgent(client, sessionStore);
-    }
+    logger.info("Creating Claude agent");
+    return new ClaudeAcpAgent(client, sessionStore);
   }, agentStream);
 
   return {

@@ -14,7 +14,6 @@ export type GitActionType =
   | "create-pr";
 export type FileOpenSource = "sidebar" | "agent-suggestion" | "search" | "diff";
 export type FileChangeType = "added" | "modified" | "deleted";
-export type AgentFramework = "claude" | "codex";
 export type StopReason = "user_cancelled" | "completed" | "error" | "timeout";
 export type CommandMenuAction =
   | "home"
@@ -62,7 +61,6 @@ export interface TaskRunStartedProperties {
   task_id: string;
   execution_type: ExecutionType;
   model?: string;
-  framework?: AgentFramework;
 }
 
 export interface TaskRunCompletedProperties {
