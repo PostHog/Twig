@@ -103,12 +103,26 @@ export function useDraftSync(
   context?: DraftContext,
 ) {
   const hasRestoredRef = useRef(false);
+  const lastSessionIdRef = useRef(sessionId);
+  const lastEditorRef = useRef(editor);
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
   const draftActions = useDraftStore((s) => s.actions);
   const draft = useDraftStore((s) => s.drafts[sessionId] ?? null);
   const hasHydrated = useDraftStore((s) => s._hasHydrated);
+
+  // Reset restoration flag when sessionId changes (e.g., navigating between tasks)
+  if (lastSessionIdRef.current !== sessionId) {
+    lastSessionIdRef.current = sessionId;
+    hasRestoredRef.current = false;
+  }
+
+  // Reset restoration flag when editor instance changes (e.g., when disabled state changes)
+  if (lastEditorRef.current !== editor && editor !== null) {
+    lastEditorRef.current = editor;
+    hasRestoredRef.current = false;
+  }
 
   // Set context for this session
   useLayoutEffect(() => {
@@ -121,7 +135,7 @@ export function useDraftSync(
     };
   }, [sessionId, context?.taskId, context?.repoPath, draftActions]);
 
-  // Restore draft on mount
+  // Restore draft on mount or when sessionId/editor changes
   useLayoutEffect(() => {
     if (!hasHydrated || !editor || hasRestoredRef.current) return;
     if (!draft || isContentEmpty(draft)) return;
@@ -137,6 +151,10 @@ export function useDraftSync(
 
   const saveDraft = useCallback(
     (e: Editor) => {
+      // Don't save until store has hydrated from storage
+      // This prevents overwriting stored drafts with empty content before restoration
+      if (!hasHydrated) return;
+
       const json = e.getJSON();
       const content = tiptapJsonToEditorContent(json);
       draftActions.setDraft(
@@ -144,7 +162,7 @@ export function useDraftSync(
         isContentEmpty(content) ? null : content,
       );
     },
-    [sessionId, draftActions],
+    [sessionId, draftActions, hasHydrated],
   );
 
   const clearDraft = useCallback(() => {
