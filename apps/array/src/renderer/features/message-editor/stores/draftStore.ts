@@ -1,4 +1,5 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -52,16 +53,19 @@ export const useDraftStore = create<DraftStore>()(
       _hasHydrated: false,
 
       actions: {
-        setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
+        setHasHydrated: (hydrated) => {
+          set({ _hasHydrated: hydrated });
+        },
 
-        setDraft: (sessionId, draft) =>
+        setDraft: (sessionId, draft) => {
           set((state) => {
             if (draft === null) {
               delete state.drafts[sessionId];
             } else {
               state.drafts[sessionId] = draft;
             }
-          }),
+          });
+        },
 
         getDraft: (sessionId) => get().drafts[sessionId] ?? null,
 
@@ -110,6 +114,7 @@ export const useDraftStore = create<DraftStore>()(
     })),
     {
       name: "message-editor-drafts",
+      storage: electronStorage,
       partialize: (state) => ({ drafts: state.drafts }),
       onRehydrateStorage: () => (state) => {
         state?.actions.setHasHydrated(true);
