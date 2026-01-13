@@ -580,18 +580,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         log.warn("Failed to cleanup agent", { taskRunId, error: err });
       }
 
-      // Step 4: Wait for ACP connection to fully close (with timeout)
-      try {
-        if (!session.connection.signal.aborted) {
-          await Promise.race([
-            session.connection.closed,
-            new Promise((resolve) => setTimeout(resolve, 1000)),
-          ]);
-        }
-      } catch {
-        // Connection may already be closed
-      }
-
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
     }
 
