@@ -666,7 +666,9 @@ const useStore = create<SessionStore>()(
       executionMode?: "plan" | "acceptEdits",
     ) => {
       if (!auth.client) {
-        throw new Error("Unable to reach server. Please check your connection.");
+        throw new Error(
+          "Unable to reach server. Please check your connection.",
+        );
       }
 
       const taskRun = await auth.client.createTaskRun(taskId);
@@ -806,15 +808,18 @@ const useStore = create<SessionStore>()(
               );
             } else if (latestRun?.id && latestRun?.log_url) {
               // Check if workspace still exists before attempting reconnect
-              const workspaceExists =
-                await trpcVanilla.workspace.verify.query({ taskId });
+              const workspaceExists = await trpcVanilla.workspace.verify.query({
+                taskId,
+              });
 
               if (!workspaceExists) {
                 // Workspace was deleted - show historical logs in error state
                 log.warn("Workspace no longer exists, showing error state", {
                   taskId,
                 });
-                const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+                const { rawEntries } = await fetchSessionLogs(
+                  latestRun.log_url,
+                );
                 const events = convertStoredEntriesToEvents(rawEntries);
 
                 const session = createBaseSession(latestRun.id, taskId, false);
@@ -858,7 +863,9 @@ const useStore = create<SessionStore>()(
             // Try to load historical logs if available
             if (latestRun?.log_url) {
               try {
-                const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+                const { rawEntries } = await fetchSessionLogs(
+                  latestRun.log_url,
+                );
                 session.events = convertStoredEntriesToEvents(rawEntries);
                 session.logUrl = latestRun.log_url;
               } catch {

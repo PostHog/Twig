@@ -257,7 +257,11 @@ export function SessionView({
               <Text size="3" weight="medium" color="red">
                 Session Error
               </Text>
-              <Text size="2" align="center" className="max-w-md px-4 text-gray-11">
+              <Text
+                size="2"
+                align="center"
+                className="max-w-md px-4 text-gray-11"
+              >
                 {errorMessage}
               </Text>
               <Flex gap="2" mt="2">
@@ -267,40 +271,45 @@ export function SessionView({
                   </Button>
                 )}
                 {onDelete && (
-                  <Button variant="soft" size="2" color="red" onClick={onDelete}>
+                  <Button
+                    variant="soft"
+                    size="2"
+                    color="red"
+                    onClick={onDelete}
+                  >
                     Delete Task
                   </Button>
                 )}
               </Flex>
             </Flex>
           ) : firstPendingPermission ? (
-              <InlinePermissionSelector
-                title={firstPendingPermission.title}
-                options={firstPendingPermission.options}
-                onSelect={handlePermissionSelect}
-                onCancel={handlePermissionCancel}
-                disabled={false}
+            <InlinePermissionSelector
+              title={firstPendingPermission.title}
+              options={firstPendingPermission.options}
+              onSelect={handlePermissionSelect}
+              onCancel={handlePermissionCancel}
+              disabled={false}
+            />
+          ) : (
+            <Box
+              className={
+                isBashMode
+                  ? "border border-accent-9 p-2"
+                  : "border-gray-4 border-t p-2"
+              }
+            >
+              <MessageEditor
+                sessionId={sessionId}
+                placeholder="Type a message... @ to mention files, ! for bash mode"
+                onSubmit={handleSubmit}
+                onBashCommand={onBashCommand}
+                onBashModeChange={setIsBashMode}
+                onCancel={onCancelPrompt}
+                currentMode={currentMode}
+                onModeChange={!isCloud ? handleModeChange : undefined}
               />
-            ) : (
-              <Box
-                className={
-                  isBashMode
-                    ? "border border-accent-9 p-2"
-                    : "border-gray-4 border-t p-2"
-                }
-              >
-                <MessageEditor
-                  sessionId={sessionId}
-                  placeholder="Type a message... @ to mention files, ! for bash mode"
-                  onSubmit={handleSubmit}
-                  onBashCommand={onBashCommand}
-                  onBashModeChange={setIsBashMode}
-                  onCancel={onCancelPrompt}
-                  currentMode={currentMode}
-                  onModeChange={!isCloud ? handleModeChange : undefined}
-                />
-              </Box>
-            )}
+            </Box>
+          )}
         </Flex>
       </ContextMenu.Trigger>
       <ContextMenu.Content size="1">

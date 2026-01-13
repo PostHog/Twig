@@ -5,10 +5,10 @@ import {
   useSessionActions,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
-import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import {
   selectWorktreePath,
   useWorkspaceStore,
