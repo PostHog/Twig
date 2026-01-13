@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
 
@@ -154,48 +154,60 @@ function copyClaudeExecutable(): Plugin {
 // Allow forcing dev mode in packaged builds via FORCE_DEV_MODE=1
 const forceDevMode = process.env.FORCE_DEV_MODE === "1";
 
-export default defineConfig({
-  plugins: [
-    tsconfigPaths(),
-    autoServicesPlugin(join(__dirname, "src/main/services")),
-    fixFilenameCircularRef(),
-    copyAgentTemplates(),
-    copyClaudeExecutable(),
-  ],
-  define: {
-    __BUILD_COMMIT__: JSON.stringify(_getGitCommit()),
-    __BUILD_DATE__: JSON.stringify(_getBuildDate()),
-    ...(forceDevMode
-      ? {
-          "import.meta.env.DEV": "true",
-          "import.meta.env.PROD": "false",
-          "import.meta.env.MODE": '"development"',
-        }
-      : {}),
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@main": path.resolve(__dirname, "./src/main"),
-      "@renderer": path.resolve(__dirname, "./src/renderer"),
-      "@shared": path.resolve(__dirname, "./src/shared"),
-      "@api": path.resolve(__dirname, "./src/api"),
+export default defineConfig(({ mode }) => {
+  // Load VITE_* env vars from monorepo root .env file
+  const env = loadEnv(mode, path.resolve(__dirname, "../.."), "VITE_");
+
+  return {
+    plugins: [
+      tsconfigPaths(),
+      autoServicesPlugin(join(__dirname, "src/main/services")),
+      fixFilenameCircularRef(),
+      copyAgentTemplates(),
+      copyClaudeExecutable(),
+    ],
+    define: {
+      __BUILD_COMMIT__: JSON.stringify(_getGitCommit()),
+      __BUILD_DATE__: JSON.stringify(_getBuildDate()),
+      // Inject PostHog env vars at build time (process.env is not available in packaged builds)
+      "process.env.VITE_POSTHOG_API_KEY": JSON.stringify(
+        env.VITE_POSTHOG_API_KEY || "",
+      ),
+      "process.env.VITE_POSTHOG_API_HOST": JSON.stringify(
+        env.VITE_POSTHOG_API_HOST || "",
+      ),
+      ...(forceDevMode
+        ? {
+            "import.meta.env.DEV": "true",
+            "import.meta.env.PROD": "false",
+            "import.meta.env.MODE": '"development"',
+          }
+        : {}),
     },
-  },
-  cacheDir: ".vite/cache",
-  build: {
-    target: "node18",
-    minify: false,
-    reportCompressedSize: false,
-    commonjsOptions: {
-      transformMixedEsModules: true,
-    },
-    rollupOptions: {
-      external: ["node-pty", "@parcel/watcher", "file-icon"],
-      onwarn(warning, warn) {
-        if (warning.code === "UNUSED_EXTERNAL_IMPORT") return;
-        warn(warning);
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+        "@main": path.resolve(__dirname, "./src/main"),
+        "@renderer": path.resolve(__dirname, "./src/renderer"),
+        "@shared": path.resolve(__dirname, "./src/shared"),
+        "@api": path.resolve(__dirname, "./src/api"),
       },
     },
-  },
+    cacheDir: ".vite/cache",
+    build: {
+      target: "node18",
+      minify: false,
+      reportCompressedSize: false,
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      },
+      rollupOptions: {
+        external: ["node-pty", "@parcel/watcher", "file-icon"],
+        onwarn(warning, warn) {
+          if (warning.code === "UNUSED_EXTERNAL_IMPORT") return;
+          warn(warning);
+        },
+      },
+    },
+  };
 });

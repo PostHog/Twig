@@ -189,10 +189,12 @@ export class Agent {
       );
     };
 
-    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
-      sessionId: taskRunId,
-      runId: taskRunId,
-    });
+    if (!options.isReconnect) {
+      await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
+        sessionId: taskRunId,
+        runId: taskRunId,
+      });
+    }
 
     // Only fetch task when we need the slug for git branch creation
     if (!options.skipGitBranch) {

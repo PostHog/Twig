@@ -3,7 +3,7 @@ import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useImperativeHandle } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
@@ -45,6 +45,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     ref,
   ) => {
     const context = useDraftStore((s) => s.contexts[sessionId]);
+    const focusRequested = useDraftStore((s) => s.focusRequested[sessionId]);
+    const clearFocusRequest = useDraftStore((s) => s.actions.clearFocusRequest);
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
@@ -53,6 +55,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
 
     const {
       editor,
+      isReady,
       isEmpty,
       isBashMode,
       submit,
@@ -89,6 +92,12 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       }),
       [focus, blur, clear, isEmpty, getContent, getText, setContent],
     );
+
+    useEffect(() => {
+      if (!focusRequested || !isReady) return;
+      focus();
+      clearFocusRequest(sessionId);
+    }, [focusRequested, focus, clearFocusRequest, sessionId, isReady]);
 
     useHotkeys(
       "escape",

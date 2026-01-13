@@ -144,6 +144,7 @@ interface ManagedSession {
   lastActivityAt: number;
   mockNodeDir: string;
   config: SessionConfig;
+  needsRecreation: boolean;
 }
 
 function getClaudeCliPath(): string {
@@ -168,7 +169,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
-    log.info("Session token updated");
+
+    // Mark all sessions for recreation - they'll be recreated before the next prompt.
+    // We don't recreate immediately because the subprocess may be mid-response or
+    // waiting on a permission prompt. Recreation happens at a safe point.
+    for (const session of this.sessions.values()) {
+      session.needsRecreation = true;
+    }
+
+    log.info("Token updated, marked sessions for recreation", {
+      sessionCount: this.sessions.size,
+    });
   }
 
   /**
@@ -335,6 +346,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
         skipGitBranch: true,
         framework,
+        isReconnect,
       });
 
       const connection = this.createClientConnection(
@@ -385,6 +397,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         lastActivityAt: Date.now(),
         mockNodeDir,
         config,
+        needsRecreation: false,
       };
 
       this.sessions.set(taskRunId, session);
@@ -416,7 +429,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found for recreation: ${taskRunId}`);
     }
 
-    log.info("Recreating session due to auth error", { taskRunId });
+    log.info("Recreating session", { taskRunId });
 
     const config = existing.config;
     this.cleanupSession(taskRunId);
@@ -436,6 +449,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     let session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    // Recreate session if marked (token was refreshed while session was active)
+    if (session.needsRecreation) {
+      log.info("Recreating session before prompt (token refreshed)", {
+        sessionId,
+      });
+      session = await this.recreateSession(sessionId);
     }
 
     session.lastActivityAt = Date.now();

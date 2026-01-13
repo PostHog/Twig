@@ -21,7 +21,6 @@ import {
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
 import { InlinePermissionSelector } from "./InlinePermissionSelector";
-import { ModeIndicator } from "./ModeIndicator";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
@@ -159,6 +158,14 @@ export function SessionView({
     async (optionId: string, customInput?: string) => {
       if (!firstPendingPermission || !taskId) return;
 
+      // Check if the selected option is "allow_always" and set mode to acceptEdits
+      const selectedOption = firstPendingPermission.options.find(
+        (o) => o.optionId === optionId,
+      );
+      if (selectedOption?.kind === "allow_always" && !isCloud) {
+        setSessionMode(taskId, "acceptEdits");
+      }
+
       if (customInput) {
         // Check if this is an "other" option (AskUserQuestion) or plan feedback
         if (optionId === "other") {
@@ -187,7 +194,14 @@ export function SessionView({
         );
       }
     },
-    [firstPendingPermission, taskId, respondToPermission, onSendPrompt],
+    [
+      firstPendingPermission,
+      taskId,
+      respondToPermission,
+      onSendPrompt,
+      isCloud,
+      setSessionMode,
+    ],
   );
 
   const handlePermissionCancel = useCallback(async () => {
@@ -199,16 +213,6 @@ export function SessionView({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Flex direction="column" height="100%" className="bg-gray-1">
-          {taskId && (
-            <Flex
-              px="3"
-              py="2"
-              justify="end"
-              className="border-gray-4 border-b"
-            >
-              <ModeIndicator taskId={taskId} />
-            </Flex>
-          )}
           {showRawLogs ? (
             <RawLogsView events={events} />
           ) : (
