@@ -239,17 +239,22 @@ function openTab(
       return { panelTree: updatedTree };
     }
 
-    // Tab doesn't exist, add it to main panel
-    const mainPanel = getLeafPanel(
-      layout.panelTree,
-      DEFAULT_PANEL_IDS.MAIN_PANEL,
-    );
-    if (!mainPanel) return {};
+    // Tab doesn't exist, add it to the focused panel (or main panel as fallback)
+    const targetPanelId = layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
+    let targetPanel = getLeafPanel(layout.panelTree, targetPanelId);
 
-    const updatedTree = updateTreeNode(
-      layout.panelTree,
-      DEFAULT_PANEL_IDS.MAIN_PANEL,
-      (panel) => addNewTabToPanel(panel, tabId, true, asPreview),
+    // Fall back to main panel if the focused panel doesn't exist or isn't a leaf
+    if (!targetPanel) {
+      targetPanel = getLeafPanel(
+        layout.panelTree,
+        DEFAULT_PANEL_IDS.MAIN_PANEL,
+      );
+    }
+    if (!targetPanel) return {};
+
+    const panelId = targetPanel.id;
+    const updatedTree = updateTreeNode(layout.panelTree, panelId, (panel) =>
+      addNewTabToPanel(panel, tabId, true, asPreview),
     );
 
     const metadata = updateMetadataForTab(layout, tabId, "add");
