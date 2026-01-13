@@ -190,7 +190,7 @@ Event Log (run_{id}.jsonl):
 **To recover current state:**
 
 1. Find latest `git_commit` event → checkout that commit
-2. Replay `file_change` events since → apply uncommitted changes
+2. Replay `file_change` events since the last commit → apply uncommitted changes
 3. Fetch file contents from S3 by hash
 
 ### Recovery Flow
