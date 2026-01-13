@@ -46,6 +46,18 @@ export interface TaskData {
   isPinned?: boolean;
 }
 
+export interface HistoryTaskData extends TaskData {
+  createdAt: number;
+  folderName?: string;
+}
+
+export interface HistoryData {
+  activeTasks: HistoryTaskData[];
+  recentTasks: HistoryTaskData[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
 export interface SidebarData {
   userName: string;
   isHomeActive: boolean;
@@ -56,6 +68,7 @@ export interface SidebarData {
   isLoading: boolean;
   folders: FolderData[];
   activeTaskId: string | null;
+  historyData: HistoryData;
 }
 
 interface ViewState {
@@ -170,6 +183,76 @@ function getActiveRepository(activeFilters: ActiveFilters): string | null {
   return repositoryFilters.length === 1 ? repositoryFilters[0].value : null;
 }
 
+function buildHistoryData(
+  allTasks: Task[],
+  workspaces: Record<string, Workspace>,
+  folders: RegisteredFolder[],
+  sessions: Record<string, AgentSession>,
+  lastViewedAt: Record<string, number>,
+  localActivityAt: Record<string, number>,
+  pinnedTaskIds: Set<string>,
+  activeTaskId: string | null,
+  visibleCount: number,
+): HistoryData {
+  const getSessionForTask = (taskId: string): AgentSession | undefined => {
+    return Object.values(sessions).find((s) => s.taskId === taskId);
+  };
+
+  // Transform all tasks to HistoryTaskData
+  const historyTasks: HistoryTaskData[] = allTasks.map((task) => {
+    const session = getSessionForTask(task.id);
+    const workspace = workspaces[task.id];
+    const folder = workspace
+      ? folders.find((f) => f.id === workspace.folderId)
+      : undefined;
+
+    const apiUpdatedAt = new Date(task.updated_at).getTime();
+    const localActivity = localActivityAt[task.id];
+    const lastActivityAt = localActivity
+      ? Math.max(apiUpdatedAt, localActivity)
+      : apiUpdatedAt;
+
+    const taskLastViewedAt = lastViewedAt[task.id];
+    const isCurrentlyViewing = activeTaskId === task.id;
+    const isUnread =
+      !isCurrentlyViewing &&
+      taskLastViewedAt !== undefined &&
+      lastActivityAt > taskLastViewedAt;
+
+    return {
+      id: task.id,
+      title: task.title,
+      lastActivityAt,
+      createdAt: new Date(task.created_at).getTime(),
+      isGenerating: session?.isPromptPending ?? false,
+      isUnread,
+      isPinned: pinnedTaskIds.has(task.id),
+      folderName: folder?.name,
+    };
+  });
+
+  // Partition into active (unread) and inactive tasks
+  const activeTasks = historyTasks
+    .filter((t) => t.isUnread)
+    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+
+  const inactiveTasks = historyTasks
+    .filter((t) => !t.isUnread)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Apply pagination to inactive tasks only (active always shown)
+  const totalCount = allTasks.length;
+  const recentTasks = inactiveTasks.slice(0, visibleCount);
+  const hasMore = inactiveTasks.length > visibleCount;
+
+  return {
+    activeTasks,
+    recentTasks,
+    totalCount,
+    hasMore,
+  };
+}
+
 export function useSidebarData({
   activeView,
   activeFilters,
@@ -183,6 +266,9 @@ export function useSidebarData({
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);
   const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
+  const historyVisibleCount = useSidebarStore(
+    (state) => state.historyVisibleCount,
+  );
   const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
@@ -269,6 +355,18 @@ export function useSidebarData({
     };
   });
 
+  const historyData = buildHistoryData(
+    allTasks,
+    workspaces,
+    folders,
+    sessions,
+    lastViewedAt,
+    localActivityAt,
+    pinnedTaskIds,
+    activeTaskId,
+    historyVisibleCount,
+  );
+
   return {
     userName,
     isHomeActive,
@@ -279,5 +377,6 @@ export function useSidebarData({
     isLoading,
     folders: folderData,
     activeTaskId,
+    historyData,
   };
 }
