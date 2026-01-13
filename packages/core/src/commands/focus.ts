@@ -1,6 +1,6 @@
 import { existsSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { registerRepo, unregisterRepo } from "../daemon/pid";
+import { readRepos, setRepoWorkspaces, unregisterRepo } from "../daemon/pid";
 import { getConflictingFiles } from "../jj/file-ownership";
 import { getTrunk, runJJ } from "../jj/runner";
 import {
@@ -16,8 +16,6 @@ import {
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
 
-const FOCUS_TRAILER_KEY = "Focus-Workspace";
-
 export interface ConflictInfo {
   file: string;
   workspaces: string[];
@@ -31,45 +29,30 @@ export interface FocusStatus {
 }
 
 /**
- * Parse Focus-Workspace trailers from the current commit description
+ * Get focused workspaces from repos.json (single source of truth).
+ * Only returns workspaces that actually exist on disk.
  */
 async function getFocusWorkspaces(
   cwd = process.cwd(),
 ): Promise<Result<string[]>> {
-  // Get the description of the current commit
-  const result = await runJJ(
-    ["log", "-r", "@", "--no-graph", "-T", "description"],
-    cwd,
-  );
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
 
-  if (!result.ok) return result;
+  const repos = readRepos();
+  const repo = repos.find((r) => r.path === repoPath);
 
-  const description = result.value.stdout;
-  const workspaces: string[] = [];
-
-  // Parse trailers (Key: Value format at end of description)
-  const lines = description.split("\n");
-  for (const line of lines) {
-    const match = line.match(new RegExp(`^${FOCUS_TRAILER_KEY}:\\s*(.+)$`));
-    if (match) {
-      workspaces.push(match[1].trim());
-    }
+  if (!repo) {
+    return ok([]);
   }
 
-  return ok(workspaces);
-}
+  // Filter to only workspaces that actually exist
+  const existingWorkspaces = repo.workspaces.filter((ws) => {
+    const wsPath = getWorkspacePath(ws, repoPath);
+    return existsSync(wsPath);
+  });
 
-/**
- * Build a description with preview trailers
- */
-function buildFocusDescription(workspaces: string[]): string {
-  if (workspaces.length === 0) return "";
-
-  const trailers = workspaces
-    .map((ws) => `${FOCUS_TRAILER_KEY}: ${ws}`)
-    .join("\n");
-
-  return `preview\n\n${trailers}`;
+  return ok(existingWorkspaces);
 }
 
 /**
@@ -87,6 +70,11 @@ async function updateFocus(
   workspaces: string[],
   cwd = process.cwd(),
 ): Promise<Result<string>> {
+  // Get repo root for workspace paths
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
+
   // Get current commit ID to abandon later (if it's a preview commit)
   const currentResult = await runJJ(
     ["log", "-r", "@", "--no-graph", "-T", "commit_id"],
@@ -96,32 +84,37 @@ async function updateFocus(
     ? currentResult.value.stdout.trim()
     : null;
 
-  // Check if current commit is a preview (has trailers)
+  // Check if currently in focus mode
   const currentWorkspaces = await getFocusWorkspaces(cwd);
-  const isCurrentPreview =
+  const isCurrentFocus =
     currentWorkspaces.ok && currentWorkspaces.value.length > 0;
 
   if (workspaces.length === 0) {
-    // Exit preview mode - go back to trunk
+    // Exit focus mode - go back to trunk
     const trunk = await getTrunk(cwd);
     const result = await runJJ(["new", trunk], cwd);
     if (!result.ok) return result;
 
-    // Abandon old preview commit
-    if (isCurrentPreview && oldCommitId) {
+    // Abandon old focus commit
+    if (isCurrentFocus && oldCommitId) {
       await runJJ(["abandon", oldCommitId], cwd);
     }
 
     // Unregister repo from daemon
-    unregisterRepo(cwd);
+    unregisterRepo(repoPath);
 
     return ok("");
   }
 
-  // Get repo root for workspace paths
-  const rootResult = await getRepoRoot(cwd);
-  if (!rootResult.ok) return rootResult;
-  const repoPath = rootResult.value;
+  // Filter to only workspaces that actually exist on disk
+  const validWorkspaces = workspaces.filter((ws) => {
+    const wsPath = getWorkspacePath(ws, repoPath);
+    return existsSync(wsPath);
+  });
+
+  if (validWorkspaces.length === 0) {
+    return err(createError("WORKSPACE_NOT_FOUND", "No valid workspaces found"));
+  }
 
   // Ensure unassigned workspace exists (creates on trunk if needed)
   const unassignedResult = await ensureUnassignedWorkspace(cwd);
@@ -138,7 +131,7 @@ async function updateFocus(
   }
 
   // Then add each agent workspace tip
-  for (const ws of workspaces) {
+  for (const ws of validWorkspaces) {
     const wsPath = getWorkspacePath(ws, repoPath);
 
     // Ensure .git symlink exists for editor integration
@@ -167,18 +160,15 @@ async function updateFocus(
     changeIds.push(tipResult.value);
   }
 
-  // Build the description with trailers
-  const description = buildFocusDescription(workspaces);
-
-  // Create the merge commit
-  // jj new <id1> <id2> ... -m "<description>"
+  // Create the merge commit with simple description
+  const description = "focus";
   const newArgs = ["new", ...changeIds, "-m", description];
   const result = await runJJ(newArgs, cwd);
 
   if (!result.ok) return result;
 
-  // Abandon old preview commit (now that we've moved away from it)
-  if (isCurrentPreview && oldCommitId) {
+  // Abandon old focus commit (now that we've moved away from it)
+  if (isCurrentFocus && oldCommitId) {
     await runJJ(["abandon", oldCommitId], cwd);
   }
 
@@ -189,8 +179,8 @@ async function updateFocus(
   );
   if (!idResult.ok) return idResult;
 
-  // Register repo with daemon for file watching
-  registerRepo(cwd, workspaces);
+  // Set exact workspace list in repos.json (single source of truth)
+  setRepoWorkspaces(repoPath, validWorkspaces);
 
   return ok(idResult.value.stdout.trim());
 }

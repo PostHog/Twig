@@ -57,10 +57,18 @@ export async function addWorkspace(
   // Ensure the workspaces directory exists
   ensureRepoWorkspacesDir(repoPath);
 
-  // Create the workspace using jj
-  // jj workspace add <DESTINATION> --name <NAME>
+  // Get trunk to create workspace at
+  const trunkResult = await runJJ(
+    ["log", "-r", "trunk()", "--no-graph", "-T", "change_id", "--limit", "1"],
+    cwd,
+  );
+  if (!trunkResult.ok) return trunkResult;
+  const trunkChangeId = trunkResult.value.stdout.trim();
+
+  // Create the workspace at trunk (not current working copy)
+  // jj workspace add <DESTINATION> --name <NAME> -r <TRUNK>
   const result = await runJJ(
-    ["workspace", "add", workspacePath, "--name", name],
+    ["workspace", "add", workspacePath, "--name", name, "-r", trunkChangeId],
     cwd,
   );
 
@@ -122,9 +130,40 @@ export async function removeWorkspace(
     await focusRemove([name], cwd);
   }
 
+  // Get the workspace's commit before forgetting (so we can abandon it)
+  const tipResult = await getWorkspaceTip(name, cwd);
+  const commitToAbandon = tipResult.ok ? tipResult.value : null;
+
+  // Clean up any bookmarks on this workspace's commit BEFORE abandoning
+  // This prevents "Tracked remote bookmarks exist for deleted bookmark" errors
+  if (commitToAbandon) {
+    // Get bookmarks on this commit
+    const bookmarksResult = await runJJ(
+      ["log", "-r", `${name}@`, "--no-graph", "-T", "bookmarks"],
+      cwd,
+    );
+    if (bookmarksResult.ok) {
+      const bookmarks = bookmarksResult.value.stdout
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      for (const bookmark of bookmarks) {
+        // Untrack remote bookmark first (if it exists)
+        await runJJ(["bookmark", "untrack", `${bookmark}@origin`], cwd);
+        // Delete the local bookmark
+        await runJJ(["bookmark", "delete", bookmark], cwd);
+      }
+    }
+  }
+
   // Forget the workspace in jj
   const forgetResult = await runJJ(["workspace", "forget", name], cwd);
   if (!forgetResult.ok) return forgetResult;
+
+  // Abandon the workspace's commit (clean up orphaned commits)
+  if (commitToAbandon) {
+    await runJJ(["abandon", commitToAbandon], cwd);
+  }
 
   // Remove the directory
   try {

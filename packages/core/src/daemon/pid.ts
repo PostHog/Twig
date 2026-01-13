@@ -150,7 +150,8 @@ export function writeRepos(repos: RepoEntry[]): void {
 }
 
 /**
- * Register a repo with workspaces for the daemon to watch
+ * Register a repo with workspaces for the daemon to watch.
+ * Merges with existing workspaces.
  */
 export function registerRepo(repoPath: string, workspaces: string[]): void {
   const repos = readRepos();
@@ -168,6 +169,27 @@ export function registerRepo(repoPath: string, workspaces: string[]): void {
   log(
     `Registered repo: ${repoPath} with workspaces: [${workspaces.join(", ")}]`,
   );
+}
+
+/**
+ * Set the exact list of workspaces for a repo (replaces existing).
+ * Use this when updating focus to ensure repos.json matches exactly.
+ */
+export function setRepoWorkspaces(
+  repoPath: string,
+  workspaces: string[],
+): void {
+  const repos = readRepos();
+  const existing = repos.find((r) => r.path === repoPath);
+
+  if (existing) {
+    existing.workspaces = workspaces;
+  } else {
+    repos.push({ path: repoPath, workspaces });
+  }
+
+  writeRepos(repos);
+  log(`Set repo workspaces: ${repoPath} -> [${workspaces.join(", ")}]`);
 }
 
 /**

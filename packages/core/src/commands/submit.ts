@@ -74,12 +74,19 @@ export async function submit(
 export const submitCommand: Command<SubmitResult, [SubmitOptions]> = {
   meta: {
     name: "submit",
-    description: "Create or update GitHub PRs for the current stack",
+    args: "[workspace]",
+    description:
+      "Create or update GitHub PRs for a workspace or the current stack",
     aliases: ["s"],
     flags: [
       { name: "yes", short: "y", description: "Skip confirmation prompt" },
       { name: "dry-run", description: "Show plan only, don't execute" },
-      { name: "draft", description: "Create PRs as drafts" },
+      { name: "draft", short: "d", description: "Create PRs as drafts" },
+      {
+        name: "message",
+        short: "m",
+        description: "Commit message / PR title (workspace only)",
+      },
     ],
     category: "workflow",
     core: true,

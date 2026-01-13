@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   cleanup,
   getLogPath,
+  getWorkspacePath,
   isRunning,
+  type RepoEntry,
   readPid,
   readRepos,
 } from "../daemon/pid";
@@ -74,8 +77,20 @@ export async function daemonStop(): Promise<Result<void>> {
 export async function daemonStatus(): Promise<Result<DaemonStatus>> {
   const running = isRunning();
   const pid = running ? (readPid() ?? undefined) : undefined;
-  const repos = readRepos();
   const logPath = getLogPath();
+
+  // Filter repos to only include workspaces that actually exist
+  const rawRepos = readRepos();
+  const repos: RepoEntry[] = [];
+  for (const repo of rawRepos) {
+    const validWorkspaces = repo.workspaces.filter((ws) => {
+      const wsPath = getWorkspacePath(repo.path, ws);
+      return existsSync(wsPath);
+    });
+    if (validWorkspaces.length > 0) {
+      repos.push({ path: repo.path, workspaces: validWorkspaces });
+    }
+  }
 
   return ok({ running, pid, repos, logPath });
 }
