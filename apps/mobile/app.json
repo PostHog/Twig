@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PostHog Mobile",
-    "slug": "posthog",
+    "name": "PostHog AI",
+    "slug": "posthog-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +18,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.posthog.mobile",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Allow PostHog to use your microphone for voice-to-text input"
+        "NSMicrophoneUsageDescription": "Allow PostHog to use your microphone for voice-to-text input",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,7 +30,10 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.posthog.mobile",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -148,6 +152,13 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fc0c23be-345c-4275-b183-4c6aa96c346b"
+      }
+    },
+    "owner": "posthog"
   }
 }
