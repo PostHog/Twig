@@ -9,10 +9,6 @@ export const credentialsSchema = z.object({
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 
-// Agent framework schema
-export const agentFrameworkSchema = z.enum(["claude", "codex"]);
-export type AgentFramework = z.infer<typeof agentFrameworkSchema>;
-
 // Execution mode schema
 export const executionModeSchema = z.enum(["plan", "acceptEdits", "default"]);
 export type ExecutionMode = z.infer<typeof executionModeSchema>;
@@ -26,7 +22,6 @@ export const sessionConfigSchema = z.object({
   logUrl: z.string().optional(),
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
-  framework: agentFrameworkSchema.optional(),
   executionMode: executionModeSchema.optional(),
 });
 
@@ -44,7 +39,6 @@ export const startSessionInput = z.object({
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
-  framework: agentFrameworkSchema.optional().default("claude"),
   executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),

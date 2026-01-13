@@ -3,7 +3,6 @@ import { EditorToolbar } from "@features/message-editor/components/EditorToolbar
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
-import { FrameworkSelector } from "@features/sessions/components/FrameworkSelector";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -195,15 +194,12 @@ export const TaskInputEditor = forwardRef<
           </Flex>
 
           <Flex justify="between" align="center" px="3" pb="3">
-            <Flex align="center" gap="1">
-              <EditorToolbar
-                disabled={isCreatingTask}
-                onInsertChip={insertChip}
-                attachTooltip="Attach files from anywhere"
-                iconSize={16}
-              />
-              <FrameworkSelector disabled={isCreatingTask} />
-            </Flex>
+            <EditorToolbar
+              disabled={isCreatingTask}
+              onInsertChip={insertChip}
+              attachTooltip="Attach files from anywhere"
+              iconSize={16}
+            />
 
             <Flex align="center" gap="4">
               {!isCloudMode && (
