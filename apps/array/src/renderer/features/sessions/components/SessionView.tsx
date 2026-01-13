@@ -7,7 +7,7 @@ import {
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
-import { Box, ContextMenu, Flex } from "@radix-ui/themes";
+import { Box, Callout, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -42,7 +42,12 @@ interface SessionViewProps {
   onCancelPrompt: () => void;
   repoPath?: string | null;
   isCloud?: boolean;
+  hasError?: boolean;
+  errorMessage?: string;
 }
+
+const DEFAULT_ERROR_MESSAGE =
+  "Failed to resume this session. The working directory may have been deleted. Please start a new task.";
 
 export function SessionView({
   events,
@@ -54,6 +59,8 @@ export function SessionView({
   onCancelPrompt,
   repoPath,
   isCloud = false,
+  hasError = false,
+  errorMessage = DEFAULT_ERROR_MESSAGE,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -232,6 +239,14 @@ export function SessionView({
           )}
 
           <PlanStatusBar plan={latestPlan} />
+
+          {hasError && (
+            <Callout.Root color="red" size="1" className="m-2">
+              <Callout.Text>
+                <Text size="2">{errorMessage}</Text>
+              </Callout.Text>
+            </Callout.Root>
+          )}
 
           {firstPendingPermission ? (
             <InlinePermissionSelector

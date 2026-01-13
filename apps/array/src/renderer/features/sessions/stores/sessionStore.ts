@@ -787,6 +787,27 @@ const useStore = create<SessionStore>()(
                 taskDescription,
               );
             } else if (latestRun?.id && latestRun?.log_url) {
+              // Check if workspace still exists before attempting reconnect
+              const workspaceExists =
+                await trpcVanilla.workspace.verify.query({ taskId });
+
+              if (!workspaceExists) {
+                // Workspace was deleted - show historical logs in error state
+                log.warn("Workspace no longer exists, showing error state", {
+                  taskId,
+                });
+                const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+                const events = convertStoredEntriesToEvents(rawEntries);
+
+                const session = createBaseSession(latestRun.id, taskId, false);
+                session.events = events;
+                session.logUrl = latestRun.log_url;
+                session.status = "error";
+
+                addSession(session);
+                return;
+              }
+
               await reconnectToLocalSession(
                 taskId,
                 latestRun.id,
