@@ -54,6 +54,7 @@ export const TaskInputEditor = forwardRef<
     const isWorktreeMode = localWorkspaceMode === "worktree";
     const isCloudMode = runMode === "cloud";
     const { isOnline } = useConnectivity();
+    const isDisabled = isCreatingTask || !isOnline;
 
     useHotkeys(
       "shift+tab",
@@ -82,7 +83,8 @@ export const TaskInputEditor = forwardRef<
     } = useTiptapEditor({
       sessionId,
       placeholder: "What do you want to work on? - @ to add context",
-      disabled: isCreatingTask,
+      disabled: isDisabled,
+      isLoading: isCreatingTask,
       isCloud: isCloudMode,
       autoFocus: true,
       context: { repoPath },
@@ -198,7 +200,7 @@ export const TaskInputEditor = forwardRef<
 
           <Flex justify="between" align="center" px="3" pb="3">
             <EditorToolbar
-              disabled={isCreatingTask}
+              disabled={isDisabled}
               onInsertChip={insertChip}
               attachTooltip="Attach files from anywhere"
               iconSize={16}
@@ -241,15 +243,15 @@ export const TaskInputEditor = forwardRef<
                     e.stopPropagation();
                     onSubmit();
                   }}
-                  disabled={!canSubmit || isCreatingTask}
+                  disabled={!canSubmit || isDisabled}
                   loading={isCreatingTask}
                   style={{
                     backgroundColor:
-                      !canSubmit || isCreatingTask
+                      !canSubmit || isDisabled
                         ? "var(--accent-a4)"
                         : undefined,
                     color:
-                      !canSubmit || isCreatingTask
+                      !canSubmit || isDisabled
                         ? "var(--accent-8)"
                         : undefined,
                   }}
