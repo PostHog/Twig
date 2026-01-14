@@ -5,13 +5,12 @@ import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const monorepoRoot = path.resolve(__dirname, "../..");
+const _monorepoRoot = path.resolve(__dirname, "../..");
 
 // Allow forcing dev mode in packaged builds via FORCE_DEV_MODE=1
 const forceDevMode = process.env.FORCE_DEV_MODE === "1";
 
 export default defineConfig({
-  envDir: monorepoRoot,
   plugins: [react(), tsconfigPaths()],
   envDir: path.resolve(__dirname, "../.."), // Load .env from monorepo root
   define: forceDevMode

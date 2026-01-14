@@ -18,9 +18,53 @@ export function formatErrorDescription(args: unknown[]): string | undefined {
   return undefined;
 }
 
-export function formatArgsToString(args: unknown[], maxLength = 200): string {
-  return args
-    .map((a) => (a instanceof Error ? a.message : String(a)))
-    .join(" ")
-    .slice(0, maxLength);
+function formatConsoleArg(arg: unknown): string {
+  if (arg instanceof Error) {
+    return arg.stack || arg.message;
+  }
+
+  if (typeof arg === "string") {
+    return arg;
+  }
+
+  try {
+    return JSON.stringify(arg);
+  } catch {
+    return String(arg);
+  }
+}
+
+function formatConsoleArgsWithSubstitutions(args: unknown[]): string {
+  if (args.length === 0) {
+    return "";
+  }
+
+  const first = args[0];
+  if (typeof first !== "string") {
+    return args.map(formatConsoleArg).join(" ");
+  }
+
+  let template = first;
+  let nextArgIndex = 1;
+
+  template = template.replace(/%[sdifoO]/g, () => {
+    if (nextArgIndex >= args.length) {
+      return "";
+    }
+
+    const replacement = formatConsoleArg(args[nextArgIndex]);
+    nextArgIndex += 1;
+    return replacement;
+  });
+
+  const rest = args.slice(nextArgIndex).map(formatConsoleArg);
+  return rest.length > 0 ? `${template} ${rest.join(" ")}` : template;
+}
+
+export function formatArgsToString(args: unknown[], maxLength = 5000): string {
+  const formatted = formatConsoleArgsWithSubstitutions(args);
+
+  return formatted.length > maxLength
+    ? `${formatted.slice(0, maxLength)}\n… (truncated)`
+    : formatted;
 }
