@@ -196,7 +196,6 @@ export function useTaskCreation({
     executionMode,
     invalidateTasks,
     navigateToTask,
-    isOnline,
   ]);
 
   return {
