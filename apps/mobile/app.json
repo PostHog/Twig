@@ -1,10 +1,9 @@
 {
   "expo": {
     "name": "PostHog AI",
-    "slug": "posthog-ai",
+    "slug": "posthog",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "bundler": "metro",
@@ -15,6 +14,7 @@
       "backgroundColor": "#0f0f0f"
     },
     "ios": {
+      "icon": "./assets/posthog.icon",
       "supportsTablet": true,
       "bundleIdentifier": "com.posthog.mobile",
       "infoPlist": {
@@ -25,7 +25,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0f0f0f"
+        "backgroundColor": "#E6E6E6"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
