@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { logger } from "@/lib/logger";
+import { queryClient } from "@/lib/queryClient";
 import {
   getCloudUrlFromRegion,
   OAUTH_SCOPES,
@@ -213,6 +214,9 @@ export const useAuthStore = create<AuthState>()(
         }
 
         await deleteTokens();
+
+        // Clear React Query cache to prevent data leakage between sessions
+        queryClient.clear();
 
         set({
           oauthAccessToken: null,

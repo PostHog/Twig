@@ -1,47 +1,40 @@
-import { useCallback, useEffect } from "react";
-import { getConversations } from "../api";
-import {
-  sortConversationsByDate,
-  useConversationStore,
-} from "../stores/conversationStore";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/features/auth";
+import { getConversation, getConversations } from "../api";
+import { sortConversationsByDate } from "../stores/conversationStore";
+
+export const conversationKeys = {
+  all: ["conversations"] as const,
+  lists: () => [...conversationKeys.all, "list"] as const,
+  list: () => [...conversationKeys.lists()] as const,
+  details: () => [...conversationKeys.all, "detail"] as const,
+  detail: (id: string) => [...conversationKeys.details(), id] as const,
+};
 
 export function useConversations() {
-  const {
-    conversations,
-    isLoading,
-    error,
-    setConversations,
-    setLoading,
-    setError,
-  } = useConversationStore();
+  const { projectId, oauthAccessToken } = useAuthStore();
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getConversations();
-      setConversations(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch conversations",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [setConversations, setLoading, setError]);
-
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
-  const sortedConversations = sortConversationsByDate(conversations);
+  const query = useQuery({
+    queryKey: conversationKeys.list(),
+    queryFn: getConversations,
+    enabled: !!projectId && !!oauthAccessToken,
+    select: sortConversationsByDate,
+  });
 
   return {
-    conversations: sortedConversations,
-    isLoading,
-    error,
-    refetch: fetchConversations,
+    conversations: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error?.message ?? null,
+    refetch: query.refetch,
   };
 }
 
+export function useConversation(conversationId: string) {
+  const { projectId, oauthAccessToken } = useAuthStore();
 
+  return useQuery({
+    queryKey: conversationKeys.detail(conversationId),
+    queryFn: () => getConversation(conversationId),
+    enabled: !!projectId && !!oauthAccessToken && !!conversationId,
+  });
+}

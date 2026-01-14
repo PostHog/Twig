@@ -1,68 +1,62 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/features/auth";
 import { getGithubRepositories, getIntegrations } from "../api";
-import type { Integration } from "../types";
 
-interface UseIntegrationsResult {
-  hasGithubIntegration: boolean | null; // null = not yet checked
-  githubIntegration: Integration | null;
-  repositories: string[];
-  isLoading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-}
+export const integrationKeys = {
+  all: ["integrations"] as const,
+  lists: () => [...integrationKeys.all, "list"] as const,
+  github: () => [...integrationKeys.all, "github"] as const,
+  repos: (integrationId: number) =>
+    [...integrationKeys.all, "repos", integrationId] as const,
+};
 
-export function useIntegrations(): UseIntegrationsResult {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [repositories, setRepositories] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const isFetching = useRef(false);
+export function useIntegrations() {
+  const { projectId, oauthAccessToken } = useAuthStore();
 
-  const fetchIntegrations = useCallback(async () => {
-    if (isFetching.current) return;
-    isFetching.current = true;
-    setIsLoading(true);
-    setError(null);
-    try {
+  const integrationsQuery = useQuery({
+    queryKey: integrationKeys.github(),
+    queryFn: async () => {
       const data = await getIntegrations();
-      const githubIntegrations = data.filter((i) => i.kind === "github");
-      setIntegrations(githubIntegrations);
+      return data.filter((i) => i.kind === "github");
+    },
+    enabled: !!projectId && !!oauthAccessToken,
+  });
 
-      if (githubIntegrations.length > 0) {
-        const allRepos: string[] = [];
-        for (const integration of githubIntegrations) {
-          const repos = await getGithubRepositories(integration.id);
-          allRepos.push(...repos);
-        }
-        setRepositories(allRepos.sort());
-      } else {
-        setRepositories([]);
+  const githubIntegrations = integrationsQuery.data ?? [];
+
+  const repositoriesQuery = useQuery({
+    queryKey: [
+      ...integrationKeys.all,
+      "repos",
+      githubIntegrations.map((i) => i.id),
+    ],
+    queryFn: async () => {
+      const allRepos: string[] = [];
+      for (const integration of githubIntegrations) {
+        const repos = await getGithubRepositories(integration.id);
+        allRepos.push(...repos);
       }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch integrations",
-      );
-    } finally {
-      setIsLoading(false);
-      setHasFetched(true);
-      isFetching.current = false;
-    }
-  }, []);
+      return allRepos.sort();
+    },
+    enabled: githubIntegrations.length > 0,
+  });
 
-  useEffect(() => {
-    fetchIntegrations();
-  }, [fetchIntegrations]);
-
-  const githubIntegration =
-    integrations.find((i) => i.kind === "github") ?? null;
+  const refetch = async () => {
+    await integrationsQuery.refetch();
+    await repositoriesQuery.refetch();
+  };
 
   return {
-    hasGithubIntegration: hasFetched ? integrations.length > 0 : null,
-    githubIntegration,
-    repositories,
-    isLoading,
-    error,
-    refetch: fetchIntegrations,
+    hasGithubIntegration: integrationsQuery.isFetched
+      ? githubIntegrations.length > 0
+      : null,
+    githubIntegrations,
+    repositories: repositoriesQuery.data ?? [],
+    isLoading: integrationsQuery.isLoading || repositoriesQuery.isLoading,
+    error:
+      integrationsQuery.error?.message ??
+      repositoriesQuery.error?.message ??
+      null,
+    refetch,
   };
 }

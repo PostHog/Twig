@@ -74,14 +74,20 @@ function getProjectId(): number {
   return projectId;
 }
 
-export async function getTasks(repository?: string): Promise<Task[]> {
+export async function getTasks(filters?: {
+  repository?: string;
+  createdBy?: number;
+}): Promise<Task[]> {
   const baseUrl = getBaseUrl();
   const projectId = getProjectId();
   const headers = getAuthHeaders();
 
   const params = new URLSearchParams({ limit: "500" });
-  if (repository) {
-    params.set("repository", repository);
+  if (filters?.repository) {
+    params.set("repository", filters.repository);
+  }
+  if (filters?.createdBy) {
+    params.set("created_by", String(filters.createdBy));
   }
 
   const response = await fetch(
@@ -137,6 +143,48 @@ export async function createTask(options: CreateTaskOptions): Promise<Task> {
   }
 
   return await response.json();
+}
+
+export async function updateTask(
+  taskId: string,
+  updates: Partial<Task>,
+): Promise<Task> {
+  const baseUrl = getBaseUrl();
+  const projectId = getProjectId();
+  const headers = getAuthHeaders();
+
+  const response = await fetch(
+    `${baseUrl}/api/projects/${projectId}/tasks/${taskId}/`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(updates),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to update task: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  const baseUrl = getBaseUrl();
+  const projectId = getProjectId();
+  const headers = getAuthHeaders();
+
+  const response = await fetch(
+    `${baseUrl}/api/projects/${projectId}/tasks/${taskId}/`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete task: ${response.statusText}`);
+  }
 }
 
 export async function runTaskInCloud(taskId: string): Promise<Task> {

@@ -1,23 +1,4 @@
-import { create } from "zustand";
 import type { ConversationDetail } from "../types";
-
-interface ConversationState {
-  conversations: ConversationDetail[];
-  isLoading: boolean;
-  error: string | null;
-  setConversations: (conversations: ConversationDetail[]) => void;
-  setLoading: (isLoading: boolean) => void;
-  setError: (error: string | null) => void;
-}
-
-export const useConversationStore = create<ConversationState>((set) => ({
-  conversations: [],
-  isLoading: false,
-  error: null,
-  setConversations: (conversations) => set({ conversations }),
-  setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error }),
-}));
 
 export function sortConversationsByDate(
   conversations: ConversationDetail[],
@@ -28,5 +9,3 @@ export function sortConversationsByDate(
     return dateB.localeCompare(dateA);
   });
 }
-
-

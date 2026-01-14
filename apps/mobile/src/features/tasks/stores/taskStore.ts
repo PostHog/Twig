@@ -4,36 +4,24 @@ import type { Task } from "../types";
 export type OrderByField = "created_at" | "status" | "title";
 export type OrderDirection = "asc" | "desc";
 
-interface TaskState {
-  tasks: Task[];
-  isLoading: boolean;
-  error: string | null;
+interface TaskUIState {
   selectedTaskId: string | null;
   orderBy: OrderByField;
   orderDirection: OrderDirection;
   filter: string;
 
-  setTasks: (tasks: Task[]) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
   selectTask: (taskId: string | null) => void;
   setOrderBy: (orderBy: OrderByField) => void;
   setOrderDirection: (direction: OrderDirection) => void;
   setFilter: (filter: string) => void;
 }
 
-export const useTaskStore = create<TaskState>((set) => ({
-  tasks: [],
-  isLoading: false,
-  error: null,
+export const useTaskStore = create<TaskUIState>((set) => ({
   selectedTaskId: null,
   orderBy: "created_at",
   orderDirection: "desc",
   filter: "",
 
-  setTasks: (tasks) => set({ tasks }),
-  setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error }),
   selectTask: (selectedTaskId) => set({ selectedTaskId }),
   setOrderBy: (orderBy) => set({ orderBy }),
   setOrderDirection: (orderDirection) => set({ orderDirection }),
