@@ -19,6 +19,7 @@ function _getBuildDate(): string {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const _monorepoRoot = path.resolve(__dirname, "../..");
 
 /**
  * Custom Vite plugin to fix circular __filename references in bundled ESM packages.

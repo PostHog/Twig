@@ -1,10 +1,10 @@
+import { ErrorBoundary } from "@components/ErrorBoundary";
 import { MainLayout } from "@components/MainLayout";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useUserNotifications } from "@hooks/useUserNotifications";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
-import { trpcVanilla } from "@renderer/trpc/client";
-import { toast } from "@utils/toast";
 import { useEffect, useState } from "react";
 
 function App() {
@@ -16,15 +16,8 @@ function App() {
     initializePostHog();
   }, []);
 
-  // Global workspace error listener for toasts
-  useEffect(() => {
-    const subscription = trpcVanilla.workspace.onError.subscribe(undefined, {
-      onData: (data) => {
-        toast.error("Workspace error", { description: data.message });
-      },
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  // Global notification listener - handles all main process notifications
+  useUserNotifications();
 
   useEffect(() => {
     initializeOAuth().finally(() => setIsLoading(false));
@@ -41,7 +34,11 @@ function App() {
     );
   }
 
-  return isAuthenticated ? <MainLayout /> : <AuthScreen />;
+  return (
+    <ErrorBoundary>
+      {isAuthenticated ? <MainLayout /> : <AuthScreen />}
+    </ErrorBoundary>
+  );
 }
 
 export default App;

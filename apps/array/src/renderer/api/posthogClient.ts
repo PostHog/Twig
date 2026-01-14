@@ -1,9 +1,9 @@
+import { buildApiFetcher } from "@api/fetcher";
+import { createApiClient, type Schemas } from "@api/generated";
 import type { AgentEvent } from "@posthog/agent";
 import { logger } from "@renderer/lib/logger";
 import type { Task, TaskRun } from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
-import { buildApiFetcher } from "./fetcher";
-import { createApiClient, type Schemas } from "./generated";
 
 const log = logger.scope("posthog-client");
 
