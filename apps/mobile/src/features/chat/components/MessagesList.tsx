@@ -81,7 +81,17 @@ export function MessagesList({
     <FlatList
       ref={flatListRef}
       data={reversedMessages}
-      keyExtractor={(item, index) => item.id || `msg-${index}`}
+      keyExtractor={(item, index) => {
+        // Use the message ID if available, otherwise create a stable key
+        // based on the original index in the non-reversed array
+        if (item.id) {
+          return item.id;
+        }
+        // For messages without IDs, use the original index (messages.length - 1 - index)
+        // combined with message type to create a more stable key
+        const originalIndex = messages.length - 1 - index;
+        return `msg-${originalIndex}-${item.type}`;
+      }}
       inverted
       renderItem={({ item, index }) => {
         // List is inverted, so index 0 is the last message. Check if any message before this index (after in original order) is human.

@@ -17,6 +17,12 @@ import {
   type ThreadMessage,
 } from "../types";
 
+// Generate a unique temporary ID for streaming messages
+let tempIdCounter = 0;
+function generateTempId(): string {
+  return `temp-${Date.now()}-${tempIdCounter++}`;
+}
+
 const FAILURE_MESSAGE: ThreadMessage = {
   type: AssistantMessageType.Failure,
   content:
@@ -72,18 +78,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const state = get();
 
-    // Add human message immediately
+    // Add human message immediately with a temp ID
     const humanMessage: ThreadMessage = {
       type: AssistantMessageType.Human,
       content: prompt,
       status: "completed",
+      id: generateTempId(),
     };
 
-    // Add a loading assistant message placeholder for thinking animation
+    // Add a loading assistant message placeholder with a temp ID for streaming
     const loadingAssistantMessage: ThreadMessage = {
       type: AssistantMessageType.Assistant,
       content: "",
       status: "loading",
+      id: generateTempId(),
     };
 
     set({
@@ -389,15 +397,16 @@ async function processSSEEvent(
 
     case AssistantEventType.Message: {
       const message = parsedObj as unknown as RootAssistantMessage;
-      // ToolCallMessage has its own status property, so we cast it directly
-      const messageStatus = message.id ? "completed" : "loading";
+      // A message is "loading" if it has no ID or has a temp- prefix
+      const isLoadingMessage = !message.id || message.id.startsWith("temp-");
+      const messageStatus = isLoadingMessage ? "loading" : "completed";
       const threadMessage = {
         ...message,
         status: messageStatus,
       } as ThreadMessage;
 
       if (isHumanMessage(message)) {
-        // Find and replace the provisional human message
+        // Find and replace the provisional human message (the one we added with a temp- ID)
         const thread = state.thread;
         const lastHumanIndex = [...thread]
           .map((m, i) => [m, i] as const)
@@ -420,34 +429,54 @@ async function processSSEEvent(
         isArtifactMessage(message) ||
         message.type === AssistantMessageType.Failure
       ) {
-        // Check if message with same ID exists
-        const existingIndex = message.id
-          ? state.thread.findIndex((m) => m.id === message.id)
+        // Check if a message with the same ID already exists
+        const existingMessageIndex = message.id
+          ? state.thread.findIndex((msg) => msg.id === message.id)
           : -1;
 
-        if (existingIndex >= 0) {
-          // Replace existing message
+        if (existingMessageIndex >= 0) {
+          // When streaming a message with an already-present ID, we simply replace it
+          // (primarily when streaming in-progress messages with a temp- ID)
           set({
             thread: [
-              ...state.thread.slice(0, existingIndex),
+              ...state.thread.slice(0, existingMessageIndex),
               threadMessage,
-              ...state.thread.slice(existingIndex + 1),
+              ...state.thread.slice(existingMessageIndex + 1),
             ],
           });
-        } else {
+        } else if (isLoadingMessage) {
+          // When a new temp message is streamed for the first time, we need to replace
+          // the loading placeholder (if any), or append it
           const lastMessage = state.thread[state.thread.length - 1];
-
-          if (
-            lastMessage?.status === "completed" ||
-            state.thread.length === 0
-          ) {
-            // Add new message
-            set({ thread: [...state.thread, threadMessage] });
-          } else {
-            // Replace loading message
+          if (lastMessage?.status === "loading") {
+            // Replace the loading placeholder with the streaming message
             set({
               thread: [...state.thread.slice(0, -1), threadMessage],
             });
+          } else {
+            // No loading placeholder, append the message
+            set({ thread: [...state.thread, threadMessage] });
+          }
+        } else {
+          // When we get the completed messages at the end of a generation,
+          // we replace from the last completed message to arrive at the final state
+          const lastCompletedMessageIndex = state.thread.findLastIndex(
+            (msg) => msg.status === "completed",
+          );
+          const replaceIndex = lastCompletedMessageIndex + 1;
+
+          if (replaceIndex < state.thread.length) {
+            // Replace the message at replaceIndex
+            set({
+              thread: [
+                ...state.thread.slice(0, replaceIndex),
+                threadMessage,
+                ...state.thread.slice(replaceIndex + 1),
+              ],
+            });
+          } else {
+            // No message to replace, just add
+            set({ thread: [...state.thread, threadMessage] });
           }
         }
       }
