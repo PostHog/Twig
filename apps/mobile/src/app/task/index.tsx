@@ -144,7 +144,7 @@ export default function NewTaskScreen() {
           headerShown: true,
           headerTitle: "New task",
           headerStyle: { backgroundColor: themeColors.background },
-          headerTintColor: themeColors.accent[9],
+          headerTintColor: themeColors.gray[12],
           presentation: "modal",
         }}
       />

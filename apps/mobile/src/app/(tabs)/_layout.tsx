@@ -51,11 +51,11 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
-      {/* Settings/Profile Tab */}
+      {/* Settings Tab */}
       <NativeTabs.Trigger name="settings">
-        <Label>Profile</Label>
+        <Label>Settings</Label>
         <Icon
-          sf={{ default: "person", selected: "person.fill" }}
+          sf={{ default: "gearshape", selected: "gearshape.fill" }}
           drawable="ic_menu_preferences"
         />
       </NativeTabs.Trigger>

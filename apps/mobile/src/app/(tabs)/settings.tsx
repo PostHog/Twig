@@ -1,46 +1,102 @@
 import { router } from "expo-router";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useAuthStore } from "@/features/auth";
+import {
+  Linking,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useAuthStore, useUserQuery } from "@/features/auth";
 
 export default function SettingsScreen() {
-  const { logout, cloudRegion } = useAuthStore();
+  const { logout, cloudRegion, getCloudUrlFromRegion } = useAuthStore();
+  const { data: userData } = useUserQuery();
 
   const handleLogout = async () => {
     await logout();
     router.replace("/auth");
   };
 
+  const handleOpenSettings = () => {
+    if (!cloudRegion) return;
+    const baseUrl = getCloudUrlFromRegion(cloudRegion);
+    Linking.openURL(`${baseUrl}/settings`);
+  };
+
   return (
     <ScrollView className="flex-1 bg-background">
-      <View className="px-6 pt-16 pb-32">
+      <View className="px-6 pt-12 pb-12">
         {/* Header */}
-        <View className="mb-10">
-          <Text className="mb-2 font-bold text-3xl text-gray-12">Profile</Text>
-          <Text className="text-base text-gray-11">Your account settings</Text>
+        <View className="mb-8">
+          <Text className="font-bold text-3xl text-gray-12">Settings</Text>
         </View>
 
-        {/* Account Info */}
+        {/* Organization */}
         <View className="mb-6 rounded-xl bg-gray-2 p-4">
           <Text className="mb-4 font-semibold text-gray-12 text-lg">
-            Account
+            Organization
           </Text>
           <View className="flex-row justify-between py-2">
             <Text className="text-gray-11 text-sm">Region</Text>
             <Text className="font-medium text-gray-12 text-sm">
-              {cloudRegion?.toUpperCase() || "N/A"}
+              {cloudRegion?.toUpperCase() || "—"}
+            </Text>
+          </View>
+          <View className="flex-row justify-between py-2">
+            <Text className="text-gray-11 text-sm">Display name</Text>
+            <Text className="font-medium text-gray-12 text-sm">
+              {userData?.organization?.name || "—"}
             </Text>
           </View>
         </View>
 
-        {/* Placeholder Content */}
+        {/* Project */}
         <View className="mb-6 rounded-xl bg-gray-2 p-4">
           <Text className="mb-4 font-semibold text-gray-12 text-lg">
-            Preferences
+            Project
           </Text>
-          <Text className="text-center text-gray-11 text-sm">
-            More settings coming soon...
-          </Text>
+          <View className="flex-row justify-between py-2">
+            <Text className="text-gray-11 text-sm">Display name</Text>
+            <Text className="font-medium text-gray-12 text-sm">
+              {userData?.team?.name || "—"}
+            </Text>
+          </View>
         </View>
+
+        {/* Profile */}
+        <View className="mb-6 rounded-xl bg-gray-2 p-4">
+          <Text className="mb-4 font-semibold text-gray-12 text-lg">
+            Profile
+          </Text>
+          <View className="flex-row justify-between py-2">
+            <Text className="text-gray-11 text-sm">First name</Text>
+            <Text className="font-medium text-gray-12 text-sm">
+              {userData?.first_name || "—"}
+            </Text>
+          </View>
+          <View className="flex-row justify-between py-2">
+            <Text className="text-gray-11 text-sm">Last name</Text>
+            <Text className="font-medium text-gray-12 text-sm">
+              {userData?.last_name || "—"}
+            </Text>
+          </View>
+          <View className="flex-row justify-between py-2">
+            <Text className="text-gray-11 text-sm">Email</Text>
+            <Text className="font-medium text-gray-12 text-sm">
+              {userData?.email || "—"}
+            </Text>
+          </View>
+        </View>
+
+        {/* All Settings Button */}
+        <TouchableOpacity
+          className="mb-6 items-center rounded-lg border border-gray-6 bg-gray-3 py-4"
+          onPress={handleOpenSettings}
+        >
+          <Text className="font-semibold text-base text-gray-12">
+            All settings
+          </Text>
+        </TouchableOpacity>
 
         {/* Logout Button */}
         <TouchableOpacity
