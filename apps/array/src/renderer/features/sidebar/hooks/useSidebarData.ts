@@ -49,6 +49,22 @@ export interface TaskData {
   isPinned?: boolean;
 }
 
+export interface HistoryTaskData extends TaskData {
+  createdAt: number;
+  folderName?: string;
+}
+
+export interface HistoryData {
+  activeTasks: HistoryTaskData[];
+  recentTasks: HistoryTaskData[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+export interface PinnedData {
+  tasks: TaskData[];
+}
+
 export interface SidebarData {
   userName: string;
   isHomeActive: boolean;
@@ -60,6 +76,8 @@ export interface SidebarData {
   folders: FolderData[];
   cloudRepos: CloudRepoData[];
   activeTaskId: string | null;
+  historyData: HistoryData;
+  pinnedData: PinnedData;
 }
 
 interface ViewState {
@@ -174,6 +192,124 @@ function getActiveRepository(activeFilters: ActiveFilters): string | null {
   return repositoryFilters.length === 1 ? repositoryFilters[0].value : null;
 }
 
+function buildHistoryData(
+  allTasks: Task[],
+  workspaces: Record<string, Workspace>,
+  folders: RegisteredFolder[],
+  sessions: Record<string, AgentSession>,
+  lastViewedAt: Record<string, number>,
+  localActivityAt: Record<string, number>,
+  pinnedTaskIds: Set<string>,
+  activeTaskId: string | null,
+  visibleCount: number,
+): HistoryData {
+  const getSessionForTask = (taskId: string): AgentSession | undefined => {
+    return Object.values(sessions).find((s) => s.taskId === taskId);
+  };
+
+  // Transform all tasks to HistoryTaskData
+  const historyTasks: HistoryTaskData[] = allTasks.map((task) => {
+    const session = getSessionForTask(task.id);
+    const workspace = workspaces[task.id];
+    const folder = workspace
+      ? folders.find((f) => f.id === workspace.folderId)
+      : undefined;
+
+    const apiUpdatedAt = new Date(task.updated_at).getTime();
+    const localActivity = localActivityAt[task.id];
+    const lastActivityAt = localActivity
+      ? Math.max(apiUpdatedAt, localActivity)
+      : apiUpdatedAt;
+
+    const taskLastViewedAt = lastViewedAt[task.id];
+    const isCurrentlyViewing = activeTaskId === task.id;
+    const isUnread =
+      !isCurrentlyViewing &&
+      taskLastViewedAt !== undefined &&
+      lastActivityAt > taskLastViewedAt;
+
+    return {
+      id: task.id,
+      title: task.title,
+      lastActivityAt,
+      createdAt: new Date(task.created_at).getTime(),
+      isGenerating: session?.isPromptPending ?? false,
+      isUnread,
+      isPinned: pinnedTaskIds.has(task.id),
+      folderName: folder?.name,
+    };
+  });
+
+  // Partition into active (unread) and inactive tasks
+  const activeTasks = historyTasks
+    .filter((t) => t.isUnread)
+    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+
+  const inactiveTasks = historyTasks
+    .filter((t) => !t.isUnread)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Apply pagination to inactive tasks only (active always shown)
+  const totalCount = allTasks.length;
+  const recentTasks = inactiveTasks.slice(0, visibleCount);
+  const hasMore = inactiveTasks.length > visibleCount;
+
+  return {
+    activeTasks,
+    recentTasks,
+    totalCount,
+    hasMore,
+  };
+}
+
+function buildPinnedData(
+  allTasks: Task[],
+  sessions: Record<string, AgentSession>,
+  lastViewedAt: Record<string, number>,
+  localActivityAt: Record<string, number>,
+  pinnedTaskIds: Set<string>,
+  activeTaskId: string | null,
+): PinnedData {
+  const getSessionForTask = (taskId: string): AgentSession | undefined => {
+    return Object.values(sessions).find((s) => s.taskId === taskId);
+  };
+
+  // Filter to only pinned tasks
+  const pinnedTasks = allTasks.filter((task) => pinnedTaskIds.has(task.id));
+
+  // Transform to TaskData
+  const tasks: TaskData[] = pinnedTasks.map((task) => {
+    const session = getSessionForTask(task.id);
+
+    const apiUpdatedAt = new Date(task.updated_at).getTime();
+    const localActivity = localActivityAt[task.id];
+    const lastActivityAt = localActivity
+      ? Math.max(apiUpdatedAt, localActivity)
+      : apiUpdatedAt;
+
+    const taskLastViewedAt = lastViewedAt[task.id];
+    const isCurrentlyViewing = activeTaskId === task.id;
+    const isUnread =
+      !isCurrentlyViewing &&
+      taskLastViewedAt !== undefined &&
+      lastActivityAt > taskLastViewedAt;
+
+    return {
+      id: task.id,
+      title: task.title,
+      lastActivityAt,
+      isGenerating: session?.isPromptPending ?? false,
+      isUnread,
+      isPinned: true,
+    };
+  });
+
+  // Sort by activity
+  tasks.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+
+  return { tasks };
+}
+
 export function useSidebarData({
   activeView,
   activeFilters,
@@ -187,6 +323,9 @@ export function useSidebarData({
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);
   const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
+  const historyVisibleCount = useSidebarStore(
+    (state) => state.historyVisibleCount,
+  );
   const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
@@ -318,54 +457,26 @@ export function useSidebarData({
     };
   });
 
-  // Collect all task IDs that are already shown in folders
-  const tasksInFolders = new Set<string>();
-  for (const folder of folderData) {
-    for (const task of folder.tasks) {
-      tasksInFolders.add(task.id);
-    }
-  }
+  const historyData = buildHistoryData(
+    allTasks,
+    workspaces,
+    folders,
+    sessions,
+    lastViewedAt,
+    localActivityAt,
+    pinnedTaskIds,
+    activeTaskId,
+    historyVisibleCount,
+  );
 
-  // Cloud tasks are tasks that don't have a workspace (not in any folder)
-  // Group them by repository
-  const cloudTasksByRepo = new Map<
-    string,
-    { task: Task; taskData: TaskData; lastActivityAt: number }[]
-  >();
-
-  for (const task of allTasks) {
-    if (tasksInFolders.has(task.id)) continue;
-
-    const repository = getTaskRepository(task) ?? "unknown";
-    const isCurrentlyViewing = activeTaskId === task.id;
-    const { taskData, lastActivityAt } = toTaskData(task, isCurrentlyViewing);
-
-    if (!cloudTasksByRepo.has(repository)) {
-      cloudTasksByRepo.set(repository, []);
-    }
-    cloudTasksByRepo.get(repository)!.push({ task, taskData, lastActivityAt });
-  }
-
-  // Convert to CloudRepoData array, sorted by most recent activity
-  const cloudRepos: CloudRepoData[] = [];
-  for (const [repository, tasks] of cloudTasksByRepo) {
-    // Sort tasks within repo by activity
-    tasks.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
-
-    const parsed = parseRepository(repository);
-    cloudRepos.push({
-      repository,
-      repoName: parsed?.repoName ?? repository,
-      tasks: tasks.map((t) => t.taskData),
-    });
-  }
-
-  // Sort repos by their most recent task activity
-  cloudRepos.sort((a, b) => {
-    const aLatest = a.tasks[0]?.lastActivityAt ?? 0;
-    const bLatest = b.tasks[0]?.lastActivityAt ?? 0;
-    return bLatest - aLatest;
-  });
+  const pinnedData = buildPinnedData(
+    allTasks,
+    sessions,
+    lastViewedAt,
+    localActivityAt,
+    pinnedTaskIds,
+    activeTaskId,
+  );
 
   return {
     userName,
@@ -378,5 +489,7 @@ export function useSidebarData({
     folders: folderData,
     cloudRepos,
     activeTaskId,
+    historyData,
+    pinnedData,
   };
 }
