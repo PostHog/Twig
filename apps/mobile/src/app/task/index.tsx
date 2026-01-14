@@ -1,5 +1,6 @@
 import { Text } from "@components/text";
 import { Stack, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useAuthStore } from "@/features/auth";
 import {
   createTask,
   getGithubRepositories,
@@ -16,6 +18,60 @@ import {
   runTaskInCloud,
 } from "@/features/tasks";
 import { useThemeColors } from "@/lib/theme";
+
+interface ConnectGitHubPromptProps {
+  onConnected?: () => void;
+}
+
+function ConnectGitHubPrompt({ onConnected }: ConnectGitHubPromptProps) {
+  const { cloudRegion, projectId, getCloudUrlFromRegion } = useAuthStore();
+  const themeColors = useThemeColors();
+
+  const handleConnectGitHub = async () => {
+    if (!cloudRegion || !projectId) return;
+    const baseUrl = getCloudUrlFromRegion(cloudRegion);
+    const authorizeUrl = `${baseUrl}/api/environments/${projectId}/integrations/authorize/?kind=github`;
+
+    // Open in-app browser - will auto-detect when user returns
+    const result = await WebBrowser.openAuthSessionAsync(
+      authorizeUrl,
+      "posthog://github/callback",
+    );
+
+    // When browser session ends, refresh integrations
+    if (
+      result.type === "dismiss" ||
+      result.type === "cancel" ||
+      result.type === "success"
+    ) {
+      onConnected?.();
+    }
+  };
+
+  return (
+    <View className="mb-4 rounded-lg border border-gray-6 p-4">
+      <View className="mb-3 flex-row items-center">
+        <Text className="mr-2 text-xl">🔗</Text>
+        <Text className="font-semibold text-gray-12">
+          Connect GitHub to continue
+        </Text>
+      </View>
+      <Text className="mb-4 text-gray-11 text-sm">
+        You need to connect your GitHub account before creating tasks. This
+        allows PostHog to work on your repositories.
+      </Text>
+      <Pressable
+        onPress={handleConnectGitHub}
+        className="items-center rounded-lg py-3"
+        style={{ backgroundColor: themeColors.accent[9] }}
+      >
+        <Text className="font-semibold text-accent-contrast">
+          Connect GitHub
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function NewTaskScreen() {
   const router = useRouter();
@@ -78,6 +134,7 @@ export default function NewTaskScreen() {
     }
   }, [prompt, selectedRepo, integrations, router]);
 
+  const hasGithubIntegration = integrations.length > 0;
   const canSubmit = prompt.trim() && selectedRepo && !creating;
 
   return (
@@ -92,7 +149,6 @@ export default function NewTaskScreen() {
         }}
       />
       <View className="flex-1 bg-background px-3 pt-4">
-        <Text className="mb-2 text-gray-9 text-xs">Repository</Text>
         {loadingRepos ? (
           <View className="mb-4 items-center rounded-lg border border-gray-6 p-4">
             <ActivityIndicator size="small" color={themeColors.accent[9]} />
@@ -100,69 +156,69 @@ export default function NewTaskScreen() {
               Loading repositories...
             </Text>
           </View>
-        ) : repositories.length === 0 ? (
-          <View className="mb-4 rounded-lg border border-gray-6 p-4">
-            <Text className="text-center text-gray-11 text-sm">
-              No GitHub integrations found. Please add a GitHub integration in
-              PostHog settings.
-            </Text>
-          </View>
+        ) : !hasGithubIntegration ? (
+          <ConnectGitHubPrompt onConnected={loadIntegrations} />
         ) : (
-          <View className="mb-4 max-h-48 rounded-lg border border-gray-6">
-            <FlatList
-              data={repositories}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => setSelectedRepo(item)}
-                  className={`border-gray-6 border-b px-3 py-3 ${
-                    selectedRepo === item ? "bg-accent-3" : ""
-                  }`}
-                >
-                  <Text
-                    className={`text-sm ${
-                      selectedRepo === item ? "text-accent-11" : "text-gray-11"
+          <>
+            <Text className="mb-2 text-gray-9 text-xs">Repository</Text>
+            <View className="mb-4 max-h-48 rounded-lg border border-gray-6">
+              <FlatList
+                data={repositories}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => setSelectedRepo(item)}
+                    className={`border-gray-6 border-b px-3 py-3 ${
+                      selectedRepo === item ? "bg-accent-3" : ""
                     }`}
                   >
-                    {item}
-                  </Text>
-                </Pressable>
-              )}
-            />
-          </View>
-        )}
+                    <Text
+                      className={`text-sm ${
+                        selectedRepo === item
+                          ? "text-accent-11"
+                          : "text-gray-11"
+                      }`}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            </View>
 
-        <Text className="mb-2 text-gray-9 text-xs">Task description</Text>
-        <TextInput
-          className="mb-4 min-h-[100px] rounded-lg border border-gray-6 px-3 py-3 font-mono text-gray-12 text-sm"
-          placeholder="What would you like the agent to do?"
-          placeholderTextColor={themeColors.gray[9]}
-          value={prompt}
-          onChangeText={setPrompt}
-          multiline
-          textAlignVertical="top"
-        />
-
-        <Pressable
-          onPress={handleCreateTask}
-          disabled={!canSubmit}
-          className={`rounded-lg py-3 ${canSubmit ? "bg-accent-9" : "bg-gray-3"}`}
-        >
-          {creating ? (
-            <ActivityIndicator
-              size="small"
-              color={themeColors.accent.contrast}
+            <Text className="mb-2 text-gray-9 text-xs">Task description</Text>
+            <TextInput
+              className="mb-4 min-h-[100px] rounded-lg border border-gray-6 px-3 py-3 font-mono text-gray-12 text-sm"
+              placeholder="What would you like the agent to do?"
+              placeholderTextColor={themeColors.gray[9]}
+              value={prompt}
+              onChangeText={setPrompt}
+              multiline
+              textAlignVertical="top"
             />
-          ) : (
-            <Text
-              className={`text-center font-medium ${
-                canSubmit ? "text-accent-contrast" : "text-gray-9"
-              }`}
+
+            <Pressable
+              onPress={handleCreateTask}
+              disabled={!canSubmit}
+              className={`rounded-lg py-3 ${canSubmit ? "bg-accent-9" : "bg-gray-3"}`}
             >
-              Create task
-            </Text>
-          )}
-        </Pressable>
+              {creating ? (
+                <ActivityIndicator
+                  size="small"
+                  color={themeColors.accent.contrast}
+                />
+              ) : (
+                <Text
+                  className={`text-center font-medium ${
+                    canSubmit ? "text-accent-contrast" : "text-gray-9"
+                  }`}
+                >
+                  Create task
+                </Text>
+              )}
+            </Pressable>
+          </>
+        )}
       </View>
     </>
   );

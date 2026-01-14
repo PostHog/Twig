@@ -7,6 +7,7 @@ export { TaskItem } from "./components/TaskItem";
 export { TaskList } from "./components/TaskList";
 export { TaskSessionView } from "./components/TaskSessionView";
 // Hooks
+export { useIntegrations } from "./hooks/useIntegrations";
 export { useTasks } from "./hooks/useTasks";
 // Stores
 export {

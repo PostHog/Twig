@@ -35,7 +35,7 @@ export default function TasksScreen() {
       </View>
 
       {/* Task List */}
-      <TaskList onTaskPress={handleTaskPress} />
+      <TaskList onTaskPress={handleTaskPress} onCreateTask={handleCreateTask} />
     </View>
   );
 }
