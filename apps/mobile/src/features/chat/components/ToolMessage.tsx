@@ -141,7 +141,7 @@ function CreateTaskPreview({
   return (
     <View className="mt-2 overflow-hidden rounded-lg border border-gray-7 bg-gray-3">
       {/* Header */}
-      <View className="flex-row items-center gap-2 border-b border-gray-7 px-3 py-2">
+      <View className="flex-row items-center gap-2 border-gray-7 border-b px-3 py-2">
         <ListChecks size={14} color={themeColors.accent[9]} />
         <Text className="font-mono text-[12px] text-gray-11">New task</Text>
       </View>

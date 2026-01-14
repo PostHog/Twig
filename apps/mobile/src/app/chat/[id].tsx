@@ -152,7 +152,6 @@ export default function ChatDetailScreen() {
       <Animated.View className="flex-1 bg-background" style={contentPosition}>
         <MessagesList
           messages={thread}
-          streamingActive={streamingActive}
           onOpenTask={handleOpenTask}
           contentContainerStyle={{
             paddingTop: 80 + insets.bottom,

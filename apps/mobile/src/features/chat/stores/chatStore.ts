@@ -79,8 +79,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       status: "completed",
     };
 
+    // Add a loading assistant message placeholder for thinking animation
+    const loadingAssistantMessage: ThreadMessage = {
+      type: AssistantMessageType.Assistant,
+      content: "",
+      status: "loading",
+    };
+
     set({
-      thread: [...state.thread, humanMessage],
+      thread: [...state.thread, humanMessage, loadingAssistantMessage],
       streamingActive: true,
       conversationLoading: true,
     });
@@ -157,7 +164,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
+      const errorMessage = (error as Error).message || "";
+      const isAborted =
+        (error as Error).name === "AbortError" ||
+        errorMessage.includes("canceled") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("aborted");
+
+      if (isAborted) {
         logger.debug("Request cancelled");
       } else {
         logger.error("Stream error:", error);

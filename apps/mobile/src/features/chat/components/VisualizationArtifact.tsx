@@ -190,7 +190,7 @@ export function VisualizationArtifact({
       <View className="w-full items-start px-4 py-3">
         <View className="w-full overflow-hidden rounded bg-gray-6">
           {content.name && (
-            <View className="border-b border-gray-7 px-4 py-2">
+            <View className="border-gray-7 border-b px-4 py-2">
               <Text className="font-mono text-[13px] text-gray-12">
                 {content.name}
               </Text>
@@ -212,7 +212,7 @@ export function VisualizationArtifact({
       <View className="w-full overflow-hidden rounded bg-gray-6">
         {/* Header with title */}
         {content.name && (
-          <View className="border-b border-gray-7 px-4 py-2">
+          <View className="border-gray-7 border-b px-4 py-2">
             <Text className="font-mono text-[13px] text-gray-12">
               {content.name}
             </Text>
@@ -247,7 +247,7 @@ export function VisualizationArtifact({
 
         {/* Artifact name */}
         {content.name && (
-          <View className="border-t border-gray-7 px-4 py-2">
+          <View className="border-gray-7 border-t px-4 py-2">
             <Text className="font-mono text-[11px] text-gray-9">
               {content.name}
             </Text>

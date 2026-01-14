@@ -1,13 +1,11 @@
 import { useEffect, useRef } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   type StyleProp,
   Text,
   View,
   type ViewStyle,
 } from "react-native";
-import { useThemeColors } from "@/lib/theme";
 import {
   AssistantMessageType,
   isArtifactMessage,
@@ -23,7 +21,6 @@ import { VisualizationArtifact } from "./VisualizationArtifact";
 
 interface MessagesListProps {
   messages: ThreadMessage[];
-  streamingActive?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
   onOpenTask?: (taskId: string) => void;
 }
@@ -67,12 +64,10 @@ function MessageItem({
 
 export function MessagesList({
   messages,
-  streamingActive,
   contentContainerStyle,
   onOpenTask,
 }: MessagesListProps) {
   const flatListRef = useRef<FlatList>(null);
-  const themeColors = useThemeColors();
 
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
@@ -110,27 +105,13 @@ export function MessagesList({
           className="flex-1 items-center justify-center px-8"
           style={{ transform: [{ scaleY: -1 }] }}
         >
-          <Text className="mb-2 text-center font-mono text-lg text-gray-12">
+          <Text className="mb-2 text-center font-mono text-gray-12 text-lg">
             Start a conversation
           </Text>
           <Text className="text-center font-mono text-[13px] text-gray-9">
             Ask Max anything about your product data
           </Text>
         </View>
-      }
-      ListHeaderComponent={
-        streamingActive &&
-        messages.length > 0 &&
-        messages[messages.length - 1]?.status !== "loading" ? (
-          <View className="items-start px-4 py-2">
-            <View className="flex-row items-center gap-2 py-1">
-              <ActivityIndicator size="small" color={themeColors.accent[9]} />
-              <Text className="font-mono text-[13px] text-gray-11 italic">
-                Generating...
-              </Text>
-            </View>
-          </View>
-        ) : null
       }
     />
   );

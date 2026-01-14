@@ -86,4 +86,3 @@ export interface CreateTaskOptions {
   repository?: string;
   github_integration?: number;
 }
-

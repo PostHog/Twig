@@ -43,7 +43,7 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
   return (
     <Pressable
       onPress={() => onPress(task)}
-      className="border-b border-gray-6 px-3 py-3 active:bg-gray-3"
+      className="border-gray-6 border-b px-3 py-3 active:bg-gray-3"
     >
       <View className="flex-row items-center gap-2">
         {/* Slug */}
@@ -66,7 +66,7 @@ function TaskItemComponent({ task, onPress }: TaskItemProps) {
 
       {/* Title */}
       <Text
-        className="mt-1 font-medium text-sm text-gray-12"
+        className="mt-1 font-medium text-gray-12 text-sm"
         numberOfLines={1}
         ellipsizeMode="tail"
       >

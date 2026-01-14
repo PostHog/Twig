@@ -73,7 +73,6 @@ export default function NewChatScreen() {
       <Animated.View className="flex-1 bg-background" style={contentPosition}>
         <MessagesList
           messages={thread}
-          streamingActive={streamingActive}
           contentContainerStyle={{
             paddingTop: 80 + insets.bottom,
             paddingBottom: 16,

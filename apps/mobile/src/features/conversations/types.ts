@@ -61,5 +61,3 @@ export type RootAssistantMessage =
 export interface ConversationDetail extends Conversation {
   messages: RootAssistantMessage[];
 }
-
-

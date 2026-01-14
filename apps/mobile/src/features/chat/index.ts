@@ -15,6 +15,7 @@ export { ToolMessage } from "./components/ToolMessage";
 export { VisualizationArtifact } from "./components/VisualizationArtifact";
 
 // Hooks
+export { usePeriodicRerender } from "./hooks/usePeriodicRerender";
 export { useVoiceRecording } from "./hooks/useVoiceRecording";
 
 // Store
