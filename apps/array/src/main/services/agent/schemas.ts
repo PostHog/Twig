@@ -9,6 +9,10 @@ export const credentialsSchema = z.object({
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 
+// Execution mode schema
+export const executionModeSchema = z.enum(["plan", "acceptEdits", "default"]);
+export type ExecutionMode = z.infer<typeof executionModeSchema>;
+
 // Session config schema
 export const sessionConfigSchema = z.object({
   taskId: z.string(),
@@ -18,11 +22,13 @@ export const sessionConfigSchema = z.object({
   logUrl: z.string().optional(),
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
+  executionMode: executionModeSchema.optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
 
 // Start session input/output
+
 export const startSessionInput = z.object({
   taskId: z.string(),
   taskRunId: z.string(),
@@ -33,7 +39,7 @@ export const startSessionInput = z.object({
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
-  executionMode: z.enum(["plan"]).optional(),
+  executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),
 });
@@ -105,6 +111,12 @@ export const setModelInput = z.object({
   modelId: z.string(),
 });
 
+// Set mode input
+export const setModeInput = z.object({
+  sessionId: z.string(),
+  modeId: z.enum(["plan", "default", "acceptEdits"]),
+});
+
 // Subscribe to session events input
 export const subscribeSessionInput = z.object({
   sessionId: z.string(),
@@ -113,6 +125,7 @@ export const subscribeSessionInput = z.object({
 // Agent events
 export const AgentServiceEvent = {
   SessionEvent: "session-event",
+  PermissionRequest: "permission-request",
 } as const;
 
 export interface AgentSessionEventPayload {
@@ -120,6 +133,43 @@ export interface AgentSessionEventPayload {
   payload: unknown;
 }
 
+export interface PermissionOption {
+  kind: "allow_once" | "allow_always" | "reject_once" | "reject_always";
+  name: string;
+  optionId: string;
+  description?: string;
+}
+
+export interface PermissionRequestPayload {
+  sessionId: string;
+  toolCallId: string;
+  title: string;
+  options: PermissionOption[];
+  rawInput: unknown;
+}
+
 export interface AgentServiceEvents {
   [AgentServiceEvent.SessionEvent]: AgentSessionEventPayload;
+  [AgentServiceEvent.PermissionRequest]: PermissionRequestPayload;
 }
+
+// Permission response input for tRPC
+export const respondToPermissionInput = z.object({
+  sessionId: z.string(),
+  toolCallId: z.string(),
+  optionId: z.string(),
+  // For multi-select mode: array of selected option IDs
+  selectedOptionIds: z.array(z.string()).optional(),
+  // For "Other" option: custom text input from user
+  customInput: z.string().optional(),
+});
+
+export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;
+
+// Permission cancellation input for tRPC
+export const cancelPermissionInput = z.object({
+  sessionId: z.string(),
+  toolCallId: z.string(),
+});
+
+export type CancelPermissionInput = z.infer<typeof cancelPermissionInput>;

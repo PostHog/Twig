@@ -23,7 +23,6 @@ export function KeyboardShortcutsSheet({
     "general",
     "navigation",
     "panels",
-    "taskList",
     "editor",
   ];
 

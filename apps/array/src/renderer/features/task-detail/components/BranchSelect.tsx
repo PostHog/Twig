@@ -144,7 +144,7 @@ export function BranchSelect({
     }
   };
 
-  // filter branches based on search query
+  // filter and sort branches based on search query
   const filteredBranches = useMemo(() => {
     let result = branches;
     if (searchQuery.trim()) {
@@ -153,8 +153,14 @@ export function BranchSelect({
         branch.toLowerCase().includes(query),
       );
     }
+    // Sort alphabetically, but default branch always comes first
+    result = [...result].sort((a, b) => {
+      if (a === defaultBranch) return -1;
+      if (b === defaultBranch) return 1;
+      return a.localeCompare(b);
+    });
     return result.slice(0, MAX_DISPLAYED_BRANCHES);
-  }, [branches, searchQuery]);
+  }, [branches, searchQuery, defaultBranch]);
 
   const hasMoreBranches =
     branches.length > MAX_DISPLAYED_BRANCHES && !searchQuery;

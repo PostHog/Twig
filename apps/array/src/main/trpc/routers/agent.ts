@@ -3,12 +3,15 @@ import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   AgentServiceEvent,
+  cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
   promptInput,
   promptOutput,
   reconnectSessionInput,
+  respondToPermissionInput,
   sessionResponseSchema,
+  setModeInput,
   setModelInput,
   startSessionInput,
   subscribeSessionInput,
@@ -57,6 +60,12 @@ export const agentRouter = router({
       getService().setSessionModel(input.sessionId, input.modelId),
     ),
 
+  setMode: publicProcedure
+    .input(setModeInput)
+    .mutation(({ input }) =>
+      getService().setSessionMode(input.sessionId, input.modeId),
+    ),
+
   onSessionEvent: publicProcedure
     .input(subscribeSessionInput)
     .subscription(async function* (opts) {
@@ -72,4 +81,41 @@ export const agentRouter = router({
         }
       }
     }),
+
+  // Permission request subscription - yields when tools need user input
+  onPermissionRequest: publicProcedure
+    .input(subscribeSessionInput)
+    .subscription(async function* (opts) {
+      const service = getService();
+      const targetSessionId = opts.input.sessionId;
+      const iterable = service.toIterable(AgentServiceEvent.PermissionRequest, {
+        signal: opts.signal,
+      });
+
+      for await (const event of iterable) {
+        if (event.sessionId === targetSessionId) {
+          yield event;
+        }
+      }
+    }),
+
+  // Respond to a permission request from the UI
+  respondToPermission: publicProcedure
+    .input(respondToPermissionInput)
+    .mutation(({ input }) =>
+      getService().respondToPermission(
+        input.sessionId,
+        input.toolCallId,
+        input.optionId,
+        input.selectedOptionIds,
+        input.customInput,
+      ),
+    ),
+
+  // Cancel a permission request (e.g., user pressed Escape)
+  cancelPermission: publicProcedure
+    .input(cancelPermissionInput)
+    .mutation(({ input }) =>
+      getService().cancelPermission(input.sessionId, input.toolCallId),
+    ),
 });

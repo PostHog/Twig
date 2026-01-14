@@ -1,6 +1,7 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
@@ -354,6 +355,8 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const pendingPermissions = usePendingPermissionsForTask(taskId);
+  const hasPendingPermissions = pendingPermissions.size > 0;
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -363,6 +366,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const getActiveIndex = useCallback((): number => {
@@ -396,8 +400,18 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     [changedFiles, getActiveIndex, openDiff, taskId],
   );
 
-  useHotkeys("up", () => handleKeyNavigation("up"), [handleKeyNavigation]);
-  useHotkeys("down", () => handleKeyNavigation("down"), [handleKeyNavigation]);
+  useHotkeys(
+    "up",
+    () => handleKeyNavigation("up"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
+  useHotkeys(
+    "down",
+    () => handleKeyNavigation("down"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
 
   const isFileActive = (file: ChangedFile): boolean => {
     if (!layout) return false;

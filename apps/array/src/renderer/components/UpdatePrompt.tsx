@@ -32,7 +32,10 @@ export function UpdatePrompt() {
   trpcReact.updates.onStatus.useSubscription(undefined, {
     enabled: isEnabled,
     onData: (status) => {
-      if (status.checking === false && status.upToDate) {
+      if (status.checking === false && status.error) {
+        setCheckingForUpdates(false);
+        setCheckResultMessage(status.error);
+      } else if (status.checking === false && status.upToDate) {
         setCheckingForUpdates(false);
         const versionSuffix = status.version ? ` (v${status.version})` : "";
         setCheckResultMessage(`Array is up to date${versionSuffix}`);

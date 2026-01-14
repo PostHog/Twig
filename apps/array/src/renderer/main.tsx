@@ -10,6 +10,8 @@ import "./styles/globals.css";
 // Initialize error handling early, before React renders
 initializeRendererErrorHandling();
 
+document.title = import.meta.env.DEV ? "Array (Development)" : "Array";
+
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
 

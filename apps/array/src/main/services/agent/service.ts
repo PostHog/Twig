@@ -10,7 +10,7 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
-import { Agent, type OnLogCallback } from "@posthog/agent";
+import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
 import { injectable } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
@@ -129,6 +129,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
+  executionMode?: "plan" | "acceptEdits" | "default";
 }
 
 interface ManagedSession {
@@ -142,6 +143,7 @@ interface ManagedSession {
   lastActivityAt: number;
   mockNodeDir: string;
   config: SessionConfig;
+  needsRecreation: boolean;
 }
 
 function getClaudeCliPath(): string {
@@ -151,14 +153,99 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
+interface PendingPermission {
+  resolve: (response: RequestPermissionResponse) => void;
+  reject: (error: Error) => void;
+  sessionId: string;
+  toolCallId: string;
+}
+
 @injectable()
 export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
+  private pendingPermissions = new Map<string, PendingPermission>();
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
-    log.info("Session token updated");
+
+    // Mark all sessions for recreation - they'll be recreated before the next prompt.
+    // We don't recreate immediately because the subprocess may be mid-response or
+    // waiting on a permission prompt. Recreation happens at a safe point.
+    for (const session of this.sessions.values()) {
+      session.needsRecreation = true;
+    }
+
+    log.info("Token updated, marked sessions for recreation", {
+      sessionCount: this.sessions.size,
+    });
+  }
+
+  /**
+   * Respond to a pending permission request from the UI.
+   * This resolves the promise that the agent is waiting on.
+   */
+  public respondToPermission(
+    sessionId: string,
+    toolCallId: string,
+    optionId: string,
+    selectedOptionIds?: string[],
+    customInput?: string,
+  ): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found", { sessionId, toolCallId });
+      return;
+    }
+
+    log.info("Permission response received", {
+      sessionId,
+      toolCallId,
+      optionId,
+      selectedOptionIds,
+      hasCustomInput: !!customInput,
+    });
+
+    pending.resolve({
+      outcome: {
+        outcome: "selected",
+        optionId,
+        // Include multi-select and custom input in the response
+        ...(selectedOptionIds && { selectedOptionIds }),
+        ...(customInput && { customInput }),
+      },
+    });
+
+    this.pendingPermissions.delete(key);
+  }
+
+  /**
+   * Cancel a pending permission request.
+   * This resolves the promise with a "cancelled" outcome per ACP spec.
+   */
+  public cancelPermission(sessionId: string, toolCallId: string): void {
+    const key = `${sessionId}:${toolCallId}`;
+    const pending = this.pendingPermissions.get(key);
+
+    if (!pending) {
+      log.warn("No pending permission found to cancel", {
+        sessionId,
+        toolCallId,
+      });
+      return;
+    }
+
+    log.info("Permission cancelled", { sessionId, toolCallId });
+
+    pending.resolve({
+      outcome: {
+        outcome: "cancelled",
+      },
+    });
+
+    this.pendingPermissions.delete(key);
   }
 
   private getToken(fallback: string): string {
@@ -230,6 +317,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl,
       sdkSessionId,
       model,
+      executionMode,
     } = config;
 
     if (!isRetry) {
@@ -255,6 +343,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     try {
       const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
         skipGitBranch: true,
+        isReconnect,
       });
 
       const connection = this.createClientConnection(
@@ -286,7 +375,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         await connection.newSession({
           cwd: repoPath,
           mcpServers,
-          _meta: { sessionId: taskRunId, model },
+          _meta: {
+            sessionId: taskRunId,
+            model,
+            ...(executionMode && { initialModeId: executionMode }),
+          },
         });
       }
 
@@ -301,6 +394,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         lastActivityAt: Date.now(),
         mockNodeDir,
         config,
+        needsRecreation: false,
       };
 
       this.sessions.set(taskRunId, session);
@@ -332,7 +426,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found for recreation: ${taskRunId}`);
     }
 
-    log.info("Recreating session due to auth error", { taskRunId });
+    log.info("Recreating session", { taskRunId });
 
     const config = existing.config;
     this.cleanupSession(taskRunId);
@@ -352,6 +446,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     let session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    // Recreate session if marked (token was refreshed while session was active)
+    if (session.needsRecreation) {
+      log.info("Recreating session before prompt (token refreshed)", {
+        sessionId,
+      });
+      session = await this.recreateSession(sessionId);
     }
 
     session.lastActivityAt = Date.now();
@@ -425,6 +527,24 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
+  async setSessionMode(sessionId: string, modeId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    try {
+      await session.connection.extMethod("session/setMode", {
+        sessionId,
+        modeId,
+      });
+      log.info("Session mode updated", { sessionId, modeId });
+    } catch (err) {
+      log.error("Failed to set session mode", { sessionId, modeId, err });
+      throw err;
+    }
+  }
+
   listSessions(taskId?: string): ManagedSession[] {
     const all = Array.from(this.sessions.values());
     return taskId ? all.filter((s) => s.taskId === taskId) : all;
@@ -457,10 +577,15 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     process.env.ANTHROPIC_API_KEY = token;
     process.env.ANTHROPIC_AUTH_TOKEN = token;
 
-    const llmGatewayUrl =
-      process.env.LLM_GATEWAY_URL ||
-      `${credentials.apiHost}/api/projects/${credentials.projectId}/llm_gateway`;
+    const llmGatewayUrl = getLlmGatewayUrl(credentials.apiHost);
     process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
+
+    const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
+      ? llmGatewayUrl
+      : `${llmGatewayUrl}/v1`;
+    process.env.OPENAI_BASE_URL = openaiBaseUrl;
+    process.env.OPENAI_API_KEY = token;
+    process.env.LLM_GATEWAY_URL = llmGatewayUrl;
 
     process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
 
@@ -507,6 +632,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     _channel: string,
     clientStreams: { readable: ReadableStream; writable: WritableStream },
   ): ClientSideConnection {
+    // Capture service reference for use in client callbacks
+    const service = this;
+
     const emitToRenderer = (payload: unknown) => {
       // Emit event via TypedEventEmitter for tRPC subscription
       this.emit(AgentServiceEvent.SessionEvent, {
@@ -538,6 +666,63 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       async requestPermission(
         params: RequestPermissionRequest,
       ): Promise<RequestPermissionResponse> {
+        const toolName =
+          (params.toolCall?.rawInput as { toolName?: string } | undefined)
+            ?.toolName || "";
+        const toolCallId = params.toolCall?.toolCallId || "";
+
+        log.info("requestPermission called", {
+          sessionId: taskRunId,
+          toolCallId,
+          toolName,
+          title: params.toolCall?.title,
+          optionCount: params.options.length,
+        });
+
+        // If we have a toolCallId, always prompt the user for permission.
+        // The claude.ts adapter only calls requestPermission when user input is needed.
+        // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
+        if (toolCallId) {
+          log.info("Permission request requires user input", {
+            sessionId: taskRunId,
+            toolCallId,
+            toolName,
+            title: params.toolCall?.title,
+          });
+
+          return new Promise((resolve, reject) => {
+            const key = `${taskRunId}:${toolCallId}`;
+            service.pendingPermissions.set(key, {
+              resolve,
+              reject,
+              sessionId: taskRunId,
+              toolCallId,
+            });
+
+            log.info("Emitting permission request to renderer", {
+              sessionId: taskRunId,
+              toolCallId,
+            });
+            service.emit(AgentServiceEvent.PermissionRequest, {
+              sessionId: taskRunId,
+              toolCallId,
+              title: params.toolCall?.title || "Permission Required",
+              options: params.options.map((o) => ({
+                kind: o.kind,
+                name: o.name,
+                optionId: o.optionId,
+                description: (o as { description?: string }).description,
+              })),
+              rawInput: params.toolCall?.rawInput,
+            });
+          });
+        }
+
+        // Fallback: no toolCallId means we can't track the response, auto-approve
+        log.warn("No toolCallId in permission request, auto-approving", {
+          sessionId: taskRunId,
+          toolName,
+        });
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );
@@ -602,6 +787,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl: "logUrl" in params ? params.logUrl : undefined,
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
+      executionMode:
+        "executionMode" in params ? params.executionMode : undefined,
     };
   }
 

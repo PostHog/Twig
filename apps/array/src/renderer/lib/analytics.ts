@@ -1,8 +1,15 @@
 import posthog from "posthog-js/dist/module.full.no-external";
+// Import the recorder to set up __PosthogExtensions__.initSessionRecording
+// The module.full.no-external bundle includes rrweb but not the initSessionRecording function
+// posthog-recorder (vs lazy-recorder) ensures recording is ready immediately
+import "posthog-js/dist/posthog-recorder";
 import type {
   EventPropertyMap,
   UserIdentifyProperties,
 } from "../../types/analytics";
+import { logger } from "./logger";
+
+const log = logger.scope("analytics");
 
 let isInitialized = false;
 
@@ -20,11 +27,61 @@ export function initializePostHog() {
   posthog.init(apiKey, {
     api_host: apiHost,
     ui_host: uiHost,
-    capture_pageview: false,
-    capture_pageleave: false,
+    disable_session_recording: false,
+    loaded: () => {
+      log.info("PostHog loaded");
+      // Start session recording immediately after load
+      // In Electron, we need to explicitly start since there's no page navigation trigger
+      posthog.startSessionRecording();
+      log.info("Session recording started");
+    },
   });
 
   isInitialized = true;
+}
+
+/**
+ * Log the current session recording status for debugging
+ */
+export function logSessionRecordingStatus() {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized");
+    return;
+  }
+
+  const sessionRecording = posthog.sessionRecording;
+  const remoteConfig = posthog.get_property("$session_recording_remote_config");
+
+  log.info("Session Recording Debug:", {
+    started: sessionRecording?.started,
+    status: sessionRecording?.status,
+    remoteConfigEnabled: remoteConfig?.enabled,
+    remoteConfig,
+    windowLocationHref: window.location?.href,
+    configDisableSessionRecording: posthog.config?.disable_session_recording,
+  });
+}
+
+/**
+ * Manually start session recording.
+ * Use this to force start recording regardless of triggers.
+ */
+export function startSessionRecording() {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot start session recording");
+    return;
+  }
+
+  log.info("Attempting to start session recording...");
+
+  // Use PostHog's startSessionRecording API which overrides triggers
+  posthog.startSessionRecording();
+
+  // Log status after attempting to start
+  setTimeout(() => {
+    log.info("Session recording status after manual start:");
+    logSessionRecordingStatus();
+  }, 1000);
 }
 
 export function identifyUser(

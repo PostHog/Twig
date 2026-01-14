@@ -1,6 +1,5 @@
 import { exec } from "node:child_process";
 import fs from "node:fs/promises";
-import path from "node:path";
 import { promisify } from "node:util";
 import { app, clipboard } from "electron";
 import Store from "electron-store";
@@ -63,19 +62,11 @@ export class ExternalAppsService {
   constructor() {
     this.prefsStore = new Store<ExternalAppsSchema>({
       name: "external-apps",
-      cwd: this.getStorePath(),
+      cwd: app.getPath("userData"),
       defaults: {
         externalAppsPrefs: {},
       },
     });
-  }
-
-  private getStorePath(): string {
-    const userDataPath = app.getPath("userData");
-    if (userDataPath.includes("@posthog")) {
-      return path.join(path.dirname(userDataPath), "Array");
-    }
-    return userDataPath;
   }
 
   private async getFileIcon() {

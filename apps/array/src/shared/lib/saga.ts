@@ -49,6 +49,7 @@ export abstract class Saga<TInput, TOutput> {
     rollback: () => Promise<void>;
   }> = [];
   private currentStepName = "unknown";
+  private stepTimings: Array<{ name: string; durationMs: number }> = [];
   protected readonly log: SagaLogger;
 
   constructor(logger?: SagaLogger) {
@@ -62,15 +63,20 @@ export abstract class Saga<TInput, TOutput> {
   async run(input: TInput): Promise<SagaResult<TOutput>> {
     this.completedSteps = [];
     this.currentStepName = "unknown";
+    this.stepTimings = [];
 
+    const sagaStart = performance.now();
     this.log.info("Starting saga", { sagaName: this.constructor.name });
 
     try {
       const result = await this.execute(input);
 
-      this.log.info("Saga completed successfully", {
+      const totalDuration = performance.now() - sagaStart;
+      this.log.debug("Saga completed successfully", {
         sagaName: this.constructor.name,
         stepsCompleted: this.completedSteps.length,
+        totalDurationMs: Math.round(totalDuration),
+        stepTimings: this.stepTimings,
       });
 
       return { success: true, data: result };
@@ -110,15 +116,18 @@ export abstract class Saga<TInput, TOutput> {
     this.currentStepName = config.name;
     this.log.debug(`Executing step: ${config.name}`);
 
+    const stepStart = performance.now();
     const result = await config.execute();
+    const durationMs = Math.round(performance.now() - stepStart);
+
+    this.stepTimings.push({ name: config.name, durationMs });
+    this.log.debug(`Step completed: ${config.name}`, { durationMs });
 
     // Store rollback action with the result bound
     this.completedSteps.push({
       name: config.name,
       rollback: () => config.rollback(result),
     });
-
-    this.log.debug(`Step completed: ${config.name}`);
 
     return result;
   }
@@ -138,8 +147,13 @@ export abstract class Saga<TInput, TOutput> {
   ): Promise<T> {
     this.currentStepName = name;
     this.log.debug(`Executing read-only step: ${name}`);
+
+    const stepStart = performance.now();
     const result = await execute();
-    this.log.debug(`Read-only step completed: ${name}`);
+    const durationMs = Math.round(performance.now() - stepStart);
+
+    this.stepTimings.push({ name, durationMs });
+    this.log.debug(`Read-only step completed: ${name}`, { durationMs });
     return result;
   }
 

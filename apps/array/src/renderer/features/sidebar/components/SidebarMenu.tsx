@@ -2,7 +2,7 @@ import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import type { DragDropEvents } from "@dnd-kit/react";
 import { DragDropProvider, DragOverlay, PointerSensor } from "@dnd-kit/react";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
@@ -15,16 +15,25 @@ import { useNavigationStore } from "@stores/navigationStore";
 import { memo, useCallback } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
+import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
+import { HistoryView } from "./HistoryView";
 import { HomeItem } from "./items/HomeItem";
 import { NewTaskItem } from "./items/NewTaskItem";
 import { TaskItem } from "./items/TaskItem";
+import { PinnedView } from "./PinnedView";
 import { SidebarFooter } from "./SidebarFooter";
 import { SortableFolderSection } from "./SortableFolderSection";
+import { ViewModeSelector } from "./ViewModeSelector";
 
 function SidebarMenuComponent() {
-  const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
+  const {
+    view,
+    navigateToTask,
+    navigateToTaskInput,
+    navigateToFolderSettings,
+  } = useNavigationStore();
 
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const { data: currentUser } = useMeQuery();
@@ -35,12 +44,15 @@ function SidebarMenuComponent() {
   const toggleSection = useSidebarStore((state) => state.toggleSection);
   const folderOrder = useSidebarStore((state) => state.folderOrder);
   const reorderFolders = useSidebarStore((state) => state.reorderFolders);
+  const viewMode = useSidebarStore((state) => state.viewMode);
   const workspaces = useWorkspaceStore.use.workspaces();
   const taskStates = useTaskExecutionStore((state) => state.taskStates);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
 
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
+  const { deleteWithConfirm } = useDeleteTask();
+  const togglePin = usePinnedTasksStore((state) => state.togglePin);
 
   const sidebarData = useSidebarData({
     activeView: view,
@@ -103,8 +115,30 @@ function SidebarMenuComponent() {
     }
   };
 
+  const handleTaskDelete = async (taskId: string) => {
+    const task = taskMap.get(taskId);
+    if (!task) return;
+
+    const workspace = workspaces[taskId];
+    const hasWorktree = !!workspace?.worktreePath;
+
+    await deleteWithConfirm({
+      taskId,
+      taskTitle: task.title,
+      hasWorktree,
+    });
+  };
+
+  const handleTaskTogglePin = (taskId: string) => {
+    togglePin(taskId);
+  };
+
   const handleFolderNewTask = (folderId: string) => {
     navigateToTaskInput(folderId);
+  };
+
+  const handleFolderSettings = (folderId: string) => {
+    navigateToFolderSettings(folderId);
   };
 
   const handleFolderContextMenu = async (
@@ -123,6 +157,13 @@ function SidebarMenuComponent() {
     if (!result.action) return;
 
     if (result.action.type === "remove") {
+      // Check if we're currently viewing a task that uses this folder
+      if (view.type === "task-detail" && view.taskId) {
+        const workspace = workspaces[view.taskId];
+        if (workspace?.folderId === folderId) {
+          navigateToTaskInput();
+        }
+      }
       await removeFolder(folderId);
     } else if (result.action.type === "external-app") {
       const { handleExternalAppAction } = await import(
@@ -159,73 +200,117 @@ function SidebarMenuComponent() {
               onClick={handleHomeClick}
             />
 
-            <DragDropProvider
-              onDragOver={handleDragOver}
-              sensors={[
-                PointerSensor.configure({
-                  activationConstraints: {
-                    distance: { value: 5 },
-                  },
-                }),
-              ]}
-            >
-              {sidebarData.folders.map((folder, index) => {
-                const isExpanded = !collapsedSections.has(folder.id);
-                return (
-                  <SortableFolderSection
-                    key={folder.id}
-                    id={folder.id}
-                    index={index}
-                    label={folder.name}
-                    icon={
-                      isExpanded ? (
-                        <FolderOpenIcon size={14} weight="regular" />
-                      ) : (
-                        <FolderIcon size={14} weight="regular" />
-                      )
-                    }
-                    isExpanded={isExpanded}
-                    onToggle={() => toggleSection(folder.id)}
-                    onContextMenu={(e) => handleFolderContextMenu(folder.id, e)}
-                  >
-                    <NewTaskItem
-                      onClick={() => handleFolderNewTask(folder.id)}
-                    />
-                    {folder.tasks.map((task) => (
-                      <TaskItem
-                        key={task.id}
-                        id={task.id}
-                        label={task.title}
-                        isActive={sidebarData.activeTaskId === task.id}
-                        worktreeName={
-                          workspaces[task.id]?.worktreeName ?? undefined
+            <div className="px-2 py-1">
+              <ViewModeSelector />
+            </div>
+
+            <div className="mx-2 my-2 border-gray-6 border-t" />
+
+            {viewMode === "history" && (
+              <HistoryView
+                historyData={sidebarData.historyData}
+                activeTaskId={sidebarData.activeTaskId}
+                onTaskClick={handleTaskClick}
+                onTaskContextMenu={handleTaskContextMenu}
+                onTaskDelete={handleTaskDelete}
+                onTaskTogglePin={handleTaskTogglePin}
+              />
+            )}
+
+            {viewMode === "pinned" && (
+              <PinnedView
+                pinnedData={sidebarData.pinnedData}
+                activeTaskId={sidebarData.activeTaskId}
+                onTaskClick={handleTaskClick}
+                onTaskContextMenu={handleTaskContextMenu}
+                onTaskDelete={handleTaskDelete}
+                onTaskTogglePin={handleTaskTogglePin}
+              />
+            )}
+
+            {viewMode === "folders" && (
+              <DragDropProvider
+                onDragOver={handleDragOver}
+                sensors={[
+                  PointerSensor.configure({
+                    activationConstraints: {
+                      distance: { value: 5 },
+                    },
+                  }),
+                ]}
+              >
+                {sidebarData.folders.map((folder, index) => {
+                  const isExpanded = !collapsedSections.has(folder.id);
+                  return (
+                    <div key={folder.id}>
+                      {index > 0 && (
+                        <div className="mx-2 my-2 border-gray-6 border-t" />
+                      )}
+                      <SortableFolderSection
+                        id={folder.id}
+                        index={index}
+                        label={folder.name}
+                        icon={
+                          isExpanded ? (
+                            <FolderOpenIcon size={14} weight="regular" />
+                          ) : (
+                            <FolderIcon size={14} weight="regular" />
+                          )
                         }
-                        worktreePath={
-                          workspaces[task.id]?.worktreePath ??
-                          workspaces[task.id]?.folderPath
+                        isExpanded={isExpanded}
+                        onToggle={() => toggleSection(folder.id)}
+                        onSettingsClick={() => handleFolderSettings(folder.id)}
+                        onContextMenu={(e) =>
+                          handleFolderContextMenu(folder.id, e)
                         }
-                        workspaceMode={taskStates[task.id]?.workspaceMode}
-                        lastActivityAt={task.lastActivityAt}
-                        isGenerating={task.isGenerating}
-                        isUnread={task.isUnread}
-                        onClick={() => handleTaskClick(task.id)}
-                        onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
-                      />
-                    ))}
-                  </SortableFolderSection>
-                );
-              })}
-              <DragOverlay>
-                {(source) =>
-                  source?.type === "folder" ? (
-                    <div className="flex w-full items-center gap-1 rounded bg-gray-2 px-2 py-1 font-mono text-[12px] text-gray-11 shadow-lg">
-                      <FolderIcon size={14} weight="regular" />
-                      <span className="font-medium">{source.data?.label}</span>
+                      >
+                        <NewTaskItem
+                          onClick={() => handleFolderNewTask(folder.id)}
+                        />
+                        {folder.tasks.map((task) => (
+                          <TaskItem
+                            key={task.id}
+                            id={task.id}
+                            label={task.title}
+                            isActive={sidebarData.activeTaskId === task.id}
+                            worktreeName={
+                              workspaces[task.id]?.worktreeName ?? undefined
+                            }
+                            worktreePath={
+                              workspaces[task.id]?.worktreePath ??
+                              workspaces[task.id]?.folderPath
+                            }
+                            workspaceMode={taskStates[task.id]?.workspaceMode}
+                            lastActivityAt={task.lastActivityAt}
+                            isGenerating={task.isGenerating}
+                            isUnread={task.isUnread}
+                            isPinned={task.isPinned}
+                            onClick={() => handleTaskClick(task.id)}
+                            onContextMenu={(e) =>
+                              handleTaskContextMenu(task.id, e)
+                            }
+                            onDelete={() => handleTaskDelete(task.id)}
+                            onTogglePin={() => handleTaskTogglePin(task.id)}
+                          />
+                        ))}
+                      </SortableFolderSection>
                     </div>
-                  ) : null
-                }
-              </DragOverlay>
-            </DragDropProvider>
+                  );
+                })}
+                <DragOverlay>
+                  {(source) =>
+                    source?.type === "folder" ? (
+                      <div className="flex w-full items-center gap-1 rounded bg-gray-2 px-2 py-1 font-mono text-[12px] text-gray-11 shadow-lg">
+                        <FolderIcon size={14} weight="regular" />
+                        <span className="font-medium">
+                          {source.data?.label}
+                        </span>
+                      </div>
+                    ) : null
+                  }
+                </DragOverlay>
+              </DragDropProvider>
+            )}
           </Flex>
         </Box>
         <SidebarFooter />

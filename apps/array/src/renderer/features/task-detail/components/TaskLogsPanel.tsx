@@ -1,9 +1,11 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { SessionView } from "@features/sessions/components/SessionView";
 import {
   useSessionActions,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
@@ -33,6 +35,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
+  const requestFocus = useDraftStore((s) => s.actions.requestFocus);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -41,6 +44,11 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isPromptPending = session?.isPromptPending ?? false;
 
   const isConnecting = useRef(false);
+
+  // Focus the message editor when navigating to this task
+  useEffect(() => {
+    requestFocus(taskId);
+  }, [taskId, requestFocus]);
 
   useEffect(() => {
     if (!repoPath) return;
@@ -95,7 +103,8 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         }
 
         const isWindowFocused = document.hasFocus();
-        if (!isWindowFocused) {
+        const { desktopNotifications } = useSettingsStore.getState();
+        if (!isWindowFocused && desktopNotifications) {
           trpcVanilla.dockBadge.show.mutate();
         }
       } catch (error) {
@@ -108,7 +117,8 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const handleCancelPrompt = useCallback(async () => {
     const result = await cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
-  }, [taskId, cancelPrompt]);
+    requestFocus(taskId);
+  }, [taskId, cancelPrompt, requestFocus]);
 
   const { appendUserShellExecute } = useSessionActions();
 

@@ -2,9 +2,10 @@ import type {
   ContentBlock,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
-import { XCircle } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { ArrowDown, XCircle } from "@phosphor-icons/react";
+import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
   isJsonRpcNotification,
@@ -12,7 +13,14 @@ import {
   isJsonRpcResponse,
   type UserShellExecuteParams,
 } from "@shared/types/session-events";
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -45,56 +53,107 @@ interface ConversationViewProps {
   isPromptPending: boolean;
   repoPath?: string | null;
   isCloud?: boolean;
+  taskId?: string;
 }
+
+const SCROLL_THRESHOLD = 100;
+const SHOW_BUTTON_THRESHOLD = 300;
 
 export function ConversationView({
   events,
   isPromptPending,
   repoPath,
   isCloud = false,
+  taskId,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
-  const lastTurnComplete = lastTurn?.isComplete ?? true;
 
-  // Scroll to bottom on initial mount
-  const hasScrolledRef = useRef(false);
+  // Track pending permissions for scroll triggering
+  const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
+  const pendingPermissionsCount = pendingPermissions.size;
+
+  const isNearBottomRef = useRef(true);
+  const prevItemsLengthRef = useRef(0);
+  const prevPendingCountRef = useRef(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Update isNearBottom on scroll
   useLayoutEffect(() => {
-    if (hasScrolledRef.current) return;
     const el = scrollRef.current;
-    if (el && items.length > 0) {
+    if (!el) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = distanceFromBottom <= SCROLL_THRESHOLD;
+      setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
+    };
+
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to bottom on first render, new content, or new pending permissions
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const isNewContent = items.length > prevItemsLengthRef.current;
+    const isNewPending = pendingPermissionsCount > prevPendingCountRef.current;
+    prevItemsLengthRef.current = items.length;
+    prevPendingCountRef.current = pendingPermissionsCount;
+
+    if (isNearBottomRef.current || isNewContent || isNewPending) {
       el.scrollTop = el.scrollHeight;
-      hasScrolledRef.current = true;
     }
-  }, [items]);
+  }, [items, pendingPermissionsCount]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, []);
 
   return (
-    <div
-      ref={scrollRef}
-      className="scrollbar-hide flex-1 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
-    >
-      <div className="flex flex-col gap-3">
-        {items.map((item) =>
-          item.type === "turn" ? (
-            <TurnView
-              key={item.id}
-              turn={item}
-              repoPath={repoPath}
-              isCloud={isCloud}
-            />
-          ) : (
-            <UserShellExecuteView key={item.id} item={item} />
-          ),
-        )}
+    <div className="relative flex-1">
+      <div
+        ref={scrollRef}
+        className="scrollbar-hide absolute inset-0 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
+      >
+        <div className="flex flex-col gap-3">
+          {items.map((item) =>
+            item.type === "turn" ? (
+              <TurnView
+                key={item.id}
+                turn={item}
+                repoPath={repoPath}
+                isCloud={isCloud}
+                taskId={taskId}
+              />
+            ) : (
+              <UserShellExecuteView key={item.id} item={item} />
+            ),
+          )}
+        </div>
+        <SessionFooter
+          isPromptPending={isPromptPending}
+          lastGenerationDuration={
+            lastTurn?.isComplete ? lastTurn.durationMs : null
+          }
+          lastStopReason={lastTurn?.stopReason}
+        />
       </div>
-      <SessionFooter
-        isPromptPending={isPromptPending || !lastTurnComplete}
-        lastGenerationDuration={
-          lastTurn?.isComplete ? lastTurn.durationMs : null
-        }
-        lastStopReason={lastTurn?.stopReason}
-      />
+      {showScrollButton && (
+        <Box className="absolute right-4 bottom-4 z-10">
+          <Button size="1" variant="solid" onClick={scrollToBottom}>
+            <ArrowDown size={14} weight="bold" />
+            Scroll to bottom
+          </Button>
+        </Box>
+      )}
     </div>
   );
 }
@@ -103,12 +162,14 @@ interface TurnViewProps {
   turn: Turn;
   repoPath?: string | null;
   isCloud?: boolean;
+  taskId?: string;
 }
 
 const TurnView = memo(function TurnView({
   turn,
   repoPath,
   isCloud = false,
+  taskId,
 }: TurnViewProps) {
   const wasCancelled = turn.stopReason === "cancelled";
   const gitAction = parseGitActionMessage(turn.userContent);
@@ -127,6 +188,7 @@ const TurnView = memo(function TurnView({
           key={`${item.sessionUpdate}-${i}`}
           item={item}
           toolCalls={turn.toolCalls}
+          taskId={taskId}
           turnCancelled={wasCancelled}
         />
       ))}

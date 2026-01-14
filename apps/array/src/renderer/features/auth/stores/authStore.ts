@@ -16,6 +16,12 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("auth-store");
 
+let refreshPromise: Promise<void> | null = null;
+let initializePromise: Promise<boolean> | null = null;
+
+const REFRESH_MAX_RETRIES = 3;
+const REFRESH_INITIAL_DELAY_MS = 1000;
+
 interface StoredTokens {
   accessToken: string;
   refreshToken: string;
@@ -124,8 +130,11 @@ export const useAuthStore = create<AuthState>()(
 
             get().scheduleTokenRefresh();
 
-            // Track user login
-            identifyUser(user.uuid, {
+            // Track user login - use distinct_id to match web sessions (same as PostHog web app)
+            const distinctId = user.distinct_id || user.email;
+            identifyUser(distinctId, {
+              email: user.email,
+              uuid: user.uuid,
               project_id: projectId.toString(),
               region,
             });
@@ -133,68 +142,135 @@ export const useAuthStore = create<AuthState>()(
               project_id: projectId.toString(),
               region,
             });
+
+            trpcVanilla.analytics.setUserId.mutate({
+              userId: distinctId,
+              properties: {
+                email: user.email,
+                uuid: user.uuid,
+                project_id: projectId.toString(),
+                region,
+              },
+            });
           } catch {
             throw new Error("Failed to authenticate with PostHog");
           }
         },
 
         refreshAccessToken: async () => {
-          const state = get();
-
-          if (!state.oauthRefreshToken || !state.cloudRegion) {
-            throw new Error("No refresh token available");
+          // If a refresh is already in progress, wait for it
+          if (refreshPromise) {
+            log.debug("Token refresh already in progress, waiting...");
+            return refreshPromise;
           }
 
-          const result = await trpcVanilla.oauth.refreshToken.mutate({
-            refreshToken: state.oauthRefreshToken,
-            region: state.cloudRegion,
-          });
+          const doRefresh = async () => {
+            const state = get();
 
-          if (!result.success || !result.data) {
-            // Refresh failed - logout user
+            if (!state.oauthRefreshToken || !state.cloudRegion) {
+              throw new Error("No refresh token available");
+            }
+
+            // Retry with exponential backoff
+            let lastError: Error | null = null;
+            for (let attempt = 0; attempt < REFRESH_MAX_RETRIES; attempt++) {
+              try {
+                if (attempt > 0) {
+                  const delay = REFRESH_INITIAL_DELAY_MS * 2 ** (attempt - 1);
+                  log.debug(
+                    `Retrying token refresh (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES}) after ${delay}ms`,
+                  );
+                  await new Promise((resolve) => setTimeout(resolve, delay));
+                }
+
+                const result = await trpcVanilla.oauth.refreshToken.mutate({
+                  refreshToken: state.oauthRefreshToken,
+                  region: state.cloudRegion,
+                });
+
+                if (!result.success || !result.data) {
+                  // Network errors should retry, auth errors should logout immediately
+                  if (result.errorCode === "network_error") {
+                    log.warn(
+                      `Token refresh network error (attempt ${attempt + 1}): ${result.error}`,
+                    );
+                    continue; // Retry
+                  }
+
+                  // Auth error or unknown - logout
+                  get().logout();
+                  throw new Error(result.error || "Token refresh failed");
+                }
+
+                const tokenResponse = result.data;
+                const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
+
+                const storedTokens: StoredTokens = {
+                  accessToken: tokenResponse.access_token,
+                  refreshToken: tokenResponse.refresh_token,
+                  expiresAt,
+                  cloudRegion: state.cloudRegion,
+                  scopedTeams: tokenResponse.scoped_teams,
+                };
+
+                const apiHost = getCloudUrlFromRegion(state.cloudRegion);
+                const projectId =
+                  tokenResponse.scoped_teams?.[0] ||
+                  state.projectId ||
+                  undefined;
+
+                const client = new PostHogAPIClient(
+                  tokenResponse.access_token,
+                  apiHost,
+                  async () => {
+                    await get().refreshAccessToken();
+                    const token = get().oauthAccessToken;
+                    if (!token) {
+                      throw new Error("No access token after refresh");
+                    }
+                    return token;
+                  },
+                  projectId,
+                );
+
+                set({
+                  oauthAccessToken: tokenResponse.access_token,
+                  oauthRefreshToken: tokenResponse.refresh_token,
+                  tokenExpiry: expiresAt,
+                  storedTokens,
+                  client,
+                  ...(projectId && { projectId }),
+                });
+
+                get().scheduleTokenRefresh();
+                return; // Success
+              } catch (error) {
+                lastError =
+                  error instanceof Error ? error : new Error(String(error));
+
+                // Check if this is a permanent failure (logout already called)
+                if (!get().oauthRefreshToken) {
+                  throw lastError;
+                }
+
+                // tRPC exceptions are typically IPC failures - retry them
+                log.warn(
+                  `Token refresh exception (attempt ${attempt + 1}): ${lastError.message}`,
+                );
+              }
+            }
+
+            // All retries exhausted
+            log.error("Token refresh failed after all retries");
             get().logout();
-            throw new Error(result.error || "Token refresh failed");
-          }
-
-          const tokenResponse = result.data;
-          const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
-
-          const storedTokens: StoredTokens = {
-            accessToken: tokenResponse.access_token,
-            refreshToken: tokenResponse.refresh_token,
-            expiresAt,
-            cloudRegion: state.cloudRegion,
-            scopedTeams: tokenResponse.scoped_teams,
+            throw lastError || new Error("Token refresh failed");
           };
 
-          const apiHost = getCloudUrlFromRegion(state.cloudRegion);
-          const projectId =
-            tokenResponse.scoped_teams?.[0] || state.projectId || undefined;
-
-          const client = new PostHogAPIClient(
-            tokenResponse.access_token,
-            apiHost,
-            async () => {
-              await get().refreshAccessToken();
-              const token = get().oauthAccessToken;
-              if (!token) {
-                throw new Error("No access token after refresh");
-              }
-              return token;
-            },
-            projectId,
-          );
-
-          set({
-            oauthAccessToken: tokenResponse.access_token,
-            oauthRefreshToken: tokenResponse.refresh_token,
-            tokenExpiry: expiresAt,
-            storedTokens,
-            client,
-            ...(projectId && { projectId }),
+          refreshPromise = doRefresh().finally(() => {
+            refreshPromise = null;
           });
 
-          get().scheduleTokenRefresh();
+          return refreshPromise;
         },
 
         scheduleTokenRefresh: () => {
@@ -230,96 +306,145 @@ export const useAuthStore = create<AuthState>()(
         },
 
         initializeOAuth: async () => {
-          // Wait for zustand hydration from async storage
-          if (!useAuthStore.persist.hasHydrated()) {
-            await new Promise<void>((resolve) => {
-              useAuthStore.persist.onFinishHydration(() => resolve());
-            });
+          // If initialization is already in progress, wait for it
+          if (initializePromise) {
+            log.debug("OAuth initialization already in progress, waiting...");
+            return initializePromise;
           }
 
-          const state = get();
+          const doInitialize = async (): Promise<boolean> => {
+            // Wait for zustand hydration from async storage
+            if (!useAuthStore.persist.hasHydrated()) {
+              await new Promise<void>((resolve) => {
+                useAuthStore.persist.onFinishHydration(() => resolve());
+              });
+            }
 
-          if (state.storedTokens) {
-            const tokens = state.storedTokens;
-            const now = Date.now();
-            const isExpired = tokens.expiresAt <= now;
+            const state = get();
 
-            set({
-              oauthAccessToken: tokens.accessToken,
-              oauthRefreshToken: tokens.refreshToken,
-              tokenExpiry: tokens.expiresAt,
-              cloudRegion: tokens.cloudRegion,
-            });
+            if (state.storedTokens) {
+              const tokens = state.storedTokens;
+              const now = Date.now();
+              const isExpired = tokens.expiresAt <= now;
 
-            if (isExpired) {
+              set({
+                oauthAccessToken: tokens.accessToken,
+                oauthRefreshToken: tokens.refreshToken,
+                tokenExpiry: tokens.expiresAt,
+                cloudRegion: tokens.cloudRegion,
+              });
+
+              if (isExpired) {
+                try {
+                  await get().refreshAccessToken();
+                } catch (error) {
+                  log.error("Failed to refresh expired token:", error);
+                  set({ storedTokens: null, isAuthenticated: false });
+                  return false;
+                }
+              }
+
+              // Re-fetch tokens after potential refresh to get updated values
+              const currentTokens = get().storedTokens;
+              if (!currentTokens) {
+                return false;
+              }
+
+              const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
+              const projectId = currentTokens.scopedTeams?.[0];
+
+              if (!projectId) {
+                log.error("No project ID found in stored tokens");
+                get().logout();
+                return false;
+              }
+
+              const client = new PostHogAPIClient(
+                currentTokens.accessToken,
+                apiHost,
+                async () => {
+                  await get().refreshAccessToken();
+                  const token = get().oauthAccessToken;
+                  if (!token) {
+                    throw new Error("No access token after refresh");
+                  }
+                  return token;
+                },
+                projectId,
+              );
+
               try {
-                await get().refreshAccessToken();
+                const user = await client.getCurrentUser();
+
+                set({
+                  isAuthenticated: true,
+                  client,
+                  projectId,
+                });
+
+                get().scheduleTokenRefresh();
+
+                // Use distinct_id to match web sessions (same as PostHog web app)
+                const distinctId = user.distinct_id || user.email;
+                identifyUser(distinctId, {
+                  email: user.email,
+                  uuid: user.uuid,
+                  project_id: projectId.toString(),
+                  region: tokens.cloudRegion,
+                });
+
+                trpcVanilla.analytics.setUserId.mutate({
+                  userId: distinctId,
+                  properties: {
+                    email: user.email,
+                    uuid: user.uuid,
+                    project_id: projectId.toString(),
+                    region: tokens.cloudRegion,
+                  },
+                });
+
+                return true;
               } catch (error) {
-                log.error("Failed to refresh expired token:", error);
+                log.error("Failed to validate OAuth session:", error);
+
+                // Network errors from fetch are TypeError, wrapped by fetcher.ts as cause
+                const isNetworkError =
+                  error instanceof Error && error.cause instanceof TypeError;
+
+                if (isNetworkError) {
+                  log.warn(
+                    "Network error during session validation - keeping session active",
+                  );
+                  set({
+                    isAuthenticated: true,
+                    client,
+                    projectId,
+                  });
+                  get().scheduleTokenRefresh();
+                  return true;
+                }
+
+                // For auth errors (401/403) or unknown errors, clear the session
                 set({ storedTokens: null, isAuthenticated: false });
                 return false;
               }
             }
 
-            // Re-fetch tokens after potential refresh to get updated values
-            const currentTokens = get().storedTokens;
-            if (!currentTokens) {
-              return false;
-            }
+            return state.isAuthenticated;
+          };
 
-            const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
-            const projectId = currentTokens.scopedTeams?.[0];
+          initializePromise = doInitialize().finally(() => {
+            initializePromise = null;
+          });
 
-            if (!projectId) {
-              log.error("No project ID found in stored tokens");
-              get().logout();
-              return false;
-            }
-
-            const client = new PostHogAPIClient(
-              currentTokens.accessToken,
-              apiHost,
-              async () => {
-                await get().refreshAccessToken();
-                const token = get().oauthAccessToken;
-                if (!token) {
-                  throw new Error("No access token after refresh");
-                }
-                return token;
-              },
-              projectId,
-            );
-
-            try {
-              const user = await client.getCurrentUser();
-
-              set({
-                isAuthenticated: true,
-                client,
-                projectId,
-              });
-
-              get().scheduleTokenRefresh();
-
-              identifyUser(user.uuid, {
-                project_id: projectId.toString(),
-                region: tokens.cloudRegion,
-              });
-
-              return true;
-            } catch (error) {
-              log.error("Failed to validate OAuth session:", error);
-              set({ storedTokens: null, isAuthenticated: false });
-              return false;
-            }
-          }
-
-          return state.isAuthenticated;
+          return initializePromise;
         },
 
         logout: () => {
           track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
           resetUser();
+
+          trpcVanilla.analytics.resetUser.mutate();
 
           if (refreshTimeoutId) {
             window.clearTimeout(refreshTimeoutId);

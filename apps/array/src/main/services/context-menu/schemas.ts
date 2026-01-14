@@ -77,6 +77,18 @@ export type TabAction = z.infer<typeof tabAction>;
 export type FileAction = z.infer<typeof fileAction>;
 export type SplitDirection = z.infer<typeof splitDirection>;
 
+export const confirmDeleteTaskInput = z.object({
+  taskTitle: z.string(),
+  hasWorktree: z.boolean(),
+});
+
+export const confirmDeleteTaskOutput = z.object({
+  confirmed: z.boolean(),
+});
+
+export type ConfirmDeleteTaskInput = z.infer<typeof confirmDeleteTaskInput>;
+export type ConfirmDeleteTaskResult = z.infer<typeof confirmDeleteTaskOutput>;
+
 export type TaskContextMenuResult = z.infer<typeof taskContextMenuOutput>;
 export type FolderContextMenuResult = z.infer<typeof folderContextMenuOutput>;
 export type TabContextMenuResult = z.infer<typeof tabContextMenuOutput>;

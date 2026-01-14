@@ -1,12 +1,9 @@
 export type {
-  ArtifactNotificationPayload,
   BranchCreatedPayload,
   ConsoleNotificationPayload,
   ErrorNotificationPayload,
-  PhaseNotificationPayload,
   PostHogNotificationPayload,
   PostHogNotificationType,
-  PrCreatedPayload,
   RunStartedPayload,
   SdkSessionPayload,
   TaskCompletePayload,
@@ -14,9 +11,10 @@ export type {
 export { POSTHOG_NOTIFICATIONS } from "./src/acp-extensions.js";
 export type {
   AcpConnectionConfig,
+  AgentFramework,
   InProcessAcpConnection,
-} from "./src/adapters/claude/claude.js";
-export { createAcpConnection } from "./src/adapters/claude/claude.js";
+} from "./src/adapters/connection.js";
+export { createAcpConnection } from "./src/adapters/connection.js";
 export { Agent } from "./src/agent.js";
 export type {
   AgentEvent,
@@ -32,6 +30,7 @@ export type { TodoItem, TodoList } from "./src/todo-manager.js";
 export { TodoManager } from "./src/todo-manager.js";
 export { ToolRegistry } from "./src/tools/registry.js";
 export type {
+  AskUserQuestionTool,
   BashOutputTool,
   BashTool,
   EditTool,
@@ -57,7 +56,6 @@ export type {
   LogLevel as LogLevelType,
   McpServerConfig,
   OnLogCallback,
-  ResearchEvaluation,
   SessionNotification,
   StoredEntry,
   StoredNotification,
@@ -68,6 +66,7 @@ export type {
 } from "./src/types.js";
 export { PermissionMode } from "./src/types.js";
 
+export { getLlmGatewayUrl } from "./src/utils/gateway.js";
 export type { LoggerConfig } from "./src/utils/logger.js";
 export { Logger, LogLevel } from "./src/utils/logger.js";
 

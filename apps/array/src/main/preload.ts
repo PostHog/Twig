@@ -1,5 +1,5 @@
+import { exposeElectronTRPC } from "@posthog/electron-trpc/main";
 import { ipcRenderer } from "electron";
-import { exposeElectronTRPC } from "trpc-electron/main";
 import "electron-log/preload";
 
 // No TRPC available, so just use IPC

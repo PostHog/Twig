@@ -100,6 +100,11 @@ export interface ExitPlanModeTool extends Tool {
   category: "assistant";
 }
 
+export interface AskUserQuestionTool extends Tool {
+  name: "AskUserQuestion";
+  category: "assistant";
+}
+
 export interface SlashCommandTool extends Tool {
   name: "SlashCommand";
   category: "assistant";
@@ -124,4 +129,5 @@ export type KnownTool =
   | TaskTool
   | TodoWriteTool
   | ExitPlanModeTool
+  | AskUserQuestionTool
   | SlashCommandTool;

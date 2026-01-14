@@ -1,6 +1,6 @@
+import { ipcLink } from "@posthog/electron-trpc/renderer";
 import { createTRPCProxyClient } from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
-import { ipcLink } from "trpc-electron/renderer";
 import type { TrpcRouter } from "../../main/trpc/router.js";
 
 export function createTrpcClient() {

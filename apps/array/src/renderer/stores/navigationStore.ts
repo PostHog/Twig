@@ -12,7 +12,7 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "settings";
+type ViewType = "task-detail" | "task-input" | "settings" | "folder-settings";
 
 interface ViewState {
   type: ViewType;
@@ -28,6 +28,7 @@ interface NavigationStore {
   navigateToTask: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
+  navigateToFolderSettings: (folderId: string) => void;
   toggleSettings: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -42,6 +43,9 @@ const isSameView = (view1: ViewState, view2: ViewState): boolean => {
     return view1.data?.id === view2.data?.id;
   }
   if (view1.type === "task-input" && view2.type === "task-input") {
+    return view1.folderId === view2.folderId;
+  }
+  if (view1.type === "folder-settings" && view2.type === "folder-settings") {
     return view1.folderId === view2.folderId;
   }
   return true;
@@ -75,6 +79,34 @@ export const useNavigationStore = create<NavigationStore>()(
           });
 
           const repoKey = getTaskRepository(task) ?? undefined;
+
+          // Check if this task has an existing workspace with a folder
+          const existingWorkspace =
+            useWorkspaceStore.getState().workspaces[task.id];
+          if (existingWorkspace?.folderId) {
+            const folder = useRegisteredFoldersStore
+              .getState()
+              .folders.find((f) => f.id === existingWorkspace.folderId);
+
+            if (folder && folder.exists === false) {
+              log.info("Folder path is stale, redirecting to folder settings", {
+                folderId: folder.id,
+                path: folder.path,
+              });
+              navigate({ type: "folder-settings", folderId: folder.id });
+              return;
+            }
+
+            if (folder) {
+              if (repoKey) {
+                useTaskDirectoryStore
+                  .getState()
+                  .setRepoDirectory(repoKey, folder.path);
+              }
+              return;
+            }
+          }
+
           const directory = useTaskDirectoryStore
             .getState()
             .getTaskDirectory(task.id, repoKey);
@@ -106,6 +138,11 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToSettings: () => {
           navigate({ type: "settings" });
+          track(ANALYTICS_EVENTS.SETTINGS_VIEWED);
+        },
+
+        navigateToFolderSettings: (folderId: string) => {
+          navigate({ type: "folder-settings", folderId });
         },
 
         toggleSettings: () => {

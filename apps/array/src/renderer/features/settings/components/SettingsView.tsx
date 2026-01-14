@@ -1,9 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import {
-  type DefaultRunMode,
-  useSettingsStore,
-} from "@features/settings/stores/settingsStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -21,14 +18,16 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
+import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { trpcReact, trpcVanilla } from "@/renderer/trpc";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -54,11 +53,11 @@ export function SettingsView() {
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
   const {
     autoRunTasks,
-    defaultRunMode,
     createPR,
+    desktopNotifications,
     setAutoRunTasks,
-    setDefaultRunMode,
     setCreatePR,
+    setDesktopNotifications,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -96,6 +95,52 @@ export function SettingsView() {
       setLocalWorktreeLocation(worktreeLocation);
     }
   }, [worktreeLocation]);
+
+  // Tracked settings handlers
+  const handleAutoRunChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "auto_run_tasks",
+        new_value: checked,
+        old_value: autoRunTasks,
+      });
+      setAutoRunTasks(checked);
+    },
+    [autoRunTasks, setAutoRunTasks],
+  );
+
+  const handleCreatePRChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "create_pr",
+        new_value: checked,
+        old_value: createPR,
+      });
+      setCreatePR(checked);
+    },
+    [createPR, setCreatePR],
+  );
+
+  const handleDarkModeChange = useCallback(() => {
+    track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+      setting_name: "dark_mode",
+      new_value: !isDarkMode,
+      old_value: isDarkMode,
+    });
+    toggleDarkMode();
+  }, [isDarkMode, toggleDarkMode]);
+
+  const handleTerminalLayoutChange = useCallback(
+    (value: "split" | "tabbed") => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "terminal_layout",
+        new_value: value,
+        old_value: terminalLayoutMode,
+      });
+      setTerminalLayout(value);
+    },
+    [terminalLayoutMode, setTerminalLayout],
+  );
 
   const handleWorktreeLocationChange = async (newLocation: string) => {
     setLocalWorktreeLocation(newLocation);
@@ -197,7 +242,7 @@ export function SettingsView() {
                   </Text>
                   <Switch
                     checked={isDarkMode}
-                    onCheckedChange={toggleDarkMode}
+                    onCheckedChange={handleDarkModeChange}
                     size="1"
                   />
                 </Flex>
@@ -209,7 +254,7 @@ export function SettingsView() {
                   <Select.Root
                     value={terminalLayoutMode}
                     onValueChange={(value) =>
-                      setTerminalLayout(value as "split" | "tabbed")
+                      handleTerminalLayoutChange(value as "split" | "tabbed")
                     }
                     size="1"
                   >
@@ -251,6 +296,30 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
+          {/* Chat Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Chat</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    Desktop notifications
+                  </Text>
+                  <Text size="1" color="gray">
+                    Show notifications when the agent finishes working on a task
+                  </Text>
+                </Flex>
+                <Switch
+                  checked={desktopNotifications}
+                  onCheckedChange={setDesktopNotifications}
+                  size="1"
+                />
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
           {/* Task Execution Section */}
           <Flex direction="column" gap="3">
             <Heading size="3">Task execution</Heading>
@@ -267,32 +336,9 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={autoRunTasks}
-                    onCheckedChange={setAutoRunTasks}
+                    onCheckedChange={handleAutoRunChange}
                     size="1"
                   />
-                </Flex>
-
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Default run environment
-                  </Text>
-                  <Select.Root
-                    value={defaultRunMode}
-                    onValueChange={(value) =>
-                      setDefaultRunMode(value as DefaultRunMode)
-                    }
-                    size="1"
-                  >
-                    <Select.Trigger />
-                    <Select.Content>
-                      <Select.Item value="local">Local</Select.Item>
-                      <Select.Item value="cloud">Cloud</Select.Item>
-                      <Select.Item value="last_used">Last used</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                  <Text size="1" color="gray">
-                    Choose which environment to use when running tasks
-                  </Text>
                 </Flex>
 
                 <Flex align="center" justify="between">
@@ -307,7 +353,7 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={createPR}
-                    onCheckedChange={setCreatePR}
+                    onCheckedChange={handleCreatePRChange}
                     size="1"
                   />
                 </Flex>

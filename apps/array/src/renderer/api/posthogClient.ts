@@ -62,14 +62,18 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(repository?: string) {
+  async getTasks(options?: { repository?: string; createdBy?: number }) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
     };
 
-    if (repository) {
-      params.repository = repository;
+    if (options?.repository) {
+      params.repository = options.repository;
+    }
+
+    if (options?.createdBy) {
+      params.created_by = options.createdBy;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {

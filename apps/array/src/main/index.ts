@@ -1,8 +1,14 @@
 declare const __BUILD_COMMIT__: string | undefined;
 declare const __BUILD_DATE__: string | undefined;
 
+import { fixPath } from "./lib/fixPath.js";
+
+// Call fixPath early to ensure PATH is correct for any child processes
+fixPath();
+
 import "reflect-metadata";
 import dns from "node:dns";
+
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +17,7 @@ import { initializeMainErrorHandling } from "./lib/error-handling.js";
 
 initializeMainErrorHandling();
 
+import { createIPCHandler } from "@posthog/electron-trpc/main";
 import {
   app,
   BrowserWindow,
@@ -20,7 +27,7 @@ import {
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
-import { createIPCHandler } from "trpc-electron/main";
+import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
@@ -53,9 +60,6 @@ let mainWindow: BrowserWindow | null = null;
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
-
-// Set app name to ensure consistent userData path across platforms
-app.setName("Array");
 
 // Single instance lock must be acquired FIRST before any other app setup
 // This ensures deep links go to the existing instance, not a new one
@@ -215,6 +219,10 @@ function createWindow(): void {
             ]
           : []),
         { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
         {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
@@ -281,6 +289,15 @@ function createWindow(): void {
             container.get<UIService>(MAIN_TOKENS.UIService).resetLayout();
           },
         },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { type: "separator" },
+        { role: "front" },
       ],
     },
   ];

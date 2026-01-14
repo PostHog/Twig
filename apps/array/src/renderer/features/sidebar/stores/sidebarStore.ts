@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type SidebarViewMode = "folders" | "history" | "pinned";
+
 interface SidebarStoreState {
   open: boolean;
   hasUserSetOpen: boolean;
@@ -8,6 +10,8 @@ interface SidebarStoreState {
   isResizing: boolean;
   collapsedSections: Set<string>;
   folderOrder: string[];
+  viewMode: SidebarViewMode;
+  historyVisibleCount: number;
 }
 
 interface SidebarStoreActions {
@@ -20,6 +24,9 @@ interface SidebarStoreActions {
   reorderFolders: (fromIndex: number, toIndex: number) => void;
   setFolderOrder: (order: string[]) => void;
   syncFolderOrder: (folderIds: string[]) => void;
+  setViewMode: (mode: SidebarViewMode) => void;
+  loadMoreHistory: () => void;
+  resetHistoryVisibleCount: () => void;
 }
 
 type SidebarStore = SidebarStoreState & SidebarStoreActions;
@@ -33,6 +40,8 @@ export const useSidebarStore = create<SidebarStore>()(
       isResizing: false,
       collapsedSections: new Set<string>(),
       folderOrder: [],
+      viewMode: "history" as SidebarViewMode,
+      historyVisibleCount: 25,
       setOpen: (open) => set({ open, hasUserSetOpen: true }),
       setOpenAuto: (open) =>
         set((state) => (state.hasUserSetOpen ? state : { open })),
@@ -74,6 +83,12 @@ export const useSidebarStore = create<SidebarStore>()(
           }
           return state;
         }),
+      setViewMode: (mode) => set({ viewMode: mode }),
+      loadMoreHistory: () =>
+        set((state) => ({
+          historyVisibleCount: state.historyVisibleCount + 25,
+        })),
+      resetHistoryVisibleCount: () => set({ historyVisibleCount: 25 }),
     }),
     {
       name: "sidebar-storage",
@@ -83,6 +98,8 @@ export const useSidebarStore = create<SidebarStore>()(
         width: state.width,
         collapsedSections: Array.from(state.collapsedSections),
         folderOrder: state.folderOrder,
+        viewMode: state.viewMode,
+        historyVisibleCount: state.historyVisibleCount,
       }),
       merge: (persisted, current) => {
         const persistedState = persisted as {
@@ -91,6 +108,8 @@ export const useSidebarStore = create<SidebarStore>()(
           width?: number;
           collapsedSections?: string[];
           folderOrder?: string[];
+          viewMode?: SidebarViewMode;
+          historyVisibleCount?: number;
         };
         return {
           ...current,
@@ -100,6 +119,9 @@ export const useSidebarStore = create<SidebarStore>()(
           width: persistedState.width ?? current.width,
           collapsedSections: new Set(persistedState.collapsedSections ?? []),
           folderOrder: persistedState.folderOrder ?? [],
+          viewMode: persistedState.viewMode ?? current.viewMode,
+          historyVisibleCount:
+            persistedState.historyVisibleCount ?? current.historyVisibleCount,
         };
       },
     },

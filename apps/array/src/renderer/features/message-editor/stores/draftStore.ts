@@ -1,4 +1,5 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -19,6 +20,7 @@ interface DraftState {
   drafts: Record<SessionId, EditorContent | string>;
   contexts: Record<SessionId, EditorContext>;
   commands: Record<SessionId, AvailableCommand[]>;
+  focusRequested: Record<SessionId, number>;
   _hasHydrated: boolean;
 }
 
@@ -35,6 +37,8 @@ export interface DraftActions {
   setCommands: (sessionId: SessionId, commands: AvailableCommand[]) => void;
   getCommands: (sessionId: SessionId) => AvailableCommand[];
   clearCommands: (sessionId: SessionId) => void;
+  requestFocus: (sessionId: SessionId) => void;
+  clearFocusRequest: (sessionId: SessionId) => void;
 }
 
 type DraftStore = DraftState & { actions: DraftActions };
@@ -45,19 +49,23 @@ export const useDraftStore = create<DraftStore>()(
       drafts: {},
       contexts: {},
       commands: {},
+      focusRequested: {},
       _hasHydrated: false,
 
       actions: {
-        setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
+        setHasHydrated: (hydrated) => {
+          set({ _hasHydrated: hydrated });
+        },
 
-        setDraft: (sessionId, draft) =>
+        setDraft: (sessionId, draft) => {
           set((state) => {
             if (draft === null) {
               delete state.drafts[sessionId];
             } else {
               state.drafts[sessionId] = draft;
             }
-          }),
+          });
+        },
 
         getDraft: (sessionId) => get().drafts[sessionId] ?? null,
 
@@ -92,10 +100,21 @@ export const useDraftStore = create<DraftStore>()(
           set((state) => {
             delete state.commands[sessionId];
           }),
+
+        requestFocus: (sessionId) =>
+          set((state) => {
+            state.focusRequested[sessionId] = Date.now();
+          }),
+
+        clearFocusRequest: (sessionId) =>
+          set((state) => {
+            delete state.focusRequested[sessionId];
+          }),
       },
     })),
     {
       name: "message-editor-drafts",
+      storage: electronStorage,
       partialize: (state) => ({ drafts: state.drafts }),
       onRehydrateStorage: () => (state) => {
         state?.actions.setHasHydrated(true);

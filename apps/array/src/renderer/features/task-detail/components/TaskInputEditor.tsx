@@ -1,11 +1,14 @@
 import "@features/message-editor/components/message-editor.css";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
@@ -21,6 +24,9 @@ interface TaskInputEditorProps {
   canSubmit: boolean;
   onSubmit: () => void;
   hasDirectory: boolean;
+  onEmptyChange?: (isEmpty: boolean) => void;
+  executionMode: ExecutionMode;
+  onModeChange: () => void;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -38,11 +44,28 @@ export const TaskInputEditor = forwardRef<
       canSubmit,
       onSubmit,
       hasDirectory,
+      onEmptyChange,
+      executionMode,
+      onModeChange,
     },
     ref,
   ) => {
     const isWorktreeMode = localWorkspaceMode === "worktree";
     const isCloudMode = runMode === "cloud";
+
+    useHotkeys(
+      "shift+tab",
+      (e) => {
+        e.preventDefault();
+        onModeChange();
+      },
+      {
+        enableOnFormTags: true,
+        enableOnContentEditable: true,
+        enabled: !isCreatingTask && !isCloudMode,
+      },
+      [onModeChange, isCreatingTask, isCloudMode],
+    );
 
     const {
       editor,
@@ -67,6 +90,7 @@ export const TaskInputEditor = forwardRef<
           onSubmit();
         }
       },
+      onEmptyChange,
     });
 
     useImperativeHandle(
@@ -92,141 +116,149 @@ export const TaskInputEditor = forwardRef<
     };
 
     return (
-      <Flex
-        direction="column"
-        style={{
-          backgroundColor: "var(--gray-2)",
-          borderRadius: "var(--radius-2)",
-          border: "1px solid var(--gray-a6)",
-          position: "relative",
-          overflow: "visible",
-        }}
-      >
+      <>
         <Flex
           direction="column"
-          p="3"
           style={{
-            cursor: "text",
+            backgroundColor: "var(--gray-2)",
+            borderRadius: "var(--radius-2)",
+            border: "1px solid var(--gray-a6)",
             position: "relative",
             overflow: "visible",
-            zIndex: 1,
           }}
-          onClick={() => focus()}
         >
           <Flex
-            align="start"
-            gap="2"
+            direction="column"
+            p="3"
             style={{
-              display: "flex",
+              cursor: "text",
+              position: "relative",
               overflow: "visible",
-              minWidth: 0,
+              zIndex: 1,
+            }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              if (!target.closest(".ProseMirror")) {
+                focus();
+              }
             }}
           >
-            <Text
-              size="2"
-              weight="bold"
+            <Flex
+              align="start"
+              gap="2"
               style={{
-                color: "var(--accent-11)",
-                fontFamily: "monospace",
-                userSelect: "none",
-                WebkitUserSelect: "none",
-                bottom: "1px",
-                position: "relative",
+                display: "flex",
+                overflow: "visible",
+                minWidth: 0,
               }}
             >
-              &gt;
-            </Text>
-            {isCreatingTask ? (
               <Text
                 size="2"
-                color="gray"
+                weight="bold"
                 style={{
+                  color: "var(--accent-11)",
                   fontFamily: "monospace",
-                  fontSize: "var(--font-size-1)",
-                }}
-              >
-                Creating task...
-              </Text>
-            ) : (
-              <Box
-                style={{
-                  flex: 1,
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  bottom: "1px",
                   position: "relative",
-                  minWidth: 0,
-                  maxHeight: "200px",
-                  overflowY: "auto",
                 }}
               >
-                <EditorContent editor={editor} />
-              </Box>
-            )}
+                &gt;
+              </Text>
+              {isCreatingTask ? (
+                <Text
+                  size="2"
+                  color="gray"
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "var(--font-size-1)",
+                  }}
+                >
+                  Creating task...
+                </Text>
+              ) : (
+                <Box
+                  style={{
+                    flex: 1,
+                    position: "relative",
+                    minWidth: 0,
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                  }}
+                >
+                  <EditorContent editor={editor} />
+                </Box>
+              )}
+            </Flex>
           </Flex>
-        </Flex>
 
-        <Flex justify="between" align="center" px="3" pb="3">
-          <EditorToolbar
-            disabled={isCreatingTask}
-            onInsertChip={insertChip}
-            attachTooltip="Attach files from anywhere"
-            iconSize={16}
-          />
+          <Flex justify="between" align="center" px="3" pb="3">
+            <EditorToolbar
+              disabled={isCreatingTask}
+              onInsertChip={insertChip}
+              attachTooltip="Attach files from anywhere"
+              iconSize={16}
+            />
 
-          <Flex align="center" gap="4">
-            {!isCloudMode && (
-              <Tooltip
-                content={
-                  isWorktreeMode
-                    ? "Work in a separate directory with its own branch"
-                    : "Work directly in the selected folder"
-                }
-              >
+            <Flex align="center" gap="4">
+              {!isCloudMode && (
+                <Tooltip
+                  content={
+                    isWorktreeMode
+                      ? "Work in a separate directory with its own branch"
+                      : "Work directly in the selected folder"
+                  }
+                >
+                  <IconButton
+                    size="1"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLocalWorkspaceModeChange(
+                        isWorktreeMode ? "root" : "worktree",
+                      );
+                    }}
+                    className="worktree-toggle-button"
+                    data-active={isWorktreeMode}
+                  >
+                    <GitBranchIcon
+                      size={16}
+                      weight={isWorktreeMode ? "fill" : "regular"}
+                    />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              <Tooltip content={getSubmitTooltip()}>
                 <IconButton
                   size="1"
-                  variant="ghost"
+                  variant="solid"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onLocalWorkspaceModeChange(
-                      isWorktreeMode ? "root" : "worktree",
-                    );
+                    onSubmit();
                   }}
-                  className="worktree-toggle-button"
-                  data-active={isWorktreeMode}
+                  disabled={!canSubmit || isCreatingTask}
+                  loading={isCreatingTask}
+                  style={{
+                    backgroundColor:
+                      !canSubmit || isCreatingTask
+                        ? "var(--accent-a4)"
+                        : undefined,
+                    color:
+                      !canSubmit || isCreatingTask
+                        ? "var(--accent-8)"
+                        : undefined,
+                  }}
                 >
-                  <GitBranchIcon
-                    size={16}
-                    weight={isWorktreeMode ? "fill" : "regular"}
-                  />
+                  <ArrowUp size={16} weight="bold" />
                 </IconButton>
               </Tooltip>
-            )}
-
-            <Tooltip content={getSubmitTooltip()}>
-              <IconButton
-                size="1"
-                variant="solid"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSubmit();
-                }}
-                disabled={!canSubmit || isCreatingTask}
-                loading={isCreatingTask}
-                style={{
-                  backgroundColor:
-                    !canSubmit || isCreatingTask
-                      ? "var(--accent-a4)"
-                      : undefined,
-                  color:
-                    !canSubmit || isCreatingTask
-                      ? "var(--accent-8)"
-                      : undefined,
-                }}
-              >
-                <ArrowUp size={16} weight="bold" />
-              </IconButton>
-            </Tooltip>
+            </Flex>
           </Flex>
         </Flex>
-      </Flex>
+        {!isCloudMode && <ModeIndicatorInput mode={executionMode} />}
+      </>
     );
   },
 );

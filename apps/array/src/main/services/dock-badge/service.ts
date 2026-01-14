@@ -19,7 +19,7 @@ export class DockBadgeService {
 
     this.hasBadge = true;
     if (process.platform === "darwin" || process.platform === "linux") {
-      app.dock.setBadge("•");
+      app.dock?.setBadge("•");
     }
     log.info("Dock badge shown");
   }
@@ -29,7 +29,7 @@ export class DockBadgeService {
 
     this.hasBadge = false;
     if (process.platform === "darwin" || process.platform === "linux") {
-      app.dock.setBadge("");
+      app.dock?.setBadge("");
     }
     log.info("Dock badge cleared");
   }

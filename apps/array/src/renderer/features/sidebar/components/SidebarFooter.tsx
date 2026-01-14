@@ -5,10 +5,12 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import { trpcVanilla } from "@renderer/trpc";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback } from "react";
+import { useSidebarStore } from "../stores/sidebarStore";
 
 export function SidebarFooter() {
   const addFolder = useRegisteredFoldersStore((state) => state.addFolder);
-  const { toggleSettings } = useNavigationStore();
+  const { toggleSettings, navigateToTaskInput } = useNavigationStore();
+  const viewMode = useSidebarStore((state) => state.viewMode);
 
   const handleAddRepository = useCallback(async () => {
     const selectedPath = await trpcVanilla.os.selectDirectory.query();
@@ -16,6 +18,12 @@ export function SidebarFooter() {
       await addFolder(selectedPath);
     }
   }, [addFolder]);
+
+  const handleNewTask = useCallback(() => {
+    navigateToTaskInput();
+  }, [navigateToTaskInput]);
+
+  const showNewTaskButton = viewMode !== "folders";
 
   return (
     <Box
@@ -30,15 +38,22 @@ export function SidebarFooter() {
       }}
     >
       <Flex align="center" gap="2" justify="between">
-        <Button
-          size="1"
-          variant="ghost"
-          color="gray"
-          onClick={handleAddRepository}
-        >
-          <Plus size={14} weight="bold" />
-          Add repository
-        </Button>
+        {showNewTaskButton ? (
+          <Button size="1" variant="ghost" color="gray" onClick={handleNewTask}>
+            <Plus size={14} weight="bold" />
+            New task
+          </Button>
+        ) : (
+          <Button
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={handleAddRepository}
+          >
+            <Plus size={14} weight="bold" />
+            Add repository
+          </Button>
+        )}
 
         <IconButton
           size="1"

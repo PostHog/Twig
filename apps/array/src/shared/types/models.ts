@@ -65,6 +65,11 @@ export const AVAILABLE_MODELS: ModelOption[] = [
 
 export const DEFAULT_MODEL = "claude-opus-4-5";
 
+// Agent frameworks
+export type AgentFramework = "claude";
+
+export const DEFAULT_FRAMEWORK: AgentFramework = "claude";
+
 export function getModelById(id: string): ModelOption | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === id && m.enabled);
 }

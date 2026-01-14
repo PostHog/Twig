@@ -8,6 +8,7 @@ import type {
   TaskRunArtifact,
   UrlMention,
 } from "./types.js";
+import { getLlmGatewayUrl } from "./utils/gateway.js";
 
 interface PostHogApiResponse<T> {
   results?: T[];
@@ -88,8 +89,7 @@ export class PostHogAPIClient {
   }
 
   getLlmGatewayUrl(): string {
-    const teamId = this.getTeamId();
-    return `${this.baseUrl}/api/projects/${teamId}/llm_gateway`;
+    return getLlmGatewayUrl(this.baseUrl);
   }
 
   async fetchTask(taskId: string): Promise<Task> {

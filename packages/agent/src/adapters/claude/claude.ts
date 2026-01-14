@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   type Agent,
-  AgentSideConnection,
+  type AgentSideConnection,
   type AuthenticateRequest,
   type AvailableCommand,
   type CancelNotification,
@@ -21,7 +21,6 @@ import {
   type LoadSessionResponse,
   type NewSessionRequest,
   type NewSessionResponse,
-  ndJsonStream,
   type PromptRequest,
   type PromptResponse,
   type ReadTextFileRequest,
@@ -58,7 +57,6 @@ import type {
   SessionStore,
 } from "@/session-store.js";
 import { Logger } from "@/utils/logger.js";
-import { createTappedWritableStream } from "@/utils/tapped-stream.js";
 import packageJson from "../../../package.json" with { type: "json" };
 import { createMcpServer, EDIT_TOOL_NAMES, toolNames } from "./mcp-server.js";
 import {
@@ -69,22 +67,138 @@ import {
   toolInfoFromToolUse,
   toolUpdateFromToolResult,
 } from "./tools.js";
-import {
-  createBidirectionalStreams,
-  Pushable,
-  type StreamPair,
-  unreachable,
-} from "./utils.js";
+import { Pushable, unreachable } from "./utils.js";
 
 /**
  * Clears the statsig cache to work around a claude-agent-sdk bug where cached
  * tool definitions include input_examples which causes API errors.
  * See: https://github.com/anthropics/claude-code/issues/11678
  */
+function getClaudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+}
+
+function getClaudePlansDir(): string {
+  return path.join(getClaudeConfigDir(), "plans");
+}
+
+function isClaudePlanFilePath(filePath: string | undefined): boolean {
+  if (!filePath) return false;
+  const resolved = path.resolve(filePath);
+  const plansDir = path.resolve(getClaudePlansDir());
+  return resolved === plansDir || resolved.startsWith(plansDir + path.sep);
+}
+
+/**
+ * Whitelist of command prefixes that are considered read-only.
+ * These commands can be used in plan mode since they don't modify files or state.
+ */
+const READ_ONLY_COMMAND_PREFIXES = [
+  // File listing and info
+  "ls",
+  "find",
+  "tree",
+  "stat",
+  "file",
+  "wc",
+  "du",
+  "df",
+  // File reading (non-modifying)
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "bat",
+  // Search
+  "grep",
+  "rg",
+  "ag",
+  "ack",
+  "fzf",
+  // Git read operations
+  "git status",
+  "git log",
+  "git diff",
+  "git show",
+  "git branch",
+  "git remote",
+  "git fetch",
+  "git rev-parse",
+  "git ls-files",
+  "git blame",
+  "git shortlog",
+  "git describe",
+  "git tag -l",
+  "git tag --list",
+  // System info
+  "pwd",
+  "whoami",
+  "which",
+  "where",
+  "type",
+  "printenv",
+  "env",
+  "echo",
+  "printf",
+  "date",
+  "uptime",
+  "uname",
+  "id",
+  "groups",
+  // Process info
+  "ps",
+  "top",
+  "htop",
+  "pgrep",
+  "lsof",
+  // Network read-only
+  "curl",
+  "wget",
+  "ping",
+  "host",
+  "dig",
+  "nslookup",
+  // Package managers (info only)
+  "npm list",
+  "npm ls",
+  "npm view",
+  "npm info",
+  "npm outdated",
+  "pnpm list",
+  "pnpm ls",
+  "pnpm why",
+  "yarn list",
+  "yarn why",
+  "yarn info",
+  // Other read-only
+  "jq",
+  "yq",
+  "xargs",
+  "sort",
+  "uniq",
+  "tr",
+  "cut",
+  "awk",
+  "sed -n",
+];
+
+/**
+ * Checks if a bash command is read-only based on a whitelist of command prefixes.
+ * Used to allow safe bash commands in plan mode.
+ */
+function isReadOnlyBashCommand(command: string): boolean {
+  const trimmed = command.trim();
+  return READ_ONLY_COMMAND_PREFIXES.some(
+    (prefix) =>
+      trimmed === prefix ||
+      trimmed.startsWith(`${prefix} `) ||
+      trimmed.startsWith(`${prefix}\t`),
+  );
+}
+
 function clearStatsigCache(): void {
-  const configDir =
-    process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
-  const statsigPath = path.join(configDir, "statsig");
+  const statsigPath = path.join(getClaudeConfigDir(), "statsig");
 
   try {
     if (fs.existsSync(statsigPath)) {
@@ -102,6 +216,8 @@ type Session = {
   permissionMode: PermissionMode;
   notificationHistory: SessionNotification[];
   sdkSessionId?: string;
+  lastPlanFilePath?: string;
+  lastPlanContent?: string;
 };
 
 type BackgroundTerminal =
@@ -156,7 +272,7 @@ type ToolUseCache = {
     type: "tool_use" | "server_tool_use" | "mcp_tool_use";
     id: string;
     name: string;
-    input: any;
+    input: unknown;
   };
 };
 
@@ -201,6 +317,44 @@ export class ClaudeAcpAgent implements Agent {
     return session;
   }
 
+  private getLatestAssistantText(
+    notifications: SessionNotification[],
+  ): string | null {
+    const chunks: string[] = [];
+    let started = false;
+
+    for (let i = notifications.length - 1; i >= 0; i -= 1) {
+      const update = notifications[i]?.update;
+      if (!update) continue;
+
+      if (update.sessionUpdate === "agent_message_chunk") {
+        started = true;
+        const content = update.content as {
+          type?: string;
+          text?: string;
+        } | null;
+        if (content?.type === "text" && content.text) {
+          chunks.push(content.text);
+        }
+        continue;
+      }
+
+      if (started) {
+        break;
+      }
+    }
+
+    if (chunks.length === 0) return null;
+    return chunks.reverse().join("");
+  }
+
+  private isPlanReady(plan: string | undefined): boolean {
+    if (!plan) return false;
+    const trimmed = plan.trim();
+    if (trimmed.length < 40) return false;
+    return /(^|\n)#{1,6}\s+\S/.test(trimmed);
+  }
+
   appendNotification(
     sessionId: string,
     notification: SessionNotification,
@@ -213,7 +367,7 @@ export class ClaudeAcpAgent implements Agent {
     this.clientCapabilities = request.clientCapabilities;
 
     // Default authMethod
-    const authMethod: any = {
+    const authMethod: { description: string; name: string; id: string } = {
       description: "Run `claude /login` in the terminal",
       name: "Log in with Claude Code",
       id: "claude-login",
@@ -323,7 +477,12 @@ export class ClaudeAcpAgent implements Agent {
       }
     }
 
-    const permissionMode = "default";
+    // Use initialModeId from _meta if provided (e.g., "plan" for plan mode), otherwise default
+    const initialModeId = (
+      params._meta as { initialModeId?: string } | undefined
+    )?.initialModeId;
+    const ourPermissionMode = (initialModeId ?? "default") as PermissionMode;
+    const sdkPermissionMode: PermissionMode = ourPermissionMode;
 
     // Extract options from _meta if provided
     const userProvidedOptions = (params._meta as NewSessionMeta | undefined)
@@ -341,7 +500,8 @@ export class ClaudeAcpAgent implements Agent {
       // If we want bypassPermissions to be an option, we have to allow it here.
       // But it doesn't work in root mode, so we only activate it if it will work.
       allowDangerouslySkipPermissions: !IS_ROOT,
-      permissionMode,
+      // Use the requested permission mode (including plan mode)
+      permissionMode: sdkPermissionMode,
       canUseTool: this.canUseTool(sessionId),
       // Use "node" to resolve via PATH where a symlink to Electron exists.
       // This avoids launching the Electron binary directly from the app bundle,
@@ -349,7 +509,12 @@ export class ClaudeAcpAgent implements Agent {
       executable: "node",
       // Prevent spawned Electron processes from showing in dock/tray.
       // Must merge with process.env since SDK replaces rather than merges.
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      // Enable AskUserQuestion tool via environment variable (required by SDK feature flag)
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: "true",
+      },
       ...(process.env.CLAUDE_CODE_EXECUTABLE && {
         pathToClaudeCodeExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
       }),
@@ -364,8 +529,9 @@ export class ClaudeAcpAgent implements Agent {
       },
     };
 
-    const allowedTools = [];
-    const disallowedTools = [];
+    // AskUserQuestion must be explicitly allowed for the agent to use it
+    const allowedTools: string[] = ["AskUserQuestion"];
+    const disallowedTools: string[] = [];
 
     // Check if built-in tools should be disabled
     const disableBuiltInTools = params._meta?.disableBuiltInTools === true;
@@ -411,6 +577,11 @@ export class ClaudeAcpAgent implements Agent {
       );
     }
 
+    // ExitPlanMode should only be available during plan mode
+    if (ourPermissionMode !== "plan") {
+      disallowedTools.push("ExitPlanMode");
+    }
+
     if (allowedTools.length > 0) {
       options.allowedTools = allowedTools;
     }
@@ -432,7 +603,7 @@ export class ClaudeAcpAgent implements Agent {
       options,
     });
 
-    this.createSession(sessionId, q, input, permissionMode);
+    this.createSession(sessionId, q, input, ourPermissionMode);
 
     // Register for S3 persistence if config provided
     const persistence = params._meta?.persistence as
@@ -502,7 +673,7 @@ export class ClaudeAcpAgent implements Agent {
       sessionId,
       models,
       modes: {
-        currentModeId: permissionMode,
+        currentModeId: ourPermissionMode,
         availableModes,
       },
     };
@@ -519,7 +690,8 @@ export class ClaudeAcpAgent implements Agent {
 
     this.sessions[params.sessionId].cancelled = false;
 
-    const { query, input } = this.sessions[params.sessionId];
+    const session = this.sessions[params.sessionId];
+    const { query, input } = session;
 
     // Capture and store user message for replay
     for (const chunk of params.prompt) {
@@ -534,7 +706,7 @@ export class ClaudeAcpAgent implements Agent {
       this.appendNotification(params.sessionId, userNotification);
     }
 
-    input.push(promptToClaude(params));
+    input.push(promptToClaude({ ...params, prompt: params.prompt }));
     while (true) {
       const { value: message, done } = await query.next();
       if (done || !message) {
@@ -545,7 +717,7 @@ export class ClaudeAcpAgent implements Agent {
       }
       this.logger.debug("SDK message received", {
         type: message.type,
-        subtype: (message as any).subtype,
+        subtype: (message as { subtype?: string }).subtype,
       });
 
       switch (message.type) {
@@ -673,16 +845,13 @@ export class ClaudeAcpAgent implements Agent {
             throw RequestError.authRequired();
           }
 
-          // When using the gateway service, text/thinking is streamed via stream_event,
-          // so skip them here to avoid duplication.
+          // Text/thinking is streamed via stream_event, so skip them here to avoid duplication.
           const content = message.message.content;
-          const isUsingGatewayService = !!process.env.LLM_GATEWAY_URL;
-          const contentToProcess =
-            isUsingGatewayService && Array.isArray(content)
-              ? content.filter(
-                  (block) => block.type !== "text" && block.type !== "thinking",
-                )
-              : content;
+          const contentToProcess = Array.isArray(content)
+            ? content.filter(
+                (block) => block.type !== "text" && block.type !== "thinking",
+              )
+            : content;
 
           for (const notification of toAcpNotifications(
             contentToProcess as typeof content,
@@ -793,7 +962,89 @@ export class ClaudeAcpAgent implements Agent {
         };
       }
 
+      // Helper to emit a tool denial notification so the UI shows the reason
+      const emitToolDenial = async (message: string) => {
+        this.logger.info(`[canUseTool] Tool denied: ${toolName}`, { message });
+        await this.client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "tool_call_update",
+            toolCallId: toolUseID,
+            status: "failed",
+            content: [
+              {
+                type: "content",
+                content: {
+                  type: "text",
+                  text: message,
+                },
+              },
+            ],
+          },
+        });
+      };
+
       if (toolName === "ExitPlanMode") {
+        // If we're already not in plan mode, just allow the tool without prompting
+        // This handles the case where mode was already changed by a previous ExitPlanMode call
+        // (Claude may call ExitPlanMode again after writing the plan file)
+        if (session.permissionMode !== "plan") {
+          return {
+            behavior: "allow",
+            updatedInput: toolInput,
+          };
+        }
+
+        let updatedInput = toolInput;
+        const planFromFile =
+          session.lastPlanContent ||
+          (session.lastPlanFilePath
+            ? this.fileContentCache[session.lastPlanFilePath]
+            : undefined);
+        const hasPlan =
+          typeof (toolInput as { plan?: unknown } | undefined)?.plan ===
+          "string";
+        if (!hasPlan) {
+          const fallbackPlan = planFromFile
+            ? planFromFile
+            : this.getLatestAssistantText(session.notificationHistory);
+          if (fallbackPlan) {
+            updatedInput = {
+              ...(toolInput as Record<string, unknown>),
+              plan: fallbackPlan,
+            };
+          }
+        }
+
+        const planText =
+          typeof (updatedInput as { plan?: unknown } | undefined)?.plan ===
+          "string"
+            ? String((updatedInput as { plan?: unknown }).plan)
+            : undefined;
+        if (!planText) {
+          const message = `Plan not ready. Provide the full markdown plan in ExitPlanMode or write it to ${getClaudePlansDir()} before requesting approval.`;
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+        if (!this.isPlanReady(planText)) {
+          const message =
+            "Plan not ready. Provide the full markdown plan in ExitPlanMode before requesting approval.";
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+
+        // ExitPlanMode is a signal to show the permission dialog
+        // The plan content should already be in the agent's text response
+        // Note: The SDK's ExitPlanMode tool includes a plan parameter, so ensure it is present
+
         const response = await this.client.requestPermission({
           options: [
             {
@@ -815,9 +1066,9 @@ export class ClaudeAcpAgent implements Agent {
           sessionId,
           toolCall: {
             toolCallId: toolUseID,
-            rawInput: toolInput,
+            rawInput: { ...updatedInput, toolName },
             title: toolInfoFromToolUse(
-              { name: toolName, input: toolInput },
+              { name: toolName, input: updatedInput },
               this.fileContentCache,
               this.logger,
             ).title,
@@ -840,7 +1091,7 @@ export class ClaudeAcpAgent implements Agent {
 
           return {
             behavior: "allow",
-            updatedInput: toolInput,
+            updatedInput,
             updatedPermissions: suggestions ?? [
               {
                 type: "setMode",
@@ -850,12 +1101,216 @@ export class ClaudeAcpAgent implements Agent {
             ],
           };
         } else {
+          // User chose "No, keep planning" - stay in plan mode and let agent continue
+          const message =
+            "User wants to continue planning. Please refine your plan based on any feedback provided, or ask clarifying questions if needed.";
+          await emitToolDenial(message);
           return {
             behavior: "deny",
-            message: "User rejected request to exit plan mode.",
+            message,
+            interrupt: false,
+          };
+        }
+      }
+
+      // AskUserQuestion always prompts user - never auto-approve
+      if (toolName === "AskUserQuestion") {
+        interface QuestionItem {
+          question: string;
+          header?: string;
+          options: Array<{ label: string; description?: string }>;
+          multiSelect?: boolean;
+        }
+        interface AskUserQuestionInput {
+          // Full format: array of questions with options
+          questions?: QuestionItem[];
+          // Simple format: just a question string (used when Claude doesn't have proper schema)
+          question?: string;
+          header?: string;
+          options?: Array<{ label: string; description?: string }>;
+          multiSelect?: boolean;
+        }
+        const input = toolInput as AskUserQuestionInput;
+
+        // Normalize to questions array format
+        // Support both: { questions: [...] } and { question: "..." }
+        let questions: QuestionItem[];
+        if (input.questions && input.questions.length > 0) {
+          // Full format with questions array
+          questions = input.questions;
+        } else if (input.question) {
+          // Simple format - convert to array
+          // If no options provided, just use "Other" for free-form input
+          questions = [
+            {
+              question: input.question,
+              header: input.header,
+              options: input.options || [],
+              multiSelect: input.multiSelect,
+            },
+          ];
+        } else {
+          return {
+            behavior: "deny",
+            message: "No questions provided",
             interrupt: true,
           };
         }
+
+        // Collect all answers from all questions
+        const allAnswers: Record<string, string | string[]> = {};
+
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
+
+          // Convert question options to permission options
+          const options = (question.options || []).map(
+            (opt: { label: string; description?: string }, idx: number) => ({
+              kind: "allow_once" as const,
+              name: opt.label,
+              optionId: `option_${idx}`,
+              description: opt.description,
+            }),
+          );
+
+          // Add "Other" option for free-form response
+          options.push({
+            kind: "allow_once" as const,
+            name: "Other",
+            optionId: "other",
+            description: "Provide a custom response",
+          });
+
+          const response = await this.client.requestPermission({
+            options,
+            sessionId,
+            toolCall: {
+              toolCallId: toolUseID,
+              rawInput: {
+                ...toolInput,
+                toolName,
+                // Include full question data for UI rendering
+                currentQuestion: question,
+                questionIndex: i,
+                totalQuestions: questions.length,
+              },
+              // Use the full question text as title for the selection input
+              title: question.question,
+            },
+          });
+
+          if (response.outcome?.outcome === "selected") {
+            const selectedOptionId = response.outcome.optionId;
+            // Type assertion for extended outcome fields
+            const extendedOutcome = response.outcome as {
+              optionId: string;
+              selectedOptionIds?: string[];
+              customInput?: string;
+            };
+
+            if (selectedOptionId === "other" && extendedOutcome.customInput) {
+              // "Other" was selected with custom text
+              allAnswers[question.question] = extendedOutcome.customInput;
+            } else if (selectedOptionId === "other") {
+              // "Other" was selected but no custom text - just record "other"
+              allAnswers[question.question] = "other";
+            } else if (
+              question.multiSelect &&
+              extendedOutcome.selectedOptionIds
+            ) {
+              // Multi-select: collect all selected option labels
+              const selectedLabels = extendedOutcome.selectedOptionIds
+                .map((id: string) => {
+                  const idx = parseInt(id.replace("option_", ""), 10);
+                  return question.options?.[idx]?.label;
+                })
+                .filter(Boolean) as string[];
+              allAnswers[question.question] = selectedLabels;
+            } else {
+              // Single select
+              const selectedIdx = parseInt(
+                selectedOptionId.replace("option_", ""),
+                10,
+              );
+              const selectedOption = question.options?.[selectedIdx];
+              allAnswers[question.question] =
+                selectedOption?.label || selectedOptionId;
+            }
+          } else {
+            // User cancelled or did not answer
+            return {
+              behavior: "deny",
+              message: "User did not complete all questions",
+              interrupt: true,
+            };
+          }
+        }
+
+        // Return all answers in updatedInput
+        return {
+          behavior: "allow",
+          updatedInput: {
+            ...toolInput,
+            answers: allAnswers,
+          },
+        };
+      }
+
+      // In plan mode, deny write/edit tools except for Claude's plan files
+      // This includes both MCP-wrapped tools and built-in SDK tools
+      const WRITE_TOOL_NAMES = [
+        ...EDIT_TOOL_NAMES,
+        "Edit",
+        "Write",
+        "NotebookEdit",
+      ];
+      if (
+        session.permissionMode === "plan" &&
+        WRITE_TOOL_NAMES.includes(toolName)
+      ) {
+        // Allow writes to Claude Code's plan files
+        const filePath = (toolInput as { file_path?: string })?.file_path;
+        const isPlanFile = isClaudePlanFilePath(filePath);
+
+        if (isPlanFile) {
+          session.lastPlanFilePath = filePath;
+          const content = (toolInput as { content?: string })?.content;
+          if (typeof content === "string") {
+            session.lastPlanContent = content;
+          }
+          return {
+            behavior: "allow",
+            updatedInput: toolInput,
+          };
+        }
+
+        const message =
+          "Cannot use write tools in plan mode. Use ExitPlanMode to request permission to make changes.";
+        await emitToolDenial(message);
+        return {
+          behavior: "deny",
+          message,
+          interrupt: false,
+        };
+      }
+
+      // In plan mode, handle Bash separately - allow read-only commands
+      if (
+        session.permissionMode === "plan" &&
+        (toolName === "Bash" || toolName === toolNames.bash)
+      ) {
+        const command = (toolInput as { command?: string })?.command ?? "";
+        if (!isReadOnlyBashCommand(command)) {
+          const message =
+            "Cannot run write/modify bash commands in plan mode. Use ExitPlanMode to request permission to make changes.";
+          await emitToolDenial(message);
+          return {
+            behavior: "deny",
+            message,
+            interrupt: false,
+          };
+        }
+        // Read-only bash commands are allowed - fall through to normal permission flow
       }
 
       if (
@@ -923,9 +1378,11 @@ export class ClaudeAcpAgent implements Agent {
           updatedInput: toolInput,
         };
       } else {
+        const message = "User refused permission to run tool";
+        await emitToolDenial(message);
         return {
           behavior: "deny",
-          message: "User refused permission to run tool",
+          message,
           interrupt: true,
         };
       }
@@ -951,6 +1408,15 @@ export class ClaudeAcpAgent implements Agent {
         modelId: string;
       };
       await this.setSessionModel({ sessionId, modelId });
+      return {};
+    }
+
+    if (method === "session/setMode") {
+      const { sessionId, modeId } = params as {
+        sessionId: string;
+        modeId: string;
+      };
+      await this.setSessionMode({ sessionId, modeId });
       return {};
     }
 
@@ -1163,8 +1629,8 @@ function formatUriAsLink(uri: string): string {
 }
 
 export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
-  const content: any[] = [];
-  const context: any[] = [];
+  const content: ContentBlockParam[] = [];
+  const context: ContentBlockParam[] = [];
 
   for (const chunk of prompt.prompt) {
     switch (chunk.type) {
@@ -1209,7 +1675,11 @@ export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
             source: {
               type: "base64",
               data: chunk.data,
-              media_type: chunk.mimeType,
+              media_type: chunk.mimeType as
+                | "image/jpeg"
+                | "image/png"
+                | "image/gif"
+                | "image/webp",
             },
           });
         } else if (chunk.uri?.startsWith("http")) {
@@ -1472,75 +1942,6 @@ export function streamEventToAcpNotifications(
   }
 }
 
-export type AcpConnectionConfig = {
-  sessionStore?: SessionStore;
-  sessionId?: string;
-  taskId?: string;
-};
-
-export type InProcessAcpConnection = {
-  agentConnection: AgentSideConnection;
-  clientStreams: StreamPair;
-};
-
-export function createAcpConnection(
-  config: AcpConnectionConfig = {},
-): InProcessAcpConnection {
-  const logger = new Logger({ debug: true, prefix: "[AcpConnection]" });
-  const streams = createBidirectionalStreams();
-
-  const { sessionStore } = config;
-
-  // Tap both streams for automatic persistence
-  // All messages (bidirectional) will be persisted as they flow through
-  let agentWritable = streams.agent.writable;
-  let clientWritable = streams.client.writable;
-
-  if (config.sessionId && sessionStore) {
-    // Register session for persistence BEFORE tapping streams
-    // This ensures all messages from the start get persisted
-    if (!sessionStore.isRegistered(config.sessionId)) {
-      sessionStore.register(config.sessionId, {
-        taskId: config.taskId ?? config.sessionId,
-        runId: config.sessionId,
-        logUrl: "", // Will be updated when we get the real logUrl
-      });
-    }
-
-    // Tap agent→client stream
-    agentWritable = createTappedWritableStream(streams.agent.writable, {
-      onMessage: (line) => {
-        sessionStore.appendRawLine(config.sessionId!, line);
-      },
-      logger,
-    });
-
-    // Tap client→agent stream
-    clientWritable = createTappedWritableStream(streams.client.writable, {
-      onMessage: (line) => {
-        sessionStore.appendRawLine(config.sessionId!, line);
-      },
-      logger,
-    });
-  } else {
-    logger.info("Tapped streams NOT enabled", {
-      hasSessionId: !!config.sessionId,
-      hasSessionStore: !!sessionStore,
-    });
-  }
-
-  const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
-
-  const agentConnection = new AgentSideConnection(
-    (client) => new ClaudeAcpAgent(client, sessionStore),
-    agentStream,
-  );
-
-  return {
-    agentConnection,
-    clientStreams: {
-      readable: streams.client.readable,
-      writable: clientWritable,
-    },
-  };
-}
+// Note: createAcpConnection has been moved to ../connection.ts
+// Import from there instead:
+// import { createAcpConnection } from "../connection.js";

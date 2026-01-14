@@ -1,7 +1,11 @@
-name: Code quality
+name: Code Quality
 
 on:
   pull_request:
+
+concurrency:
+  group: code-quality-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -10,10 +14,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
+
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
+
       - name: Run Biome
         run: biome ci .

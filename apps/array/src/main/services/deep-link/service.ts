@@ -21,18 +21,17 @@ export class DeepLinkService {
       return;
     }
 
-    // Register the protocol
+    // Skip protocol registration in development to avoid hijacking deep links
+    // from the production app. OAuth uses HTTP callback in dev mode anyway.
     if (process.defaultApp) {
-      // Development: need to register with path to electron
-      if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-          process.argv[1],
-        ]);
-      }
-    } else {
-      // Production
-      app.setAsDefaultProtocolClient(PROTOCOL);
+      log.info(
+        "Skipping protocol registration in development (using HTTP callback for OAuth)",
+      );
+      return;
     }
+
+    // Production: register the protocol
+    app.setAsDefaultProtocolClient(PROTOCOL);
 
     this.protocolRegistered = true;
     log.info(`Registered '${PROTOCOL}' protocol handler`);

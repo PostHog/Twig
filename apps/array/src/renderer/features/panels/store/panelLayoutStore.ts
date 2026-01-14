@@ -1,5 +1,7 @@
+import { track } from "@renderer/lib/analytics";
 import { persist } from "zustand/middleware";
 import { createWithEqualityFn } from "zustand/traditional";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 import {
   DEFAULT_PANEL_IDS,
   DEFAULT_TAB_IDS,
@@ -27,6 +29,11 @@ import {
   updateTreeNode,
 } from "./panelTree";
 import type { PanelNode, Tab } from "./panelTypes";
+
+function getFileExtension(filePath: string): string {
+  const parts = filePath.split(".");
+  return parts.length > 1 ? parts[parts.length - 1] : "";
+}
 
 export interface TaskLayout {
   panelTree: PanelNode;
@@ -282,11 +289,30 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
         set((state) => openTab(state, taskId, tabId, asPreview));
+
+        track(ANALYTICS_EVENTS.FILE_OPENED, {
+          file_extension: getFileExtension(filePath),
+          source: "sidebar",
+          task_id: taskId,
+        });
       },
 
       openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
         set((state) => openTab(state, taskId, tabId, asPreview));
+
+        // Track diff viewed
+        const changeType =
+          status === "added"
+            ? "added"
+            : status === "deleted"
+              ? "deleted"
+              : "modified";
+        track(ANALYTICS_EVENTS.FILE_DIFF_VIEWED, {
+          file_extension: getFileExtension(filePath),
+          change_type: changeType,
+          task_id: taskId,
+        });
       },
 
       keepTab: (taskId, panelId, tabId) => {

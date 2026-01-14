@@ -1,4 +1,3 @@
-import path from "node:path";
 import { WorktreeManager } from "@posthog/agent";
 import { app } from "electron";
 import Store from "electron-store";
@@ -59,23 +58,15 @@ const schema = {
   },
 };
 
-function getStorePath(): string {
-  const userDataPath = app.getPath("userData");
-  if (userDataPath.includes("@posthog")) {
-    return path.join(path.dirname(userDataPath), "Array");
-  }
-  return userDataPath;
-}
-
 export const rendererStore = new Store<RendererStoreSchema>({
   name: "renderer-storage",
-  cwd: getStorePath(),
+  cwd: app.getPath("userData"),
 });
 
 export const foldersStore = new Store<FoldersSchema>({
   name: "folders",
   schema,
-  cwd: getStorePath(),
+  cwd: app.getPath("userData"),
   defaults: {
     folders: [],
     taskAssociations: [],

@@ -28,9 +28,14 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
+import { track } from "@renderer/lib/analytics";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
+import {
+  ANALYTICS_EVENTS,
+  type GitActionType as AnalyticsGitActionType,
+} from "@/types/analytics";
 
 interface GitActionsBarProps {
   taskId: string;
@@ -124,11 +129,11 @@ export function GitActionsBar({
       const executionType = GIT_ACTION_EXECUTION_TYPE[actionType];
 
       setIsSending(true);
+      let success = false;
       try {
         if (executionType === "trpc") {
           const result = await executeTrpcGitAction(actionType, repoPath);
-          if (!result.success) {
-          }
+          success = result.success;
           await queryClient.invalidateQueries({
             queryKey: ["git-sync-status", repoPath],
           });
@@ -139,8 +144,30 @@ export function GitActionsBar({
           if (!session) return;
           const message = createGitActionMessage(actionType, prompt);
           await sendPrompt(taskId, message);
+          success = true;
+        }
+
+        // Track git action executed
+        track(ANALYTICS_EVENTS.GIT_ACTION_EXECUTED, {
+          action_type: actionType as AnalyticsGitActionType,
+          success,
+          task_id: taskId,
+        });
+
+        // Track PR created specifically
+        if (actionType === "create-pr") {
+          track(ANALYTICS_EVENTS.PR_CREATED, {
+            task_id: taskId,
+            success,
+          });
         }
       } catch (_error) {
+        // Track failed git action
+        track(ANALYTICS_EVENTS.GIT_ACTION_EXECUTED, {
+          action_type: actionType as AnalyticsGitActionType,
+          success: false,
+          task_id: taskId,
+        });
       } finally {
         setIsSending(false);
       }

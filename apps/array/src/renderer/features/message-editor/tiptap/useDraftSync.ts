@@ -9,6 +9,10 @@ function tiptapJsonToEditorContent(json: JSONContent): EditorContent {
   const traverse = (node: JSONContent) => {
     if (node.type === "text" && node.text) {
       segments.push({ type: "text", text: node.text });
+    } else if (node.type === "hardBreak") {
+      // Shift+Enter creates a hard break within a paragraph
+      // Use two trailing spaces + newline for markdown line break (<br>)
+      segments.push({ type: "text", text: "  \n" });
     } else if (node.type === "mentionChip" && node.attrs) {
       segments.push({
         type: "chip",
@@ -18,6 +22,15 @@ function tiptapJsonToEditorContent(json: JSONContent): EditorContent {
           label: node.attrs.label,
         },
       });
+    } else if (node.type === "doc" && node.content) {
+      // Add double newlines between paragraphs for markdown rendering
+      // (single newlines in markdown become spaces, double newlines create paragraph breaks)
+      for (let i = 0; i < node.content.length; i++) {
+        if (i > 0) {
+          segments.push({ type: "text", text: "\n\n" });
+        }
+        traverse(node.content[i]);
+      }
     } else if (node.content) {
       for (const child of node.content) {
         traverse(child);
@@ -30,13 +43,33 @@ function tiptapJsonToEditorContent(json: JSONContent): EditorContent {
 }
 
 function editorContentToTiptapJson(content: EditorContent): JSONContent {
-  const paragraphContent: JSONContent[] = [];
+  const paragraphs: JSONContent[] = [];
+  let currentParagraphContent: JSONContent[] = [];
+
+  const flushParagraph = () => {
+    paragraphs.push({ type: "paragraph", content: currentParagraphContent });
+    currentParagraphContent = [];
+  };
 
   for (const seg of content.segments) {
     if (seg.type === "text") {
-      paragraphContent.push({ type: "text", text: seg.text });
+      const paragraphParts = seg.text.split("\n\n");
+      for (let i = 0; i < paragraphParts.length; i++) {
+        if (i > 0) {
+          flushParagraph();
+        }
+        const lineParts = paragraphParts[i].split(/ {2}\n|\n/);
+        for (let j = 0; j < lineParts.length; j++) {
+          if (j > 0) {
+            currentParagraphContent.push({ type: "hardBreak" });
+          }
+          if (lineParts[j]) {
+            currentParagraphContent.push({ type: "text", text: lineParts[j] });
+          }
+        }
+      }
     } else {
-      paragraphContent.push({
+      currentParagraphContent.push({
         type: "mentionChip",
         attrs: {
           type: seg.chip.type,
@@ -47,9 +80,15 @@ function editorContentToTiptapJson(content: EditorContent): JSONContent {
     }
   }
 
+  flushParagraph();
+
+  if (paragraphs.length === 0) {
+    paragraphs.push({ type: "paragraph", content: [] });
+  }
+
   return {
     type: "doc",
-    content: [{ type: "paragraph", content: paragraphContent }],
+    content: paragraphs,
   };
 }
 
@@ -64,12 +103,26 @@ export function useDraftSync(
   context?: DraftContext,
 ) {
   const hasRestoredRef = useRef(false);
+  const lastSessionIdRef = useRef(sessionId);
+  const lastEditorRef = useRef(editor);
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
   const draftActions = useDraftStore((s) => s.actions);
   const draft = useDraftStore((s) => s.drafts[sessionId] ?? null);
   const hasHydrated = useDraftStore((s) => s._hasHydrated);
+
+  // Reset restoration flag when sessionId changes (e.g., navigating between tasks)
+  if (lastSessionIdRef.current !== sessionId) {
+    lastSessionIdRef.current = sessionId;
+    hasRestoredRef.current = false;
+  }
+
+  // Reset restoration flag when editor instance changes (e.g., when disabled state changes)
+  if (lastEditorRef.current !== editor && editor !== null) {
+    lastEditorRef.current = editor;
+    hasRestoredRef.current = false;
+  }
 
   // Set context for this session
   useLayoutEffect(() => {
@@ -82,7 +135,7 @@ export function useDraftSync(
     };
   }, [sessionId, context?.taskId, context?.repoPath, draftActions]);
 
-  // Restore draft on mount
+  // Restore draft on mount or when sessionId/editor changes
   useLayoutEffect(() => {
     if (!hasHydrated || !editor || hasRestoredRef.current) return;
     if (!draft || isContentEmpty(draft)) return;
@@ -98,6 +151,10 @@ export function useDraftSync(
 
   const saveDraft = useCallback(
     (e: Editor) => {
+      // Don't save until store has hydrated from storage
+      // This prevents overwriting stored drafts with empty content before restoration
+      if (!hasHydrated) return;
+
       const json = e.getJSON();
       const content = tiptapJsonToEditorContent(json);
       draftActions.setDraft(
@@ -105,7 +162,7 @@ export function useDraftSync(
         isContentEmpty(content) ? null : content,
       );
     },
-    [sessionId, draftActions],
+    [sessionId, draftActions, hasHydrated],
   );
 
   const clearDraft = useCallback(() => {

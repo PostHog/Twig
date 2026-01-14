@@ -1,13 +1,16 @@
 import "./message-editor.css";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useImperativeHandle } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
 import { EditorToolbar } from "./EditorToolbar";
+import { ModeIndicatorInput } from "./ModeIndicatorInput";
 
 export type { EditorHandle as MessageEditorHandle };
 export type { EditorContentType as EditorContent };
@@ -21,6 +24,8 @@ interface MessageEditorProps {
   onCancel?: () => void;
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
+  currentMode?: ExecutionMode;
+  onModeChange?: () => void;
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -34,10 +39,14 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onCancel,
       onAttachFiles,
       autoFocus = false,
+      currentMode,
+      onModeChange,
     },
     ref,
   ) => {
     const context = useDraftStore((s) => s.contexts[sessionId]);
+    const focusRequested = useDraftStore((s) => s.focusRequested[sessionId]);
+    const clearFocusRequest = useDraftStore((s) => s.actions.clearFocusRequest);
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
@@ -46,6 +55,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
 
     const {
       editor,
+      isReady,
       isEmpty,
       isBashMode,
       submit,
@@ -58,6 +68,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       insertChip,
     } = useTiptapEditor({
       sessionId,
+      taskId,
       placeholder,
       disabled,
       isCloud,
@@ -82,9 +93,30 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       [focus, blur, clear, isEmpty, getContent, getText, setContent],
     );
 
+    useEffect(() => {
+      if (!focusRequested || !isReady) return;
+      focus();
+      clearFocusRequest(sessionId);
+    }, [focusRequested, focus, clearFocusRequest, sessionId, isReady]);
+
+    useHotkeys(
+      "escape",
+      (e) => {
+        if (isLoading && onCancel) {
+          e.preventDefault();
+          onCancel();
+        }
+      },
+      {
+        enableOnFormTags: true,
+        enableOnContentEditable: true,
+      },
+      [isLoading, onCancel],
+    );
+
     const handleContainerClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest("button")) {
+      if (!target.closest("button") && !target.closest(".ProseMirror")) {
         focus();
       }
     };
@@ -96,7 +128,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         onClick={handleContainerClick}
         style={{ cursor: "text" }}
       >
-        <div className="max-h-[200px] min-h-[30px] flex-1 overflow-y-auto font-mono text-sm">
+        <div className="max-h-[200px] min-h-[50px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </div>
 
@@ -154,6 +186,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             )}
           </Flex>
         </Flex>
+        {onModeChange && currentMode && (
+          <ModeIndicatorInput mode={currentMode} />
+        )}
       </Flex>
     );
   },
