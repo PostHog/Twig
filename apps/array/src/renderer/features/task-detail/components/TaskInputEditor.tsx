@@ -247,13 +247,9 @@ export const TaskInputEditor = forwardRef<
                   loading={isCreatingTask}
                   style={{
                     backgroundColor:
-                      !canSubmit || isDisabled
-                        ? "var(--accent-a4)"
-                        : undefined,
+                      !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
                     color:
-                      !canSubmit || isDisabled
-                        ? "var(--accent-8)"
-                        : undefined,
+                      !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
                   }}
                 >
                   <ArrowUp size={16} weight="bold" />
