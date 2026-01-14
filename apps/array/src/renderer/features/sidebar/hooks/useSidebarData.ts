@@ -236,12 +236,15 @@ function buildHistoryData(
     };
   });
 
+  // Filter out pinned tasks - they will be shown in their own section
+  const unpinnedTasks = historyTasks.filter((t) => !pinnedTaskIds.has(t.id));
+
   // Partition into active (unread) and inactive tasks
-  const activeTasks = historyTasks
+  const activeTasks = unpinnedTasks
     .filter((t) => t.isUnread)
     .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
 
-  const inactiveTasks = historyTasks
+  const inactiveTasks = unpinnedTasks
     .filter((t) => !t.isUnread)
     .sort((a, b) => b.createdAt - a.createdAt);
 
