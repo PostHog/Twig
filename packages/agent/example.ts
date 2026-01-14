@@ -7,6 +7,7 @@ import { config } from "dotenv";
 config();
 
 import { Agent, PermissionMode } from "./src/agent.js";
+import { getLlmGatewayUrl } from "./src/utils/gateway.js";
 
 function hasUncommittedChanges(repoPath: string): boolean {
   try {
@@ -83,10 +84,11 @@ async function testAgent() {
     });
   }
 
+  const apiKey = process.env.POSTHOG_API_KEY || "";
   const agent = new Agent({
     workingDirectory: REPO_PATH,
     posthogApiUrl: process.env.POSTHOG_API_URL || "http://localhost:8010",
-    posthogApiKey: process.env.POSTHOG_API_KEY,
+    getPosthogApiKey: () => apiKey,
     posthogProjectId: process.env.POSTHOG_PROJECT_ID
       ? parseInt(process.env.POSTHOG_PROJECT_ID, 10)
       : 1,
@@ -142,7 +144,9 @@ async function testAgent() {
           POSTHOG_AUTH_HEADER: `Bearer ${process.env.POSTHOG_API_KEY}`,
           ANTHROPIC_API_KEY: process.env.POSTHOG_API_KEY,
           ANTHROPIC_AUTH_TOKEN: process.env.POSTHOG_API_KEY,
-          ANTHROPIC_BASE_URL: `${process.env.POSTHOG_API_URL}/api/projects/${process.env.POSTHOG_PROJECT_ID}/llm_gateway`,
+          ANTHROPIC_BASE_URL: getLlmGatewayUrl(
+            process.env.POSTHOG_API_URL || "",
+          ),
         },
       },
     });

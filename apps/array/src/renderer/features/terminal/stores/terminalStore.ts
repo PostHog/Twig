@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { terminalManager } from "../services/TerminalManager";
@@ -88,9 +89,9 @@ export const useTerminalStore = create<TerminalStoreState>()(
           const state = get().terminalStates[key];
           if (!state?.sessionId) return;
 
-          const processName = await window.electronAPI?.shellGetProcess(
-            state.sessionId,
-          );
+          const processName = await trpcVanilla.shell.getProcess.query({
+            sessionId: state.sessionId,
+          });
           if (processName !== state.processName) {
             get().setProcessName(key, processName ?? null);
           }

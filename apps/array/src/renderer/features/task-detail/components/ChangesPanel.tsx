@@ -1,5 +1,8 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
+import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
+import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
   ArrowCounterClockwiseIcon,
@@ -7,7 +10,6 @@ import {
   CaretUpIcon,
   CodeIcon,
   CopyIcon,
-  FileIcon,
   FilePlus,
 } from "@phosphor-icons/react";
 import {
@@ -19,6 +21,7 @@ import {
   Text,
   Tooltip,
 } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -127,13 +130,21 @@ function ChangedFileItem({
     openDiff(taskId, file.path, file.status);
   };
 
+  const handleDoubleClick = () => {
+    openDiff(taskId, file.path, file.status, false);
+  };
+
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const result = await window.electronAPI.showFileContextMenu(fullPath);
+    const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
+      filePath: fullPath,
+    });
 
     if (!result.action) return;
 
-    await handleExternalAppAction(result.action, fullPath, fileName);
+    if (result.action.type === "external-app") {
+      await handleExternalAppAction(result.action.action, fullPath, fileName);
+    }
   };
 
   const handleOpenWith = async (appId: string) => {
@@ -169,11 +180,11 @@ function ChangedFileItem({
 
     if (result.response !== 1) return;
 
-    await window.electronAPI.discardFileChanges(
-      repoPath,
-      file.originalPath ?? file.path, // For renames, use the original path
-      file.status,
-    );
+    await trpcVanilla.git.discardFileChanges.mutate({
+      directoryPath: repoPath,
+      filePath: file.originalPath ?? file.path, // For renames, use the original path
+      fileStatus: file.status,
+    });
 
     closeDiffTabsForFile(taskId, file.path);
 
@@ -190,6 +201,7 @@ function ChangedFileItem({
       align="center"
       gap="1"
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -207,12 +219,7 @@ function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <FileIcon
-        size={14}
-        weight="regular"
-        color="var(--gray-10)"
-        style={{ flexShrink: 0 }}
-      />
+      <FileIcon filename={fileName} size={14} />
       <Text
         size="1"
         style={{
@@ -348,12 +355,18 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const pendingPermissions = usePendingPermissionsForTask(taskId);
+  const hasPendingPermissions = pendingPermissions.size > 0;
 
   const { data: changedFiles = [], isLoading } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getChangedFilesHead.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: !!repoPath,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const getActiveIndex = useCallback((): number => {
@@ -387,8 +400,18 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     [changedFiles, getActiveIndex, openDiff, taskId],
   );
 
-  useHotkeys("up", () => handleKeyNavigation("up"), [handleKeyNavigation]);
-  useHotkeys("down", () => handleKeyNavigation("down"), [handleKeyNavigation]);
+  useHotkeys(
+    "up",
+    () => handleKeyNavigation("up"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
+  useHotkeys(
+    "down",
+    () => handleKeyNavigation("down"),
+    { enabled: !hasPendingPermissions },
+    [handleKeyNavigation, hasPendingPermissions],
+  );
 
   const isFileActive = (file: ChangedFile): boolean => {
     if (!layout) return false;
@@ -403,33 +426,48 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     return <PanelMessage>Loading changes...</PanelMessage>;
   }
 
-  if (changedFiles.length === 0) {
-    return <PanelMessage>No file changes yet</PanelMessage>;
+  const hasChanges = changedFiles.length > 0;
+
+  if (!hasChanges) {
+    return (
+      <Box height="100%" position="relative">
+        <PanelMessage>No file changes yet</PanelMessage>
+        <GitActionsBar taskId={taskId} repoPath={repoPath} hasChanges={false} />
+      </Box>
+    );
   }
 
   return (
-    <Box height="100%" overflowY="auto" py="2">
-      <Flex direction="column">
-        {changedFiles.map((file) => (
-          <ChangedFileItem
-            key={file.path}
-            file={file}
-            taskId={taskId}
-            repoPath={repoPath}
-            isActive={isFileActive(file)}
-          />
-        ))}
-        <Flex align="center" justify="center" gap="1" py="2">
-          <CaretUpIcon size={12} color="var(--gray-10)" />
-          <Text size="1" className="text-gray-10">
-            /
-          </Text>
-          <CaretDownIcon size={12} color="var(--gray-10)" />
-          <Text size="1" className="text-gray-10" ml="1">
-            to switch files
-          </Text>
+    <Box height="100%" position="relative">
+      <Box
+        height="100%"
+        overflowY="auto"
+        py="2"
+        style={{ paddingBottom: "52px" }}
+      >
+        <Flex direction="column">
+          {changedFiles.map((file) => (
+            <ChangedFileItem
+              key={file.path}
+              file={file}
+              taskId={taskId}
+              repoPath={repoPath}
+              isActive={isFileActive(file)}
+            />
+          ))}
+          <Flex align="center" justify="center" gap="1" py="2">
+            <CaretUpIcon size={12} color="var(--gray-10)" />
+            <Text size="1" className="text-gray-10">
+              /
+            </Text>
+            <CaretDownIcon size={12} color="var(--gray-10)" />
+            <Text size="1" className="text-gray-10" ml="1">
+              to switch files
+            </Text>
+          </Flex>
         </Flex>
-      </Flex>
+      </Box>
+      <GitActionsBar taskId={taskId} repoPath={repoPath} hasChanges={true} />
     </Box>
   );
 }

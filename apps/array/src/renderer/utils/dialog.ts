@@ -1,3 +1,5 @@
+import { trpcVanilla } from "@renderer/trpc";
+
 interface MessageBoxOptions {
   type?: "none" | "info" | "error" | "question" | "warning";
   title?: string;
@@ -19,5 +21,5 @@ export async function showMessageBox(
     document.activeElement.blur();
   }
 
-  return window.electronAPI.showMessageBox(options);
+  return trpcVanilla.os.showMessageBox.mutate({ options });
 }

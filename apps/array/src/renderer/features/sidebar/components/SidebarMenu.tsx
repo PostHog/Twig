@@ -2,28 +2,35 @@ import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import type { DragDropEvents } from "@dnd-kit/react";
 import { DragDropProvider, DragOverlay, PointerSensor } from "@dnd-kit/react";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { CloudIcon, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { memo, useCallback } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
+import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HomeItem } from "./items/HomeItem";
 import { NewTaskItem } from "./items/NewTaskItem";
 import { TaskItem } from "./items/TaskItem";
-import { SidebarSection } from "./SidebarSection";
+import { SidebarFooter } from "./SidebarFooter";
 import { SortableFolderSection } from "./SortableFolderSection";
 
 function SidebarMenuComponent() {
-  const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
+  const {
+    view,
+    navigateToTask,
+    navigateToTaskInput,
+    navigateToFolderSettings,
+  } = useNavigationStore();
 
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const { data: currentUser } = useMeQuery();
@@ -40,6 +47,8 @@ function SidebarMenuComponent() {
 
   const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
     useTaskContextMenu();
+  const { deleteWithConfirm } = useDeleteTask();
+  const togglePin = usePinnedTasksStore((state) => state.togglePin);
 
   const sidebarData = useSidebarData({
     activeView: view,
@@ -102,8 +111,30 @@ function SidebarMenuComponent() {
     }
   };
 
+  const handleTaskDelete = async (taskId: string) => {
+    const task = taskMap.get(taskId);
+    if (!task) return;
+
+    const workspace = workspaces[taskId];
+    const hasWorktree = !!workspace?.worktreePath;
+
+    await deleteWithConfirm({
+      taskId,
+      taskTitle: task.title,
+      hasWorktree,
+    });
+  };
+
+  const handleTaskTogglePin = (taskId: string) => {
+    togglePin(taskId);
+  };
+
   const handleFolderNewTask = (folderId: string) => {
     navigateToTaskInput(folderId);
+  };
+
+  const handleFolderSettings = (folderId: string) => {
+    navigateToFolderSettings(folderId);
   };
 
   const handleFolderContextMenu = async (
@@ -114,30 +145,31 @@ function SidebarMenuComponent() {
     const folder = folders.find((f) => f.id === folderId);
     if (!folder) return;
 
-    if (!window.electronAPI?.showFolderContextMenu) {
-      const confirmed = window.confirm(
-        `Remove "${folder.name}" from Array?\n\nThis will not delete any files on your computer.`,
-      );
-      if (confirmed) {
-        await removeFolder(folderId);
+    const result = await trpcVanilla.contextMenu.showFolderContextMenu.mutate({
+      folderName: folder.name,
+      folderPath: folder.path,
+    });
+
+    if (!result.action) return;
+
+    if (result.action.type === "remove") {
+      // Check if we're currently viewing a task that uses this folder
+      if (view.type === "task-detail" && view.taskId) {
+        const workspace = workspaces[view.taskId];
+        if (workspace?.folderId === folderId) {
+          navigateToTaskInput();
+        }
       }
-      return;
-    }
-
-    const result = await window.electronAPI.showFolderContextMenu(
-      folderId,
-      folder.name,
-      folder.path,
-    );
-
-    if (result.action === "remove") {
       await removeFolder(folderId);
-    } else if (result.action && typeof result.action === "object") {
-      // Handle external app actions
+    } else if (result.action.type === "external-app") {
       const { handleExternalAppAction } = await import(
         "@utils/handleExternalAppAction"
       );
-      await handleExternalAppAction(result.action, folder.path, folder.name);
+      await handleExternalAppAction(
+        result.action.action,
+        folder.path,
+        folder.name,
+      );
     }
   };
 
@@ -149,110 +181,105 @@ function SidebarMenuComponent() {
         onOpenChange={setRenameDialogOpen}
       />
 
-      <Box
-        style={{
-          flexGrow: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-        }}
-      >
-        <Flex direction="column" py="2">
-          <HomeItem
-            isActive={sidebarData.isHomeActive}
-            onClick={handleHomeClick}
-          />
+      <Box height="100%" position="relative">
+        <Box
+          style={{
+            height: "100%",
+            overflowY: "auto",
+            overflowX: "hidden",
+            paddingBottom: "52px",
+          }}
+        >
+          <Flex direction="column" py="2">
+            <HomeItem
+              isActive={sidebarData.isHomeActive}
+              onClick={handleHomeClick}
+            />
 
-          <DragDropProvider
-            onDragOver={handleDragOver}
-            sensors={[
-              PointerSensor.configure({
-                activationConstraints: {
-                  distance: { value: 5 },
-                },
-              }),
-            ]}
-          >
-            {sidebarData.folders.map((folder, index) => {
-              const isExpanded = !collapsedSections.has(folder.id);
-              return (
-                <SortableFolderSection
-                  key={folder.id}
-                  id={folder.id}
-                  index={index}
-                  label={folder.name}
-                  icon={
-                    isExpanded ? (
-                      <FolderOpenIcon size={14} weight="regular" />
-                    ) : (
-                      <FolderIcon size={14} weight="regular" />
-                    )
-                  }
-                  isExpanded={isExpanded}
-                  onToggle={() => toggleSection(folder.id)}
-                  onContextMenu={(e) => handleFolderContextMenu(folder.id, e)}
-                >
-                  <NewTaskItem onClick={() => handleFolderNewTask(folder.id)} />
-                  {folder.tasks.map((task) => (
-                    <TaskItem
-                      key={task.id}
-                      id={task.id}
-                      label={task.title}
-                      isActive={sidebarData.activeTaskId === task.id}
-                      worktreeName={
-                        workspaces[task.id]?.worktreeName ?? undefined
-                      }
-                      worktreePath={
-                        workspaces[task.id]?.worktreePath ??
-                        workspaces[task.id]?.folderPath
-                      }
-                      workspaceMode={taskStates[task.id]?.workspaceMode}
-                      lastActivityAt={task.lastActivityAt}
-                      isGenerating={task.isGenerating}
-                      isUnread={task.isUnread}
-                      onClick={() => handleTaskClick(task.id)}
-                      onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
-                    />
-                  ))}
-                </SortableFolderSection>
-              );
-            })}
-            <DragOverlay>
-              {(source) =>
-                source?.type === "folder" ? (
-                  <div className="flex w-full items-center gap-1 rounded bg-gray-2 px-2 py-1 font-mono text-[12px] text-gray-11 shadow-lg">
-                    <FolderIcon size={14} weight="regular" />
-                    <span className="font-medium">{source.data?.label}</span>
-                  </div>
-                ) : null
-              }
-            </DragOverlay>
-          </DragDropProvider>
+            <div className="mx-2 my-2 border-gray-6 border-t" />
 
-          {sidebarData.cloudRepos.map((cloudRepo) => (
-            <SidebarSection
-              key={cloudRepo.repository}
-              id={`cloud-${cloudRepo.repository}`}
-              label={cloudRepo.repoName}
-              icon={<CloudIcon size={14} weight="regular" />}
-              isExpanded={!collapsedSections.has(`cloud-${cloudRepo.repository}`)}
-              onToggle={() => toggleSection(`cloud-${cloudRepo.repository}`)}
+            <DragDropProvider
+              onDragOver={handleDragOver}
+              sensors={[
+                PointerSensor.configure({
+                  activationConstraints: {
+                    distance: { value: 5 },
+                  },
+                }),
+              ]}
             >
-              {cloudRepo.tasks.map((task) => (
-                <TaskItem
-                  key={task.id}
-                  id={task.id}
-                  label={task.title}
-                  isActive={sidebarData.activeTaskId === task.id}
-                  lastActivityAt={task.lastActivityAt}
-                  isGenerating={task.isGenerating}
-                  isUnread={task.isUnread}
-                  onClick={() => handleTaskClick(task.id)}
-                  onContextMenu={(e) => handleTaskContextMenu(task.id, e)}
-                />
-              ))}
-            </SidebarSection>
-          ))}
-        </Flex>
+              {sidebarData.folders.map((folder, index) => {
+                const isExpanded = !collapsedSections.has(folder.id);
+                return (
+                  <div key={folder.id}>
+                    {index > 0 && (
+                      <div className="mx-2 my-2 border-gray-6 border-t" />
+                    )}
+                    <SortableFolderSection
+                      id={folder.id}
+                      index={index}
+                      label={folder.name}
+                      icon={
+                        isExpanded ? (
+                          <FolderOpenIcon size={14} weight="regular" />
+                        ) : (
+                          <FolderIcon size={14} weight="regular" />
+                        )
+                      }
+                      isExpanded={isExpanded}
+                      onToggle={() => toggleSection(folder.id)}
+                      onSettingsClick={() => handleFolderSettings(folder.id)}
+                      onContextMenu={(e) =>
+                        handleFolderContextMenu(folder.id, e)
+                      }
+                    >
+                      <NewTaskItem
+                        onClick={() => handleFolderNewTask(folder.id)}
+                      />
+                      {folder.tasks.map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          id={task.id}
+                          label={task.title}
+                          isActive={sidebarData.activeTaskId === task.id}
+                          worktreeName={
+                            workspaces[task.id]?.worktreeName ?? undefined
+                          }
+                          worktreePath={
+                            workspaces[task.id]?.worktreePath ??
+                            workspaces[task.id]?.folderPath
+                          }
+                          workspaceMode={taskStates[task.id]?.workspaceMode}
+                          lastActivityAt={task.lastActivityAt}
+                          isGenerating={task.isGenerating}
+                          isUnread={task.isUnread}
+                          isPinned={task.isPinned}
+                          onClick={() => handleTaskClick(task.id)}
+                          onContextMenu={(e) =>
+                            handleTaskContextMenu(task.id, e)
+                          }
+                          onDelete={() => handleTaskDelete(task.id)}
+                          onTogglePin={() => handleTaskTogglePin(task.id)}
+                        />
+                      ))}
+                    </SortableFolderSection>
+                  </div>
+                );
+              })}
+              <DragOverlay>
+                {(source) =>
+                  source?.type === "folder" ? (
+                    <div className="flex w-full items-center gap-1 rounded bg-gray-2 px-2 py-1 font-mono text-[12px] text-gray-11 shadow-lg">
+                      <FolderIcon size={14} weight="regular" />
+                      <span className="font-medium">{source.data?.label}</span>
+                    </div>
+                  ) : null
+                }
+              </DragOverlay>
+            </DragDropProvider>
+          </Flex>
+        </Box>
+        <SidebarFooter />
       </Box>
     </>
   );

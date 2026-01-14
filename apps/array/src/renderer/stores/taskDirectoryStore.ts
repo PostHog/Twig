@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import { omitKey } from "@utils/object";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
@@ -10,6 +11,7 @@ interface TaskDirectoryState {
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
   setRepoDirectory: (repoKey: string, directory: string) => void;
   clearRepoDirectory: (repoKey: string) => void;
+  validateLastUsedDirectory: () => Promise<void>;
 }
 
 const isValidPath = (path: string): boolean => {
@@ -54,6 +56,18 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
           repoDirectories: omitKey(state.repoDirectories, repoKey),
         }));
       },
+
+      validateLastUsedDirectory: async () => {
+        const { lastUsedDirectory } = get();
+        if (!lastUsedDirectory) return;
+
+        const exists = await trpcVanilla.git.validateRepo.query({
+          directoryPath: lastUsedDirectory,
+        });
+        if (!exists) {
+          set({ lastUsedDirectory: null });
+        }
+      },
     }),
     {
       name: "task-directory-mappings",
@@ -84,6 +98,9 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
           state.repoDirectories = cleanedRepoDirs;
           state.lastUsedDirectory = cleanedLastUsed;
         }
+
+        // Validate that lastUsedDirectory still exists on disk
+        state.validateLastUsedDirectory();
       },
     },
   ),

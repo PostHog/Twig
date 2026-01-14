@@ -1,5 +1,7 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import { ChatCenteredText, Terminal } from "@phosphor-icons/react";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
@@ -18,6 +20,7 @@ export interface PanelLayoutState {
   closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
+  keepTab: (taskId: string, panelId: string, tabId: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
   addTerminalTab: (taskId: string, panelId: string) => void;
   splitPanel: (
@@ -41,6 +44,7 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
         closeTab: state.closeTab,
         closeOtherTabs: state.closeOtherTabs,
         closeTabsToRight: state.closeTabsToRight,
+        keepTab: state.keepTab,
         setFocusedPanel: state.setFocusedPanel,
         addTerminalTab: state.addTerminalTab,
         splitPanel: state.splitPanel,
@@ -97,9 +101,26 @@ export function useTabInjection(
           };
         }
 
+        // Generate icon based on tab type
+        let icon = tab.icon;
+        if (!icon) {
+          if (tab.data.type === "file" || tab.data.type === "diff") {
+            const filename = tab.data.relativePath.split("/").pop() || "";
+            icon = <FileIcon filename={filename} size={14} />;
+          } else if (
+            tab.data.type === "terminal" ||
+            tab.data.type === "workspace-terminal"
+          ) {
+            icon = <Terminal size={14} />;
+          } else if (tab.data.type === "logs") {
+            icon = <ChatCenteredText size={14} />;
+          }
+        }
+
         const updatedTab = {
           ...tab,
           data: updatedData,
+          icon,
         };
 
         return {

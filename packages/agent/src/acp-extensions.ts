@@ -13,16 +13,8 @@
  * Used with AgentSideConnection.extNotification() or Client.extNotification()
  */
 export const POSTHOG_NOTIFICATIONS = {
-  /** Artifact produced during task execution (research, plan, etc.) */
-  ARTIFACT: "_posthog/artifact",
-  /** Phase has started (research, plan, build, etc.) */
-  PHASE_START: "_posthog/phase_start",
-  /** Phase has completed */
-  PHASE_COMPLETE: "_posthog/phase_complete",
   /** Git branch was created */
   BRANCH_CREATED: "_posthog/branch_created",
-  /** Pull request was created */
-  PR_CREATED: "_posthog/pr_created",
   /** Task run has started */
   RUN_STARTED: "_posthog/run_started",
   /** Task has completed */
@@ -38,34 +30,8 @@ export const POSTHOG_NOTIFICATIONS = {
 export type PostHogNotificationType =
   (typeof POSTHOG_NOTIFICATIONS)[keyof typeof POSTHOG_NOTIFICATIONS];
 
-export interface ArtifactNotificationPayload {
-  sessionId: string;
-  kind:
-    | "research_evaluation"
-    | "research_questions"
-    | "plan"
-    | "pr_body"
-    | string;
-  content: unknown;
-}
-
-export interface PhaseNotificationPayload {
-  sessionId: string;
-  phase: "research" | "plan" | "build" | "finalize" | string;
-  [key: string]: unknown;
-}
-
 export interface BranchCreatedPayload {
-  sessionId: string;
   branch: string;
-}
-
-/**
- * Payload for PR created notification
- */
-export interface PrCreatedPayload {
-  sessionId: string;
-  prUrl: string;
 }
 
 export interface RunStartedPayload {
@@ -106,10 +72,7 @@ export interface SdkSessionPayload {
 }
 
 export type PostHogNotificationPayload =
-  | ArtifactNotificationPayload
-  | PhaseNotificationPayload
   | BranchCreatedPayload
-  | PrCreatedPayload
   | RunStartedPayload
   | TaskCompletePayload
   | ErrorNotificationPayload

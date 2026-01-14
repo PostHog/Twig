@@ -4,13 +4,30 @@ export const POSTHOG_US_CLIENT_ID = "HCWoE0aRFMYxIxFNTTwkOORn5LBjOt2GVDzwSw5W";
 export const POSTHOG_EU_CLIENT_ID = "AIvijgMS0dxKEmr5z6odvRd8Pkh5vts3nPTzgzU9";
 export const POSTHOG_DEV_CLIENT_ID = "DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ";
 
-export const OAUTH_PORT = 8237;
-
 export const OAUTH_SCOPES = [
+  // Array app needs
   "user:read",
   "project:read",
   "task:write",
+  "llm_gateway:read",
   "integration:read",
+  "introspection",
+  "dashboard:read",
+  "error_tracking:read",
+  "event_definition:read",
+  "experiment:read",
+  "feature_flag:read",
+  "insight:read",
+  "organization:read",
+  "property_definition:read",
+  "query:read",
+  "survey:read",
+  "warehouse_table:read",
+  "dashboard:write",
+  "experiment:write",
+  "feature_flag:write",
+  "insight:write",
+  "survey:write",
 ];
 
 // Token refresh settings

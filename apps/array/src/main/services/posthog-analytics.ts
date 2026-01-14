@@ -1,6 +1,7 @@
 import { PostHog } from "posthog-node";
 
 let posthogClient: PostHog | null = null;
+let currentUserId: string | null = null;
 
 export function initializePostHog() {
   if (posthogClient) {
@@ -21,6 +22,14 @@ export function initializePostHog() {
   return posthogClient;
 }
 
+export function setCurrentUserId(userId: string | null) {
+  currentUserId = userId;
+}
+
+export function getCurrentUserId() {
+  return currentUserId;
+}
+
 export function trackAppEvent(
   eventName: string,
   properties?: Record<string, string | number | boolean>,
@@ -29,13 +38,16 @@ export function trackAppEvent(
     return;
   }
 
+  // Use real user ID if available, otherwise use anonymous ID
+  const distinctId = currentUserId || "anonymous-app-event";
+
   properties = {
     ...properties,
-    $process_person_profile: false,
+    $process_person_profile: !!currentUserId,
   };
 
   posthogClient.capture({
-    distinctId: "app-event",
+    distinctId,
     event: eventName,
     properties,
   });
@@ -48,6 +60,8 @@ export function identifyUser(
   if (!posthogClient) {
     return;
   }
+
+  currentUserId = userId;
 
   posthogClient.identify({
     distinctId: userId,
@@ -64,4 +78,8 @@ export async function shutdownPostHog() {
 
 export function getPostHogClient() {
   return posthogClient;
+}
+
+export function resetUser() {
+  currentUserId = null;
 }

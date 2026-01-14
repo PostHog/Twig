@@ -8,6 +8,7 @@ import type {
   TaskRunArtifact,
   UrlMention,
 } from "./types.js";
+import { getLlmGatewayUrl } from "./utils/gateway.js";
 
 interface PostHogApiResponse<T> {
   results?: T[];
@@ -42,7 +43,7 @@ export class PostHogAPIClient {
 
   private get headers(): Record<string, string> {
     return {
-      Authorization: `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.config.getApiKey()}`,
       "Content-Type": "application/json",
     };
   }
@@ -84,12 +85,11 @@ export class PostHogAPIClient {
   }
 
   getApiKey(): string {
-    return this.config.apiKey;
+    return this.config.getApiKey();
   }
 
   getLlmGatewayUrl(): string {
-    const teamId = this.getTeamId();
-    return `${this.baseUrl}/api/projects/${teamId}/llm_gateway`;
+    return getLlmGatewayUrl(this.baseUrl);
   }
 
   async fetchTask(taskId: string): Promise<Task> {

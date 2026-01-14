@@ -1,4 +1,5 @@
 import type { WorkspaceMode } from "@shared/types";
+import { DEFAULT_MODEL } from "@shared/types/models";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -12,6 +13,8 @@ interface SettingsStore {
   lastUsedLocalWorkspaceMode: LocalWorkspaceMode;
   lastUsedWorkspaceMode: WorkspaceMode;
   createPR: boolean;
+  defaultModel: string;
+  desktopNotifications: boolean;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -19,6 +22,8 @@ interface SettingsStore {
   setLastUsedLocalWorkspaceMode: (mode: LocalWorkspaceMode) => void;
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
   setCreatePR: (createPR: boolean) => void;
+  setDefaultModel: (model: string) => void;
+  setDesktopNotifications: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -30,6 +35,8 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedLocalWorkspaceMode: "worktree",
       lastUsedWorkspaceMode: "worktree",
       createPR: true,
+      defaultModel: DEFAULT_MODEL,
+      desktopNotifications: true,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -38,6 +45,9 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ lastUsedLocalWorkspaceMode: mode }),
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
       setCreatePR: (createPR) => set({ createPR }),
+      setDefaultModel: (model) => set({ defaultModel: model }),
+      setDesktopNotifications: (enabled) =>
+        set({ desktopNotifications: enabled }),
     }),
     {
       name: "settings-storage",

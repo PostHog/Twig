@@ -1,47 +1,49 @@
+declare const __BUILD_COMMIT__: string | undefined;
+declare const __BUILD_DATE__: string | undefined;
+
+import { fixPath } from "./lib/fixPath.js";
+
+// Call fixPath early to ensure PATH is correct for any child processes
+fixPath();
+
+import "reflect-metadata";
 import dns from "node:dns";
+
 import { mkdirSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createIPCHandler } from "@posthog/electron-trpc/main";
 import {
   app,
   BrowserWindow,
-  ipcMain,
+  clipboard,
+  dialog,
   Menu,
   type MenuItemConstructorOptions,
   shell,
 } from "electron";
 import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
-import {
-  cleanupAgentSessions,
-  registerAgentIpc,
-} from "./services/session-manager.js";
+import { container } from "./di/container.js";
+import { MAIN_TOKENS } from "./di/tokens.js";
+import type { AgentService } from "./services/agent/service.js";
+import type { DockBadgeService } from "./services/dock-badge/service.js";
+import type { UIService } from "./services/ui/service.js";
+import { setMainWindowGetter } from "./trpc/context.js";
+import { trpcRouter } from "./trpc/index.js";
 
-// Legacy type kept for backwards compatibility with taskControllers map
-type TaskController = unknown;
-
-import { registerFileWatcherIpc } from "./services/fileWatcher.js";
-import { registerFoldersIpc } from "./services/folders.js";
-import { registerFsIpc } from "./services/fs.js";
-import { registerGitIpc } from "./services/git.js";
 import "./services/index.js";
-import {
-  getOrRefreshApps,
-  registerExternalAppsIpc,
-} from "./services/externalApps.js";
-import { registerOAuthHandlers } from "./services/oauth.js";
-import { registerOsIpc } from "./services/os.js";
-import { registerPosthogIpc } from "./services/posthog.js";
+import type { DeepLinkService } from "./services/deep-link/service.js";
+import type { ExternalAppsService } from "./services/external-apps/service.js";
+import type { OAuthService } from "./services/oauth/service.js";
 import {
   initializePostHog,
   shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
-import { registerSettingsIpc } from "./services/settings.js";
-import { registerShellIpc } from "./services/shell.js";
-import { registerAutoUpdater } from "./services/updates.js";
-import { registerWorkspaceIpc } from "./services/workspace/index.js";
-import { registerWorktreeIpc } from "./services/worktree.js";
+import type { TaskLinkService } from "./services/task-link/service";
+import type { UpdatesService } from "./services/updates/service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,14 +52,62 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
-const taskControllers = new Map<string, TaskController>();
 
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
 dns.setDefaultResultOrder("ipv4first");
 
-// Set app name to ensure consistent userData path across platforms
-app.setName("Array");
+// Single instance lock must be acquired FIRST before any other app setup
+// This ensures deep links go to the existing instance, not a new one
+// In development, we need to pass the same args that setAsDefaultProtocolClient uses
+const additionalData = process.defaultApp ? { argv: process.argv } : undefined;
+const gotTheLock = app.requestSingleInstanceLock(additionalData);
+if (!gotTheLock) {
+  app.quit();
+  // Must exit immediately to prevent any further initialization
+  process.exit(0);
+}
+
+// Queue to hold deep link URLs received before app is ready
+let pendingDeepLinkUrl: string | null = null;
+
+// Handle deep link URLs on macOS - must be registered before app is ready
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+
+  // If the app isn't ready yet, queue the URL for later processing
+  if (!app.isReady()) {
+    pendingDeepLinkUrl = url;
+    return;
+  }
+
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
+  deepLinkService.handleUrl(url);
+
+  // Focus the main window when receiving a deep link
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+// Handle deep link URLs on Windows/Linux (second instance sends URL via command line)
+app.on("second-instance", (_event, commandLine) => {
+  const url = commandLine.find((arg) => arg.startsWith("array://"));
+  if (url) {
+    const deepLinkService = container.get<DeepLinkService>(
+      MAIN_TOKENS.DeepLinkService,
+    );
+    deepLinkService.handleUrl(url);
+  }
+
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 function ensureClaudeConfigDir(): void {
   const existing = process.env.CLAUDE_CONFIG_DIR;
@@ -108,6 +158,9 @@ function createWindow(): void {
     mainWindow?.show();
   });
 
+  setMainWindowGetter(() => mainWindow);
+  createIPCHandler({ router: trpcRouter, windows: [mainWindow] });
+
   setupExternalLinkHandlers(mainWindow);
 
   // Set up menu for keyboard shortcuts
@@ -115,13 +168,62 @@ function createWindow(): void {
     {
       label: "Array",
       submenu: [
-        { role: "about" },
+        {
+          label: "About Array",
+          click: () => {
+            const commit = __BUILD_COMMIT__ ?? "dev";
+            const buildDate = __BUILD_DATE__ ?? "dev";
+            const info = [
+              `Version: ${app.getVersion()}`,
+              `Commit: ${commit}`,
+              `Date: ${buildDate}`,
+              `Electron: ${process.versions.electron}`,
+              `Chromium: ${process.versions.chrome}`,
+              `Node.js: ${process.versions.node}`,
+              `V8: ${process.versions.v8}`,
+              `OS: ${process.platform} ${process.arch} ${os.release()}`,
+            ].join("\n");
+
+            dialog
+              .showMessageBox({
+                type: "info",
+                title: "About Array",
+                message: "Array",
+                detail: info,
+                buttons: ["Copy", "OK"],
+                defaultId: 1,
+              })
+              .then((result) => {
+                if (result.response === 0) {
+                  clipboard.writeText(info);
+                }
+              });
+          },
+        },
+        { type: "separator" },
+        ...(app.isPackaged
+          ? [
+              {
+                label: "Check for Updates...",
+                click: () => {
+                  const updatesService = container.get<UpdatesService>(
+                    MAIN_TOKENS.UpdatesService,
+                  );
+                  updatesService.triggerMenuCheck();
+                },
+              },
+            ]
+          : []),
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
         { type: "separator" },
         {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
           click: () => {
-            mainWindow?.webContents.send("open-settings");
+            container.get<UIService>(MAIN_TOKENS.UIService).openSettings();
           },
         },
         { type: "separator" },
@@ -135,7 +237,7 @@ function createWindow(): void {
           label: "New task",
           accelerator: "CmdOrCtrl+N",
           click: () => {
-            mainWindow?.webContents.send("new-task");
+            container.get<UIService>(MAIN_TOKENS.UIService).newTask();
           },
         },
         { type: "separator" },
@@ -145,7 +247,7 @@ function createWindow(): void {
             {
               label: "Clear application storage",
               click: () => {
-                mainWindow?.webContents.send("clear-storage");
+                container.get<UIService>(MAIN_TOKENS.UIService).clearStorage();
               },
             },
           ],
@@ -180,9 +282,18 @@ function createWindow(): void {
         {
           label: "Reset layout",
           click: () => {
-            mainWindow?.webContents.send("reset-layout");
+            container.get<UIService>(MAIN_TOKENS.UIService).resetLayout();
           },
         },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { type: "separator" },
+        { role: "front" },
       ],
     },
   ];
@@ -207,14 +318,41 @@ app.whenReady().then(() => {
   createWindow();
   ensureClaudeConfigDir();
 
+  // Initialize deep link service and register protocol
+  const deepLinkService = container.get<DeepLinkService>(
+    MAIN_TOKENS.DeepLinkService,
+  );
+  deepLinkService.registerProtocol();
+
+  // Initialize OAuth service (registers its deep link handler)
+  container.get<OAuthService>(MAIN_TOKENS.OAuthService);
+
+  // Initialize services that need early startup
+  container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
+  container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
+  container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
+
   // Initialize PostHog analytics
   initializePostHog();
   trackAppEvent(ANALYTICS_EVENTS.APP_STARTED);
 
   // Preload external app icons in background
-  getOrRefreshApps().catch(() => {
-    // Silently fail, will retry on first use
-  });
+  container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
+
+  // Handle case where app was launched by a deep link
+  if (process.platform === "darwin") {
+    // On macOS, the open-url event may have fired before app was ready
+    if (pendingDeepLinkUrl) {
+      deepLinkService.handleUrl(pendingDeepLinkUrl);
+      pendingDeepLinkUrl = null;
+    }
+  } else {
+    // On Windows/Linux, the URL comes via command line arguments
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("array://"));
+    if (deepLinkUrl) {
+      deepLinkService.handleUrl(deepLinkUrl);
+    }
+  }
 });
 
 app.on("window-all-closed", async () => {
@@ -227,7 +365,8 @@ app.on("window-all-closed", async () => {
 
 app.on("before-quit", async (event) => {
   event.preventDefault();
-  await cleanupAgentSessions();
+  const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
+  await agentService.cleanupAll();
   trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
   await shutdownPostHog();
   app.exit(0);
@@ -238,23 +377,3 @@ app.on("activate", () => {
     createWindow();
   }
 });
-
-// Background services
-registerAutoUpdater(() => mainWindow);
-
-ipcMain.handle("app:get-version", () => app.getVersion());
-
-// Register IPC handlers via services
-registerPosthogIpc();
-registerOAuthHandlers();
-registerOsIpc(() => mainWindow);
-registerGitIpc(() => mainWindow);
-registerAgentIpc(taskControllers, () => mainWindow);
-registerFsIpc();
-registerFileWatcherIpc(() => mainWindow);
-registerFoldersIpc(() => mainWindow);
-registerWorktreeIpc();
-registerShellIpc();
-registerExternalAppsIpc();
-registerWorkspaceIpc(() => mainWindow);
-registerSettingsIpc();

@@ -1,28 +1,31 @@
-import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import {
-  buildPromptBlocks,
-  extractFileMentions,
-  tiptapToMarkdown,
-} from "@features/editor/utils/tiptap-converter";
-import { useSessionStore } from "@features/sessions/stores/sessionStore";
+import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import type { EditorContent } from "@features/message-editor/utils/content";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
-import { useTaskInputStore } from "@features/task-detail/stores/taskInputStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
-import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
+import { get } from "@renderer/di/container";
+import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
-import type { Task, WorkspaceMode } from "@shared/types";
+import type {
+  TaskCreationInput,
+  TaskService,
+} from "@renderer/services/task/service";
+import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import type { Editor } from "@tiptap/react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 const log = logger.scope("task-creation");
 
 interface UseTaskCreationOptions {
-  editor: Editor | null;
+  editorRef: React.RefObject<MessageEditorHandle | null>;
   selectedDirectory: string;
+  selectedRepository?: string | null;
+  githubIntegrationId?: number;
   workspaceMode: WorkspaceMode;
+  branch?: string | null;
+  editorIsEmpty: boolean;
+  executionMode?: "plan" | "acceptEdits";
 }
 
 interface UseTaskCreationReturn {
@@ -31,178 +34,165 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-async function startAgentSession(
-  task: Task,
-  repoPath: string,
-  initialPrompt?: ContentBlock[],
-): Promise<void> {
-  await useSessionStore.getState().connectToTask({
-    task,
-    repoPath,
-    initialPrompt,
-  });
+function contentToXml(content: EditorContent): string {
+  return content.segments
+    .map((seg) => {
+      if (seg.type === "text") return seg.text;
+      const chip = seg.chip;
+      switch (chip.type) {
+        case "file":
+          return `<file path="${chip.id}" />`;
+        case "command":
+          return `/${chip.label}`;
+        case "error":
+          return `<error id="${chip.id}" />`;
+        case "experiment":
+          return `<experiment id="${chip.id}" />`;
+        case "insight":
+          return `<insight id="${chip.id}" />`;
+        case "feature_flag":
+          return `<feature_flag id="${chip.id}" />`;
+        default:
+          return `@${chip.label}`;
+      }
+    })
+    .join("");
+}
+
+function extractFileMentionsFromContent(content: EditorContent): string[] {
+  const filePaths: string[] = [];
+  for (const seg of content.segments) {
+    if (seg.type === "chip" && seg.chip.type === "file") {
+      if (!filePaths.includes(seg.chip.id)) {
+        filePaths.push(seg.chip.id);
+      }
+    }
+  }
+  return filePaths;
+}
+
+function prepareTaskInput(
+  content: EditorContent,
+  options: {
+    selectedDirectory: string;
+    selectedRepository?: string | null;
+    githubIntegrationId?: number;
+    workspaceMode: WorkspaceMode;
+    branch?: string | null;
+    autoRun: boolean;
+    executionMode?: "plan" | "acceptEdits";
+  },
+): TaskCreationInput {
+  return {
+    content: contentToXml(content).trim(),
+    filePaths: extractFileMentionsFromContent(content),
+    repoPath: options.selectedDirectory,
+    repository: options.selectedRepository,
+    githubIntegrationId: options.githubIntegrationId,
+    workspaceMode: options.workspaceMode,
+    branch: options.branch,
+    autoRun: options.autoRun,
+    executionMode: options.executionMode,
+  };
+}
+
+function getErrorMessage(failedStep: string, error: string): string {
+  const messages: Record<string, string> = {
+    validation: error,
+    repo_detection: "Failed to detect repository",
+    task_creation: "Failed to create task",
+    workspace_creation: "Failed to create workspace",
+    cloud_run: "Failed to start cloud execution",
+    agent_session: "Failed to start agent session",
+  };
+  return messages[failedStep] ?? error;
 }
 
 export function useTaskCreation({
-  editor,
+  editorRef,
   selectedDirectory,
+  selectedRepository,
+  githubIntegrationId,
   workspaceMode,
+  branch,
+  editorIsEmpty,
+  executionMode,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
-  const {
-    mutate: createTask,
-    isPending: isCreatingTask,
-    invalidateTasks,
-  } = useCreateTask();
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
-  const { client, isAuthenticated } = useAuthStore();
-  const { setRepoPath: saveRepoPath, setWorkspaceMode: saveWorkspaceMode } =
-    useTaskExecutionStore();
+  const { isAuthenticated } = useAuthStore();
   const { autoRunTasks } = useSettingsStore();
-  const { clearDraft } = useTaskInputStore();
+  const { invalidateTasks } = useCreateTask();
 
+  const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
-    !!editor &&
+    !!editorRef.current &&
     isAuthenticated &&
-    !!client &&
-    !!selectedDirectory &&
+    (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
     !isCreatingTask &&
-    !editor.isEmpty;
+    !editorIsEmpty;
 
   const handleSubmit = useCallback(async () => {
-    const canSubmit =
-      !!editor &&
-      isAuthenticated &&
-      !!client &&
-      !!selectedDirectory &&
-      !isCreatingTask &&
-      !editor.isEmpty;
+    const editor = editorRef.current;
+    if (!canSubmit || !editor) return;
 
-    if (!canSubmit) {
-      return;
-    }
+    setIsCreatingTask(true);
 
-    const editorJson = editor.getJSON();
-    const content = tiptapToMarkdown(editorJson).trim();
-    if (!content) {
-      return;
-    }
-
-    // Extract file mentions for building prompt content blocks
-    const filePaths = extractFileMentions(editorJson);
-
-    let repository: string | undefined;
-    if (selectedDirectory) {
-      const detected = await window.electronAPI.detectRepo(selectedDirectory);
-      if (detected) {
-        repository = `${detected.organization}/${detected.repository}`;
-      }
-    }
-
-    createTask(
-      {
-        description: content,
-        repository,
+    try {
+      const content = editor.getContent();
+      const input = prepareTaskInput(content, {
+        selectedDirectory,
+        selectedRepository,
+        githubIntegrationId,
+        workspaceMode,
+        branch,
         autoRun: autoRunTasks,
-        createdFrom: "cli",
-      },
-      {
-        onSuccess: async (newTask: Task) => {
-          // Save workspace mode preference
-          saveWorkspaceMode(newTask.id, workspaceMode);
-          useSettingsStore.getState().setLastUsedWorkspaceMode(workspaceMode);
+        executionMode,
+      });
 
-          // Also save the run mode and local workspace mode separately for UI
-          if (workspaceMode === "cloud") {
-            useSettingsStore.getState().setLastUsedRunMode("cloud");
-          } else {
-            useSettingsStore.getState().setLastUsedRunMode("local");
-            useSettingsStore
-              .getState()
-              .setLastUsedLocalWorkspaceMode(workspaceMode);
-          }
+      const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
+      const result = await taskService.createTask(input);
 
-          if (workspaceMode === "cloud") {
-            if (selectedDirectory) {
-              try {
-                await useWorkspaceStore
-                  .getState()
-                  .ensureWorkspace(newTask.id, selectedDirectory, "cloud");
-              } catch (error) {
-                log.error("Failed to create cloud workspace:", error);
-              }
-            }
+      if (result.success) {
+        const { task } = result.data;
 
-            try {
-              const updatedTask = await client.runTaskInCloud(newTask.id);
-              log.info("Started cloud task", { taskId: newTask.id });
-              invalidateTasks();
-              navigateToTask(updatedTask);
-            } catch (error) {
-              log.error("Failed to start cloud task:", error);
-              invalidateTasks();
-              navigateToTask(newTask);
-            }
-            editor.commands.clearContent();
-            clearDraft();
-          } else {
-            // Local execution (worktree or root)
-            let agentCwd = selectedDirectory;
+        // Invalidate tasks query
+        invalidateTasks(task);
 
-            if (selectedDirectory) {
-              await saveRepoPath(newTask.id, selectedDirectory);
+        // Navigate to the new task
+        navigateToTask(task);
 
-              try {
-                const workspace = await useWorkspaceStore
-                  .getState()
-                  .ensureWorkspace(
-                    newTask.id,
-                    selectedDirectory,
-                    workspaceMode,
-                  );
-                agentCwd = workspace.worktreePath ?? workspace.folderPath;
-              } catch (error) {
-                log.error("Failed to create workspace for task:", error);
-              }
-            }
+        // Clear editor
+        editor.clear();
 
-            // Invalidate tasks AFTER workspace is ready to avoid race condition
-            // where sidebar re-renders before workspace exists
-            invalidateTasks();
-
-            navigateToTask(newTask);
-            editor.commands.clearContent();
-            clearDraft();
-
-            if (autoRunTasks && agentCwd) {
-              // Build content blocks with file contents for the initial prompt
-              const promptBlocks = await buildPromptBlocks(
-                content,
-                filePaths,
-                agentCwd,
-              );
-              await startAgentSession(newTask, agentCwd, promptBlocks);
-            }
-          }
-        },
-        onError: (error) => {
-          log.error("Failed to create task:", error);
-        },
-      },
-    );
+        log.info("Task created successfully", { taskId: task.id });
+      } else {
+        const message = getErrorMessage(result.failedStep, result.error);
+        toast.error(message);
+        log.error("Task creation failed", {
+          failedStep: result.failedStep,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to create task: ${message}`);
+      log.error("Unexpected error during task creation", { error });
+    } finally {
+      setIsCreatingTask(false);
+    }
   }, [
-    editor,
+    canSubmit,
+    editorRef,
     selectedDirectory,
+    selectedRepository,
+    githubIntegrationId,
     workspaceMode,
-    createTask,
-    saveRepoPath,
-    navigateToTask,
+    branch,
     autoRunTasks,
-    clearDraft,
-    isCreatingTask,
-    client,
-    isAuthenticated,
+    executionMode,
     invalidateTasks,
-    saveWorkspaceMode,
+    navigateToTask,
   ]);
 
   return {

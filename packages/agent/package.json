@@ -1,6 +1,6 @@
 {
   "name": "@posthog/agent",
-  "version": "1.28.0",
+  "version": "2.0.0",
   "repository": "https://github.com/PostHog/array",
   "description": "TypeScript agent framework wrapping Claude Agent SDK with Git-based task execution for PostHog",
   "main": "./dist/index.js",

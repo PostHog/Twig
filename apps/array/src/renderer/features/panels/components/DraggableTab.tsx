@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import type { TabData } from "@features/panels/store/panelTypes";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import type React from "react";
 import { useCallback } from "react";
@@ -14,10 +15,12 @@ interface DraggableTabProps {
   isActive: boolean;
   index: number;
   closeable?: boolean;
+  isPreview?: boolean;
   onSelect: () => void;
   onClose?: () => void;
   onCloseOthers?: () => void;
   onCloseToRight?: () => void;
+  onKeep?: () => void;
   icon?: React.ReactNode;
   badge?: React.ReactNode;
   hasUnsavedChanges?: boolean;
@@ -31,10 +34,12 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   isActive,
   index,
   closeable = true,
+  isPreview,
   onSelect,
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onKeep,
   icon,
   badge,
   hasUnsavedChanges,
@@ -50,42 +55,47 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     data: { tabId, panelId, type: "tab" },
   });
 
+  const handleDoubleClick = useCallback(() => {
+    if (isPreview) {
+      onKeep?.();
+    }
+  }, [isPreview, onKeep]);
+
   const handleContextMenu = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();
 
-      // Get absolute path from tab data for file and diff tabs
       let filePath: string | undefined;
       if (tabData.type === "file" || tabData.type === "diff") {
         filePath = tabData.absolutePath;
       }
 
-      const result = await window.electronAPI.showTabContextMenu(
-        closeable,
+      const result = await trpcVanilla.contextMenu.showTabContextMenu.mutate({
+        canClose: closeable,
         filePath,
-      );
+      });
 
-      // Handle string actions (close, close-others, close-right)
-      if (typeof result.action === "string") {
-        switch (result.action) {
-          case "close":
-            onClose?.();
-            break;
-          case "close-others":
-            onCloseOthers?.();
-            break;
-          case "close-right":
-            onCloseToRight?.();
-            break;
-        }
-      }
-      // Handle external app actions
-      else if (
-        typeof result.action === "object" &&
-        result.action !== null &&
-        filePath
-      ) {
-        await handleExternalAppAction(result.action, filePath, label);
+      if (!result.action) return;
+
+      switch (result.action.type) {
+        case "close":
+          onClose?.();
+          break;
+        case "close-others":
+          onCloseOthers?.();
+          break;
+        case "close-right":
+          onCloseToRight?.();
+          break;
+        case "external-app":
+          if (filePath) {
+            await handleExternalAppAction(
+              result.action.action,
+              filePath,
+              label,
+            );
+          }
+          break;
       }
     },
     [closeable, onClose, onCloseOthers, onCloseToRight, tabData, label],
@@ -112,6 +122,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
         minWidth: "60px",
       }}
       onClick={onSelect}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={(e) => {
         if (!isActive) {
@@ -130,6 +141,10 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       <Text
         size="1"
         className="max-w-[200px] select-none overflow-hidden text-ellipsis whitespace-nowrap"
+        style={{
+          fontStyle: isPreview ? "italic" : "normal",
+          opacity: isPreview ? 0.7 : 1,
+        }}
       >
         {label}
       </Text>

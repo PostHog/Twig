@@ -128,7 +128,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: {
       unpack:
-        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**}",
+        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**,**/node_modules/file-icon/**}",
     },
     prune: false,
     name: "Array",
@@ -202,6 +202,7 @@ const config: ForgeConfig = {
       copyNativeDependency("@parcel/watcher", buildPath);
       copyNativeDependency("@parcel/watcher-darwin-arm64", buildPath);
       copyNativeDependency("file-icon", buildPath);
+      copyNativeDependency("p-map", buildPath);
       // Copy @parcel/watcher's hoisted dependencies
       copyNativeDependency("micromatch", buildPath);
       copyNativeDependency("is-glob", buildPath);
@@ -229,7 +230,7 @@ const config: ForgeConfig = {
     new VitePlugin({
       build: [
         {
-          entry: "src/main/index.ts",
+          entry: "src/main/bootstrap.ts",
           config: "vite.main.config.mts",
           target: "main",
         },

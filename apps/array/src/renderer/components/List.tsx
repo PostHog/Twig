@@ -44,6 +44,7 @@ export function List({ children, as = "ul" }: ListProps) {
 
   return (
     <Component
+      className="marker:text-[var(--accent-10)]"
       style={{
         margin: 0,
         marginTop: "var(--space-2)",

@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> Array is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
+
+
 # PostHog Array Monorepo
 
 This is the monorepo for PostHog's Array desktop task manager and the agent framework that powers it.

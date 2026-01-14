@@ -1,6 +1,5 @@
 import { AsciiArt } from "@components/AsciiArt";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import {
   Box,
   Button,
@@ -13,13 +12,11 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
-import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { IS_DEV } from "@/constants/environment";
-
-const log = logger.scope("auth");
 
 export const getErrorMessage = (error: unknown) => {
   if (!(error instanceof Error)) {
@@ -38,63 +35,23 @@ export const getErrorMessage = (error: unknown) => {
   return message;
 };
 
-const detectWorkspacePath = async () => {
-  try {
-    const detectedPath = await window.electronAPI.findReposDirectory();
-    if (detectedPath) {
-      return detectedPath;
-    }
-  } catch (error) {
-    log.error("Failed to detect repos directory:", error);
-  }
-
-  return null;
-};
-
 export function AuthScreen() {
   const [region, setRegion] = useState<CloudRegion>("us");
-  const [workspace, setWorkspace] = useState("~/workspace");
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
-  const { loginWithOAuth, setDefaultWorkspace } = useAuthStore();
-
-  useEffect(() => {
-    detectWorkspacePath().then((path) => {
-      if (path) {
-        setWorkspace(path);
-      }
-    });
-  }, []);
+  const { loginWithOAuth } = useAuthStore();
 
   const authMutation = useMutation({
-    mutationFn: async ({
-      selectedRegion,
-      workspace,
-    }: {
-      selectedRegion: CloudRegion;
-      workspace: string;
-    }) => {
-      if (!workspace || !workspace.trim()) {
-        setWorkspaceError("Please select a clone location");
-        throw new Error("Clone location is required");
-      }
-
-      // Login with OAuth first
+    mutationFn: async (selectedRegion: CloudRegion) => {
       await loginWithOAuth(selectedRegion);
-
-      // Then save workspace
-      setDefaultWorkspace(workspace.trim());
-      setWorkspaceError(null);
     },
   });
 
   const handleSignIn = async () => {
     if (authMutation.isPending) {
       authMutation.reset();
-      await window.electronAPI.oauthCancelFlow();
+      await trpcVanilla.oauth.cancelFlow.mutate();
     } else {
-      setWorkspaceError(null);
-      authMutation.mutate({ selectedRegion: region, workspace });
+      authMutation.mutate(region);
     }
   };
 
@@ -144,28 +101,6 @@ export function AuthScreen() {
                     </Select.Root>
                   </Flex>
 
-                  <Flex direction="column" gap="2">
-                    <Text as="label" size="2" weight="medium" color="gray">
-                      Default clone location
-                    </Text>
-                    <FolderPicker
-                      value={workspace}
-                      onChange={setWorkspace}
-                      placeholder="~/repos"
-                      size="2"
-                    />
-                    <Text size="1" color="gray">
-                      Where repositories will be cloned. This should be the
-                      folder where you usually store your projects.
-                    </Text>
-                  </Flex>
-
-                  {workspaceError && (
-                    <Callout.Root color="red">
-                      <Callout.Text>{workspaceError}</Callout.Text>
-                    </Callout.Root>
-                  )}
-
                   {authMutation.isError && (
                     <Callout.Root color="red">
                       <Callout.Text>
@@ -184,7 +119,6 @@ export function AuthScreen() {
 
                   <Button
                     onClick={handleSignIn}
-                    disabled={!workspace}
                     variant={"classic"}
                     size="3"
                     mt="2"

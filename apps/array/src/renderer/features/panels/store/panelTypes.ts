@@ -34,10 +34,6 @@ export type TabData =
       scriptType: "init" | "start";
     }
   | {
-      type: "artifact";
-      artifactId: string;
-    }
-  | {
       type: "logs";
     }
   | {
@@ -57,6 +53,7 @@ export type Tab = {
   icon?: React.ReactNode;
   hasUnsavedChanges?: boolean;
   badge?: React.ReactNode;
+  isPreview?: boolean;
 };
 
 export type PanelContent = {

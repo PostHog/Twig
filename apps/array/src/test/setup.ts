@@ -1,6 +1,49 @@
 import "@testing-library/jest-dom";
 import { cleanup } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
+
+// Mock localStorage for Zustand persist middleware
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: (index: number) => Object.keys(store)[index] ?? null,
+  };
+})();
+
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageMock,
+  writable: true,
+});
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+// Mock electron-log before any imports that use it
+vi.mock("electron-log/renderer", () => {
+  const mockLog = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    scope: () => mockLog,
+    transports: { console: { level: "debug" } },
+  };
+  return { default: mockLog };
+});
 
 // Suppress act() warnings from Radix UI async updates in tests,
 // we don't care about them.
@@ -29,6 +72,7 @@ globalThis.ResizeObserver = class ResizeObserver {
 };
 
 HTMLCanvasElement.prototype.getContext = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,

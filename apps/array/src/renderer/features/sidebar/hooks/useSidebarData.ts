@@ -1,7 +1,7 @@
 import type { Schemas } from "@api/generated";
 import {
   type AgentSession,
-  useSessionStore,
+  useSessions,
 } from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
@@ -16,6 +16,7 @@ import {
   getTaskRepository,
   parseRepository,
 } from "@/renderer/utils/repository";
+import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 
@@ -45,12 +46,7 @@ export interface TaskData {
   lastActivityAt?: number;
   isGenerating?: boolean;
   isUnread?: boolean;
-}
-
-export interface CloudRepoData {
-  repository: string;
-  repoName: string;
-  tasks: TaskData[];
+  isPinned?: boolean;
 }
 
 export interface SidebarData {
@@ -67,7 +63,7 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-list" | "task-detail" | "task-input" | "settings";
+  type: "task-detail" | "task-input" | "settings" | "folder-settings";
   data?: Task;
 }
 
@@ -105,15 +101,13 @@ function groupTasksByFolder(
 
   for (const task of tasks) {
     const workspace = workspaces[task.id];
-    if (workspace) {
-      const folder = folders.find((f) => f.id === workspace.folderId);
-      if (folder) {
-        if (!tasksByFolder.has(folder.id)) {
-          tasksByFolder.set(folder.id, []);
-        }
-        tasksByFolder.get(folder.id)?.push(task);
-      }
+    if (!workspace) continue;
+    const folder = folders.find((f) => f.id === workspace.folderId);
+    if (!folder) continue;
+    if (!tasksByFolder.has(folder.id)) {
+      tasksByFolder.set(folder.id, []);
     }
+    tasksByFolder.get(folder.id)?.push(task);
   }
 
   return tasksByFolder;
@@ -165,11 +159,8 @@ function createTaskViews(currentUser: Schemas.User | undefined): TaskView[] {
 
 function getActiveViewId(
   views: TaskView[],
-  activeView: ViewState,
   activeFilters: ActiveFilters,
 ): string | null {
-  if (activeView.type !== "task-list") return null;
-
   for (const view of views) {
     if (filtersMatch(activeFilters, view.filters)) {
       return view.id;
@@ -191,17 +182,18 @@ export function useSidebarData({
   const { data: allTasks = [], isLoading } = useTasks();
   const { folders } = useRegisteredFoldersStore();
   const workspaces = useWorkspaceStore.use.workspaces();
-  const sessions = useSessionStore((state) => state.sessions);
+  const sessions = useSessions();
   const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
   const folderOrder = useSidebarStore((state) => state.folderOrder);
   const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
+  const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
 
   const userName = currentUser?.first_name || currentUser?.email || "Account";
   const isHomeActive = activeView.type === "task-input";
 
   const views = createTaskViews(currentUser);
-  const activeViewId = getActiveViewId(views, activeView, activeFilters);
+  const activeViewId = getActiveViewId(views, activeFilters);
 
   const repositories = buildRepositoryMap(allTasks);
   const activeRepository = getActiveRepository(activeFilters);
@@ -242,7 +234,10 @@ export function useSidebarData({
         try {
           await ensureWorkspace(task.id, matchingFolder.path, "cloud");
         } catch (err) {
-          log.error("Failed to auto-sync task", { taskId: task.id, error: err });
+          log.error("Failed to auto-sync task", {
+            taskId: task.id,
+            error: err,
+          });
         } finally {
           syncingRef.current.delete(task.id);
         }
@@ -267,51 +262,59 @@ export function useSidebarData({
     return Object.values(sessions).find((s) => s.taskId === taskId);
   };
 
-  // Helper to convert task to TaskData
-  const toTaskData = (
-    task: Task,
-    isCurrentlyViewing: boolean,
-  ): { taskData: TaskData; lastActivityAt: number } => {
-    const session = getSessionForTask(task.id);
-    const apiUpdatedAt = new Date(task.updated_at).getTime();
-    const localActivity = localActivityAt[task.id];
-    const lastActivityAt = localActivity
-      ? Math.max(apiUpdatedAt, localActivity)
-      : apiUpdatedAt;
-    const taskLastViewedAt = lastViewedAt[task.id];
-    const isUnread =
-      !isCurrentlyViewing &&
-      taskLastViewedAt !== undefined &&
-      lastActivityAt > taskLastViewedAt;
-
-    return {
-      taskData: {
-        id: task.id,
-        title: task.title,
-        lastActivityAt,
-        isGenerating: session?.isPromptPending ?? false,
-        isUnread,
-      },
-      lastActivityAt,
-    };
-  };
-
   const folderData: FolderData[] = sortedFolders.map((folder) => {
     const folderTasks = tasksByFolder.get(folder.id) || [];
 
     const tasksWithActivity = folderTasks.map((task) => {
-      const isCurrentlyViewing = activeTaskId === task.id;
-      const { taskData, lastActivityAt } = toTaskData(task, isCurrentlyViewing);
-      return { taskData, lastActivityAt };
+      const session = getSessionForTask(task.id);
+      // Use max of task.updated_at and local activity timestamp for accurate ordering
+      const apiUpdatedAt = new Date(task.updated_at).getTime();
+      const localActivity = localActivityAt[task.id];
+      const lastActivityAt = localActivity
+        ? Math.max(apiUpdatedAt, localActivity)
+        : apiUpdatedAt;
+      const isPinned = pinnedTaskIds.has(task.id);
+      return {
+        task,
+        lastActivityAt,
+        isGenerating: session?.isPromptPending ?? false,
+        isPinned,
+      };
     });
 
-    tasksWithActivity.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    // Sort by pinned first, then by most recent activity
+    tasksWithActivity.sort((a, b) => {
+      // Pinned tasks come first
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      // Then sort by most recent activity
+      return b.lastActivityAt - a.lastActivityAt;
+    });
 
     return {
       id: folder.id,
       name: folder.name,
       path: folder.path,
-      tasks: tasksWithActivity.map(({ taskData }) => taskData),
+      tasks: tasksWithActivity.map(
+        ({ task, lastActivityAt, isGenerating, isPinned }) => {
+          const taskLastViewedAt = lastViewedAt[task.id];
+          const isCurrentlyViewing = activeTaskId === task.id;
+          // Only show unread if: user has viewed it before AND there's new activity since
+          const isUnread =
+            !isCurrentlyViewing &&
+            taskLastViewedAt !== undefined &&
+            lastActivityAt > taskLastViewedAt;
+
+          return {
+            id: task.id,
+            title: task.title,
+            lastActivityAt,
+            isGenerating,
+            isUnread,
+            isPinned,
+          };
+        },
+      ),
     };
   });
 

@@ -115,6 +115,88 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.plan-markdown {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.plan-markdown h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.plan-markdown h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 8px;
+}
+
+.plan-markdown h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+}
+
+.plan-markdown p {
+  margin: 0 0 8px;
+}
+
+.plan-markdown ul,
+.plan-markdown ol {
+  margin: 0 0 10px 16px;
+  padding: 0;
+}
+
+.plan-markdown li {
+  margin: 2px 0;
+}
+
+.plan-markdown code {
+  font-family:
+    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.plan-markdown pre {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0 12px;
+}
+
+.plan-markdown pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 11px;
+}
+
+.plan-markdown table {
+  border-collapse: collapse;
+  margin: 8px 0 12px;
+  width: 100%;
+  font-size: 11px;
+}
+
+.plan-markdown th,
+.plan-markdown td {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.plan-markdown blockquote {
+  margin: 8px 0 12px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

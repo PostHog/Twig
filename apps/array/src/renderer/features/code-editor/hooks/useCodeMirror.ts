@@ -6,6 +6,7 @@ import {
 } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useEffect, useRef } from "react";
 
@@ -161,12 +162,16 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
 
     const handleContextMenu = async (e: MouseEvent) => {
       e.preventDefault();
-      const result = await window.electronAPI.showFileContextMenu(filePath);
+      const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
+        filePath,
+      });
 
       if (!result.action) return;
 
-      const fileName = filePath.split("/").pop() || "file";
-      await handleExternalAppAction(result.action, filePath, fileName);
+      if (result.action.type === "external-app") {
+        const fileName = filePath.split("/").pop() || "file";
+        await handleExternalAppAction(result.action.action, filePath, fileName);
+      }
     };
 
     domElement.addEventListener("contextmenu", handleContextMenu);

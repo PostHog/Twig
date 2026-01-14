@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -6,7 +7,6 @@ import { logger } from "@/renderer/lib/logger";
 
 const log = logger.scope("terminal-manager");
 
-// Hidden container to park detached terminals so they survive React unmounts
 let parkingContainer: HTMLElement | null = null;
 
 function getParkingContainer(): HTMLElement {
@@ -29,10 +29,10 @@ export interface TerminalInstance {
   fitAddon: FitAddon;
   serializeAddon: SerializeAddon;
   attachedElement: HTMLElement | null;
-  terminalElement: HTMLElement | null; // The xterm's own DOM element
+  terminalElement: HTMLElement | null;
   isReady: boolean;
-  hasOpened: boolean; // Track if term.open() was called
-  ipcCleanups: Array<() => void>;
+  hasOpened: boolean;
+  cleanups: Array<() => void>;
   resizeObserver: ResizeObserver | null;
   saveTimeout: number | null;
   persistenceKey: string;
@@ -93,15 +93,10 @@ function loadAddons(term: XTerm) {
   const fit = new FitAddon();
   const serialize = new SerializeAddon();
 
-  const activateLink = (event: MouseEvent, uri: string) => {
-    const isMac = /Mac/.test(navigator.platform);
-    const hasModifier = isMac ? event.metaKey : event.ctrlKey;
-
-    if (hasModifier) {
-      window.electronAPI?.openExternal(uri).catch((error: Error) => {
-        log.error("Failed to open link:", uri, error);
-      });
-    }
+  const activateLink = (_event: MouseEvent, uri: string) => {
+    trpcVanilla.os.openExternal.mutate({ url: uri }).catch((error: Error) => {
+      log.error("Failed to open link:", uri, error);
+    });
   };
 
   const webLinks = new WebLinksAddon(activateLink);
@@ -118,19 +113,16 @@ function attachKeyHandlers(term: XTerm) {
     const isMac = /Mac/.test(navigator.platform);
     const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
 
-    // Cmd+K to clear
     if (event.key === "k" && cmdOrCtrl && event.type === "keydown") {
       event.preventDefault();
       term.clear();
       return false;
     }
 
-    // Let Cmd+W bubble up for tab closing
     if (event.key === "w" && cmdOrCtrl) {
       return false;
     }
 
-    // Let Cmd+1-9 bubble up for tab switching
     if (cmdOrCtrl && event.key >= "1" && event.key <= "9") {
       return false;
     }
@@ -184,7 +176,7 @@ class TerminalManagerImpl {
       terminalElement: null,
       isReady: false,
       hasOpened: false,
-      ipcCleanups: [],
+      cleanups: [],
       resizeObserver: null,
       saveTimeout: null,
       persistenceKey,
@@ -192,13 +184,20 @@ class TerminalManagerImpl {
       taskId,
     };
 
-    // Write initial state if provided (before opening)
     if (initialState) {
       term.write(initialState);
     }
 
-    // Setup IPC listeners
-    this.setupIPC(sessionId, instance);
+    // Setup user input handler
+    const disposable = term.onData((data: string) => {
+      trpcVanilla.shell.write
+        .mutate({ sessionId, data })
+        .catch((error: Error) => {
+          log.error("Failed to write to shell:", error);
+        });
+      this.scheduleSave(sessionId, instance);
+    });
+    instance.cleanups.push(() => disposable.dispose());
 
     // Initialize shell session
     this.initializeSession(sessionId, instance, cwd, taskId);
@@ -214,15 +213,14 @@ class TerminalManagerImpl {
     taskId?: string,
   ): Promise<void> {
     try {
-      const sessionExists = await window.electronAPI?.shellCheck(sessionId);
+      const sessionExists = await trpcVanilla.shell.check.query({ sessionId });
       if (!sessionExists) {
-        await window.electronAPI?.shellCreate(sessionId, cwd, taskId);
+        await trpcVanilla.shell.create.mutate({ sessionId, cwd, taskId });
       }
 
       instance.isReady = true;
       log.info("Shell session ready:", sessionId);
 
-      // Fit if attached
       if (instance.attachedElement) {
         instance.fitAddon.fit();
       }
@@ -239,38 +237,20 @@ class TerminalManagerImpl {
     }
   }
 
-  private setupIPC(sessionId: string, instance: TerminalInstance): void {
-    const { term } = instance;
-
-    // Receive data from shell
-    const unsubscribeData = window.electronAPI?.onShellData(
-      sessionId,
-      (data: string) => {
-        term.write(data);
-        this.scheduleSave(sessionId, instance);
-      },
-    );
-    if (unsubscribeData) {
-      instance.ipcCleanups.push(unsubscribeData);
-    }
-
-    // Handle shell exit
-    const unsubscribeExit = window.electronAPI?.onShellExit(sessionId, () => {
-      term.writeln("\r\n\x1b[33mProcess exited\x1b[0m\r\n");
-      this.emit("exit", { sessionId, persistenceKey: instance.persistenceKey });
-    });
-    if (unsubscribeExit) {
-      instance.ipcCleanups.push(unsubscribeExit);
-    }
-
-    // Send user input to shell
-    const disposable = term.onData((data: string) => {
-      window.electronAPI?.shellWrite(sessionId, data).catch((error: Error) => {
-        log.error("Failed to write to shell:", error);
-      });
+  writeData(sessionId: string, data: string): void {
+    const instance = this.instances.get(sessionId);
+    if (instance) {
+      instance.term.write(data);
       this.scheduleSave(sessionId, instance);
-    });
-    instance.ipcCleanups.push(() => disposable.dispose());
+    }
+  }
+
+  handleExit(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (instance) {
+      instance.term.writeln("\r\n\x1b[33mProcess exited\x1b[0m\r\n");
+      this.emit("exit", { sessionId, persistenceKey: instance.persistenceKey });
+    }
   }
 
   private scheduleSave(sessionId: string, instance: TerminalInstance): void {
@@ -295,12 +275,10 @@ class TerminalManagerImpl {
       return;
     }
 
-    // Already attached to this element
     if (instance.attachedElement === element) {
       return;
     }
 
-    // Detach resize observer from previous element if any
     if (instance.resizeObserver) {
       instance.resizeObserver.disconnect();
       instance.resizeObserver = null;
@@ -310,24 +288,24 @@ class TerminalManagerImpl {
     instance.attachedElement = element;
 
     if (!instance.hasOpened) {
-      // First time: call open() which creates the DOM elements
       instance.term.open(element);
       instance.hasOpened = true;
-      // Save reference to xterm's container element
       instance.terminalElement = element.querySelector(".xterm") as HTMLElement;
     } else if (instance.terminalElement) {
-      // Re-attaching: move the existing terminal element to new container
       element.appendChild(instance.terminalElement);
     }
 
-    // Setup resize observer
     const handleResize = () => {
       if (instance.fitAddon) {
         instance.fitAddon.fit();
 
         if (instance.isReady) {
-          window.electronAPI
-            ?.shellResize(sessionId, instance.term.cols, instance.term.rows)
+          trpcVanilla.shell.resize
+            .mutate({
+              sessionId,
+              cols: instance.term.cols,
+              rows: instance.term.rows,
+            })
             .catch((error: Error) => {
               log.error("Failed to resize shell:", error);
             });
@@ -338,7 +316,6 @@ class TerminalManagerImpl {
     instance.resizeObserver = new ResizeObserver(handleResize);
     instance.resizeObserver.observe(element);
 
-    // Fit after attach
     setTimeout(() => {
       instance.fitAddon.fit();
     }, 0);
@@ -352,13 +329,11 @@ class TerminalManagerImpl {
 
     log.debug("Detaching terminal from DOM:", sessionId);
 
-    // Disconnect resize observer
     if (instance.resizeObserver) {
       instance.resizeObserver.disconnect();
       instance.resizeObserver = null;
     }
 
-    // Save state before detaching
     const serialized = instance.serializeAddon.serialize();
     this.emit("stateChange", {
       sessionId,
@@ -366,7 +341,6 @@ class TerminalManagerImpl {
       serializedState: serialized,
     });
 
-    // Move terminal element to parking container to survive React unmount
     if (instance.terminalElement) {
       getParkingContainer().appendChild(instance.terminalElement);
     }
@@ -382,22 +356,18 @@ class TerminalManagerImpl {
 
     log.info("Destroying terminal instance:", sessionId);
 
-    // Detach if attached
     if (instance.attachedElement) {
       this.detach(sessionId);
     }
 
-    // Clear save timeout
     if (instance.saveTimeout) {
       clearTimeout(instance.saveTimeout);
     }
 
-    // Cleanup IPC subscriptions
-    for (const cleanup of instance.ipcCleanups) {
+    for (const cleanup of instance.cleanups) {
       cleanup();
     }
 
-    // Dispose terminal
     instance.term.dispose();
 
     this.instances.delete(sessionId);
@@ -439,11 +409,12 @@ class TerminalManagerImpl {
   }
 
   on<T extends EventType>(event: T, listener: Listener<T>): () => void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+    let listeners = this.listeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(event, listeners);
     }
 
-    const listeners = this.listeners.get(event)!;
     listeners.add(listener as Listener<EventType>);
 
     return () => {

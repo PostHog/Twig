@@ -2,11 +2,13 @@ import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirrorDiffEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { Box } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -28,15 +30,22 @@ export function DiffEditorPanel({
   const repoPath = worktreePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
+  const closeDiffTabsForFile = usePanelLayoutStore(
+    (s) => s.closeDiffTabsForFile,
+  );
 
-  const { data: changedFiles = [] } = useQuery({
+  const { data: changedFiles = [], isLoading: loadingChangelist } = useQuery({
     queryKey: ["changed-files-head", repoPath],
-    queryFn: () => window.electronAPI.getChangedFilesHead(repoPath as string),
+    queryFn: () =>
+      trpcVanilla.git.getChangedFilesHead.query({
+        directoryPath: repoPath as string,
+      }),
     enabled: !!repoPath,
     staleTime: Infinity,
   });
 
   const fileInfo = changedFiles.find((f) => f.path === filePath);
+  const isFileStillChanged = !!fileInfo;
   const status = fileInfo?.status ?? "modified";
   const originalPath = fileInfo?.originalPath ?? filePath;
   const isDeleted = status === "deleted";
@@ -45,7 +54,10 @@ export function DiffEditorPanel({
   const { data: modifiedContent, isLoading: loadingModified } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
     queryFn: () =>
-      window.electronAPI.readRepoFile(repoPath as string, filePath),
+      trpcVanilla.fs.readRepoFile.query({
+        repoPath: repoPath as string,
+        filePath,
+      }),
     enabled: !!repoPath && !isDeleted,
     staleTime: Infinity,
   });
@@ -53,7 +65,10 @@ export function DiffEditorPanel({
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
     queryKey: ["file-at-head", repoPath, originalPath],
     queryFn: () =>
-      window.electronAPI.getFileAtHead(repoPath as string, originalPath),
+      trpcVanilla.git.getFileAtHead.query({
+        directoryPath: repoPath as string,
+        filePath: originalPath,
+      }),
     enabled: !!repoPath && !isNew,
     staleTime: Infinity,
   });
@@ -63,7 +78,11 @@ export function DiffEditorPanel({
       if (!repoPath) return;
 
       try {
-        await window.electronAPI.writeRepoFile(repoPath, filePath, newContent);
+        await trpcVanilla.fs.writeRepoFile.mutate({
+          repoPath,
+          filePath,
+          content: newContent,
+        });
 
         queryClient.invalidateQueries({
           queryKey: ["repo-file", repoPath, filePath],
@@ -76,14 +95,33 @@ export function DiffEditorPanel({
     [repoPath, filePath, queryClient],
   );
 
+  const isLoading =
+    loadingChangelist ||
+    (!isDeleted && loadingModified) ||
+    (!isNew && loadingOriginal);
+
+  const hasNoChanges =
+    !!repoPath &&
+    !isLoading &&
+    (!isFileStillChanged ||
+      (!isDeleted && !isNew && originalContent === modifiedContent));
+
+  useEffect(() => {
+    if (hasNoChanges) {
+      closeDiffTabsForFile(taskId, filePath);
+    }
+  }, [hasNoChanges, closeDiffTabsForFile, taskId, filePath]);
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
 
-  const isLoading =
-    (!isDeleted && loadingModified) || (!isNew && loadingOriginal);
   if (isLoading) {
     return <PanelMessage>Loading diff...</PanelMessage>;
+  }
+
+  if (hasNoChanges) {
+    return null;
   }
 
   const showDiff = !isDeleted && !isNew;
@@ -96,12 +134,14 @@ export function DiffEditorPanel({
           originalContent={originalContent ?? ""}
           modifiedContent={modifiedContent ?? ""}
           filePath={absolutePath}
+          relativePath={filePath}
           onContentChange={handleContentChange}
         />
       ) : (
         <CodeMirrorEditor
           content={content ?? ""}
           filePath={absolutePath}
+          relativePath={filePath}
           readOnly
         />
       )}

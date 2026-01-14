@@ -1,9 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import {
-  type DefaultRunMode,
-  useSettingsStore,
-} from "@features/settings/stores/settingsStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -11,6 +8,7 @@ import {
   Badge,
   Box,
   Button,
+  Callout,
   Card,
   Flex,
   Heading,
@@ -19,12 +17,17 @@ import {
   Switch,
   Text,
 } from "@radix-ui/themes";
+import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
+import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
+import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { trpcReact, trpcVanilla } from "@/renderer/trpc";
+import { ANALYTICS_EVENTS } from "@/types/analytics";
 import { useThemeStore } from "../../../stores/themeStore";
 
 const log = logger.scope("settings");
@@ -44,23 +47,17 @@ const REGION_URLS: Record<CloudRegion, string> = {
 export function SettingsView() {
   useSetHeaderContent(null);
 
-  const {
-    isAuthenticated,
-    defaultWorkspace,
-    setDefaultWorkspace,
-    cloudRegion,
-    loginWithOAuth,
-    logout,
-  } = useAuthStore();
+  const { isAuthenticated, cloudRegion, loginWithOAuth, logout } =
+    useAuthStore();
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
   const {
     autoRunTasks,
-    defaultRunMode,
     createPR,
+    desktopNotifications,
     setAutoRunTasks,
-    setDefaultRunMode,
     setCreatePR,
+    setDesktopNotifications,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -68,17 +65,30 @@ export function SettingsView() {
   const setTerminalLayout = useTerminalLayoutStore(
     (state) => state.setTerminalLayout,
   );
+  const openShortcutsSheet = useShortcutsSheetStore((state) => state.open);
 
   const { data: currentUser } = useMeQuery();
   const { data: project } = useProjectQuery();
 
   const { data: worktreeLocation } = useQuery({
     queryKey: ["settings", "worktreeLocation"],
-    queryFn: () => window.electronAPI.settings.getWorktreeLocation(),
+    queryFn: async () => {
+      const result = await trpcVanilla.secureStore.getItem.query({
+        key: "worktreeLocation",
+      });
+      return result ?? null;
+    },
   });
+
+  const { data: appVersion } = trpcReact.os.getAppVersion.useQuery();
 
   const [localWorktreeLocation, setLocalWorktreeLocation] =
     useState<string>("");
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<{
+    message?: string;
+    type?: "info" | "success" | "error";
+  }>({});
 
   useEffect(() => {
     if (worktreeLocation) {
@@ -86,10 +96,59 @@ export function SettingsView() {
     }
   }, [worktreeLocation]);
 
+  // Tracked settings handlers
+  const handleAutoRunChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "auto_run_tasks",
+        new_value: checked,
+        old_value: autoRunTasks,
+      });
+      setAutoRunTasks(checked);
+    },
+    [autoRunTasks, setAutoRunTasks],
+  );
+
+  const handleCreatePRChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "create_pr",
+        new_value: checked,
+        old_value: createPR,
+      });
+      setCreatePR(checked);
+    },
+    [createPR, setCreatePR],
+  );
+
+  const handleDarkModeChange = useCallback(() => {
+    track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+      setting_name: "dark_mode",
+      new_value: !isDarkMode,
+      old_value: isDarkMode,
+    });
+    toggleDarkMode();
+  }, [isDarkMode, toggleDarkMode]);
+
+  const handleTerminalLayoutChange = useCallback(
+    (value: "split" | "tabbed") => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "terminal_layout",
+        new_value: value,
+        old_value: terminalLayoutMode,
+      });
+      setTerminalLayout(value);
+    },
+    [terminalLayoutMode, setTerminalLayout],
+  );
+
   const handleWorktreeLocationChange = async (newLocation: string) => {
     setLocalWorktreeLocation(newLocation);
     try {
-      await window.electronAPI.settings.setWorktreeLocation(newLocation);
+      await trpcVanilla.secureStore.setItem.query({
+        key: "worktreeLocation",
+        value: newLocation,
+      });
     } catch (error) {
       log.error("Failed to set worktree location:", error);
     }
@@ -104,7 +163,7 @@ export function SettingsView() {
   const handleReauthenticate = async () => {
     if (reauthMutation.isPending) {
       reauthMutation.reset();
-      await window.electronAPI.oauthCancelFlow();
+      await trpcVanilla.oauth.cancelFlow.mutate();
     } else if (cloudRegion) {
       reauthMutation.mutate(cloudRegion);
     }
@@ -113,6 +172,53 @@ export function SettingsView() {
   const handleLogout = () => {
     logout();
   };
+
+  const checkUpdatesMutation = trpcReact.updates.check.useMutation();
+
+  const handleCheckForUpdates = async () => {
+    setCheckingForUpdates(true);
+    setUpdateStatus({ message: "Checking for updates...", type: "info" });
+
+    try {
+      const result = await checkUpdatesMutation.mutateAsync();
+
+      if (result.success) {
+        setUpdateStatus({
+          message:
+            "Checking for updates. You'll be notified if an update is available.",
+          type: "success",
+        });
+      } else {
+        setUpdateStatus({
+          message: result.error || "Failed to check for updates",
+          type: "error",
+        });
+      }
+    } catch (error) {
+      log.error("Failed to check for updates:", error);
+      setUpdateStatus({
+        message: "An unexpected error occurred",
+        type: "error",
+      });
+    } finally {
+      setCheckingForUpdates(false);
+    }
+  };
+
+  trpcReact.updates.onStatus.useSubscription(undefined, {
+    onData: (status) => {
+      if (status.checking === false && status.upToDate) {
+        const versionSuffix = status.version ? ` (v${status.version})` : "";
+        setUpdateStatus({
+          message: `You're running the latest version${versionSuffix}`,
+          type: "success",
+        });
+        setCheckingForUpdates(false);
+      } else if (status.checking === false) {
+        setCheckingForUpdates(false);
+      }
+    },
+  });
 
   return (
     <Box height="100%" overflowY="auto">
@@ -136,7 +242,7 @@ export function SettingsView() {
                   </Text>
                   <Switch
                     checked={isDarkMode}
-                    onCheckedChange={toggleDarkMode}
+                    onCheckedChange={handleDarkModeChange}
                     size="1"
                   />
                 </Flex>
@@ -148,7 +254,7 @@ export function SettingsView() {
                   <Select.Root
                     value={terminalLayoutMode}
                     onValueChange={(value) =>
-                      setTerminalLayout(value as "split" | "tabbed")
+                      handleTerminalLayoutChange(value as "split" | "tabbed")
                     }
                     size="1"
                   >
@@ -163,6 +269,51 @@ export function SettingsView() {
                     logs. Tabbed shows the terminal as a tab alongside logs.
                   </Text>
                 </Flex>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          <Flex direction="column" gap="3">
+            <Heading size="3">Keyboard shortcuts</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    View all shortcuts
+                  </Text>
+                  <Text size="1" color="gray">
+                    See all available keyboard shortcuts
+                  </Text>
+                </Flex>
+                <Button variant="soft" size="1" onClick={openShortcutsSheet}>
+                  {formatHotkey("mod+/")}
+                </Button>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          {/* Chat Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Chat</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    Desktop notifications
+                  </Text>
+                  <Text size="1" color="gray">
+                    Show notifications when the agent finishes working on a task
+                  </Text>
+                </Flex>
+                <Switch
+                  checked={desktopNotifications}
+                  onCheckedChange={setDesktopNotifications}
+                  size="1"
+                />
               </Flex>
             </Card>
           </Flex>
@@ -185,32 +336,9 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={autoRunTasks}
-                    onCheckedChange={setAutoRunTasks}
+                    onCheckedChange={handleAutoRunChange}
                     size="1"
                   />
-                </Flex>
-
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Default run environment
-                  </Text>
-                  <Select.Root
-                    value={defaultRunMode}
-                    onValueChange={(value) =>
-                      setDefaultRunMode(value as DefaultRunMode)
-                    }
-                    size="1"
-                  >
-                    <Select.Trigger />
-                    <Select.Content>
-                      <Select.Item value="local">Local</Select.Item>
-                      <Select.Item value="cloud">Cloud</Select.Item>
-                      <Select.Item value="last_used">Last used</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                  <Text size="1" color="gray">
-                    Choose which environment to use when running tasks
-                  </Text>
                 </Flex>
 
                 <Flex align="center" justify="between">
@@ -225,35 +353,9 @@ export function SettingsView() {
                   </Flex>
                   <Switch
                     checked={createPR}
-                    onCheckedChange={setCreatePR}
+                    onCheckedChange={handleCreatePRChange}
                     size="1"
                   />
-                </Flex>
-              </Flex>
-            </Card>
-          </Flex>
-
-          <Box className="border-gray-6 border-t" />
-
-          {/* Clone Location Section */}
-          <Flex direction="column" gap="3">
-            <Heading size="3">Clone location</Heading>
-            <Card>
-              <Flex direction="column" gap="3">
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Default clone location
-                  </Text>
-                  <FolderPicker
-                    value={defaultWorkspace || ""}
-                    onChange={setDefaultWorkspace}
-                    placeholder="~/repos"
-                    size="1"
-                  />
-                  <Text size="1" color="gray">
-                    Default directory where repositories will be cloned. This
-                    should be the folder where you usually store your projects.
-                  </Text>
                 </Flex>
               </Flex>
             </Card>
@@ -370,35 +472,47 @@ export function SettingsView() {
                   </Flex>
                 )}
 
+                {appVersion && (
+                  <Flex direction="column" gap="3">
+                    <Flex direction="column" gap="2">
+                      <Text size="1" weight="medium">
+                        Version
+                      </Text>
+                      <Text size="1" color="gray">
+                        {appVersion}
+                      </Text>
+                    </Flex>
+                    <Button
+                      variant="soft"
+                      size="1"
+                      onClick={handleCheckForUpdates}
+                      disabled={checkingForUpdates}
+                    >
+                      {checkingForUpdates && <Spinner />}
+                      {checkingForUpdates ? "Checking..." : "Check for updates"}
+                    </Button>
+                    {updateStatus.message && (
+                      <Callout.Root
+                        size="1"
+                        color={
+                          updateStatus.type === "error"
+                            ? "red"
+                            : updateStatus.type === "success"
+                              ? "green"
+                              : "blue"
+                        }
+                      >
+                        <Callout.Text>{updateStatus.message}</Callout.Text>
+                      </Callout.Root>
+                    )}
+                  </Flex>
+                )}
+
                 {!isAuthenticated && (
                   <Text size="1" color="gray">
                     You are not currently authenticated. Please sign in from the
                     main screen.
                   </Text>
-                )}
-
-                {isAuthenticated && (
-                  <Flex gap="2">
-                    <Button
-                      variant="classic"
-                      size="1"
-                      onClick={handleReauthenticate}
-                      color={reauthMutation.isPending ? "gray" : undefined}
-                    >
-                      {reauthMutation.isPending && <Spinner />}
-                      {reauthMutation.isPending
-                        ? "Cancel authorization"
-                        : "Re-authenticate"}
-                    </Button>
-                    <Button
-                      variant="soft"
-                      color="red"
-                      size="1"
-                      onClick={handleLogout}
-                    >
-                      Sign out
-                    </Button>
-                  </Flex>
                 )}
 
                 {reauthMutation.isError && (
@@ -410,6 +524,29 @@ export function SettingsView() {
                 )}
               </Flex>
             </Card>
+            {isAuthenticated && (
+              <Flex gap="2">
+                <Button
+                  variant="classic"
+                  size="1"
+                  onClick={handleReauthenticate}
+                  color={reauthMutation.isPending ? "gray" : undefined}
+                >
+                  {reauthMutation.isPending && <Spinner />}
+                  {reauthMutation.isPending
+                    ? "Cancel authorization"
+                    : "Re-authenticate"}
+                </Button>
+                <Button
+                  variant="soft"
+                  color="red"
+                  size="1"
+                  onClick={handleLogout}
+                >
+                  Sign out
+                </Button>
+              </Flex>
+            )}
           </Flex>
         </Flex>
       </Box>

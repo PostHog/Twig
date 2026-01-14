@@ -1,4 +1,5 @@
 import { logger } from "@renderer/lib/logger";
+import { trpcVanilla } from "@renderer/trpc";
 import type { RegisteredFolder } from "@shared/types";
 import { create } from "zustand";
 
@@ -23,7 +24,7 @@ interface RegisteredFoldersState {
 let updateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function loadFolders(): Promise<RegisteredFolder[]> {
-  return await window.electronAPI.folders.getFolders();
+  return await trpcVanilla.folders.getFolders.query();
 }
 
 function updateFolderInList(
@@ -41,9 +42,17 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
   (set, get) => {
     (async () => {
       try {
-        const folders = await loadFolders();
-        set({ folders, isLoaded: true });
+        const loadedFolders = await loadFolders();
+        // Merge with existing state to preserve folders added during load
+        set((state) => {
+          // Dedupe by id, local state wins for freshness
+          const byId = new Map<string, RegisteredFolder>();
+          for (const f of loadedFolders) byId.set(f.id, f);
+          for (const f of state.folders) byId.set(f.id, f);
+          return { folders: Array.from(byId.values()), isLoaded: true };
+        });
 
+        const folders = get().folders;
         for (const folder of folders) {
           get()
             .cleanupOrphanedWorktrees(folder.path)
@@ -56,7 +65,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
         }
       } catch (error) {
         log.error("Failed to load folders:", error);
-        set({ folders: [], isLoaded: true });
+        set({ isLoaded: true });
       }
     })();
 
@@ -76,7 +85,9 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       addFolder: async (folderPath: string) => {
         try {
-          const folder = await window.electronAPI.folders.addFolder(folderPath);
+          const folder = await trpcVanilla.folders.addFolder.mutate({
+            folderPath,
+          });
           set((state) => ({
             folders: updateFolderInList(state.folders, folder),
           }));
@@ -89,7 +100,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       removeFolder: async (folderId: string) => {
         try {
-          await window.electronAPI.folders.removeFolder(folderId);
+          await trpcVanilla.folders.removeFolder.mutate({ folderId });
           set((state) => ({
             folders: state.folders.filter((f) => f.id !== folderId),
           }));
@@ -116,7 +127,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
         updateDebounceTimer = setTimeout(async () => {
           try {
-            await window.electronAPI.folders.updateFolderAccessed(folderId);
+            await trpcVanilla.folders.updateFolderAccessed.mutate({ folderId });
           } catch (error) {
             log.error("Failed to update folder accessed time:", error);
           }
@@ -145,9 +156,9 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       cleanupOrphanedWorktrees: async (mainRepoPath: string) => {
         try {
-          return await window.electronAPI.folders.cleanupOrphanedWorktrees(
+          return await trpcVanilla.folders.cleanupOrphanedWorktrees.mutate({
             mainRepoPath,
-          );
+          });
         } catch (error) {
           log.error("Failed to cleanup orphaned worktrees:", error);
           return {

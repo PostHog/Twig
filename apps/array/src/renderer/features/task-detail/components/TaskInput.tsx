@@ -1,17 +1,27 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useEffect, useState } from "react";
-import { useEditorSetup } from "../hooks/useEditorSetup";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
-import { type RunMode, RunModeSelect } from "./RunModeSelect";
+import { BranchSelect } from "./BranchSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
+
+const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+
+function cycleMode(current: ExecutionMode): ExecutionMode {
+  const currentIndex = EXECUTION_MODES.indexOf(current);
+  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
+  return EXECUTION_MODES[nextIndex];
+}
 
 const DOT_FILL = "var(--gray-6)";
 
@@ -22,45 +32,52 @@ export function TaskInput() {
 
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { folders } = useRegisteredFoldersStore();
-  const { lastUsedRunMode, lastUsedLocalWorkspaceMode } = useSettingsStore();
+  const { lastUsedLocalWorkspaceMode } = useSettingsStore();
+
+  const editorRef = useRef<MessageEditorHandle>(null);
 
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  const [runMode, setRunMode] = useState<RunMode>(
-    import.meta.env.DEV ? lastUsedRunMode : "local",
-  );
+  // We're temporarily removing the cloud/local toggle, so hardcode to local
+  const runMode = "local";
   const [localWorkspaceMode, setLocalWorkspaceMode] =
     useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [editorIsEmpty, setEditorIsEmpty] = useState(true);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
+
+  const handleModeChange = useCallback(() => {
+    setExecutionMode((current) => cycleMode(current));
+  }, []);
+
+  const { githubIntegration } = useRepositoryIntegration();
 
   useEffect(() => {
     if (view.folderId) {
-      const folder = folders.find((f) => f.id === view.folderId);
+      // Access store directly to avoid folders dependency triggering re-sync
+      const currentFolders = useRegisteredFoldersStore.getState().folders;
+      const folder = currentFolders.find((f) => f.id === view.folderId);
       if (folder) {
         setSelectedDirectory(folder.path);
       }
     }
-  }, [view.folderId, folders]);
+  }, [view.folderId]);
 
   const handleDirectoryChange = (newPath: string) => {
     setSelectedDirectory(newPath);
   };
 
-  const editor = useEditorSetup({
-    onSubmit: () => handleSubmit(),
-    isDisabled: false,
-    repoPath: selectedDirectory,
-  });
-
-  // Compute the effective workspace mode for task creation
-  const effectiveWorkspaceMode: WorkspaceMode =
-    runMode === "cloud" ? "cloud" : localWorkspaceMode;
+  const effectiveWorkspaceMode: WorkspaceMode = localWorkspaceMode;
 
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
-    editor,
+    editorRef,
     selectedDirectory,
+    githubIntegrationId: githubIntegration?.id,
     workspaceMode: effectiveWorkspaceMode,
+    branch: selectedBranch,
+    editorIsEmpty,
+    executionMode: executionMode === "default" ? undefined : executionMode,
   });
 
   return (
@@ -119,13 +136,20 @@ export function TaskInput() {
             placeholder="Select working directory..."
             size="1"
           />
-          {import.meta.env.DEV && (
-            <RunModeSelect value={runMode} onChange={setRunMode} size="1" />
+          {selectedDirectory && (
+            <BranchSelect
+              value={selectedBranch}
+              onChange={setSelectedBranch}
+              directoryPath={selectedDirectory}
+              runMode={runMode}
+            />
           )}
         </Flex>
 
         <TaskInputEditor
-          editor={editor}
+          ref={editorRef}
+          sessionId="task-input"
+          repoPath={selectedDirectory}
           isCreatingTask={isCreatingTask}
           runMode={runMode}
           localWorkspaceMode={localWorkspaceMode}
@@ -133,9 +157,12 @@ export function TaskInput() {
           canSubmit={canSubmit}
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}
+          onEmptyChange={setEditorIsEmpty}
+          executionMode={executionMode}
+          onModeChange={handleModeChange}
         />
 
-        <SuggestedTasks editor={editor} />
+        <SuggestedTasks editorRef={editorRef} />
       </Flex>
     </Flex>
   );

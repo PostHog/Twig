@@ -1,7 +1,7 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import type { PanelNode } from "@features/panels/store/panelTypes";
 import type { Task } from "@shared/types";
-import { expect, vi } from "vitest";
+import { expect } from "vitest";
 
 export function createMockTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -15,27 +15,6 @@ export function createMockTask(overrides: Partial<Task> = {}): Task {
     updated_at: new Date().toISOString(),
     ...overrides,
   };
-}
-
-export function mockElectronAPI(
-  overrides: Partial<typeof window.electronAPI> = {},
-) {
-  window.electronAPI = {
-    listRepoFiles: vi.fn().mockResolvedValue([
-      { path: "App.tsx", name: "App.tsx" },
-      { path: "helper.ts", name: "helper.ts" },
-      { path: "README.md", name: "README.md" },
-    ]),
-    readRepoFile: vi.fn().mockResolvedValue("// file content"),
-    shellCreate: vi.fn().mockResolvedValue(undefined),
-    shellWrite: vi.fn().mockResolvedValue(undefined),
-    shellResize: vi.fn().mockResolvedValue(undefined),
-    shellDispose: vi.fn().mockResolvedValue(undefined),
-    shellDestroy: vi.fn().mockResolvedValue(undefined),
-    onShellData: vi.fn().mockReturnValue(() => {}),
-    onShellExit: vi.fn().mockReturnValue(() => {}),
-    ...overrides,
-  } as unknown as typeof window.electronAPI;
 }
 
 export interface PanelStructure {
@@ -217,7 +196,7 @@ export function assertGroupStructure(
 
 export function openMultipleFiles(taskId: string, files: string[]) {
   for (const file of files) {
-    usePanelLayoutStore.getState().openFile(taskId, file);
+    usePanelLayoutStore.getState().openFile(taskId, file, false);
   }
 }
 

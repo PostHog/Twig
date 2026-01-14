@@ -1,14 +1,27 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import { Cloud, GitBranch as GitBranchIcon } from "@phosphor-icons/react";
+import {
+  Cloud,
+  GitBranch as GitBranchIcon,
+  PushPin,
+  PushPinSlash,
+  Trash,
+} from "@phosphor-icons/react";
+import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 function useCurrentBranch(repoPath?: string, worktreeName?: string) {
   return useQuery({
     queryKey: ["current-branch", repoPath],
-    queryFn: () => window.electronAPI.getCurrentBranch(repoPath!),
+    queryFn: () => {
+      if (!repoPath) throw new Error("repoPath is required");
+      return trpcVanilla.git.getCurrentBranch.query({
+        directoryPath: repoPath,
+      });
+    },
     enabled: !!repoPath && !worktreeName,
     staleTime: 3000,
     refetchInterval: 3000,
@@ -25,8 +38,50 @@ interface TaskItemProps {
   lastActivityAt?: number;
   isGenerating?: boolean;
   isUnread?: boolean;
+  isPinned?: boolean;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onDelete?: () => void;
+  onTogglePin?: () => void;
+}
+
+interface TaskHoverToolbarProps {
+  isPinned: boolean;
+  onDelete: () => void;
+  onTogglePin: () => void;
+}
+
+function TaskHoverToolbar({
+  isPinned,
+  onDelete,
+  onTogglePin,
+}: TaskHoverToolbarProps) {
+  return (
+    <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+      <button
+        type="button"
+        className="flex h-5 w-5 items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePin();
+        }}
+        title={isPinned ? "Unpin task" : "Pin task"}
+      >
+        {isPinned ? <PushPinSlash size={12} /> : <PushPin size={12} />}
+      </button>
+      <button
+        type="button"
+        className="flex h-5 w-5 items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        title="Delete task"
+      >
+        <Trash size={12} />
+      </button>
+    </span>
+  );
 }
 
 interface DiffStatsDisplayProps {
@@ -36,7 +91,8 @@ interface DiffStatsDisplayProps {
 function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", worktreePath],
-    queryFn: () => window.electronAPI.getDiffStats(worktreePath),
+    queryFn: () =>
+      trpcVanilla.git.getDiffStats.query({ directoryPath: worktreePath }),
     enabled: !!worktreePath,
     staleTime: 30000,
     refetchOnWindowFocus: false,
@@ -82,8 +138,11 @@ export function TaskItem({
   lastActivityAt,
   isGenerating,
   isUnread,
+  isPinned = false,
   onClick,
   onContextMenu,
+  onDelete,
+  onTogglePin,
 }: TaskItemProps) {
   const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
 
@@ -119,8 +178,30 @@ export function TaskItem({
     <span className="flex h-[12px] w-[12px] items-center justify-center text-[8px] text-green-11">
       ■
     </span>
+  ) : isPinned ? (
+    <PushPin size={12} className="text-accent-11" />
   ) : (
     <GitBranchIcon size={12} />
+  );
+
+  const endContent = useMemo(
+    () => (
+      <span className="flex items-center gap-1">
+        {!isCloudTask && worktreePath && (
+          <span className="group-hover:hidden">
+            <DiffStatsDisplay worktreePath={worktreePath} />
+          </span>
+        )}
+        {onDelete && onTogglePin && (
+          <TaskHoverToolbar
+            isPinned={isPinned}
+            onDelete={onDelete}
+            onTogglePin={onTogglePin}
+          />
+        )}
+      </span>
+    ),
+    [isCloudTask, worktreePath, onDelete, onTogglePin, isPinned],
   );
 
   return (
@@ -132,11 +213,7 @@ export function TaskItem({
       isActive={isActive}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      endContent={
-        !isCloudTask && worktreePath ? (
-          <DiffStatsDisplay worktreePath={worktreePath} />
-        ) : undefined
-      }
+      endContent={endContent}
     />
   );
 }

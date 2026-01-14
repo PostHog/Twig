@@ -9,7 +9,7 @@ export function formatDuration(ms: number): string {
   const centiseconds = Math.floor((ms % 1000) / 10);
 
   if (mins > 0) {
-    return `${mins}m ${secs.toString().padStart(2, "0")}.${centiseconds.toString().padStart(2, "0")}s`;
+    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
   }
   return `${secs}.${centiseconds.toString().padStart(2, "0")}s`;
 }
@@ -33,8 +33,8 @@ export function GeneratingIndicator() {
       className="select-none text-accent-11"
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
-      <DotsCircleSpinner size={14} className="text-accent-11" />
-      <Text size="2">
+      <DotsCircleSpinner size={12} className="text-accent-11" />
+      <Text size="1">
         Generating
         <span
           className="loading-dots"

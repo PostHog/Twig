@@ -7,7 +7,7 @@ import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
 export const DEFAULT_FALLBACK_TAB = DEFAULT_TAB_IDS.LOGS;
 
 // Tab ID utilities
-export type TabType = "file" | "artifact" | "diff" | "system";
+export type TabType = "file" | "diff" | "system";
 
 export interface ParsedTabId {
   type: TabType;
@@ -16,10 +16,6 @@ export interface ParsedTabId {
 
 export function createFileTabId(filePath: string): string {
   return `file-${filePath}`;
-}
-
-export function createArtifactTabId(fileName: string): string {
-  return `artifact-${fileName}`;
 }
 
 export function createDiffTabId(filePath: string, status?: string): string {
@@ -43,9 +39,6 @@ export function getDiffTabIdsForFile(filePath: string): string[] {
 export function parseTabId(tabId: string): ParsedTabId & { status?: string } {
   if (tabId.startsWith("file-")) {
     return { type: "file", value: tabId.slice(5) };
-  }
-  if (tabId.startsWith("artifact-")) {
-    return { type: "artifact", value: tabId.slice(9) };
   }
   if (tabId.startsWith("diff-")) {
     const rest = tabId.slice(5);
@@ -157,7 +150,11 @@ export function updateTaskLayout(
 }
 
 // Tree update helpers
-export function createNewTab(tabId: string, closeable = true): Tab {
+export function createNewTab(
+  tabId: string,
+  closeable = true,
+  isPreview = false,
+): Tab {
   const parsed = parseTabId(tabId);
   let data: Tab["data"];
 
@@ -178,12 +175,6 @@ export function createNewTab(tabId: string, closeable = true): Tab {
         absolutePath: "", // Will be populated by tab injection
         repoPath: "", // Will be populated by tab injection
         status: (parsed.status || "modified") as GitFileStatus,
-      };
-      break;
-    case "artifact":
-      data = {
-        type: "artifact",
-        artifactId: parsed.value,
       };
       break;
     case "system":
@@ -210,6 +201,7 @@ export function createNewTab(tabId: string, closeable = true): Tab {
     component: null,
     closeable,
     draggable: true,
+    isPreview,
   };
 }
 
@@ -217,14 +209,20 @@ export function addNewTabToPanel(
   panel: PanelNode,
   tabId: string,
   closeable = true,
+  isPreview = false,
 ): PanelNode {
   if (panel.type !== "leaf") return panel;
+
+  // If opening as preview, remove any existing preview tab first
+  const tabs = isPreview
+    ? panel.content.tabs.filter((tab) => !tab.isPreview)
+    : panel.content.tabs;
 
   return {
     ...panel,
     content: {
       ...panel.content,
-      tabs: [...panel.content.tabs, createNewTab(tabId, closeable)],
+      tabs: [...tabs, createNewTab(tabId, closeable, isPreview)],
       activeTabId: tabId,
     },
   };
@@ -271,7 +269,7 @@ export function updateMetadataForTab(
   layout: TaskLayout,
   tabId: string,
   action: "add" | "remove",
-): Pick<TaskLayout, "openFiles" | "openArtifacts"> {
+): Pick<TaskLayout, "openFiles"> {
   const parsed = parseTabId(tabId);
 
   if (parsed.type === "file") {
@@ -279,18 +277,10 @@ export function updateMetadataForTab(
       action === "add"
         ? [...layout.openFiles, parsed.value]
         : layout.openFiles.filter((f) => f !== parsed.value);
-    return { openFiles, openArtifacts: layout.openArtifacts };
+    return { openFiles };
   }
 
-  if (parsed.type === "artifact") {
-    const openArtifacts =
-      action === "add"
-        ? [...layout.openArtifacts, parsed.value]
-        : layout.openArtifacts.filter((f) => f !== parsed.value);
-    return { openFiles: layout.openFiles, openArtifacts };
-  }
-
-  return { openFiles: layout.openFiles, openArtifacts: layout.openArtifacts };
+  return { openFiles: layout.openFiles };
 }
 
 // Cleanup utilities

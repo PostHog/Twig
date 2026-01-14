@@ -1,10 +1,15 @@
+import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
+import { useMeQuery } from "@hooks/useMeQuery";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
@@ -13,29 +18,37 @@ const log = logger.scope("tasks");
 const taskKeys = {
   all: ["tasks"] as const,
   lists: () => [...taskKeys.all, "list"] as const,
-  list: (filters?: { repository?: string }) =>
+  list: (filters?: { repository?: string; createdBy?: number }) =>
     [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
 };
 
 export function useTasks(filters?: { repository?: string }) {
+  const { data: currentUser } = useMeQuery();
+
   return useAuthenticatedQuery(
-    taskKeys.list(filters),
+    taskKeys.list({ ...filters, createdBy: currentUser?.id }),
     (client) =>
-      client.getTasks(filters?.repository) as unknown as Promise<Task[]>,
-    {
-      staleTime: 30 * 1000,
-      refetchInterval: 30 * 1000,
-      refetchOnWindowFocus: true,
-    },
+      client.getTasks({
+        repository: filters?.repository,
+        createdBy: currentUser?.id,
+      }) as unknown as Promise<Task[]>,
+    { enabled: !!currentUser?.id },
   );
 }
 
 export function useCreateTask() {
   const queryClient = useQueryClient();
 
-  const invalidateTasks = () => {
+  const invalidateTasks = (newTask?: Task) => {
+    // If a new task is provided, add it to cache immediately for instant UI update
+    if (newTask) {
+      queryClient.setQueryData<Task[]>(taskKeys.list(), (old) =>
+        old ? [newTask, ...old] : [newTask],
+      );
+    }
+    // Also invalidate to ensure we're in sync with server
     queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
   };
 
@@ -45,9 +58,11 @@ export function useCreateTask() {
       {
         description,
         repository,
+        github_integration,
       }: {
         description: string;
         repository?: string;
+        github_integration?: number;
         autoRun?: boolean;
         createdFrom?: "cli" | "command-menu";
       },
@@ -55,6 +70,7 @@ export function useCreateTask() {
       client.createTask({
         description,
         repository,
+        github_integration,
       }) as unknown as Promise<Task>,
     {
       onSuccess: (_task, variables) => {
@@ -97,10 +113,18 @@ export function useUpdateTask() {
   );
 }
 
+interface DeleteTaskOptions {
+  taskId: string;
+  taskTitle: string;
+  hasWorktree: boolean;
+}
+
 export function useDeleteTask() {
   const queryClient = useQueryClient();
+  const { view, navigateToTaskInput } = useNavigationStore();
+  const unpinTask = usePinnedTasksStore((state) => state.unpin);
 
-  return useAuthenticatedMutation(
+  const mutation = useAuthenticatedMutation(
     async (client, taskId: string) => {
       const workspaceStore = useWorkspaceStore.getState();
       const workspace = workspaceStore.workspaces[taskId];
@@ -121,6 +145,35 @@ export function useDeleteTask() {
       },
     },
   );
+
+  const deleteWithConfirm = useCallback(
+    async ({ taskId, taskTitle, hasWorktree }: DeleteTaskOptions) => {
+      const result = await trpcVanilla.contextMenu.confirmDeleteTask.mutate({
+        taskTitle,
+        hasWorktree,
+      });
+
+      if (!result.confirmed) {
+        return false;
+      }
+
+      // Navigate away if viewing the deleted task
+      if (view.type === "task-detail" && view.data?.id === taskId) {
+        navigateToTaskInput();
+      }
+
+      // Clean up pinned state
+      unpinTask(taskId);
+
+      // Delete the task
+      await mutation.mutateAsync(taskId);
+
+      return true;
+    },
+    [mutation, view, navigateToTaskInput, unpinTask],
+  );
+
+  return { ...mutation, deleteWithConfirm };
 }
 
 export function useDuplicateTask() {

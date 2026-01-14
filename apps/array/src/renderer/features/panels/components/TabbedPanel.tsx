@@ -2,6 +2,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { SquareSplitHorizontalIcon } from "@phosphor-icons/react";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Box, Flex } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SplitDirection } from "../store/panelLayoutStore";
@@ -48,10 +49,10 @@ interface TabbedPanelProps {
   onActiveTabChange?: (panelId: string, tabId: string) => void;
   onCloseOtherTabs?: (panelId: string, tabId: string) => void;
   onCloseTabsToRight?: (panelId: string, tabId: string) => void;
+  onKeepTab?: (panelId: string, tabId: string) => void;
   onPanelFocus?: (panelId: string) => void;
   draggingTabId?: string | null;
   draggingTabPanelId?: string | null;
-  isFocused?: boolean;
   onAddTerminal?: () => void;
   onSplitPanel?: (direction: SplitDirection) => void;
 }
@@ -62,17 +63,17 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onActiveTabChange,
   onCloseOtherTabs,
   onCloseTabsToRight,
+  onKeepTab,
   onPanelFocus,
   draggingTabId = null,
   draggingTabPanelId = null,
-  isFocused = false,
   onAddTerminal,
   onSplitPanel,
 }) => {
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
 
   const handleSplitClick = async () => {
-    const result = await window.electronAPI.showSplitContextMenu();
+    const result = await trpcVanilla.contextMenu.showSplitContextMenu.mutate();
     if (result.direction) {
       onSplitPanel?.(result.direction as SplitDirection);
     }
@@ -163,6 +164,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 index={index}
                 draggable={tab.draggable}
                 closeable={tab.closeable !== false}
+                isPreview={tab.isPreview}
                 onSelect={() => {
                   onActiveTabChange?.(panelId, tab.id);
                   onPanelFocus?.(panelId);
@@ -175,6 +177,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 }
                 onCloseOthers={() => onCloseOtherTabs?.(panelId, tab.id)}
                 onCloseToRight={() => onCloseTabsToRight?.(panelId, tab.id)}
+                onKeep={() => onKeepTab?.(panelId, tab.id)}
                 icon={tab.icon}
                 hasUnsavedChanges={tab.hasUnsavedChanges}
                 badge={tab.badge}
@@ -188,37 +191,32 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               />
             )}
           </Flex>
-          {isFocused &&
-            content.droppable &&
-            (onSplitPanel || onAddTerminal) && (
-              <Flex
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  height: "32px",
-                  borderLeft: "1px solid var(--gray-6)",
-                  background: "var(--color-background)",
-                }}
-              >
-                {onSplitPanel && (
-                  <TabBarButton
-                    ariaLabel="Split panel"
-                    onClick={handleSplitClick}
-                  >
-                    <SquareSplitHorizontalIcon width={12} height={12} />
-                  </TabBarButton>
-                )}
-                {onAddTerminal && (
-                  <TabBarButton
-                    ariaLabel="Add terminal"
-                    onClick={onAddTerminal}
-                  >
-                    <PlusIcon width={12} height={12} />
-                  </TabBarButton>
-                )}
-              </Flex>
-            )}
+          {content.droppable && (onSplitPanel || onAddTerminal) && (
+            <Flex
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                height: "32px",
+                borderLeft: "1px solid var(--gray-6)",
+                background: "var(--color-background)",
+              }}
+            >
+              {onSplitPanel && (
+                <TabBarButton
+                  ariaLabel="Split panel"
+                  onClick={handleSplitClick}
+                >
+                  <SquareSplitHorizontalIcon width={12} height={12} />
+                </TabBarButton>
+              )}
+              {onAddTerminal && (
+                <TabBarButton ariaLabel="Add terminal" onClick={onAddTerminal}>
+                  <PlusIcon width={12} height={12} />
+                </TabBarButton>
+              )}
+            </Flex>
+          )}
         </Box>
       )}
 

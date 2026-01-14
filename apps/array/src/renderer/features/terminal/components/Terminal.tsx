@@ -1,4 +1,5 @@
 import { Box } from "@radix-ui/themes";
+import { trpcReact } from "@renderer/trpc";
 import { useThemeStore } from "@stores/themeStore";
 import "@xterm/xterm/css/xterm.css";
 import { useCallback, useEffect, useRef } from "react";
@@ -54,6 +55,28 @@ export function Terminal({
   useEffect(() => {
     terminalManager.setTheme(isDarkMode);
   }, [isDarkMode]);
+
+  // Subscribe to shell data events
+  trpcReact.shell.onData.useSubscription(
+    { sessionId },
+    {
+      enabled: !!sessionId,
+      onData: (event) => {
+        terminalManager.writeData(event.sessionId, event.data);
+      },
+    },
+  );
+
+  // Subscribe to shell exit events
+  trpcReact.shell.onExit.useSubscription(
+    { sessionId },
+    {
+      enabled: !!sessionId,
+      onData: (event) => {
+        terminalManager.handleExit(event.sessionId);
+      },
+    },
+  );
 
   // Event callbacks
   useEffect(() => {

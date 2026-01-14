@@ -1,47 +1,35 @@
-/* Task Input Editor Styles */
+/* Task Input specific overrides - base styles in message-editor.css */
 
-.cli-editor {
-  font-family: monospace;
-  background-color: transparent;
-  border: none;
-  outline: none;
-  color: var(--gray-12);
-  font-size: var(--font-size-1);
-  width: 100%;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: break-word;
-}
-
-.cli-editor.ProseMirror {
-  overflow-x: hidden;
-}
-
-.cli-editor.ProseMirror p {
-  margin: 0;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: break-word;
-}
-
-.cli-editor.ProseMirror.ProseMirror-focused
-  p.is-editor-empty:first-child::before {
-  content: "";
-}
-
-.cli-editor.ProseMirror:not(.ProseMirror-focused)
-  p.is-editor-empty:first-child::before {
+.worktree-toggle-button {
   color: var(--gray-11);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
 }
 
-.cli-file-mention {
-  background-color: var(--accent-a3);
-  color: var(--accent-11);
-  padding: 1px 4px;
-  border-radius: 4px;
-  font-weight: 500;
+.worktree-toggle-button:hover {
+  background-color: var(--gray-a4);
+}
+
+.worktree-toggle-button[data-active="true"] {
+  background-color: var(--blue-a4);
+  color: var(--blue-11);
+}
+
+.worktree-toggle-button[data-active="true"]:hover {
+  background-color: var(--blue-a5);
+}
+
+.plan-mode-toggle-button {
+  color: var(--gray-11);
+}
+
+.plan-mode-toggle-button:hover {
+  background-color: var(--gray-a4);
+}
+
+.plan-mode-toggle-button[data-active="true"] {
+  background-color: var(--amber-a4);
+  color: var(--amber-11);
+}
+
+.plan-mode-toggle-button[data-active="true"]:hover {
+  background-color: var(--amber-a5);
 }

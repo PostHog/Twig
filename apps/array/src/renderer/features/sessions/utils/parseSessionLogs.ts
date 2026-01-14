@@ -1,5 +1,7 @@
 /// <reference path="../../../types/electron.d.ts" />
+
 import type { SessionNotification } from "@agentclientprotocol/sdk";
+import { trpcVanilla } from "@/renderer/trpc";
 
 export interface StoredLogEntry {
   type: string;
@@ -32,8 +34,7 @@ export async function fetchSessionLogs(
   }
 
   try {
-    const content = await window.electronAPI.fetchS3Logs(logUrl);
-
+    const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
     if (!content?.trim()) {
       return { notifications: [], rawEntries: [] };
     }
@@ -98,4 +99,61 @@ export async function fetchSessionLogs(
   } catch {
     return { notifications: [], rawEntries: [] };
   }
+}
+
+export interface PermissionRequest {
+  toolCallId: string;
+  title: string;
+  options: Array<{
+    kind: string;
+    name: string;
+    optionId: string;
+    description?: string;
+  }>;
+  rawInput: unknown;
+  receivedAt: number;
+}
+
+/**
+ * Scan log entries to find pending permission requests.
+ * Returns permission requests that don't have a matching response.
+ */
+export function findPendingPermissions(
+  entries: StoredLogEntry[],
+): Map<string, PermissionRequest> {
+  const requests = new Map<string, StoredLogEntry>();
+  const responses = new Set<string>();
+
+  for (const entry of entries) {
+    const method = entry.notification?.method;
+    const params = entry.notification?.params as
+      | Record<string, unknown>
+      | undefined;
+
+    if (method === "_array/permission_request" && params?.toolCallId) {
+      requests.set(params.toolCallId as string, entry);
+    }
+    if (method === "_array/permission_response" && params?.toolCallId) {
+      responses.add(params.toolCallId as string);
+    }
+  }
+
+  // Return requests without matching response
+  const pending = new Map<string, PermissionRequest>();
+  for (const [toolCallId, entry] of requests) {
+    if (!responses.has(toolCallId)) {
+      const params = entry.notification?.params as Record<string, unknown>;
+      pending.set(toolCallId, {
+        toolCallId,
+        title: (params.title as string) || "Permission Required",
+        options: (params.options as PermissionRequest["options"]) || [],
+        rawInput: params.rawInput,
+        receivedAt: entry.timestamp
+          ? new Date(entry.timestamp).getTime()
+          : Date.now(),
+      });
+    }
+  }
+
+  return pending;
 }

@@ -9,14 +9,12 @@ import { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 import {
   createAcpConnection,
   type InProcessAcpConnection,
-} from "./adapters/claude/claude.js";
+} from "./adapters/connection.js";
 import { PostHogFileManager } from "./file-manager.js";
 import { GitManager } from "./git-manager.js";
 import { PostHogAPIClient } from "./posthog-api.js";
-import { PromptBuilder } from "./prompt-builder.js";
 import { SessionStore } from "./session-store.js";
 import { TaskManager } from "./task-manager.js";
-import { TemplateManager } from "./template-manager.js";
 import type {
   AgentConfig,
   CanUseTool,
@@ -25,8 +23,14 @@ import type {
   TaskExecutionOptions,
 } from "./types.js";
 import { Logger } from "./utils/logger.js";
-import { TASK_WORKFLOW } from "./workflow/config.js";
-import type { SendNotification, WorkflowRuntime } from "./workflow/types.js";
+
+/**
+ * Type for sending ACP notifications
+ */
+type SendNotification = (
+  method: string,
+  params: Record<string, unknown>,
+) => Promise<void>;
 
 export class Agent {
   private workingDirectory: string;
@@ -34,10 +38,8 @@ export class Agent {
   private posthogAPI?: PostHogAPIClient;
   private fileManager: PostHogFileManager;
   private gitManager: GitManager;
-  private templateManager: TemplateManager;
   private logger: Logger;
   private acpConnection?: InProcessAcpConnection;
-  private promptBuilder: PromptBuilder;
   private mcpServers?: Record<string, any>;
   private canUseTool?: CanUseTool;
   private currentRunId?: string;
@@ -57,8 +59,8 @@ export class Agent {
 
     // Add auth if API key provided
     const headers: Record<string, string> = {};
-    if (config.posthogApiKey) {
-      headers.Authorization = `Bearer ${config.posthogApiKey}`;
+    if (config.getPosthogApiKey) {
+      headers.Authorization = `Bearer ${config.getPosthogApiKey()}`;
     }
 
     const defaultMcpServers = {
@@ -89,16 +91,15 @@ export class Agent {
       repositoryPath: this.workingDirectory,
       logger: this.logger.child("GitManager"),
     });
-    this.templateManager = new TemplateManager();
 
     if (
       config.posthogApiUrl &&
-      config.posthogApiKey &&
+      config.getPosthogApiKey &&
       config.posthogProjectId
     ) {
       this.posthogAPI = new PostHogAPIClient({
         apiUrl: config.posthogApiUrl,
-        apiKey: config.posthogApiKey,
+        getApiKey: config.getPosthogApiKey,
         projectId: config.posthogProjectId,
       });
 
@@ -108,13 +109,6 @@ export class Agent {
         this.logger.child("SessionStore"),
       );
     }
-
-    this.promptBuilder = new PromptBuilder({
-      getTaskFiles: (taskId: string) => this.getTaskFiles(taskId),
-      generatePlanTemplate: (vars) => this.templateManager.generatePlan(vars),
-      posthogClient: this.posthogAPI,
-      logger: this.logger.child("PromptBuilder"),
-    });
   }
 
   /**
@@ -126,7 +120,7 @@ export class Agent {
   }
 
   /**
-   * Configure LLM gateway environment variables for Claude Code CLI
+   * Configure LLM gateway environment variables for Claude Code CLI.
    */
   private async _configureLlmGateway(): Promise<void> {
     if (!this.posthogAPI) {
@@ -139,113 +133,25 @@ export class Agent {
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
       this.ensureOpenAIGatewayEnv(gatewayUrl, apiKey);
+      this.ensureGeminiGatewayEnv(gatewayUrl, apiKey);
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;
     }
   }
 
-  private getOrCreateConnection(): InProcessAcpConnection {
-    if (!this.acpConnection) {
-      this.acpConnection = createAcpConnection({
-        sessionStore: this.sessionStore,
-      });
-    }
-    return this.acpConnection;
-  }
-
-  // Adaptive task execution orchestrated via workflow steps
+  /**
+   * @deprecated Use runTaskV2() for local execution or runTaskCloud() for cloud execution.
+   * This method used the old workflow system which has been removed.
+   */
   async runTask(
-    taskId: string,
-    taskRunId: string,
-    options: import("./types.js").TaskExecutionOptions = {},
+    _taskId: string,
+    _taskRunId: string,
+    _options: import("./types.js").TaskExecutionOptions = {},
   ): Promise<void> {
-    // await this._configureLlmGateway();
-
-    const task = await this.fetchTask(taskId);
-    const cwd = options.repositoryPath || this.workingDirectory;
-    const isCloudMode = options.isCloudMode ?? false;
-    const taskSlug = (task as any).slug || task.id;
-
-    // Use taskRunId as sessionId - they are the same identifier
-    this.currentRunId = taskRunId;
-
-    this.logger.info("Starting adaptive task execution", {
-      taskId: task.id,
-      taskSlug,
-      taskRunId,
-      isCloudMode,
-    });
-
-    const connection = this.getOrCreateConnection();
-
-    // Create sendNotification using ACP connection's extNotification
-    const sendNotification: SendNotification = async (method, params) => {
-      this.logger.debug(`Notification: ${method}`, params);
-      await connection.agentConnection.extNotification?.(method, params);
-    };
-
-    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
-      sessionId: taskRunId,
-      runId: taskRunId,
-    });
-
-    await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
-
-    let taskError: Error | undefined;
-    try {
-      const workflowContext: WorkflowRuntime = {
-        task,
-        taskSlug,
-        runId: taskRunId,
-        cwd,
-        isCloudMode,
-        options,
-        logger: this.logger,
-        fileManager: this.fileManager,
-        gitManager: this.gitManager,
-        promptBuilder: this.promptBuilder,
-        connection: connection.agentConnection,
-        sessionId: taskRunId,
-        sendNotification,
-        mcpServers: this.mcpServers,
-        posthogAPI: this.posthogAPI,
-        stepResults: {},
-      };
-
-      for (const step of TASK_WORKFLOW) {
-        const result = await step.run({ step, context: workflowContext });
-        if (result.halt) {
-          return;
-        }
-      }
-
-      const shouldCreatePR = options.createPR ?? isCloudMode;
-      if (shouldCreatePR) {
-        await this.ensurePullRequest(
-          task,
-          workflowContext.stepResults,
-          sendNotification,
-        );
-      }
-
-      this.logger.info("Task execution complete", { taskId: task.id });
-      await sendNotification(POSTHOG_NOTIFICATIONS.TASK_COMPLETE, {
-        sessionId: taskRunId,
-        taskId: task.id,
-      });
-    } catch (error) {
-      taskError = error instanceof Error ? error : new Error(String(error));
-      this.logger.error("Task execution failed", {
-        taskId: task.id,
-        error: taskError.message,
-      });
-      await sendNotification(POSTHOG_NOTIFICATIONS.ERROR, {
-        sessionId: taskRunId,
-        message: taskError.message,
-      });
-      throw taskError;
-    }
+    throw new Error(
+      "runTask() is deprecated. Use runTaskV2() for local execution or runTaskCloud() for cloud execution.",
+    );
   }
 
   /**
@@ -262,8 +168,6 @@ export class Agent {
   ): Promise<InProcessAcpConnection> {
     await this._configureLlmGateway();
 
-    const task = await this.fetchTask(taskId);
-    const taskSlug = (task as any).slug || task.id;
     const isCloudMode = options.isCloudMode ?? false;
     const _cwd = options.repositoryPath || this.workingDirectory;
 
@@ -271,9 +175,10 @@ export class Agent {
     this.currentRunId = taskRunId;
 
     this.acpConnection = createAcpConnection({
+      framework: options.framework,
       sessionStore: this.sessionStore,
       sessionId: taskRunId,
-      taskId: task.id,
+      taskId,
     });
 
     const sendNotification: SendNotification = async (method, params) => {
@@ -284,12 +189,17 @@ export class Agent {
       );
     };
 
-    await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
-      sessionId: taskRunId,
-      runId: taskRunId,
-    });
+    if (!options.isReconnect) {
+      await sendNotification(POSTHOG_NOTIFICATIONS.RUN_STARTED, {
+        sessionId: taskRunId,
+        runId: taskRunId,
+      });
+    }
 
+    // Only fetch task when we need the slug for git branch creation
     if (!options.skipGitBranch) {
+      const task = options.task ?? (await this.fetchTask(taskId));
+      const taskSlug = (task as any).slug || task.id;
       try {
         await this.prepareTaskBranch(taskSlug, isCloudMode, sendNotification);
       } catch (error) {
@@ -373,9 +283,7 @@ export class Agent {
 **Description**: ${taskDescription}
 
 ## Changes
-This PR implements the changes described in the task.
-
-Generated by PostHog Agent`;
+This PR implements the changes described in the task.`;
     const prBody = customBody || defaultBody;
 
     const prUrl = await this.gitManager.createPullRequest(
@@ -526,6 +434,19 @@ Generated by PostHog Agent`;
 
     if (resolvedToken) {
       process.env.OPENAI_API_KEY = resolvedToken;
+    }
+  }
+
+  private ensureGeminiGatewayEnv(gatewayUrl?: string, token?: string): void {
+    const resolvedGatewayUrl = gatewayUrl || process.env.ANTHROPIC_BASE_URL;
+    const resolvedToken = token || process.env.ANTHROPIC_AUTH_TOKEN;
+
+    if (resolvedGatewayUrl) {
+      process.env.GEMINI_BASE_URL = resolvedGatewayUrl;
+    }
+
+    if (resolvedToken) {
+      process.env.GEMINI_API_KEY = resolvedToken;
     }
   }
 
@@ -833,61 +754,6 @@ Generated by PostHog Agent`;
       });
       await this.sessionStore.fail(taskRunId, errorMessage);
       throw error;
-    }
-  }
-
-  private async ensurePullRequest(
-    task: Task,
-    stepResults: Record<string, any>,
-    sendNotification: SendNotification,
-  ): Promise<void> {
-    const latestRun = task.latest_run;
-    const existingPr =
-      latestRun?.output && typeof latestRun.output === "object"
-        ? (latestRun.output as any).pr_url
-        : null;
-
-    if (existingPr) {
-      this.logger.info("PR already exists, skipping creation", {
-        taskId: task.id,
-        prUrl: existingPr,
-      });
-      return;
-    }
-
-    const buildResult = stepResults.build;
-    if (!buildResult?.commitCreated) {
-      this.logger.warn(
-        "Build step did not produce a commit; skipping PR creation",
-        { taskId: task.id },
-      );
-      return;
-    }
-
-    const branchName = await this.gitManager.getCurrentBranch();
-    const finalizeResult = stepResults.finalize;
-    const prBody = finalizeResult?.prBody;
-
-    const prUrl = await this.createPullRequest(
-      task.id,
-      branchName,
-      task.title,
-      task.description ?? "",
-      prBody,
-    );
-
-    await sendNotification(POSTHOG_NOTIFICATIONS.PR_CREATED, { prUrl });
-
-    try {
-      await this.attachPullRequestToTask(task.id, prUrl, branchName);
-      this.logger.info("PR attached to task successfully", {
-        taskId: task.id,
-        prUrl,
-      });
-    } catch (error) {
-      this.logger.warn("Could not attach PR to task", {
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 }

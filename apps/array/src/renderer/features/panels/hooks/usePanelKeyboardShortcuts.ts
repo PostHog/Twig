@@ -1,3 +1,4 @@
+import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { useHotkeys } from "react-hotkeys-hook";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import { getLeafPanel } from "../store/panelStoreHelpers";
@@ -6,7 +7,7 @@ export function usePanelKeyboardShortcuts(taskId: string): void {
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 
   useHotkeys(
-    "mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
+    SHORTCUTS.SWITCH_TAB,
     (event, handler) => {
       event.preventDefault();
 
@@ -36,7 +37,7 @@ export function usePanelKeyboardShortcuts(taskId: string): void {
   );
 
   useHotkeys(
-    "mod+w",
+    SHORTCUTS.CLOSE_TAB,
     (event) => {
       event.preventDefault();
 
