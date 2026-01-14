@@ -4,13 +4,22 @@
 
 # PostHog Array Monorepo
 
-This is the monorepo for PostHog's Array desktop task manager and the agent framework that powers it.
+This is the monorepo for PostHog's Array desktop task manager, the `arr` CLI for stacked PRs, and the agent framework that powers them.
 
 ## Projects
 
-- **[apps/array](./apps/array)** - The Array desktop application
-- **[apps/cli](./apps/cli)** - The `arr` CLI for stacked PRs using jj
-- **[packages/agent](./packages/agent)** - The TypeScript agent framework
+| Package | Description |
+|---------|-------------|
+| **[apps/array](./apps/array)** | Electron desktop app for AI-assisted task management with git worktree isolation |
+| **[apps/cli](./apps/cli)** | `arr` CLI for stacked PR management using Jujutsu |
+| **[packages/agent](./packages/agent)** | TypeScript agent framework wrapping Claude Agent SDK |
+| **[packages/core](./packages/core)** | Shared business logic for jj/GitHub operations |
+
+## arr CLI
+
+`arr` is a CLI for stacked PR management using Jujutsu (`jj`). Split your work into small changes, push them as a PR stack, and keep everything in sync.
+
+See the [arr CLI README](./apps/cli/README.md) for installation and usage.
 
 ## Development
 
@@ -18,8 +27,6 @@ This is the monorepo for PostHog's Array desktop task manager and the agent fram
 
 - Node.js 22+
 - pnpm 10.23.0
-- [Bun](https://bun.sh/docs/installation) (for the CLI)
-- [jj](https://martinvonz.github.io/jj/latest/install-and-setup/) (for the CLI)
 
 ### Setup
 
@@ -33,10 +40,6 @@ pnpm install
 # Build the agent package
 pnpm --filter agent build
 ```
-
-### Installing the CLI
-
-See the [arr CLI README](./apps/cli/README.md) for installation and usage instructions.
 
 ### Running in Development
 
@@ -73,7 +76,8 @@ array-monorepo/
 │   ├── array/          # Electron desktop app
 │   └── cli/            # arr CLI for stacked PRs
 ├── packages/
-│   └── agent/          # Agent framework
+│   ├── agent/          # Agent framework (Claude Agent SDK wrapper)
+│   └── core/           # Shared jj/GitHub business logic
 ├── pnpm-workspace.yaml # Workspace configuration
 └── package.json        # Root package.json
 ```
