@@ -5,6 +5,7 @@ import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
+import { sleepWithBackoff } from "@shared/utils/backoff";
 import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
@@ -13,7 +14,6 @@ import {
   TOKEN_REFRESH_BUFFER_MS,
 } from "@/constants/oauth";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
-import { sleepWithBackoff } from "@shared/utils/backoff";
 
 const log = logger.scope("auth-store");
 
