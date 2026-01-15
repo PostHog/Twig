@@ -8,6 +8,7 @@ interface SidebarStoreState {
   isResizing: boolean;
   collapsedSections: Set<string>;
   folderOrder: string[];
+  historyVisibleCount: number;
 }
 
 interface SidebarStoreActions {
@@ -20,6 +21,8 @@ interface SidebarStoreActions {
   reorderFolders: (fromIndex: number, toIndex: number) => void;
   setFolderOrder: (order: string[]) => void;
   syncFolderOrder: (folderIds: string[]) => void;
+  loadMoreHistory: () => void;
+  resetHistoryVisibleCount: () => void;
 }
 
 type SidebarStore = SidebarStoreState & SidebarStoreActions;
@@ -33,6 +36,7 @@ export const useSidebarStore = create<SidebarStore>()(
       isResizing: false,
       collapsedSections: new Set<string>(),
       folderOrder: [],
+      historyVisibleCount: 25,
       setOpen: (open) => set({ open, hasUserSetOpen: true }),
       setOpenAuto: (open) =>
         set((state) => (state.hasUserSetOpen ? state : { open })),
@@ -74,6 +78,11 @@ export const useSidebarStore = create<SidebarStore>()(
           }
           return state;
         }),
+      loadMoreHistory: () =>
+        set((state) => ({
+          historyVisibleCount: state.historyVisibleCount + 25,
+        })),
+      resetHistoryVisibleCount: () => set({ historyVisibleCount: 25 }),
     }),
     {
       name: "sidebar-storage",
@@ -83,6 +92,7 @@ export const useSidebarStore = create<SidebarStore>()(
         width: state.width,
         collapsedSections: Array.from(state.collapsedSections),
         folderOrder: state.folderOrder,
+        historyVisibleCount: state.historyVisibleCount,
       }),
       merge: (persisted, current) => {
         const persistedState = persisted as {
@@ -91,6 +101,7 @@ export const useSidebarStore = create<SidebarStore>()(
           width?: number;
           collapsedSections?: string[];
           folderOrder?: string[];
+          historyVisibleCount?: number;
         };
         return {
           ...current,
@@ -100,6 +111,8 @@ export const useSidebarStore = create<SidebarStore>()(
           width: persistedState.width ?? current.width,
           collapsedSections: new Set(persistedState.collapsedSections ?? []),
           folderOrder: persistedState.folderOrder ?? [],
+          historyVisibleCount:
+            persistedState.historyVisibleCount ?? current.historyVisibleCount,
         };
       },
     },

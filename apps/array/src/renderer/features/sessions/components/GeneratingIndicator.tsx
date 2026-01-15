@@ -1,6 +1,8 @@
-import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
+import { Campfire } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
+
+const ACTIVITIES = ["Foraging", "Hunting", "Building", "Gathering", "Crafting"];
 
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -16,12 +18,21 @@ export function formatDuration(ms: number): string {
 
 export function GeneratingIndicator() {
   const [elapsed, setElapsed] = useState(0);
+  const [activityIndex, setActivityIndex] = useState(0);
 
   useEffect(() => {
     const startTime = Date.now();
     const interval = setInterval(() => {
       setElapsed(Date.now() - startTime);
     }, 50);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActivityIndex((i) => (i + 1) % ACTIVITIES.length);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, []);
@@ -33,14 +44,8 @@ export function GeneratingIndicator() {
       className="select-none text-accent-11"
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
-      <DotsCircleSpinner size={12} className="text-accent-11" />
-      <Text size="1">
-        Generating
-        <span
-          className="loading-dots"
-          style={{ display: "inline-block", width: "2rem", textAlign: "left" }}
-        />
-      </Text>
+      <Campfire size={14} weight="fill" className="campfire-pulse" />
+      <Text size="1">{ACTIVITIES[activityIndex]}...</Text>
       <Text
         size="1"
         color="gray"

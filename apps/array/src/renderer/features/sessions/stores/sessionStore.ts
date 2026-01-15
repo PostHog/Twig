@@ -21,12 +21,14 @@ import {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import { getIsOnline } from "@/renderer/stores/connectivityStore";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 import {
   findPendingPermissions,
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
+import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -45,12 +47,13 @@ export interface AgentSession {
   events: AcpMessage[];
   startedAt: number;
   status: "connecting" | "connected" | "disconnected" | "error";
+  errorMessage?: string;
   isPromptPending: boolean;
   isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
   model?: string;
-  framework?: "claude" | "codex";
+  framework?: "claude";
   // Current execution mode (plan = read-only, default = manual approve, acceptEdits = auto-approve edits)
   currentMode: ExecutionMode;
   // Permission requests waiting for user response
@@ -90,6 +93,7 @@ interface SessionActions {
     customInput?: string,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
+  clearSessionError: (taskId: string) => void;
 }
 
 interface AuthCredentials {
@@ -149,6 +153,7 @@ function subscribeToChannel(taskRunId: string) {
                   newMode === "acceptEdits"
                 ) {
                   session.currentMode = newMode;
+                  setPersistedTaskMode(session.taskId, newMode);
                   log.info("Session mode updated", { taskRunId, newMode });
                 }
               }
@@ -158,6 +163,14 @@ function subscribeToChannel(taskRunId: string) {
       },
       onError: (err) => {
         log.error("Session subscription error", { taskRunId, error: err });
+        useStore.setState((state) => {
+          const session = state.sessions[taskRunId];
+          if (session) {
+            session.status = "error";
+            session.errorMessage =
+              "Lost connection to the agent. Please restart the task.";
+          }
+        });
       },
     },
   );
@@ -414,7 +427,6 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
-  framework?: "claude" | "codex",
   executionMode?: "plan" | "acceptEdits",
 ): AgentSession {
   return {
@@ -426,7 +438,6 @@ function createBaseSession(
     status: "connecting",
     isPromptPending: false,
     isCloud,
-    framework,
     currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
   };
@@ -595,10 +606,14 @@ const useStore = create<SessionStore>()(
         });
       }
 
+      const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, false);
       session.events = events;
       session.logUrl = logUrl;
       session.pendingPermissions = pendingPermissions;
+      if (persistedMode) {
+        session.currentMode = persistedMode;
+      }
 
       addSession(session);
       subscribeToChannel(taskRunId);
@@ -616,9 +631,31 @@ const useStore = create<SessionStore>()(
 
       if (result) {
         updateSession(taskRunId, { status: "connected" });
+        if (persistedMode) {
+          try {
+            await trpcVanilla.agent.setMode.mutate({
+              sessionId: taskRunId,
+              modeId: persistedMode,
+            });
+            log.info("Restored persisted mode after reconnect", {
+              taskId,
+              taskRunId,
+              mode: persistedMode,
+            });
+          } catch (error) {
+            log.warn("Failed to restore persisted mode after reconnect", {
+              taskId,
+              error,
+            });
+          }
+        }
       } else {
         unsubscribeFromChannel(taskRunId);
-        removeSession(taskRunId);
+        updateSession(taskRunId, {
+          status: "error",
+          errorMessage:
+            "Failed to reconnect to the agent. Please restart the task.",
+        });
       }
     };
 
@@ -630,17 +667,20 @@ const useStore = create<SessionStore>()(
       executionMode?: "plan" | "acceptEdits",
     ) => {
       if (!auth.client) {
-        log.error("API client not available");
-        return;
+        throw new Error(
+          "Unable to reach server. Please check your connection.",
+        );
       }
 
       const taskRun = await auth.client.createTaskRun(taskId);
       if (!taskRun?.id) {
-        log.error("Task run created without ID");
-        return;
+        throw new Error("Failed to create task run. Please try again.");
       }
 
-      const { defaultModel, defaultFramework } = useSettingsStore.getState();
+      const persistedMode = getPersistedTaskMode(taskId);
+      const effectiveMode = executionMode ?? persistedMode;
+
+      const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -649,20 +689,21 @@ const useStore = create<SessionStore>()(
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         model: defaultModel,
-        framework: defaultFramework,
-        executionMode,
+        executionMode: effectiveMode,
       });
 
       const session = createBaseSession(
         taskRun.id,
         taskId,
         false,
-        defaultFramework,
-        executionMode,
+        effectiveMode === "default" ? undefined : effectiveMode,
       );
       session.channel = result.channel;
       session.status = "connected";
       session.model = defaultModel;
+      if (persistedMode && !executionMode) {
+        session.currentMode = persistedMode;
+      }
 
       addSession(session);
       subscribeToChannel(taskRun.id);
@@ -671,7 +712,6 @@ const useStore = create<SessionStore>()(
         task_id: taskId,
         execution_type: "local",
         model: defaultModel,
-        framework: defaultFramework,
       });
 
       if (initialPrompt?.length) {
@@ -745,15 +785,60 @@ const useStore = create<SessionStore>()(
           if (connectAttempts.has(taskId)) return;
           if (getSessionByTaskId(taskId)?.status === "connected") return;
 
+          // Check auth first
+          const auth = getAuthCredentials();
+          if (!auth) {
+            log.error("Missing auth credentials");
+            const taskRunId = latestRun?.id ?? `error-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "error";
+            session.errorMessage =
+              "Authentication required. Please sign in to continue.";
+            addSession(session);
+            return;
+          }
+
+          // For non-cloud sessions, check workspace existence (local filesystem check)
+          // This should happen before the offline check so users see workspace errors
+          if (!isCloud && latestRun?.id && latestRun?.log_url) {
+            const workspaceExists = await trpcVanilla.workspace.verify.query({
+              taskId,
+            });
+
+            if (!workspaceExists) {
+              log.warn("Workspace no longer exists, showing error state", {
+                taskId,
+              });
+              const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
+              const events = convertStoredEntriesToEvents(rawEntries);
+
+              const session = createBaseSession(latestRun.id, taskId, false);
+              session.events = events;
+              session.logUrl = latestRun.log_url;
+              session.status = "error";
+              session.errorMessage =
+                "The working directory for this task no longer exists. Please start a new task.";
+
+              addSession(session);
+              return;
+            }
+          }
+
+          // Don't try to connect if offline (agent connection requires internet)
+          if (!getIsOnline()) {
+            log.info("Skipping connection attempt - offline", { taskId });
+            const taskRunId = latestRun?.id ?? `offline-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "disconnected";
+            session.errorMessage =
+              "No internet connection. Connect when you're back online.";
+            addSession(session);
+            return;
+          }
+
           connectAttempts.add(taskId);
 
           try {
-            const auth = getAuthCredentials();
-            if (!auth) {
-              log.error("Missing auth credentials");
-              return;
-            }
-
             if (isCloud && latestRun?.id && latestRun?.log_url) {
               await connectToCloudSession(
                 taskId,
@@ -782,6 +867,27 @@ const useStore = create<SessionStore>()(
             const message =
               error instanceof Error ? error.message : String(error);
             log.error("Failed to connect to task", { message });
+
+            // Create session in error state so user sees what happened
+            const taskRunId = latestRun?.id ?? `error-${taskId}`;
+            const session = createBaseSession(taskRunId, taskId, isCloud);
+            session.status = "error";
+            session.errorMessage = `Failed to connect to the agent: ${message}`;
+
+            // Try to load historical logs if available
+            if (latestRun?.log_url) {
+              try {
+                const { rawEntries } = await fetchSessionLogs(
+                  latestRun.log_url,
+                );
+                session.events = convertStoredEntriesToEvents(rawEntries);
+                session.logUrl = latestRun.log_url;
+              } catch {
+                // Ignore log fetch errors - just show error state without logs
+              }
+            }
+
+            addSession(session);
           } finally {
             connectAttempts.delete(taskId);
           }
@@ -808,6 +914,13 @@ const useStore = create<SessionStore>()(
         },
 
         sendPrompt: async (taskId, prompt) => {
+          // Check connectivity before attempting to send
+          if (!getIsOnline()) {
+            throw new Error(
+              "No internet connection. Please check your connection and try again.",
+            );
+          }
+
           const session = getSessionByTaskId(taskId);
           if (!session) throw new Error("No active session for task");
 
@@ -903,6 +1016,7 @@ const useStore = create<SessionStore>()(
               modeId,
             });
             updateSession(session.taskRunId, { currentMode: modeId });
+            setPersistedTaskMode(taskId, modeId);
           } catch (error) {
             log.error("Failed to change session mode", {
               taskId,
@@ -1079,6 +1193,14 @@ const useStore = create<SessionStore>()(
               error,
             });
           }
+        },
+
+        clearSessionError: (taskId: string) => {
+          const session = getSessionByTaskId(taskId);
+          if (session) {
+            removeSession(session.taskRunId);
+          }
+          connectAttempts.delete(taskId);
         },
       },
     };

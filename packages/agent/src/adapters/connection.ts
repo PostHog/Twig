@@ -1,8 +1,7 @@
 /**
- * Shared ACP connection factory with framework routing.
+ * Shared ACP connection factory.
  *
- * Creates ACP connections that can use different agent frameworks
- * (Claude Code, OpenAI Codex) based on the configured framework.
+ * Creates ACP connections for the Claude Code agent.
  */
 
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
@@ -11,9 +10,8 @@ import { Logger } from "@/utils/logger.js";
 import { createTappedWritableStream } from "@/utils/tapped-stream.js";
 import { ClaudeAcpAgent } from "./claude/claude.js";
 import { createBidirectionalStreams, type StreamPair } from "./claude/utils.js";
-import { CodexAcpAgent } from "./codex/codex.js";
 
-export type AgentFramework = "claude" | "codex";
+export type AgentFramework = "claude";
 
 export type AcpConnectionConfig = {
   framework?: AgentFramework;
@@ -25,6 +23,7 @@ export type AcpConnectionConfig = {
 export type InProcessAcpConnection = {
   agentConnection: AgentSideConnection;
   clientStreams: StreamPair;
+  cleanup: () => Promise<void>;
 };
 
 /**
@@ -81,16 +80,12 @@ export function createAcpConnection(
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
-  // Create the appropriate agent based on framework selection
+  // Create the Claude agent - capture reference for cleanup
+  let claudeAgent: ClaudeAcpAgent | null = null;
   const agentConnection = new AgentSideConnection((client) => {
-    switch (framework) {
-      case "codex":
-        logger.info("Creating Codex agent");
-        return new CodexAcpAgent(client, sessionStore);
-      default:
-        logger.info("Creating Claude agent");
-        return new ClaudeAcpAgent(client, sessionStore);
-    }
+    logger.info("Creating Claude agent");
+    claudeAgent = new ClaudeAcpAgent(client, sessionStore);
+    return claudeAgent;
   }, agentStream);
 
   return {
@@ -98,6 +93,27 @@ export function createAcpConnection(
     clientStreams: {
       readable: streams.client.readable,
       writable: clientWritable,
+    },
+    cleanup: async () => {
+      logger.info("Cleaning up ACP connection");
+
+      // First close the agent sessions (aborts any running queries)
+      if (claudeAgent) {
+        claudeAgent.closeAllSessions();
+      }
+
+      // Then close the streams to properly terminate the ACP connection
+      // This signals the connection to close and cleanup
+      try {
+        await streams.client.writable.close();
+      } catch {
+        // Stream may already be closed
+      }
+      try {
+        await streams.agent.writable.close();
+      } catch {
+        // Stream may already be closed
+      }
     },
   };
 }

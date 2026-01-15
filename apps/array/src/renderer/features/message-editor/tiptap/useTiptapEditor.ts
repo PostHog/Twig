@@ -12,6 +12,7 @@ export interface UseTiptapEditorOptions {
   taskId?: string;
   placeholder?: string;
   disabled?: boolean;
+  isLoading?: boolean;
   isCloud?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
@@ -35,6 +36,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     taskId,
     placeholder = "",
     disabled = false,
+    isLoading = false,
     isCloud = false,
     autoFocus = false,
     context,
@@ -97,6 +99,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
         attributes: { class: EDITOR_CLASS },
         handleKeyDown: (view, event) => {
           if (event.key === "Enter" && !event.shiftKey) {
+            if (!view.editable) return false;
             const suggestionPopup = document.querySelector("[data-tippy-root]");
             if (suggestionPopup) return false;
             event.preventDefault();
@@ -217,6 +220,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const submit = useCallback(() => {
     if (!editor) return;
+    if (disabled || isLoading) return;
 
     const text = editor.getText().trim();
     if (!text) return;
@@ -236,7 +240,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     editor.commands.clearContent();
     prevBashModeRef.current = false;
     draft.clearDraft();
-  }, [editor, isCloud, draft]);
+  }, [editor, disabled, isLoading, isCloud, draft]);
 
   submitRef.current = submit;
 

@@ -3,8 +3,8 @@ import { EditorToolbar } from "@features/message-editor/components/EditorToolbar
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
-import { FrameworkSelector } from "@features/sessions/components/FrameworkSelector";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
@@ -53,6 +53,8 @@ export const TaskInputEditor = forwardRef<
   ) => {
     const isWorktreeMode = localWorkspaceMode === "worktree";
     const isCloudMode = runMode === "cloud";
+    const { isOnline } = useConnectivity();
+    const isDisabled = isCreatingTask || !isOnline;
 
     useHotkeys(
       "shift+tab",
@@ -81,7 +83,8 @@ export const TaskInputEditor = forwardRef<
     } = useTiptapEditor({
       sessionId,
       placeholder: "What do you want to work on? - @ to add context",
-      disabled: isCreatingTask,
+      disabled: isDisabled,
+      isLoading: isCreatingTask,
       isCloud: isCloudMode,
       autoFocus: true,
       context: { repoPath },
@@ -110,6 +113,7 @@ export const TaskInputEditor = forwardRef<
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
+      if (!isOnline) return "You're offline";
       if (isEmpty) return "Enter a task description";
       if (!hasDirectory) return "Select a folder first";
       if (!canSubmit) return "Missing required fields";
@@ -195,15 +199,12 @@ export const TaskInputEditor = forwardRef<
           </Flex>
 
           <Flex justify="between" align="center" px="3" pb="3">
-            <Flex align="center" gap="1">
-              <EditorToolbar
-                disabled={isCreatingTask}
-                onInsertChip={insertChip}
-                attachTooltip="Attach files from anywhere"
-                iconSize={16}
-              />
-              <FrameworkSelector disabled={isCreatingTask} />
-            </Flex>
+            <EditorToolbar
+              disabled={isDisabled}
+              onInsertChip={insertChip}
+              attachTooltip="Attach files from anywhere"
+              iconSize={16}
+            />
 
             <Flex align="center" gap="4">
               {!isCloudMode && (
@@ -242,17 +243,13 @@ export const TaskInputEditor = forwardRef<
                     e.stopPropagation();
                     onSubmit();
                   }}
-                  disabled={!canSubmit || isCreatingTask}
+                  disabled={!canSubmit || isDisabled}
                   loading={isCreatingTask}
                   style={{
                     backgroundColor:
-                      !canSubmit || isCreatingTask
-                        ? "var(--accent-a4)"
-                        : undefined,
+                      !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
                     color:
-                      !canSubmit || isCreatingTask
-                        ? "var(--accent-8)"
-                        : undefined,
+                      !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
                   }}
                 >
                   <ArrowUp size={16} weight="bold" />

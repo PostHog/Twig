@@ -129,7 +129,6 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  framework?: "claude" | "codex";
   executionMode?: "plan" | "acceptEdits" | "default";
 }
 
@@ -318,7 +317,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl,
       sdkSessionId,
       model,
-      framework,
       executionMode,
     } = config;
 
@@ -345,7 +343,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     try {
       const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
         skipGitBranch: true,
-        framework,
         isReconnect,
       });
 
@@ -554,19 +551,40 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   async cleanupAll(): Promise<void> {
+    log.info("Cleaning up all agent sessions", {
+      sessionCount: this.sessions.size,
+    });
+
     for (const [taskRunId, session] of this.sessions) {
+      // Step 1: Send ACP cancel notification for any ongoing prompt turns
+      try {
+        if (!session.connection.signal.aborted) {
+          await session.connection.cancel({ sessionId: taskRunId });
+          log.info("Sent ACP cancel for session", { taskRunId });
+        }
+      } catch (err) {
+        log.warn("Failed to send ACP cancel", { taskRunId, error: err });
+      }
+
+      // Step 2: Cancel via agent (triggers AbortController)
       try {
         session.agent.cancelTask(session.taskId);
       } catch (err) {
-        log.warn("Failed to cancel session during cleanup", {
-          taskRunId,
-          error: err,
-        });
+        log.warn("Failed to cancel task", { taskRunId, error: err });
       }
+
+      // Step 3: Cleanup agent connection (closes streams, aborts subprocess)
+      try {
+        await session.agent.cleanup();
+      } catch (err) {
+        log.warn("Failed to cleanup agent", { taskRunId, error: err });
+      }
+
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
     }
 
     this.sessions.clear();
+    log.info("All agent sessions cleaned up");
   }
 
   private setupEnvironment(
@@ -790,7 +808,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl: "logUrl" in params ? params.logUrl : undefined,
       sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
       model: "model" in params ? params.model : undefined,
-      framework: "framework" in params ? params.framework : "claude",
       executionMode:
         "executionMode" in params ? params.executionMode : undefined,
     };

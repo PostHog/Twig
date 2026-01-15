@@ -7,7 +7,7 @@
   },
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun",
     "dev": "bun run ./bin/arr.ts",
     "typecheck": "tsc --noEmit",
     "test:pty": "vitest run tests/e2e/pty.test.ts"
