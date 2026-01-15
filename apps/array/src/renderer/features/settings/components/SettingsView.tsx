@@ -54,9 +54,11 @@ export function SettingsView() {
   const {
     autoRunTasks,
     createPR,
+    cursorGlow,
     desktopNotifications,
     setAutoRunTasks,
     setCreatePR,
+    setCursorGlow,
     setDesktopNotifications,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
@@ -127,8 +129,24 @@ export function SettingsView() {
       new_value: !isDarkMode,
       old_value: isDarkMode,
     });
+    // Turn off cursor glow when switching to light mode
+    if (isDarkMode && cursorGlow) {
+      setCursorGlow(false);
+    }
     toggleDarkMode();
-  }, [isDarkMode, toggleDarkMode]);
+  }, [isDarkMode, toggleDarkMode, cursorGlow, setCursorGlow]);
+
+  const handleCursorGlowChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "cursor_glow",
+        new_value: checked,
+        old_value: cursorGlow,
+      });
+      setCursorGlow(checked);
+    },
+    [cursorGlow, setCursorGlow],
+  );
 
   const handleTerminalLayoutChange = useCallback(
     (value: "split" | "tabbed") => {
@@ -237,15 +255,38 @@ export function SettingsView() {
             <Card>
               <Flex direction="column" gap="4">
                 <Flex align="center" justify="between">
-                  <Text size="1" weight="medium">
-                    Dark mode
-                  </Text>
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Dark mode
+                    </Text>
+                    <Text size="1" color="gray">
+                      Use dark theme for the interface
+                    </Text>
+                  </Flex>
                   <Switch
                     checked={isDarkMode}
                     onCheckedChange={handleDarkModeChange}
                     size="1"
                   />
                 </Flex>
+
+                {isDarkMode && (
+                  <Flex align="center" justify="between">
+                    <Flex direction="column" gap="1">
+                      <Text size="1" weight="medium">
+                        Cursor glow
+                      </Text>
+                      <Text size="1" color="gray">
+                        Show a glow effect that follows your cursor
+                      </Text>
+                    </Flex>
+                    <Switch
+                      checked={cursorGlow}
+                      onCheckedChange={handleCursorGlowChange}
+                      size="1"
+                    />
+                  </Flex>
+                )}
 
                 <Flex direction="column" gap="2">
                   <Text size="1" weight="medium">
