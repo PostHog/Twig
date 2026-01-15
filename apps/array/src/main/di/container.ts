@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { Container } from "inversify";
 import { AgentService } from "../services/agent/service.js";
+import { ConnectivityService } from "../services/connectivity/service.js";
 import { ContextMenuService } from "../services/context-menu/service.js";
 import { DeepLinkService } from "../services/deep-link/service.js";
 import { DockBadgeService } from "../services/dock-badge/service.js";
@@ -22,6 +23,7 @@ export const container = new Container({
 });
 
 container.bind(MAIN_TOKENS.AgentService).to(AgentService);
+container.bind(MAIN_TOKENS.ConnectivityService).to(ConnectivityService);
 container.bind(MAIN_TOKENS.ContextMenuService).to(ContextMenuService);
 container.bind(MAIN_TOKENS.DeepLinkService).to(DeepLinkService);
 container.bind(MAIN_TOKENS.DockBadgeService).to(DockBadgeService);
