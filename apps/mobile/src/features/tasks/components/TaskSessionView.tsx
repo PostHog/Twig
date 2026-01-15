@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import {
   AgentMessage,
-  Composer,
   HumanMessage,
   ToolMessage,
   type ToolStatus,
@@ -13,8 +12,8 @@ import type { SessionEvent, SessionNotification } from "../types";
 interface TaskSessionViewProps {
   events: SessionEvent[];
   isPromptPending: boolean;
-  onSendPrompt: (text: string) => void;
   onOpenTask?: (taskId: string) => void;
+  contentContainerStyle?: object;
 }
 
 interface ToolData {
@@ -165,8 +164,8 @@ function processEvents(events: SessionEvent[]): ParsedMessage[] {
 export function TaskSessionView({
   events,
   isPromptPending,
-  onSendPrompt,
   onOpenTask,
+  contentContainerStyle,
 }: TaskSessionViewProps) {
   const messages = useMemo(() => processEvents(events), [events]);
   const themeColors = useThemeColors();
@@ -198,29 +197,28 @@ export function TaskSessionView({
   );
 
   return (
-    <View className="flex-1">
-      <FlatList
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        inverted
-        contentContainerStyle={{
-          flexDirection: "column-reverse",
-          paddingVertical: 16,
-        }}
-        ListHeaderComponent={
-          isPromptPending ? (
-            <View className="mb-2 flex-row items-center gap-2">
-              <ActivityIndicator size="small" color={themeColors.accent[9]} />
-              <Text className="font-mono text-[13px] text-gray-11 italic">
-                Thinking...
-              </Text>
-            </View>
-          ) : null
-        }
-      />
-
-      <Composer onSend={onSendPrompt} disabled={isPromptPending} />
-    </View>
+    <FlatList
+      data={messages}
+      renderItem={renderMessage}
+      keyExtractor={(item) => item.id}
+      inverted
+      contentContainerStyle={{
+        flexDirection: "column-reverse",
+        ...contentContainerStyle,
+      }}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={
+        isPromptPending ? (
+          <View className="mb-2 flex-row items-center gap-2">
+            <ActivityIndicator size="small" color={themeColors.accent[9]} />
+            <Text className="font-mono text-[13px] text-gray-11 italic">
+              Thinking...
+            </Text>
+          </View>
+        ) : null
+      }
+    />
   );
 }

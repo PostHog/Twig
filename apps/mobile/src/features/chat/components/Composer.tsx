@@ -1,5 +1,4 @@
 import { GlassContainer, GlassView } from "expo-glass-effect";
-import { LinearGradient } from "expo-linear-gradient";
 import { ArrowUp, Microphone, Stop } from "phosphor-react-native";
 import { useState } from "react";
 import {
@@ -9,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { toRgba, useThemeColors } from "@/lib/theme";
+import { useThemeColors } from "@/lib/theme";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 interface ComposerProps {
@@ -64,7 +63,7 @@ export function Composer({
           paddingHorizontal: 8,
         }}
       >
-        <LinearGradient
+        {/* <LinearGradient
           colors={[
             toRgba(themeColors.background, 0),
             toRgba(themeColors.background, 1),
@@ -77,7 +76,7 @@ export function Composer({
             bottom: -40,
           }}
           pointerEvents="none"
-        />
+        /> */}
         <GlassContainer
           spacing={8}
           style={{
