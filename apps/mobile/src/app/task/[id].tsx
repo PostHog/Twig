@@ -1,13 +1,7 @@
 import { Text } from "@components/text";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  DynamicColorIOS,
-  Platform,
-  Pressable,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -91,51 +85,6 @@ export default function TaskDetailScreen() {
     [router],
   );
 
-  const headerRight = useCallback(() => {
-    if (!session) return null;
-
-    const statusColors = {
-      connected:
-        Platform.OS === "ios"
-          ? DynamicColorIOS({
-              dark: themeColors.status.success,
-              light: themeColors.status.success,
-            })
-          : themeColors.status.success,
-      connecting:
-        Platform.OS === "ios"
-          ? DynamicColorIOS({
-              dark: themeColors.status.warning,
-              light: themeColors.status.warning,
-            })
-          : themeColors.status.warning,
-      disconnected:
-        Platform.OS === "ios"
-          ? DynamicColorIOS({
-              dark: themeColors.status.error,
-              light: themeColors.status.error,
-            })
-          : themeColors.status.error,
-      error:
-        Platform.OS === "ios"
-          ? DynamicColorIOS({
-              dark: themeColors.status.error,
-              light: themeColors.status.error,
-            })
-          : themeColors.status.error,
-    };
-
-    const color =
-      statusColors[session.status as keyof typeof statusColors] ??
-      statusColors.disconnected;
-
-    return (
-      <Text style={{ color }} className="font-medium text-xs">
-        {session.status}
-      </Text>
-    );
-  }, [session, themeColors]);
-
   if (loading) {
     return (
       <>
@@ -197,7 +146,6 @@ export default function TaskDetailScreen() {
           headerTitleStyle: {
             fontWeight: "600",
           },
-          headerRight,
           presentation: "modal",
         }}
       />
