@@ -12,6 +12,8 @@ on:
       - "package.json"
       - "turbo.json"
       - ".github/workflows/array-release.yml"
+    tags:
+      - "v*"
 
 concurrency:
   group: array-release
