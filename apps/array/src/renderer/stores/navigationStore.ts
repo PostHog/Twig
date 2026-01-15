@@ -1,8 +1,7 @@
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
-import type { Task, WorkspaceMode } from "@shared/types";
+import type { Task } from "@shared/types";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { getTaskRepository } from "@utils/repository";
@@ -12,13 +11,19 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "settings" | "folder-settings";
+type ViewType =
+  | "task-detail"
+  | "task-input"
+  | "settings"
+  | "folder-settings"
+  | "repo-dashboard";
 
 interface ViewState {
   type: ViewType;
   data?: Task;
   taskId?: string;
   folderId?: string;
+  repoPath?: string;
 }
 
 interface NavigationStore {
@@ -29,6 +34,7 @@ interface NavigationStore {
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
+  navigateToRepoDashboard: (repoPath: string) => void;
   toggleSettings: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -47,6 +53,9 @@ const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   }
   if (view1.type === "folder-settings" && view2.type === "folder-settings") {
     return view1.folderId === view2.folderId;
+  }
+  if (view1.type === "repo-dashboard" && view2.type === "repo-dashboard") {
+    return view1.repoPath === view2.repoPath;
   }
   return true;
 };
@@ -80,13 +89,13 @@ export const useNavigationStore = create<NavigationStore>()(
 
           const repoKey = getTaskRepository(task) ?? undefined;
 
-          // Check if this task has an existing workspace with a folder
+          // Check if this task has an existing workspace
           const existingWorkspace =
             useWorkspaceStore.getState().workspaces[task.id];
-          if (existingWorkspace?.folderId) {
+          if (existingWorkspace?.repoPath) {
             const folder = useRegisteredFoldersStore
               .getState()
-              .folders.find((f) => f.id === existingWorkspace.folderId);
+              .folders.find((f) => f.path === existingWorkspace.repoPath);
 
             if (folder && folder.exists === false) {
               log.info("Folder path is stale, redirecting to folder settings", {
@@ -115,17 +124,9 @@ export const useNavigationStore = create<NavigationStore>()(
             try {
               await useRegisteredFoldersStore.getState().addFolder(directory);
 
-              let workspaceMode: WorkspaceMode = useTaskExecutionStore
-                .getState()
-                .getTaskState(task.id).workspaceMode;
-
-              if (task.latest_run?.environment === "cloud") {
-                workspaceMode = "cloud";
-              }
-
               await useWorkspaceStore
                 .getState()
-                .ensureWorkspace(task.id, directory, workspaceMode);
+                .ensureWorkspace(task.id, task.title, directory);
             } catch (error) {
               log.error("Failed to auto-register folder on task open:", error);
             }
@@ -143,6 +144,13 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
+        },
+
+        navigateToRepoDashboard: (repoPath: string) => {
+          navigate({ type: "repo-dashboard", repoPath });
+          track(ANALYTICS_EVENTS.REPO_DASHBOARD_VIEWED, {
+            repo_path: repoPath,
+          });
         },
 
         toggleSettings: () => {
@@ -206,6 +214,7 @@ export const useNavigationStore = create<NavigationStore>()(
           type: state.view.type,
           taskId: state.view.taskId,
           folderId: state.view.folderId,
+          repoPath: state.view.repoPath,
         },
       }),
     },

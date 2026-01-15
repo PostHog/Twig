@@ -7,7 +7,7 @@ import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
 import { Saga, type SagaLogger } from "@shared/lib/saga";
-import type { Task, Workspace, WorkspaceMode } from "@shared/types";
+import type { Task, WorkspaceInfo } from "@shared/types";
 
 const log = logger.scope("task-creation-saga");
 
@@ -27,7 +27,7 @@ export interface TaskCreationInput {
   filePaths?: string[];
   repoPath?: string;
   repository?: string | null;
-  workspaceMode?: WorkspaceMode;
+  runMode?: "local" | "cloud";
   branch?: string | null;
   githubIntegrationId?: number;
   autoRun?: boolean;
@@ -37,7 +37,7 @@ export interface TaskCreationInput {
 
 export interface TaskCreationOutput {
   task: Task;
-  workspace: Workspace | null;
+  workspace: WorkspaceInfo | null;
 }
 
 export interface TaskCreationDeps {
@@ -76,31 +76,29 @@ export class TaskCreationSaga extends Saga<
         .getState()
         .getTaskDirectory(task.id, repoKey ?? undefined);
 
-    // Step 3: Resolve workspaceMode - input takes precedence, then derive from task
-    const workspaceMode =
-      input.workspaceMode ??
-      (task.latest_run?.environment === "cloud" ? "cloud" : "worktree");
+    // Step 3: Resolve runMode - input takes precedence, then derive from task
+    const runMode =
+      input.runMode ??
+      (task.latest_run?.environment === "cloud" ? "cloud" : "local");
 
     log.info("Task setup resolved", {
       taskId: task.id,
       isOpen: !!input.taskId,
       repository: repoKey,
       repoPath,
-      workspaceMode,
+      runMode,
       hasLatestRun: !!task.latest_run,
       latestRunLogUrl: task.latest_run?.log_url,
     });
 
-    // Step 4: Create workspace if we have a directory
-    let workspace: Workspace | null = null;
+    // Step 4: Create workspace if we have a directory (local only)
+    let workspace: WorkspaceInfo | null = null;
 
-    if (repoPath) {
+    if (repoPath && runMode === "local") {
       // Save repo → directory mapping (ensures it exists for future opens)
       if (repoKey) {
         useTaskDirectoryStore.getState().setRepoDirectory(repoKey, repoPath);
       }
-
-      const branch = input.branch ?? task.latest_run?.branch ?? null;
 
       // Get or create folder registration first
       const folder = await this.readOnlyStep(
@@ -118,45 +116,27 @@ export class TaskCreationSaga extends Saga<
         },
       );
 
-      const workspaceInfo = await this.step({
+      workspace = await this.step({
         name: "workspace_creation",
         execute: async () => {
           return trpcVanilla.workspace.create.mutate({
             taskId: task.id,
-            mainRepoPath: repoPath,
+            taskTitle: task.title,
+            repoPath,
             folderId: folder.id,
-            folderPath: repoPath,
-            mode: workspaceMode,
-            branch: branch ?? undefined,
           });
         },
         rollback: async () => {
           log.info("Rolling back: deleting workspace", { taskId: task.id });
           await trpcVanilla.workspace.delete.mutate({
             taskId: task.id,
-            mainRepoPath: repoPath,
           });
         },
       });
-
-      workspace = {
-        taskId: task.id,
-        folderId: folder.id,
-        folderPath: repoPath,
-        mode: workspaceMode,
-        worktreePath: workspaceInfo.worktree?.worktreePath ?? null,
-        worktreeName: workspaceInfo.worktree?.worktreeName ?? null,
-        branchName: workspaceInfo.worktree?.branchName ?? null,
-        baseBranch: workspaceInfo.worktree?.baseBranch ?? null,
-        createdAt:
-          workspaceInfo.worktree?.createdAt ?? new Date().toISOString(),
-        terminalSessionIds: workspaceInfo.terminalSessionIds,
-        hasStartScripts: workspaceInfo.hasStartScripts,
-      };
     }
 
     // Step 5: Start cloud run (only for new cloud tasks)
-    if (workspaceMode === "cloud" && !task.latest_run) {
+    if (runMode === "cloud" && !task.latest_run) {
       await this.step({
         name: "cloud_run",
         execute: () => this.deps.posthogClient.runTaskInCloud(task.id),
@@ -167,11 +147,10 @@ export class TaskCreationSaga extends Saga<
     }
 
     // Step 6: Connect to session
-    const agentCwd =
-      workspace?.worktreePath ?? workspace?.folderPath ?? repoPath;
+    const agentCwd = workspace?.workspacePath ?? repoPath;
     const shouldConnect =
       !!input.taskId || // Open: always connect to load chat history
-      workspaceMode === "cloud" || // Cloud create: always connect
+      runMode === "cloud" || // Cloud create: always connect
       (agentCwd && input.autoRun); // Local create: only if autoRun
 
     if (shouldConnect) {
@@ -264,9 +243,7 @@ export class TaskCreationSaga extends Saga<
           description: input.content ?? "",
           repository: repository ?? undefined,
           github_integration:
-            input.workspaceMode === "cloud"
-              ? input.githubIntegrationId
-              : undefined,
+            input.runMode === "cloud" ? input.githubIntegrationId : undefined,
         });
         return result as unknown as Task;
       },

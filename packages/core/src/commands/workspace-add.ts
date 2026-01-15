@@ -1,4 +1,8 @@
-import { addWorkspace, type WorkspaceInfo } from "../jj/workspace";
+import {
+  type AddWorkspaceOptions,
+  addWorkspace,
+  type WorkspaceInfo,
+} from "../jj/workspace";
 import type { Result } from "../result";
 import { focusAdd } from "./focus";
 import type { Command } from "./types";
@@ -6,8 +10,9 @@ import type { Command } from "./types";
 export async function workspaceAdd(
   name: string,
   cwd = process.cwd(),
+  options: AddWorkspaceOptions = {},
 ): Promise<Result<WorkspaceInfo>> {
-  const result = await addWorkspace(name, cwd);
+  const result = await addWorkspace(name, cwd, options);
   if (!result.ok) return result;
 
   // Automatically add new workspace to focus

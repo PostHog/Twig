@@ -11,7 +11,7 @@ interface DiffViewerStore {
 export const useDiffViewerStore = create<DiffViewerStore>()(
   persist(
     (set) => ({
-      viewMode: "split",
+      viewMode: "unified",
       setViewMode: (mode) => set({ viewMode: mode }),
     }),
     {

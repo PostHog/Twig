@@ -10,7 +10,7 @@ import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
 
@@ -185,7 +185,7 @@ function LazyTreeItem({
 
 export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const worktreePath = useWorkspaceStore(selectWorkspacePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
   const queryClient = useQueryClient();
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));

@@ -1,12 +1,10 @@
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -25,24 +23,17 @@ function cycleMode(current: ExecutionMode): ExecutionMode {
 
 const DOT_FILL = "var(--gray-6)";
 
-type LocalWorkspaceMode = "worktree" | "root";
-
 export function TaskInput() {
   useSetHeaderContent(null);
 
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { lastUsedLocalWorkspaceMode } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
 
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  // We're temporarily removing the cloud/local toggle, so hardcode to local
-  const runMode = "local";
-  const [localWorkspaceMode, setLocalWorkspaceMode] =
-    useState<LocalWorkspaceMode>(lastUsedLocalWorkspaceMode);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
@@ -68,13 +59,10 @@ export function TaskInput() {
     setSelectedDirectory(newPath);
   };
 
-  const effectiveWorkspaceMode: WorkspaceMode = localWorkspaceMode;
-
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editorRef,
     selectedDirectory,
     githubIntegrationId: githubIntegration?.id,
-    workspaceMode: effectiveWorkspaceMode,
     branch: selectedBranch,
     editorIsEmpty,
     executionMode: executionMode === "default" ? undefined : executionMode,
@@ -141,7 +129,6 @@ export function TaskInput() {
               value={selectedBranch}
               onChange={setSelectedBranch}
               directoryPath={selectedDirectory}
-              runMode={runMode}
             />
           )}
         </Flex>
@@ -151,9 +138,6 @@ export function TaskInput() {
           sessionId="task-input"
           repoPath={selectedDirectory}
           isCreatingTask={isCreatingTask}
-          runMode={runMode}
-          localWorkspaceMode={localWorkspaceMode}
-          onLocalWorkspaceModeChange={setLocalWorkspaceMode}
           canSubmit={canSubmit}
           onSubmit={handleSubmit}
           hasDirectory={!!selectedDirectory}

@@ -15,10 +15,6 @@ interface RegisteredFoldersState {
   getFolderByPath: (path: string) => RegisteredFolder | undefined;
   getRecentFolders: (limit?: number) => RegisteredFolder[];
   getFolderDisplayName: (path: string) => string | null;
-  cleanupOrphanedWorktrees: (mainRepoPath: string) => Promise<{
-    deleted: string[];
-    errors: Array<{ path: string; error: string }>;
-  }>;
 }
 
 let updateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,18 +47,6 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
           for (const f of state.folders) byId.set(f.id, f);
           return { folders: Array.from(byId.values()), isLoaded: true };
         });
-
-        const folders = get().folders;
-        for (const folder of folders) {
-          get()
-            .cleanupOrphanedWorktrees(folder.path)
-            .catch((error) => {
-              log.error(
-                `Failed to cleanup orphaned worktrees for ${folder.path}:`,
-                error,
-              );
-            });
-        }
       } catch (error) {
         log.error("Failed to load folders:", error);
         set({ isLoaded: true });
@@ -152,20 +136,6 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
         if (!path) return null;
         const folder = get().folders.find((f) => f.path === path);
         return folder?.name ?? path.split("/").pop() ?? null;
-      },
-
-      cleanupOrphanedWorktrees: async (mainRepoPath: string) => {
-        try {
-          return await trpcVanilla.folders.cleanupOrphanedWorktrees.mutate({
-            mainRepoPath,
-          });
-        } catch (error) {
-          log.error("Failed to cleanup orphaned worktrees:", error);
-          return {
-            deleted: [],
-            errors: [{ path: mainRepoPath, error: String(error) }],
-          };
-        }
       },
     };
   },

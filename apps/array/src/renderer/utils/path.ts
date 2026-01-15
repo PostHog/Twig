@@ -1,3 +1,12 @@
+/**
+ * Get the last segment of a path (similar to node:path basename)
+ */
+export function basename(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash === -1 ? normalized : normalized.slice(lastSlash + 1);
+}
+
 export function expandTildePath(path: string): string {
   if (!path.startsWith("~")) return path;
   // In renderer context, we can't access process.env directly

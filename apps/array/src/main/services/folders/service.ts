@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { WorktreeManager } from "@posthog/agent";
+import { workspaceRemove } from "@array/core/commands/workspace-remove";
 import { dialog } from "electron";
 import { injectable } from "inversify";
 import { generateId } from "../../../shared/utils/id.js";
@@ -10,11 +10,7 @@ import { logger } from "../../lib/logger.js";
 import { getMainWindow } from "../../trpc/context.js";
 import { clearAllStoreData, foldersStore } from "../../utils/store.js";
 import { isGitRepository } from "../git.js";
-import { getWorktreeLocation } from "../settingsStore.js";
-import type {
-  CleanupOrphanedWorktreesOutput,
-  RegisteredFolder,
-} from "./schemas.js";
+import type { RegisteredFolder } from "./schemas.js";
 
 const execAsync = promisify(exec);
 const log = logger.scope("folders-service");
@@ -97,26 +93,17 @@ export class FoldersService {
 
   async removeFolder(folderId: string): Promise<void> {
     const folders = foldersStore.get("folders", []);
-    const associations = foldersStore.get("taskAssociations", []);
+    const associations = foldersStore.get("taskWorkspaceAssociations", []);
 
+    // Remove all jj workspaces associated with this folder
     const associationsToRemove = associations.filter(
       (a) => a.folderId === folderId,
     );
     for (const assoc of associationsToRemove) {
-      if (assoc.worktree) {
-        try {
-          const worktreeBasePath = getWorktreeLocation();
-          const manager = new WorktreeManager({
-            mainRepoPath: assoc.folderPath,
-            worktreeBasePath,
-          });
-          await manager.deleteWorktree(assoc.worktree.worktreePath);
-        } catch (error) {
-          log.error(
-            `Failed to delete worktree ${assoc.worktree.worktreePath}:`,
-            error,
-          );
-        }
+      try {
+        await workspaceRemove(assoc.workspaceName, assoc.repoPath);
+      } catch (error) {
+        log.error(`Failed to delete workspace ${assoc.workspaceName}:`, error);
       }
     }
 
@@ -126,7 +113,7 @@ export class FoldersService {
     );
 
     foldersStore.set("folders", filtered);
-    foldersStore.set("taskAssociations", filteredAssociations);
+    foldersStore.set("taskWorkspaceAssociations", filteredAssociations);
     log.debug(`Removed folder with ID: ${folderId}`);
   }
 
@@ -138,24 +125,6 @@ export class FoldersService {
       folder.lastAccessed = new Date().toISOString();
       foldersStore.set("folders", folders);
     }
-  }
-
-  async cleanupOrphanedWorktrees(
-    mainRepoPath: string,
-  ): Promise<CleanupOrphanedWorktreesOutput> {
-    const worktreeBasePath = getWorktreeLocation();
-    const manager = new WorktreeManager({ mainRepoPath, worktreeBasePath });
-
-    const associations = foldersStore.get("taskAssociations", []);
-    const associatedWorktreePaths: string[] = [];
-
-    for (const assoc of associations) {
-      if (assoc.worktree?.worktreePath) {
-        associatedWorktreePaths.push(assoc.worktree.worktreePath);
-      }
-    }
-
-    return await manager.cleanupOrphanedWorktrees(associatedWorktreePaths);
   }
 
   async clearAllData(): Promise<void> {

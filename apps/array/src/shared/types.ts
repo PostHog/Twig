@@ -7,24 +7,6 @@ export interface RegisteredFolder {
   exists?: boolean;
 }
 
-export interface WorktreeInfo {
-  worktreePath: string;
-  worktreeName: string;
-  branchName: string;
-  baseBranch: string;
-  createdAt: string;
-}
-
-export type WorkspaceMode = "worktree" | "root" | "cloud";
-
-export interface TaskFolderAssociation {
-  taskId: string;
-  folderId: string;
-  folderPath: string;
-  mode: WorkspaceMode;
-  worktree?: WorktreeInfo;
-}
-
 // Workspace types for array.json configuration
 export interface ArrayConfig {
   scripts?: {
@@ -34,24 +16,12 @@ export interface ArrayConfig {
   };
 }
 
+// Simplified workspace types for jj workspaces
 export interface WorkspaceInfo {
   taskId: string;
-  mode: WorkspaceMode;
-  worktree: WorktreeInfo | null;
-  terminalSessionIds: string[];
-  hasStartScripts?: boolean;
-}
-
-export interface Workspace {
-  taskId: string;
-  folderId: string;
-  folderPath: string;
-  mode: WorkspaceMode;
-  worktreePath: string | null;
-  worktreeName: string | null;
-  branchName: string | null;
-  baseBranch: string | null;
-  createdAt: string;
+  workspaceName: string;
+  workspacePath: string;
+  repoPath: string;
   terminalSessionIds: string[];
   hasStartScripts?: boolean;
 }
@@ -67,11 +37,9 @@ export interface WorkspaceTerminalInfo {
 
 export interface CreateWorkspaceOptions {
   taskId: string;
-  mainRepoPath: string;
+  taskTitle: string;
+  repoPath: string;
   folderId: string;
-  folderPath: string;
-  mode: WorkspaceMode;
-  branch?: string;
 }
 
 export interface ScriptExecutionResult {
@@ -181,4 +149,55 @@ export interface DetectedApplication {
 
 export interface ExternalAppsPreferences {
   lastUsedApp?: string;
+}
+
+// JJ Workspace types (from @array/core)
+
+/** Info about a jj workspace (from listWorkspaces) */
+export interface JJWorkspaceInfo {
+  name: string;
+  path: string;
+  changeId: string;
+  isStale: boolean;
+}
+
+/** File change in a workspace */
+export interface JJFileChange {
+  status: "M" | "A" | "D" | "R";
+  path: string;
+}
+
+/** Diff stats for a workspace */
+export interface JJDiffStats {
+  added: number;
+  removed: number;
+  files: number;
+}
+
+/** Status of a workspace (files and stats) */
+export interface JJWorkspaceStatus {
+  name: string;
+  changes: JJFileChange[];
+  stats: JJDiffStats;
+}
+
+/** Conflict info - file modified by multiple workspaces */
+export interface JJConflictInfo {
+  file: string;
+  workspaces: string[];
+}
+
+/** Focus status - which workspaces are currently focused/merged */
+export interface JJFocusStatus {
+  isFocused: boolean;
+  workspaces: string[];
+  allWorkspaces: JJWorkspaceInfo[];
+  conflicts: JJConflictInfo[];
+}
+
+/** Daemon status */
+export interface DaemonStatus {
+  running: boolean;
+  pid?: number;
+  repos?: Array<{ path: string; workspaces: string[] }>;
 }

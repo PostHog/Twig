@@ -6,24 +6,27 @@ import { Box } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface CodeEditorPanelProps {
   taskId: string;
-  task: Task;
+  task: Task | null;
   absolutePath: string;
+  /** Direct repo path - used when no task is available (e.g., dashboard) */
+  repoPath?: string;
 }
 
 export function CodeEditorPanel({
   taskId,
   task,
   absolutePath,
+  repoPath: directRepoPath,
 }: CodeEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const workspacePath = useWorkspaceStore(selectWorkspacePath(taskId));
+  const repoPath = directRepoPath ?? workspacePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
 
   const {

@@ -4,7 +4,6 @@ import { Button, DropdownMenu, Flex, Text, TextField } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
 import { trpcVanilla } from "@renderer/trpc";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RunMode } from "./RunModeSelect";
 
 const MAX_DISPLAYED_BRANCHES = 20;
 
@@ -12,7 +11,6 @@ interface BranchSelectProps {
   value: string | null; // null means use default branch
   onChange: (branch: string | null) => void;
   directoryPath: string;
-  runMode: RunMode;
   size?: Responsive<"1" | "2">;
 }
 
@@ -20,7 +18,6 @@ export function BranchSelect({
   value,
   onChange,
   directoryPath,
-  runMode,
   size = "1",
 }: BranchSelectProps) {
   const [branches, setBranches] = useState<string[]>([]);
@@ -80,9 +77,8 @@ export function BranchSelect({
     };
   }, [directoryPath]);
 
-  // Determine which branch to use as the initial value based on run mode
-  const initialBranch =
-    runMode === "local" ? currentBranch || defaultBranch : defaultBranch;
+  // Always use current branch or fallback to default (always local mode with jj)
+  const initialBranch = currentBranch || defaultBranch;
 
   useEffect(() => {
     if (!hasSetInitialValue.current && value === null && initialBranch) {
@@ -90,13 +86,6 @@ export function BranchSelect({
       onChange(initialBranch);
     }
   }, [initialBranch, value, onChange]);
-
-  // Reset branch selection when runMode changes
-  useEffect(() => {
-    if (initialBranch) {
-      onChange(initialBranch);
-    }
-  }, [initialBranch, onChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpenChange = useCallback(
     async (open: boolean) => {

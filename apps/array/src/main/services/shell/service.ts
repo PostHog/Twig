@@ -155,19 +155,25 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
   ): Promise<Record<string, string> | undefined> {
     if (!taskId) return undefined;
 
-    const associations = foldersStore.get("taskAssociations", []);
+    const associations = foldersStore.get("taskWorkspaceAssociations", []);
     const association = associations.find((a) => a.taskId === taskId);
 
-    if (!association || association.mode === "cloud") {
+    if (!association) {
       return undefined;
     }
 
+    // Import dynamically to avoid circular dependency
+    const { getWorkspacePath } = await import("@array/core/jj/workspace");
+    const workspacePath = getWorkspacePath(
+      association.workspaceName,
+      association.repoPath,
+    );
+
     return buildWorkspaceEnv({
       taskId,
-      folderPath: association.folderPath,
-      worktreePath: association.worktree?.worktreePath ?? null,
-      worktreeName: association.worktree?.worktreeName ?? null,
-      mode: association.mode,
+      folderPath: association.repoPath,
+      worktreePath: workspacePath,
+      worktreeName: association.workspaceName,
     });
   }
 }

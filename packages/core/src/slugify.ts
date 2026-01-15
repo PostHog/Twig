@@ -8,7 +8,7 @@
  * - Trim leading/trailing hyphens
  * - Limit to 50 characters
  */
-function slugifyForBranch(text: string): string {
+export function slugifyForBranch(text: string): string {
   if (!text || !text.trim()) {
     return "untitled";
   }

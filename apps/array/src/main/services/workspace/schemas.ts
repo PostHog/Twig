@@ -1,15 +1,6 @@
 import { z } from "zod";
 
-// Base schemas
-export const workspaceModeSchema = z.enum(["worktree", "root", "cloud"]);
-
-export const worktreeInfoSchema = z.object({
-  worktreePath: z.string(),
-  worktreeName: z.string(),
-  branchName: z.string(),
-  baseBranch: z.string(),
-  createdAt: z.string(),
-});
+// Simplified workspace schemas for jj workspaces
 
 export const workspaceTerminalInfoSchema = z.object({
   sessionId: z.string(),
@@ -22,22 +13,9 @@ export const workspaceTerminalInfoSchema = z.object({
 
 export const workspaceInfoSchema = z.object({
   taskId: z.string(),
-  mode: workspaceModeSchema,
-  worktree: worktreeInfoSchema.nullable(),
-  terminalSessionIds: z.array(z.string()),
-  hasStartScripts: z.boolean().optional(),
-});
-
-export const workspaceSchema = z.object({
-  taskId: z.string(),
-  folderId: z.string(),
-  folderPath: z.string(),
-  mode: workspaceModeSchema,
-  worktreePath: z.string().nullable(),
-  worktreeName: z.string().nullable(),
-  branchName: z.string().nullable(),
-  baseBranch: z.string().nullable(),
-  createdAt: z.string(),
+  workspaceName: z.string(),
+  workspacePath: z.string(),
+  repoPath: z.string(),
   terminalSessionIds: z.array(z.string()),
   hasStartScripts: z.boolean().optional(),
 });
@@ -51,18 +29,13 @@ export const scriptExecutionResultSchema = z.object({
 // Input schemas
 export const createWorkspaceInput = z.object({
   taskId: z.string(),
-  mainRepoPath: z
-    .string()
-    .min(2, "Repository path must be a valid directory path"),
+  taskTitle: z.string(),
+  repoPath: z.string().min(2, "Repository path must be a valid directory path"),
   folderId: z.string(),
-  folderPath: z.string().min(2, "Folder path must be a valid directory path"),
-  mode: workspaceModeSchema,
-  branch: z.string().optional(),
 });
 
 export const deleteWorkspaceInput = z.object({
   taskId: z.string(),
-  mainRepoPath: z.string(),
 });
 
 export const verifyWorkspaceInput = z.object({
@@ -75,8 +48,8 @@ export const getWorkspaceInfoInput = z.object({
 
 export const runStartScriptsInput = z.object({
   taskId: z.string(),
-  worktreePath: z.string(),
-  worktreeName: z.string(),
+  workspacePath: z.string(),
+  workspaceName: z.string(),
 });
 
 export const isWorkspaceRunningInput = z.object({
@@ -91,7 +64,7 @@ export const getWorkspaceTerminalsInput = z.object({
 export const createWorkspaceOutput = workspaceInfoSchema;
 export const verifyWorkspaceOutput = z.boolean();
 export const getWorkspaceInfoOutput = workspaceInfoSchema.nullable();
-export const getAllWorkspacesOutput = z.record(z.string(), workspaceSchema);
+export const getAllWorkspacesOutput = z.record(z.string(), workspaceInfoSchema);
 export const runStartScriptsOutput = scriptExecutionResultSchema;
 export const isWorkspaceRunningOutput = z.boolean();
 export const getWorkspaceTerminalsOutput = z.array(workspaceTerminalInfoSchema);
@@ -114,11 +87,8 @@ export const workspaceWarningPayload = z.object({
 });
 
 // Type exports
-export type WorkspaceMode = z.infer<typeof workspaceModeSchema>;
-export type WorktreeInfo = z.infer<typeof worktreeInfoSchema>;
 export type WorkspaceTerminalInfo = z.infer<typeof workspaceTerminalInfoSchema>;
 export type WorkspaceInfo = z.infer<typeof workspaceInfoSchema>;
-export type Workspace = z.infer<typeof workspaceSchema>;
 export type ScriptExecutionResult = z.infer<typeof scriptExecutionResultSchema>;
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceInput>;

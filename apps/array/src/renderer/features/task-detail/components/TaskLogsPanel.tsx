@@ -10,7 +10,7 @@ import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
@@ -31,7 +31,7 @@ interface TaskLogsPanelProps {
 
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const worktreePath = useWorkspaceStore(selectWorkspacePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const session = useSessionForTask(taskId);

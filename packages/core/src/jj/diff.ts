@@ -74,6 +74,42 @@ export function parseDiffPaths(output: string): string[] {
 }
 
 // =============================================================================
+// Per-File Stats Parsing
+// =============================================================================
+
+export interface FileStats {
+  path: string;
+  added: number;
+  removed: number;
+}
+
+/**
+ * Parse jj diff --stat output to get per-file line stats.
+ * Example input:
+ *   src/file1.ts | 10 ++++----
+ *   src/file2.ts | 5 ++
+ *   2 files changed, 15 insertions(+), 5 deletions(-)
+ */
+export function parsePerFileStats(output: string): FileStats[] {
+  const stats: FileStats[] = [];
+
+  for (const line of output.split("\n")) {
+    // Match lines like: " src/file.ts | 10 ++++----" or " src/file.ts | 5 ++"
+    // The pattern after | is: number, then +/- characters
+    const match = line.match(/^\s*(.+?)\s+\|\s+\d+\s+(\+*)(-*)\s*$/);
+    if (match) {
+      stats.push({
+        path: match[1].trim(),
+        added: match[2].length,
+        removed: match[3].length,
+      });
+    }
+  }
+
+  return stats;
+}
+
+// =============================================================================
 // Diff Stats Parsing
 // =============================================================================
 

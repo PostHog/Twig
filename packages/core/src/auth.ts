@@ -24,7 +24,8 @@ export async function saveAuthState(state: AuthState): Promise<void> {
   const authPath = getAuthPath();
 
   await ensureDir(authDir);
-  await Bun.write(authPath, JSON.stringify(state, null, 2));
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(authPath, JSON.stringify(state, null, 2));
 }
 
 interface GhAuthStatus {

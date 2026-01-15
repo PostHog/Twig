@@ -131,7 +131,7 @@ export function useDeleteTask() {
 
       if (workspace) {
         try {
-          await workspaceStore.deleteWorkspace(taskId, workspace.folderPath);
+          await workspaceStore.deleteWorkspace(taskId);
         } catch (error) {
           log.error("Failed to delete workspace:", error);
         }

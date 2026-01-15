@@ -1,18 +1,15 @@
 import { FileIcon } from "@components/ui/FileIcon";
-import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { ChatCenteredText, Terminal } from "@phosphor-icons/react";
-import type { Task } from "@shared/types";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode, Tab } from "../store/panelTypes";
 import { shouldUpdateSizes } from "../utils/panelLayoutUtils";
+
+/** Function type for rendering tab content - allows different layouts to provide their own renderers */
+export type ContentRenderer = (tab: Tab) => ReactNode;
 
 export interface PanelLayoutState {
   updateSizes: (taskId: string, groupId: string, sizes: number[]) => void;
@@ -22,7 +19,7 @@ export interface PanelLayoutState {
   closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   keepTab: (taskId: string, panelId: string, tabId: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
-  addTerminalTab: (taskId: string, panelId: string) => void;
+  addTerminalTab: (taskId: string, panelId: string, cwd?: string) => void;
   splitPanel: (
     taskId: string,
     tabId: string,
@@ -74,19 +71,24 @@ export function usePanelGroupRefs() {
   return { groupRefs, setGroupRef };
 }
 
-export function useTabInjection(
-  tabs: Tab[],
-  panelId: string,
-  taskId: string,
-  task: Task,
-  closeTab: (taskId: string, panelId: string, tabId: string) => void,
-): Tab[] {
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const storedRepoPath = useTaskExecutionStore(
-    (state) => state.taskStates[taskId]?.repoPath ?? null,
-  );
-  const repoPath = worktreePath || storedRepoPath || "";
+export interface TabInjectionOptions {
+  tabs: Tab[];
+  panelId: string;
+  layoutId: string;
+  renderContent: ContentRenderer;
+  closeTab: (layoutId: string, panelId: string, tabId: string) => void;
+  /** Optional repo path for file/diff tab path resolution */
+  repoPath?: string;
+}
 
+export function useTabInjection({
+  tabs,
+  panelId,
+  layoutId,
+  renderContent,
+  closeTab,
+  repoPath = "",
+}: TabInjectionOptions): Tab[] {
   return useMemo(
     () =>
       tabs.map((tab) => {
@@ -117,7 +119,7 @@ export function useTabInjection(
           }
         }
 
-        const updatedTab = {
+        const updatedTab: Tab = {
           ...tab,
           data: updatedData,
           icon,
@@ -125,17 +127,15 @@ export function useTabInjection(
 
         return {
           ...updatedTab,
-          component: (
-            <TabContentRenderer tab={updatedTab} taskId={taskId} task={task} />
-          ),
+          component: renderContent(updatedTab),
           onClose: tab.closeable
             ? () => {
-                closeTab(taskId, panelId, tab.id);
+                closeTab(layoutId, panelId, tab.id);
               }
             : undefined,
         };
       }),
-    [tabs, panelId, taskId, task, closeTab, repoPath],
+    [tabs, panelId, layoutId, renderContent, closeTab, repoPath],
   );
 }
 

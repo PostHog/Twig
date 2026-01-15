@@ -3,9 +3,7 @@ import { trpcVanilla } from "@renderer/trpc";
 import type {
   CreateWorkspaceOptions,
   ScriptExecutionResult,
-  Workspace,
   WorkspaceInfo,
-  WorkspaceMode,
   WorkspaceTerminalInfo,
 } from "@shared/types";
 import type { StoreApi, UseBoundStore } from "zustand";
@@ -30,7 +28,7 @@ function createSelectors<S extends UseBoundStore<StoreApi<object>>>(_store: S) {
 }
 
 interface WorkspaceState {
-  workspaces: Record<string, Workspace>;
+  workspaces: Record<string, WorkspaceInfo>;
   isLoaded: boolean;
   isCreating: Record<string, boolean>;
 
@@ -38,16 +36,17 @@ interface WorkspaceState {
   loadWorkspaces: () => Promise<void>;
 
   // CRUD
-  createWorkspace: (options: CreateWorkspaceOptions) => Promise<Workspace>;
-  deleteWorkspace: (taskId: string, mainRepoPath: string) => Promise<void>;
+  createWorkspace: (
+    options: CreateWorkspaceOptions & { taskTitle: string },
+  ) => Promise<WorkspaceInfo>;
+  deleteWorkspace: (taskId: string) => Promise<void>;
   verifyWorkspace: (taskId: string) => Promise<boolean>;
 
   ensureWorkspace: (
     taskId: string,
+    taskTitle: string,
     repoPath: string,
-    mode?: WorkspaceMode,
-    branch?: string | null,
-  ) => Promise<Workspace>;
+  ) => Promise<WorkspaceInfo>;
 
   // Operations
   runStartScripts: (taskId: string) => Promise<ScriptExecutionResult>;
@@ -55,36 +54,15 @@ interface WorkspaceState {
   getWorkspaceTerminals: (taskId: string) => Promise<WorkspaceTerminalInfo[]>;
 
   // Convenience selectors (synchronous)
-  getWorkspace: (taskId: string) => Workspace | null;
-  getWorktreePath: (taskId: string) => string | null;
-  getWorktreeName: (taskId: string) => string | null;
-  getBranchName: (taskId: string) => string | null;
-  getFolderPath: (taskId: string) => string | null;
+  getWorkspace: (taskId: string) => WorkspaceInfo | null;
+  getWorkspacePath: (taskId: string) => string | null;
+  getWorkspaceName: (taskId: string) => string | null;
+  getRepoPath: (taskId: string) => string | null;
 
   // Internal state management
   setCreating: (taskId: string, creating: boolean) => void;
-  updateWorkspace: (taskId: string, workspace: Workspace) => void;
+  updateWorkspace: (taskId: string, workspace: WorkspaceInfo) => void;
   removeWorkspace: (taskId: string) => void;
-}
-
-function workspaceInfoToWorkspace(
-  info: WorkspaceInfo,
-  folderId: string,
-  folderPath: string,
-): Workspace {
-  return {
-    taskId: info.taskId,
-    folderId,
-    folderPath,
-    mode: info.mode,
-    worktreePath: info.worktree?.worktreePath ?? null,
-    worktreeName: info.worktree?.worktreeName ?? null,
-    branchName: info.worktree?.branchName ?? null,
-    baseBranch: info.worktree?.baseBranch ?? null,
-    createdAt: info.worktree?.createdAt ?? new Date().toISOString(),
-    terminalSessionIds: info.terminalSessionIds,
-    hasStartScripts: info.hasStartScripts,
-  };
 }
 
 const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
@@ -92,7 +70,6 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     try {
       const workspaces = await trpcVanilla.workspace.getAll.query();
       if (workspaces) {
-        // Merge with existing state to preserve workspaces created during load
         set((state) => ({
           workspaces: { ...workspaces, ...state.workspaces },
           isLoaded: true,
@@ -121,24 +98,22 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       }
     },
 
-    createWorkspace: async (options: CreateWorkspaceOptions) => {
-      const { taskId, folderId, folderPath } = options;
+    createWorkspace: async (options) => {
+      const { taskId, folderId, taskTitle, repoPath } = options;
       set((state) => ({
         isCreating: { ...state.isCreating, [taskId]: true },
       }));
 
       try {
-        const workspaceInfo =
-          await trpcVanilla.workspace.create.mutate(options);
-        if (!workspaceInfo) {
+        const workspace = await trpcVanilla.workspace.create.mutate({
+          taskId,
+          taskTitle,
+          repoPath,
+          folderId,
+        });
+        if (!workspace) {
           throw new Error("Failed to create workspace");
         }
-
-        const workspace = workspaceInfoToWorkspace(
-          workspaceInfo,
-          folderId,
-          folderPath,
-        );
 
         set((state) => ({
           workspaces: { ...state.workspaces, [taskId]: workspace },
@@ -154,8 +129,8 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       }
     },
 
-    deleteWorkspace: async (taskId: string, mainRepoPath: string) => {
-      await trpcVanilla.workspace.delete.mutate({ taskId, mainRepoPath });
+    deleteWorkspace: async (taskId: string) => {
+      await trpcVanilla.workspace.delete.mutate({ taskId });
       set((state) => ({ workspaces: omitKey(state.workspaces, taskId) }));
     },
 
@@ -169,9 +144,8 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
 
     ensureWorkspace: async (
       taskId: string,
+      taskTitle: string,
       repoPath: string,
-      mode: WorkspaceMode = "worktree",
-      branch?: string | null,
     ) => {
       // Return existing workspace if it exists
       const existing = get().workspaces[taskId];
@@ -179,54 +153,13 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
         return existing;
       }
 
-      // For cloud tasks, create a minimal workspace entry (no local worktree)
-      if (mode === "cloud") {
-        const { getFolderByPath, addFolder } =
-          useRegisteredFoldersStore.getState();
-        let folder = getFolderByPath(repoPath);
-        if (!folder) {
-          folder = await addFolder(repoPath);
-        }
-
-        const cloudWorkspace: Workspace = {
-          taskId,
-          folderId: folder.id,
-          folderPath: repoPath,
-          mode: "cloud",
-          worktreePath: null,
-          worktreeName: null,
-          branchName: null,
-          baseBranch: branch ?? null,
-          createdAt: new Date().toISOString(),
-          terminalSessionIds: [],
-          hasStartScripts: false,
-        };
-
-        set((state) => ({
-          workspaces: { ...state.workspaces, [taskId]: cloudWorkspace },
-        }));
-
-        // Persist cloud workspace to main process
-        await trpcVanilla.workspace.create.mutate({
-          taskId,
-          mainRepoPath: repoPath,
-          folderId: folder.id,
-          folderPath: repoPath,
-          mode: "cloud",
-          branch: branch ?? undefined,
-        });
-
-        return cloudWorkspace;
-      }
-
-      // Atomically check if creating and set if not - this prevents race conditions
+      // Atomically check if creating and set if not
       let wasAlreadyCreating = false;
       set((state) => {
         if (state.isCreating[taskId]) {
           wasAlreadyCreating = true;
-          return state; // No change
+          return state;
         }
-        // Set creating flag atomically with the check
         return {
           ...state,
           isCreating: { ...state.isCreating, [taskId]: true },
@@ -234,7 +167,6 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       });
 
       if (wasAlreadyCreating) {
-        // Wait for creation to complete and return the workspace
         return new Promise((resolve, reject) => {
           const checkInterval = setInterval(() => {
             const current = get();
@@ -260,24 +192,16 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
           folder = await addFolder(repoPath);
         }
 
-        const workspaceInfo = await trpcVanilla.workspace.create.mutate({
+        const workspace = await trpcVanilla.workspace.create.mutate({
           taskId,
-          mainRepoPath: repoPath,
+          taskTitle,
+          repoPath,
           folderId: folder.id,
-          folderPath: repoPath,
-          mode,
-          branch: branch ?? undefined,
         });
 
-        if (!workspaceInfo) {
+        if (!workspace) {
           throw new Error("Failed to create workspace");
         }
-
-        const workspace = workspaceInfoToWorkspace(
-          workspaceInfo,
-          folder.id,
-          repoPath,
-        );
 
         set((state) => ({
           workspaces: { ...state.workspaces, [taskId]: workspace },
@@ -303,15 +227,10 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
         };
       }
 
-      // Use worktreePath for worktree mode, folderPath for root mode
-      const scriptPath = workspace.worktreePath ?? workspace.folderPath;
-      const scriptName =
-        workspace.worktreeName ?? workspace.folderPath.split("/").pop() ?? "";
-
       const result = await trpcVanilla.workspace.runStart.mutate({
         taskId,
-        worktreePath: scriptPath,
-        worktreeName: scriptName,
+        workspacePath: workspace.workspacePath,
+        workspaceName: workspace.workspaceName,
       });
       return (
         result ?? {
@@ -339,23 +258,16 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       return get().workspaces[taskId] ?? null;
     },
 
-    getWorktreePath: (taskId: string) => {
-      const workspace = get().workspaces[taskId];
-      if (!workspace) return null;
-      // In root mode, return folderPath; in worktree mode, return worktreePath
-      return workspace.worktreePath ?? workspace.folderPath;
+    getWorkspacePath: (taskId: string) => {
+      return get().workspaces[taskId]?.workspacePath ?? null;
     },
 
-    getWorktreeName: (taskId: string) => {
-      return get().workspaces[taskId]?.worktreeName ?? null;
+    getWorkspaceName: (taskId: string) => {
+      return get().workspaces[taskId]?.workspaceName ?? null;
     },
 
-    getBranchName: (taskId: string) => {
-      return get().workspaces[taskId]?.branchName ?? null;
-    },
-
-    getFolderPath: (taskId: string) => {
-      return get().workspaces[taskId]?.folderPath ?? null;
+    getRepoPath: (taskId: string) => {
+      return get().workspaces[taskId]?.repoPath ?? null;
     },
 
     // Internal state management
@@ -365,7 +277,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       }));
     },
 
-    updateWorkspace: (taskId: string, workspace: Workspace) => {
+    updateWorkspace: (taskId: string, workspace: WorkspaceInfo) => {
       set((state) => ({
         workspaces: { ...state.workspaces, [taskId]: workspace },
       }));
@@ -384,19 +296,13 @@ export const useWorkspaceStore = createSelectors(useWorkspaceStoreBase);
 export const selectWorkspace = (taskId: string) => (state: WorkspaceState) =>
   state.workspaces[taskId];
 
-export const selectWorktreePath =
-  (taskId: string) => (state: WorkspaceState) => {
-    const workspace = state.workspaces[taskId];
-    if (!workspace) return undefined;
-    // In root mode, return folderPath; in worktree mode, return worktreePath
-    return workspace.worktreePath ?? workspace.folderPath;
-  };
+export const selectWorkspacePath =
+  (taskId: string) => (state: WorkspaceState) =>
+    state.workspaces[taskId]?.workspacePath;
 
-export const selectWorktreeName = (taskId: string) => (state: WorkspaceState) =>
-  state.workspaces[taskId]?.worktreeName;
-
-export const selectBranchName = (taskId: string) => (state: WorkspaceState) =>
-  state.workspaces[taskId]?.branchName;
+export const selectWorkspaceName =
+  (taskId: string) => (state: WorkspaceState) =>
+    state.workspaces[taskId]?.workspaceName;
 
 export const selectIsCreating = (taskId: string) => (state: WorkspaceState) =>
   state.isCreating[taskId] ?? false;

@@ -4,7 +4,7 @@ import { trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
 
@@ -15,7 +15,7 @@ interface ChangesTabBadgeProps {
 
 export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const worktreePath = useWorkspaceStore(selectWorkspacePath(taskId));
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const { data: diffStats } = useQuery({

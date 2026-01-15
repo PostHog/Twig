@@ -1,5 +1,4 @@
 import path from "node:path";
-import type { WorkspaceMode } from "@shared/types";
 import { getCurrentBranch, getDefaultBranch } from "../git";
 
 export interface WorkspaceEnvContext {
@@ -7,7 +6,6 @@ export interface WorkspaceEnvContext {
   folderPath: string;
   worktreePath: string | null;
   worktreeName: string | null;
-  mode: WorkspaceMode;
 }
 
 const PORT_BASE = 50000;
@@ -44,10 +42,6 @@ function allocateWorkspacePorts(taskId: string): {
 export async function buildWorkspaceEnv(
   context: WorkspaceEnvContext,
 ): Promise<Record<string, string>> {
-  if (context.mode === "cloud") {
-    return {};
-  }
-
   const workspaceName =
     context.worktreeName ?? path.basename(context.folderPath);
   const workspacePath = context.worktreePath ?? context.folderPath;

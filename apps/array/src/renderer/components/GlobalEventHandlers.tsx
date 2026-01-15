@@ -123,9 +123,9 @@ export function GlobalEventHandlers({
     if (view.type !== "task-detail" || !view.data) return;
 
     const workspace = workspaces[view.data.id];
-    if (!workspace?.folderId) return;
+    if (!workspace?.repoPath) return;
 
-    const folder = folders.find((f) => f.id === workspace.folderId);
+    const folder = folders.find((f) => f.path === workspace.repoPath);
     if (folder && folder.exists === false) {
       navigateToFolderSettings(folder.id);
     }

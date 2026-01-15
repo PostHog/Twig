@@ -93,6 +93,7 @@
     "@codemirror/view": "^6.38.8",
     "@dnd-kit/react": "^0.1.21",
     "@floating-ui/dom": "^1.7.4",
+    "@array/core": "workspace:*",
     "@parcel/watcher": "^2.5.1",
     "@phosphor-icons/react": "^2.1.10",
     "@posthog/agent": "workspace:*",

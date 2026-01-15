@@ -47,6 +47,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   const { ref, isDragging } = useSortable({
     id: tabId,
     index,
+    type: "tab",
     group: panelId,
     transition: {
       duration: 200,

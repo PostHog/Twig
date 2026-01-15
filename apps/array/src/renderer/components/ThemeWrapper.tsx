@@ -27,7 +27,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
       grayColor="slate"
       panelBackground="solid"
       radius="none"
-      scaling="100%"
+      scaling="95%"
     >
       {children}
       <div ref={portalRef} id="portal-container" />

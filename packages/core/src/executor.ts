@@ -1,3 +1,5 @@
+import { spawn, spawnSync } from "node:child_process";
+
 export interface CommandResult {
   stdout: string;
   stderr: string;
@@ -18,43 +20,50 @@ export interface CommandExecutor {
   ): Promise<CommandResult>;
 }
 
-function createShellExecutor(): CommandExecutor {
+function createExecutor(): CommandExecutor {
   return {
     async execute(
       command: string,
       args: string[],
       options: ExecuteOptions,
     ): Promise<CommandResult> {
-      const proc = Bun.spawn([command, ...args], {
-        cwd: options.cwd,
-        env: { ...process.env, ...options.env },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      return new Promise((resolve, reject) => {
+        const proc = spawn(command, args, {
+          cwd: options.cwd,
+          env: { ...process.env, ...options.env },
+        });
 
-      const timeoutMs = options.timeout ?? 30000;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        const timeoutMs = options.timeout ?? 30000;
+        const timeout = setTimeout(() => {
           proc.kill();
           reject(new Error(`Command timed out after ${timeoutMs}ms`));
         }, timeoutMs);
+
+        const stdoutChunks: Buffer[] = [];
+        const stderrChunks: Buffer[] = [];
+
+        proc.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+        proc.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+
+        proc.on("close", (exitCode) => {
+          clearTimeout(timeout);
+          resolve({
+            stdout: Buffer.concat(stdoutChunks).toString(),
+            stderr: Buffer.concat(stderrChunks).toString(),
+            exitCode: exitCode ?? 1,
+          });
+        });
+
+        proc.on("error", (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
       });
-
-      const resultPromise = (async () => {
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-        const exitCode = await proc.exited;
-        return { stdout, stderr, exitCode };
-      })();
-
-      return Promise.race([resultPromise, timeoutPromise]);
     },
   };
 }
 
-export const shellExecutor = createShellExecutor();
+export const shellExecutor = createExecutor();
 
 interface SyncOptions {
   cwd?: string;
@@ -71,18 +80,18 @@ export function runSync(
   args: string[],
   options?: SyncOptions,
 ): string {
-  const result = Bun.spawnSync([command, ...args], {
+  const result = spawnSync(command, args, {
     cwd: options?.cwd ?? process.cwd(),
-    stdin: options?.input ? Buffer.from(options.input) : undefined,
+    input: options?.input,
+    encoding: "utf-8",
   });
 
-  if (result.exitCode !== 0) {
+  if (result.status !== 0) {
     if (options?.onError === "ignore") return "";
-    const stderr = result.stderr.toString();
-    throw new Error(`${command} ${args.join(" ")} failed: ${stderr}`);
+    throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr}`);
   }
 
-  return result.stdout.toString().trim();
+  return (result.stdout ?? "").trim();
 }
 
 /**

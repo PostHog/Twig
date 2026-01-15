@@ -30,7 +30,6 @@ export class TaskService {
    */
   public async createTask(input: TaskCreationInput): Promise<CreateTaskResult> {
     log.info("Creating task", {
-      workspaceMode: input.workspaceMode,
       hasContent: !!input.content,
       hasRepo: !!input.repository,
     });
@@ -159,32 +158,18 @@ export class TaskService {
     const workspaceStore = useWorkspaceStore.getState();
 
     // Derive values from input or output
-    const workspaceMode =
-      input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
-    const repoPath = input?.repoPath ?? output.workspace?.folderPath;
-
-    // Save workspace mode for this task
-    taskExecution.setWorkspaceMode(output.task.id, workspaceMode);
+    const repoPath = input?.repoPath ?? output.workspace?.repoPath;
 
     // Only update settings preferences when creating (user made a choice)
     if (input) {
-      settings.setLastUsedWorkspaceMode(workspaceMode);
-
-      if (workspaceMode === "cloud") {
-        settings.setLastUsedRunMode("cloud");
-      } else {
-        settings.setLastUsedRunMode("local");
-        settings.setLastUsedLocalWorkspaceMode(
-          workspaceMode as "worktree" | "root",
-        );
-      }
+      settings.setLastUsedRunMode("local");
 
       // Clear draft only on create (task-input is the sessionId used by TaskInputEditor)
       draftStore.actions.setDraft("task-input", null);
     }
 
-    // Save repo path for local tasks
-    if (repoPath && workspaceMode !== "cloud") {
+    // Save repo path for task
+    if (repoPath) {
       taskExecution.setRepoPath(output.task.id, repoPath);
     }
 

@@ -37,6 +37,13 @@ export type TabData =
       type: "logs";
     }
   | {
+      type: "workspaces";
+      repoPath: string;
+    }
+  | {
+      type: "preview-placeholder";
+    }
+  | {
       type: "other";
       // Generic tab without specific data
     };

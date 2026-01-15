@@ -5,23 +5,17 @@ import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndi
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useConnectivity } from "@hooks/useConnectivity";
-import { ArrowUp, GitBranchIcon } from "@phosphor-icons/react";
+import { ArrowUp } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
-
-type LocalWorkspaceMode = "worktree" | "root";
 
 interface TaskInputEditorProps {
   sessionId: string;
   repoPath: string;
   isCreatingTask: boolean;
-  runMode: RunMode;
-  localWorkspaceMode: LocalWorkspaceMode;
-  onLocalWorkspaceModeChange: (mode: LocalWorkspaceMode) => void;
   canSubmit: boolean;
   onSubmit: () => void;
   hasDirectory: boolean;
@@ -39,9 +33,6 @@ export const TaskInputEditor = forwardRef<
       sessionId,
       repoPath,
       isCreatingTask,
-      runMode,
-      localWorkspaceMode,
-      onLocalWorkspaceModeChange,
       canSubmit,
       onSubmit,
       hasDirectory,
@@ -51,8 +42,6 @@ export const TaskInputEditor = forwardRef<
     },
     ref,
   ) => {
-    const isWorktreeMode = localWorkspaceMode === "worktree";
-    const isCloudMode = runMode === "cloud";
     const { isOnline } = useConnectivity();
     const isDisabled = isCreatingTask || !isOnline;
 
@@ -65,9 +54,9 @@ export const TaskInputEditor = forwardRef<
       {
         enableOnFormTags: true,
         enableOnContentEditable: true,
-        enabled: !isCreatingTask && !isCloudMode,
+        enabled: !isCreatingTask,
       },
-      [onModeChange, isCreatingTask, isCloudMode],
+      [onModeChange, isCreatingTask],
     );
 
     const {
@@ -85,7 +74,7 @@ export const TaskInputEditor = forwardRef<
       placeholder: "What do you want to work on? - @ to add context",
       disabled: isDisabled,
       isLoading: isCreatingTask,
-      isCloud: isCloudMode,
+      isCloud: false,
       autoFocus: true,
       context: { repoPath },
       capabilities: { commands: false, bashMode: false },
@@ -206,59 +195,29 @@ export const TaskInputEditor = forwardRef<
               iconSize={16}
             />
 
-            <Flex align="center" gap="4">
-              {!isCloudMode && (
-                <Tooltip
-                  content={
-                    isWorktreeMode
-                      ? "Work in a separate directory with its own branch"
-                      : "Work directly in the selected folder"
-                  }
-                >
-                  <IconButton
-                    size="1"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onLocalWorkspaceModeChange(
-                        isWorktreeMode ? "root" : "worktree",
-                      );
-                    }}
-                    className="worktree-toggle-button"
-                    data-active={isWorktreeMode}
-                  >
-                    <GitBranchIcon
-                      size={16}
-                      weight={isWorktreeMode ? "fill" : "regular"}
-                    />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              <Tooltip content={getSubmitTooltip()}>
-                <IconButton
-                  size="1"
-                  variant="solid"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSubmit();
-                  }}
-                  disabled={!canSubmit || isDisabled}
-                  loading={isCreatingTask}
-                  style={{
-                    backgroundColor:
-                      !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
-                    color:
-                      !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
-                  }}
-                >
-                  <ArrowUp size={16} weight="bold" />
-                </IconButton>
-              </Tooltip>
-            </Flex>
+            <Tooltip content={getSubmitTooltip()}>
+              <IconButton
+                size="1"
+                variant="solid"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSubmit();
+                }}
+                disabled={!canSubmit || isDisabled}
+                loading={isCreatingTask}
+                style={{
+                  backgroundColor:
+                    !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
+                  color:
+                    !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
+                }}
+              >
+                <ArrowUp size={16} weight="bold" />
+              </IconButton>
+            </Tooltip>
           </Flex>
         </Flex>
-        {!isCloudMode && <ModeIndicatorInput mode={executionMode} />}
+        <ModeIndicatorInput mode={executionMode} />
       </>
     );
   },

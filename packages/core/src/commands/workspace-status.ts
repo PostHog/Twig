@@ -1,4 +1,8 @@
-import { type DiffEntry, parseDiffSummary } from "../jj/diff";
+import {
+  type DiffEntry,
+  parseDiffSummary,
+  parsePerFileStats,
+} from "../jj/diff";
 import { runJJ } from "../jj/runner";
 import { listWorkspaces, workspaceRef } from "../jj/workspace";
 import { ok, type Result } from "../result";
@@ -7,6 +11,8 @@ import type { Command } from "./types";
 export interface FileChange {
   status: "M" | "A" | "D" | "R";
   path: string;
+  linesAdded?: number;
+  linesRemoved?: number;
 }
 
 export interface DiffStats {
@@ -75,15 +81,29 @@ export async function getWorkspaceStatus(
     diffEntryToFileChange,
   );
 
-  // Get diff stats
+  // Get diff stats (both aggregate and per-file)
   const statResult = await runJJ(
     ["diff", "-r", workspaceRef(workspaceName), "--stat"],
     cwd,
   );
 
-  const stats = statResult.ok
-    ? parseDiffStats(statResult.value.stdout)
-    : { added: 0, removed: 0, files: changes.length };
+  let stats = { added: 0, removed: 0, files: changes.length };
+
+  if (statResult.ok) {
+    stats = parseDiffStats(statResult.value.stdout);
+
+    // Merge per-file stats into changes
+    const perFileStats = parsePerFileStats(statResult.value.stdout);
+    const statsMap = new Map(perFileStats.map((s) => [s.path, s]));
+
+    for (const change of changes) {
+      const fileStats = statsMap.get(change.path);
+      if (fileStats) {
+        change.linesAdded = fileStats.added;
+        change.linesRemoved = fileStats.removed;
+      }
+    }
+  }
 
   return ok({
     name: workspaceName,

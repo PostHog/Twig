@@ -18,7 +18,7 @@ import type { Command } from "./types";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DAEMON_PROCESS_PATH = join(__dirname, "../daemon/daemon-process.ts");
 
-interface DaemonStatus {
+export interface DaemonStatus {
   running: boolean;
   pid?: number;
   repos: Array<{ path: string; workspaces: string[] }>;

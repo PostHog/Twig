@@ -11,7 +11,6 @@ import type {
   TaskCreationInput,
   TaskService,
 } from "@renderer/services/task/service";
-import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -23,7 +22,6 @@ interface UseTaskCreationOptions {
   selectedDirectory: string;
   selectedRepository?: string | null;
   githubIntegrationId?: number;
-  workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
   executionMode?: "plan" | "acceptEdits";
@@ -78,7 +76,6 @@ function prepareTaskInput(
     selectedDirectory: string;
     selectedRepository?: string | null;
     githubIntegrationId?: number;
-    workspaceMode: WorkspaceMode;
     branch?: string | null;
     autoRun: boolean;
     executionMode?: "plan" | "acceptEdits";
@@ -90,7 +87,6 @@ function prepareTaskInput(
     repoPath: options.selectedDirectory,
     repository: options.selectedRepository,
     githubIntegrationId: options.githubIntegrationId,
-    workspaceMode: options.workspaceMode,
     branch: options.branch,
     autoRun: options.autoRun,
     executionMode: options.executionMode,
@@ -114,7 +110,6 @@ export function useTaskCreation({
   selectedDirectory,
   selectedRepository,
   githubIntegrationId,
-  workspaceMode,
   branch,
   editorIsEmpty,
   executionMode,
@@ -126,12 +121,11 @@ export function useTaskCreation({
   const { invalidateTasks } = useCreateTask();
   const { isOnline } = useConnectivity();
 
-  const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&
     isOnline &&
-    (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
+    !!selectedDirectory &&
     !isCreatingTask &&
     !editorIsEmpty;
 
@@ -147,7 +141,6 @@ export function useTaskCreation({
         selectedDirectory,
         selectedRepository,
         githubIntegrationId,
-        workspaceMode,
         branch,
         autoRun: autoRunTasks,
         executionMode,
@@ -190,7 +183,6 @@ export function useTaskCreation({
     selectedDirectory,
     selectedRepository,
     githubIntegrationId,
-    workspaceMode,
     branch,
     autoRunTasks,
     executionMode,

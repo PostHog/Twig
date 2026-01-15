@@ -76,12 +76,18 @@ export function setupWorkspaceLinks(
   }
 }
 
+export interface AddWorkspaceOptions {
+  /** Revision to create workspace at (e.g., branch name). Defaults to trunk() */
+  revision?: string;
+}
+
 /**
  * Create a new jj workspace in ~/.array/workspaces/<repo>/<name>
  */
 export async function addWorkspace(
   name: string,
   cwd = process.cwd(),
+  options: AddWorkspaceOptions = {},
 ): Promise<Result<WorkspaceInfo>> {
   // Get repo root to calculate paths correctly
   const rootResult = await getRepoRoot(cwd);
@@ -100,21 +106,18 @@ export async function addWorkspace(
   // Ensure the workspaces directory exists
   ensureRepoWorkspacesDir(repoPath);
 
-  // Get trunk to create workspace at
-  const trunkResult = await getTrunkChangeId(cwd);
-  if (!trunkResult.ok) return trunkResult;
+  // Determine revision to create workspace at
+  let revision = options.revision;
+  if (!revision) {
+    // Default to trunk
+    const trunkResult = await getTrunkChangeId(cwd);
+    if (!trunkResult.ok) return trunkResult;
+    revision = trunkResult.value;
+  }
 
-  // Create the workspace at trunk (not current working copy)
+  // Create the workspace at the specified revision
   const result = await runJJ(
-    [
-      "workspace",
-      "add",
-      workspacePath,
-      "--name",
-      name,
-      "-r",
-      trunkResult.value,
-    ],
+    ["workspace", "add", workspacePath, "--name", name, "-r", revision],
     cwd,
   );
   if (!result.ok) return result;
@@ -218,7 +221,6 @@ export async function listWorkspaces(
   const result = await runJJ(["workspace", "list"], cwd);
   if (!result.ok) return result;
 
-  const _workspacesDir = getWorkspacesDir(repoPath);
   const workspaces: WorkspaceInfo[] = [];
 
   // Parse jj workspace list output

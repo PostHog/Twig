@@ -27,7 +27,7 @@ describe("panelLayoutStore", () => {
     });
 
     it("creates default layout when task is initialized", () => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       const layout = usePanelLayoutStore.getState().getLayout("task-1");
 
       expect(layout).not.toBeNull();
@@ -35,7 +35,7 @@ describe("panelLayoutStore", () => {
     });
 
     it("creates default layout with correct structure", () => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
 
       withRootGroup("task-1", (root: GroupNode) => {
         assertGroupStructure(root, {
@@ -58,7 +58,7 @@ describe("panelLayoutStore", () => {
 
   describe("openFile", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
     });
 
     it("adds file tab to main panel by default", () => {
@@ -146,7 +146,7 @@ describe("panelLayoutStore", () => {
 
   describe("closeTab", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
@@ -194,7 +194,7 @@ describe("panelLayoutStore", () => {
 
   describe("setActiveTab", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
@@ -209,8 +209,8 @@ describe("panelLayoutStore", () => {
 
   describe("task isolation", () => {
     it("keeps tasks isolated from each other", () => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
-      usePanelLayoutStore.getState().initializeTask("task-2");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-2");
 
       openMultipleFiles("task-1", ["src/App.tsx"]);
       openMultipleFiles("task-2", ["src/Other.tsx"]);
@@ -228,7 +228,7 @@ describe("panelLayoutStore", () => {
 
   describe("panel size persistence", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
     });
 
     it("preserves custom panel sizes when opening a file", () => {
@@ -274,7 +274,7 @@ describe("panelLayoutStore", () => {
 
   describe("persistence", () => {
     it("persists state to localStorage", () => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
 
       const storedData = localStorage.getItem("panel-layout-store");
@@ -288,7 +288,7 @@ describe("panelLayoutStore", () => {
     });
 
     it("restores state from localStorage", () => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
 
       const storedData = localStorage.getItem("panel-layout-store");
@@ -308,7 +308,7 @@ describe("panelLayoutStore", () => {
 
   describe("drag state", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
     });
 
@@ -334,7 +334,7 @@ describe("panelLayoutStore", () => {
     });
 
     it("isolates drag state between tasks", () => {
-      usePanelLayoutStore.getState().initializeTask("task-2");
+      usePanelLayoutStore.getState().initializeLayout("task-2");
       usePanelLayoutStore
         .getState()
         .setDraggingTab("task-1", "file-src/App.tsx", "main-panel");
@@ -349,7 +349,7 @@ describe("panelLayoutStore", () => {
 
   describe("reorderTabs", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       openMultipleFiles("task-1", [
         "src/App.tsx",
         "src/Other.tsx",
@@ -380,7 +380,7 @@ describe("panelLayoutStore", () => {
 
   describe("moveTab", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
     });
 
@@ -418,7 +418,7 @@ describe("panelLayoutStore", () => {
 
   describe("splitPanel", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
@@ -479,7 +479,7 @@ describe("panelLayoutStore", () => {
 
   describe("updateSizes", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
     });
 
     it("updates panel group sizes", () => {
@@ -495,7 +495,7 @@ describe("panelLayoutStore", () => {
 
   describe("tree cleanup", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
       openMultipleFiles("task-1", ["src/App.tsx", "src/Other.tsx"]);
     });
 
@@ -527,7 +527,7 @@ describe("panelLayoutStore", () => {
 
   describe("preview tabs", () => {
     beforeEach(() => {
-      usePanelLayoutStore.getState().initializeTask("task-1");
+      usePanelLayoutStore.getState().initializeLayout("task-1");
     });
 
     it("creates preview tab by default when opening a file", () => {

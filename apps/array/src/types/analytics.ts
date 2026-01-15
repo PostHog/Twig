@@ -196,6 +196,7 @@ export const ANALYTICS_EVENTS = {
 
   // Navigation events
   SETTINGS_VIEWED: "Settings viewed",
+  REPO_DASHBOARD_VIEWED: "Repo dashboard viewed",
   COMMAND_MENU_OPENED: "Command menu opened",
   COMMAND_MENU_ACTION: "Command menu action",
 
@@ -241,6 +242,7 @@ export type EventPropertyMap = {
 
   // Navigation events
   [ANALYTICS_EVENTS.SETTINGS_VIEWED]: never;
+  [ANALYTICS_EVENTS.REPO_DASHBOARD_VIEWED]: { repo_path: string };
   [ANALYTICS_EVENTS.COMMAND_MENU_OPENED]: never;
   [ANALYTICS_EVENTS.COMMAND_MENU_ACTION]: CommandMenuActionProperties;
 

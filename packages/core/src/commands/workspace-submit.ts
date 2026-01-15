@@ -72,10 +72,9 @@ export async function submitWorkspace(
     );
   }
 
-  // Get the workspace tip
+  // Get the workspace tip (validates workspace exists and has a commit)
   const tipResult = await getWorkspaceTip(workspace, cwd);
   if (!tipResult.ok) return tipResult;
-  const _changeId = tipResult.value;
 
   // Check if workspace has changes
   const diffResult = await runJJ(

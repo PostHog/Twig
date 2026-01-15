@@ -4,6 +4,7 @@ import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
+import { RepoDashboard } from "@features/repo-dashboard/components/RepoDashboard";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
@@ -12,6 +13,7 @@ import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
+import { useDaemon } from "@hooks/useDaemon";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -34,6 +36,7 @@ export function MainLayout() {
 
   useIntegrations();
   useTaskDeepLink();
+  useDaemon(); // Auto-starts daemon if not running
 
   useEffect(() => {
     if (tasks) {
@@ -61,6 +64,8 @@ export function MainLayout() {
           {view.type === "settings" && <SettingsView />}
 
           {view.type === "folder-settings" && <FolderSettingsView />}
+
+          {view.type === "repo-dashboard" && <RepoDashboard />}
         </Box>
 
         {view.type === "task-detail" && view.data && (

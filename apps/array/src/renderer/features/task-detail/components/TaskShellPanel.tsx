@@ -6,7 +6,7 @@ import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useEffect } from "react";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
 
@@ -21,7 +21,7 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
   const stateKey = shellId ? `${taskId}-${shellId}` : taskId;
   const tabId = shellId || "shell";
 
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId)) ?? null;
+  const worktreePath = useWorkspaceStore(selectWorkspacePath(taskId)) ?? null;
 
   const processName = useTerminalStore(
     (state) => state.terminalStates[stateKey]?.processName,

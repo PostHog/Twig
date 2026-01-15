@@ -25,12 +25,8 @@ export async function loadUserConfig(): Promise<UserConfig> {
   const configPath = getUserConfigPath();
 
   try {
-    const file = Bun.file(configPath);
-    if (!(await file.exists())) {
-      return createDefaultUserConfig();
-    }
-
-    const content = await file.text();
+    const { readFile } = await import("node:fs/promises");
+    const content = await readFile(configPath, "utf-8");
     const parsed = JSON.parse(content);
     return UserConfigSchema.parse(parsed);
   } catch {
@@ -43,7 +39,8 @@ export async function saveUserConfig(config: UserConfig): Promise<void> {
   const configPath = getUserConfigPath();
 
   await ensureDir(configDir);
-  await Bun.write(configPath, JSON.stringify(config, null, 2));
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(configPath, JSON.stringify(config, null, 2));
 }
 
 export function createDefaultUserConfig(): UserConfig {

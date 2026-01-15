@@ -1,15 +1,18 @@
-import type { Task } from "@shared/types";
 import type React from "react";
-import { useTabInjection } from "../hooks/usePanelLayoutHooks";
+import {
+  type ContentRenderer,
+  useTabInjection,
+} from "../hooks/usePanelLayoutHooks";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import type { LeafPanel } from "../store/panelTypes";
 import { TabbedPanel } from "./TabbedPanel";
 
 interface LeafNodeRendererProps {
   node: LeafPanel;
-  taskId: string;
-  task: Task;
-  closeTab: (taskId: string, panelId: string, tabId: string) => void;
+  layoutId: string;
+  renderContent: ContentRenderer;
+  repoPath?: string;
+  closeTab: (layoutId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (panelId: string, tabId: string) => void;
   closeTabsToRight: (panelId: string, tabId: string) => void;
   keepTab: (panelId: string, tabId: string) => void;
@@ -23,8 +26,9 @@ interface LeafNodeRendererProps {
 
 export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   node,
-  taskId,
-  task,
+  layoutId,
+  renderContent,
+  repoPath,
   closeTab,
   closeOtherTabs,
   closeTabsToRight,
@@ -36,13 +40,14 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   onAddTerminal,
   onSplitPanel,
 }) => {
-  const tabs = useTabInjection(
-    node.content.tabs,
-    node.id,
-    taskId,
-    task,
+  const tabs = useTabInjection({
+    tabs: node.content.tabs,
+    panelId: node.id,
+    layoutId,
+    renderContent,
     closeTab,
-  );
+    repoPath,
+  });
 
   const contentWithComponents = {
     ...node.content,

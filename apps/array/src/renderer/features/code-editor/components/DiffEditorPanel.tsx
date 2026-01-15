@@ -10,24 +10,31 @@ import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
 import {
-  selectWorktreePath,
+  selectWorkspacePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface DiffEditorPanelProps {
   taskId: string;
-  task: Task;
+  task: Task | null;
   absolutePath: string;
+  /** Direct repo path - used when no task is available (e.g., dashboard) */
+  repoPath?: string;
+  /** Skip auto-closing when file has no changes (used for jj workspaces) */
+  skipAutoClose?: boolean;
 }
 
 export function DiffEditorPanel({
   taskId,
   task,
   absolutePath,
+  repoPath: directRepoPath,
+  skipAutoClose = false,
 }: DiffEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const workspacePath = useWorkspaceStore(selectWorkspacePath(taskId));
+  // Prefer direct repo path (dashboard mode) over workspace/task-derived paths
+  const repoPath = directRepoPath ?? workspacePath ?? taskData.repoPath;
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
   const closeDiffTabsForFile = usePanelLayoutStore(
@@ -107,10 +114,10 @@ export function DiffEditorPanel({
       (!isDeleted && !isNew && originalContent === modifiedContent));
 
   useEffect(() => {
-    if (hasNoChanges) {
+    if (hasNoChanges && !skipAutoClose) {
       closeDiffTabsForFile(taskId, filePath);
     }
-  }, [hasNoChanges, closeDiffTabsForFile, taskId, filePath]);
+  }, [hasNoChanges, skipAutoClose, closeDiffTabsForFile, taskId, filePath]);
 
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
@@ -120,7 +127,7 @@ export function DiffEditorPanel({
     return <PanelMessage>Loading diff...</PanelMessage>;
   }
 
-  if (hasNoChanges) {
+  if (hasNoChanges && !skipAutoClose) {
     return null;
   }
 

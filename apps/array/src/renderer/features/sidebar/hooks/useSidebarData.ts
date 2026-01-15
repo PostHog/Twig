@@ -8,7 +8,7 @@ import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import type { RegisteredFolder, Task, Workspace } from "@shared/types";
+import type { RegisteredFolder, Task, WorkspaceInfo } from "@shared/types";
 import { useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
@@ -77,7 +77,12 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings" | "folder-settings";
+  type:
+    | "task-detail"
+    | "task-input"
+    | "settings"
+    | "folder-settings"
+    | "repo-dashboard";
   data?: Task;
 }
 
@@ -109,14 +114,14 @@ function buildRepositoryMap(tasks: Task[]): Repository[] {
 function groupTasksByFolder(
   tasks: Task[],
   folders: RegisteredFolder[],
-  workspaces: Record<string, Workspace>,
+  workspaces: Record<string, WorkspaceInfo>,
 ): Map<string, Task[]> {
   const tasksByFolder = new Map<string, Task[]>();
 
   for (const task of tasks) {
     const workspace = workspaces[task.id];
     if (!workspace) continue;
-    const folder = folders.find((f) => f.id === workspace.folderId);
+    const folder = folders.find((f) => f.path === workspace.repoPath);
     if (!folder) continue;
     if (!tasksByFolder.has(folder.id)) {
       tasksByFolder.set(folder.id, []);
@@ -190,7 +195,7 @@ function getActiveRepository(activeFilters: ActiveFilters): string | null {
 
 function buildHistoryData(
   allTasks: Task[],
-  workspaces: Record<string, Workspace>,
+  workspaces: Record<string, WorkspaceInfo>,
   folders: RegisteredFolder[],
   sessions: Record<string, AgentSession>,
   lastViewedAt: Record<string, number>,
@@ -208,7 +213,7 @@ function buildHistoryData(
     const session = getSessionForTask(task.id);
     const workspace = workspaces[task.id];
     const folder = workspace
-      ? folders.find((f) => f.id === workspace.folderId)
+      ? folders.find((f) => f.path === workspace.repoPath)
       : undefined;
 
     const apiUpdatedAt = new Date(task.updated_at).getTime();

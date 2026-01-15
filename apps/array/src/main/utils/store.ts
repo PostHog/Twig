@@ -1,16 +1,20 @@
-import { WorktreeManager } from "@posthog/agent";
+import { workspaceRemove } from "@array/core/commands/workspace-remove";
 import { app } from "electron";
 import Store from "electron-store";
-import type {
-  RegisteredFolder,
-  TaskFolderAssociation,
-} from "../../shared/types";
+import type { RegisteredFolder } from "../../shared/types";
 import { logger } from "../lib/logger";
-import { getWorktreeLocation } from "../services/settingsStore";
+
+// Simplified task-workspace association for jj workspaces
+interface TaskWorkspaceAssociation {
+  taskId: string;
+  workspaceName: string;
+  repoPath: string;
+  folderId: string;
+}
 
 interface FoldersSchema {
   folders: RegisteredFolder[];
-  taskAssociations: TaskFolderAssociation[];
+  taskWorkspaceAssociations: TaskWorkspaceAssociation[];
 }
 
 interface RendererStoreSchema {
@@ -33,27 +37,18 @@ const schema = {
       required: ["id", "path", "name", "lastAccessed", "createdAt"],
     },
   },
-  taskAssociations: {
+  taskWorkspaceAssociations: {
     type: "array" as const,
     default: [],
     items: {
       type: "object" as const,
       properties: {
         taskId: { type: "string" as const },
+        workspaceName: { type: "string" as const },
+        repoPath: { type: "string" as const },
         folderId: { type: "string" as const },
-        folderPath: { type: "string" as const },
-        worktree: {
-          type: "object" as const,
-          properties: {
-            worktreePath: { type: "string" as const },
-            worktreeName: { type: "string" as const },
-            branchName: { type: "string" as const },
-            baseBranch: { type: "string" as const },
-            createdAt: { type: "string" as const },
-          },
-        },
       },
-      required: ["taskId", "folderId", "folderPath"],
+      required: ["taskId", "workspaceName", "repoPath", "folderId"],
     },
   },
 };
@@ -69,29 +64,19 @@ export const foldersStore = new Store<FoldersSchema>({
   cwd: app.getPath("userData"),
   defaults: {
     folders: [],
-    taskAssociations: [],
+    taskWorkspaceAssociations: [],
   },
 });
 
 const log = logger.scope("store");
 
 export async function clearAllStoreData(): Promise<void> {
-  const associations = foldersStore.get("taskAssociations", []);
+  const associations = foldersStore.get("taskWorkspaceAssociations", []);
   for (const assoc of associations) {
-    if (assoc.worktree) {
-      try {
-        const worktreeBasePath = getWorktreeLocation();
-        const manager = new WorktreeManager({
-          mainRepoPath: assoc.folderPath,
-          worktreeBasePath,
-        });
-        await manager.deleteWorktree(assoc.worktree.worktreePath);
-      } catch (error) {
-        log.error(
-          `Failed to delete worktree ${assoc.worktree.worktreePath}:`,
-          error,
-        );
-      }
+    try {
+      await workspaceRemove(assoc.workspaceName, assoc.repoPath);
+    } catch (error) {
+      log.error(`Failed to delete workspace ${assoc.workspaceName}:`, error);
     }
   }
 

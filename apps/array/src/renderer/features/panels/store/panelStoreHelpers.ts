@@ -1,6 +1,6 @@
 import type { GitFileStatus } from "@/shared/types";
 import { DEFAULT_TAB_IDS } from "../constants/panelConstants";
-import type { SplitDirection, TaskLayout } from "./panelLayoutStore";
+import type { LayoutState, SplitDirection } from "./panelLayoutStore";
 import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";
 
 // Constants
@@ -128,20 +128,20 @@ export function resetPanelIdCounter(): void {
 }
 
 // State update wrapper
-export function updateTaskLayout(
-  state: { taskLayouts: Record<string, TaskLayout> },
-  taskId: string,
-  updater: (layout: TaskLayout) => Partial<TaskLayout>,
-): { taskLayouts: Record<string, TaskLayout> } {
-  const layout = state.taskLayouts[taskId];
+export function updateLayout(
+  state: { layouts: Record<string, LayoutState> },
+  layoutId: string,
+  updater: (layout: LayoutState) => Partial<LayoutState>,
+): { layouts: Record<string, LayoutState> } {
+  const layout = state.layouts[layoutId];
   if (!layout) return state;
 
   const updates = updater(layout);
 
   return {
-    taskLayouts: {
-      ...state.taskLayouts,
-      [taskId]: {
+    layouts: {
+      ...state.layouts,
+      [layoutId]: {
         ...layout,
         ...updates,
       },
@@ -266,10 +266,10 @@ export function getSplitConfig(direction: SplitDirection): SplitConfig {
 
 // Metadata tracking utilities
 export function updateMetadataForTab(
-  layout: TaskLayout,
+  layout: LayoutState,
   tabId: string,
   action: "add" | "remove",
-): Pick<TaskLayout, "openFiles"> {
+): Pick<LayoutState, "openFiles"> {
   const parsed = parseTabId(tabId);
 
   if (parsed.type === "file") {

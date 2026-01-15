@@ -26,9 +26,9 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
 
       getTaskDirectory: (taskId: string, repoKey?: string) => {
         const workspaceStore = useWorkspaceStore.getState();
-        const folderPath = workspaceStore.getFolderPath(taskId);
-        if (folderPath) {
-          return expandTildePath(folderPath);
+        const repoPath = workspaceStore.getRepoPath(taskId);
+        if (repoPath) {
+          return expandTildePath(repoPath);
         }
 
         if (repoKey) {

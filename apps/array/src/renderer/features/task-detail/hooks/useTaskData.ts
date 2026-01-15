@@ -7,7 +7,7 @@ import { useEffect, useMemo } from "react";
 
 interface UseTaskDataParams {
   taskId: string;
-  initialTask: Task;
+  initialTask: Task | null;
 }
 
 export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
@@ -21,9 +21,11 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     [tasks, taskId, initialTask],
   );
 
-  // Initialize repo path for this task
+  // Initialize repo path for this task (only when task is available)
   useEffect(() => {
-    initializeRepoPath(taskId, task);
+    if (task) {
+      initializeRepoPath(taskId, task);
+    }
   }, [initializeRepoPath, taskId, task]);
 
   // Subscribe to specific fields reactively to avoid unnecessary rerenders
@@ -34,7 +36,7 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
     (state) => state.taskStates[taskId]?.repoExists ?? null,
   );
 
-  const repository = getTaskRepository(task);
+  const repository = task ? getTaskRepository(task) : null;
 
   // Use the stored repoPath
   const derivedPath = useMemo(() => {

@@ -1,6 +1,8 @@
+import { useJJMode } from "@hooks/useJJMode";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { Warning } from "@phosphor-icons/react";
+import { GitBranch, Warning } from "@phosphor-icons/react";
 import {
+  Badge,
   Box,
   Button,
   Callout,
@@ -8,6 +10,7 @@ import {
   Code,
   Flex,
   Heading,
+  Spinner,
   Text,
 } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
@@ -27,6 +30,16 @@ export function FolderSettingsView() {
   const folder = folders.find((f) => f.id === folderId);
 
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    branch,
+    isJJMode,
+    isLoading: isModeLoading,
+    enter,
+    exit,
+    isEntering,
+    isExiting,
+  } = useJJMode(folder?.path);
 
   const handleRemoveFolder = async () => {
     if (!folderId) return;
@@ -160,6 +173,80 @@ export function FolderSettingsView() {
                   Root path
                 </Text>
                 <Code size="1">{folder.path}</Code>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
+          <Flex direction="column" gap="3">
+            <Heading size="3">Workspace Mode</Heading>
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex justify="between" align="center">
+                  <Flex align="center" gap="2">
+                    <GitBranch size={16} />
+                    <Text size="2" weight="medium">
+                      Current Mode
+                    </Text>
+                  </Flex>
+                  {isModeLoading ? (
+                    <Spinner size="1" />
+                  ) : (
+                    <Badge color={isJJMode ? "green" : "blue"} size="1">
+                      {isJJMode
+                        ? "jj workspaces"
+                        : `git (${branch || "unknown"})`}
+                    </Badge>
+                  )}
+                </Flex>
+
+                <Flex direction="column" gap="2">
+                  <Text size="1" color="gray">
+                    {isJJMode
+                      ? "Array is managing workspaces with jj. Each task has its own workspace for isolated changes. You can switch to Git mode to use traditional git workflows."
+                      : "You're in Git mode. Switch to jj mode to enable workspace isolation - each task gets its own workspace for parallel development without conflicts."}
+                  </Text>
+                </Flex>
+
+                <Flex gap="2">
+                  {isJJMode ? (
+                    <Button
+                      variant="soft"
+                      size="1"
+                      onClick={exit}
+                      disabled={isExiting}
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      {isExiting ? (
+                        <>
+                          <Spinner size="1" />
+                          Switching...
+                        </>
+                      ) : (
+                        "Switch to Git mode"
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="soft"
+                      color="green"
+                      size="1"
+                      onClick={enter}
+                      disabled={isEntering}
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      {isEntering ? (
+                        <>
+                          <Spinner size="1" />
+                          Switching...
+                        </>
+                      ) : (
+                        "Enable jj workspaces"
+                      )}
+                    </Button>
+                  )}
+                </Flex>
               </Flex>
             </Card>
           </Flex>

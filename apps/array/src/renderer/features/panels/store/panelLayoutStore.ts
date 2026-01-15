@@ -16,8 +16,8 @@ import {
   getLeafPanel,
   getSplitConfig,
   selectNextTabAfterClose,
+  updateLayout,
   updateMetadataForTab,
-  updateTaskLayout,
 } from "./panelStoreHelpers";
 import {
   addTabToPanel,
@@ -35,7 +35,7 @@ function getFileExtension(filePath: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : "";
 }
 
-export interface TaskLayout {
+export interface LayoutState {
   panelTree: PanelNode;
   openFiles: string[];
   draggingTabId: string | null;
@@ -43,66 +43,71 @@ export interface TaskLayout {
   focusedPanelId: string | null;
 }
 
+/** @deprecated Use LayoutState instead */
+export type TaskLayout = LayoutState;
+
 export type SplitDirection = "left" | "right" | "top" | "bottom";
 
 export interface PanelLayoutStore {
-  taskLayouts: Record<string, TaskLayout>;
+  layouts: Record<string, LayoutState>;
 
-  getLayout: (taskId: string) => TaskLayout | null;
-  initializeTask: (
-    taskId: string,
+  getLayout: (layoutId: string) => LayoutState | null;
+  initializeLayout: (
+    layoutId: string,
     terminalLayoutMode?: "split" | "tabbed",
   ) => void;
-  openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
+  initializeCustomLayout: (layoutId: string, panelTree: PanelNode) => void;
+  openFile: (layoutId: string, filePath: string, asPreview?: boolean) => void;
   openDiff: (
-    taskId: string,
+    layoutId: string,
     filePath: string,
     status?: string,
     asPreview?: boolean,
   ) => void;
-  keepTab: (taskId: string, panelId: string, tabId: string) => void;
-  closeTab: (taskId: string, panelId: string, tabId: string) => void;
-  closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
-  closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
-  closeTabsForFile: (taskId: string, filePath: string) => void;
-  closeDiffTabsForFile: (taskId: string, filePath: string) => void;
-  setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
+  keepTab: (layoutId: string, panelId: string, tabId: string) => void;
+  closeTab: (layoutId: string, panelId: string, tabId: string) => void;
+  closeOtherTabs: (layoutId: string, panelId: string, tabId: string) => void;
+  closeTabsToRight: (layoutId: string, panelId: string, tabId: string) => void;
+  closeTabsForFile: (layoutId: string, filePath: string) => void;
+  closeDiffTabsForFile: (layoutId: string, filePath: string) => void;
+  setPreviewDiff: (layoutId: string, filePath: string, status?: string) => void;
+  setActiveTab: (layoutId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
-    taskId: string,
+    layoutId: string,
     tabId: string | null,
     panelId: string | null,
   ) => void;
-  clearDraggingTab: (taskId: string) => void;
+  clearDraggingTab: (layoutId: string) => void;
   reorderTabs: (
-    taskId: string,
+    layoutId: string,
     panelId: string,
     sourceIndex: number,
     targetIndex: number,
   ) => void;
   moveTab: (
-    taskId: string,
+    layoutId: string,
     tabId: string,
     sourcePanelId: string,
     targetPanelId: string,
   ) => void;
   splitPanel: (
-    taskId: string,
+    layoutId: string,
     tabId: string,
     sourcePanelId: string,
     targetPanelId: string,
     direction: SplitDirection,
   ) => void;
-  updateSizes: (taskId: string, groupId: string, sizes: number[]) => void;
+  updateSizes: (layoutId: string, groupId: string, sizes: number[]) => void;
   updateTabMetadata: (
-    taskId: string,
+    layoutId: string,
     tabId: string,
     metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
   ) => void;
-  updateTabLabel: (taskId: string, tabId: string, label: string) => void;
-  setFocusedPanel: (taskId: string, panelId: string) => void;
-  addTerminalTab: (taskId: string, panelId: string) => void;
+  updateTabLabel: (layoutId: string, tabId: string, label: string) => void;
+  setFocusedPanel: (layoutId: string, panelId: string) => void;
+  addTerminalTab: (layoutId: string, panelId: string, cwd?: string) => void;
   addWorkspaceTerminalTab: (
-    taskId: string,
+    layoutId: string,
     sessionId: string,
     command: string,
     scriptType: "init" | "start",
@@ -205,12 +210,12 @@ function createDefaultPanelTree(
 }
 
 function openTab(
-  state: { taskLayouts: Record<string, TaskLayout> },
-  taskId: string,
+  state: { layouts: Record<string, LayoutState> },
+  layoutId: string,
   tabId: string,
   asPreview = true,
-): { taskLayouts: Record<string, TaskLayout> } {
-  return updateTaskLayout(state, taskId, (layout) => {
+): { layouts: Record<string, LayoutState> } {
+  return updateLayout(state, layoutId, (layout) => {
     // Check if tab already exists in tree
     const existingTab = findTabInTree(layout.panelTree, tabId);
 
@@ -269,20 +274,19 @@ function openTab(
 export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
   persist(
     (set, get) => ({
-      taskLayouts: {},
+      layouts: {},
 
-      getLayout: (taskId) => {
-        return get().taskLayouts[taskId] || null;
+      getLayout: (layoutId) => {
+        return get().layouts[layoutId] || null;
       },
 
-      initializeTask: (taskId, terminalLayoutMode = "split") => {
+      initializeLayout: (layoutId, terminalLayoutMode = "split") => {
         set((state) => ({
-          taskLayouts: {
-            ...state.taskLayouts,
-            [taskId]: {
+          layouts: {
+            ...state.layouts,
+            [layoutId]: {
               panelTree: createDefaultPanelTree(terminalLayoutMode),
               openFiles: [],
-              openArtifacts: [],
               draggingTabId: null,
               draggingTabPanelId: null,
               focusedPanelId: DEFAULT_PANEL_IDS.MAIN_PANEL,
@@ -291,20 +295,35 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         }));
       },
 
-      openFile: (taskId, filePath, asPreview = true) => {
+      initializeCustomLayout: (layoutId, panelTree) => {
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [layoutId]: {
+              panelTree,
+              openFiles: [],
+              draggingTabId: null,
+              draggingTabPanelId: null,
+              focusedPanelId: DEFAULT_PANEL_IDS.MAIN_PANEL,
+            },
+          },
+        }));
+      },
+
+      openFile: (layoutId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
-        set((state) => openTab(state, taskId, tabId, asPreview));
+        set((state) => openTab(state, layoutId, tabId, asPreview));
 
         track(ANALYTICS_EVENTS.FILE_OPENED, {
           file_extension: getFileExtension(filePath),
           source: "sidebar",
-          task_id: taskId,
+          task_id: layoutId,
         });
       },
 
-      openDiff: (taskId, filePath, status, asPreview = true) => {
+      openDiff: (layoutId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
-        set((state) => openTab(state, taskId, tabId, asPreview));
+        set((state) => openTab(state, layoutId, tabId, asPreview));
 
         // Track diff viewed
         const changeType =
@@ -316,13 +335,13 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         track(ANALYTICS_EVENTS.FILE_DIFF_VIEWED, {
           file_extension: getFileExtension(filePath),
           change_type: changeType,
-          task_id: taskId,
+          task_id: layoutId,
         });
       },
 
-      keepTab: (taskId, panelId, tabId) => {
+      keepTab: (layoutId, panelId, tabId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -344,9 +363,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      closeTab: (taskId, panelId, tabId) => {
+      closeTab: (layoutId, panelId, tabId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -392,9 +411,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      closeOtherTabs: (taskId, panelId, tabId) => {
+      closeOtherTabs: (layoutId, panelId, tabId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -421,9 +440,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      closeTabsToRight: (taskId, panelId, tabId) => {
+      closeTabsToRight: (layoutId, panelId, tabId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -455,8 +474,8 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      closeTabsForFile: (taskId, filePath) => {
-        const layout = get().taskLayouts[taskId];
+      closeTabsForFile: (layoutId, filePath) => {
+        const layout = get().layouts[layoutId];
         if (!layout) return;
 
         const tabIds = [
@@ -467,13 +486,13 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         for (const tabId of tabIds) {
           const tabLocation = findTabInTree(layout.panelTree, tabId);
           if (tabLocation) {
-            get().closeTab(taskId, tabLocation.panelId, tabId);
+            get().closeTab(layoutId, tabLocation.panelId, tabId);
           }
         }
       },
 
-      closeDiffTabsForFile: (taskId, filePath) => {
-        const layout = get().taskLayouts[taskId];
+      closeDiffTabsForFile: (layoutId, filePath) => {
+        const layout = get().layouts[layoutId];
         if (!layout) return;
 
         const tabIds = getDiffTabIdsForFile(filePath);
@@ -481,14 +500,62 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         for (const tabId of tabIds) {
           const tabLocation = findTabInTree(layout.panelTree, tabId);
           if (tabLocation) {
-            get().closeTab(taskId, tabLocation.panelId, tabId);
+            get().closeTab(layoutId, tabLocation.panelId, tabId);
           }
         }
       },
 
-      setActiveTab: (taskId, panelId, tabId) => {
+      setPreviewDiff: (layoutId, filePath, status) => {
+        const tabId = createDiffTabId(filePath, status);
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
+            const updatePanel = (node: PanelNode): PanelNode => {
+              if (node.type === "leaf" && node.id === "preview-panel") {
+                return {
+                  ...node,
+                  content: {
+                    ...node.content,
+                    tabs: [
+                      {
+                        id: tabId,
+                        label: filePath.split("/").pop() || filePath,
+                        data: {
+                          type: "diff",
+                          relativePath: filePath,
+                          absolutePath: "",
+                          repoPath: "",
+                          status:
+                            (status as
+                              | "modified"
+                              | "added"
+                              | "deleted"
+                              | "renamed"
+                              | "untracked") ?? "modified",
+                        },
+                        closeable: false,
+                        draggable: false,
+                      },
+                    ],
+                    activeTabId: tabId,
+                  },
+                };
+              }
+              if (node.type === "group") {
+                return {
+                  ...node,
+                  children: node.children.map(updatePanel),
+                };
+              }
+              return node;
+            };
+            return { ...layout, panelTree: updatePanel(layout.panelTree) };
+          }),
+        );
+      },
+
+      setActiveTab: (layoutId, panelId, tabId) => {
+        set((state) =>
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -500,27 +567,27 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      setDraggingTab: (taskId, tabId, panelId) => {
+      setDraggingTab: (layoutId, tabId, panelId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, () => ({
+          updateLayout(state, layoutId, () => ({
             draggingTabId: tabId,
             draggingTabPanelId: panelId,
           })),
         );
       },
 
-      clearDraggingTab: (taskId) => {
+      clearDraggingTab: (layoutId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, () => ({
+          updateLayout(state, layoutId, () => ({
             draggingTabId: null,
             draggingTabPanelId: null,
           })),
         );
       },
 
-      reorderTabs: (taskId, panelId, sourceIndex, targetIndex) => {
+      reorderTabs: (layoutId, panelId, sourceIndex, targetIndex) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -546,9 +613,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      moveTab: (taskId, tabId, sourcePanelId, targetPanelId) => {
+      moveTab: (layoutId, tabId, sourcePanelId, targetPanelId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const sourcePanel = getLeafPanel(layout.panelTree, sourcePanelId);
             if (!sourcePanel) return {};
 
@@ -577,9 +644,15 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      splitPanel: (taskId, tabId, sourcePanelId, targetPanelId, direction) => {
+      splitPanel: (
+        layoutId,
+        tabId,
+        sourcePanelId,
+        targetPanelId,
+        direction,
+      ) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const sourcePanel = getLeafPanel(layout.panelTree, sourcePanelId);
             if (!sourcePanel) return {};
 
@@ -646,9 +719,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      updateSizes: (taskId, groupId, sizes) => {
+      updateSizes: (layoutId, groupId, sizes) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               groupId,
@@ -663,9 +736,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      updateTabMetadata: (taskId, tabId, metadata) => {
+      updateTabMetadata: (layoutId, tabId, metadata) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const tabLocation = findTabInTree(layout.panelTree, tabId);
             if (!tabLocation) return {};
 
@@ -694,9 +767,9 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      updateTabLabel: (taskId, tabId, label) => {
+      updateTabLabel: (layoutId, tabId, label) => {
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const tabLocation = findTabInTree(layout.panelTree, tabId);
             if (!tabLocation) return {};
 
@@ -725,18 +798,18 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      setFocusedPanel: (taskId, panelId) => {
+      setFocusedPanel: (layoutId, panelId) => {
         set((state) =>
-          updateTaskLayout(state, taskId, () => ({
+          updateLayout(state, layoutId, () => ({
             focusedPanelId: panelId,
           })),
         );
       },
 
-      addTerminalTab: (taskId, panelId) => {
+      addTerminalTab: (layoutId, panelId, cwd) => {
         const tabId = `shell-${Date.now()}`;
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const updatedTree = updateTreeNode(
               layout.panelTree,
               panelId,
@@ -745,7 +818,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                 return addTabToPanel(panel, {
                   id: tabId,
                   label: "Terminal",
-                  data: { type: "terminal", terminalId: tabId, cwd: "" },
+                  data: { type: "terminal", terminalId: tabId, cwd: cwd ?? "" },
                   component: null,
                   draggable: true,
                   closeable: true,
@@ -758,13 +831,13 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         );
       },
 
-      addWorkspaceTerminalTab: (taskId, sessionId, command, scriptType) => {
+      addWorkspaceTerminalTab: (layoutId, sessionId, command, scriptType) => {
         const tabId = `workspace-terminal-${sessionId}`;
         const label =
           scriptType === "init" ? `Init: ${command}` : `Start: ${command}`;
 
         set((state) =>
-          updateTaskLayout(state, taskId, (layout) => {
+          updateLayout(state, layoutId, (layout) => {
             const existingTab = findTabInTree(layout.panelTree, tabId);
             if (existingTab) {
               const updatedTree = updateTreeNode(
@@ -802,14 +875,14 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       },
 
       clearAllLayouts: () => {
-        set({ taskLayouts: {} });
+        set({ layouts: {} });
       },
     }),
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 8,
-      migrate: () => ({ taskLayouts: {} }),
+      version: 9,
+      migrate: () => ({ layouts: {} }),
     },
   ),
 );

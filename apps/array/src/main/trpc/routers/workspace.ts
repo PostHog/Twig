@@ -44,9 +44,7 @@ export const workspaceRouter = router({
 
   delete: publicProcedure
     .input(deleteWorkspaceInput)
-    .mutation(({ input }) =>
-      getService().deleteWorkspace(input.taskId, input.mainRepoPath),
-    ),
+    .mutation(({ input }) => getService().deleteWorkspace(input.taskId)),
 
   verify: publicProcedure
     .input(verifyWorkspaceInput)
@@ -68,8 +66,8 @@ export const workspaceRouter = router({
     .mutation(({ input }) =>
       getService().runStartScripts(
         input.taskId,
-        input.worktreePath,
-        input.worktreeName,
+        input.workspacePath,
+        input.workspaceName,
       ),
     ),
 

@@ -1,5 +1,6 @@
 import { agentRouter } from "./routers/agent.js";
 import { analyticsRouter } from "./routers/analytics.js";
+import { arrRouter } from "./routers/arr.js";
 import { connectivityRouter } from "./routers/connectivity.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
@@ -23,6 +24,7 @@ import { router } from "./trpc.js";
 export const trpcRouter = router({
   agent: agentRouter,
   analytics: analyticsRouter,
+  arr: arrRouter,
   connectivity: connectivityRouter,
   contextMenu: contextMenuRouter,
   dockBadge: dockBadgeRouter,

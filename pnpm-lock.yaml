@@ -29,6 +29,9 @@ importers:
 
   apps/array:
     dependencies:
+      '@array/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@codemirror/lang-angular':
         specifier: ^0.1.4
         version: 0.1.4

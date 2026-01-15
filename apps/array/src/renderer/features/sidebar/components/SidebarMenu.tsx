@@ -6,12 +6,14 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { memo } from "react";
+import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
+import { memo, useMemo } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HistoryView } from "./HistoryView";
+import { FolderItem } from "./items/FolderItem";
 import { HomeItem } from "./items/HomeItem";
 import { SidebarFooter } from "./SidebarFooter";
 
@@ -21,6 +23,7 @@ function SidebarMenuComponent() {
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const { data: currentUser } = useMeQuery();
   const { data: allTasks = [] } = useTasks();
+  const { folders } = useRegisteredFoldersStore();
 
   const workspaces = useWorkspaceStore.use.workspaces();
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
@@ -35,6 +38,22 @@ function SidebarMenuComponent() {
     activeFilters,
     currentUser,
   });
+
+  // Sort folders alphabetically by name
+  const sortedFolders = useMemo(() => {
+    return [...folders]
+      .filter((f) => f.exists)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [folders]);
+
+  // Get task count per folder from sidebarData
+  const getTaskCountForFolder = (folderId: string): number => {
+    const folderData = sidebarData.folders.find((f) => f.id === folderId);
+    return folderData?.tasks.length ?? 0;
+  };
+
+  // Check if a repo is currently active
+  const activeRepoPath = view.type === "repo-dashboard" ? view.repoPath : null;
 
   const taskMap = new Map<string, Task>();
   for (const task of allTasks) {
@@ -57,8 +76,7 @@ function SidebarMenuComponent() {
     const task = taskMap.get(taskId);
     if (task) {
       const workspace = workspaces[taskId];
-      const effectivePath = workspace?.worktreePath ?? workspace?.folderPath;
-      showContextMenu(task, e, effectivePath ?? undefined);
+      showContextMenu(task, e, workspace?.workspacePath ?? undefined);
     }
   };
 
@@ -67,12 +85,12 @@ function SidebarMenuComponent() {
     if (!task) return;
 
     const workspace = workspaces[taskId];
-    const hasWorktree = !!workspace?.worktreePath;
+    const hasWorkspace = !!workspace?.workspacePath;
 
     await deleteWithConfirm({
       taskId,
       taskTitle: task.title,
-      hasWorktree,
+      hasWorktree: hasWorkspace,
     });
   };
 
@@ -102,6 +120,23 @@ function SidebarMenuComponent() {
               isActive={sidebarData.isHomeActive}
               onClick={handleHomeClick}
             />
+
+            {sortedFolders.length > 0 && (
+              <>
+                <div className="mx-2 my-2 border-gray-6 border-t" />
+                <div className="px-2 py-1 font-medium font-mono text-[10px] text-gray-10 uppercase tracking-wide">
+                  Repositories
+                </div>
+                {sortedFolders.map((folder) => (
+                  <FolderItem
+                    key={folder.id}
+                    path={folder.path}
+                    isActive={activeRepoPath === folder.path}
+                    taskCount={getTaskCountForFolder(folder.id)}
+                  />
+                ))}
+              </>
+            )}
 
             <div className="mx-2 my-2 border-gray-6 border-t" />
 
