@@ -7,6 +7,13 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        cave: {
+          cream: "#f7eddf",
+          charcoal: "#2d2b29",
+        },
+        fire: {
+          glow: "rgba(255, 140, 60, 0.15)",
+        },
         posthog: {
           50: "#fef2f2",
           100: "#fee2e2",

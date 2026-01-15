@@ -1,6 +1,7 @@
 import { resolveBookmarkConflict } from "../bookmark-utils";
 import type { Engine } from "../engine";
 import { ensureBookmark, list, runJJ, status } from "../jj";
+import { parseDiffSummary } from "../jj/diff";
 import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
 import type { Command } from "./types";
@@ -27,7 +28,7 @@ interface SplitOptions {
   engine: Engine;
 }
 
-interface FileInfo {
+export interface FileInfo {
   path: string;
   status: string;
 }
@@ -40,28 +41,18 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 /**
- * Parse diff summary output into file info array.
- */
-function parseDiffSummary(stdout: string): FileInfo[] {
-  return stdout
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const statusChar = line[0];
-      const path = line.slice(2).trim();
-      return { path, status: STATUS_MAP[statusChar] ?? statusChar };
-    });
-}
-
-/**
  * Get the list of files in the parent change that can be split.
  * Returns the parent's files (since split targets @-).
  */
 export async function getSplittableFiles(): Promise<Result<FileInfo[]>> {
   const parentDiffResult = await runJJ(["diff", "-r", "@-", "--summary"]);
   if (!parentDiffResult.ok) return parentDiffResult;
-  return ok(parseDiffSummary(parentDiffResult.value.stdout));
+  return ok(
+    parseDiffSummary(parentDiffResult.value.stdout).map((entry) => ({
+      path: entry.path,
+      status: STATUS_MAP[entry.status] ?? entry.status,
+    })),
+  );
 }
 
 /**

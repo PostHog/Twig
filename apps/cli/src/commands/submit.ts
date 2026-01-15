@@ -1,11 +1,14 @@
 import { isGhInstalled } from "@array/core/auth";
 import { submit as submitCmd } from "@array/core/commands/submit";
+import { submitWorkspace } from "@array/core/commands/workspace-submit";
 import type { ArrContext } from "@array/core/engine";
 import { checkPrerequisites } from "@array/core/init";
+import { listWorkspaces } from "@array/core/jj/workspace";
 import {
   blank,
   cyan,
   dim,
+  formatSuccess,
   green,
   indent,
   message,
@@ -13,10 +16,11 @@ import {
   status,
   yellow,
 } from "../utils/output";
-import { confirm } from "../utils/prompt";
+import { confirm, textInput } from "../utils/prompt";
 import { unwrap } from "../utils/run";
 
 export async function submit(
+  args: string[],
   flags: Record<string, string | boolean>,
   ctx: ArrContext,
 ): Promise<void> {
@@ -32,6 +36,50 @@ export async function submit(
   if (missing.length > 0) {
     printInstallInstructions(missing);
     process.exit(1);
+  }
+
+  // Check if first arg is a workspace name - if so, route to workspace submit
+  const workspaceName = args[0];
+  if (workspaceName) {
+    const workspaces = await listWorkspaces();
+    if (workspaces.ok) {
+      const ws = workspaces.value.find((w) => w.name === workspaceName);
+      if (ws) {
+        // Route to workspace submit
+        const draft = Boolean(flags.draft || flags.d);
+        let msg = (flags.message ?? flags.m) as string | undefined;
+
+        let result = await submitWorkspace(workspaceName, {
+          draft,
+          message: msg,
+        });
+
+        // If missing message, prompt for it
+        if (!result.ok && result.error.code === "MISSING_MESSAGE") {
+          const prompted = await textInput("Commit message");
+          if (!prompted) {
+            message(dim("Cancelled"));
+            return;
+          }
+          msg = prompted;
+          result = await submitWorkspace(workspaceName, {
+            draft,
+            message: msg,
+          });
+        }
+
+        const value = unwrap(result);
+
+        if (value.status === "created") {
+          message(formatSuccess(`Created PR for ${cyan(value.workspace)}`));
+        } else {
+          message(formatSuccess(`Updated PR for ${cyan(value.workspace)}`));
+        }
+        message(`  ${dim("PR:")} ${value.prUrl}`);
+        message(`  ${dim("Branch:")} ${value.bookmark}`);
+        return;
+      }
+    }
   }
 
   const skipConfirm = Boolean(flags.yes || flags.y || flags["no-dry-run"]);

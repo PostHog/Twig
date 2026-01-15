@@ -61,9 +61,46 @@ describe("panelLayoutStore", () => {
       usePanelLayoutStore.getState().initializeTask("task-1");
     });
 
-    it("adds file tab to main panel", () => {
+    it("adds file tab to main panel by default", () => {
       usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
 
+      assertTabCount(getPanelTree("task-1"), "main-panel", 2);
+      assertPanelLayout(getPanelTree("task-1"), [
+        {
+          panelId: "main-panel",
+          expectedTabs: ["logs", "file-src/App.tsx"],
+        },
+      ]);
+    });
+
+    it("opens file in the focused panel", () => {
+      // Focus the terminal panel
+      usePanelLayoutStore
+        .getState()
+        .setFocusedPanel("task-1", "terminal-panel");
+
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+
+      // File should open in terminal-panel (the focused panel), not main-panel
+      assertPanelLayout(getPanelTree("task-1"), [
+        {
+          panelId: "terminal-panel",
+          expectedTabs: ["shell", "file-src/App.tsx"],
+          activeTab: "file-src/App.tsx",
+        },
+      ]);
+      assertTabCount(getPanelTree("task-1"), "main-panel", 1); // Only logs
+    });
+
+    it("falls back to main panel if focused panel does not exist", () => {
+      // Set focus to a non-existent panel
+      usePanelLayoutStore
+        .getState()
+        .setFocusedPanel("task-1", "non-existent-panel");
+
+      usePanelLayoutStore.getState().openFile("task-1", "src/App.tsx");
+
+      // File should fall back to main-panel
       assertTabCount(getPanelTree("task-1"), "main-panel", 2);
       assertPanelLayout(getPanelTree("task-1"), [
         {

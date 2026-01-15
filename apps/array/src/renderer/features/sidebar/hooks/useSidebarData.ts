@@ -10,7 +10,7 @@ import { filtersMatch } from "@lib/filters";
 import { logger } from "@renderer/lib/logger";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RegisteredFolder, Task, Workspace } from "@shared/types";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
   getTaskRepository,
@@ -240,12 +240,15 @@ function buildHistoryData(
     };
   });
 
+  // Filter out pinned tasks - they will be shown in their own section
+  const unpinnedTasks = historyTasks.filter((t) => !pinnedTaskIds.has(t.id));
+
   // Partition into active (unread) and inactive tasks
-  const activeTasks = historyTasks
+  const activeTasks = unpinnedTasks
     .filter((t) => t.isUnread)
     .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
 
-  const inactiveTasks = historyTasks
+  const inactiveTasks = unpinnedTasks
     .filter((t) => !t.isUnread)
     .sort((a, b) => b.createdAt - a.createdAt);
 
@@ -343,139 +346,138 @@ export function useSidebarData({
     syncFolderOrder(folderIds);
   }, [syncFolderOrder, folderIds]);
 
-  // Auto-sync remote tasks to workspaces based on repository matching
-  const ensureWorkspace = useWorkspaceStore((state) => state.ensureWorkspace);
-  const syncingRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const syncTasksToWorkspaces = async () => {
-      for (const task of allTasks) {
-        const taskRepo = getTaskRepository(task);
-        if (!taskRepo) continue;
-
-        const hasWorkspace = !!workspaces[task.id];
-        if (hasWorkspace) continue;
-
-        if (syncingRef.current.has(task.id)) continue;
-
-        const matchingFolder = folders.find(
-          (f) => f.repository?.toLowerCase() === taskRepo.toLowerCase(),
-        );
-        if (!matchingFolder) continue;
-
-        syncingRef.current.add(task.id);
-        log.info("Auto-syncing task to folder", {
-          taskId: task.id,
-          taskRepo,
-          folderId: matchingFolder.id,
-        });
-
-        try {
-          await ensureWorkspace(task.id, matchingFolder.path, "cloud");
-        } catch (err) {
-          log.error("Failed to auto-sync task", {
-            taskId: task.id,
-            error: err,
-          });
-        } finally {
-          syncingRef.current.delete(task.id);
-        }
-      }
-    };
-
-    if (allTasks.length > 0 && folders.length > 0) {
-      syncTasksToWorkspaces();
-    }
-  }, [allTasks, folders, workspaces, ensureWorkspace]);
-
-  // Sort folders by persisted order
-  const sortedFolders = sortFoldersByOrder(folders, folderOrder);
-  const tasksByFolder = groupTasksByFolder(allTasks, folders, workspaces);
-
   const activeTaskId =
     activeView.type === "task-detail" && activeView.data
       ? activeView.data.id
       : null;
 
-  const getSessionForTask = (taskId: string): AgentSession | undefined => {
-    return Object.values(sessions).find((s) => s.taskId === taskId);
-  };
-
-  const folderData: FolderData[] = sortedFolders.map((folder) => {
-    const folderTasks = tasksByFolder.get(folder.id) || [];
-
-    const tasksWithActivity = folderTasks.map((task) => {
-      const session = getSessionForTask(task.id);
-      // Use max of task.updated_at and local activity timestamp for accurate ordering
-      const apiUpdatedAt = new Date(task.updated_at).getTime();
-      const localActivity = localActivityAt[task.id];
-      const lastActivityAt = localActivity
-        ? Math.max(apiUpdatedAt, localActivity)
-        : apiUpdatedAt;
-      const isPinned = pinnedTaskIds.has(task.id);
-      return {
-        task,
-        lastActivityAt,
-        isGenerating: session?.isPromptPending ?? false,
-        isPinned,
-      };
-    });
-
-    // Sort by pinned first, then by most recent activity
-    tasksWithActivity.sort((a, b) => {
-      // Pinned tasks come first
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      // Then sort by most recent activity
-      return b.lastActivityAt - a.lastActivityAt;
-    });
-
-    return {
-      id: folder.id,
-      name: folder.name,
-      path: folder.path,
-      tasks: tasksWithActivity.map(
-        ({ task, lastActivityAt, isGenerating, isPinned }) => {
-          const taskLastViewedAt = lastViewedAt[task.id];
-          const isCurrentlyViewing = activeTaskId === task.id;
-          // Only show unread if: user has viewed it before AND there's new activity since
-          const isUnread =
-            !isCurrentlyViewing &&
-            taskLastViewedAt !== undefined &&
-            lastActivityAt > taskLastViewedAt;
-
-          return {
-            id: task.id,
-            title: task.title,
-            lastActivityAt,
-            isGenerating,
-            isUnread,
-            isPinned,
-          };
-        },
-      ),
-    };
-  });
-
-  const historyData = buildHistoryData(
-    allTasks,
-    workspaces,
-    folders,
-    sessions,
-    lastViewedAt,
-    localActivityAt,
-    pinnedTaskIds,
-    activeTaskId,
-    historyVisibleCount,
+  // Memoize sorted folders to maintain stable reference
+  const sortedFolders = useMemo(
+    () => sortFoldersByOrder(folders, folderOrder),
+    [folders, folderOrder],
   );
 
-  const pinnedData = buildPinnedData(
-    allTasks,
+  // Memoize tasks grouped by folder to maintain stable reference
+  const tasksByFolder = useMemo(
+    () => groupTasksByFolder(allTasks, folders, workspaces),
+    [allTasks, folders, workspaces],
+  );
+
+  // Memoize folder data to prevent unnecessary re-renders in consumers
+  const folderData: FolderData[] = useMemo(() => {
+    const getSessionForTask = (taskId: string): AgentSession | undefined => {
+      return Object.values(sessions).find((s) => s.taskId === taskId);
+    };
+
+    return sortedFolders.map((folder) => {
+      const folderTasks = tasksByFolder.get(folder.id) || [];
+
+      const tasksWithActivity = folderTasks.map((task) => {
+        const session = getSessionForTask(task.id);
+        // Use max of task.updated_at and local activity timestamp for accurate ordering
+        const apiUpdatedAt = new Date(task.updated_at).getTime();
+        const localActivity = localActivityAt[task.id];
+        const lastActivityAt = localActivity
+          ? Math.max(apiUpdatedAt, localActivity)
+          : apiUpdatedAt;
+        const isPinned = pinnedTaskIds.has(task.id);
+        return {
+          task,
+          lastActivityAt,
+          isGenerating: session?.isPromptPending ?? false,
+          isPinned,
+        };
+      });
+
+      // Sort by pinned first, then by most recent activity
+      tasksWithActivity.sort((a, b) => {
+        // Pinned tasks come first
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        // Then sort by most recent activity
+        return b.lastActivityAt - a.lastActivityAt;
+      });
+
+      return {
+        id: folder.id,
+        name: folder.name,
+        path: folder.path,
+        tasks: tasksWithActivity.map(
+          ({ task, lastActivityAt, isGenerating, isPinned }) => {
+            const taskLastViewedAt = lastViewedAt[task.id];
+            const isCurrentlyViewing = activeTaskId === task.id;
+            // Only show unread if: user has viewed it before AND there's new activity since
+            const isUnread =
+              !isCurrentlyViewing &&
+              taskLastViewedAt !== undefined &&
+              lastActivityAt > taskLastViewedAt;
+
+            return {
+              id: task.id,
+              title: task.title,
+              lastActivityAt,
+              isGenerating,
+              isUnread,
+              isPinned,
+            };
+          },
+        ),
+      };
+    });
+  }, [
+    sortedFolders,
+    tasksByFolder,
     sessions,
-    lastViewedAt,
     localActivityAt,
     pinnedTaskIds,
+    lastViewedAt,
     activeTaskId,
+  ]);
+
+  const historyData = useMemo(
+    () =>
+      buildHistoryData(
+        allTasks,
+        workspaces,
+        folders,
+        sessions,
+        lastViewedAt,
+        localActivityAt,
+        pinnedTaskIds,
+        activeTaskId,
+        historyVisibleCount,
+      ),
+    [
+      allTasks,
+      workspaces,
+      folders,
+      sessions,
+      lastViewedAt,
+      localActivityAt,
+      pinnedTaskIds,
+      activeTaskId,
+      historyVisibleCount,
+    ],
+  );
+
+  const pinnedData = useMemo(
+    () =>
+      buildPinnedData(
+        allTasks,
+        sessions,
+        lastViewedAt,
+        localActivityAt,
+        pinnedTaskIds,
+        activeTaskId,
+      ),
+    [
+      allTasks,
+      sessions,
+      lastViewedAt,
+      localActivityAt,
+      pinnedTaskIds,
+      activeTaskId,
+    ],
   );
 
   return {

@@ -358,6 +358,10 @@ This PR implements the changes described in the task.`;
     }
   }
 
+  async cleanup(): Promise<void> {
+    await this.acpConnection?.cleanup();
+  }
+
   getTaskExecutionStatus(taskId: string): string | null {
     // Find the execution for this task
     for (const execution of this.taskManager.executionStates.values()) {

@@ -23,6 +23,7 @@ export type AcpConnectionConfig = {
 export type InProcessAcpConnection = {
   agentConnection: AgentSideConnection;
   clientStreams: StreamPair;
+  cleanup: () => Promise<void>;
 };
 
 /**
@@ -79,10 +80,12 @@ export function createAcpConnection(
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
-  // Create the Claude agent
+  // Create the Claude agent - capture reference for cleanup
+  let claudeAgent: ClaudeAcpAgent | null = null;
   const agentConnection = new AgentSideConnection((client) => {
     logger.info("Creating Claude agent");
-    return new ClaudeAcpAgent(client, sessionStore);
+    claudeAgent = new ClaudeAcpAgent(client, sessionStore);
+    return claudeAgent;
   }, agentStream);
 
   return {
@@ -90,6 +93,27 @@ export function createAcpConnection(
     clientStreams: {
       readable: streams.client.readable,
       writable: clientWritable,
+    },
+    cleanup: async () => {
+      logger.info("Cleaning up ACP connection");
+
+      // First close the agent sessions (aborts any running queries)
+      if (claudeAgent) {
+        claudeAgent.closeAllSessions();
+      }
+
+      // Then close the streams to properly terminate the ACP connection
+      // This signals the connection to close and cleanup
+      try {
+        await streams.client.writable.close();
+      } catch {
+        // Stream may already be closed
+      }
+      try {
+        await streams.agent.writable.close();
+      } catch {
+        // Stream may already be closed
+      }
     },
   };
 }

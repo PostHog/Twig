@@ -218,6 +218,7 @@ type Session = {
   sdkSessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;
+  abortController: AbortController;
 };
 
 type BackgroundTerminal =
@@ -300,11 +301,25 @@ export class ClaudeAcpAgent implements Agent {
     this.sessionStore = sessionStore;
   }
 
+  closeAllSessions(): void {
+    for (const [sessionId, session] of Object.entries(this.sessions)) {
+      try {
+        // Abort the session's AbortController - this signals the SDK to terminate the subprocess
+        session.abortController.abort();
+        this.logger.info("Aborted session", { sessionId });
+      } catch (err) {
+        this.logger.warn("Failed to abort session", { sessionId, error: err });
+      }
+    }
+    this.sessions = {};
+  }
+
   createSession(
     sessionId: string,
     q: Query,
     input: Pushable<SDKUserMessage>,
     permissionMode: PermissionMode,
+    abortController: AbortController,
   ): Session {
     const session: Session = {
       query: q,
@@ -312,6 +327,7 @@ export class ClaudeAcpAgent implements Agent {
       cancelled: false,
       permissionMode,
       notificationHistory: [],
+      abortController,
     };
     this.sessions[sessionId] = session;
     return session;
@@ -589,11 +605,13 @@ export class ClaudeAcpAgent implements Agent {
       options.disallowedTools = disallowedTools;
     }
 
-    // Handle abort controller from meta options
-    const abortController = userProvidedOptions?.abortController;
-    if (abortController?.signal.aborted) {
+    // Create or use provided abort controller - we need this for cleanup
+    const sessionAbortController =
+      userProvidedOptions?.abortController ?? new AbortController();
+    if (sessionAbortController.signal.aborted) {
       throw new Error("Cancelled");
     }
+    options.abortController = sessionAbortController;
 
     // Clear statsig cache before creating query to avoid input_examples bug
     clearStatsigCache();
@@ -603,7 +621,13 @@ export class ClaudeAcpAgent implements Agent {
       options,
     });
 
-    this.createSession(sessionId, q, input, ourPermissionMode);
+    this.createSession(
+      sessionId,
+      q,
+      input,
+      ourPermissionMode,
+      sessionAbortController,
+    );
 
     // Register for S3 persistence if config provided
     const persistence = params._meta?.persistence as
@@ -1081,6 +1105,7 @@ export class ClaudeAcpAgent implements Agent {
             response.outcome.optionId === "acceptEdits")
         ) {
           session.permissionMode = response.outcome.optionId;
+          await session.query.setPermissionMode(response.outcome.optionId);
           await this.client.sessionUpdate({
             sessionId,
             update: {
@@ -1515,6 +1540,10 @@ export class ClaudeAcpAgent implements Agent {
         },
       };
 
+      // Create abort controller for cleanup
+      const sessionAbortController = new AbortController();
+      options.abortController = sessionAbortController;
+
       // Clear statsig cache before creating query to avoid input_examples bug
       clearStatsigCache();
 
@@ -1530,6 +1559,7 @@ export class ClaudeAcpAgent implements Agent {
         q,
         input,
         permissionMode,
+        sessionAbortController,
       );
 
       // Store SDK session ID if resuming

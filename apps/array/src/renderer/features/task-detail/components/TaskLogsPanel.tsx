@@ -8,15 +8,18 @@ import {
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import {
   selectWorktreePath,
   useWorkspaceStore,
 } from "@features/workspace/stores/workspaceStore";
+import { useConnectivity } from "@hooks/useConnectivity";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
 
 const log = logger.scope("task-logs-panel");
@@ -32,13 +35,18 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const session = useSessionForTask(taskId);
-  const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
+  const { connectToTask, sendPrompt, cancelPrompt, clearSessionError } =
+    useSessionActions();
+  const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
   const requestFocus = useDraftStore((s) => s.actions.requestFocus);
+  const { isOnline } = useConnectivity();
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
+  const hasError = session?.status === "error";
+  const errorMessage = session?.errorMessage;
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
@@ -53,8 +61,14 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
+    if (!isOnline) return;
 
-    if (session?.status === "connected" || session?.status === "connecting") {
+    // Don't reconnect if already connected, connecting, or in error state
+    if (
+      session?.status === "connected" ||
+      session?.status === "connecting" ||
+      session?.status === "error"
+    ) {
       return;
     }
 
@@ -82,7 +96,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     }).finally(() => {
       isConnecting.current = false;
     });
-  }, [task, repoPath, session, connectToTask, markActivity]);
+  }, [task, repoPath, session, connectToTask, markActivity, isOnline]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -108,6 +122,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           trpcVanilla.dockBadge.show.mutate();
         }
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to send message";
+        toast.error(message);
         log.error("Failed to send prompt", error);
       }
     },
@@ -121,6 +138,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   }, [taskId, cancelPrompt, requestFocus]);
 
   const { appendUserShellExecute } = useSessionActions();
+
+  const handleRetry = useCallback(() => {
+    if (!repoPath) return;
+    clearSessionError(taskId);
+    connectToTask({ task, repoPath });
+  }, [taskId, repoPath, task, clearSessionError, connectToTask]);
+
+  const handleDelete = useCallback(() => {
+    const hasWorktree = !!worktreePath;
+    deleteWithConfirm({
+      taskId,
+      taskTitle: task.title ?? task.description ?? "Untitled",
+      hasWorktree,
+    });
+  }, [taskId, task, worktreePath, deleteWithConfirm]);
 
   const handleBashCommand = useCallback(
     async (command: string) => {
@@ -152,6 +184,10 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
+          hasError={hasError}
+          errorMessage={errorMessage}
+          onRetry={handleRetry}
+          onDelete={handleDelete}
         />
       </Box>
     </BackgroundWrapper>

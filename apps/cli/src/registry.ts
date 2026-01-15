@@ -22,15 +22,19 @@ import { untrackCommand } from "@array/core/commands/untrack";
 import { upCommand } from "@array/core/commands/up";
 import type { ContextLevel } from "@array/core/context";
 import type { ArrContext } from "@array/core/engine";
+import { assign, unassigned } from "./commands/assign";
 import { auth, meta as authMeta } from "./commands/auth";
 import { bottom } from "./commands/bottom";
 import { checkout } from "./commands/checkout";
 import { ci, meta as ciMeta } from "./commands/ci";
 import { config, meta as configMeta } from "./commands/config";
 import { create } from "./commands/create";
+import { daemon } from "./commands/daemon";
 import { deleteChange } from "./commands/delete";
 import { down } from "./commands/down";
-import { exit, meta as exitMeta } from "./commands/exit";
+import { run as enter, meta as enterMeta } from "./commands/enter";
+import { run as exit, meta as exitMeta } from "./commands/exit";
+import { focus } from "./commands/focus";
 import { get } from "./commands/get";
 import { init, meta as initMeta } from "./commands/init";
 import { log } from "./commands/log";
@@ -49,6 +53,7 @@ import { trunk } from "./commands/trunk";
 import { undo } from "./commands/undo";
 import { untrack } from "./commands/untrack";
 import { up } from "./commands/up";
+import { workspace } from "./commands/workspace";
 import type { ParsedCommand } from "./utils/args";
 
 export type { CommandMeta, CommandMeta as CommandInfo, CommandCategory };
@@ -86,6 +91,44 @@ const logMeta: CommandMeta = {
   core: true,
 };
 
+const workspaceMeta: CommandMeta = {
+  name: "workspace",
+  args: "<add|remove|list|status|submit> [name]",
+  description: "Manage agent workspaces",
+  aliases: ["ws"],
+  category: "management",
+  core: true,
+};
+
+const focusMeta: CommandMeta = {
+  name: "focus",
+  args: "[add|remove|only|all|none|resolve] [workspace...]",
+  description: "Manage live focus of workspace changes",
+  category: "workflow",
+  core: true,
+};
+
+const daemonMeta: CommandMeta = {
+  name: "daemon",
+  args: "<start|stop|status>",
+  description: "Manage workspace sync daemon",
+  category: "management",
+};
+
+const assignMeta: CommandMeta = {
+  name: "assign",
+  args: "<file...> <workspace> | <file...> --new <name>",
+  description: "Move unassigned files to a workspace",
+  category: "workflow",
+};
+
+const unassignedMeta: CommandMeta = {
+  name: "unassigned",
+  args: "<list>",
+  description: "Manage unassigned user edits",
+  category: "info",
+};
+
 export const COMMANDS = {
   auth: authMeta,
   init: initMeta,
@@ -111,11 +154,17 @@ export const COMMANDS = {
   squash: squashCommand.meta,
   merge: mergeCommand.meta,
   undo: undoCommand.meta,
+  enter: enterMeta,
   exit: exitMeta,
   ci: ciMeta,
   config: configMeta,
   help: helpMeta,
   version: versionMeta,
+  workspace: workspaceMeta,
+  focus: focusMeta,
+  daemon: daemonMeta,
+  assign: assignMeta,
+  unassigned: unassignedMeta,
 } as const;
 
 export const HANDLERS: Record<string, CommandHandler> = {
@@ -124,7 +173,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   config: () => config(),
   status: (p) => status({ debug: !!p.flags.debug }),
   create: (p, ctx) => create(p.args.join(" "), ctx!),
-  submit: (p, ctx) => submit(p.flags, ctx!),
+  submit: (p, ctx) => submit(p.args, p.flags, ctx!),
   get: (p, ctx) => get(ctx!, p.args[0]),
   track: (p, ctx) => track(p.args[0], ctx!),
   untrack: (p, ctx) =>
@@ -151,8 +200,14 @@ export const HANDLERS: Record<string, CommandHandler> = {
   squash: (p, ctx) => squash(p.flags, ctx!),
   merge: (p, ctx) => merge(p.flags, ctx!),
   undo: () => undo(),
+  enter: () => enter(),
   exit: () => exit(),
   ci: () => ci(),
+  workspace: (p) => workspace(p.args[0], p.args.slice(1)),
+  focus: (p) => focus(p.args[0], p.args.slice(1)),
+  daemon: (p) => daemon(p.args[0]),
+  assign: (p) => assign(p.args),
+  unassigned: (p) => unassigned(p.args[0], p.args.slice(1)),
 };
 
 type CommandName = keyof typeof COMMANDS;
