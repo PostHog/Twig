@@ -1,4 +1,3 @@
-import { CursorGlow } from "@components/CursorGlow";
 import { LoginTransition } from "@components/LoginTransition";
 import { MainLayout } from "@components/MainLayout";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
@@ -67,7 +66,6 @@ function App() {
 
   return (
     <>
-      <CursorGlow />
       <AnimatePresence mode="wait">
         {!isAuthenticated ? (
           <motion.div

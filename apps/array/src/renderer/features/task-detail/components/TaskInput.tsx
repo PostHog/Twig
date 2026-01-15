@@ -1,3 +1,4 @@
+import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
@@ -35,6 +36,7 @@ export function TaskInput() {
   const { lastUsedLocalWorkspaceMode } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
@@ -81,89 +83,100 @@ export function TaskInput() {
   });
 
   return (
-    <Flex
-      align="center"
-      justify="center"
-      height="100%"
-      style={{ position: "relative" }}
+    <div
+      ref={containerRef}
+      style={{
+        position: "relative",
+        height: "100%",
+        width: "100%",
+        overflow: "hidden",
+      }}
     >
-      <svg
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          width: "100%",
-          height: "100.333%",
-          pointerEvents: "none",
-          opacity: 0.4,
-          maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to top, black 0%, transparent 100%)",
-        }}
-      >
-        <defs>
-          <pattern
-            id="dot-pattern"
-            patternUnits="userSpaceOnUse"
-            width="8"
-            height="8"
-          >
-            <circle cx="0" cy="0" r="1" fill={DOT_FILL} />
-            <circle cx="0" cy="8" r="1" fill={DOT_FILL} />
-            <circle cx="8" cy="8" r="1" fill={DOT_FILL} />
-            <circle cx="8" cy="0" r="1" fill={DOT_FILL} />
-            <circle cx="4" cy="4" r="1" fill={DOT_FILL} />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#dot-pattern)" />
-      </svg>
+      <TorchGlow containerRef={containerRef} />
       <Flex
-        direction="column"
-        gap="4"
-        style={{
-          fontFamily: "monospace",
-          width: "100%",
-          maxWidth: "600px",
-          position: "relative",
-          zIndex: 1,
-        }}
+        align="center"
+        justify="center"
+        height="100%"
+        style={{ position: "relative" }}
       >
-        <Flex gap="2" align="center">
-          <FolderPicker
-            value={selectedDirectory}
-            onChange={handleDirectoryChange}
-            placeholder="Select working directory..."
-            size="1"
-          />
-          {selectedDirectory && (
-            <BranchSelect
-              value={selectedBranch}
-              onChange={setSelectedBranch}
-              directoryPath={selectedDirectory}
-              runMode={runMode}
+        <svg
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            width: "100%",
+            height: "100.333%",
+            pointerEvents: "none",
+            opacity: 0.4,
+            maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to top, black 0%, transparent 100%)",
+          }}
+        >
+          <defs>
+            <pattern
+              id="dot-pattern"
+              patternUnits="userSpaceOnUse"
+              width="8"
+              height="8"
+            >
+              <circle cx="0" cy="0" r="1" fill={DOT_FILL} />
+              <circle cx="0" cy="8" r="1" fill={DOT_FILL} />
+              <circle cx="8" cy="8" r="1" fill={DOT_FILL} />
+              <circle cx="8" cy="0" r="1" fill={DOT_FILL} />
+              <circle cx="4" cy="4" r="1" fill={DOT_FILL} />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#dot-pattern)" />
+        </svg>
+        <Flex
+          direction="column"
+          gap="4"
+          style={{
+            fontFamily: "monospace",
+            width: "100%",
+            maxWidth: "600px",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <Flex gap="2" align="center">
+            <FolderPicker
+              value={selectedDirectory}
+              onChange={handleDirectoryChange}
+              placeholder="Select working directory..."
+              size="1"
             />
-          )}
+            {selectedDirectory && (
+              <BranchSelect
+                value={selectedBranch}
+                onChange={setSelectedBranch}
+                directoryPath={selectedDirectory}
+                runMode={runMode}
+              />
+            )}
+          </Flex>
+
+          <TaskInputEditor
+            ref={editorRef}
+            sessionId="task-input"
+            repoPath={selectedDirectory}
+            isCreatingTask={isCreatingTask}
+            runMode={runMode}
+            localWorkspaceMode={localWorkspaceMode}
+            onLocalWorkspaceModeChange={setLocalWorkspaceMode}
+            canSubmit={canSubmit}
+            onSubmit={handleSubmit}
+            hasDirectory={!!selectedDirectory}
+            onEmptyChange={setEditorIsEmpty}
+            executionMode={executionMode}
+            onModeChange={handleModeChange}
+          />
+
+          <SuggestedTasks editorRef={editorRef} />
         </Flex>
-
-        <TaskInputEditor
-          ref={editorRef}
-          sessionId="task-input"
-          repoPath={selectedDirectory}
-          isCreatingTask={isCreatingTask}
-          runMode={runMode}
-          localWorkspaceMode={localWorkspaceMode}
-          onLocalWorkspaceModeChange={setLocalWorkspaceMode}
-          canSubmit={canSubmit}
-          onSubmit={handleSubmit}
-          hasDirectory={!!selectedDirectory}
-          onEmptyChange={setEditorIsEmpty}
-          executionMode={executionMode}
-          onModeChange={handleModeChange}
-        />
-
-        <SuggestedTasks editorRef={editorRef} />
       </Flex>
-    </Flex>
+    </div>
   );
 }
