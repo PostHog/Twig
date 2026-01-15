@@ -10,7 +10,11 @@ import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthStore } from "@/features/auth";
-import { posthog, useScreenTracking } from "@/lib/posthog";
+import {
+  POSTHOG_API_KEY,
+  POSTHOG_OPTIONS,
+  useScreenTracking,
+} from "@/lib/posthog";
 import { queryClient } from "@/lib/queryClient";
 import { darkTheme, lightTheme, useThemeColors } from "@/lib/theme";
 
@@ -95,7 +99,8 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <KeyboardProvider>
         <PostHogProvider
-          client={posthog}
+          apiKey={POSTHOG_API_KEY}
+          options={POSTHOG_OPTIONS}
           autocapture={{
             captureTouches: true,
             captureScreens: false, // We handle screen tracking manually for expo-router

@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { logger } from "@/lib/logger";
-import { posthog } from "@/lib/posthog";
 import { queryClient } from "@/lib/queryClient";
 import {
   getCloudUrlFromRegion,
@@ -218,8 +217,6 @@ export const useAuthStore = create<AuthState>()(
 
         // Clear React Query cache to prevent data leakage between sessions
         queryClient.clear();
-
-        posthog.reset();
 
         set({
           oauthAccessToken: null,

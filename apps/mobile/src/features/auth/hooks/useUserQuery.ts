@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { posthog } from "@/lib/posthog";
 import { useAuthStore } from "../stores/authStore";
 
 export interface UserData {
@@ -38,13 +37,6 @@ export function useUserQuery() {
       }
 
       const data: UserData = await response.json();
-
-      posthog.identify(data.uuid, {
-        email: data.email,
-        first_name: data.first_name ?? "",
-        last_name: data.last_name ?? "",
-      });
-
       return data;
     },
     enabled: !!cloudRegion && !!oauthAccessToken,
