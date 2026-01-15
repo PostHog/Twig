@@ -5,6 +5,7 @@ import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
+import { sleepWithBackoff } from "@shared/utils/backoff";
 import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
@@ -176,11 +177,12 @@ export const useAuthStore = create<AuthState>()(
             for (let attempt = 0; attempt < REFRESH_MAX_RETRIES; attempt++) {
               try {
                 if (attempt > 0) {
-                  const delay = REFRESH_INITIAL_DELAY_MS * 2 ** (attempt - 1);
                   log.debug(
-                    `Retrying token refresh (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES}) after ${delay}ms`,
+                    `Retrying token refresh (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES})`,
                   );
-                  await new Promise((resolve) => setTimeout(resolve, delay));
+                  await sleepWithBackoff(attempt - 1, {
+                    initialDelayMs: REFRESH_INITIAL_DELAY_MS,
+                  });
                 }
 
                 const result = await trpcVanilla.oauth.refreshToken.mutate({

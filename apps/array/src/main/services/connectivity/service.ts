@@ -1,5 +1,6 @@
 import { net } from "electron";
 import { injectable, postConstruct } from "inversify";
+import { getBackoffDelay } from "../../../shared/utils/backoff.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import {
@@ -19,7 +20,7 @@ const ONLINE_POLL_INTERVAL_MS = 3_000;
 export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
   private isOnline = false;
   private pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  private currentPollInterval = MIN_POLL_INTERVAL_MS;
+  private offlinePollAttempt = 0;
 
   @postConstruct()
   init(): void {
@@ -45,7 +46,7 @@ export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
     log.info("Connectivity status changed", { isOnline: online });
     this.emit(ConnectivityEvent.StatusChange, { isOnline: online });
 
-    this.currentPollInterval = MIN_POLL_INTERVAL_MS;
+    this.offlinePollAttempt = 0;
   }
 
   private async checkConnectivity(): Promise<void> {
@@ -73,7 +74,7 @@ export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
   private startPolling(): void {
     if (this.pollTimeoutId) return;
 
-    this.currentPollInterval = MIN_POLL_INTERVAL_MS;
+    this.offlinePollAttempt = 0;
     this.schedulePoll();
   }
 
@@ -82,7 +83,11 @@ export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
     // when offline: poll more frequently with backoff to detect recovery
     const interval = this.isOnline
       ? ONLINE_POLL_INTERVAL_MS
-      : this.currentPollInterval;
+      : getBackoffDelay(this.offlinePollAttempt, {
+          initialDelayMs: MIN_POLL_INTERVAL_MS,
+          maxDelayMs: MAX_POLL_INTERVAL_MS,
+          multiplier: 1.5,
+        });
 
     this.pollTimeoutId = setTimeout(async () => {
       this.pollTimeoutId = null;
@@ -91,10 +96,7 @@ export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
       await this.checkConnectivity();
 
       if (!this.isOnline && wasOffline) {
-        this.currentPollInterval = Math.min(
-          this.currentPollInterval * 1.5,
-          MAX_POLL_INTERVAL_MS,
-        );
+        this.offlinePollAttempt++;
       }
 
       this.schedulePoll();
