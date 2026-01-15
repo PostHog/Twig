@@ -73,7 +73,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       sessionId,
       taskId,
       placeholder,
-      disabled,
+      disabled: isDisabled,
+      isLoading,
       isCloud,
       autoFocus,
       context: { taskId, repoPath },
@@ -138,7 +139,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         <Flex justify="between" align="center">
           <Flex gap="2" align="center">
             <EditorToolbar
-              disabled={disabled}
+              disabled={isDisabled}
               taskId={taskId}
               onInsertChip={insertChip}
               onAttachFiles={onAttachFiles}
