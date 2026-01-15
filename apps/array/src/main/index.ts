@@ -377,3 +377,33 @@ app.on("activate", () => {
     createWindow();
   }
 });
+
+// Handle process signals to ensure clean shutdown
+const handleShutdownSignal = async (_signal: string) => {
+  try {
+    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
+    await agentService.cleanupAll();
+  } catch (_err) {}
+  process.exit(0);
+};
+
+process.on("SIGTERM", () => handleShutdownSignal("SIGTERM"));
+process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
+process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
+
+// Handle uncaught exceptions to attempt cleanup before crash
+process.on("uncaughtException", async (_error) => {
+  try {
+    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
+    await agentService.cleanupAll();
+  } catch (_cleanupErr) {}
+  process.exit(1);
+});
+
+process.on("unhandledRejection", async (_reason) => {
+  try {
+    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
+    await agentService.cleanupAll();
+  } catch (_cleanupErr) {}
+  process.exit(1);
+});

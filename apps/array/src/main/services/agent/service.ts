@@ -551,19 +551,40 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   async cleanupAll(): Promise<void> {
+    log.info("Cleaning up all agent sessions", {
+      sessionCount: this.sessions.size,
+    });
+
     for (const [taskRunId, session] of this.sessions) {
+      // Step 1: Send ACP cancel notification for any ongoing prompt turns
+      try {
+        if (!session.connection.signal.aborted) {
+          await session.connection.cancel({ sessionId: taskRunId });
+          log.info("Sent ACP cancel for session", { taskRunId });
+        }
+      } catch (err) {
+        log.warn("Failed to send ACP cancel", { taskRunId, error: err });
+      }
+
+      // Step 2: Cancel via agent (triggers AbortController)
       try {
         session.agent.cancelTask(session.taskId);
       } catch (err) {
-        log.warn("Failed to cancel session during cleanup", {
-          taskRunId,
-          error: err,
-        });
+        log.warn("Failed to cancel task", { taskRunId, error: err });
       }
+
+      // Step 3: Cleanup agent connection (closes streams, aborts subprocess)
+      try {
+        await session.agent.cleanup();
+      } catch (err) {
+        log.warn("Failed to cleanup agent", { taskRunId, error: err });
+      }
+
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
     }
 
     this.sessions.clear();
+    log.info("All agent sessions cleaned up");
   }
 
   private setupEnvironment(
