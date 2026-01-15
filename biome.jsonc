@@ -60,7 +60,10 @@
   "overrides": [
     {
       // Files using unknownAtRules
-      "includes": ["apps/array/src/renderer/styles/globals.css"],
+      "includes": [
+        "apps/array/src/renderer/styles/globals.css",
+        "apps/mobile/global.css"
+      ],
       "linter": {
         "enabled": false
       }
