@@ -8,13 +8,7 @@ export async function push(
 ): Promise<Result<void>> {
   const remote = options?.remote ?? "origin";
 
-  // Track the bookmark on the remote if specified (required for new bookmarks)
-  if (options?.bookmark) {
-    // Track ignores already-tracked bookmarks, so safe to call always
-    await runJJ(["bookmark", "track", `${options.bookmark}@${remote}`], cwd);
-  }
-
-  const args = ["git", "push"];
+  const args = ["git", "push", "--allow-new"];
   if (options?.remote) {
     args.push("--remote", options.remote);
   }
@@ -22,5 +16,13 @@ export async function push(
     args.push("--bookmark", options.bookmark);
   }
 
-  return runJJVoid(args, cwd);
+  const result = await runJJVoid(args, cwd);
+  if (!result.ok) return result;
+
+  // After pushing, set up tracking for the bookmark
+  if (options?.bookmark) {
+    await runJJ(["bookmark", "track", `${options.bookmark}@${remote}`], cwd);
+  }
+
+  return result;
 }

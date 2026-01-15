@@ -461,6 +461,9 @@ importers:
       '@octokit/rest':
         specifier: ^22.0.1
         version: 22.0.1
+      '@parcel/watcher':
+        specifier: ^2.5.1
+        version: 2.5.1
       zod:
         specifier: ^3.24.1
         version: 3.25.76
