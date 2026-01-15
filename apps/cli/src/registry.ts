@@ -32,7 +32,8 @@ import { create } from "./commands/create";
 import { daemon } from "./commands/daemon";
 import { deleteChange } from "./commands/delete";
 import { down } from "./commands/down";
-import { exit, meta as exitMeta } from "./commands/exit";
+import { run as enter, meta as enterMeta } from "./commands/enter";
+import { run as exit, meta as exitMeta } from "./commands/exit";
 import { focus } from "./commands/focus";
 import { get } from "./commands/get";
 import { init, meta as initMeta } from "./commands/init";
@@ -153,6 +154,7 @@ export const COMMANDS = {
   squash: squashCommand.meta,
   merge: mergeCommand.meta,
   undo: undoCommand.meta,
+  enter: enterMeta,
   exit: exitMeta,
   ci: ciMeta,
   config: configMeta,
@@ -198,6 +200,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   squash: (p, ctx) => squash(p.flags, ctx!),
   merge: (p, ctx) => merge(p.flags, ctx!),
   undo: () => undo(),
+  enter: () => enter(),
   exit: () => exit(),
   ci: () => ci(),
   workspace: (p) => workspace(p.args[0], p.args.slice(1)),
