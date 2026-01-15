@@ -8,6 +8,7 @@ import {
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import {
   selectWorktreePath,
   useWorkspaceStore,
@@ -32,13 +33,17 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = worktreePath ?? taskData.repoPath;
 
   const session = useSessionForTask(taskId);
-  const { connectToTask, sendPrompt, cancelPrompt } = useSessionActions();
+  const { connectToTask, sendPrompt, cancelPrompt, clearSessionError } =
+    useSessionActions();
+  const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
   const requestFocus = useDraftStore((s) => s.actions.requestFocus);
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
+  const hasError = session?.status === "error";
+  const errorMessage = session?.errorMessage;
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
@@ -54,7 +59,12 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (!repoPath) return;
     if (isConnecting.current) return;
 
-    if (session?.status === "connected" || session?.status === "connecting") {
+    // Don't reconnect if already connected, connecting, or in error state
+    if (
+      session?.status === "connected" ||
+      session?.status === "connecting" ||
+      session?.status === "error"
+    ) {
       return;
     }
 
@@ -122,6 +132,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const { appendUserShellExecute } = useSessionActions();
 
+  const handleRetry = useCallback(() => {
+    if (!repoPath) return;
+    clearSessionError(taskId);
+    connectToTask({ task, repoPath });
+  }, [taskId, repoPath, task, clearSessionError, connectToTask]);
+
+  const handleDelete = useCallback(() => {
+    const hasWorktree = !!worktreePath;
+    deleteWithConfirm({
+      taskId,
+      taskTitle: task.title ?? task.description ?? "Untitled",
+      hasWorktree,
+    });
+  }, [taskId, task, worktreePath, deleteWithConfirm]);
+
   const handleBashCommand = useCallback(
     async (command: string) => {
       if (!repoPath) return;
@@ -152,6 +177,10 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           onCancelPrompt={handleCancelPrompt}
           repoPath={repoPath}
           isCloud={session?.isCloud ?? false}
+          hasError={hasError}
+          errorMessage={errorMessage}
+          onRetry={handleRetry}
+          onDelete={handleDelete}
         />
       </Box>
     </BackgroundWrapper>
