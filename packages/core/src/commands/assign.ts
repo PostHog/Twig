@@ -15,6 +15,13 @@ export interface AssignResult {
 }
 
 /**
+ * Escape all regex metacharacters in a string.
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Match files against pathspecs.
  * Supports glob patterns like *.txt, src/**, etc.
  */
@@ -22,12 +29,18 @@ function matchFiles(patterns: string[], availableFiles: string[]): string[] {
   const matched = new Set<string>();
 
   for (const pattern of patterns) {
-    // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\./g, "\\.")
-      .replace(/\*\*/g, "{{GLOBSTAR}}")
-      .replace(/\*/g, "[^/]*")
-      .replace(/{{GLOBSTAR}}/g, ".*");
+    // Use placeholders for glob tokens before escaping
+    const withPlaceholders = pattern
+      .replace(/\*\*/g, "\0GLOBSTAR\0")
+      .replace(/\*/g, "\0GLOB\0");
+
+    // Escape all regex metacharacters
+    const escaped = escapeRegex(withPlaceholders);
+
+    // Replace placeholders with regex equivalents
+    const regexPattern = escaped
+      .replace(/\0GLOBSTAR\0/g, ".*")
+      .replace(/\0GLOB\0/g, "[^/]*");
 
     const regex = new RegExp(`^${regexPattern}$`);
 
