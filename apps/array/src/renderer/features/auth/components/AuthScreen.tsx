@@ -1,17 +1,7 @@
-import { AsciiArt } from "@components/AsciiArt";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import {
-  Box,
-  Button,
-  Callout,
-  Card,
-  Container,
-  Flex,
-  Heading,
-  Select,
-  Spinner,
-  Text,
-} from "@radix-ui/themes";
+import { Box, Callout, Flex, Select, Spinner, Text } from "@radix-ui/themes";
+import caveHero from "@renderer/assets/images/cave-hero.jpg";
+import twigLogo from "@renderer/assets/images/twig-logo.svg";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
@@ -61,86 +51,114 @@ export function AuthScreen() {
   };
 
   return (
-    <Flex height="100vh">
-      {/* Left pane - Auth form */}
-      <Box width="50%" className="border-gray-6 border-r">
-        <Container size="1">
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            height="100vh"
-          >
-            <Card size="3">
-              <Flex direction="column" gap="6" width="25vw">
-                <Flex direction="column" gap="2">
-                  <Heading size="4">Welcome to Array</Heading>
-                  <Text size="2" color="gray">
-                    Sign in with your PostHog account
-                  </Text>
-                </Flex>
+    <Flex height="100vh" style={{ position: "relative" }}>
+      {/* Full-screen cave painting background */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url(${caveHero})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
 
-                <Flex direction="column" gap="4">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" weight="medium" color="gray">
-                      PostHog region
-                    </Text>
-                    <Select.Root
-                      value={region}
-                      onValueChange={handleRegionChange}
-                      size="3"
-                    >
-                      <Select.Trigger />
-                      <Select.Content>
-                        <Select.Item value="us">US Cloud</Select.Item>
-                        <Select.Item value="eu">EU Cloud</Select.Item>
-                        {IS_DEV && (
-                          <Select.Item value="dev">Development</Select.Item>
-                        )}
-                      </Select.Content>
-                    </Select.Root>
-                  </Flex>
-
-                  {authMutation.isError && (
-                    <Callout.Root color="red">
-                      <Callout.Text>
-                        {getErrorMessage(authMutation.error)}
-                      </Callout.Text>
-                    </Callout.Root>
-                  )}
-
-                  {authMutation.isPending && (
-                    <Callout.Root color="blue">
-                      <Callout.Text>
-                        Waiting for authorization in your browser...
-                      </Callout.Text>
-                    </Callout.Root>
-                  )}
-
-                  <Button
-                    onClick={handleSignIn}
-                    variant={"classic"}
-                    size="3"
-                    mt="2"
-                    color={authMutation.isPending ? "gray" : undefined}
-                  >
-                    {authMutation.isPending && <Spinner />}
-
-                    {authMutation.isPending
-                      ? "Cancel authorization"
-                      : "Sign in with PostHog"}
-                  </Button>
-                </Flex>
-              </Flex>
-            </Card>
+      {/* Left side - login form */}
+      <Flex
+        width="50%"
+        align="center"
+        justify="center"
+        style={{
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <Flex direction="column" gap="6" style={{ maxWidth: "320px" }}>
+          <Flex direction="column" gap="4">
+            <img
+              src={twigLogo}
+              alt="Twig"
+              style={{
+                height: "48px",
+                objectFit: "contain",
+                alignSelf: "flex-start",
+              }}
+            />
+            <Text
+              size="5"
+              style={{
+                fontFamily: "Halfre, serif",
+                color: "var(--cave-charcoal)",
+                lineHeight: 1.3,
+              }}
+            >
+              the dawn of a new agentic era
+            </Text>
           </Flex>
-        </Container>
-      </Box>
 
-      {/* Right pane - ASCII Art */}
-      <Box width="50%" height="100%">
-        <AsciiArt scale={1} />
-      </Box>
+          <Flex direction="column" gap="4">
+            <Flex direction="column" gap="2">
+              <Text
+                size="2"
+                weight="medium"
+                style={{ color: "var(--cave-charcoal)", opacity: 0.6 }}
+              >
+                PostHog region
+              </Text>
+              <Select.Root
+                value={region}
+                onValueChange={handleRegionChange}
+                size="3"
+              >
+                <Select.Trigger />
+                <Select.Content>
+                  <Select.Item value="us">US Cloud</Select.Item>
+                  <Select.Item value="eu">EU Cloud</Select.Item>
+                  {IS_DEV && <Select.Item value="dev">Development</Select.Item>}
+                </Select.Content>
+              </Select.Root>
+            </Flex>
+
+            {authMutation.isError && (
+              <Callout.Root color="red">
+                <Callout.Text>
+                  {getErrorMessage(authMutation.error)}
+                </Callout.Text>
+              </Callout.Root>
+            )}
+
+            {authMutation.isPending && (
+              <Callout.Root color="blue">
+                <Callout.Text>
+                  Waiting for authorization in your browser...
+                </Callout.Text>
+              </Callout.Root>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSignIn}
+              className="flex items-center justify-center gap-2 px-6 py-3 font-bold text-base transition-opacity hover:opacity-90"
+              style={{
+                backgroundColor: authMutation.isPending
+                  ? "var(--gray-8)"
+                  : "var(--cave-charcoal)",
+                color: authMutation.isPending
+                  ? "var(--gray-11)"
+                  : "var(--cave-cream)",
+              }}
+            >
+              {authMutation.isPending && <Spinner />}
+              {authMutation.isPending
+                ? "Cancel authorization"
+                : "Sign in with PostHog"}
+            </button>
+          </Flex>
+        </Flex>
+      </Flex>
+
+      {/* Right side - empty, shows background */}
+      <Box width="50%" />
     </Flex>
   );
 }

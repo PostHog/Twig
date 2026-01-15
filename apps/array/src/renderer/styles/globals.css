@@ -82,6 +82,37 @@
   font-style: italic;
 }
 
+@font-face {
+  font-family: "Halfre";
+  src: url("/assets/fonts/Halfre.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+:root {
+  --cave-cream: #f7eddf;
+  --cave-charcoal: #2d2b29;
+  --fire-glow: rgba(255, 140, 60, 0.15);
+  --fire-glow-bright: rgba(255, 120, 50, 0.6);
+}
+
+/* Campfire pulse animation for generating indicator */
+@keyframes campfire-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    color: var(--orange-9);
+  }
+  50% {
+    opacity: 0.5;
+    color: var(--orange-11);
+  }
+}
+
+.campfire-pulse {
+  animation: campfire-pulse 1s ease-in-out infinite;
+}
+
 .radix-themes {
   /* Font families */
   --default-font-family:
