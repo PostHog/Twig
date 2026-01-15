@@ -16,6 +16,8 @@ const REPOS_FILE = "repos.json";
 export interface RepoEntry {
   path: string;
   workspaces: string[];
+  /** When true, daemon watches main repo for git→unassigned sync even without focus */
+  gitMode?: boolean;
 }
 
 /**
@@ -200,6 +202,44 @@ export function unregisterRepo(repoPath: string): void {
   const filtered = repos.filter((r) => r.path !== repoPath);
   writeRepos(filtered);
   log(`Unregistered repo: ${repoPath}`);
+}
+
+/**
+ * Enable git mode for a repo (daemon watches main repo for git→unassigned sync)
+ */
+export function enableGitMode(repoPath: string): void {
+  const repos = readRepos();
+  const existing = repos.find((r) => r.path === repoPath);
+
+  if (existing) {
+    existing.gitMode = true;
+  } else {
+    repos.push({ path: repoPath, workspaces: [], gitMode: true });
+  }
+
+  writeRepos(repos);
+  log(`Enabled git mode for: ${repoPath}`);
+}
+
+/**
+ * Disable git mode for a repo
+ */
+export function disableGitMode(repoPath: string): void {
+  const repos = readRepos();
+  const existing = repos.find((r) => r.path === repoPath);
+
+  if (existing) {
+    existing.gitMode = false;
+    // If no workspaces and no git mode, remove the repo
+    if (existing.workspaces.length === 0) {
+      writeRepos(repos.filter((r) => r.path !== repoPath));
+      log(`Disabled git mode and removed repo: ${repoPath}`);
+      return;
+    }
+  }
+
+  writeRepos(repos);
+  log(`Disabled git mode for: ${repoPath}`);
 }
 
 /**

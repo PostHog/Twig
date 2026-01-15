@@ -593,8 +593,8 @@ async function routePreviewEdits(repoPath: string): Promise<void> {
   log(`[focus:${repoPath}] Starting edit routing`);
 
   const repo = currentRepos.find((r) => r.path === repoPath);
-  if (!repo || repo.workspaces.length === 0) {
-    log(`[focus:${repoPath}] No registered workspaces, skipping`);
+  if (!repo) {
+    log(`[focus:${repoPath}] Repo not registered, skipping`);
     return;
   }
 
@@ -610,8 +610,14 @@ async function routePreviewEdits(repoPath: string): Promise<void> {
     return;
   }
 
-  // Single workspace mode: all edits go directly to that workspace
-  if (repo.workspaces.length === 1) {
+  // Git mode (no focused workspaces): all edits go to unassigned
+  if (repo.workspaces.length === 0) {
+    await copyFilesToWorkspace(changedFiles, UNASSIGNED_WORKSPACE, repoPath);
+    log(
+      `[focus:${repoPath}] Routed ${changedFiles.length} file(s) to ${UNASSIGNED_WORKSPACE} (git mode)`,
+    );
+  } else if (repo.workspaces.length === 1) {
+    // Single workspace mode: all edits go directly to that workspace
     await copyFilesToWorkspace(changedFiles, repo.workspaces[0], repoPath);
     log(
       `[focus:${repoPath}] Routed ${changedFiles.length} file(s) to ${repo.workspaces[0]}`,
@@ -738,7 +744,10 @@ async function watchRepo(repo: RepoEntry): Promise<void> {
   }
 
   // Watch main repo for user edits (bidirectional sync)
-  await watchPreview(repo.path);
+  // Either in focus mode (workspaces.length > 0) or git mode
+  if (repo.workspaces.length > 0 || repo.gitMode) {
+    await watchPreview(repo.path);
+  }
 }
 
 async function unwatchRepo(repoPath: string): Promise<void> {
@@ -783,8 +792,12 @@ async function reloadRepos(): Promise<void> {
       );
     }
 
-    if (validWorkspaces.length > 0) {
-      newRepos.push({ path: repo.path, workspaces: validWorkspaces });
+    if (validWorkspaces.length > 0 || repo.gitMode) {
+      newRepos.push({
+        path: repo.path,
+        workspaces: validWorkspaces,
+        gitMode: repo.gitMode,
+      });
     } else {
       needsWrite = true;
       log(`Removing repo with no valid workspaces: ${repo.path}`);

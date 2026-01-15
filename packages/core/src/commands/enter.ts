@@ -1,5 +1,7 @@
+import { disableGitMode } from "../daemon/pid";
 import { getCurrentBranch, isDetachedHead } from "../git/head";
 import { status } from "../jj/status";
+import { getRepoRoot } from "../jj/workspace";
 import { ok, type Result } from "../result";
 
 export interface EnterResult {
@@ -28,6 +30,12 @@ export async function enter(cwd = process.cwd()): Promise<Result<EnterResult>> {
   }
 
   const workingCopy = statusResult.value.workingCopy;
+
+  // Disable git mode - no longer need daemon to watch git→unassigned
+  const rootResult = await getRepoRoot(cwd);
+  if (rootResult.ok) {
+    disableGitMode(rootResult.value);
+  }
 
   return ok({
     bookmark: branch || "",

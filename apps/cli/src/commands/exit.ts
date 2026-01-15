@@ -38,6 +38,12 @@ export async function run(): Promise<void> {
 
   message(`${green(">")} Switched to git branch ${cyan(result.branch)}`);
 
+  if (result.syncedFiles > 0) {
+    message(
+      dim(`Synced ${result.syncedFiles} file(s) from unassigned workspace`),
+    );
+  }
+
   if (result.usedFallback) {
     blank();
     warning("No bookmark found in ancestors, switched to trunk.");

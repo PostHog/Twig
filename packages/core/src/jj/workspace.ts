@@ -7,6 +7,7 @@ import {
   getRepoWorkspacesDir,
 } from "../daemon/pid";
 import { createError, err, ok, type Result } from "../result";
+import { ensureBookmark } from "./bookmark-create";
 import { parseDiffPaths } from "./diff";
 import { runJJ } from "./runner";
 
@@ -124,6 +125,9 @@ export async function addWorkspace(
   // Get the workspace info
   const infoResult = await getWorkspaceInfo(name, cwd);
   if (!infoResult.ok) return infoResult;
+
+  // Create a bookmark for the workspace so arr exit can find it
+  await ensureBookmark(name, infoResult.value.changeId, cwd);
 
   return ok(infoResult.value);
 }
@@ -374,7 +378,14 @@ export async function ensureUnassignedWorkspace(
   // Setup editor integration links
   setupWorkspaceLinks(workspacePath, repoPath);
 
-  return getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+  // Get info and create bookmark
+  const infoResult = await getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
+  if (!infoResult.ok) return infoResult;
+
+  // Create a bookmark for the workspace so arr exit can find it
+  await ensureBookmark(UNASSIGNED_WORKSPACE, infoResult.value.changeId, cwd);
+
+  return infoResult;
 }
 
 /**
