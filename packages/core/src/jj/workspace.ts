@@ -7,10 +7,19 @@ import {
   getRepoWorkspacesDir,
 } from "../daemon/pid";
 import { createError, err, ok, type Result } from "../result";
+import { parseDiffPaths } from "./diff";
 import { runJJ } from "./runner";
 
 /** Special workspace for user edits not yet assigned to an agent */
 export const UNASSIGNED_WORKSPACE = "unassigned";
+
+/** Description used for focus merge commits */
+export const FOCUS_COMMIT_DESCRIPTION = "focus";
+
+/** Suffix for workspace working copy references (e.g., "agent-a@") */
+export function workspaceRef(name: string): string {
+  return `${name}@`;
+}
 
 export interface WorkspaceInfo {
   name: string;
@@ -31,6 +40,39 @@ export function getWorkspacesDir(repoPath: string): string {
  */
 export function getWorkspacePath(name: string, repoPath: string): string {
   return getGlobalWorkspacePath(repoPath, name);
+}
+
+/**
+ * Get the trunk change ID for workspace creation.
+ */
+async function getTrunkChangeId(cwd: string): Promise<Result<string>> {
+  const result = await runJJ(
+    ["log", "-r", "trunk()", "--no-graph", "-T", "change_id", "--limit", "1"],
+    cwd,
+  );
+  if (!result.ok) return result;
+  return ok(result.value.stdout.trim());
+}
+
+/**
+ * Setup workspace links for editor integration:
+ * - Symlink .git to enable git diffs/gutters
+ * - Create .jj/.gitignore to ignore jj internals from git
+ */
+export function setupWorkspaceLinks(
+  workspacePath: string,
+  repoPath: string,
+): void {
+  const gitPath = join(repoPath, ".git");
+  const workspaceGitPath = join(workspacePath, ".git");
+  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
+    symlinkSync(gitPath, workspaceGitPath);
+  }
+
+  const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
+  if (!existsSync(workspaceJjGitignorePath)) {
+    writeFileSync(workspaceJjGitignorePath, "/*\n");
+  }
 }
 
 /**
@@ -58,42 +100,30 @@ export async function addWorkspace(
   ensureRepoWorkspacesDir(repoPath);
 
   // Get trunk to create workspace at
-  const trunkResult = await runJJ(
-    ["log", "-r", "trunk()", "--no-graph", "-T", "change_id", "--limit", "1"],
-    cwd,
-  );
+  const trunkResult = await getTrunkChangeId(cwd);
   if (!trunkResult.ok) return trunkResult;
-  const trunkChangeId = trunkResult.value.stdout.trim();
 
   // Create the workspace at trunk (not current working copy)
-  // jj workspace add <DESTINATION> --name <NAME> -r <TRUNK>
   const result = await runJJ(
-    ["workspace", "add", workspacePath, "--name", name, "-r", trunkChangeId],
+    [
+      "workspace",
+      "add",
+      workspacePath,
+      "--name",
+      name,
+      "-r",
+      trunkResult.value,
+    ],
     cwd,
   );
-
   if (!result.ok) return result;
 
-  // Symlink .git to enable editor git integration (diffs, gutters)
-  const gitPath = join(repoPath, ".git");
-  const workspaceGitPath = join(workspacePath, ".git");
-  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
-    symlinkSync(gitPath, workspaceGitPath);
-  }
-
-  // Create .jj/.gitignore to ignore jj internals
-  const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
-  if (!existsSync(workspaceJjGitignorePath)) {
-    writeFileSync(workspaceJjGitignorePath, "/*\n");
-  }
+  // Setup editor integration links
+  setupWorkspaceLinks(workspacePath, repoPath);
 
   // Get the workspace info
   const infoResult = await getWorkspaceInfo(name, cwd);
   if (!infoResult.ok) return infoResult;
-
-  // Automatically add to focus (dynamic import to avoid circular dependency)
-  const { focusAdd } = await import("../commands/focus");
-  await focusAdd([name], cwd);
 
   return ok(infoResult.value);
 }
@@ -119,17 +149,6 @@ export async function removeWorkspace(
     );
   }
 
-  // If workspace is in focus, remove it from focus first (dynamic import to avoid circular dependency)
-  const { focusStatus, focusRemove } = await import("../commands/focus");
-  const status = await focusStatus(cwd);
-  if (
-    status.ok &&
-    status.value.isFocused &&
-    status.value.workspaces.includes(name)
-  ) {
-    await focusRemove([name], cwd);
-  }
-
   // Get the workspace's commit before forgetting (so we can abandon it)
   const tipResult = await getWorkspaceTip(name, cwd);
   const commitToAbandon = tipResult.ok ? tipResult.value : null;
@@ -139,7 +158,7 @@ export async function removeWorkspace(
   if (commitToAbandon) {
     // Get bookmarks on this commit
     const bookmarksResult = await runJJ(
-      ["log", "-r", `${name}@`, "--no-graph", "-T", "bookmarks"],
+      ["log", "-r", workspaceRef(name), "--no-graph", "-T", "bookmarks"],
       cwd,
     );
     if (bookmarksResult.ok) {
@@ -268,7 +287,7 @@ export async function getWorkspaceTip(
 ): Promise<Result<string>> {
   // Use the workspace@ syntax to get the working copy of that workspace
   const result = await runJJ(
-    ["log", "-r", `${name}@`, "--no-graph", "-T", "change_id"],
+    ["log", "-r", workspaceRef(name), "--no-graph", "-T", "change_id"],
     cwd,
   );
 
@@ -334,15 +353,10 @@ export async function ensureUnassignedWorkspace(
   ensureRepoWorkspacesDir(repoPath);
 
   // Get trunk revision to create workspace at
-  const trunkResult = await runJJ(
-    ["log", "-r", "trunk()", "--no-graph", "-T", "change_id", "--limit", "1"],
-    cwd,
-  );
+  const trunkResult = await getTrunkChangeId(cwd);
   if (!trunkResult.ok) return trunkResult;
-  const trunkChangeId = trunkResult.value.stdout.trim();
 
   // Create workspace at trunk
-  // jj workspace add <DESTINATION> --name <NAME> -r <REVISION>
   const createResult = await runJJ(
     [
       "workspace",
@@ -351,24 +365,14 @@ export async function ensureUnassignedWorkspace(
       "--name",
       UNASSIGNED_WORKSPACE,
       "-r",
-      trunkChangeId,
+      trunkResult.value,
     ],
     cwd,
   );
   if (!createResult.ok) return createResult;
 
-  // Symlink .git for editor integration
-  const gitPath = join(repoPath, ".git");
-  const workspaceGitPath = join(workspacePath, ".git");
-  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
-    symlinkSync(gitPath, workspaceGitPath);
-  }
-
-  // Create .jj/.gitignore to ignore jj internals
-  const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
-  if (!existsSync(workspaceJjGitignorePath)) {
-    writeFileSync(workspaceJjGitignorePath, "/*\n");
-  }
+  // Setup editor integration links
+  setupWorkspaceLinks(workspacePath, repoPath);
 
   return getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
 }
@@ -380,29 +384,10 @@ export async function getUnassignedFiles(
   cwd = process.cwd(),
 ): Promise<Result<string[]>> {
   const result = await runJJ(
-    ["diff", "-r", `${UNASSIGNED_WORKSPACE}@`, "--summary"],
+    ["diff", "-r", workspaceRef(UNASSIGNED_WORKSPACE), "--summary"],
     cwd,
   );
   if (!result.ok) return result;
 
-  const files: string[] = [];
-  for (const line of result.value.stdout.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // Match: M path, A path, D path
-    const simpleMatch = trimmed.match(/^[MAD]\s+(.+)$/);
-    if (simpleMatch) {
-      files.push(simpleMatch[1].trim());
-      continue;
-    }
-
-    // Match: R {old => new}
-    const renameMatch = trimmed.match(/^R\s+\{(.+)\s+=>\s+(.+)\}$/);
-    if (renameMatch) {
-      files.push(renameMatch[2].trim()); // Only the new name matters for listing
-    }
-  }
-
-  return ok(files);
+  return ok(parseDiffPaths(result.value.stdout));
 }

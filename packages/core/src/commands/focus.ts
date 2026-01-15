@@ -1,14 +1,18 @@
-import { existsSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { readRepos, setRepoWorkspaces, unregisterRepo } from "../daemon/pid";
-import { getConflictingFiles } from "../jj/file-ownership";
+import {
+  getConflictingFiles,
+  getWorkspacesForFile,
+} from "../jj/file-ownership";
 import { getTrunk, runJJ } from "../jj/runner";
 import {
   ensureUnassignedWorkspace,
+  FOCUS_COMMIT_DESCRIPTION,
   getRepoRoot,
   getWorkspacePath,
   getWorkspaceTip,
   listWorkspaces,
+  setupWorkspaceLinks,
   snapshotWorkspace,
   UNASSIGNED_WORKSPACE,
   type WorkspaceInfo,
@@ -121,7 +125,6 @@ async function updateFocus(
   if (!unassignedResult.ok) return unassignedResult;
 
   // Snapshot each workspace to pick up existing changes, then get tip
-  const gitPath = join(repoPath, ".git");
   const changeIds: string[] = [];
 
   // First, add unassigned workspace tip to merge parents
@@ -134,17 +137,8 @@ async function updateFocus(
   for (const ws of validWorkspaces) {
     const wsPath = getWorkspacePath(ws, repoPath);
 
-    // Ensure .git symlink exists for editor integration
-    const workspaceGitPath = join(wsPath, ".git");
-    if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
-      symlinkSync(gitPath, workspaceGitPath);
-    }
-
-    // Create .jj/.gitignore to ignore jj internals
-    const workspaceJjGitignorePath = join(wsPath, ".jj", ".gitignore");
-    if (!existsSync(workspaceJjGitignorePath)) {
-      writeFileSync(workspaceJjGitignorePath, "/*\n");
-    }
+    // Ensure editor integration links exist
+    setupWorkspaceLinks(wsPath, repoPath);
 
     await snapshotWorkspace(wsPath);
 
@@ -161,7 +155,7 @@ async function updateFocus(
   }
 
   // Create the merge commit with simple description
-  const description = "focus";
+  const description = FOCUS_COMMIT_DESCRIPTION;
   const newArgs = ["new", ...changeIds, "-m", description];
   const result = await runJJ(newArgs, cwd);
 
@@ -202,24 +196,6 @@ async function getMergeConflictFiles(cwd: string): Promise<string[]> {
       const parts = line.trim().split(/\s{2,}/);
       return parts[0];
     });
-}
-
-/**
- * Check which workspaces modified a given file
- */
-async function getWorkspacesForFile(
-  file: string,
-  workspaces: string[],
-  cwd: string,
-): Promise<string[]> {
-  const result: string[] = [];
-  for (const ws of workspaces) {
-    const diff = await runJJ(["diff", "-r", `${ws}@`, "--summary"], cwd);
-    if (diff.ok && diff.value.stdout.includes(file)) {
-      result.push(ws);
-    }
-  }
-  return result;
 }
 
 /**

@@ -23,6 +23,8 @@ import {
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as watcher from "@parcel/watcher";
+import { parseDiffPaths } from "../jj/diff";
+import { UNASSIGNED_WORKSPACE, workspaceRef } from "../jj/workspace";
 import {
   cleanup,
   getReposPath,
@@ -144,7 +146,7 @@ async function loadGitignore(workspacePath: string): Promise<Set<string>> {
       }
     }
   } catch {
-    // No .gitignore
+    // .gitignore doesn't exist or isn't readable - use defaults only
   }
   return ignored;
 }
@@ -173,6 +175,8 @@ async function getTrackedFiles(cwd: string): Promise<string[]> {
  */
 async function rewriteFilesInPlace(cwd: string): Promise<void> {
   const files = await getTrackedFiles(cwd);
+  let errorCount = 0;
+
   for (const file of files) {
     const filePath = join(cwd, file);
     if (existsSync(filePath)) {
@@ -182,10 +186,18 @@ async function rewriteFilesInPlace(cwd: string): Promise<void> {
           const content = readFileSync(filePath);
           writeFileSync(filePath, content);
         }
-      } catch {
-        // Ignore errors for individual files
+      } catch (err) {
+        errorCount++;
+        // Log first few errors to avoid spam
+        if (errorCount <= 3) {
+          log(`Failed to rewrite ${file}: ${err}`);
+        }
       }
     }
+  }
+
+  if (errorCount > 3) {
+    log(`...and ${errorCount - 3} more file rewrite errors`);
   }
 }
 
@@ -221,6 +233,44 @@ function wsKey(repoPath: string, wsName: string): string {
 }
 
 /**
+ * Mark workspace sync as complete and re-queue if dirty.
+ */
+function finishWorkspaceSync(
+  key: string,
+  repoPath: string,
+  wsName: string,
+  wsPath: string,
+): void {
+  syncingWorkspaces.delete(key);
+
+  if (dirtyWorkspaces.has(key)) {
+    log(`[${key}] Changes during sync, re-queuing`);
+    dirtyWorkspaces.delete(key);
+    const queue = repoSyncQueue.get(repoPath) || [];
+    if (!queue.some((item) => item.wsName === wsName)) {
+      queue.push({ wsName, wsPath });
+      repoSyncQueue.set(repoPath, queue);
+    }
+  }
+}
+
+/**
+ * Rebase focus commit onto all workspace tips.
+ */
+async function rebaseFocusCommit(
+  repoPath: string,
+  workspaces: string[],
+): Promise<boolean> {
+  const destinations = [
+    "-d",
+    workspaceRef(UNASSIGNED_WORKSPACE),
+    ...workspaces.flatMap((ws) => ["-d", workspaceRef(ws)]),
+  ];
+  const result = await runJJ(["rebase", "-r", "@", ...destinations], repoPath);
+  return result !== null;
+}
+
+/**
  * Snapshot a workspace and update focus.
  */
 async function snapshotAndSync(
@@ -231,32 +281,14 @@ async function snapshotAndSync(
   const key = wsKey(repoPath, wsName);
   const t0 = performance.now();
 
-  // Mark as syncing
   syncingWorkspaces.add(key);
   dirtyWorkspaces.delete(key);
-
   log(`[${key}] Starting sync`);
 
-  const finishSync = () => {
-    syncingWorkspaces.delete(key);
-
-    // If workspace was marked dirty during sync, re-queue it
-    if (dirtyWorkspaces.has(key)) {
-      log(`[${key}] Changes during sync, re-queuing`);
-      dirtyWorkspaces.delete(key);
-      const queue = repoSyncQueue.get(repoPath) || [];
-      if (!queue.some((item) => item.wsName === wsName)) {
-        queue.push({ wsName, wsPath });
-        repoSyncQueue.set(repoPath, queue);
-      }
-    }
-  };
-
-  // Get registered workspaces for this repo
   const repo = currentRepos.find((r) => r.path === repoPath);
   if (!repo || repo.workspaces.length === 0) {
     log(`[${key}] No registered workspaces, skipping`);
-    finishSync();
+    finishWorkspaceSync(key, repoPath, wsName, wsPath);
     return;
   }
 
@@ -265,43 +297,30 @@ async function snapshotAndSync(
   const snapResult = await runJJ(["status", "--quiet"], wsPath);
   if (snapResult === null) {
     log(`[${key}] Snapshot failed, aborting sync`);
-    finishSync();
+    finishWorkspaceSync(key, repoPath, wsName, wsPath);
     return;
   }
-  const t2 = performance.now();
-  log(`[${key}] Snapshot complete (${(t2 - t1).toFixed(0)}ms)`);
+  log(`[${key}] Snapshot complete (${(performance.now() - t1).toFixed(0)}ms)`);
 
   // Step 2: Rebase focus commit onto all workspace tips
-  // jj rebase -r @ -d unassigned@ -d agent-a@ -d agent-b@ ...
-  const destinations = [
-    "-d",
-    "unassigned@",
-    ...repo.workspaces.flatMap((ws) => ["-d", `${ws}@`]),
-  ];
-  const t3 = performance.now();
-  const rebaseResult = await runJJ(
-    ["rebase", "-r", "@", ...destinations],
-    repoPath,
-  );
-  if (rebaseResult === null) {
+  const t2 = performance.now();
+  const rebaseOk = await rebaseFocusCommit(repoPath, repo.workspaces);
+  if (!rebaseOk) {
     log(`[${key}] Rebase failed`);
-    finishSync();
+    finishWorkspaceSync(key, repoPath, wsName, wsPath);
     return;
   }
-  const t4 = performance.now();
-  log(`[${key}] Rebase complete (${(t4 - t3).toFixed(0)}ms)`);
+  log(`[${key}] Rebase complete (${(performance.now() - t2).toFixed(0)}ms)`);
 
-  // Step 3: Rewrite files in-place to trigger VSCode's file watcher
-  // (jj rebase replaces files with new inodes, VSCode watches old inodes)
-  const t5 = performance.now();
+  // Step 3: Rewrite files to trigger VSCode's file watcher
+  const t3 = performance.now();
   await rewriteFilesInPlace(repoPath);
-  const t6 = performance.now();
-  log(`[${key}] Rewrote files in-place (${(t6 - t5).toFixed(0)}ms)`);
+  log(`[${key}] Rewrote files (${(performance.now() - t3).toFixed(0)}ms)`);
 
   log(
     `[${key}] Sync complete (total: ${(performance.now() - t0).toFixed(0)}ms)`,
   );
-  finishSync();
+  finishWorkspaceSync(key, repoPath, wsName, wsPath);
 }
 
 function triggerSync(repoPath: string, wsName: string, wsPath: string): void {
@@ -399,13 +418,16 @@ async function watchWorkspace(
       if (relevantEvents.length === 0) return;
 
       // Check watcher latency by comparing file mtime to now
+      // File may be deleted between event and stat - safe to ignore
       let maxLatency = 0;
       for (const event of relevantEvents) {
         try {
           const mtime = statSync(event.path).mtimeMs;
           const latency = tEvent - mtime;
           if (latency > maxLatency) maxLatency = latency;
-        } catch {}
+        } catch {
+          // File was deleted or inaccessible - skip latency calculation
+        }
       }
 
       log(
@@ -438,32 +460,6 @@ async function unwatchWorkspace(
 // Preview Watcher: Routes edits from main repo to appropriate workspace
 // ============================================================================
 
-const UNASSIGNED_WORKSPACE = "unassigned";
-
-/**
- * Parse jj diff --summary output to extract file paths.
- */
-function parseDiffSummary(output: string): string[] {
-  const files: string[] = [];
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    const simpleMatch = trimmed.match(/^[MAD]\s+(.+)$/);
-    if (simpleMatch) {
-      files.push(simpleMatch[1].trim());
-      continue;
-    }
-
-    const renameMatch = trimmed.match(/^R\s+\{(.+)\s+=>\s+(.+)\}$/);
-    if (renameMatch) {
-      files.push(renameMatch[1].trim());
-      files.push(renameMatch[2].trim());
-    }
-  }
-  return files;
-}
-
 /**
  * Build ownership map: file → workspaces that modified it.
  */
@@ -474,10 +470,13 @@ async function buildOwnershipMap(
   const ownership = new Map<string, string[]>();
 
   for (const ws of workspaces) {
-    const result = await runJJ(["diff", "-r", `${ws}@`, "--summary"], cwd);
+    const result = await runJJ(
+      ["diff", "-r", workspaceRef(ws), "--summary"],
+      cwd,
+    );
     if (result === null) continue;
 
-    const files = parseDiffSummary(result);
+    const files = parseDiffPaths(result);
     for (const file of files) {
       const owners = ownership.get(file) || [];
       if (!owners.includes(ws)) {
@@ -534,12 +533,60 @@ function copyFilesToWorkspace(
 }
 
 /**
+ * Group changed files by their target workspace based on ownership.
+ */
+function groupFilesByOwner(
+  changedFiles: string[],
+  ownership: Map<string, string[]>,
+  repoPath: string,
+): Map<string, string[]> {
+  const toRoute = new Map<string, string[]>();
+
+  for (const file of changedFiles) {
+    const owners = ownership.get(file) || [];
+
+    if (owners.length === 0) {
+      const files = toRoute.get(UNASSIGNED_WORKSPACE) || [];
+      files.push(file);
+      toRoute.set(UNASSIGNED_WORKSPACE, files);
+    } else if (owners.length === 1) {
+      const files = toRoute.get(owners[0]) || [];
+      files.push(file);
+      toRoute.set(owners[0], files);
+    } else {
+      log(
+        `[focus:${repoPath}] WARNING: ${file} has multiple owners: ${owners.join(", ")}`,
+      );
+    }
+  }
+
+  return toRoute;
+}
+
+/**
+ * Route files to workspaces and log results.
+ */
+async function routeFilesToWorkspaces(
+  toRoute: Map<string, string[]>,
+  repoPath: string,
+): Promise<void> {
+  for (const [target, files] of toRoute) {
+    const success = await copyFilesToWorkspace(files, target, repoPath);
+    if (success) {
+      log(`[focus:${repoPath}] Routed ${files.length} file(s) to ${target}`);
+    } else {
+      log(`[focus:${repoPath}] Failed to route files to ${target}`);
+    }
+  }
+}
+
+/**
  * Route focus edits to appropriate workspaces.
  *
  * Routing rules:
  * - File modified by exactly 1 agent → route to that agent
  * - File not modified by any agent → route to unassigned
- * - File modified by 2+ agents → BLOCKED (shouldn't happen, checked at preview add)
+ * - File modified by 2+ agents → BLOCKED (shouldn't happen)
  */
 async function routePreviewEdits(repoPath: string): Promise<void> {
   const t0 = performance.now();
@@ -551,75 +598,29 @@ async function routePreviewEdits(repoPath: string): Promise<void> {
     return;
   }
 
-  // Single workspace mode: all edits go directly to that workspace
-  if (repo.workspaces.length === 1) {
-    const ws = repo.workspaces[0];
-    // Get files changed in focus working copy (not committed)
-    const diffResult = await runJJ(["diff", "--summary"], repoPath);
-    if (diffResult) {
-      const files = parseDiffSummary(diffResult);
-      if (files.length > 0) {
-        const success = await copyFilesToWorkspace(files, ws, repoPath);
-        if (success) {
-          log(`[focus:${repoPath}] Routed ${files.length} file(s) to ${ws}`);
-        }
-      }
-    }
-    log(
-      `[focus:${repoPath}] Edit routing complete (${(performance.now() - t0).toFixed(0)}ms)`,
-    );
-    return;
-  }
-
-  // Multi-workspace mode: route based on ownership
-  // Get files changed in focus working copy (not committed)
   const diffResult = await runJJ(["diff", "--summary"], repoPath);
   if (!diffResult) {
     log(`[focus:${repoPath}] No changes to route`);
     return;
   }
 
-  const changedFiles = parseDiffSummary(diffResult);
+  const changedFiles = parseDiffPaths(diffResult);
   if (changedFiles.length === 0) {
     log(`[focus:${repoPath}] No tracked files changed`);
     return;
   }
 
-  // Build ownership map for current workspaces
-  const ownership = await buildOwnershipMap(repo.workspaces, repoPath);
-
-  // Group files by target workspace
-  const toRoute = new Map<string, string[]>();
-
-  for (const file of changedFiles) {
-    const owners = ownership.get(file) || [];
-
-    if (owners.length === 0) {
-      // Not owned by any agent → unassigned
-      const files = toRoute.get(UNASSIGNED_WORKSPACE) || [];
-      files.push(file);
-      toRoute.set(UNASSIGNED_WORKSPACE, files);
-    } else if (owners.length === 1) {
-      // Owned by exactly one agent → route to that agent
-      const files = toRoute.get(owners[0]) || [];
-      files.push(file);
-      toRoute.set(owners[0], files);
-    } else {
-      // Multiple owners → conflict, skip (shouldn't happen)
-      log(
-        `[focus:${repoPath}] WARNING: ${file} has multiple owners: ${owners.join(", ")}`,
-      );
-    }
-  }
-
-  // Copy files to their target workspaces
-  for (const [target, files] of toRoute) {
-    const success = await copyFilesToWorkspace(files, target, repoPath);
-    if (success) {
-      log(`[focus:${repoPath}] Routed ${files.length} file(s) to ${target}`);
-    } else {
-      log(`[focus:${repoPath}] Failed to route files to ${target}`);
-    }
+  // Single workspace mode: all edits go directly to that workspace
+  if (repo.workspaces.length === 1) {
+    await copyFilesToWorkspace(changedFiles, repo.workspaces[0], repoPath);
+    log(
+      `[focus:${repoPath}] Routed ${changedFiles.length} file(s) to ${repo.workspaces[0]}`,
+    );
+  } else {
+    // Multi-workspace mode: route based on ownership
+    const ownership = await buildOwnershipMap(repo.workspaces, repoPath);
+    const toRoute = groupFilesByOwner(changedFiles, ownership, repoPath);
+    await routeFilesToWorkspaces(toRoute, repoPath);
   }
 
   log(

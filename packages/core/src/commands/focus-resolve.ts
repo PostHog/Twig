@@ -1,4 +1,6 @@
+import { getWorkspacesForFile } from "../jj/file-ownership";
 import { runJJ } from "../jj/runner";
+import { workspaceRef } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import { focusRemove, focusStatus } from "./focus";
 import type { Command } from "./types";
@@ -12,24 +14,6 @@ export interface ResolveResult {
   file: string;
   kept: string;
   removed: string[];
-}
-
-/**
- * Get workspaces that have modified a specific file.
- */
-async function getWorkspacesForFile(
-  file: string,
-  workspaces: string[],
-  cwd: string,
-): Promise<string[]> {
-  const result: string[] = [];
-  for (const ws of workspaces) {
-    const diff = await runJJ(["diff", "-r", `${ws}@`, "--summary"], cwd);
-    if (diff.ok && diff.value.stdout.includes(file)) {
-      result.push(ws);
-    }
-  }
-  return result;
 }
 
 /**
@@ -53,7 +37,10 @@ export async function listConflicts(
   const fileWorkspaces = new Map<string, string[]>();
 
   for (const ws of status.value.workspaces) {
-    const diff = await runJJ(["diff", "-r", `${ws}@`, "--summary"], cwd);
+    const diff = await runJJ(
+      ["diff", "-r", workspaceRef(ws), "--summary"],
+      cwd,
+    );
     if (!diff.ok) continue;
 
     for (const line of diff.value.stdout.split("\n")) {
@@ -144,6 +131,61 @@ export async function resolveConflict(
     kept: keepWorkspace,
     removed: toRemove,
   });
+}
+
+/**
+ * Batch resolve conflicts by computing which workspaces to remove.
+ *
+ * Takes a map of file -> chosen workspace, and returns the set of workspaces
+ * that should be removed from focus to resolve all conflicts.
+ *
+ * Returns workspaces to remove (not the ones to keep).
+ */
+export async function resolveConflictsBatch(
+  choices: Map<string, string>,
+  cwd = process.cwd(),
+): Promise<Result<ResolveResult[]>> {
+  const conflicts = await listConflicts(cwd);
+  if (!conflicts.ok) return conflicts;
+
+  const workspacesToRemove = new Set<string>();
+  const results: ResolveResult[] = [];
+
+  for (const conflict of conflicts.value) {
+    const choice = choices.get(conflict.file);
+    if (!choice) continue;
+
+    // Filter out workspaces already marked for removal
+    const remainingWorkspaces = conflict.workspaces.filter(
+      (ws) => !workspacesToRemove.has(ws),
+    );
+
+    // If only one workspace remains, no conflict to resolve
+    if (remainingWorkspaces.length < 2) continue;
+
+    // Validate the choice is valid for this conflict
+    if (!remainingWorkspaces.includes(choice)) continue;
+
+    // Mark non-chosen workspaces for removal
+    const toRemove = remainingWorkspaces.filter((ws) => ws !== choice);
+    for (const ws of toRemove) {
+      workspacesToRemove.add(ws);
+    }
+
+    results.push({
+      file: conflict.file,
+      kept: choice,
+      removed: toRemove,
+    });
+  }
+
+  // Actually remove the workspaces from focus
+  if (workspacesToRemove.size > 0) {
+    const removeResult = await focusRemove([...workspacesToRemove], cwd);
+    if (!removeResult.ok) return removeResult;
+  }
+
+  return ok(results);
 }
 
 export const listConflictsCommand: Command<FileConflict[], [string?]> = {

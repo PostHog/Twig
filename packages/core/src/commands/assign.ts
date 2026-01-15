@@ -3,6 +3,7 @@ import {
   addWorkspace,
   getUnassignedFiles,
   UNASSIGNED_WORKSPACE,
+  workspaceRef,
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
@@ -80,9 +81,9 @@ export async function assignFiles(
     [
       "squash",
       "--from",
-      `${UNASSIGNED_WORKSPACE}@`,
+      workspaceRef(UNASSIGNED_WORKSPACE),
       "--into",
-      `${targetWorkspace}@`,
+      workspaceRef(targetWorkspace),
       ...filesToAssign,
     ],
     cwd,
@@ -139,9 +140,9 @@ export async function assignFilesToNewWorkspace(
     [
       "squash",
       "--from",
-      `${UNASSIGNED_WORKSPACE}@`,
+      workspaceRef(UNASSIGNED_WORKSPACE),
       "--into",
-      `${newWorkspaceName}@`,
+      workspaceRef(newWorkspaceName),
       ...filesToAssign,
     ],
     cwd,

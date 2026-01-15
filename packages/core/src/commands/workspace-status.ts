@@ -1,5 +1,6 @@
+import { type DiffEntry, parseDiffSummary } from "../jj/diff";
 import { runJJ } from "../jj/runner";
-import { listWorkspaces } from "../jj/workspace";
+import { listWorkspaces, workspaceRef } from "../jj/workspace";
 import { ok, type Result } from "../result";
 import type { Command } from "./types";
 
@@ -20,26 +21,8 @@ export interface WorkspaceStatus {
   stats: DiffStats;
 }
 
-/**
- * Parse jj diff --summary output into FileChange array.
- */
-function parseDiffSummary(output: string): FileChange[] {
-  const changes: FileChange[] = [];
-
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    const match = trimmed.match(/^([MADR])\s+(.+)$/);
-    if (match) {
-      changes.push({
-        status: match[1] as FileChange["status"],
-        path: match[2].trim(),
-      });
-    }
-  }
-
-  return changes;
+function diffEntryToFileChange(entry: DiffEntry): FileChange {
+  return { status: entry.status, path: entry.path };
 }
 
 /**
@@ -83,16 +66,18 @@ export async function getWorkspaceStatus(
 ): Promise<Result<WorkspaceStatus>> {
   // Get diff summary
   const summaryResult = await runJJ(
-    ["diff", "-r", `${workspaceName}@`, "--summary"],
+    ["diff", "-r", workspaceRef(workspaceName), "--summary"],
     cwd,
   );
   if (!summaryResult.ok) return summaryResult;
 
-  const changes = parseDiffSummary(summaryResult.value.stdout);
+  const changes = parseDiffSummary(summaryResult.value.stdout).map(
+    diffEntryToFileChange,
+  );
 
   // Get diff stats
   const statResult = await runJJ(
-    ["diff", "-r", `${workspaceName}@`, "--stat"],
+    ["diff", "-r", workspaceRef(workspaceName), "--stat"],
     cwd,
   );
 

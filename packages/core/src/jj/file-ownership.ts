@@ -1,40 +1,12 @@
 import { ok, type Result } from "../result";
+import { parseDiffPaths } from "./diff";
 import { runJJ } from "./runner";
+import { workspaceRef } from "./workspace";
 
 export interface FileOwnershipMap {
   ownership: Map<string, string[]>;
   getOwners(file: string): string[];
   hasConflict(file: string): boolean;
-}
-
-/**
- * Parse jj diff --summary output to extract file paths.
- * Handles: M (modified), A (added), D (deleted), R (renamed)
- * Rename format: R {old => new}
- */
-function parseDiffSummary(output: string): string[] {
-  const files: string[] = [];
-
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // Match: M path, A path, D path
-    const simpleMatch = trimmed.match(/^[MAD]\s+(.+)$/);
-    if (simpleMatch) {
-      files.push(simpleMatch[1].trim());
-      continue;
-    }
-
-    // Match: R {old => new}
-    const renameMatch = trimmed.match(/^R\s+\{(.+)\s+=>\s+(.+)\}$/);
-    if (renameMatch) {
-      files.push(renameMatch[1].trim());
-      files.push(renameMatch[2].trim());
-    }
-  }
-
-  return files;
 }
 
 /**
@@ -49,10 +21,13 @@ export async function buildFileOwnershipMap(
 
   for (const ws of workspaces) {
     // Get files modified by this workspace (vs trunk)
-    const result = await runJJ(["diff", "-r", `${ws}@`, "--summary"], cwd);
+    const result = await runJJ(
+      ["diff", "-r", workspaceRef(ws), "--summary"],
+      cwd,
+    );
     if (!result.ok) continue;
 
-    const files = parseDiffSummary(result.value.stdout);
+    const files = parseDiffPaths(result.value.stdout);
 
     for (const file of files) {
       const owners = ownership.get(file) || [];
@@ -90,4 +65,25 @@ export async function getConflictingFiles(
   }
 
   return ok(conflicts);
+}
+
+/**
+ * Get workspaces that have modified a specific file.
+ */
+export async function getWorkspacesForFile(
+  file: string,
+  workspaces: string[],
+  cwd = process.cwd(),
+): Promise<string[]> {
+  const result: string[] = [];
+  for (const ws of workspaces) {
+    const diff = await runJJ(
+      ["diff", "-r", workspaceRef(ws), "--summary"],
+      cwd,
+    );
+    if (diff.ok && diff.value.stdout.includes(file)) {
+      result.push(ws);
+    }
+  }
+  return result;
 }

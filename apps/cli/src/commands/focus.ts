@@ -8,7 +8,10 @@ import {
   focusRemove,
   focusStatus,
 } from "@array/core/commands/focus";
-import { listConflicts } from "@array/core/commands/focus-resolve";
+import {
+  listConflicts,
+  resolveConflictsBatch,
+} from "@array/core/commands/focus-resolve";
 import {
   cmd,
   cyan,
@@ -161,29 +164,17 @@ export async function focus(
         return;
       }
 
-      const removedWorkspaces = new Set<string>();
-      let resolved = 0;
-      let skipped = 0;
+      // Collect user choices for each conflict
+      const choices = new Map<string, string>();
 
       for (const conflict of conflicts) {
-        // Filter out workspaces that have already been removed
-        const remainingWorkspaces = conflict.workspaces.filter(
-          (ws) => !removedWorkspaces.has(ws),
-        );
-
-        // If only one workspace remains, no conflict to resolve
-        if (remainingWorkspaces.length < 2) {
-          skipped++;
-          continue;
-        }
-
         message(`${yellow("Conflict:")} ${cyan(conflict.file)}`);
-        message(dim(`  Modified by: ${remainingWorkspaces.join(", ")}`));
+        message(dim(`  Modified by: ${conflict.workspaces.join(", ")}`));
         message("");
 
         const choice = await select(
           "Which version do you want to keep in focus?",
-          remainingWorkspaces.map((ws) => ({ label: ws, value: ws })),
+          conflict.workspaces.map((ws) => ({ label: ws, value: ws })),
         );
 
         if (!choice) {
@@ -191,34 +182,19 @@ export async function focus(
           return;
         }
 
-        // Mark non-chosen workspaces as removed
-        for (const ws of remainingWorkspaces) {
-          if (ws !== choice) {
-            removedWorkspaces.add(ws);
-          }
-        }
-
-        resolved++;
+        choices.set(conflict.file, choice);
         message("");
       }
 
-      // Actually remove the workspaces from focus
-      if (removedWorkspaces.size > 0) {
-        unwrap(await focusRemove([...removedWorkspaces]));
-      }
+      // Resolve all conflicts in batch
+      const results = unwrap(await resolveConflictsBatch(choices));
 
+      const removedWorkspaces = new Set(results.flatMap((r) => r.removed));
       message(
         formatSuccess(
-          `Resolved ${resolved} conflict${resolved === 1 ? "" : "s"}, removed ${[...removedWorkspaces].join(", ")} from focus`,
+          `Resolved ${results.length} conflict${results.length === 1 ? "" : "s"}, removed ${[...removedWorkspaces].join(", ")} from focus`,
         ),
       );
-      if (skipped > 0) {
-        message(
-          dim(
-            `Skipped ${skipped} conflict${skipped === 1 ? "" : "s"} (already resolved)`,
-          ),
-        );
-      }
       break;
     }
 

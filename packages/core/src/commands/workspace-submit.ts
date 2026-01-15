@@ -6,6 +6,7 @@ import {
   getWorkspaceTip,
   listWorkspaces,
   UNASSIGNED_WORKSPACE,
+  workspaceRef,
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
@@ -33,7 +34,7 @@ async function getWorkspaceDescription(
   cwd = process.cwd(),
 ): Promise<string> {
   const result = await runJJ(
-    ["log", "-r", `${workspace}@`, "--no-graph", "-T", "description"],
+    ["log", "-r", workspaceRef(workspace), "--no-graph", "-T", "description"],
     cwd,
   );
   if (!result.ok) return "";
@@ -78,7 +79,7 @@ export async function submitWorkspace(
 
   // Check if workspace has changes
   const diffResult = await runJJ(
-    ["diff", "-r", `${workspace}@`, "--summary"],
+    ["diff", "-r", workspaceRef(workspace), "--summary"],
     cwd,
   );
   if (!diffResult.ok) return diffResult;
@@ -108,7 +109,7 @@ export async function submitWorkspace(
   // If message provided but no description, set it on the commit
   if (options.message && !description) {
     const describeResult = await runJJ(
-      ["describe", "-r", `${workspace}@`, "-m", options.message],
+      ["describe", "-r", workspaceRef(workspace), "-m", options.message],
       cwd,
     );
     if (!describeResult.ok) return describeResult;
@@ -118,7 +119,7 @@ export async function submitWorkspace(
   // Get or generate bookmark name
   // First check if there's already a bookmark on this change
   const bookmarkResult = await runJJ(
-    ["log", "-r", `${workspace}@`, "--no-graph", "-T", "bookmarks"],
+    ["log", "-r", workspaceRef(workspace), "--no-graph", "-T", "bookmarks"],
     cwd,
   );
 
@@ -135,7 +136,7 @@ export async function submitWorkspace(
 
     // Create the bookmark
     const createResult = await runJJ(
-      ["bookmark", "create", bookmark, "-r", `${workspace}@`],
+      ["bookmark", "create", bookmark, "-r", workspaceRef(workspace)],
       cwd,
     );
     if (!createResult.ok) return createResult;
