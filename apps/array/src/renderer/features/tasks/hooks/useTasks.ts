@@ -140,7 +140,47 @@ export function useDeleteTask() {
       return client.deleteTask(taskId);
     },
     {
-      onSuccess: () => {
+      onMutate: async (taskId) => {
+        // Cancel outgoing refetches to avoid overwriting optimistic update
+        await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
+
+        // Snapshot all task list queries for rollback
+        const previousQueries: Array<{ queryKey: unknown; data: Task[] }> = [];
+        const queries = queryClient.getQueriesData<Task[]>({
+          queryKey: taskKeys.lists(),
+        });
+        for (const [queryKey, data] of queries) {
+          if (data) {
+            previousQueries.push({ queryKey, data });
+          }
+        }
+
+        // Optimistically remove the task from all list queries
+        queryClient.setQueriesData<Task[]>(
+          { queryKey: taskKeys.lists() },
+          (old) => old?.filter((task) => task.id !== taskId),
+        );
+
+        return { previousQueries };
+      },
+      onError: (_err, _taskId, context) => {
+        // Rollback all queries on error
+        const ctx = context as
+          | {
+              previousQueries: Array<{
+                queryKey: readonly unknown[];
+                data: Task[];
+              }>;
+            }
+          | undefined;
+        if (ctx?.previousQueries) {
+          for (const { queryKey, data } of ctx.previousQueries) {
+            queryClient.setQueryData(queryKey, data);
+          }
+        }
+      },
+      onSettled: () => {
+        // Always refetch to ensure sync with server
         queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       },
     },
