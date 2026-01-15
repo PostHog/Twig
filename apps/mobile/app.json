@@ -151,7 +151,8 @@
             ]
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "extra": {
       "router": {},

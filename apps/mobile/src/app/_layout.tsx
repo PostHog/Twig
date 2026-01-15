@@ -4,17 +4,21 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "nativewind";
+import { PostHogProvider } from "posthog-react-native";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthStore } from "@/features/auth";
+import { posthog, useScreenTracking } from "@/lib/posthog";
 import { queryClient } from "@/lib/queryClient";
 import { darkTheme, lightTheme, useThemeColors } from "@/lib/theme";
 
 function RootLayoutNav() {
   const { isLoading, initializeAuth } = useAuthStore();
   const themeColors = useThemeColors();
+
+  useScreenTracking();
 
   useEffect(() => {
     initializeAuth();
@@ -90,12 +94,20 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
-        <QueryClientProvider client={queryClient}>
-          <View style={themeVars} className="flex-1">
-            <RootLayoutNav />
-          </View>
-          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
-        </QueryClientProvider>
+        <PostHogProvider
+          client={posthog}
+          autocapture={{
+            captureTouches: true,
+            captureScreens: false, // We handle screen tracking manually for expo-router
+          }}
+        >
+          <QueryClientProvider client={queryClient}>
+            <View style={themeVars} className="flex-1">
+              <RootLayoutNav />
+            </View>
+            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+          </QueryClientProvider>
+        </PostHogProvider>
       </KeyboardProvider>
     </SafeAreaProvider>
   );
