@@ -119,7 +119,7 @@ export function MessagesList({
             Start a conversation
           </Text>
           <Text className="text-center font-mono text-[13px] text-gray-9">
-            Ask Max anything about your product data
+            Ask PostHog AI anything about your product data
           </Text>
         </View>
       }

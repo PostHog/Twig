@@ -50,7 +50,7 @@ export function ConversationList({
       <View className="flex-1 items-center justify-center p-6">
         <Text className="text-center text-gray-11">No conversations yet</Text>
         <Text className="mt-2 text-center text-gray-9 text-sm">
-          Start chatting with Max to see your conversations here
+          Start chatting with PostHog AI to see your conversations here
         </Text>
       </View>
     );

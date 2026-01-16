@@ -26,7 +26,7 @@ export default function ConversationsScreen() {
             <Text className="font-bold text-2xl text-gray-12">
               Conversations
             </Text>
-            <Text className="text-gray-11 text-sm">Your Max AI chats</Text>
+            <Text className="text-gray-11 text-sm">Your PostHog AI chats</Text>
           </View>
           <Pressable
             onPress={handleNewChat}

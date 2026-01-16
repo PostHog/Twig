@@ -1,4 +1,4 @@
-// Simplified types for Max conversation in mobile app
+// Simplified types for PostHog AI conversation in mobile app
 // Based on posthog/frontend/src/queries/schema/schema-assistant-messages.ts
 
 export enum AssistantMessageType {
