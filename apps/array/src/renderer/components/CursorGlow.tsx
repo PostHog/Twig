@@ -1,8 +1,10 @@
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useEffect, useState } from "react";
 
 export function CursorGlow() {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
+  const cursorGlow = useSettingsStore((state) => state.cursorGlow);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -16,8 +18,7 @@ export function CursorGlow() {
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
-  // Only show in dark mode
-  if (!isDarkMode || !mousePos) return null;
+  if (!isDarkMode || !cursorGlow || !mousePos) return null;
 
   return (
     <div

@@ -11,6 +11,7 @@ interface SettingsStore {
   createPR: boolean;
   defaultModel: string;
   desktopNotifications: boolean;
+  cursorGlow: boolean;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -18,6 +19,7 @@ interface SettingsStore {
   setCreatePR: (createPR: boolean) => void;
   setDefaultModel: (model: string) => void;
   setDesktopNotifications: (enabled: boolean) => void;
+  setCursorGlow: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -29,6 +31,7 @@ export const useSettingsStore = create<SettingsStore>()(
       createPR: true,
       defaultModel: DEFAULT_MODEL,
       desktopNotifications: true,
+      cursorGlow: false,
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -37,6 +40,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setDefaultModel: (model) => set({ defaultModel: model }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
+      setCursorGlow: (enabled) => set({ cursorGlow: enabled }),
     }),
     {
       name: "settings-storage",
