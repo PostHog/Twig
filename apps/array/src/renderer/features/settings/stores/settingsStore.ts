@@ -17,7 +17,6 @@ interface SettingsStore {
   defaultModel: string;
   desktopNotifications: boolean;
   cursorGlow: boolean;
-  autoConvertLongText: boolean;
   sendMessagesWith: SendMessagesWith;
 
   setAutoRunTasks: (autoRun: boolean) => void;
@@ -29,7 +28,6 @@ interface SettingsStore {
   setDefaultModel: (model: string) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
-  setAutoConvertLongText: (enabled: boolean) => void;
   setSendMessagesWith: (mode: SendMessagesWith) => void;
 }
 
@@ -45,7 +43,6 @@ export const useSettingsStore = create<SettingsStore>()(
       defaultModel: DEFAULT_MODEL,
       desktopNotifications: true,
       cursorGlow: false,
-      autoConvertLongText: true,
       sendMessagesWith: "enter",
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
@@ -59,8 +56,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setCursorGlow: (enabled) => set({ cursorGlow: enabled }),
-      setAutoConvertLongText: (enabled) =>
-        set({ autoConvertLongText: enabled }),
       setSendMessagesWith: (mode) => set({ sendMessagesWith: mode }),
     }),
     {
