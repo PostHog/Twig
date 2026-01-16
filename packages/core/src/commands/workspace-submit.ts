@@ -124,7 +124,12 @@ export async function submitWorkspace(
 
   let bookmark: string;
   const existingBookmarks = bookmarkResult.ok
-    ? bookmarkResult.value.stdout.trim().split(/\s+/).filter(Boolean)
+    ? bookmarkResult.value.stdout
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        // Strip jj bookmark suffixes: * (divergent), ? (conflicted)
+        .map((b) => b.replace(/[*?]$/, ""))
     : [];
 
   if (existingBookmarks.length > 0) {
@@ -142,7 +147,12 @@ export async function submitWorkspace(
   }
 
   // Push the bookmark
-  const pushResult = await push({ bookmark });
+  console.log("[workspace-submit] Pushing bookmark:", bookmark);
+  const pushResult = await push({ bookmark }, cwd);
+  console.log(
+    "[workspace-submit] Push result:",
+    pushResult.ok ? "success" : pushResult.error,
+  );
   if (!pushResult.ok) {
     return err(
       createError(
@@ -154,13 +164,21 @@ export async function submitWorkspace(
 
   // Check if PR already exists
   const existingPR = await getPRForBranch(bookmark, cwd);
-  const trunk = await getTrunk();
+  const trunk = await getTrunk(cwd);
 
-  if (existingPR.ok && existingPR.value) {
+  console.log("[workspace-submit] PR check:", {
+    bookmark,
+    trunk,
+    existingPR: existingPR.ok ? existingPR.value : existingPR.error,
+  });
+
+  if (existingPR.ok && existingPR.value && existingPR.value.state === "OPEN") {
     // Update existing PR
-    const updateResult = await updatePR(existingPR.value.number, {
-      base: trunk,
-    });
+    const updateResult = await updatePR(
+      existingPR.value.number,
+      { base: trunk },
+      cwd,
+    );
     if (!updateResult.ok) {
       return err(
         createError(
@@ -180,12 +198,15 @@ export async function submitWorkspace(
   }
 
   // Create new PR
-  const prResult = await createPR({
-    head: bookmark,
-    title: message,
-    base: trunk,
-    draft: options.draft,
-  });
+  const prResult = await createPR(
+    {
+      head: bookmark,
+      title: message,
+      base: trunk,
+      draft: options.draft,
+    },
+    cwd,
+  );
 
   if (!prResult.ok) {
     return err(

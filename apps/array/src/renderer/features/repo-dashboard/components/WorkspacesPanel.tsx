@@ -1,10 +1,10 @@
-import { DotPattern } from "@components/ui/DotPattern";
 import { useFocus } from "@features/sidebar/hooks/useFocus";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Warning } from "@phosphor-icons/react";
 import { Box, Button, Card, Flex, ScrollArea, Text } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc";
+import { toast } from "@renderer/utils/toast";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useMemo, useState } from "react";
 import { ConflictResolutionModal } from "./ConflictResolutionModal";
@@ -48,26 +48,104 @@ interface WorkspacesPanelProps {
 
 export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
+
   const { navigateToTask } = useNavigationStore();
   const { data: allTasks = [] } = useTasks();
   const workspaceInfos = useWorkspaceStore.use.workspaces();
 
-  const { focusStatus, isWorkspaceFocused, toggleFocus } = useFocus(repoPath);
+  // Check repo mode to determine toggle vs radio behavior
+  const { data: repoMode } = trpcReact.arr.repoMode.useQuery(
+    { cwd: repoPath },
+    {
+      enabled: !!repoPath,
+      staleTime: 1000,
+      refetchInterval: 5000,
+    },
+  );
+
+  const isGitMode = repoMode?.mode === "git";
+
+  const {
+    focusStatus,
+    isWorkspaceFocused,
+    toggleFocus,
+    pendingConflicts,
+    clearPendingConflicts,
+  } = useFocus(repoPath, isGitMode);
+
+  const utils = trpcReact.useUtils();
 
   const { data: workspaceStatuses } = trpcReact.arr.workspaceStatus.useQuery(
     { cwd: repoPath },
-    { enabled: !!repoPath, staleTime: 5000 },
+    {
+      enabled: !!repoPath,
+      staleTime: 500,
+      refetchInterval: 1000,
+      refetchOnWindowFocus: true,
+    },
+  );
+
+  const { data: workspacePRInfos } = trpcReact.arr.workspacePRInfo.useQuery(
+    { cwd: repoPath },
+    {
+      enabled: !!repoPath,
+      staleTime: 30000,
+      refetchOnWindowFocus: true,
+    },
   );
 
   const { data: unassignedFiles } = trpcReact.arr.listUnassigned.useQuery(
     { cwd: repoPath },
-    { enabled: !!repoPath, staleTime: 5000 },
+    {
+      enabled: !!repoPath,
+      staleTime: 500,
+      refetchInterval: 1000,
+      refetchOnWindowFocus: true,
+    },
   );
 
-  const submitMutation = trpcReact.arr.workspaceSubmit.useMutation();
+  const submitMutation = trpcReact.arr.workspaceSubmit.useMutation({
+    onMutate: ({ workspace }) => {
+      toast.loading(`Pushing ${workspace}...`);
+    },
+    onSuccess: (data) => {
+      const action = data.status === "created" ? "Created" : "Updated";
+      toast.success(`${action} PR #${data.prNumber}`, {
+        description: data.prUrl,
+      });
+      utils.arr.workspacePRInfo.invalidate({ cwd: repoPath });
+    },
+    onError: (error) => {
+      toast.error("Push failed", {
+        description: error.message,
+      });
+    },
+  });
+
+  const deleteMutation = trpcReact.arr.workspaceRemove.useMutation({
+    onSuccess: (_data, { name }) => {
+      toast.success(`Deleted workspace "${name}"`);
+      utils.arr.focusStatus.invalidate({ cwd: repoPath });
+      utils.arr.workspaceStatus.invalidate({ cwd: repoPath });
+    },
+    onError: (error) => {
+      toast.error("Failed to delete workspace", {
+        description: error.message,
+      });
+    },
+  });
+
+  const handleDelete = (workspaceName: string) => {
+    deleteMutation.mutate({ name: workspaceName, cwd: repoPath });
+  };
 
   const handleSubmit = (workspaceName: string) => {
-    submitMutation.mutate({ workspace: workspaceName, cwd: repoPath });
+    const task = workspaceToTask.get(workspaceName);
+    submitMutation.mutate({
+      workspace: workspaceName,
+      cwd: repoPath,
+      message: task?.title,
+    });
   };
 
   // Build a map from workspace name to task
@@ -114,14 +192,7 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
       )}
 
       {/* Main Content: Fixed Unassigned + Scrollable Lanes */}
-      <Flex style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-        {/* Background dot pattern */}
-        <DotPattern
-          id="workspaces-panel-dots"
-          opacity={0.5}
-          color="var(--gray-5)"
-        />
-
+      <Flex style={{ flex: 1, overflow: "hidden" }}>
         {/* Fixed Unassigned Lane */}
         <UnassignedLane
           files={unassignedFilesList}
@@ -131,7 +202,7 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
         />
 
         {/* Scrollable Workspace Lanes */}
-        <Box style={{ flex: 1, overflow: "hidden" }}>
+        <Box style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           <ScrollArea
             type="always"
             scrollbars="horizontal"
@@ -142,11 +213,15 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
                 height: "100%",
                 minHeight: "300px",
                 width: "fit-content",
+                paddingRight: "288px",
               }}
             >
               {workspaces.map((workspace) => {
                 const status = workspaceStatuses?.find(
                   (s) => s.name === workspace.name,
+                );
+                const prInfo = workspacePRInfos?.find(
+                  (p) => p.workspace === workspace.name,
                 );
                 const task = workspaceToTask.get(workspace.name);
                 return (
@@ -157,6 +232,12 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
                     isFocused={isWorkspaceFocused(workspace.name)}
                     onToggleFocus={() => toggleFocus(workspace.name)}
                     onSubmit={() => handleSubmit(workspace.name)}
+                    isSubmitting={
+                      submitMutation.isPending &&
+                      submitMutation.variables?.workspace === workspace.name
+                    }
+                    onChat={() => task && navigateToTask(task)}
+                    onDelete={() => handleDelete(workspace.name)}
                     changes={status?.changes ?? []}
                     stats={status?.stats}
                     repoPath={repoPath}
@@ -166,6 +247,9 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
                         ? () => handleWorkspaceClick(workspace.name)
                         : undefined
                     }
+                    pr={prInfo?.pr ?? undefined}
+                    isGitMode={isGitMode}
+                    lastModified={status?.lastModified}
                   />
                 );
               })}
@@ -175,14 +259,18 @@ export function WorkspacesPanel({ repoPath }: WorkspacesPanelProps) {
       </Flex>
 
       {/* Conflict Modal */}
-      {focusStatus?.conflicts && (
-        <ConflictResolutionModal
-          open={conflictModalOpen}
-          onOpenChange={setConflictModalOpen}
-          conflicts={focusStatus.conflicts}
-          repoPath={repoPath}
-        />
-      )}
+      <ConflictResolutionModal
+        open={conflictModalOpen || !!pendingConflicts}
+        onOpenChange={(open) => {
+          setConflictModalOpen(open);
+          if (!open) {
+            clearPendingConflicts();
+          }
+        }}
+        conflicts={pendingConflicts ?? focusStatus?.conflicts ?? []}
+        repoPath={repoPath}
+        workspaceToTask={workspaceToTask}
+      />
     </Flex>
   );
 }

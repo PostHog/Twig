@@ -1,4 +1,4 @@
-import { existsSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -16,6 +16,9 @@ export const UNASSIGNED_WORKSPACE = "unassigned";
 
 /** Description used for focus merge commits */
 export const FOCUS_COMMIT_DESCRIPTION = "focus";
+
+/** Description used for remote baseline merge commits */
+export const REMOTE_BASELINE_DESCRIPTION = "remote baseline";
 
 /** Suffix for workspace working copy references (e.g., "agent-a@") */
 export function workspaceRef(name: string): string {
@@ -79,6 +82,8 @@ export function setupWorkspaceLinks(
 export interface AddWorkspaceOptions {
   /** Revision to create workspace at (e.g., branch name). Defaults to trunk() */
   revision?: string;
+  /** Description/message for the workspace commit (becomes PR title) */
+  description?: string;
 }
 
 /**
@@ -129,6 +134,21 @@ export async function addWorkspace(
   const infoResult = await getWorkspaceInfo(name, cwd);
   if (!infoResult.ok) return infoResult;
 
+  // Set the commit description if provided and not already set (becomes PR title)
+  if (options.description) {
+    const descResult = await runJJ(
+      ["log", "-r", workspaceRef(name), "--no-graph", "-T", "description"],
+      cwd,
+    );
+    const existingDesc = descResult.ok ? descResult.value.stdout.trim() : "";
+    if (!existingDesc) {
+      await runJJ(
+        ["describe", "-r", workspaceRef(name), "-m", options.description],
+        cwd,
+      );
+    }
+  }
+
   // Create a bookmark for the workspace so arr exit can find it
   await ensureBookmark(name, infoResult.value.changeId, cwd);
 
@@ -172,7 +192,9 @@ export async function removeWorkspace(
       const bookmarks = bookmarksResult.value.stdout
         .trim()
         .split(/\s+/)
-        .filter(Boolean);
+        .filter(Boolean)
+        // Strip jj bookmark suffixes: * (divergent), ? (conflicted)
+        .map((b) => b.replace(/[*?]$/, ""));
       for (const bookmark of bookmarks) {
         // Untrack remote bookmark first (if it exists)
         await runJJ(["bookmark", "untrack", `${bookmark}@origin`], cwd);
@@ -403,4 +425,62 @@ export async function getUnassignedFiles(
   if (!result.ok) return result;
 
   return ok(parseDiffPaths(result.value.stdout));
+}
+
+/**
+ * Read file content from a workspace's working directory.
+ * This returns the current (modified) content of the file.
+ */
+export function readWorkspaceFile(
+  workspaceName: string,
+  filePath: string,
+  repoPath: string,
+): Result<string> {
+  const workspacePath = getWorkspacePath(workspaceName, repoPath);
+  const fullPath = join(workspacePath, filePath);
+
+  if (!existsSync(fullPath)) {
+    return err(
+      createError("NOT_FOUND", `File '${filePath}' not found in workspace`),
+    );
+  }
+
+  try {
+    const content = readFileSync(fullPath, "utf-8");
+    return ok(content);
+  } catch (e) {
+    return err(createError("COMMAND_FAILED", `Failed to read file: ${e}`));
+  }
+}
+
+/**
+ * Get file content at the parent revision of a workspace.
+ * This returns the original (pre-change) content.
+ * Uses --ignore-working-copy to avoid slow snapshots.
+ * Returns empty string if file doesn't exist at parent (new file).
+ */
+export async function getWorkspaceFileAtParent(
+  workspaceName: string,
+  filePath: string,
+  cwd = process.cwd(),
+): Promise<Result<string>> {
+  // Get the parent of the workspace's working copy
+  const parentRevision = `${workspaceRef(workspaceName)}-`;
+
+  const start = performance.now();
+  const result = await runJJ(
+    ["file", "show", "--ignore-working-copy", filePath, "-r", parentRevision],
+    cwd,
+  );
+  console.log(
+    `[timing] jj file show for ${filePath} took ${(performance.now() - start).toFixed(1)}ms`,
+  );
+
+  // If file doesn't exist at parent, it's a new file - return empty string
+  if (!result.ok && result.error.message.includes("No such path")) {
+    return ok("");
+  }
+  if (!result.ok) return result;
+
+  return ok(result.value.stdout);
 }

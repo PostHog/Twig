@@ -222,6 +222,16 @@ export function enableGitMode(repoPath: string): void {
 }
 
 /**
+ * Check if a repo is in git mode
+ */
+export function isGitMode(repoPath: string): boolean {
+  const repos = readRepos();
+  const existing = repos.find((r) => r.path === repoPath);
+  // Default to false (jj mode) if repo not registered
+  return existing?.gitMode ?? false;
+}
+
+/**
  * Disable git mode for a repo
  */
 export function disableGitMode(repoPath: string): void {

@@ -10,6 +10,8 @@ interface CodeMirrorDiffEditorProps {
   filePath?: string;
   relativePath?: string;
   onContentChange?: (content: string) => void;
+  /** Hide the header row with filename and split/unified toggle */
+  hideHeader?: boolean;
 }
 
 export function CodeMirrorDiffEditor({
@@ -18,6 +20,7 @@ export function CodeMirrorDiffEditor({
   filePath,
   relativePath,
   onContentChange,
+  hideHeader = false,
 }: CodeMirrorDiffEditorProps) {
   const { viewMode, setViewMode } = useDiffViewerStore();
   const extensions = useEditorExtensions(filePath, true);
@@ -43,31 +46,35 @@ export function CodeMirrorDiffEditor({
 
   return (
     <Flex direction="column" height="100%">
-      <Flex
-        px="3"
-        py="2"
-        align="center"
-        justify="between"
-        style={{ borderBottom: "1px solid var(--gray-6)", flexShrink: 0 }}
-      >
-        {relativePath && (
-          <Text
-            size="1"
-            color="gray"
-            style={{ fontFamily: "var(--code-font-family)" }}
-          >
-            {relativePath}
-          </Text>
-        )}
-        <SegmentedControl.Root
-          size="1"
-          value={viewMode}
-          onValueChange={(value) => setViewMode(value as ViewMode)}
+      {!hideHeader && (
+        <Flex
+          px="3"
+          py="2"
+          align="center"
+          justify="between"
+          style={{ borderBottom: "1px solid var(--gray-6)", flexShrink: 0 }}
         >
-          <SegmentedControl.Item value="split">Split</SegmentedControl.Item>
-          <SegmentedControl.Item value="unified">Unified</SegmentedControl.Item>
-        </SegmentedControl.Root>
-      </Flex>
+          {relativePath && (
+            <Text
+              size="1"
+              color="gray"
+              style={{ fontFamily: "var(--code-font-family)" }}
+            >
+              {relativePath}
+            </Text>
+          )}
+          <SegmentedControl.Root
+            size="1"
+            value={viewMode}
+            onValueChange={(value) => setViewMode(value as ViewMode)}
+          >
+            <SegmentedControl.Item value="split">Split</SegmentedControl.Item>
+            <SegmentedControl.Item value="unified">
+              Unified
+            </SegmentedControl.Item>
+          </SegmentedControl.Root>
+        </Flex>
+      )}
       <Box style={{ flex: 1, overflow: "auto" }}>
         <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
       </Box>

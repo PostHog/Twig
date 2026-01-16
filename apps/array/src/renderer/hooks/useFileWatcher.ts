@@ -36,6 +36,20 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
       queryClient.invalidateQueries({
         queryKey: ["diff-stats", repoPath],
       });
+      // Also invalidate jj workspace file queries (for any workspace)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            (key[0] === "workspace-file" &&
+              key[1] === repoPath &&
+              key[3] === relativePath) ||
+            (key[0] === "workspace-file-parent" &&
+              key[1] === repoPath &&
+              key[3] === relativePath)
+          );
+        },
+      });
     },
   });
 

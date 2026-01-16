@@ -1,6 +1,5 @@
 import { Button, Flex } from "@radix-ui/themes";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { useFocus } from "../hooks/useFocus";
 import type {
   HistoryData,
   HistoryTaskData,
@@ -48,15 +47,6 @@ function HistoryTaskItem({
   const workspaces = useWorkspaceStore.use.workspaces();
   const workspace = workspaces[task.id];
 
-  const { isWorkspaceFocused, toggleFocus } = useFocus(workspace?.repoPath);
-  const isFocused = workspace?.workspaceName
-    ? isWorkspaceFocused(workspace.workspaceName)
-    : false;
-
-  const handleToggleFocus = workspace?.workspaceName
-    ? () => toggleFocus(workspace.workspaceName)
-    : undefined;
-
   return (
     <TaskItem
       id={task.id}
@@ -68,12 +58,10 @@ function HistoryTaskItem({
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
-      isFocused={isFocused}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDelete={onDelete}
       onTogglePin={onTogglePin}
-      onToggleFocus={handleToggleFocus}
     />
   );
 }
@@ -98,15 +86,6 @@ function PinnedTaskItem({
   const workspaces = useWorkspaceStore.use.workspaces();
   const workspace = workspaces[task.id];
 
-  const { isWorkspaceFocused, toggleFocus } = useFocus(workspace?.repoPath);
-  const isFocused = workspace?.workspaceName
-    ? isWorkspaceFocused(workspace.workspaceName)
-    : false;
-
-  const handleToggleFocus = workspace?.workspaceName
-    ? () => toggleFocus(workspace.workspaceName)
-    : undefined;
-
   return (
     <TaskItem
       id={task.id}
@@ -118,12 +97,10 @@ function PinnedTaskItem({
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
-      isFocused={isFocused}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDelete={onDelete}
       onTogglePin={onTogglePin}
-      onToggleFocus={handleToggleFocus}
     />
   );
 }

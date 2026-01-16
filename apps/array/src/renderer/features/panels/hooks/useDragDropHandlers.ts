@@ -5,20 +5,40 @@ import {
 } from "../store/panelLayoutStore";
 import { findPanelById } from "../store/panelStoreHelpers";
 
+export interface FileDragHandlers {
+  onFileDragStart?: (file: string) => void;
+  onFileDrop?: (
+    file: string,
+    fromWorkspace: string,
+    toWorkspace: string,
+  ) => Promise<void>;
+  onFileDragCancel?: () => void;
+}
+
 const isSplitDirection = (zone: string): zone is SplitDirection => {
   return (
     zone === "top" || zone === "bottom" || zone === "left" || zone === "right"
   );
 };
 
-export const useDragDropHandlers = (taskId: string) => {
+export const useDragDropHandlers = (
+  taskId: string,
+  fileHandlers?: FileDragHandlers,
+) => {
   const { moveTab, splitPanel, setDraggingTab, reorderTabs, setFocusedPanel } =
     usePanelLayoutStore();
 
   const handleDragStart: DragDropEvents["dragstart"] = (event) => {
     const data = event.operation.source?.data;
-    if (data?.type !== "tab" || !data.tabId || !data.panelId) return;
 
+    // Handle file drag
+    if (data?.type === "file" && data.file) {
+      fileHandlers?.onFileDragStart?.(data.file as string);
+      return;
+    }
+
+    // Handle tab drag
+    if (data?.type !== "tab" || !data.tabId || !data.panelId) return;
     setDraggingTab(taskId, data.tabId, data.panelId);
   };
 
@@ -59,13 +79,38 @@ export const useDragDropHandlers = (taskId: string) => {
     }
   };
 
-  const handleDragEnd: DragDropEvents["dragend"] = (event) => {
+  const handleDragEnd: DragDropEvents["dragend"] = async (event) => {
     usePanelLayoutStore.getState().clearDraggingTab(taskId);
-
-    if (event.canceled) return;
 
     const sourceData = event.operation.source?.data;
     const targetData = event.operation.target?.data;
+
+    // Handle file drop
+    if (sourceData?.type === "file") {
+      if (event.canceled) {
+        fileHandlers?.onFileDragCancel?.();
+        return;
+      }
+
+      if (
+        targetData?.type === "workspace" &&
+        sourceData.file &&
+        sourceData.workspace &&
+        targetData.workspace &&
+        sourceData.workspace !== targetData.workspace
+      ) {
+        await fileHandlers?.onFileDrop?.(
+          sourceData.file as string,
+          sourceData.workspace as string,
+          targetData.workspace as string,
+        );
+      } else {
+        fileHandlers?.onFileDragCancel?.();
+      }
+      return;
+    }
+
+    if (event.canceled) return;
 
     // Tab reordering within same panel is handled by onDragOver
     // Here we only handle cross-panel moves and splits

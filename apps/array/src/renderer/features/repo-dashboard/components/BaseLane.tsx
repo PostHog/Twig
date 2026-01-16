@@ -1,6 +1,6 @@
 import { DotPattern } from "@components/ui/DotPattern";
 import { SidebarSimple } from "@phosphor-icons/react";
-import { Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
+import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import type { ReactNode } from "react";
 import { useId, useState } from "react";
 
@@ -135,7 +135,7 @@ export function BaseLane({
       {subHeader}
 
       {/* File List */}
-      <ScrollArea style={{ flex: 1, position: "relative" }}>
+      <Box style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         {showDotPattern && itemCount === 0 && (
           <DotPattern
             id={`lane-${patternId}`}
@@ -149,8 +149,8 @@ export function BaseLane({
           style={{ position: "relative", zIndex: 1 }}
         >
           {itemCount === 0 ? (
-            <Flex align="center" justify="center" py="6">
-              <Text size="1" color="gray">
+            <Flex align="center" justify="center" py="6" px="3">
+              <Text size="1" color="gray" align="center">
                 {emptyMessage}
               </Text>
             </Flex>
@@ -158,7 +158,7 @@ export function BaseLane({
             children
           )}
         </Flex>
-      </ScrollArea>
+      </Box>
     </Flex>
   );
 }

@@ -7,7 +7,10 @@ export {
   PanelLeaf,
   PanelTab,
 } from "./components/PanelTree";
-export { useDragDropHandlers } from "./hooks/useDragDropHandlers";
+export {
+  type FileDragHandlers,
+  useDragDropHandlers,
+} from "./hooks/useDragDropHandlers";
 export type { ContentRenderer } from "./hooks/usePanelLayoutHooks";
 export { usePanelLayoutStore } from "./store/panelLayoutStore";
 export { usePanelStore } from "./store/panelStore";

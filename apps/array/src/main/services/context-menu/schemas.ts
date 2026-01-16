@@ -20,6 +20,10 @@ export const fileContextMenuInput = z.object({
   showCollapseAll: z.boolean().optional(),
 });
 
+export const workspaceContextMenuInput = z.object({
+  workspaceName: z.string(),
+});
+
 const externalAppAction = z.discriminatedUnion("type", [
   z.object({ type: z.literal("open-in-app"), appId: z.string() }),
   z.object({ type: z.literal("copy-path") }),
@@ -49,6 +53,11 @@ const fileAction = z.discriminatedUnion("type", [
   z.object({ type: z.literal("external-app"), action: externalAppAction }),
 ]);
 
+const workspaceAction = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("delete") }),
+  z.object({ type: z.literal("copy-path") }),
+]);
+
 const splitDirection = z.enum(["left", "right", "up", "down"]);
 
 export const taskContextMenuOutput = z.object({
@@ -61,6 +70,9 @@ export const tabContextMenuOutput = z.object({ action: tabAction.nullable() });
 export const fileContextMenuOutput = z.object({
   action: fileAction.nullable(),
 });
+export const workspaceContextMenuOutput = z.object({
+  action: workspaceAction.nullable(),
+});
 export const splitContextMenuOutput = z.object({
   direction: splitDirection.nullable(),
 });
@@ -69,10 +81,14 @@ export type TaskContextMenuInput = z.infer<typeof taskContextMenuInput>;
 export type FolderContextMenuInput = z.infer<typeof folderContextMenuInput>;
 export type TabContextMenuInput = z.infer<typeof tabContextMenuInput>;
 export type FileContextMenuInput = z.infer<typeof fileContextMenuInput>;
+export type WorkspaceContextMenuInput = z.infer<
+  typeof workspaceContextMenuInput
+>;
 
 export type ExternalAppAction = z.infer<typeof externalAppAction>;
 export type TaskAction = z.infer<typeof taskAction>;
 export type FolderAction = z.infer<typeof folderAction>;
+export type WorkspaceAction = z.infer<typeof workspaceAction>;
 export type TabAction = z.infer<typeof tabAction>;
 export type FileAction = z.infer<typeof fileAction>;
 export type SplitDirection = z.infer<typeof splitDirection>;
@@ -93,4 +109,7 @@ export type TaskContextMenuResult = z.infer<typeof taskContextMenuOutput>;
 export type FolderContextMenuResult = z.infer<typeof folderContextMenuOutput>;
 export type TabContextMenuResult = z.infer<typeof tabContextMenuOutput>;
 export type FileContextMenuResult = z.infer<typeof fileContextMenuOutput>;
+export type WorkspaceContextMenuResult = z.infer<
+  typeof workspaceContextMenuOutput
+>;
 export type SplitContextMenuResult = z.infer<typeof splitContextMenuOutput>;

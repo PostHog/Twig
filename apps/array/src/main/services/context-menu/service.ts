@@ -26,6 +26,9 @@ import type {
   TaskAction,
   TaskContextMenuInput,
   TaskContextMenuResult,
+  WorkspaceAction,
+  WorkspaceContextMenuInput,
+  WorkspaceContextMenuResult,
 } from "./schemas.js";
 import type {
   ActionItemDef,
@@ -163,6 +166,28 @@ export class ContextMenuService {
           ]
         : []),
       ...this.externalAppItems<FileAction>(apps, lastUsedAppId),
+    ]);
+  }
+
+  async showWorkspaceContextMenu(
+    input: WorkspaceContextMenuInput,
+  ): Promise<WorkspaceContextMenuResult> {
+    return this.showMenu<WorkspaceAction>([
+      this.item("Copy Path", { type: "copy-path" }),
+      this.separator(),
+      this.item(
+        "Delete workspace",
+        { type: "delete" },
+        {
+          confirm: {
+            title: "Delete Workspace",
+            message: `Delete workspace "${input.workspaceName}"?`,
+            detail:
+              "This will permanently delete the workspace and all its changes.",
+            confirmLabel: "Delete",
+          },
+        },
+      ),
     ]);
   }
 

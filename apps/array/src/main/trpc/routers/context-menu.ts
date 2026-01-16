@@ -12,6 +12,8 @@ import {
   tabContextMenuOutput,
   taskContextMenuInput,
   taskContextMenuOutput,
+  workspaceContextMenuInput,
+  workspaceContextMenuOutput,
 } from "../../services/context-menu/schemas.js";
 import type { ContextMenuService } from "../../services/context-menu/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -48,4 +50,9 @@ export const contextMenuRouter = router({
     .input(fileContextMenuInput)
     .output(fileContextMenuOutput)
     .mutation(({ input }) => getService().showFileContextMenu(input)),
+
+  showWorkspaceContextMenu: publicProcedure
+    .input(workspaceContextMenuInput)
+    .output(workspaceContextMenuOutput)
+    .mutation(({ input }) => getService().showWorkspaceContextMenu(input)),
 });

@@ -90,7 +90,7 @@ export function HeaderRow() {
       {content && (
         <Flex
           align="center"
-          justify="between"
+          justify="center"
           px="3"
           flexGrow="1"
           style={{ height: "100%", overflow: "hidden" }}

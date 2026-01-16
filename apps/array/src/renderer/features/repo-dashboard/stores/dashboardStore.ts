@@ -1,3 +1,4 @@
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { trpcReact } from "@renderer/trpc";
 import { create } from "zustand";
 
@@ -91,6 +92,20 @@ export function useDashboardActions(repoPath: string | undefined) {
     },
   });
 
+  const moveFilesMutation = trpcReact.arr.moveFiles.useMutation({
+    onSuccess: () => {
+      if (repoPath) {
+        utils.arr.listUnassigned.invalidate({ cwd: repoPath });
+        utils.arr.workspaceStatus.invalidate({ cwd: repoPath });
+        utils.arr.focusStatus.invalidate({ cwd: repoPath });
+      }
+      store.clearDragState();
+    },
+    onError: (_error) => {
+      store.clearDragState();
+    },
+  });
+
   const toggleWorkspaceFocus = async (workspace: string) => {
     if (!repoPath) return;
 
@@ -120,10 +135,34 @@ export function useDashboardActions(repoPath: string | undefined) {
     });
   };
 
+  const moveFiles = async (
+    files: string[],
+    fromWorkspace: string,
+    toWorkspace: string,
+  ) => {
+    if (!repoPath || files.length === 0) return;
+
+    await moveFilesMutation.mutateAsync({
+      files,
+      fromWorkspace,
+      toWorkspace,
+      cwd: repoPath,
+    });
+
+    // Close any open diff tabs for moved files (they're now in a different workspace)
+    const layoutId = `dashboard-${repoPath}`;
+    const closeDiffTabsForFile =
+      usePanelLayoutStore.getState().closeDiffTabsForFile;
+    for (const file of files) {
+      closeDiffTabsForFile(layoutId, file);
+    }
+  };
+
   return {
     toggleWorkspaceFocus,
     assignFiles,
-    isAssigning: assignFilesMutation.isPending,
+    moveFiles,
+    isAssigning: assignFilesMutation.isPending || moveFilesMutation.isPending,
     isFocusMutating:
       focusAddMutation.isPending || focusRemoveMutation.isPending,
   };

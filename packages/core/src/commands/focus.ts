@@ -12,10 +12,12 @@ import {
   getWorkspacePath,
   getWorkspaceTip,
   listWorkspaces,
+  REMOTE_BASELINE_DESCRIPTION,
   setupWorkspaceLinks,
   snapshotWorkspace,
   UNASSIGNED_WORKSPACE,
   type WorkspaceInfo,
+  workspaceRef,
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
@@ -70,6 +72,69 @@ async function getFocusWorkspaces(
  * All workspaces are siblings on trunk, only merged at preview time.
  * This keeps PRs clean - landing agent-a only lands agent-a's changes.
  */
+/**
+ * Find all existing focus and remote baseline commits by their description.
+ * Returns commit IDs to abandon.
+ */
+async function findFocusCommits(cwd: string): Promise<string[]> {
+  // Find all commits with "focus" or "remote baseline" description that aren't immutable
+  const result = await runJJ(
+    [
+      "log",
+      "-r",
+      `(description(substring:"${FOCUS_COMMIT_DESCRIPTION}") | description(substring:"${REMOTE_BASELINE_DESCRIPTION}")) & ~immutable()`,
+      "--no-graph",
+      "-T",
+      'commit_id ++ "\\n"',
+    ],
+    cwd,
+  );
+  if (!result.ok) return [];
+
+  return result.value.stdout.trim().split("\n").filter(Boolean);
+}
+
+/**
+ * Get the remote baseline ref for a workspace.
+ * Returns bookmark@origin if the workspace has been pushed, otherwise trunk.
+ */
+async function getWorkspaceRemoteBaseline(
+  workspace: string,
+  trunk: string,
+  cwd: string,
+): Promise<string> {
+  // Get bookmark on this workspace's commit
+  const bookmarkResult = await runJJ(
+    ["log", "-r", workspaceRef(workspace), "--no-graph", "-T", "bookmarks"],
+    cwd,
+  );
+
+  if (!bookmarkResult.ok) return trunk;
+
+  const bookmarks = bookmarkResult.value.stdout
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    // Strip jj bookmark suffixes: * (divergent), ? (conflicted)
+    .map((b) => b.replace(/[*?]$/, ""));
+  if (bookmarks.length === 0) return trunk;
+
+  const bookmark = bookmarks[0];
+
+  // Check if this bookmark has a remote tracking ref
+  const remoteRef = `${bookmark}@origin`;
+  const checkResult = await runJJ(
+    ["log", "-r", remoteRef, "--no-graph", "-T", "commit_id"],
+    cwd,
+  );
+
+  if (checkResult.ok && checkResult.value.stdout.trim()) {
+    return remoteRef;
+  }
+
+  return trunk;
+}
+
 async function updateFocus(
   workspaces: string[],
   cwd = process.cwd(),
@@ -79,29 +144,19 @@ async function updateFocus(
   if (!rootResult.ok) return rootResult;
   const repoPath = rootResult.value;
 
-  // Get current commit ID to abandon later (if it's a preview commit)
-  const currentResult = await runJJ(
-    ["log", "-r", "@", "--no-graph", "-T", "commit_id"],
-    cwd,
-  );
-  const oldCommitId = currentResult.ok
-    ? currentResult.value.stdout.trim()
-    : null;
+  // Find all existing focus commits to abandon after we create the new one
+  const oldFocusCommits = await findFocusCommits(cwd);
 
-  // Check if currently in focus mode
-  const currentWorkspaces = await getFocusWorkspaces(cwd);
-  const isCurrentFocus =
-    currentWorkspaces.ok && currentWorkspaces.value.length > 0;
+  const trunk = await getTrunk(cwd);
 
   if (workspaces.length === 0) {
     // Exit focus mode - go back to trunk
-    const trunk = await getTrunk(cwd);
     const result = await runJJ(["new", trunk], cwd);
     if (!result.ok) return result;
 
-    // Abandon old focus commit
-    if (isCurrentFocus && oldCommitId) {
-      await runJJ(["abandon", oldCommitId], cwd);
+    // Abandon all old focus commits
+    if (oldFocusCommits.length > 0) {
+      await runJJ(["abandon", ...oldFocusCommits], cwd);
     }
 
     // Unregister repo from daemon
@@ -124,16 +179,31 @@ async function updateFocus(
   const unassignedResult = await ensureUnassignedWorkspace(cwd);
   if (!unassignedResult.ok) return unassignedResult;
 
-  // Snapshot each workspace to pick up existing changes, then get tip
-  const changeIds: string[] = [];
+  // Collect remote baselines for git_head (what's already pushed)
+  // and local tips for the working copy merge
+  const remoteBaselines: string[] = [trunk]; // Always include trunk
+  const localTips: string[] = [];
 
-  // First, add unassigned workspace tip to merge parents
+  // First, add unassigned workspace tip and its remote baseline
   const unassignedTipResult = await getWorkspaceTip(UNASSIGNED_WORKSPACE, cwd);
   if (unassignedTipResult.ok) {
-    changeIds.push(unassignedTipResult.value);
+    localTips.push(unassignedTipResult.value);
+
+    // Check if unassigned has a pushed bookmark
+    const unassignedBaseline = await getWorkspaceRemoteBaseline(
+      UNASSIGNED_WORKSPACE,
+      trunk,
+      cwd,
+    );
+    if (
+      unassignedBaseline !== trunk &&
+      !remoteBaselines.includes(unassignedBaseline)
+    ) {
+      remoteBaselines.push(unassignedBaseline);
+    }
   }
 
-  // Then add each agent workspace tip
+  // Then process each agent workspace
   for (const ws of validWorkspaces) {
     const wsPath = getWorkspacePath(ws, repoPath);
 
@@ -142,6 +212,7 @@ async function updateFocus(
 
     await snapshotWorkspace(wsPath);
 
+    // Get local tip for working copy
     const tipResult = await getWorkspaceTip(ws, cwd);
     if (!tipResult.ok) {
       return err(
@@ -151,19 +222,53 @@ async function updateFocus(
         ),
       );
     }
-    changeIds.push(tipResult.value);
+    localTips.push(tipResult.value);
+
+    // Get remote baseline for git_head
+    const remoteBaseline = await getWorkspaceRemoteBaseline(ws, trunk, cwd);
+    if (remoteBaseline !== trunk && !remoteBaselines.includes(remoteBaseline)) {
+      remoteBaselines.push(remoteBaseline);
+    }
   }
 
-  // Create the merge commit with simple description
+  // Step 1: Create the remote baseline merge (this becomes git_head's parent)
+  // This represents "what's already on the remote" for all focused workspaces
+  let baselineRef: string;
+  if (remoteBaselines.length === 1) {
+    baselineRef = remoteBaselines[0];
+  } else {
+    // Create a merge of all remote baselines
+    const baselineMergeResult = await runJJ(
+      ["new", ...remoteBaselines, "-m", REMOTE_BASELINE_DESCRIPTION],
+      cwd,
+    );
+    if (!baselineMergeResult.ok) return baselineMergeResult;
+
+    // Get the commit id of the baseline merge
+    const baselineIdResult = await runJJ(
+      ["log", "-r", "@", "--no-graph", "-T", "commit_id"],
+      cwd,
+    );
+    if (!baselineIdResult.ok) return baselineIdResult;
+    baselineRef = baselineIdResult.value.stdout.trim();
+  }
+
+  // Step 2: Create the focus commit on top of the baseline
+  // git_head() will point to baselineRef (the remote baseline)
   const description = FOCUS_COMMIT_DESCRIPTION;
-  const newArgs = ["new", ...changeIds, "-m", description];
-  const result = await runJJ(newArgs, cwd);
+  const newResult = await runJJ(["new", baselineRef, "-m", description], cwd);
+  if (!newResult.ok) return newResult;
 
-  if (!result.ok) return result;
+  // Step 3: Restore changes from all local workspace tips into the focus commit
+  // This brings in the local (potentially unpushed) changes without making them parents
+  for (const tip of localTips) {
+    const restoreResult = await runJJ(["restore", "--from", tip], cwd);
+    if (!restoreResult.ok) return restoreResult;
+  }
 
-  // Abandon old focus commit (now that we've moved away from it)
-  if (isCurrentFocus && oldCommitId) {
-    await runJJ(["abandon", oldCommitId], cwd);
+  // Abandon all old focus commits (now that we've moved away from them)
+  if (oldFocusCommits.length > 0) {
+    await runJJ(["abandon", ...oldFocusCommits], cwd);
   }
 
   // Get the new change-id

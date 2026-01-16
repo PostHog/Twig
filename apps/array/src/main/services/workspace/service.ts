@@ -152,8 +152,11 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     // Generate workspace name from task title
     const workspaceName = this.generateWorkspaceName(taskTitle, taskId);
 
-    // Create the jj workspace
-    const result = await workspaceAdd(workspaceName, repoPath, { revision });
+    // Create the jj workspace with the task title as the commit description
+    const result = await workspaceAdd(workspaceName, repoPath, {
+      revision,
+      description: taskTitle,
+    });
     if (!result.ok) {
       log.error(`Failed to create workspace for task ${taskId}:`, result.error);
       throw new Error(`Failed to create workspace: ${result.error.message}`);

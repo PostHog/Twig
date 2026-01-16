@@ -1,4 +1,5 @@
 import { DiffStatsBadge } from "@components/ui/DiffStatsBadge";
+import { useDroppable } from "@dnd-kit/react";
 import { BaseLane } from "./BaseLane";
 import { DraggableFileItem } from "./DraggableFileItem";
 
@@ -21,49 +22,62 @@ export function UnassignedLane({
   layoutId,
   stats,
 }: UnassignedLaneProps) {
+  const { ref, isDropTarget } = useDroppable({
+    id: "workspace-unassigned",
+    data: { type: "workspace", workspace: "unassigned" },
+    accept: ["file"],
+  });
+
   return (
-    <BaseLane
-      name="Unassigned"
-      itemCount={files.length}
-      headerActions={
-        <DiffStatsBadge
-          added={stats?.added}
-          removed={stats?.removed}
-          files={files.length}
-        />
-      }
-      collapsedStats={
-        files.length > 0 ? (
+    <div ref={ref} style={{ height: "100%" }}>
+      <BaseLane
+        name="Unassigned"
+        itemCount={files.length}
+        headerActions={
           <DiffStatsBadge
             added={stats?.added}
             removed={stats?.removed}
             files={files.length}
-            vertical
           />
-        ) : undefined
-      }
-      containerStyle={{
-        width: "240px",
-        minWidth: "240px",
-        backgroundColor: "var(--gray-2)",
-        position: "relative",
-        zIndex: 1,
-      }}
-      headerStyle={{
-        backgroundColor: "var(--gray-1)",
-      }}
-      collapsedStyle={{
-        backgroundColor: "var(--gray-2)",
-      }}
-    >
-      {files.map((file) => (
-        <DraggableFileItem
-          key={file}
-          file={{ path: file, status: "M" }}
-          repoPath={repoPath}
-          layoutId={layoutId}
-        />
-      ))}
-    </BaseLane>
+        }
+        collapsedStats={
+          files.length > 0 ? (
+            <DiffStatsBadge
+              added={stats?.added}
+              removed={stats?.removed}
+              files={files.length}
+              vertical
+            />
+          ) : undefined
+        }
+        containerStyle={{
+          width: "240px",
+          minWidth: "240px",
+          backgroundColor: isDropTarget ? "var(--green-2)" : "var(--gray-2)",
+          position: "relative",
+          zIndex: 1,
+          transition: "background-color 150ms ease",
+        }}
+        headerStyle={{
+          backgroundColor: isDropTarget ? "var(--green-2)" : "var(--gray-1)",
+          transition: "background-color 150ms ease",
+        }}
+        collapsedStyle={{
+          backgroundColor: isDropTarget ? "var(--green-2)" : "var(--gray-2)",
+          transition: "background-color 150ms ease",
+        }}
+        emptyMessage="Changes not related to any task will show up here."
+      >
+        {files.map((file) => (
+          <DraggableFileItem
+            key={file}
+            file={{ path: file, status: "M" }}
+            repoPath={repoPath}
+            layoutId={layoutId}
+            workspace="unassigned"
+          />
+        ))}
+      </BaseLane>
+    </div>
   );
 }

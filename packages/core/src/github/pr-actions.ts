@@ -36,14 +36,32 @@ export async function createPR(
     const error = e as Error & {
       status?: number;
       response?: {
-        data?: { message?: string; errors?: Array<{ message?: string }> };
+        data?: {
+          message?: string;
+          errors?: Array<{
+            message?: string;
+            resource?: string;
+            field?: string;
+            code?: string;
+          }>;
+        };
       };
     };
     const ghMessage = error.response?.data?.message || error.message;
     const ghErrors = error.response?.data?.errors
-      ?.map((err) => err.message)
+      ?.map((err) => err.message || `${err.resource}.${err.field}: ${err.code}`)
       .join(", ");
-    const details = ghErrors ? `${ghMessage} (${ghErrors})` : ghMessage;
+    const details = ghErrors ? `${ghMessage}: ${ghErrors}` : ghMessage;
+
+    // Log full error for debugging
+    console.error("[createPR] GitHub API error:", {
+      status: error.status,
+      message: ghMessage,
+      errors: error.response?.data?.errors,
+      head: options.head,
+      base: options.base,
+    });
+
     return err(
       createError("COMMAND_FAILED", `Failed to create PR: ${details}`),
     );

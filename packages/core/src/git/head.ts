@@ -85,3 +85,69 @@ export async function detachHead(
 
   return ok(undefined);
 }
+
+export interface BranchInfo {
+  name: string;
+  isCurrent: boolean;
+  isRemote: boolean;
+}
+
+/**
+ * List all local Git branches.
+ */
+export async function listBranches(
+  cwd: string,
+  executor: CommandExecutor = shellExecutor,
+): Promise<Result<BranchInfo[]>> {
+  const result = await executor.execute(
+    "git",
+    ["branch", "--format=%(refname:short)|%(HEAD)"],
+    { cwd },
+  );
+
+  if (result.exitCode !== 0) {
+    return err(
+      createError(
+        "COMMAND_FAILED",
+        `Failed to list branches: ${result.stderr}`,
+      ),
+    );
+  }
+
+  const branches: BranchInfo[] = result.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const [name, head] = line.split("|");
+      return {
+        name: name.trim(),
+        isCurrent: head === "*",
+        isRemote: false,
+      };
+    });
+
+  return ok(branches);
+}
+
+/**
+ * Checkout a Git branch.
+ */
+export async function checkoutBranch(
+  cwd: string,
+  branch: string,
+  executor: CommandExecutor = shellExecutor,
+): Promise<Result<void>> {
+  const result = await executor.execute("git", ["checkout", branch], { cwd });
+
+  if (result.exitCode !== 0) {
+    return err(
+      createError(
+        "COMMAND_FAILED",
+        `Failed to checkout branch '${branch}': ${result.stderr}`,
+      ),
+    );
+  }
+
+  return ok(undefined);
+}

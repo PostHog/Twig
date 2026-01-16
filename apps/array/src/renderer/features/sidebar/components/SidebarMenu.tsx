@@ -46,12 +46,6 @@ function SidebarMenuComponent() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [folders]);
 
-  // Get task count per folder from sidebarData
-  const getTaskCountForFolder = (folderId: string): number => {
-    const folderData = sidebarData.folders.find((f) => f.id === folderId);
-    return folderData?.tasks.length ?? 0;
-  };
-
   // Check if a repo is currently active
   const activeRepoPath = view.type === "repo-dashboard" ? view.repoPath : null;
 
@@ -132,7 +126,6 @@ function SidebarMenuComponent() {
                     key={folder.id}
                     path={folder.path}
                     isActive={activeRepoPath === folder.path}
-                    taskCount={getTaskCountForFolder(folder.id)}
                   />
                 ))}
               </>

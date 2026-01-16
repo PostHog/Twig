@@ -1,3 +1,4 @@
+import { parseDiffPaths } from "../jj/diff";
 import { runJJ } from "../jj/runner";
 import {
   addWorkspace,
@@ -7,6 +8,21 @@ import {
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
+
+/**
+ * Get files modified in a workspace (vs its parent).
+ */
+async function getWorkspaceFiles(
+  workspace: string,
+  cwd: string,
+): Promise<Result<string[]>> {
+  const result = await runJJ(
+    ["diff", "-r", workspaceRef(workspace), "--summary"],
+    cwd,
+  );
+  if (!result.ok) return result;
+  return ok(parseDiffPaths(result.value.stdout));
+}
 
 export interface AssignResult {
   files: string[];
@@ -167,6 +183,88 @@ export async function assignFilesToNewWorkspace(
     files: filesToAssign,
     from: UNASSIGNED_WORKSPACE,
     to: newWorkspaceName,
+  });
+}
+
+export interface MoveFilesResult {
+  files: string[];
+  from: string;
+  to: string;
+}
+
+/**
+ * Move files from one workspace to another.
+ * Disallows moves that would create conflicts (target already has changes to the file).
+ */
+export async function moveFiles(
+  files: string[],
+  fromWorkspace: string,
+  toWorkspace: string,
+  cwd = process.cwd(),
+): Promise<Result<MoveFilesResult>> {
+  if (files.length === 0) {
+    return err(createError("INVALID_INPUT", "No files specified"));
+  }
+
+  if (fromWorkspace === toWorkspace) {
+    return err(
+      createError("INVALID_INPUT", "Source and target workspace are the same"),
+    );
+  }
+
+  // Get files in source workspace
+  const sourceFilesResult = await getWorkspaceFiles(fromWorkspace, cwd);
+  if (!sourceFilesResult.ok) return sourceFilesResult;
+
+  // Verify all requested files exist in source
+  const missingFiles = files.filter(
+    (f) => !sourceFilesResult.value.includes(f),
+  );
+  if (missingFiles.length > 0) {
+    return err(
+      createError(
+        "NOT_FOUND",
+        `Files not found in ${fromWorkspace}: ${missingFiles.join(", ")}`,
+      ),
+    );
+  }
+
+  // Get files in target workspace to check for conflicts
+  const targetFilesResult = await getWorkspaceFiles(toWorkspace, cwd);
+  if (!targetFilesResult.ok) return targetFilesResult;
+
+  // Check for conflicts - files that exist in both source and target
+  const conflictingFiles = files.filter((f) =>
+    targetFilesResult.value.includes(f),
+  );
+  if (conflictingFiles.length > 0) {
+    return err(
+      createError(
+        "CONFLICT",
+        `Cannot move: ${toWorkspace} already has changes to: ${conflictingFiles.join(", ")}`,
+      ),
+    );
+  }
+
+  // Squash files from source to target workspace
+  const result = await runJJ(
+    [
+      "squash",
+      "--from",
+      workspaceRef(fromWorkspace),
+      "--into",
+      workspaceRef(toWorkspace),
+      ...files,
+    ],
+    cwd,
+  );
+
+  if (!result.ok) return result;
+
+  return ok({
+    files,
+    from: fromWorkspace,
+    to: toWorkspace,
   });
 }
 

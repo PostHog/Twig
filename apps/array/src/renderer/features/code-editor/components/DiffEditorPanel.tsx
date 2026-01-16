@@ -22,6 +22,10 @@ interface DiffEditorPanelProps {
   repoPath?: string;
   /** Skip auto-closing when file has no changes (used for jj workspaces) */
   skipAutoClose?: boolean;
+  /** Workspace name for jj workspace diffs */
+  workspace?: string;
+  /** Hide the header row with filename and split/unified toggle */
+  hideHeader?: boolean;
 }
 
 export function DiffEditorPanel({
@@ -30,6 +34,8 @@ export function DiffEditorPanel({
   absolutePath,
   repoPath: directRepoPath,
   skipAutoClose = false,
+  workspace,
+  hideHeader = false,
 }: DiffEditorPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const workspacePath = useWorkspaceStore(selectWorkspacePath(taskId));
@@ -41,43 +47,71 @@ export function DiffEditorPanel({
     (s) => s.closeDiffTabsForFile,
   );
 
+  // For jj workspaces, use workspace-specific queries
+  const isJJWorkspace = !!workspace;
+
   const { data: changedFiles = [], isLoading: loadingChangelist } = useQuery({
     queryKey: ["changed-files-head", repoPath],
     queryFn: () =>
       trpcVanilla.git.getChangedFilesHead.query({
         directoryPath: repoPath as string,
       }),
-    enabled: !!repoPath,
+    enabled: !!repoPath && !isJJWorkspace,
     staleTime: Infinity,
   });
 
   const fileInfo = changedFiles.find((f) => f.path === filePath);
-  const isFileStillChanged = !!fileInfo;
+  const isFileStillChanged = isJJWorkspace || !!fileInfo;
   const status = fileInfo?.status ?? "modified";
   const originalPath = fileInfo?.originalPath ?? filePath;
   const isDeleted = status === "deleted";
   const isNew = status === "untracked" || status === "added";
 
+  // Modified content - from workspace working directory for jj, or repo file for git
   const { data: modifiedContent, isLoading: loadingModified } = useQuery({
-    queryKey: ["repo-file", repoPath, filePath],
-    queryFn: () =>
-      trpcVanilla.fs.readRepoFile.query({
-        repoPath: repoPath as string,
-        filePath,
-      }),
+    queryKey: isJJWorkspace
+      ? ["workspace-file", repoPath, workspace, filePath]
+      : ["repo-file", repoPath, filePath],
+    queryFn: async () => {
+      const result = isJJWorkspace
+        ? await trpcVanilla.arr.getWorkspaceFile.query({
+            workspace: workspace as string,
+            filePath,
+            cwd: repoPath as string,
+          })
+        : await trpcVanilla.fs.readRepoFile.query({
+            repoPath: repoPath as string,
+            filePath,
+          });
+      return result;
+    },
     enabled: !!repoPath && !isDeleted,
-    staleTime: Infinity,
+    // jj workspace files change frequently, git repo files less so
+    staleTime: isJJWorkspace ? 0 : Infinity,
   });
 
+  // Original content - from workspace parent revision for jj, or HEAD for git
+  // Parent revision is typically stable, but refetch on window focus for jj workspaces
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
-    queryKey: ["file-at-head", repoPath, originalPath],
-    queryFn: () =>
-      trpcVanilla.git.getFileAtHead.query({
-        directoryPath: repoPath as string,
-        filePath: originalPath,
-      }),
+    queryKey: isJJWorkspace
+      ? ["workspace-file-parent", repoPath, workspace, filePath]
+      : ["file-at-head", repoPath, originalPath],
+    queryFn: async () => {
+      const result = isJJWorkspace
+        ? await trpcVanilla.arr.getWorkspaceFileAtParent.query({
+            workspace: workspace as string,
+            filePath,
+            cwd: repoPath as string,
+          })
+        : await trpcVanilla.git.getFileAtHead.query({
+            directoryPath: repoPath as string,
+            filePath: originalPath,
+          });
+      return result;
+    },
     enabled: !!repoPath && !isNew,
-    staleTime: Infinity,
+    // Parent revision is stable, but use reasonable stale time for jj
+    staleTime: isJJWorkspace ? 30000 : Infinity,
   });
 
   const handleContentChange = useCallback(
@@ -103,7 +137,7 @@ export function DiffEditorPanel({
   );
 
   const isLoading =
-    loadingChangelist ||
+    (!isJJWorkspace && loadingChangelist) ||
     (!isDeleted && loadingModified) ||
     (!isNew && loadingOriginal);
 
@@ -143,6 +177,7 @@ export function DiffEditorPanel({
           filePath={absolutePath}
           relativePath={filePath}
           onContentChange={handleContentChange}
+          hideHeader={hideHeader}
         />
       ) : (
         <CodeMirrorEditor

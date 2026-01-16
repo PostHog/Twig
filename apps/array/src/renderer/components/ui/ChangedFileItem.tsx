@@ -3,7 +3,7 @@ import {
   ArrowCounterClockwiseIcon,
   CodeIcon,
   CopyIcon,
-  File,
+  DotsSixVertical,
   FilePlus,
 } from "@phosphor-icons/react";
 import {
@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useState } from "react";
+import { FileIcon } from "./FileIcon";
 
 export type FileStatus =
   | "modified"
@@ -132,6 +133,10 @@ export interface ChangedFileItemProps {
   layoutId?: string;
   repoPath: string;
   isActive?: boolean;
+  /** Workspace name for jj workspace diffs */
+  workspace?: string;
+  /** Show drag handle on hover */
+  draggable?: boolean;
 }
 
 export function ChangedFileItem({
@@ -139,6 +144,8 @@ export function ChangedFileItem({
   layoutId,
   repoPath,
   isActive = false,
+  workspace,
+  draggable = false,
 }: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const setPreviewDiff = usePanelLayoutStore((state) => state.setPreviewDiff);
@@ -161,7 +168,18 @@ export function ChangedFileItem({
   const handleClick = () => {
     if (layoutId) {
       if (isDashboard) {
-        setPreviewDiff(layoutId, file.path, toGitFileStatus(file.status));
+        // Invalidate workspace file queries to ensure fresh content
+        if (workspace) {
+          queryClient.invalidateQueries({
+            queryKey: ["workspace-file", repoPath, workspace, file.path],
+          });
+        }
+        setPreviewDiff(
+          layoutId,
+          file.path,
+          toGitFileStatus(file.status),
+          workspace,
+        );
       } else {
         openDiff(layoutId, file.path, toGitFileStatus(file.status));
       }
@@ -220,19 +238,38 @@ export function ChangedFileItem({
 
     if (result.response !== 1) return;
 
-    await trpcVanilla.git.discardFileChanges.mutate({
-      directoryPath: repoPath,
-      filePath: file.originalPath ?? file.path,
-      fileStatus: toGitFileStatus(file.status),
-    });
+    if (workspace) {
+      // Use jj restore for workspace files
+      await trpcVanilla.arr.restoreFile.mutate({
+        workspace,
+        filePath: file.originalPath ?? file.path,
+        fileStatus: file.status,
+        cwd: repoPath,
+      });
+
+      // Invalidate workspace status queries
+      queryClient.invalidateQueries({
+        queryKey: [["arr", "workspaceStatus"]],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [["arr", "listUnassigned"]],
+      });
+    } else {
+      // Use git restore for non-workspace files
+      await trpcVanilla.git.discardFileChanges.mutate({
+        directoryPath: repoPath,
+        filePath: file.originalPath ?? file.path,
+        fileStatus: toGitFileStatus(file.status),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["changed-files-head", repoPath],
+      });
+    }
 
     if (layoutId) {
       closeDiffTabsForFile(layoutId, file.path);
     }
-
-    queryClient.invalidateQueries({
-      queryKey: ["changed-files-head", repoPath],
-    });
   };
 
   const hasLineStats =
@@ -261,7 +298,20 @@ export function ChangedFileItem({
         paddingRight: "8px",
       }}
     >
-      <File size={14} style={{ flexShrink: 0, color: "var(--gray-10)" }} />
+      {draggable && (
+        <DotsSixVertical
+          size={14}
+          style={{
+            flexShrink: 0,
+            color: "var(--gray-10)",
+            opacity: isHovered ? 1 : 0,
+            cursor: "grab",
+            transition: "opacity 100ms ease",
+            marginLeft: "-2px",
+          }}
+        />
+      )}
+      <FileIcon filename={fileName} size={14} />
       <Text
         size="1"
         style={{

@@ -1,4 +1,8 @@
-import { assignFiles, listUnassigned } from "@array/core/commands/assign";
+import {
+  assignFiles,
+  listUnassigned,
+  moveFiles,
+} from "@array/core/commands/assign";
 import {
   daemonStart,
   daemonStatus,
@@ -20,13 +24,25 @@ import {
   resolveConflict,
   resolveConflictsBatch,
 } from "@array/core/commands/focus-resolve";
+import { restoreFile } from "@array/core/commands/restore-file";
 // Import @array/core commands
 import { workspaceAdd } from "@array/core/commands/workspace-add";
 import { workspaceList } from "@array/core/commands/workspace-list";
+import { getWorkspacePRInfos } from "@array/core/commands/workspace-pr-info";
 import { workspaceRemove } from "@array/core/commands/workspace-remove";
 import { workspaceStatus } from "@array/core/commands/workspace-status";
 import { submitWorkspace } from "@array/core/commands/workspace-submit";
-import { getCurrentBranch, isDetachedHead } from "@array/core/git/head";
+import { isGitMode } from "@array/core/daemon/pid";
+import {
+  checkoutBranch,
+  getCurrentBranch,
+  listBranches,
+} from "@array/core/git/head";
+import {
+  getWorkspaceFileAtParent,
+  getWorkspacePath,
+  readWorkspaceFile,
+} from "@array/core/jj/workspace";
 import { z } from "zod";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -51,6 +67,12 @@ const assignFilesInput = z.object({
   targetWorkspace: z.string(),
   cwd: z.string(),
 });
+const moveFilesInput = z.object({
+  files: z.array(z.string()),
+  fromWorkspace: z.string(),
+  toWorkspace: z.string(),
+  cwd: z.string(),
+});
 const resolveConflictInput = z.object({
   file: z.string(),
   keepWorkspace: z.string(),
@@ -65,6 +87,27 @@ const workspaceSubmitInput = z.object({
   cwd: z.string(),
   draft: z.boolean().optional(),
   message: z.string().optional(),
+});
+const workspaceFileInput = z.object({
+  workspace: z.string(),
+  filePath: z.string(),
+  cwd: z.string(),
+});
+const restoreFileInput = z.object({
+  workspace: z.string(),
+  filePath: z.string(),
+  fileStatus: z.enum([
+    "M",
+    "A",
+    "D",
+    "R",
+    "modified",
+    "added",
+    "deleted",
+    "renamed",
+    "untracked",
+  ]),
+  cwd: z.string(),
 });
 
 // Helper to unwrap Result type
@@ -106,6 +149,11 @@ export const arrRouter = router({
       const result = await workspaceStatus(input.workspace, input.cwd);
       return unwrapResult(result);
     }),
+
+  workspacePRInfo: publicProcedure.input(cwdInput).query(async ({ input }) => {
+    const result = await getWorkspacePRInfos(input.cwd);
+    return unwrapResult(result);
+  }),
 
   // Focus management
   focusStatus: publicProcedure.input(cwdInput).query(async ({ input }) => {
@@ -188,10 +236,63 @@ export const arrRouter = router({
       return unwrapResult(result);
     }),
 
+  moveFiles: publicProcedure
+    .input(moveFilesInput)
+    .mutation(async ({ input }) => {
+      const result = await moveFiles(
+        input.files,
+        input.fromWorkspace,
+        input.toWorkspace,
+        input.cwd,
+      );
+      return unwrapResult(result);
+    }),
+
   listUnassigned: publicProcedure.input(cwdInput).query(async ({ input }) => {
     const result = await listUnassigned(input.cwd);
     return unwrapResult(result);
   }),
+
+  restoreFile: publicProcedure
+    .input(restoreFileInput)
+    .mutation(async ({ input }) => {
+      const result = await restoreFile(
+        input.workspace,
+        input.filePath,
+        input.fileStatus,
+        input.cwd,
+      );
+      return unwrapResult(result);
+    }),
+
+  // Workspace file content (for diff viewer)
+  getWorkspaceFile: publicProcedure
+    .input(workspaceFileInput)
+    .query(({ input }) => {
+      const result = readWorkspaceFile(
+        input.workspace,
+        input.filePath,
+        input.cwd,
+      );
+      return unwrapResult(result);
+    }),
+
+  getWorkspaceFileAtParent: publicProcedure
+    .input(workspaceFileInput)
+    .query(async ({ input }) => {
+      const result = await getWorkspaceFileAtParent(
+        input.workspace,
+        input.filePath,
+        input.cwd,
+      );
+      return unwrapResult(result);
+    }),
+
+  getWorkspacePath: publicProcedure
+    .input(z.object({ workspace: z.string(), cwd: z.string() }))
+    .query(({ input }) => {
+      return getWorkspacePath(input.workspace, input.cwd);
+    }),
 
   // Submit workspace as PR
   workspaceSubmit: publicProcedure
@@ -234,13 +335,26 @@ export const arrRouter = router({
 
   // Get repo mode (jj vs git)
   repoMode: publicProcedure.input(cwdInput).query(async ({ input }) => {
-    const isJJMode = await isDetachedHead(input.cwd);
-    const branch = isJJMode ? null : await getCurrentBranch(input.cwd);
+    const gitMode = isGitMode(input.cwd);
+    const branch = gitMode ? await getCurrentBranch(input.cwd) : null;
     return {
-      mode: isJJMode ? ("jj" as const) : ("git" as const),
+      mode: gitMode ? ("git" as const) : ("jj" as const),
       branch,
     };
   }),
+
+  // Git branch management (for git mode)
+  listBranches: publicProcedure.input(cwdInput).query(async ({ input }) => {
+    const result = await listBranches(input.cwd);
+    return unwrapResult(result);
+  }),
+
+  checkoutBranch: publicProcedure
+    .input(z.object({ branch: z.string(), cwd: z.string() }))
+    .mutation(async ({ input }) => {
+      const result = await checkoutBranch(input.cwd, input.branch);
+      return unwrapResult(result);
+    }),
 
   // Convenience: ensure daemon is running (start if not)
   ensureDaemon: publicProcedure.mutation(async () => {

@@ -6,10 +6,9 @@ import { SidebarItem } from "../SidebarItem";
 interface FolderItemProps {
   path: string;
   isActive: boolean;
-  taskCount: number;
 }
 
-export function FolderItem({ path, isActive, taskCount }: FolderItemProps) {
+export function FolderItem({ path, isActive }: FolderItemProps) {
   const { navigateToRepoDashboard } = useNavigationStore();
 
   const name = basename(path);
@@ -19,7 +18,6 @@ export function FolderItem({ path, isActive, taskCount }: FolderItemProps) {
       depth={0}
       icon={<Folder size={12} />}
       label={name}
-      subtitle={`${taskCount} task${taskCount !== 1 ? "s" : ""}`}
       isActive={isActive}
       onClick={() => navigateToRepoDashboard(path)}
     />

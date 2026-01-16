@@ -2,7 +2,10 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { useSettingsStore } from "@stores/settingsStore";
 import type React from "react";
 import { useCallback, useEffect } from "react";
-import { useDragDropHandlers } from "../hooks/useDragDropHandlers";
+import {
+  type FileDragHandlers,
+  useDragDropHandlers,
+} from "../hooks/useDragDropHandlers";
 import { usePanelKeyboardShortcuts } from "../hooks/usePanelKeyboardShortcuts";
 import {
   type ContentRenderer,
@@ -23,6 +26,8 @@ export interface PanelLayoutProps {
   renderContent: ContentRenderer;
   /** Optional repo path for file/diff tab path resolution */
   repoPath?: string;
+  /** Optional handlers for file drag-drop operations */
+  fileDragHandlers?: FileDragHandlers;
 }
 
 const PanelLayoutRenderer: React.FC<{
@@ -177,12 +182,13 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({
   layoutId,
   renderContent,
   repoPath,
+  fileDragHandlers,
 }) => {
   const layout = usePanelLayoutStore((state) => state.getLayout(layoutId));
   const initializeLayout = usePanelLayoutStore(
     (state) => state.initializeLayout,
   );
-  const dragDropHandlers = useDragDropHandlers(layoutId);
+  const dragDropHandlers = useDragDropHandlers(layoutId, fileDragHandlers);
   const terminalLayoutMode = useSettingsStore(
     (state) => state.terminalLayoutMode,
   );

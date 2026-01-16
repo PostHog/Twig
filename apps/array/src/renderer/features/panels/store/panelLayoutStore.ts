@@ -70,7 +70,13 @@ export interface PanelLayoutStore {
   closeTabsToRight: (layoutId: string, panelId: string, tabId: string) => void;
   closeTabsForFile: (layoutId: string, filePath: string) => void;
   closeDiffTabsForFile: (layoutId: string, filePath: string) => void;
-  setPreviewDiff: (layoutId: string, filePath: string, status?: string) => void;
+  setPreviewDiff: (
+    layoutId: string,
+    filePath: string,
+    status?: string,
+    workspace?: string,
+  ) => void;
+  clearPreviewDiff: (layoutId: string) => void;
   setActiveTab: (layoutId: string, panelId: string, tabId: string) => void;
   setDraggingTab: (
     layoutId: string,
@@ -505,37 +511,70 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         }
       },
 
-      setPreviewDiff: (layoutId, filePath, status) => {
+      setPreviewDiff: (layoutId, filePath, status, workspace) => {
         const tabId = createDiffTabId(filePath, status);
         set((state) =>
           updateLayout(state, layoutId, (layout) => {
+            const previewTab: Tab = {
+              id: tabId,
+              label: filePath.split("/").pop() || filePath,
+              data: {
+                type: "diff",
+                relativePath: filePath,
+                absolutePath: "",
+                repoPath: "",
+                status:
+                  (status as
+                    | "modified"
+                    | "added"
+                    | "deleted"
+                    | "renamed"
+                    | "untracked") ?? "modified",
+                workspace,
+              },
+              closeable: false,
+              draggable: false,
+            };
+
+            // Check if preview-panel exists
+            const hasPreviewPanel = (node: PanelNode): boolean => {
+              if (node.type === "leaf") return node.id === "preview-panel";
+              return node.children.some(hasPreviewPanel);
+            };
+
+            if (!hasPreviewPanel(layout.panelTree)) {
+              // Create the preview panel and wrap in a horizontal split
+              const previewPanel: PanelNode = {
+                type: "leaf",
+                id: "preview-panel",
+                content: {
+                  id: "preview-panel",
+                  tabs: [previewTab],
+                  activeTabId: tabId,
+                  showTabs: false,
+                  droppable: false,
+                },
+              };
+
+              const newTree: PanelNode = {
+                type: "group",
+                id: "dashboard-split",
+                direction: "horizontal",
+                sizes: [70, 30],
+                children: [layout.panelTree, previewPanel],
+              };
+
+              return { panelTree: newTree };
+            }
+
+            // Preview panel exists, update its content
             const updatePanel = (node: PanelNode): PanelNode => {
               if (node.type === "leaf" && node.id === "preview-panel") {
                 return {
                   ...node,
                   content: {
                     ...node.content,
-                    tabs: [
-                      {
-                        id: tabId,
-                        label: filePath.split("/").pop() || filePath,
-                        data: {
-                          type: "diff",
-                          relativePath: filePath,
-                          absolutePath: "",
-                          repoPath: "",
-                          status:
-                            (status as
-                              | "modified"
-                              | "added"
-                              | "deleted"
-                              | "renamed"
-                              | "untracked") ?? "modified",
-                        },
-                        closeable: false,
-                        draggable: false,
-                      },
-                    ],
+                    tabs: [previewTab],
                     activeTabId: tabId,
                   },
                 };
@@ -548,7 +587,46 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
               }
               return node;
             };
-            return { ...layout, panelTree: updatePanel(layout.panelTree) };
+            return { panelTree: updatePanel(layout.panelTree) };
+          }),
+        );
+      },
+
+      clearPreviewDiff: (layoutId) => {
+        set((state) =>
+          updateLayout(state, layoutId, (layout) => {
+            // Remove preview-panel from the tree, collapsing the group if needed
+            const removePreviewPanel = (node: PanelNode): PanelNode | null => {
+              if (node.type === "leaf") {
+                // If this is the preview panel, remove it
+                return node.id === "preview-panel" ? null : node;
+              }
+
+              // For groups, filter out the preview panel
+              const filteredChildren = node.children
+                .map(removePreviewPanel)
+                .filter((child): child is PanelNode => child !== null);
+
+              // If no children left, this group should be removed
+              if (filteredChildren.length === 0) return null;
+
+              // If only one child left, return that child directly (collapse the group)
+              if (filteredChildren.length === 1) return filteredChildren[0];
+
+              return {
+                ...node,
+                children: filteredChildren,
+                sizes: filteredChildren.map(
+                  () => 100 / filteredChildren.length,
+                ),
+              };
+            };
+
+            const newTree = removePreviewPanel(layout.panelTree);
+            // Shouldn't happen, but fallback to original tree
+            if (!newTree) return {};
+
+            return { panelTree: newTree };
           }),
         );
       },
@@ -881,8 +959,17 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 9,
+      version: 10,
       migrate: () => ({ layouts: {} }),
+      // Don't persist dashboard layouts - they should start fresh each session
+      partialize: (state) => ({
+        ...state,
+        layouts: Object.fromEntries(
+          Object.entries(state.layouts).filter(
+            ([key]) => !key.startsWith("dashboard-"),
+          ),
+        ),
+      }),
     },
   ),
 );

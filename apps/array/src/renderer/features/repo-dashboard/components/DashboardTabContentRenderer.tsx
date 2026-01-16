@@ -1,9 +1,10 @@
 import { CodeEditorPanel } from "@features/code-editor/components/CodeEditorPanel";
 import { DiffEditorPanel } from "@features/code-editor/components/DiffEditorPanel";
+import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import type { Tab } from "@features/panels/store/panelTypes";
 import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
-import { File } from "@phosphor-icons/react";
-import { Flex, Text } from "@radix-ui/themes";
+import { File, X } from "@phosphor-icons/react";
+import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { WorkspacesPanel } from "./WorkspacesPanel";
 
 interface DashboardTabContentRendererProps {
@@ -17,6 +18,7 @@ export function DashboardTabContentRenderer({
 }: DashboardTabContentRendererProps) {
   const { data } = tab;
   const layoutId = `dashboard-${repoPath}`;
+  const clearPreviewDiff = usePanelLayoutStore((s) => s.clearPreviewDiff);
 
   switch (data.type) {
     case "workspaces":
@@ -37,16 +39,47 @@ export function DashboardTabContentRenderer({
         />
       );
 
-    case "diff":
+    case "diff": {
+      // For dashboard diffs, absolutePath may be empty - use relativePath with repoPath
+      const absolutePath =
+        data.absolutePath || `${repoPath}/${data.relativePath}`;
       return (
-        <DiffEditorPanel
-          taskId={layoutId}
-          task={null}
-          absolutePath={data.absolutePath}
-          repoPath={repoPath}
-          skipAutoClose
-        />
+        <Box
+          style={{ height: "100%", display: "flex", flexDirection: "column" }}
+        >
+          <Flex
+            align="center"
+            justify="between"
+            px="3"
+            py="1"
+            style={{ borderBottom: "1px solid var(--gray-5)", flexShrink: 0 }}
+          >
+            <Text size="1" weight="medium">
+              {data.relativePath}
+            </Text>
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => clearPreviewDiff(layoutId)}
+            >
+              <X size={14} />
+            </IconButton>
+          </Flex>
+          <Box style={{ flex: 1, minHeight: 0 }}>
+            <DiffEditorPanel
+              taskId={layoutId}
+              task={null}
+              absolutePath={absolutePath}
+              repoPath={repoPath}
+              skipAutoClose
+              workspace={data.workspace}
+              hideHeader
+            />
+          </Box>
+        </Box>
       );
+    }
 
     case "preview-placeholder":
       return (

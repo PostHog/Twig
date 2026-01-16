@@ -8,17 +8,19 @@ interface DraggableFileItemProps {
   file: ChangedFile;
   repoPath: string;
   layoutId?: string;
+  workspace?: string;
 }
 
 export function DraggableFileItem({
   file,
   repoPath,
   layoutId,
+  workspace,
 }: DraggableFileItemProps) {
   const { ref, isDragSource } = useDraggable({
-    id: `file-${file.path}`,
+    id: `file-${workspace ?? "unassigned"}-${file.path}`,
     type: "file",
-    data: { type: "file", file: file.path },
+    data: { type: "file", file: file.path, workspace },
   });
 
   return (
@@ -29,7 +31,13 @@ export function DraggableFileItem({
         touchAction: "none",
       }}
     >
-      <ChangedFileItem file={file} repoPath={repoPath} layoutId={layoutId} />
+      <ChangedFileItem
+        file={file}
+        repoPath={repoPath}
+        layoutId={layoutId}
+        workspace={workspace}
+        draggable
+      />
     </div>
   );
 }

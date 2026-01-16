@@ -21,6 +21,8 @@ export type TabData =
       absolutePath: string;
       repoPath: string;
       status: GitFileStatus;
+      /** Workspace name for jj workspace diffs */
+      workspace?: string;
     }
   | {
       type: "terminal";
