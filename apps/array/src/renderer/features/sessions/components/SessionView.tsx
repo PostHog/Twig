@@ -251,7 +251,7 @@ export function SessionView({
               justify="center"
               direction="column"
               gap="2"
-              className="absolute inset-0"
+              className="absolute inset-0 bg-gray-1"
             >
               <Warning size={32} weight="duotone" color="var(--red-9)" />
               <Text size="3" weight="medium" color="red">
