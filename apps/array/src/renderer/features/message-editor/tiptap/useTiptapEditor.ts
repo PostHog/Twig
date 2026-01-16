@@ -1,4 +1,5 @@
 import { toast } from "@renderer/utils/toast";
+import { useSettingsStore } from "@stores/settingsStore";
 import { useEditor } from "@tiptap/react";
 import { useCallback, useRef, useState } from "react";
 import { usePromptHistoryStore } from "../stores/promptHistoryStore";
