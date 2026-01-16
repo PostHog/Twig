@@ -24,7 +24,10 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
       const mode = await trpcVanilla.secureStore.getItem.query({
         key: "terminalLayoutMode",
       });
-      set({ terminalLayoutMode: mode as TerminalLayoutMode, isLoading: false });
+      set({
+        terminalLayoutMode: (mode as TerminalLayoutMode) || "split",
+        isLoading: false,
+      });
     } catch (_error) {
       set({ terminalLayoutMode: "split", isLoading: false });
     }
