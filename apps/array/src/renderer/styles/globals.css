@@ -667,36 +667,37 @@ body {
 :root,
 .light,
 .light-theme {
-  --gray-1: #eaeaea;
-  --gray-2: #e5e5e5;
-  --gray-3: #dbdbdb;
-  --gray-4: #d2d2d2;
-  --gray-5: #cacaca;
-  --gray-6: #c1c1c1;
-  --gray-7: #b5b5b5;
-  --gray-8: #a2a2a2;
-  --gray-9: #747474;
-  --gray-10: #6a6a6a;
-  --gray-11: #4e4e4e;
-  --gray-12: #1f1f1f;
+  /* Warm cave-inspired gray palette */
+  --gray-1: #f7eddf;
+  --gray-2: #f1e5d5;
+  --gray-3: #ebe1d3;
+  --gray-4: #ddd5c7;
+  --gray-5: #cec6b8;
+  --gray-6: #b8b0a2;
+  --gray-7: #a39b8d;
+  --gray-8: #9a9282;
+  --gray-9: #6e665a;
+  --gray-10: #5e564a;
+  --gray-11: #3d3832;
+  --gray-12: #2d2b29;
 
-  --gray-a1: #9a85ff0c;
-  --gray-a2: #1e088d0b;
-  --gray-a3: #12084716;
-  --gray-a4: #08012c1f;
-  --gray-a5: #09032428;
-  --gray-a6: #09051e32;
-  --gray-a7: #0401143e;
-  --gray-a8: #04030f53;
-  --gray-a9: #02020784;
-  --gray-a10: #0100058e;
-  --gray-a11: #010003ac;
-  --gray-a12: #000001de;
+  --gray-a1: #3d280005;
+  --gray-a2: #3d28000a;
+  --gray-a3: #3d280012;
+  --gray-a4: #3d28001f;
+  --gray-a5: #3d28002d;
+  --gray-a6: #3d28003d;
+  --gray-a7: #3d280052;
+  --gray-a8: #3d280066;
+  --gray-a9: #3d28009e;
+  --gray-a10: #3d2800ad;
+  --gray-a11: #3d2800c7;
+  --gray-a12: #2d2b29ed;
 
   --gray-contrast: #ffffff;
-  --gray-surface: #ffffffcc;
-  --gray-indicator: #747474;
-  --gray-track: #747474;
+  --gray-surface: #f7eddfcc;
+  --gray-indicator: #6e665a;
+  --gray-track: #6e665a;
 }
 
 @supports (color: color(display-p3 1 1 1)) {
@@ -704,36 +705,37 @@ body {
     :root,
     .light,
     .light-theme {
-      --gray-1: oklch(93.8% 0 none);
-      --gray-2: oklch(92.2% 0 none);
-      --gray-3: oklch(89.2% 0 none);
-      --gray-4: oklch(86.4% 0 none);
-      --gray-5: oklch(83.9% 0 none);
-      --gray-6: oklch(81.1% 0 none);
-      --gray-7: oklch(77.4% 0 none);
-      --gray-8: oklch(71.2% 0 none);
-      --gray-9: oklch(55.8% 0 none);
-      --gray-10: oklch(52.3% 0 none);
-      --gray-11: oklch(42.3% 0 none);
-      --gray-12: oklch(24% 0 none);
+      /* Warm cave-inspired gray palette (P3) */
+      --gray-1: oklch(95.5% 0.015 75);
+      --gray-2: oklch(93% 0.02 75);
+      --gray-3: oklch(91% 0.022 75);
+      --gray-4: oklch(87.5% 0.02 75);
+      --gray-5: oklch(83% 0.018 75);
+      --gray-6: oklch(76% 0.016 75);
+      --gray-7: oklch(69% 0.014 75);
+      --gray-8: oklch(65% 0.012 75);
+      --gray-9: oklch(50% 0.015 75);
+      --gray-10: oklch(44% 0.015 75);
+      --gray-11: oklch(33% 0.012 75);
+      --gray-12: oklch(26% 0.01 75);
 
-      --gray-a1: color(display-p3 0.1882 0.0039 0.9216 / 0.021);
-      --gray-a2: color(display-p3 0.0941 0.0039 0.451 / 0.042);
-      --gray-a3: color(display-p3 0.0471 0.0039 0.2196 / 0.084);
-      --gray-a4: color(display-p3 0.0353 0.0078 0.149 / 0.122);
-      --gray-a5: color(display-p3 0.0235 0.0039 0.1098 / 0.155);
-      --gray-a6: color(display-p3 0.0196 0.0039 0.0863 / 0.193);
-      --gray-a7: color(display-p3 0.0157 0.0039 0.0627 / 0.243);
-      --gray-a8: color(display-p3 0.0118 0.0039 0.0471 / 0.323);
-      --gray-a9: color(display-p3 0.0078 0 0.0196 / 0.515);
-      --gray-a10: color(display-p3 0.0078 0 0.0157 / 0.557);
-      --gray-a11: color(display-p3 0 0 0.0118 / 0.674);
-      --gray-a12: color(display-p3 0 0 0.0039 / 0.871);
+      --gray-a1: color(display-p3 0.24 0.16 0 / 0.02);
+      --gray-a2: color(display-p3 0.24 0.16 0 / 0.04);
+      --gray-a3: color(display-p3 0.24 0.16 0 / 0.07);
+      --gray-a4: color(display-p3 0.24 0.16 0 / 0.12);
+      --gray-a5: color(display-p3 0.24 0.16 0 / 0.18);
+      --gray-a6: color(display-p3 0.24 0.16 0 / 0.24);
+      --gray-a7: color(display-p3 0.24 0.16 0 / 0.32);
+      --gray-a8: color(display-p3 0.24 0.16 0 / 0.4);
+      --gray-a9: color(display-p3 0.24 0.16 0 / 0.62);
+      --gray-a10: color(display-p3 0.24 0.16 0 / 0.68);
+      --gray-a11: color(display-p3 0.24 0.16 0 / 0.78);
+      --gray-a12: color(display-p3 0.18 0.17 0.16 / 0.93);
 
       --gray-contrast: #ffffff;
-      --gray-surface: color(display-p3 1 1 1 / 80%);
-      --gray-indicator: oklch(55.8% 0 none);
-      --gray-track: oklch(55.8% 0 none);
+      --gray-surface: color(display-p3 0.969 0.929 0.875 / 80%);
+      --gray-indicator: oklch(50% 0.015 75);
+      --gray-track: oklch(50% 0.015 75);
     }
   }
 }
@@ -742,13 +744,13 @@ body {
 .light,
 .light-theme,
 .radix-themes {
-  --color-background: #eeefe9;
-  --terminal-foreground: #1f1f1f;
+  --color-background: #f7eddf;
+  --terminal-foreground: #2d2b29;
   --terminal-background: transparent;
   --terminal-cursor: #dc9300;
-  --terminal-cursor-accent: #eaeaea;
+  --terminal-cursor-accent: #f7eddf;
   --terminal-selection-bg: rgba(255, 189, 87, 0.4);
-  --terminal-selection-fg: #1f1f1f;
+  --terminal-selection-fg: #2d2b29;
 }
 
 .dark,
@@ -825,72 +827,74 @@ body {
 
 .dark,
 .dark-theme {
-  --gray-1: #151515;
-  --gray-2: #1c1c1c;
-  --gray-3: #242424;
-  --gray-4: #2b2b28;
-  --gray-5: #323231;
-  --gray-6: #3b3b38;
-  --gray-7: #484846;
-  --gray-8: #60605c;
-  --gray-9: #6e6e6b;
-  --gray-10: #7b7b7b;
-  --gray-11: #b4b4b1;
-  --gray-12: #eeeeea;
+  /* Warm cave-inspired dark gray palette */
+  --gray-1: #1a1815;
+  --gray-2: #211e1a;
+  --gray-3: #2a2621;
+  --gray-4: #322e28;
+  --gray-5: #3b362f;
+  --gray-6: #453f37;
+  --gray-7: #524b42;
+  --gray-8: #6e665a;
+  --gray-9: #8a8275;
+  --gray-10: #9a9282;
+  --gray-11: #c4baa8;
+  --gray-12: #f7eddf;
 
   --gray-a1: #00000000;
-  --gray-a2: #ffffff08;
-  --gray-a3: #ffffff10;
-  --gray-a4: #ffffdf18;
-  --gray-a5: #fdfdf520;
-  --gray-a6: #fbfbe92a;
-  --gray-a7: #fefef538;
-  --gray-a8: #fffff252;
-  --gray-a9: #fffff861;
-  --gray-a10: #ffffff6f;
-  --gray-a11: #fefef9ae;
-  --gray-a12: #fffffbed;
+  --gray-a2: #f7eddf08;
+  --gray-a3: #f7eddf10;
+  --gray-a4: #f7eddf18;
+  --gray-a5: #f7eddf20;
+  --gray-a6: #f7eddf2a;
+  --gray-a7: #f7eddf38;
+  --gray-a8: #f7eddf52;
+  --gray-a9: #f7eddf6a;
+  --gray-a10: #f7eddf7a;
+  --gray-a11: #f7eadfb8;
+  --gray-a12: #f7eddfed;
 
   --gray-contrast: #ffffff;
-  --gray-surface: rgba(0, 0, 0, 0.05);
-  --gray-indicator: #6e6e6b;
-  --gray-track: #6e6e6b;
+  --gray-surface: rgba(26, 24, 21, 0.5);
+  --gray-indicator: #8a8275;
+  --gray-track: #8a8275;
 }
 
 @supports (color: color(display-p3 1 1 1)) {
   @media (color-gamut: p3) {
     .dark,
     .dark-theme {
-      --gray-1: oklch(19.6% 0.0006 106.5);
-      --gray-2: oklch(22.6% 0.0003 106.5);
-      --gray-3: oklch(26.1% 0.0006 106.5);
-      --gray-4: oklch(28.7% 0.0046 106.5);
-      --gray-5: oklch(31.5% 0.0017 106.5);
-      --gray-6: oklch(35% 0.0046 106.5);
-      --gray-7: oklch(40.3% 0.0035 106.5);
-      --gray-8: oklch(48.8% 0.0062 106.5);
-      --gray-9: oklch(53.8% 0.0046 106.5);
-      --gray-10: oklch(58.4% 0.0012 106.5);
-      --gray-11: oklch(77% 0.0042 106.5);
-      --gray-12: oklch(94.9% 0.0062 106.5);
+      /* Warm cave-inspired dark gray palette (P3) */
+      --gray-1: oklch(18% 0.012 75);
+      --gray-2: oklch(21% 0.014 75);
+      --gray-3: oklch(25% 0.016 75);
+      --gray-4: oklch(28% 0.016 75);
+      --gray-5: oklch(32% 0.015 75);
+      --gray-6: oklch(36% 0.014 75);
+      --gray-7: oklch(42% 0.013 75);
+      --gray-8: oklch(50% 0.015 75);
+      --gray-9: oklch(60% 0.014 75);
+      --gray-10: oklch(65% 0.012 75);
+      --gray-11: oklch(80% 0.018 75);
+      --gray-12: oklch(95.5% 0.015 75);
 
       --gray-a1: color(display-p3 0 0 0 / 0);
-      --gray-a2: color(display-p3 1 1 1 / 0.0299);
-      --gray-a3: color(display-p3 1 1 1 / 0.0641);
-      --gray-a4: color(display-p3 0.9922 0.9922 0.8667 / 0.095);
-      --gray-a5: color(display-p3 1 1 0.9686 / 0.124);
-      --gray-a6: color(display-p3 0.9961 0.9961 0.9255 / 0.163);
-      --gray-a7: color(display-p3 1 1 0.9647 / 0.218);
-      --gray-a8: color(display-p3 1 1 0.9529 / 0.321);
-      --gray-a9: color(display-p3 1 1 0.9686 / 0.381);
-      --gray-a10: color(display-p3 1 1 1 / 0.4359);
-      --gray-a11: color(display-p3 1 1 0.9804 / 0.68);
-      --gray-a12: color(display-p3 0.9961 0.9961 0.9804 / 0.928);
+      --gray-a2: color(display-p3 0.969 0.929 0.875 / 0.03);
+      --gray-a3: color(display-p3 0.969 0.929 0.875 / 0.065);
+      --gray-a4: color(display-p3 0.969 0.929 0.875 / 0.095);
+      --gray-a5: color(display-p3 0.969 0.929 0.875 / 0.125);
+      --gray-a6: color(display-p3 0.969 0.929 0.875 / 0.165);
+      --gray-a7: color(display-p3 0.969 0.929 0.875 / 0.22);
+      --gray-a8: color(display-p3 0.969 0.929 0.875 / 0.32);
+      --gray-a9: color(display-p3 0.969 0.929 0.875 / 0.42);
+      --gray-a10: color(display-p3 0.969 0.929 0.875 / 0.48);
+      --gray-a11: color(display-p3 0.969 0.929 0.875 / 0.72);
+      --gray-a12: color(display-p3 0.969 0.929 0.875 / 0.93);
 
       --gray-contrast: #ffffff;
-      --gray-surface: color(display-p3 0 0 0 / 5%);
-      --gray-indicator: oklch(53.8% 0.0046 106.5);
-      --gray-track: oklch(53.8% 0.0046 106.5);
+      --gray-surface: color(display-p3 0.1 0.094 0.082 / 50%);
+      --gray-indicator: oklch(60% 0.014 75);
+      --gray-track: oklch(60% 0.014 75);
     }
   }
 }
@@ -898,13 +902,27 @@ body {
 .dark,
 .dark-theme,
 :is(.dark, .dark-theme) :where(.radix-themes:not(.light, .light-theme)) {
-  --color-background: #151515;
-  --terminal-foreground: #eeeeea;
+  --color-background: #1a1815;
+  --terminal-foreground: #f7eddf;
   --terminal-background: transparent;
   --terminal-cursor: #dc9300;
-  --terminal-cursor-accent: #eeeeea;
+  --terminal-cursor-accent: #f7eddf;
   --terminal-selection-bg: rgba(255, 203, 129, 0.3);
-  --terminal-selection-fg: #eeeeea;
+  --terminal-selection-fg: #f7eddf;
+}
+
+/* Organic/cave-like border radius utility */
+.cave-organic {
+  border-radius: 2px 6px 4px 8px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.03);
+}
+
+.cave-organic-sm {
+  border-radius: 1px 4px 2px 5px;
+}
+
+.cave-organic-lg {
+  border-radius: 4px 10px 6px 12px;
 }
 
 /* Buttons should have pointer cursor */

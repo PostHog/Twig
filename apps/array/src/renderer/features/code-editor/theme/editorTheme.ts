@@ -10,40 +10,42 @@ function withAlpha(hex: string, alpha: number): string {
   return `${hex}${a}`;
 }
 
+// Warm cave-inspired dark theme colors
 const dark = {
   chalky: "#e5c07b",
   coral: "#e06c75",
   cyan: "#56b6c2",
-  invalid: "#ffffff",
-  ivory: "#abb2bf",
-  stone: "#7d8799",
+  invalid: "#f7eddf",
+  ivory: "#c4baa8",
+  stone: "#8a8275",
   malibu: "#61afef",
   sage: "#98c379",
   whiskey: "#d19a66",
   violet: "#c678dd",
-  background: "#21252b",
-  highlightBackground: "#2c313a",
-  tooltipBackground: "#353a42",
-  selection: "#3E4451",
-  cursor: "#528bff",
+  background: "#1a1815",
+  highlightBackground: "#2a2621",
+  tooltipBackground: "#322e28",
+  selection: "#453f37",
+  cursor: "#f1a82c",
 };
 
+// Warm cave-inspired light theme colors
 const light = {
   chalky: "#c18401",
-  coral: "#e45649",
+  coral: "#c45649",
   cyan: "#0184bc",
-  invalid: "#000000",
-  ivory: "#383a42",
-  stone: "#a0a1a7",
+  invalid: "#2d2b29",
+  ivory: "#3d3832",
+  stone: "#9a9282",
   malibu: "#4078f2",
   sage: "#50a14f",
   whiskey: "#986801",
   violet: "#a626a4",
-  background: "#fafafa",
-  highlightBackground: "#d0d0d0",
-  tooltipBackground: "#f0f0f0",
-  selection: "#d7d7d7",
-  cursor: "#526fff",
+  background: "#f7eddf",
+  highlightBackground: "#ebe1d3",
+  tooltipBackground: "#f1e5d5",
+  selection: "#ddd5c7",
+  cursor: "#dc9300",
 };
 
 function createEditorTheme(colors: typeof dark, isDark: boolean) {
@@ -290,14 +292,14 @@ export const mergeViewTheme = EditorView.baseTheme({
     },
   },
   "&light .cm-collapsedLines": {
-    color: "#444",
+    color: "#3d3832",
     background:
-      "linear-gradient(to bottom, transparent 0, #f3f3f3 30%, #f3f3f3 70%, transparent 100%)",
+      "linear-gradient(to bottom, transparent 0, #ebe1d3 30%, #ebe1d3 70%, transparent 100%)",
   },
   "&dark .cm-collapsedLines": {
-    color: "#ddd",
+    color: "#c4baa8",
     background:
-      "linear-gradient(to bottom, transparent 0, #222 30%, #222 70%, transparent 100%)",
+      "linear-gradient(to bottom, transparent 0, #2a2621 30%, #2a2621 70%, transparent 100%)",
   },
   ".cm-changeGutter": { width: "3px", paddingLeft: "1px" },
   "&light.cm-merge-a .cm-changedLineGutter, &light .cm-deletedLineGutter": {

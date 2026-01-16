@@ -70,22 +70,23 @@ type EventType = keyof EventPayloadMap;
 type Listener<T extends EventType> = (payload: EventPayloadMap[T]) => void;
 
 function getTerminalTheme(isDarkMode: boolean) {
+  // Warm cave-inspired terminal colors
   return isDarkMode
     ? {
         background: "transparent",
-        foreground: "#eeeeea",
+        foreground: "#f7eddf",
         cursor: "#dc9300",
-        cursorAccent: "#eeeeea",
+        cursorAccent: "#f7eddf",
         selectionBackground: "rgba(255, 203, 129, 0.3)",
-        selectionForeground: "#eeeeea",
+        selectionForeground: "#f7eddf",
       }
     : {
         background: "transparent",
-        foreground: "#1f1f1f",
+        foreground: "#2d2b29",
         cursor: "#dc9300",
-        cursorAccent: "#1f1f1f",
+        cursorAccent: "#2d2b29",
         selectionBackground: "rgba(255, 189, 87, 0.4)",
-        selectionForeground: "#1f1f1f",
+        selectionForeground: "#2d2b29",
       };
 }
 
