@@ -10,3 +10,9 @@ procs:
     cmd: ["pnpm", "--filter", "agent", "run", "dev"]
     cwd: .
     color: magenta
+
+  mobile-ios:
+    cmd: ["pnpm", "--filter", "@posthog/mobile", "run", "ios"]
+    cwd: .
+    color: green
+    autostart: false

@@ -10,7 +10,7 @@ interface UseAutoScrollOptions<T extends string> {
 }
 
 interface UseAutoScrollReturn {
-  scrollRef: React.RefObject<HTMLDivElement>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   autoScroll: boolean;
   setAutoScroll: (value: boolean) => void;
 }

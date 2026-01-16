@@ -4,11 +4,12 @@
 
 # PostHog Array Monorepo
 
-This is the monorepo for PostHog's Array desktop task manager and the agent framework that powers it.
+This is the monorepo for PostHog's Array apps and the agent framework that powers them.
 
 ## Projects
 
-- **[apps/array](./apps/array)** - The Array desktop application
+- **[apps/array](./apps/array)** - Array desktop application (Electron)
+- **[apps/mobile](./apps/mobile)** - PostHog mobile app (React Native / Expo)
 - **[packages/agent](./packages/agent)** - The TypeScript agent framework
 
 ## Development
@@ -42,6 +43,24 @@ pnpm dev:agent   # Run agent in watch mode
 pnpm dev:array   # Run array app
 ```
 
+### Mobile App
+
+```bash
+# Install mobile dependencies
+pnpm mobile:install
+
+# Build and run on iOS simulator
+pnpm mobile:run:ios
+
+# Start development server (without rebuilding again)
+pnpm mobile:start
+
+# Submit to TestFlight
+pnpm mobile:testflight
+```
+
+See [apps/mobile/README.md](./apps/mobile/README.md) for more details on developing the mobile app. 
+
 ### Other Commands
 
 ```bash
@@ -63,7 +82,8 @@ pnpm test
 ```
 array-monorepo/
 ├── apps/
-│   └── array/          # Electron desktop app
+│   ├── array/          # Electron desktop app
+│   └── mobile/         # React Native mobile app (Expo)
 ├── packages/
 │   └── agent/          # Agent framework
 ├── pnpm-workspace.yaml # Workspace configuration

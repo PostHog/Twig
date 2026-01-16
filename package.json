@@ -22,7 +22,22 @@
     "test:vitest": "pnpm --filter array --filter @posthog/electron-trpc test",
     "clean": "pnpm -r clean",
     "knip": "knip",
-    "prepare": "husky"
+    "prepare": "husky",
+    "mobile:start": "pnpm --filter @posthog/mobile exec expo start",
+    "mobile:start:clear": "pnpm --filter @posthog/mobile exec expo start --clear",
+    "mobile:run:ios": "pnpm --filter @posthog/mobile exec expo run:ios",
+    "mobile:run:ios:device": "pnpm --filter @posthog/mobile exec expo run:ios --device",
+    "mobile:run:android": "pnpm --filter @posthog/mobile exec expo run:android",
+    "mobile:prebuild": "pnpm --filter @posthog/mobile exec expo prebuild",
+    "mobile:prebuild:clean": "pnpm --filter @posthog/mobile exec expo prebuild --clean",
+    "mobile:build:dev": "pnpm --filter @posthog/mobile exec eas build --profile development --platform ios",
+    "mobile:build:dev:local": "pnpm --filter @posthog/mobile exec eas build --profile development --platform ios --local",
+    "mobile:build:preview": "pnpm --filter @posthog/mobile exec eas build --profile preview --platform ios",
+    "mobile:build:production": "pnpm --filter @posthog/mobile exec eas build --profile production --platform ios",
+    "mobile:testflight": "pnpm --filter @posthog/mobile exec npx testflight",
+    "mobile:lint": "pnpm --filter @posthog/mobile exec biome check .",
+    "mobile:format": "pnpm --filter @posthog/mobile exec biome format --write .",
+    "mobile:install": "pnpm install --filter @posthog/mobile"
   },
   "keywords": [
     "posthog",
