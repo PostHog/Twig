@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Array (Main Process)",
+      "type": "node",
+      "request": "attach",
+      "port": 5858,
+      "restart": true,
+      "timeout": 60000,
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "sourceMaps": true,
+      "address": "127.0.0.1",
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "${workspaceFolder}"
+    },
+    {
+      "name": "Debug Array (Renderer Process)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}/apps/array",
+      "timeout": 60000,
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack:///./*": "${webRoot}/*",
+        "webpack:///src/*": "${webRoot}/src/*",
+        "webpack:///*": "*",
+        "webpack:///./~/*": "${webRoot}/node_modules/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Array (Main + Renderer)",
+      "configurations": [
+        "Debug Array (Main Process)",
+        "Debug Array (Renderer Process)"
+      ],
+      "preLaunchTask": "start-dev-with-debug",
+      "stopAll": true
+    }
+  ]
+}
