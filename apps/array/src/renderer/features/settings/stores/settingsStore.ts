@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 
 export type DefaultRunMode = "local" | "cloud" | "last_used";
 export type LocalWorkspaceMode = "worktree" | "root";
+export type SendMessagesWith = "enter" | "cmd+enter";
 
 interface SettingsStore {
   autoRunTasks: boolean;
@@ -16,6 +17,8 @@ interface SettingsStore {
   defaultModel: string;
   desktopNotifications: boolean;
   cursorGlow: boolean;
+  autoConvertLongText: boolean;
+  sendMessagesWith: SendMessagesWith;
 
   setAutoRunTasks: (autoRun: boolean) => void;
   setDefaultRunMode: (mode: DefaultRunMode) => void;
@@ -26,6 +29,8 @@ interface SettingsStore {
   setDefaultModel: (model: string) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
+  setAutoConvertLongText: (enabled: boolean) => void;
+  setSendMessagesWith: (mode: SendMessagesWith) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -40,6 +45,8 @@ export const useSettingsStore = create<SettingsStore>()(
       defaultModel: DEFAULT_MODEL,
       desktopNotifications: true,
       cursorGlow: false,
+      autoConvertLongText: true,
+      sendMessagesWith: "enter",
 
       setAutoRunTasks: (autoRun) => set({ autoRunTasks: autoRun }),
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
@@ -52,6 +59,9 @@ export const useSettingsStore = create<SettingsStore>()(
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setCursorGlow: (enabled) => set({ cursorGlow: enabled }),
+      setAutoConvertLongText: (enabled) =>
+        set({ autoConvertLongText: enabled }),
+      setSendMessagesWith: (mode) => set({ sendMessagesWith: mode }),
     }),
     {
       name: "settings-storage",
