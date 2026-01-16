@@ -554,64 +554,15 @@ This PR implements the changes described in the task.`;
         },
       ];
 
-      // Track the last known log entry count for message polling
+      // Track the last known log entry count for interrupt polling
       let lastKnownEntryCount = 0;
-      let isRunning = true;
-      let isCancelled = false;
-      const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes idle timeout
-      let lastActivityTime = Date.now();
+      let isPolling = true;
 
-      // Queue for incoming messages to process
-      const messageQueue: ContentBlock[] = [];
-      let currentPromptPromise: Promise<void> | null = null;
-
-      // Process the next message in the queue
-      const processNextMessage = async (): Promise<void> => {
-        if (messageQueue.length === 0 || currentPromptPromise || isCancelled) {
-          return;
-        }
-
-        const promptBlocks = messageQueue.splice(0, messageQueue.length);
-
-        const processPrompt = async () => {
-          try {
-            this.logger.info("Processing prompt", {
-              blockCount: promptBlocks.length,
-            });
-            lastActivityTime = Date.now();
-            await clientConnection.prompt({
-              sessionId: taskRunId,
-              prompt: promptBlocks,
-            });
-            lastActivityTime = Date.now();
-          } catch (err) {
-            if (!isCancelled) {
-              this.logger.error("Prompt processing failed", { error: err });
-            }
-          } finally {
-            currentPromptPromise = null;
-            // Check if more messages arrived while processing
-            if (messageQueue.length > 0 && !isCancelled) {
-              processNextMessage();
-            }
-          }
-        };
-
-        currentPromptPromise = processPrompt();
-      };
-
-      // Poll for new messages from clients
-      const pollForMessages = async () => {
-        while (isRunning && !isCancelled) {
+      // Start interrupt polling in background
+      const pollForInterrupts = async () => {
+        while (isPolling) {
           await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
-          if (!isRunning || isCancelled) break;
-
-          // Check for idle timeout (only when not processing a prompt)
-          if (!currentPromptPromise && Date.now() - lastActivityTime > IDLE_TIMEOUT_MS) {
-            this.logger.info("Session idle timeout reached", { taskRunId });
-            isRunning = false;
-            break;
-          }
+          if (!isPolling) break;
 
           try {
             const newEntries = await this.sessionStore?.pollForNewEntries(
@@ -621,23 +572,6 @@ This PR implements the changes described in the task.`;
 
             for (const entry of newEntries ?? []) {
               lastKnownEntryCount++;
-
-              // Handle cancellation requests (standard ACP session/cancel)
-              if (entry.notification?.method === "session/cancel") {
-                this.logger.info("Received cancel request from client", {
-                  taskRunId,
-                });
-                isCancelled = true;
-                try {
-                  await clientConnection.cancel({ sessionId: taskRunId });
-                } catch (cancelErr) {
-                  this.logger.warn("Cancel request failed", {
-                    error: cancelErr,
-                  });
-                }
-                break;
-              }
-
               // Look for user_message notifications (clients send session/update with user_message_chunk)
               if (entry.notification?.method === "session/update") {
                 const update = (entry.notification?.params as any)?.update;
@@ -647,65 +581,39 @@ This PR implements the changes described in the task.`;
                 ) {
                   const content = update?.content;
                   if (content) {
-                    this.logger.info("Received user message from client", {
-                      content,
+                    this.logger.info("Processing user interrupt", { content });
+                    // Send as new prompt - will be processed after current prompt completes
+                    await clientConnection.prompt({
+                      sessionId: taskRunId,
+                      prompt: Array.isArray(content) ? content : [content],
                     });
-                    // Convert to ContentBlock format
-                    const contentBlock: ContentBlock =
-                      content.type === "text"
-                        ? { type: "text", text: content.text }
-                        : content;
-                    messageQueue.push(contentBlock);
-                    lastActivityTime = Date.now();
-
-                    // Process message if not already processing
-                    processNextMessage();
                   }
                 }
               }
             }
           } catch (err) {
-            this.logger.warn("Message polling error", { error: err });
+            this.logger.warn("Interrupt polling error", { error: err });
           }
-        }
-
-        // Wait for any in-progress prompt to complete before exiting
-        if (currentPromptPromise) {
-          this.logger.info("Waiting for in-progress prompt to complete");
-          await currentPromptPromise;
         }
       };
 
-      // Start message polling in background
-      const pollingPromise = pollForMessages();
+      // Start polling in background (don't await)
+      const pollingPromise = pollForInterrupts();
 
       // Send initial prompt and wait for completion
       this.logger.info("Sending initial prompt to agent");
-      lastActivityTime = Date.now();
+      const result = await clientConnection.prompt({
+        sessionId: taskRunId,
+        prompt: initialPrompt,
+      });
 
-      const initialPromptProcess = async () => {
-        try {
-          await clientConnection.prompt({
-            sessionId: taskRunId,
-            prompt: initialPrompt,
-          });
-          lastActivityTime = Date.now();
-        } finally {
-          currentPromptPromise = null;
-        }
-      };
-
-      currentPromptPromise = initialPromptProcess();
-      await currentPromptPromise;
-
-      // After initial prompt completes, continue polling for follow-up messages
-      // Wait for either idle timeout or explicit stop
-      this.logger.info("Initial prompt complete, waiting for follow-up messages");
+      // Stop interrupt polling
+      isPolling = false;
       await pollingPromise;
 
-      this.logger.info("Cloud session ending", {
+      this.logger.info("Task execution complete", {
         taskId: task.id,
-        cancelled: isCancelled,
+        stopReason: result.stopReason,
       });
 
       const branchName = await this.gitManager.getCurrentBranch();
