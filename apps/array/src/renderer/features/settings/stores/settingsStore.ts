@@ -14,6 +14,7 @@ interface SettingsStore {
   lastUsedWorkspaceMode: WorkspaceMode;
   createPR: boolean;
   defaultModel: string;
+  defaultThinkingEnabled: boolean;
   desktopNotifications: boolean;
   cursorGlow: boolean;
 
@@ -24,6 +25,7 @@ interface SettingsStore {
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
   setCreatePR: (createPR: boolean) => void;
   setDefaultModel: (model: string) => void;
+  setDefaultThinkingEnabled: (enabled: boolean) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
 }
@@ -38,6 +40,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedWorkspaceMode: "worktree",
       createPR: true,
       defaultModel: DEFAULT_MODEL,
+      defaultThinkingEnabled: false,
       desktopNotifications: true,
       cursorGlow: false,
 
@@ -49,6 +52,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
       setCreatePR: (createPR) => set({ createPR }),
       setDefaultModel: (model) => set({ defaultModel: model }),
+      setDefaultThinkingEnabled: (enabled) =>
+        set({ defaultThinkingEnabled: enabled }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setCursorGlow: (enabled) => set({ cursorGlow: enabled }),

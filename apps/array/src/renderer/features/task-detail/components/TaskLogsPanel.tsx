@@ -5,6 +5,7 @@ import {
   useSessionActions,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
+import { useThinkingStore } from "@features/sessions/stores/thinkingStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
@@ -87,11 +88,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       sessionStatus: session?.status ?? "none",
     });
 
+    // Initialize thinking state for this task from settings default
+    useThinkingStore.getState().initializeThinking(task.id);
+
+    // Prepend "ultrathink" to initial prompt if extended thinking is enabled
+    const thinkingEnabled = useThinkingStore.getState().getThinking(task.id);
+    const initialPromptText =
+      hasInitialPrompt && thinkingEnabled
+        ? `ultrathink ${task.description}`
+        : task.description;
+
     connectToTask({
       task,
       repoPath,
       initialPrompt: hasInitialPrompt
-        ? [{ type: "text", text: task.description }]
+        ? [{ type: "text", text: initialPromptText }]
         : undefined,
     }).finally(() => {
       isConnecting.current = false;
@@ -103,7 +114,14 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       try {
         markAsViewed(taskId);
 
-        const result = await sendPrompt(taskId, text);
+        // Prepend "ultrathink" if thinking is enabled and not already present
+        const thinkingEnabled = useThinkingStore.getState().getThinking(taskId);
+        const promptText =
+          thinkingEnabled && !text.trim().toLowerCase().startsWith("ultrathink")
+            ? `ultrathink ${text}`
+            : text;
+
+        const result = await sendPrompt(taskId, promptText);
         log.info("Prompt completed", { stopReason: result.stopReason });
 
         markActivity(taskId);

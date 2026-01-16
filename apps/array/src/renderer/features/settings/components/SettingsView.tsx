@@ -21,6 +21,7 @@ import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
 import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
+import { AVAILABLE_MODELS } from "@shared/types/models";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
@@ -55,10 +56,13 @@ export function SettingsView() {
     autoRunTasks,
     createPR,
     cursorGlow,
+    defaultModel,
+    defaultThinkingEnabled,
     desktopNotifications,
     setAutoRunTasks,
     setCreatePR,
     setCursorGlow,
+    setDefaultThinkingEnabled,
     setDesktopNotifications,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
@@ -158,6 +162,18 @@ export function SettingsView() {
       setTerminalLayout(value);
     },
     [terminalLayoutMode, setTerminalLayout],
+  );
+
+  const handleThinkingEnabledChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "default_thinking_enabled",
+        new_value: checked,
+        old_value: defaultThinkingEnabled,
+      });
+      setDefaultThinkingEnabled(checked);
+    },
+    [defaultThinkingEnabled, setDefaultThinkingEnabled],
   );
 
   const handleWorktreeLocationChange = async (newLocation: string) => {
@@ -341,20 +357,44 @@ export function SettingsView() {
           <Flex direction="column" gap="3">
             <Heading size="3">Chat</Heading>
             <Card>
-              <Flex align="center" justify="between">
-                <Flex direction="column" gap="1">
-                  <Text size="1" weight="medium">
-                    Desktop notifications
-                  </Text>
-                  <Text size="1" color="gray">
-                    Show notifications when the agent finishes working on a task
-                  </Text>
+              <Flex direction="column" gap="4">
+                {/* Thinking toggle - only for Anthropic models */}
+                {AVAILABLE_MODELS.find(
+                  (m) => m.id === defaultModel && m.provider === "anthropic",
+                ) && (
+                  <Flex align="center" justify="between">
+                    <Flex direction="column" gap="1">
+                      <Text size="1" weight="medium">
+                        Extended thinking
+                      </Text>
+                      <Text size="1" color="gray">
+                        Enable extended thinking for all chats.
+                      </Text>
+                    </Flex>
+                    <Switch
+                      checked={defaultThinkingEnabled}
+                      onCheckedChange={handleThinkingEnabledChange}
+                      size="1"
+                    />
+                  </Flex>
+                )}
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Desktop notifications
+                    </Text>
+                    <Text size="1" color="gray">
+                      Show notifications when the agent finishes working on a
+                      task
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={desktopNotifications}
+                    onCheckedChange={setDesktopNotifications}
+                    size="1"
+                  />
                 </Flex>
-                <Switch
-                  checked={desktopNotifications}
-                  onCheckedChange={setDesktopNotifications}
-                  size="1"
-                />
               </Flex>
             </Card>
           </Flex>
