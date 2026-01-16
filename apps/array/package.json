@@ -61,7 +61,7 @@
     "tsx": "^4.20.6",
     "typed-openapi": "^2.2.2",
     "typescript": "^5.9.3",
-    "vite": "^5.0.12",
+    "vite": "^6.0.7",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.10",
     "yaml": "^2.8.1"
