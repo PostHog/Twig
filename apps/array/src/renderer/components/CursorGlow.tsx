@@ -71,7 +71,8 @@ export function CursorGlow() {
           "radial-gradient(circle at center, var(--fire-glow) 0%, transparent 70%)",
         opacity: flicker.opacity,
         zIndex: 9999,
-        transition: "opacity 0.1s ease-out, width 0.1s ease-out, height 0.1s ease-out",
+        transition:
+          "opacity 0.1s ease-out, width 0.1s ease-out, height 0.1s ease-out",
       }}
     />
   );
