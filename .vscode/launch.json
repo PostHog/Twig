@@ -8,9 +8,7 @@
       "port": 5858,
       "restart": true,
       "timeout": 60000,
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
+      "skipFiles": ["<node_internals>/**"],
       "sourceMaps": true,
       "address": "127.0.0.1",
       "localRoot": "${workspaceFolder}",
