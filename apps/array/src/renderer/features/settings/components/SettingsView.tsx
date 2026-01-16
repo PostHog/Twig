@@ -59,11 +59,13 @@ export function SettingsView() {
     createPR,
     cursorGlow,
     desktopNotifications,
+    autoConvertLongText,
     sendMessagesWith,
     setAutoRunTasks,
     setCreatePR,
     setCursorGlow,
     setDesktopNotifications,
+    setAutoConvertLongText,
     setSendMessagesWith,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
@@ -163,6 +165,18 @@ export function SettingsView() {
       setTerminalLayout(value);
     },
     [terminalLayoutMode, setTerminalLayout],
+  );
+
+  const handleAutoConvertLongTextChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "auto_convert_long_text",
+        new_value: checked,
+        old_value: autoConvertLongText,
+      });
+      setAutoConvertLongText(checked);
+    },
+    [autoConvertLongText, setAutoConvertLongText],
   );
 
   const handleSendMessagesWithChange = useCallback(
