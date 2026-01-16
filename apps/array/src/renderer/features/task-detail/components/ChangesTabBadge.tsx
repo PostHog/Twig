@@ -39,7 +39,7 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
     <Flex gap="2" mr="2">
       {diffStats.linesAdded > 0 && (
         <Text size="1">
-          <Text size="1" color="green">
+          <Text size="1" style={{ color: "var(--green-9)" }}>
             +{diffStats.linesAdded}
           </Text>
           ,
@@ -47,14 +47,15 @@ export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
       )}
       {diffStats.linesRemoved > 0 && (
         <Text size="1">
-          <Text size="1" color="red">
+          <Text size="1" style={{ color: "var(--red-9)" }}>
             -{diffStats.linesRemoved}
           </Text>
           ,
         </Text>
       )}
       <Text size="1">
-        <Text color="blue">{diffStats.filesChanged}</Text> {filesLabel} changed
+        <Text style={{ color: "var(--blue-9)" }}>{diffStats.filesChanged}</Text>{" "}
+        {filesLabel} changed
       </Text>
     </Flex>
   );
