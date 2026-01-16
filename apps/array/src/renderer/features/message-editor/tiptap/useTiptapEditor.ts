@@ -98,14 +98,24 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       editorProps: {
         attributes: { class: EDITOR_CLASS },
         handleKeyDown: (view, event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            if (!view.editable) return false;
-            const suggestionPopup = document.querySelector("[data-tippy-root]");
-            if (suggestionPopup) return false;
-            event.preventDefault();
-            historyActions.reset();
-            submitRef.current();
-            return true;
+          if (event.key === "Enter") {
+            const sendMessagesWith =
+              useSettingsStore.getState().sendMessagesWith;
+            const isCmdEnterMode = sendMessagesWith === "cmd+enter";
+            const isSubmitKey = isCmdEnterMode
+              ? event.metaKey || event.ctrlKey
+              : !event.shiftKey;
+
+            if (isSubmitKey) {
+              if (!view.editable) return false;
+              const suggestionPopup =
+                document.querySelector("[data-tippy-root]");
+              if (suggestionPopup) return false;
+              event.preventDefault();
+              historyActions.reset();
+              submitRef.current();
+              return true;
+            }
           }
 
           if (
