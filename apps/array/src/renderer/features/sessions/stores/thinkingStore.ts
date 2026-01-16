@@ -49,20 +49,23 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
           const defaultEnabled =
             useSettingsStore.getState().defaultThinkingEnabled;
           set((state) => ({
-            thinkingByTask: { ...state.thinkingByTask, [taskId]: defaultEnabled },
+            thinkingByTask: {
+              ...state.thinkingByTask,
+              [taskId]: defaultEnabled,
+            },
           }));
         }
       },
     }),
     {
       name: "thinking-storage",
-    }
-  )
+    },
+  ),
 );
 
 // Hook to get thinking state for a specific task
 export function useThinkingForTask(taskId: string | undefined) {
   return useThinkingStore((state) =>
-    taskId ? state.getThinking(taskId) : false
+    taskId ? state.getThinking(taskId) : false,
   );
 }

@@ -32,12 +32,12 @@ export function EditorToolbar({
 
   // Check if current model is Anthropic
   const isAnthropicModel = AVAILABLE_MODELS.some(
-    (m) => m.id === activeModel && m.provider === "anthropic"
+    (m) => m.id === activeModel && m.provider === "anthropic",
   );
 
   // Thinking state for this task
   const thinkingEnabled = useThinkingStore((state) =>
-    taskId ? state.getThinking(taskId) : false
+    taskId ? state.getThinking(taskId) : false,
   );
   const toggleThinking = useThinkingStore((state) => state.toggleThinking);
 
