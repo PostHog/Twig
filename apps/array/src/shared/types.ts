@@ -5,7 +5,6 @@ export interface RegisteredFolder {
   lastAccessed: string;
   createdAt: string;
   exists?: boolean;
-  repository?: string;
 }
 
 export interface WorktreeInfo {

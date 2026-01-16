@@ -28,11 +28,13 @@ export function VirtualizedList<T>({
 
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement,
-    estimateSize: getEstimateSize,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => estimateSize,
     overscan,
     gap,
-    getItemKey: stableGetItemKey,
+    getItemKey: getItemKey
+      ? (index) => getItemKey(items[index], index)
+      : undefined,
   });
 
   useEffect(() => {

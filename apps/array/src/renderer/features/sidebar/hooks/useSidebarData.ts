@@ -7,7 +7,6 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
-import { logger } from "@renderer/lib/logger";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import type { RegisteredFolder, Task, Workspace } from "@shared/types";
 import { useEffect, useMemo } from "react";
@@ -19,8 +18,6 @@ import {
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
-
-const log = logger.scope("sidebar-data");
 
 export interface TaskView {
   id: string;
@@ -74,7 +71,6 @@ export interface SidebarData {
   activeRepository: string | null;
   isLoading: boolean;
   folders: FolderData[];
-  cloudRepos: CloudRepoData[];
   activeTaskId: string | null;
   historyData: HistoryData;
   pinnedData: PinnedData;
@@ -489,7 +485,6 @@ export function useSidebarData({
     activeRepository,
     isLoading,
     folders: folderData,
-    cloudRepos,
     activeTaskId,
     historyData,
     pinnedData,
