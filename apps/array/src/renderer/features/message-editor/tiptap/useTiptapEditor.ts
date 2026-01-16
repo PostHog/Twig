@@ -153,31 +153,44 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
           const files = event.dataTransfer?.files;
           if (!files || files.length === 0) return false;
 
-          const paths: string[] = [];
+          const paths: { path: string; name: string }[] = [];
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             // In Electron, File objects have a 'path' property
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const path = (file as any).path;
             if (path) {
-              paths.push(path);
+              paths.push({ path, name: file.name });
             }
           }
 
           if (paths.length > 0) {
             event.preventDefault();
 
+            // Insert file mention chips for each dropped file
+            const { tr } = view.state;
             const coordinates = view.posAtCoords({
               left: event.clientX,
               top: event.clientY,
             });
-            const pos = coordinates
-              ? coordinates.pos
-              : view.state.selection.from;
+            let pos = coordinates ? coordinates.pos : view.state.selection.from;
 
-            const textToInsert = paths.map((p) => `"${p}"`).join(" ");
+            for (const { path, name } of paths) {
+              const chipNode = view.state.schema.nodes.mentionChip?.create({
+                type: "file",
+                id: path,
+                label: name,
+              });
+              if (chipNode) {
+                tr.insert(pos, chipNode);
+                pos += chipNode.nodeSize;
+                // Add space after chip
+                tr.insertText(" ", pos);
+                pos += 1;
+              }
+            }
 
-            view.dispatch(view.state.tr.insertText(`${textToInsert} `, pos));
+            view.dispatch(tr);
             return true;
           }
 
