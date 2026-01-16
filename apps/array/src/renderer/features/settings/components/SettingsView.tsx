@@ -379,6 +379,23 @@ export function SettingsView() {
                 <Flex align="center" justify="between">
                   <Flex direction="column" gap="1">
                     <Text size="1" weight="medium">
+                      Auto-convert long text
+                    </Text>
+                    <Text size="1" color="gray">
+                      Automatically convert pasted text over 500 characters into
+                      an attachment
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={autoConvertLongText}
+                    onCheckedChange={handleAutoConvertLongTextChange}
+                    size="1"
+                  />
+                </Flex>
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
                       Send messages with
                     </Text>
                     <Text size="1" color="gray">
