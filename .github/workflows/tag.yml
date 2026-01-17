@@ -72,5 +72,7 @@ jobs:
           TAG="v$NEW_VERSION"
           echo "Creating tag: $TAG (from base tag $LATEST_TAG + $PATCH commits)"
 
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
           git tag -a "$TAG" -m "Release $TAG"
           git push "https://x-access-token:${GH_TOKEN}@github.com/$REPOSITORY" "$TAG"
