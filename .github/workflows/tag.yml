@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
   tag:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Get app token
