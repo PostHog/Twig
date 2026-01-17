@@ -2,16 +2,6 @@ name: Release Array
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "apps/array/**"
-      - "packages/agent/**"
-      - "packages/electron-trpc/**"
-      - "pnpm-lock.yaml"
-      - "package.json"
-      - "turbo.json"
-      - ".github/workflows/array-release.yml"
     tags:
       - "v*"
 
@@ -57,48 +47,17 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
-      - name: Compute version from git tags
+      - name: Extract version from tag
         id: version
         run: |
-          # Find the latest minor version tag (vX.Y format - exactly 2 parts)
-          # These are manually created to mark new minor releases
-          # Release tags (vX.Y.Z) are ignored for base version calculation
-          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1)
-
-          # Fall back to vX.Y.0 format if no vX.Y tags exist (backward compat)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.0' --sort=-v:refname | head -1)
-          fi
-
-          if [ -z "$LATEST_TAG" ]; then
-            echo "No version tag found. Create one with: git tag v0.15 && git push origin v0.15"
-            exit 1
-          fi
-
-          # Extract major.minor from tag
-          VERSION_PART=${LATEST_TAG#v}
-          MAJOR=$(echo "$VERSION_PART" | cut -d. -f1)
-          MINOR=$(echo "$VERSION_PART" | cut -d. -f2)
-
-          # Count commits since the base tag
-          PATCH=$(git rev-list "$LATEST_TAG"..HEAD --count)
-
-          if [ "$PATCH" -eq 0 ]; then
-            echo "No commits since $LATEST_TAG. Nothing to release."
-            exit 1
-          fi
-
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          echo "Version: $NEW_VERSION (from base tag $LATEST_TAG + $PATCH commits)"
-
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "base_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Version: $TAG_VERSION"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set version in package.json
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Update package.json for the build (not committed)
           jq --arg v "$APP_VERSION" '.version = $v' apps/array/package.json > tmp.json && mv tmp.json apps/array/package.json
           echo "Set apps/array/package.json version to $APP_VERSION"
 
@@ -131,16 +90,6 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           rm "$RUNNER_TEMP/certificate.p12"
-
-      - name: Create tag
-        env:
-          APP_VERSION: ${{ steps.version.outputs.version }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          TAG="v$APP_VERSION"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/$REPOSITORY" "$TAG"
 
       - name: Build native modules
         run: pnpm --filter array run build-native
