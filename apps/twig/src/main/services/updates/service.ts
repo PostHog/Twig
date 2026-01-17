@@ -1,7 +1,9 @@
 import { app, autoUpdater } from "electron";
-import { injectable, postConstruct } from "inversify";
+import { inject, injectable, postConstruct } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { AppLifecycleService } from "../app-lifecycle/service.js";
 import {
   type CheckForUpdatesOutput,
   type InstallUpdateOutput,
@@ -20,6 +22,9 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   private static readonly CHECK_TIMEOUT_MS = 60 * 1000; // 1 minute timeout for checks
   private static readonly DISABLE_ENV_FLAG = "ELECTRON_DISABLE_AUTO_UPDATE";
   private static readonly SUPPORTED_PLATFORMS = ["darwin", "win32"];
+
+  @inject(MAIN_TOKENS.AppLifecycleService)
+  private lifecycleService!: AppLifecycleService;
 
   private updateReady = false;
   private pendingNotification = false;
@@ -94,7 +99,7 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     return { success: true };
   }
 
-  installUpdate(): InstallUpdateOutput {
+  async installUpdate(): Promise<InstallUpdateOutput> {
     if (!this.updateReady) {
       log.warn("installUpdate called but no update is ready");
       return { installed: false };
@@ -105,6 +110,9 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     });
 
     try {
+      await this.lifecycleService.shutdown();
+      this.lifecycleService.setQuittingForUpdate();
+
       autoUpdater.quitAndInstall();
       return { installed: true };
     } catch (error) {
