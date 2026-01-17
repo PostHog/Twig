@@ -113,6 +113,21 @@
   animation: campfire-pulse 1s ease-in-out infinite;
 }
 
+/* Torch glow pulse animation for cursor flame effect */
+@keyframes torch-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.torch-glow-pulse {
+  animation: torch-pulse 1.5s ease-in-out infinite;
+}
+
 .radix-themes {
   /* Font families */
   --default-font-family:
