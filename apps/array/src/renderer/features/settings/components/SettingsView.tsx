@@ -1,6 +1,9 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import {
+  type SendMessagesWith,
+  useSettingsStore,
+} from "@features/settings/stores/settingsStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
@@ -56,10 +59,12 @@ export function SettingsView() {
     createPR,
     cursorGlow,
     desktopNotifications,
+    sendMessagesWith,
     setAutoRunTasks,
     setCreatePR,
     setCursorGlow,
     setDesktopNotifications,
+    setSendMessagesWith,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalLayoutStore(
     (state) => state.terminalLayoutMode,
@@ -158,6 +163,18 @@ export function SettingsView() {
       setTerminalLayout(value);
     },
     [terminalLayoutMode, setTerminalLayout],
+  );
+
+  const handleSendMessagesWithChange = useCallback(
+    (value: SendMessagesWith) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "send_messages_with",
+        new_value: value,
+        old_value: sendMessagesWith,
+      });
+      setSendMessagesWith(value);
+    },
+    [sendMessagesWith, setSendMessagesWith],
   );
 
   const handleWorktreeLocationChange = async (newLocation: string) => {
@@ -341,20 +358,48 @@ export function SettingsView() {
           <Flex direction="column" gap="3">
             <Heading size="3">Chat</Heading>
             <Card>
-              <Flex align="center" justify="between">
-                <Flex direction="column" gap="1">
-                  <Text size="1" weight="medium">
-                    Desktop notifications
-                  </Text>
-                  <Text size="1" color="gray">
-                    Show notifications when the agent finishes working on a task
-                  </Text>
+              <Flex direction="column" gap="4">
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Desktop notifications
+                    </Text>
+                    <Text size="1" color="gray">
+                      Show notifications when the agent finishes working on a
+                      task
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={desktopNotifications}
+                    onCheckedChange={setDesktopNotifications}
+                    size="1"
+                  />
                 </Flex>
-                <Switch
-                  checked={desktopNotifications}
-                  onCheckedChange={setDesktopNotifications}
-                  size="1"
-                />
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Send messages with
+                    </Text>
+                    <Text size="1" color="gray">
+                      Choose which key combination sends messages. Use
+                      Shift+Enter for new lines.
+                    </Text>
+                  </Flex>
+                  <Select.Root
+                    value={sendMessagesWith}
+                    onValueChange={(value) =>
+                      handleSendMessagesWithChange(value as SendMessagesWith)
+                    }
+                    size="1"
+                  >
+                    <Select.Trigger />
+                    <Select.Content>
+                      <Select.Item value="enter">Enter</Select.Item>
+                      <Select.Item value="cmd+enter">⌘ Enter</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                </Flex>
               </Flex>
             </Card>
           </Flex>
