@@ -48,7 +48,11 @@ export function RightSidebarContent({
   const [activeTab, setActiveTab] = useState<TabId>("changes");
 
   return (
-    <Flex direction="column" height="100%">
+    <Flex
+      direction="column"
+      height="100%"
+      style={{ backgroundColor: "var(--color-background)" }}
+    >
       <Flex
         style={{
           borderBottom: "1px solid var(--gray-6)",

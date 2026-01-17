@@ -13,7 +13,10 @@ export function StatusBar({ showKeyHints = true }: StatusBarProps) {
   const { statusText, keyHints } = useStatusBarStore();
 
   return (
-    <Box className="flex flex-row items-center justify-between border-gray-6 border-t bg-gray-2 px-4 py-2">
+    <Box
+      className="flex flex-row items-center justify-between border-t px-4 py-2"
+      style={{ backgroundColor: "var(--gray-2)", borderColor: "var(--gray-6)" }}
+    >
       <Flex align="center" gap="2">
         <StatusBarMenu />
         <Code size="1" variant="ghost" color="gray">
