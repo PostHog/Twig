@@ -1,0 +1,74 @@
+name: Tag Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/array/**"
+      - "packages/agent/**"
+      - "packages/electron-trpc/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "turbo.json"
+      - ".github/workflows/tag.yml"
+      - ".github/workflows/array-release.yml"
+
+concurrency:
+  group: tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Compute version and create tag
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Find the latest minor version tag (vX.Y format - exactly 2 parts)
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1)
+
+          # Fall back to vX.Y.0 format if no vX.Y tags exist (backward compat)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.0' --sort=-v:refname | head -1)
+          fi
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No version tag found. Create one with: git tag v0.15 && git push origin v0.15"
+            exit 1
+          fi
+
+          # Extract major.minor from tag
+          VERSION_PART=${LATEST_TAG#v}
+          MAJOR=$(echo "$VERSION_PART" | cut -d. -f1)
+          MINOR=$(echo "$VERSION_PART" | cut -d. -f2)
+
+          # Count commits since the base tag
+          PATCH=$(git rev-list "$LATEST_TAG"..HEAD --count)
+
+          if [ "$PATCH" -eq 0 ]; then
+            echo "No commits since $LATEST_TAG. Nothing to release."
+            exit 0
+          fi
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="v$NEW_VERSION"
+          echo "Creating tag: $TAG (from base tag $LATEST_TAG + $PATCH commits)"
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$REPOSITORY" "$TAG"
