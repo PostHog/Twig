@@ -2,7 +2,7 @@ import { useThemeStore } from "@stores/themeStore";
 import { useEffect, useState } from "react";
 
 interface TorchGlowProps {
-  containerRef: React.RefObject<HTMLElement>;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 export function TorchGlow({ containerRef }: TorchGlowProps) {
