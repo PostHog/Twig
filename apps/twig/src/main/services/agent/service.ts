@@ -678,14 +678,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   private async switchToCloud(session: ManagedSession): Promise<CloudModeResult> {
-    const { taskRunId, taskId, config } = session;
+    const { taskRunId, taskId, config, repoPath } = session;
     log.info("Switching to cloud mode", { sessionId: taskRunId, taskId });
 
     // Emit transitioning event
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "cloud",
-      message: "Moving to cloud...",
+      message: "Syncing files to cloud...",
     });
 
     try {
@@ -696,28 +696,41 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         // Ignore cancel errors - agent might not be running
       }
 
-      // 2. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
+      // 2. Create API client for PostHog operations
       const apiClient = new PostHogAPIClient({
         apiUrl: config.credentials.apiHost,
         getApiKey: () => this.getToken(config.credentials.apiKey),
         projectId: config.credentials.projectId,
       });
 
+      // 3. Sync local file changes to S3 before switching
+      const fileSyncManager = new FileSyncManager({
+        workingDirectory: repoPath,
+        taskId,
+        runId: taskRunId,
+        apiClient,
+      });
+
+      try {
+        log.info("Syncing local files to S3", { taskRunId, repoPath });
+        const manifest = await fileSyncManager.syncFilesToS3(repoPath);
+        log.info("Local files synced to S3", {
+          taskRunId,
+          fileCount: Object.keys(manifest.files).length,
+          deletedCount: manifest.deleted_files.length,
+        });
+      } catch (err) {
+        log.warn("Failed to sync local files to S3, continuing anyway", { taskRunId, err });
+      }
+
+      // 4. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
       await apiClient.updateTaskRun(taskId, taskRunId, {
         environment: "cloud",
       });
 
       log.info("Task run environment switched to cloud", { taskRunId });
 
-      // 3. Create FileSyncManager for local file application
-      const fileSyncManager = new FileSyncManager({
-        workingDirectory: session.repoPath,
-        taskId,
-        runId: taskRunId,
-        apiClient,
-      });
-
-      // 4. Create CloudConnection and connect via SSE
+      // 5. Create CloudConnection and connect via SSE
       log.info("[SWITCH_CLOUD] Creating CloudConnection", { taskRunId });
       const cloudConnectionEvents: CloudConnectionEvents = {
         onEvent: (event: JsonRpcMessage) => {
@@ -815,14 +828,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   private async switchToLocal(session: ManagedSession): Promise<CloudModeResult> {
-    const { taskRunId, cloudConnection } = session;
+    const { taskRunId, taskId, config, repoPath, cloudConnection } = session;
     log.info("Switching to local mode", { sessionId: taskRunId });
 
     // Emit transitioning event
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "local",
-      message: "Moving to local...",
+      message: "Syncing files from cloud...",
     });
 
     try {
@@ -835,18 +848,52 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         }
       }
 
-      // 2. Clean up file sync manager
+      // 2. Fetch and apply file manifest from cloud
+      const apiClient = new PostHogAPIClient({
+        apiUrl: config.credentials.apiHost,
+        getApiKey: () => this.getToken(config.credentials.apiKey),
+        projectId: config.credentials.projectId,
+      });
+
+      try {
+        log.info("Fetching file manifest from cloud", { taskRunId });
+        const manifest = await apiClient.getFileManifest(taskId, taskRunId);
+
+        if (manifest) {
+          const fileSyncManager = new FileSyncManager({
+            workingDirectory: repoPath,
+            taskId,
+            runId: taskRunId,
+            apiClient,
+          });
+
+          log.info("Applying cloud file changes locally", {
+            taskRunId,
+            fileCount: Object.keys(manifest.files).length,
+            deletedCount: manifest.deleted_files.length,
+          });
+
+          await fileSyncManager.applyManifest(manifest, repoPath);
+          log.info("Cloud file changes applied locally", { taskRunId });
+        } else {
+          log.info("No file manifest found, skipping file sync", { taskRunId });
+        }
+      } catch (err) {
+        log.warn("Failed to apply cloud file changes, continuing anyway", { taskRunId, err });
+      }
+
+      // 3. Clean up existing file sync manager
       if (session.fileSyncManager) {
         session.fileSyncManager.clear();
       }
 
-      // 3. Update session state
+      // 4. Update session state
       session.isCloud = false;
       session.cloudRunId = undefined;
       session.cloudConnection = undefined;
       session.fileSyncManager = undefined;
 
-      // 4. Emit success event
+      // 5. Emit success event
       this.emit(AgentServiceEvent.ModeChanged, {
         sessionId: taskRunId,
         mode: "local",

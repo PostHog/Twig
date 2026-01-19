@@ -128,3 +128,17 @@ export interface WorktreeInfo {
   baseBranch: string;
   createdAt: string;
 }
+
+// File manifest for cloud/local sync
+export interface FileManifestEntry {
+  hash: string;
+  size: number;
+}
+
+export interface FileManifest {
+  version: number;
+  base_commit: string | null;
+  updated_at: string;
+  files: Record<string, FileManifestEntry>;
+  deleted_files: string[];
+}

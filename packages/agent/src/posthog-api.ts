@@ -1,4 +1,4 @@
-import type { ArtifactType, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
+import type { ArtifactType, FileManifest, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
 
 export interface TaskArtifactUploadPayload {
   name: string;
@@ -160,5 +160,89 @@ export class PostHogAPIClient {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Fetch logs from S3 using presigned URL from TaskRun
+   * @param taskRun - The task run containing the log_url
+   * @returns Array of stored entries, or empty array if no logs available
+   */
+  async fetchTaskRunLogs(taskRun: TaskRun): Promise<StoredEntry[]> {
+    if (!taskRun.log_url) {
+      return [];
+    }
+
+    try {
+      const response = await fetch(taskRun.log_url);
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch logs: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const content = await response.text();
+
+      if (!content.trim()) {
+        return [];
+      }
+
+      // Parse newline-delimited JSON
+      return content
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as StoredEntry);
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch task run logs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Get file manifest for a task run (used for cloud/local sync)
+   * Returns null if no manifest exists
+   */
+  async getFileManifest(
+    taskId: string,
+    runId: string,
+  ): Promise<FileManifest | null> {
+    const teamId = this.getTeamId();
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/file_manifest/`,
+        { headers: this.headers },
+      );
+
+      if (response.status === 204) {
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to get file manifest: ${response.status}`);
+      }
+
+      return response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Update file manifest for a task run (used for cloud/local sync)
+   */
+  async putFileManifest(
+    taskId: string,
+    runId: string,
+    manifest: FileManifest,
+  ): Promise<FileManifest> {
+    const teamId = this.getTeamId();
+    return this.apiRequest<FileManifest>(
+      `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/file_manifest/`,
+      {
+        method: "PUT",
+        body: JSON.stringify(manifest),
+      },
+    );
   }
 }

@@ -11,6 +11,8 @@ export type { FileChangeEvent, FileSyncConfig, SyncedFile } from "./src/file-syn
 export { FileSyncManager } from "./src/file-sync.js";
 export type {
   AgentConfig,
+  FileManifest,
+  FileManifestEntry,
   OnLogCallback,
   PostHogAPIConfig,
 } from "./src/types.js";

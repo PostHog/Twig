@@ -1,4 +1,5 @@
 import type { ToolCall } from "@features/sessions/types";
+import { EditToolView } from "./EditToolView";
 import { ExecuteToolView } from "./ExecuteToolView";
 import { InlineQuestionView } from "./InlineQuestionView";
 import { PlanApprovalView } from "./PlanApprovalView";
@@ -40,6 +41,10 @@ export function ToolCallBlock({
     return (
       <ExecuteToolView toolCall={toolCall} turnCancelled={turnCancelled} />
     );
+  }
+
+  if (toolCall.kind === "edit") {
+    return <EditToolView toolCall={toolCall} turnCancelled={turnCancelled} />;
   }
 
   return <ToolCallView toolCall={toolCall} turnCancelled={turnCancelled} />;

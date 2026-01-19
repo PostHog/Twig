@@ -9,13 +9,22 @@
  * When receiving sync events (client side):
  * - Downloads files from S3
  * - Applies changes to local filesystem
+ *
+ * Cloud/Local Handoff:
+ * - syncFilesToS3(): Upload local changes when switching to cloud
+ * - applyManifest(): Apply cloud changes when switching to local
  */
 
+import { exec } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { promisify } from "node:util";
 import type { PostHogAPIClient } from "./posthog-api.js";
+import type { FileManifest, FileManifestEntry } from "./types.js";
 import { Logger } from "./utils/logger.js";
+
+const execAsync = promisify(exec);
 
 export interface FileChangeEvent {
   type: "file_created" | "file_modified" | "file_deleted";
@@ -326,5 +335,266 @@ export class FileSyncManager {
   clear(): void {
     this.syncedFiles.clear();
     this.pendingUploads.clear();
+  }
+
+  /**
+   * Get files that have changed since a base commit.
+   * If no base commit is provided, returns all tracked files.
+   */
+  async getChangedFiles(
+    repoPath: string,
+    baseCommit?: string | null,
+  ): Promise<Array<{ path: string; status: "added" | "modified" | "deleted" }>> {
+    const changedFiles: Array<{
+      path: string;
+      status: "added" | "modified" | "deleted";
+    }> = [];
+
+    try {
+      let diffOutput: string;
+
+      if (baseCommit) {
+        const { stdout } = await execAsync(
+          `git diff --name-status ${baseCommit} HEAD`,
+          { cwd: repoPath },
+        );
+        diffOutput = stdout;
+      } else {
+        const { stdout } = await execAsync("git diff --name-status HEAD~1 HEAD", {
+          cwd: repoPath,
+        });
+        diffOutput = stdout;
+      }
+
+      for (const line of diffOutput.trim().split("\n")) {
+        if (!line) continue;
+        const [statusCode, ...pathParts] = line.split("\t");
+        const filePath = pathParts.join("\t");
+
+        let status: "added" | "modified" | "deleted";
+        switch (statusCode?.[0]) {
+          case "A":
+            status = "added";
+            break;
+          case "D":
+            status = "deleted";
+            break;
+          default:
+            status = "modified";
+        }
+
+        changedFiles.push({ path: filePath, status });
+      }
+
+      // Also include untracked files
+      const { stdout: untrackedOutput } = await execAsync(
+        "git ls-files --others --exclude-standard",
+        { cwd: repoPath },
+      );
+
+      for (const line of untrackedOutput.trim().split("\n")) {
+        if (line) {
+          changedFiles.push({ path: line, status: "added" });
+        }
+      }
+
+      // Include modified but not yet committed files
+      const { stdout: stagedOutput } = await execAsync(
+        "git diff --name-status",
+        { cwd: repoPath },
+      );
+
+      for (const line of stagedOutput.trim().split("\n")) {
+        if (!line) continue;
+        const [statusCode, ...pathParts] = line.split("\t");
+        const filePath = pathParts.join("\t");
+
+        if (!changedFiles.some((f) => f.path === filePath)) {
+          let status: "added" | "modified" | "deleted";
+          switch (statusCode?.[0]) {
+            case "A":
+              status = "added";
+              break;
+            case "D":
+              status = "deleted";
+              break;
+            default:
+              status = "modified";
+          }
+          changedFiles.push({ path: filePath, status });
+        }
+      }
+    } catch (error) {
+      this.logger.error("Failed to get changed files", { error });
+    }
+
+    return changedFiles;
+  }
+
+  /**
+   * Sync all changed files to S3 and create/update the file manifest.
+   * Called when switching from local to cloud mode.
+   */
+  async syncFilesToS3(
+    repoPath: string,
+    baseCommit?: string | null,
+  ): Promise<FileManifest> {
+    this.logger.info("Syncing files to S3", { repoPath, baseCommit });
+
+    const changedFiles = await this.getChangedFiles(repoPath, baseCommit);
+    const files: Record<string, FileManifestEntry> = {};
+    const deletedFiles: string[] = [];
+
+    for (const { path: filePath, status } of changedFiles) {
+      if (status === "deleted") {
+        deletedFiles.push(filePath);
+        continue;
+      }
+
+      const absolutePath = join(repoPath, filePath);
+
+      try {
+        const content = await fs.readFile(absolutePath, "utf8");
+        const hash = this.computeHash(content);
+
+        // Upload file by hash (content-addressed storage)
+        await this.config.apiClient.uploadTaskArtifacts(
+          this.config.taskId,
+          this.config.runId,
+          [
+            {
+              name: `files/${hash}`,
+              type: "artifact",
+              content,
+              content_type: this.inferContentType(filePath),
+            },
+          ],
+        );
+
+        files[filePath] = {
+          hash,
+          size: Buffer.byteLength(content, "utf8"),
+        };
+
+        this.logger.debug("Uploaded file", { filePath, hash });
+      } catch (error) {
+        this.logger.error("Failed to upload file", { filePath, error });
+      }
+    }
+
+    const manifest: FileManifest = {
+      version: 1,
+      base_commit: baseCommit || null,
+      updated_at: new Date().toISOString(),
+      files,
+      deleted_files: deletedFiles,
+    };
+
+    // Store the manifest
+    await this.config.apiClient.putFileManifest(
+      this.config.taskId,
+      this.config.runId,
+      manifest,
+    );
+
+    this.logger.info("File manifest uploaded", {
+      fileCount: Object.keys(files).length,
+      deletedCount: deletedFiles.length,
+    });
+
+    return manifest;
+  }
+
+  /**
+   * Apply a file manifest to the local filesystem.
+   * Called when switching from cloud to local mode.
+   */
+  async applyManifest(
+    manifest: FileManifest,
+    repoPath: string,
+  ): Promise<void> {
+    this.logger.info("Applying file manifest", {
+      fileCount: Object.keys(manifest.files).length,
+      deletedCount: manifest.deleted_files.length,
+    });
+
+    // Apply file changes
+    for (const [relativePath, meta] of Object.entries(manifest.files)) {
+      const localPath = join(repoPath, relativePath);
+
+      try {
+        // Check if local file already has same content
+        const localHash = await this.computeFileHash(localPath).catch(
+          () => null,
+        );
+
+        if (localHash === meta.hash) {
+          this.logger.debug("File unchanged, skipping", { relativePath });
+          continue;
+        }
+
+        // Download file by hash
+        const storagePath = `files/${meta.hash}`;
+        const presignedUrl = await this.config.apiClient.getArtifactPresignedUrl(
+          this.config.taskId,
+          this.config.runId,
+          storagePath,
+        );
+
+        if (!presignedUrl) {
+          // Try alternative path format
+          const altStoragePath = `sync/${relativePath}`;
+          const altUrl = await this.config.apiClient.getArtifactPresignedUrl(
+            this.config.taskId,
+            this.config.runId,
+            altStoragePath,
+          );
+
+          if (!altUrl) {
+            this.logger.error("Could not find file in S3", { relativePath });
+            continue;
+          }
+
+          await this.downloadAndWriteFile(localPath, altStoragePath);
+        } else {
+          const response = await fetch(presignedUrl);
+          if (!response.ok) {
+            throw new Error(`Download failed: ${response.status}`);
+          }
+
+          const content = await response.text();
+
+          await fs.mkdir(dirname(localPath), { recursive: true });
+          await fs.writeFile(localPath, content, "utf8");
+
+          this.logger.debug("Applied file", { relativePath });
+        }
+      } catch (error) {
+        this.logger.error("Failed to apply file", { relativePath, error });
+      }
+    }
+
+    // Apply deletions
+    for (const deletedPath of manifest.deleted_files) {
+      const localPath = join(repoPath, deletedPath);
+      try {
+        await fs.unlink(localPath);
+        this.logger.debug("Deleted file", { deletedPath });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          this.logger.error("Failed to delete file", { deletedPath, error });
+        }
+      }
+    }
+
+    this.logger.info("File manifest applied");
+  }
+
+  /**
+   * Compute hash of a local file.
+   */
+  private async computeFileHash(filePath: string): Promise<string> {
+    const content = await fs.readFile(filePath, "utf8");
+    return this.computeHash(content);
   }
 }
