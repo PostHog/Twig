@@ -114,6 +114,7 @@ const subscriptions = new Map<
   {
     event: { unsubscribe: () => void };
     permission?: { unsubscribe: () => void };
+    modeChanged?: { unsubscribe: () => void };
   }
 >();
 
@@ -288,9 +289,34 @@ function subscribeToChannel(taskRunId: string) {
       },
     );
 
+  // Subscribe to mode change events (cloud/local switching)
+  const modeChangedSubscription = trpcVanilla.agent.onModeChanged.subscribe(
+    { sessionId: taskRunId },
+    {
+      onData: (payload) => {
+        log.info("Mode change event received", {
+          taskRunId,
+          mode: payload.mode,
+          message: payload.message,
+        });
+
+        useStore.setState((state) => {
+          const session = state.sessions[taskRunId];
+          if (session) {
+            session.isCloud = payload.mode === "cloud";
+          }
+        });
+      },
+      onError: (err) => {
+        log.error("Mode change subscription error", { taskRunId, error: err });
+      },
+    },
+  );
+
   subscriptions.set(taskRunId, {
     event: eventSubscription,
     permission: permissionSubscription,
+    modeChanged: modeChangedSubscription,
   });
 }
 
@@ -298,6 +324,7 @@ function unsubscribeFromChannel(taskRunId: string) {
   const subscription = subscriptions.get(taskRunId);
   subscription?.event.unsubscribe();
   subscription?.permission?.unsubscribe();
+  subscription?.modeChanged?.unsubscribe();
   subscriptions.delete(taskRunId);
 }
 
@@ -351,6 +378,45 @@ function createUserShellExecuteEvent(
       // TODO: Migrate to twig
       method: "_array/user_shell_execute",
       params: { command, cwd, result },
+    },
+  };
+}
+
+// Counter for generating unique cloud prompt IDs (prefixed to avoid collision with local IDs)
+let cloudPromptIdCounter = 10000;
+
+function createCloudPromptRequestEvent(
+  blocks: ContentBlock[],
+  ts: number,
+): { event: AcpMessage; promptId: number } {
+  const promptId = cloudPromptIdCounter++;
+  return {
+    event: {
+      type: "acp_message",
+      ts,
+      message: {
+        jsonrpc: "2.0",
+        id: promptId,
+        method: "session/prompt",
+        params: { prompt: blocks },
+      },
+    },
+    promptId,
+  };
+}
+
+function createCloudPromptResponseEvent(
+  promptId: number,
+  stopReason: string,
+  ts: number,
+): AcpMessage {
+  return {
+    type: "acp_message",
+    ts,
+    message: {
+      jsonrpc: "2.0",
+      id: promptId,
+      result: { stopReason },
     },
   };
 }
@@ -751,29 +817,37 @@ const useStore = create<SessionStore>()(
 
     const sendCloudPrompt = async (
       session: AgentSession,
-      taskId: string,
+      _taskId: string,
       blocks: ContentBlock[],
     ): Promise<{ stopReason: string }> => {
-      const storedEntry: StoredLogEntry = {
-        type: "notification",
-        timestamp: new Date().toISOString(),
-        notification: {
-          method: "session/update",
-          params: {
-            update: { sessionUpdate: "user_message_chunk", content: blocks[0] },
-          },
-        },
-      };
+      // Create a session/prompt request event locally so UI can track the turn
+      const startTs = Date.now();
+      const { event: requestEvent, promptId } = createCloudPromptRequestEvent(
+        blocks,
+        startTs,
+      );
+      appendEvents(session.taskRunId, [requestEvent]);
 
-      const event: AcpMessage = {
-        type: "acp_message",
-        ts: Date.now(),
-        message: storedEntry.notification as JsonRpcMessage,
-      };
+      // Send prompt to cloud via main process
+      updateSession(session.taskRunId, { isPromptPending: true });
+      try {
+        const result = await trpcVanilla.agent.prompt.mutate({
+          sessionId: session.taskRunId,
+          prompt: blocks,
+        });
 
-      await appendAndPersist(taskId, session, event, storedEntry);
+        // Create a session/prompt response event to complete the turn
+        const responseEvent = createCloudPromptResponseEvent(
+          promptId,
+          result.stopReason,
+          Date.now(),
+        );
+        appendEvents(session.taskRunId, [responseEvent]);
 
-      return { stopReason: "pending" };
+        return result;
+      } finally {
+        updateSession(session.taskRunId, { isPromptPending: false });
+      }
     };
 
     const sendLocalPrompt = async (

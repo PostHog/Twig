@@ -68,10 +68,14 @@ export default defineConfig({
 
     // Touch a trigger file to signal electron-forge to restart
     // This file is watched by Vite, triggering main process rebuild
+    // Skip in Docker/CI environments where the twig app doesn't exist
     const triggerFile = resolve(
       import.meta.dirname,
       "../../apps/twig/src/main/.agent-trigger",
     );
-    writeFileSync(triggerFile, `${Date.now()}`);
+    const triggerDir = resolve(import.meta.dirname, "../../apps/twig/src/main");
+    if (existsSync(triggerDir)) {
+      writeFileSync(triggerFile, `${Date.now()}`);
+    }
   },
 });

@@ -1,9 +1,16 @@
-import type { PostHogAPIConfig, StoredEntry, TaskRun } from "./types.js";
+import type { ArtifactType, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
+
+export interface TaskArtifactUploadPayload {
+  name: string;
+  type: ArtifactType;
+  content: string;
+  content_type?: string;
+}
 
 export type TaskRunUpdate = Partial<
   Pick<
     TaskRun,
-    "status" | "branch" | "stage" | "error_message" | "output" | "state"
+    "status" | "branch" | "stage" | "error_message" | "output" | "state" | "environment"
   >
 >;
 
@@ -112,5 +119,46 @@ export class PostHogAPIClient {
         body: JSON.stringify({ entries }),
       },
     );
+  }
+
+  async uploadTaskArtifacts(
+    taskId: string,
+    runId: string,
+    artifacts: TaskArtifactUploadPayload[],
+  ): Promise<TaskRunArtifact[]> {
+    if (!artifacts.length) {
+      return [];
+    }
+
+    const teamId = this.getTeamId();
+    const response = await this.apiRequest<{ artifacts: TaskRunArtifact[] }>(
+      `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/artifacts/`,
+      {
+        method: "POST",
+        body: JSON.stringify({ artifacts }),
+      },
+    );
+
+    return response.artifacts ?? [];
+  }
+
+  async getArtifactPresignedUrl(
+    taskId: string,
+    runId: string,
+    storagePath: string,
+  ): Promise<string | null> {
+    const teamId = this.getTeamId();
+    try {
+      const response = await this.apiRequest<{ url: string; expires_in: number }>(
+        `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/artifacts/presign/`,
+        {
+          method: "POST",
+          body: JSON.stringify({ storage_path: storagePath }),
+        },
+      );
+      return response.url;
+    } catch {
+      return null;
+    }
   }
 }

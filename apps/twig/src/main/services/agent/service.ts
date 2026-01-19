@@ -10,7 +10,17 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
-import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
+import {
+  Agent,
+  CloudConnection,
+  type CloudConnectionEvents,
+  type FileSyncEvent,
+  FileSyncManager,
+  type JsonRpcMessage,
+  getLlmGatewayUrl,
+  type OnLogCallback,
+  PostHogAPIClient,
+} from "@posthog/agent";
 import { app } from "electron";
 import { injectable } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
@@ -19,6 +29,7 @@ import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
+  type CloudModeResult,
   type Credentials,
   type InterruptReason,
   type PromptOutput,
@@ -152,6 +163,11 @@ interface ManagedSession {
   needsRecreation: boolean;
   promptPending: boolean;
   pendingContext?: string;
+  // Cloud mode state
+  isCloud: boolean;
+  cloudRunId?: string;
+  cloudConnection?: CloudConnection;
+  fileSyncManager?: FileSyncManager;
 }
 
 function getClaudeCliPath(): string {
@@ -430,6 +446,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         config,
         needsRecreation: false,
         promptPending: false,
+        isCloud: false,
       };
 
       this.sessions.set(taskRunId, session);
@@ -489,6 +506,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     let session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    log.info("Prompt called", { sessionId, isCloud: session.isCloud, hasCloudConnection: !!session.cloudConnection });
+
+    // Route to cloud if in cloud mode
+    if (session.isCloud && session.cloudConnection) {
+      session.lastActivityAt = Date.now();
+      // Extract text content from ContentBlock array for cloud prompt
+      const textContent = prompt
+        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+      log.info("Sending prompt to cloud", { sessionId, contentLength: textContent.length });
+      await session.cloudConnection.prompt(textContent);
+      log.info("Cloud prompt sent successfully", { sessionId });
+      return { stopReason: "end_turn" };
     }
 
     // Recreate session if marked (token was refreshed while session was active)
@@ -564,6 +597,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
+    // Route to cloud if in cloud mode
+    if (session.isCloud && session.cloudConnection) {
+      try {
+        await session.cloudConnection.cancel();
+        return true;
+      } catch (err) {
+        log.error("Failed to cancel cloud prompt", { sessionId, err });
+        return false;
+      }
+    }
+
     try {
       await session.connection.cancel({
         sessionId,
@@ -618,6 +662,262 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       log.error("Failed to set session mode", { sessionId, modeId, err });
       throw err;
     }
+  }
+
+  async toggleCloudMode(sessionId: string): Promise<CloudModeResult> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    if (session.isCloud) {
+      return this.switchToLocal(session);
+    } else {
+      return this.switchToCloud(session);
+    }
+  }
+
+  private async switchToCloud(session: ManagedSession): Promise<CloudModeResult> {
+    const { taskRunId, taskId, config } = session;
+    log.info("Switching to cloud mode", { sessionId: taskRunId, taskId });
+
+    // Emit transitioning event
+    this.emit(AgentServiceEvent.ModeChanged, {
+      sessionId: taskRunId,
+      mode: "cloud",
+      message: "Moving to cloud...",
+    });
+
+    try {
+      // 1. Cancel current local agent operation gracefully
+      try {
+        await session.connection.cancel({ sessionId: taskRunId });
+      } catch {
+        // Ignore cancel errors - agent might not be running
+      }
+
+      // 2. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
+      const apiClient = new PostHogAPIClient({
+        apiUrl: config.credentials.apiHost,
+        getApiKey: () => this.getToken(config.credentials.apiKey),
+        projectId: config.credentials.projectId,
+      });
+
+      await apiClient.updateTaskRun(taskId, taskRunId, {
+        environment: "cloud",
+      });
+
+      log.info("Task run environment switched to cloud", { taskRunId });
+
+      // 3. Create FileSyncManager for local file application
+      const fileSyncManager = new FileSyncManager({
+        workingDirectory: session.repoPath,
+        taskId,
+        runId: taskRunId,
+        apiClient,
+      });
+
+      // 4. Create CloudConnection and connect via SSE
+      log.info("[SWITCH_CLOUD] Creating CloudConnection", { taskRunId });
+      const cloudConnectionEvents: CloudConnectionEvents = {
+        onEvent: (event: JsonRpcMessage) => {
+          log.info("[SWITCH_CLOUD] onEvent callback triggered", { method: event.method });
+          this.handleCloudEvent(taskRunId, event);
+        },
+        onError: (error: Error) => {
+          log.error("Cloud connection error", { sessionId: taskRunId, error });
+          this.emit(AgentServiceEvent.SessionEvent, {
+            sessionId: taskRunId,
+            payload: {
+              type: "acp_message",
+              ts: Date.now(),
+              message: {
+                jsonrpc: "2.0",
+                method: "error",
+                params: { message: error.message },
+              },
+            },
+          });
+        },
+        onConnect: () => {
+          log.info("Cloud connection established", { sessionId: taskRunId });
+        },
+        onDisconnect: () => {
+          log.info("Cloud connection disconnected", { sessionId: taskRunId });
+        },
+        onFileSync: async (event: FileSyncEvent) => {
+          log.info("File sync event received", {
+            sessionId: taskRunId,
+            type: event.type,
+            path: event.relativePath,
+          });
+          try {
+            await fileSyncManager.applyFileChange({
+              type: event.type,
+              path: join(session.repoPath, event.relativePath),
+              relativePath: event.relativePath,
+              storagePath: event.storagePath,
+              contentHash: event.contentHash,
+              size: event.size,
+            });
+            log.info("File synced locally", { path: event.relativePath });
+          } catch (err) {
+            log.error("Failed to sync file locally", { path: event.relativePath, err });
+          }
+        },
+      };
+
+      const cloudConnection = new CloudConnection(
+        {
+          apiHost: config.credentials.apiHost,
+          apiKey: this.getToken(config.credentials.apiKey),
+          projectId: config.credentials.projectId,
+          taskId,
+          runId: taskRunId,
+        },
+        cloudConnectionEvents,
+      );
+
+      // Connect to cloud
+      await cloudConnection.connect();
+
+      // 5. Update session state
+      session.isCloud = true;
+      session.cloudRunId = taskRunId;
+      session.cloudConnection = cloudConnection;
+      session.fileSyncManager = fileSyncManager;
+
+      // 6. Emit success event
+      this.emit(AgentServiceEvent.ModeChanged, {
+        sessionId: taskRunId,
+        mode: "cloud",
+        message: "Running in cloud",
+      });
+
+      log.info("Successfully switched to cloud mode", { sessionId: taskRunId });
+
+      return {
+        mode: "cloud",
+        message: "Successfully moved to cloud",
+      };
+    } catch (error) {
+      log.error("Failed to switch to cloud mode", { sessionId: taskRunId, error });
+
+      // Revert to local mode on failure
+      this.emit(AgentServiceEvent.ModeChanged, {
+        sessionId: taskRunId,
+        mode: "local",
+        message: "Failed to switch to cloud",
+      });
+
+      throw error;
+    }
+  }
+
+  private async switchToLocal(session: ManagedSession): Promise<CloudModeResult> {
+    const { taskRunId, cloudConnection } = session;
+    log.info("Switching to local mode", { sessionId: taskRunId });
+
+    // Emit transitioning event
+    this.emit(AgentServiceEvent.ModeChanged, {
+      sessionId: taskRunId,
+      mode: "local",
+      message: "Moving to local...",
+    });
+
+    try {
+      // 1. Close cloud connection gracefully
+      if (cloudConnection) {
+        try {
+          await cloudConnection.close();
+        } catch {
+          // Ignore close errors
+        }
+      }
+
+      // 2. Clean up file sync manager
+      if (session.fileSyncManager) {
+        session.fileSyncManager.clear();
+      }
+
+      // 3. Update session state
+      session.isCloud = false;
+      session.cloudRunId = undefined;
+      session.cloudConnection = undefined;
+      session.fileSyncManager = undefined;
+
+      // 4. Emit success event
+      this.emit(AgentServiceEvent.ModeChanged, {
+        sessionId: taskRunId,
+        mode: "local",
+        message: "Running locally",
+      });
+
+      log.info("Successfully switched to local mode", { sessionId: taskRunId });
+
+      return {
+        mode: "local",
+        message: "Successfully moved to local",
+      };
+    } catch (error) {
+      log.error("Failed to switch to local mode", { sessionId: taskRunId, error });
+      throw error;
+    }
+  }
+
+  private handleCloudEvent(sessionId: string, event: JsonRpcMessage): void {
+    log.info("[CLOUD_EVENT] Received cloud event", {
+      sessionId,
+      method: event.method,
+      hasParams: !!event.params,
+    });
+    log.debug("[CLOUD_EVENT] Full event", { event });
+
+    // Transform cloud events to ACP message format for UI
+    const acpMessage: AcpMessage = {
+      type: "acp_message",
+      ts: Date.now(),
+      message: event as AcpMessage["message"],
+    };
+
+    log.info("[CLOUD_EVENT] Emitting to renderer", {
+      sessionId,
+      method: event.method,
+    });
+
+    this.emit(AgentServiceEvent.SessionEvent, {
+      sessionId,
+      payload: acpMessage,
+    });
+  }
+
+  async promptCloud(sessionId: string, content: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session?.isCloud || !session.cloudConnection) {
+      throw new Error("Session is not in cloud mode");
+    }
+
+    await session.cloudConnection.prompt(content);
+  }
+
+  async cancelCloudPrompt(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session?.isCloud || !session.cloudConnection) {
+      return false;
+    }
+
+    try {
+      await session.cloudConnection.cancel();
+      return true;
+    } catch (error) {
+      log.error("Failed to cancel cloud prompt", { sessionId, error });
+      return false;
+    }
+  }
+
+  isCloudMode(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    return session?.isCloud ?? false;
   }
 
   listSessions(taskId?: string): ManagedSession[] {

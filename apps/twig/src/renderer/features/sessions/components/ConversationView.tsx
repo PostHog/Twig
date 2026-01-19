@@ -284,7 +284,8 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
 
       currentTurn = {
         type: "turn",
-        id: `turn-${msg.id}`,
+        // Include timestamp in ID to avoid duplicates when switching local/cloud
+        id: `turn-${msg.id}-${event.ts}`,
         promptId: msg.id,
         userContent,
         items: [],

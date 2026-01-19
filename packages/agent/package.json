@@ -36,6 +36,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.8",
     "@types/bun": "latest",
+    "@types/node": "^22.16.0",
     "minimatch": "^10.0.3",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",

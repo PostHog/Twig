@@ -1,5 +1,6 @@
 import "./message-editor.css";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { CloudModeIndicator } from "@features/sessions/components/CloudModeIndicator";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -159,6 +160,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
                 bash mode
               </Text>
             )}
+            <CloudModeIndicator isCloud={isCloud} />
           </Flex>
           <Flex gap="4" align="center">
             {isLoading && onCancel ? (

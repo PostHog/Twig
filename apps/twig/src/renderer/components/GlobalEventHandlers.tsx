@@ -1,14 +1,18 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
+import { useSessions } from "@features/sessions/stores/sessionStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
+import { logger } from "@renderer/lib/logger";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { trpcReact } from "@/renderer/trpc";
+
+const log = logger.scope("global-handlers");
 
 interface GlobalEventHandlersProps {
   onToggleCommandMenu: () => void;
@@ -36,6 +40,14 @@ export function GlobalEventHandlers({
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
+  const sessions = useSessions();
+  const toggleCloudModeMutation = trpcReact.agent.toggleCloudMode.useMutation();
+
+  // Get current session if viewing a task
+  const currentSession = useMemo(() => {
+    if (view.type !== "task-detail" || !view.taskId) return null;
+    return Object.values(sessions).find((s) => s.taskId === view.taskId);
+  }, [view, sessions]);
 
   const handleOpenSettings = useCallback(() => {
     toggleSettings();
@@ -62,6 +74,26 @@ export function GlobalEventHandlers({
     if (!data) return;
     clearApplicationStorage();
   }, []);
+
+  const handleToggleCloudMode = useCallback(() => {
+    if (!currentSession) {
+      log.warn("No active session for cloud mode toggle");
+      return;
+    }
+
+    log.info("Toggling cloud mode", { sessionId: currentSession.taskRunId });
+    toggleCloudModeMutation.mutate(
+      { sessionId: currentSession.taskRunId },
+      {
+        onSuccess: (result) => {
+          log.info("Cloud mode toggled", result);
+        },
+        onError: (error) => {
+          log.error("Failed to toggle cloud mode", { error });
+        },
+      },
+    );
+  }, [currentSession, toggleCloudModeMutation]);
 
   const globalOptions = {
     enableOnFormTags: true,
@@ -90,6 +122,10 @@ export function GlobalEventHandlers({
   );
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
+  useHotkeys(SHORTCUTS.TOGGLE_CLOUD_MODE, handleToggleCloudMode, {
+    ...globalOptions,
+    enabled: !!currentSession,
+  });
 
   // Mouse back/forward buttons
   useEffect(() => {

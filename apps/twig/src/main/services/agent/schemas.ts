@@ -143,6 +143,7 @@ export const subscribeSessionInput = z.object({
 export const AgentServiceEvent = {
   SessionEvent: "session-event",
   PermissionRequest: "permission-request",
+  ModeChanged: "mode-changed",
 } as const;
 
 export interface AgentSessionEventPayload {
@@ -165,9 +166,16 @@ export interface PermissionRequestPayload {
   rawInput: unknown;
 }
 
+export interface ModeChangedPayload {
+  sessionId: string;
+  mode: "local" | "cloud";
+  message: string;
+}
+
 export interface AgentServiceEvents {
   [AgentServiceEvent.SessionEvent]: AgentSessionEventPayload;
   [AgentServiceEvent.PermissionRequest]: PermissionRequestPayload;
+  [AgentServiceEvent.ModeChanged]: ModeChangedPayload;
 }
 
 // Permission response input for tRPC
@@ -220,3 +228,18 @@ export const sessionInfoSchema = z.object({
 });
 
 export const listSessionsOutput = z.array(sessionInfoSchema);
+
+// Toggle cloud mode input for tRPC
+export const toggleCloudModeInput = z.object({
+  sessionId: z.string(),
+});
+
+export type ToggleCloudModeInput = z.infer<typeof toggleCloudModeInput>;
+
+// Cloud mode result
+export const cloudModeResultSchema = z.object({
+  mode: z.enum(["local", "cloud"]),
+  message: z.string(),
+});
+
+export type CloudModeResult = z.infer<typeof cloudModeResultSchema>;

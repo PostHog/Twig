@@ -144,17 +144,10 @@ export class PostHogAPIClient {
     });
   }
 
-  async runTaskInCloud(taskId: string): Promise<Task> {
-    const teamId = await this.getTeamId();
-
-    const data = await this.api.post(
-      `/api/projects/{project_id}/tasks/{id}/run/`,
-      {
-        path: { project_id: teamId.toString(), id: taskId },
-      },
-    );
-
-    return data as unknown as Task;
+  async runTaskInCloud(taskId: string): Promise<TaskRun> {
+    // Create a cloud task run - this triggers the cloud-session workflow
+    // which provisions a sandbox and starts the agent server
+    return this.createTaskRun(taskId, { environment: "cloud" });
   }
 
   async listTaskRuns(taskId: string): Promise<TaskRun[]> {
@@ -194,7 +187,10 @@ export class PostHogAPIClient {
     return await response.json();
   }
 
-  async createTaskRun(taskId: string): Promise<TaskRun> {
+  async createTaskRun(
+    taskId: string,
+    options?: { environment?: "local" | "cloud" },
+  ): Promise<TaskRun> {
     const teamId = await this.getTeamId();
     const data = await this.api.post(
       `/api/projects/{project_id}/tasks/{task_id}/runs/`,
@@ -202,7 +198,7 @@ export class PostHogAPIClient {
         path: { project_id: teamId.toString(), task_id: taskId },
         //@ts-expect-error the generated client does not infer the request type unless explicitly specified on the viewset
         body: {
-          environment: "local" as const,
+          environment: options?.environment ?? "local",
         },
       },
     );

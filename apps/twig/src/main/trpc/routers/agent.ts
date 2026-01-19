@@ -6,6 +6,7 @@ import {
   cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
+  cloudModeResultSchema,
   listSessionsInput,
   listSessionsOutput,
   notifySessionContextInput,
@@ -18,6 +19,7 @@ import {
   setModelInput,
   startSessionInput,
   subscribeSessionInput,
+  toggleCloudModeInput,
   tokenUpdateInput,
 } from "../../services/agent/schemas.js";
 import type { AgentService } from "../../services/agent/service.js";
@@ -140,4 +142,27 @@ export const agentRouter = router({
   markAllForRecreation: publicProcedure.mutation(() =>
     getService().markAllSessionsForRecreation(),
   ),
+
+  // Toggle between local and cloud execution mode
+  toggleCloudMode: publicProcedure
+    .input(toggleCloudModeInput)
+    .output(cloudModeResultSchema)
+    .mutation(({ input }) => getService().toggleCloudMode(input.sessionId)),
+
+  // Subscribe to mode change events
+  onModeChanged: publicProcedure
+    .input(subscribeSessionInput)
+    .subscription(async function* (opts) {
+      const service = getService();
+      const targetSessionId = opts.input.sessionId;
+      const iterable = service.toIterable(AgentServiceEvent.ModeChanged, {
+        signal: opts.signal,
+      });
+
+      for await (const event of iterable) {
+        if (event.sessionId === targetSessionId) {
+          yield event;
+        }
+      }
+    }),
 });

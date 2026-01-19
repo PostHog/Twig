@@ -156,13 +156,15 @@ export class TaskCreationSaga extends Saga<
 
     // Step 5: Start cloud run (only for new cloud tasks)
     if (workspaceMode === "cloud" && !task.latest_run) {
-      await this.step({
+      const cloudRun = await this.step({
         name: "cloud_run",
         execute: () => this.deps.posthogClient.runTaskInCloud(task.id),
         rollback: async () => {
           log.info("Rolling back: cloud run (no-op)", { taskId: task.id });
         },
       });
+      // Update task with the new cloud run so connectToTask sees cloud mode
+      task.latest_run = cloudRun;
     }
 
     // Step 6: Connect to session
