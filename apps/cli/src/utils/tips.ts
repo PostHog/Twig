@@ -1,4 +1,4 @@
-import { getTip, markTipSeen, shouldShowTip } from "@array/core/config";
+import { getTip, markTipSeen, shouldShowTip } from "@twig/core/config";
 import { blank, cmd, dim, hint } from "./output";
 
 function formatTip(tip: string): string {

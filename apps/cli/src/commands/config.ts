@@ -1,9 +1,9 @@
-import type { CommandMeta } from "@array/core/commands/types";
+import type { CommandMeta } from "@twig/core/commands/types";
 import {
   createDefaultUserConfig,
   loadUserConfig,
   saveUserConfig,
-} from "@array/core/config";
+} from "@twig/core/config";
 import {
   blank,
   bold,

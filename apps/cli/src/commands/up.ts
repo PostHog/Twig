@@ -1,4 +1,4 @@
-import { up as coreUp } from "@array/core/commands/up";
+import { up as coreUp } from "@twig/core/commands/up";
 import { printNavResult } from "../utils/output";
 import { unwrap } from "../utils/run";
 

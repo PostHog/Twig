@@ -15,7 +15,7 @@ const log = logger.scope("updates");
 export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   private static readonly SERVER_HOST = "https://update.electronjs.org";
   private static readonly REPO_OWNER = "PostHog";
-  private static readonly REPO_NAME = "Array";
+  private static readonly REPO_NAME = "Twig";
   private static readonly CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
   private static readonly CHECK_TIMEOUT_MS = 60 * 1000; // 1 minute timeout for checks
   private static readonly DISABLE_ENV_FLAG = "ELECTRON_DISABLE_AUTO_UPDATE";

@@ -1,5 +1,5 @@
 {
-  "name": "@array/core",
+  "name": "@twig/core",
   "version": "0.0.1",
   "description": "Changeset management on top of jj (Jujutsu VCS)",
   "type": "module",

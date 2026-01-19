@@ -114,7 +114,7 @@ pnpm build-native
 
 ### Auto Updates & Releases
 
-Array uses Electron's built-in `autoUpdater` pointed at the public `update.electronjs.org` service for `PostHog/Array`. Every time a non-draft GitHub release is published with the platform archives, packaged apps will automatically download and install the newest version on macOS and Windows.
+Twig uses Electron's built-in `autoUpdater` pointed at the public `update.electronjs.org` service for `PostHog/Twig`. Every time a non-draft GitHub release is published with the platform archives, packaged apps will automatically download and install the newest version on macOS and Windows.
 
 Publishing a new release:
 

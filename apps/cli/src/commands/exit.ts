@@ -1,7 +1,7 @@
-import { exit } from "@array/core/commands/exit";
-import { focusNone, focusStatus } from "@array/core/commands/focus";
-import type { CommandMeta } from "@array/core/commands/types";
-import { unwrap } from "@array/core/result";
+import { exit } from "@twig/core/commands/exit";
+import { focusNone, focusStatus } from "@twig/core/commands/focus";
+import type { CommandMeta } from "@twig/core/commands/types";
+import { unwrap } from "@twig/core/result";
 import {
   blank,
   cyan,

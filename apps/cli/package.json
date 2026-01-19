@@ -1,5 +1,5 @@
 {
-  "name": "@array/cli",
+  "name": "@twig/cli",
   "version": "0.0.1",
   "description": "CLI for changeset management with jj",
   "bin": {
@@ -19,6 +19,6 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
-    "@array/core": "workspace:*"
+    "@twig/core": "workspace:*"
   }
 }

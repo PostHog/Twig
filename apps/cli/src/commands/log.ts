@@ -4,8 +4,8 @@ import {
   type LogPRInfo,
   type NormalLogResult,
   parseChangeLine,
-} from "@array/core/commands/log";
-import type { ArrContext } from "@array/core/engine";
+} from "@twig/core/commands/log";
+import type { ArrContext } from "@twig/core/engine";
 import { COMMANDS } from "../registry";
 import {
   arr,

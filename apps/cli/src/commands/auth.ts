@@ -3,8 +3,8 @@ import {
   ghAuthLogin,
   isGhInstalled,
   saveAuthState,
-} from "@array/core/auth";
-import type { CommandMeta } from "@array/core/commands/types";
+} from "@twig/core/auth";
+import type { CommandMeta } from "@twig/core/commands/types";
 import { COMMANDS } from "../registry";
 import {
   arr,

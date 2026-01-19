@@ -1,7 +1,7 @@
 {
-  "name": "@posthog/array",
+  "name": "@posthog/twig",
   "version": "0.0.0-dev",
-  "description": "Array - PostHog desktop task manager",
+  "description": "Twig - PostHog desktop task manager",
   "main": ".vite/build/bootstrap.js",
   "versionHash": "dynamic",
   "engines": {
@@ -22,11 +22,11 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "test": "vitest run",
-    "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/array/scripts/patch-electron-name.sh"
+    "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/twig/scripts/patch-electron-name.sh"
   },
   "keywords": [
     "posthog",
-    "array",
+    "twig",
     "tasks",
     "developer-tools"
   ],

@@ -1,4 +1,4 @@
-name: Release Array
+name: Release Twig
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - "v*"
 
 concurrency:
-  group: array-release
+  group: twig-release
   cancel-in-progress: false
 
 jobs:
@@ -58,8 +58,8 @@ jobs:
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          jq --arg v "$APP_VERSION" '.version = $v' apps/array/package.json > tmp.json && mv tmp.json apps/array/package.json
-          echo "Set apps/array/package.json version to $APP_VERSION"
+          jq --arg v "$APP_VERSION" '.version = $v' apps/twig/package.json > tmp.json && mv tmp.json apps/twig/package.json
+          echo "Set apps/twig/package.json version to $APP_VERSION"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -92,10 +92,10 @@ jobs:
           rm "$RUNNER_TEMP/certificate.p12"
 
       - name: Build native modules
-        run: pnpm --filter array run build-native
+        run: pnpm --filter twig run build-native
 
       - name: Publish with Electron Forge
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: pnpm --filter array run publish
+        run: pnpm --filter twig run publish

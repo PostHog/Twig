@@ -4,7 +4,7 @@
     ".": {
       "entry": ["mprocs.yaml"]
     },
-    "apps/array": {
+    "apps/twig": {
       "entry": [
         "src/main/index.ts",
         "src/main/preload.ts",

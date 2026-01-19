@@ -5,14 +5,14 @@ on:
     branches:
       - main
     paths:
-      - "apps/array/**"
+      - "apps/twig/**"
       - "packages/agent/**"
       - "packages/electron-trpc/**"
       - "pnpm-lock.yaml"
       - "package.json"
       - "turbo.json"
       - ".github/workflows/tag.yml"
-      - ".github/workflows/array-release.yml"
+      - ".github/workflows/twig-release.yml"
 
 concurrency:
   group: tag

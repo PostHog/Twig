@@ -1,5 +1,5 @@
-import type { CommandMeta } from "@array/core/commands/types";
-import type { NavigationResult } from "@array/core/types";
+import type { CommandMeta } from "@twig/core/commands/types";
+import type { NavigationResult } from "@twig/core/types";
 
 const colors = {
   reset: "\x1b[0m",

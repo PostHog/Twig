@@ -1,6 +1,6 @@
 procs:
-  array:
-    cmd: ["pnpm", "--filter", "array", "run", "start"]
+  twig:
+    cmd: ["pnpm", "--filter", "twig", "run", "start"]
     cwd: .
     color: blue
     depends_on:

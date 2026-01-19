@@ -1,6 +1,6 @@
-import { deleteChange as deleteCmd } from "@array/core/commands/delete";
-import type { ArrContext } from "@array/core/engine";
-import { changeLabel } from "@array/core/slugify";
+import { deleteChange as deleteCmd } from "@twig/core/commands/delete";
+import type { ArrContext } from "@twig/core/engine";
+import { changeLabel } from "@twig/core/slugify";
 import {
   cyan,
   dim,

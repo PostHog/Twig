@@ -1,4 +1,4 @@
-import { resolve as coreResolve } from "@array/core/commands/resolve";
+import { resolve as coreResolve } from "@twig/core/commands/resolve";
 import { COMMANDS } from "../registry";
 import {
   arr,

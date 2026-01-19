@@ -1,5 +1,5 @@
-import { create as createCmd } from "@array/core/commands/create";
-import type { ArrContext } from "@array/core/engine";
+import { create as createCmd } from "@twig/core/commands/create";
+import type { ArrContext } from "@twig/core/engine";
 import { COMMANDS } from "../registry";
 import {
   arr,

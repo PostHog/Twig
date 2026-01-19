@@ -220,7 +220,7 @@ const config: ForgeConfig = {
     new PublisherGithub({
       repository: {
         owner: "PostHog",
-        name: "Array",
+        name: "Twig",
       },
       draft: false,
       prerelease: false,

@@ -201,7 +201,7 @@ describe("UpdatesService", () => {
       await initializeService(service);
 
       expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith({
-        url: "https://update.electronjs.org/PostHog/Array/darwin-arm64/2.0.0",
+        url: "https://update.electronjs.org/PostHog/Twig/darwin-arm64/2.0.0",
       });
     });
   });

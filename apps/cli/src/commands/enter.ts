@@ -1,6 +1,6 @@
-import { enter } from "@array/core/commands/enter";
-import type { CommandMeta } from "@array/core/commands/types";
-import { unwrap } from "@array/core/result";
+import { enter } from "@twig/core/commands/enter";
+import type { CommandMeta } from "@twig/core/commands/types";
+import { unwrap } from "@twig/core/result";
 import { blank, dim, green, hint, message } from "../utils/output";
 
 export const meta: CommandMeta = {
