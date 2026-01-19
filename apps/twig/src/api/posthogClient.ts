@@ -61,7 +61,11 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(options?: { repository?: string; createdBy?: number }) {
+  async getTasks(options?: {
+    repository?: string;
+    createdBy?: number;
+    originProduct?: string;
+  }) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
@@ -73,6 +77,10 @@ export class PostHogAPIClient {
 
     if (options?.createdBy) {
       params.created_by = options.createdBy;
+    }
+
+    if (options?.originProduct) {
+      params.origin_product = options.originProduct;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {
