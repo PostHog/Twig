@@ -1,6 +1,10 @@
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useAutoDetectedTasks } from "@features/tasks/hooks/useTasks";
-import { ArrowsClockwiseIcon, SparkleIcon } from "@phosphor-icons/react";
+import {
+  ArrowRightIcon,
+  ArrowsClockwiseIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import {
   Box,
   Button,
@@ -9,6 +13,7 @@ import {
   Skeleton,
   Text,
 } from "@radix-ui/themes";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
 import type { Task } from "@shared/types";
 import { useSuggestedTasksStore } from "../stores/suggestedTasksStore";
 
@@ -61,6 +66,7 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
   const incrementUsage = useSuggestedTasksStore(
     (state) => state.incrementUsage,
   );
+  const { navigateToTaskPreview } = useNavigationStore();
 
   const { data: autoDetectedTasks = [], isLoading } = useAutoDetectedTasks();
   const hasAutoDetectedTasks = autoDetectedTasks.length > 0;
@@ -80,10 +86,7 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
   };
 
   const handleAutoDetectedTaskClick = (task: Task) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    editor.setContent(task.description);
+    navigateToTaskPreview(task);
   };
 
   if (staticSuggestions.length === 0 && !hasAutoDetectedTasks && !isLoading) {
@@ -120,13 +123,17 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
               className="group relative flex cursor-pointer items-start gap-2 rounded border border-accent-6 bg-accent-2 p-2 text-left transition-colors hover:border-accent-8 hover:bg-accent-3"
             >
               <Flex direction="column" gap="1" style={{ flex: 1 }}>
-                <Flex align="center" gap="2">
-                  <Text size="1" weight="medium" className="text-accent-12">
+                <Flex align="start" gap="2">
+                  <Text
+                    size="1"
+                    weight="medium"
+                    className="text-pretty text-accent-12"
+                  >
                     {task.title}
                   </Text>
                   <Text
                     size="1"
-                    className="rounded bg-accent-4 px-1 py-0.5 text-accent-11"
+                    className="whitespace-nowrap rounded bg-accent-4 px-1 py-0.5 text-accent-11"
                   >
                     AUTO-DETECTED
                   </Text>
@@ -138,6 +145,10 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
                   {task.description}
                 </Text>
               </Flex>
+              <ArrowRightIcon
+                size={16}
+                className="flex-shrink-0 text-accent-9 group-hover:text-accent-11"
+              />
             </button>
           ))}
         </Flex>

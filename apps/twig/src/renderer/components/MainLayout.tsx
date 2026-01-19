@@ -10,6 +10,7 @@ import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
+import { TaskPreviewView } from "@features/task-preview/components/TaskPreviewView";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { useIntegrations } from "@hooks/useIntegrations";
@@ -56,6 +57,10 @@ export function MainLayout() {
 
           {view.type === "task-detail" && view.data && (
             <TaskDetail key={view.data.id} task={view.data} />
+          )}
+
+          {view.type === "task-preview" && view.data && (
+            <TaskPreviewView task={view.data} />
           )}
 
           {view.type === "settings" && <SettingsView />}

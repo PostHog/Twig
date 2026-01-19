@@ -12,7 +12,12 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "settings" | "folder-settings";
+type ViewType =
+  | "task-detail"
+  | "task-input"
+  | "task-preview"
+  | "settings"
+  | "folder-settings";
 
 interface ViewState {
   type: ViewType;
@@ -26,6 +31,7 @@ interface NavigationStore {
   history: ViewState[];
   historyIndex: number;
   navigateToTask: (task: Task) => void;
+  navigateToTaskPreview: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
@@ -40,6 +46,9 @@ interface NavigationStore {
 const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   if (view1.type !== view2.type) return false;
   if (view1.type === "task-detail" && view2.type === "task-detail") {
+    return view1.data?.id === view2.data?.id;
+  }
+  if (view1.type === "task-preview" && view2.type === "task-preview") {
     return view1.data?.id === view2.data?.id;
   }
   if (view1.type === "task-input" && view2.type === "task-input") {
@@ -134,6 +143,13 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToTaskInput: (folderId?: string) => {
           navigate({ type: "task-input", folderId });
+        },
+
+        navigateToTaskPreview: (task: Task) => {
+          navigate({ type: "task-preview", data: task, taskId: task.id });
+          track(ANALYTICS_EVENTS.TASK_VIEWED, {
+            task_id: task.id,
+          });
         },
 
         navigateToSettings: () => {
