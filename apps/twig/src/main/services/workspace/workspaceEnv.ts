@@ -60,14 +60,14 @@ export async function buildWorkspaceEnv(
   const portAllocation = allocateWorkspacePorts(context.taskId);
 
   return {
-    ARRAY_WORKSPACE_NAME: workspaceName,
-    ARRAY_WORKSPACE_PATH: workspacePath,
-    ARRAY_ROOT_PATH: rootPath,
-    ARRAY_DEFAULT_BRANCH: defaultBranch,
-    ARRAY_WORKSPACE_BRANCH: workspaceBranch,
-    ARRAY_WORKSPACE_PORTS: portAllocation.ports.join(","),
-    ARRAY_WORKSPACE_PORTS_RANGE: String(PORTS_PER_WORKSPACE),
-    ARRAY_WORKSPACE_PORTS_START: String(portAllocation.start),
-    ARRAY_WORKSPACE_PORTS_END: String(portAllocation.end),
+    TWIG_WORKSPACE_NAME: workspaceName,
+    TWIG_WORKSPACE_PATH: workspacePath,
+    TWIG_ROOT_PATH: rootPath,
+    TWIG_DEFAULT_BRANCH: defaultBranch,
+    TWIG_WORKSPACE_BRANCH: workspaceBranch,
+    TWIG_WORKSPACE_PORTS: portAllocation.ports.join(","),
+    TWIG_WORKSPACE_PORTS_RANGE: String(PORTS_PER_WORKSPACE),
+    TWIG_WORKSPACE_PORTS_START: String(portAllocation.start),
+    TWIG_WORKSPACE_PORTS_END: String(portAllocation.end),
   };
 }

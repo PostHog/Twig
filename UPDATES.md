@@ -1,8 +1,8 @@
 # Releasing Updates
 
-Array uses semantic versioning with git tags. Patch versions are automatically computed from commit counts.
+Twig uses semantic versioning with git tags. Patch versions are automatically computed from commit counts.
 
-The version in `apps/array/package.json` is set to `0.0.0-dev` - this is intentional. CI injects the real version at build time from git tags.
+The version in `apps/twig/package.json` is set to `0.0.0-dev` - this is intentional. CI injects the real version at build time from git tags.
 
 ## Version Format: `major.minor.patch`
 

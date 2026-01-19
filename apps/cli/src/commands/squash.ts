@@ -1,5 +1,5 @@
-import { squash as squashCmd } from "@array/core/commands/squash";
-import type { ArrContext } from "@array/core/engine";
+import { squash as squashCmd } from "@twig/core/commands/squash";
+import type { ArrContext } from "@twig/core/engine";
 import { cyan, dim, formatSuccess, message } from "../utils/output";
 import { unwrap } from "../utils/run";
 

@@ -3,7 +3,7 @@ import {
   daemonStart,
   daemonStatus,
   daemonStop,
-} from "@array/core/commands/daemon";
+} from "@twig/core/commands/daemon";
 import { cyan, dim, formatSuccess, green, message, red } from "../utils/output";
 import { unwrap } from "../utils/run";
 

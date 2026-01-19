@@ -11,10 +11,10 @@ Split your work into small changes, push them as a PR stack, and keep everything
 Requires [Bun](https://bun.sh).
 
 ```
-git clone https://github.com/posthog/array
-cd array
+git clone https://github.com/posthog/twig
+cd twig
 pnpm install
-pnpm --filter @array/core build
+pnpm --filter @twig/core build
 ```
 
 Then install the `arr` command (symlinked to `~/bin/arr`):

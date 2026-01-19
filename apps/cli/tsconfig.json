@@ -18,7 +18,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@array/core": ["../core/src/index.ts"]
+      "@twig/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src/**/*", "bin/**/*", "tests/**/*"],

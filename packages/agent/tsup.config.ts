@@ -70,7 +70,7 @@ export default defineConfig({
     // This file is watched by Vite, triggering main process rebuild
     const triggerFile = resolve(
       import.meta.dirname,
-      "../../apps/array/src/main/.agent-trigger",
+      "../../apps/twig/src/main/.agent-trigger",
     );
     writeFileSync(triggerFile, `${Date.now()}`);
   },

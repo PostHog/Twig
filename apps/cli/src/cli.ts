@@ -1,5 +1,5 @@
-import { triggerBackgroundRefresh } from "@array/core/background-refresh";
-import { type ArrContext, initContext } from "@array/core/engine";
+import { triggerBackgroundRefresh } from "@twig/core/background-refresh";
+import { type ArrContext, initContext } from "@twig/core/engine";
 import { dumpRefs } from "./commands/hidden/dump-refs";
 import { refreshPRInfo } from "./commands/hidden/refresh-pr-info";
 import {
@@ -53,7 +53,7 @@ const GLOBAL_OPTIONS = `${bold("GLOBAL OPTIONS")}
       --version      Show arr version number.`;
 
 const DOCS = `${bold("DOCS")}
-  Get started: https://github.com/posthog/array`;
+  Get started: https://github.com/posthog/twig`;
 
 function formatCommand(
   c: CommandInfo,
@@ -107,7 +107,7 @@ ${bold("ESCAPE HATCH")}
   \t\t\t\t\tYour jj changes are preserved and you can return anytime.
 
 ${bold("LEARN MORE")}
-  Documentation\t\t\thttps://github.com/posthog/array
+  Documentation\t\t\thttps://github.com/posthog/twig
   jj documentation\t\thttps://www.jj-vcs.dev/latest/
 `);
 }

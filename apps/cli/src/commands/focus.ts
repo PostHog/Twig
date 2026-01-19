@@ -7,11 +7,11 @@ import {
   focusOnly,
   focusRemove,
   focusStatus,
-} from "@array/core/commands/focus";
+} from "@twig/core/commands/focus";
 import {
   listConflicts,
   resolveConflictsBatch,
-} from "@array/core/commands/focus-resolve";
+} from "@twig/core/commands/focus-resolve";
 import {
   cmd,
   cyan,

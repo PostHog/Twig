@@ -1,10 +1,10 @@
-import { restack as coreRestack } from "@array/core/commands/restack";
+import { restack as coreRestack } from "@twig/core/commands/restack";
 import {
   cleanupMergedChange,
   sync as coreSync,
-} from "@array/core/commands/sync";
-import type { ArrContext, Engine } from "@array/core/engine";
-import type { MergedChange } from "@array/core/stacks";
+} from "@twig/core/commands/sync";
+import type { ArrContext, Engine } from "@twig/core/engine";
+import type { MergedChange } from "@twig/core/stacks";
 import { COMMANDS } from "../registry";
 import {
   arr,

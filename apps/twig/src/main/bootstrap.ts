@@ -6,16 +6,30 @@
  * instantiation (which calls app.getPath('userData') in their constructors).
  *
  */
+import { existsSync, renameSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 
 const isDev = !app.isPackaged;
 
 // Set different app names for separate single-instance locks
-const appName = isDev ? "array-dev" : "Array";
+const legacyAppName = isDev ? "array-dev" : "Array";
+const appName = isDev ? "twig-dev" : "Twig";
 app.setName(isDev ? "Twig (Development)" : "Twig");
 
-const userDataPath = path.join(app.getPath("appData"), "@posthog", appName);
+// Migrate userData from legacy location if needed
+const appDataPath = app.getPath("appData");
+const legacyUserDataPath = path.join(appDataPath, "@posthog", legacyAppName);
+const userDataPath = path.join(appDataPath, "@posthog", appName);
+
+if (existsSync(legacyUserDataPath) && !existsSync(userDataPath)) {
+  try {
+    renameSync(legacyUserDataPath, userDataPath);
+  } catch {
+    // If migration fails, continue with new path
+  }
+}
+
 app.setPath("userData", userDataPath);
 
 // Now dynamically import the rest of the application

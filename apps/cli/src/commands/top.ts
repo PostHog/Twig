@@ -1,4 +1,4 @@
-import { top as coreTop } from "@array/core/commands/top";
+import { top as coreTop } from "@twig/core/commands/top";
 import { printNavResult } from "../utils/output";
 import { unwrap } from "../utils/run";
 

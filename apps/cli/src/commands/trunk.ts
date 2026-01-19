@@ -1,4 +1,4 @@
-import { trunk as coreTrunk } from "@array/core/commands/trunk";
+import { trunk as coreTrunk } from "@twig/core/commands/trunk";
 import { printNavResult } from "../utils/output";
 import { unwrap } from "../utils/run";
 

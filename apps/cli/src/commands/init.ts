@@ -1,16 +1,16 @@
-import type { CommandMeta } from "@array/core/commands/types";
-import { isRepoInitialized } from "@array/core/config";
-import { hasBranch } from "@array/core/git/branch";
-import { hasRemote, isBranchPushed, pushBranch } from "@array/core/git/remote";
-import { hasGitCommits, initGit, isInGitRepo } from "@array/core/git/repo";
-import { detectTrunkBranches } from "@array/core/git/trunk";
+import type { CommandMeta } from "@twig/core/commands/types";
+import { isRepoInitialized } from "@twig/core/config";
+import { hasBranch } from "@twig/core/git/branch";
+import { hasRemote, isBranchPushed, pushBranch } from "@twig/core/git/remote";
+import { hasGitCommits, initGit, isInGitRepo } from "@twig/core/git/repo";
+import { detectTrunkBranches } from "@twig/core/git/trunk";
 import {
   checkPrerequisites,
   configureTrunk,
   initJj,
   installJj,
   isJjInitialized,
-} from "@array/core/init";
+} from "@twig/core/init";
 import { COMMANDS } from "../registry";
 import {
   arr,

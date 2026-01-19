@@ -1,5 +1,5 @@
-import { syncPRInfo } from "@array/core/commands/sync-pr-info";
-import { initContext } from "@array/core/engine";
+import { syncPRInfo } from "@twig/core/commands/sync-pr-info";
+import { initContext } from "@twig/core/engine";
 
 /**
  * Background PR info refresh command.

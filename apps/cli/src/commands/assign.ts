@@ -2,7 +2,7 @@ import {
   assignFiles,
   assignFilesToNewWorkspace,
   listUnassigned,
-} from "@array/core/commands/assign";
+} from "@twig/core/commands/assign";
 import { cyan, dim, formatSuccess, green, message } from "../utils/output";
 import { requireArg, unwrap } from "../utils/run";
 

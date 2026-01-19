@@ -1,7 +1,7 @@
-import { getMergeablePrs, merge as mergeCmd } from "@array/core/commands/merge";
-import { sync as syncCmd } from "@array/core/commands/sync";
-import type { ArrContext } from "@array/core/engine";
-import type { PRToMerge } from "@array/core/types";
+import { getMergeablePrs, merge as mergeCmd } from "@twig/core/commands/merge";
+import { sync as syncCmd } from "@twig/core/commands/sync";
+import type { ArrContext } from "@twig/core/engine";
+import type { PRToMerge } from "@twig/core/types";
 import { COMMANDS } from "../registry";
 import {
   arr,

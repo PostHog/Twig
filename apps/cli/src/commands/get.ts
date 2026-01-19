@@ -1,6 +1,6 @@
-import { get as coreGet } from "@array/core/commands/get";
-import type { CommandMeta } from "@array/core/commands/types";
-import type { ArrContext } from "@array/core/engine";
+import { get as coreGet } from "@twig/core/commands/get";
+import type { CommandMeta } from "@twig/core/commands/types";
+import type { ArrContext } from "@twig/core/engine";
 import {
   cyan,
   dim,

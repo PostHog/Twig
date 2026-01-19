@@ -3,7 +3,7 @@
 ## Project Structure
 
 - Monorepo with pnpm workspaces and turbo
-- `apps/array` - Twig Electron desktop app (React + Vite)
+- `apps/twig` - Twig Electron desktop app (React + Vite)
 - `packages/agent` - TypeScript agent framework wrapping Claude Agent SDK
 
 ## Commands
@@ -11,7 +11,7 @@
 - `pnpm install` - Install all dependencies
 - `pnpm dev` - Run both agent (watch) and twig app via mprocs
 - `pnpm dev:agent` - Run agent package in watch mode only
-- `pnpm dev:array` - Run twig desktop app only
+- `pnpm dev:twig` - Run twig desktop app only
 - `pnpm build` - Build all packages (turbo)
 - `pnpm typecheck` - Type check all packages
 - `pnpm lint` - Lint and auto-fix with biome
@@ -20,10 +20,10 @@
 
 ### Twig App Specific
 
-- `pnpm --filter array test` - Run vitest tests
-- `pnpm --filter array typecheck` - Type check twig app
-- `pnpm --filter array package` - Package electron app
-- `pnpm --filter array make` - Make distributable
+- `pnpm --filter twig test` - Run vitest tests
+- `pnpm --filter twig typecheck` - Type check twig app
+- `pnpm --filter twig package` - Package electron app
+- `pnpm --filter twig make` - Make distributable
 
 ### Agent Package Specific
 
@@ -61,7 +61,7 @@ Import directly from source files instead.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tRPC, state management).
 
-### Electron App (apps/array)
+### Electron App (apps/twig)
 
 - **Main process** (`src/main/`) - Stateless services, tRPC routers, system I/O
 - **Renderer process** (`src/renderer/`) - React app, all application state
@@ -79,8 +79,8 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tR
 
 ### CLI Package (packages/cli)
 
-- **Dumb shell, imperative core**: CLI commands should be thin wrappers that call `@array/core`
-- All business logic belongs in `@array/core`, not in CLI command files
+- **Dumb shell, imperative core**: CLI commands should be thin wrappers that call `@twig/core`
+- All business logic belongs in `@twig/core`, not in CLI command files
 - CLI only handles: argument parsing, calling core, formatting output
 - No data transformation, tree building, or complex logic in CLI
 
@@ -106,4 +106,4 @@ TODO: Update me
 ## Testing
 
 - `pnpm test` - Run tests across all packages
-- Array app: Vitest with jsdom, helpers in `apps/array/src/test/`
+- Twig app: Vitest with jsdom, helpers in `apps/twig/src/test/`

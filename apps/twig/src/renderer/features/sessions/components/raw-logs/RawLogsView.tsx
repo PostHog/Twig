@@ -21,7 +21,7 @@ interface FilteredEvent {
 }
 
 export function RawLogsView({ events }: RawLogsViewProps) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null!);
   const searchQuery = useSearchQuery();
   const showSearch = useShowSearch();
   const { setSearchQuery, toggleSearch } = useSessionViewActions();
