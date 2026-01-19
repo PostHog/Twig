@@ -7,9 +7,11 @@ import { detectTrunkBranches } from "@twig/core/git/trunk";
 import {
   checkPrerequisites,
   configureTrunk,
+  configureWorkspaceMode,
   initJj,
   installJj,
   isJjInitialized,
+  isWorkspaceModeConfigured,
 } from "@twig/core/init";
 import { COMMANDS } from "../registry";
 import {
@@ -80,6 +82,18 @@ export async function init(
 
   const alreadyInitialized = await isRepoInitialized(cwd);
   if (alreadyInitialized) {
+    // Even if already initialized, ensure workspace mode configs are up to date
+    const workspaceModeConfigured = await isWorkspaceModeConfigured(cwd);
+    if (!workspaceModeConfigured) {
+      const workspaceResult = await configureWorkspaceMode(cwd);
+      if (workspaceResult.ok) {
+        success(
+          "Updated workspace mode configuration (watchman, private commits)",
+        );
+      } else {
+        warning("Could not update workspace mode configuration.");
+      }
+    }
     warning("Array is already initialized in this repo.");
     hint(`Run \`${arr(COMMANDS.status)}\` to see your current state.`);
     return;
@@ -210,6 +224,16 @@ export async function init(
   if (!trunkResult.ok) {
     console.error(formatError(trunkResult.error.message));
     process.exit(1);
+  }
+
+  // Configure workspace mode (git.private-commits for wip: commits)
+  const workspaceModeConfigured = await isWorkspaceModeConfigured(cwd);
+  if (!workspaceModeConfigured) {
+    const workspaceResult = await configureWorkspaceMode(cwd);
+    if (!workspaceResult.ok) {
+      warning("Could not configure workspace mode.");
+      hint("Agent workspaces may push wip: commits to remote.");
+    }
   }
 
   // Ensure trunk is pushed to remote (required for PR creation)

@@ -22,7 +22,7 @@ import { untrackCommand } from "@twig/core/commands/untrack";
 import { upCommand } from "@twig/core/commands/up";
 import type { ContextLevel } from "@twig/core/context";
 import type { ArrContext } from "@twig/core/engine";
-import { assign, unassigned } from "./commands/assign";
+import { assign, wc } from "./commands/assign";
 import { auth, meta as authMeta } from "./commands/auth";
 import { bottom } from "./commands/bottom";
 import { checkout } from "./commands/checkout";
@@ -118,14 +118,14 @@ const daemonMeta: CommandMeta = {
 const assignMeta: CommandMeta = {
   name: "assign",
   args: "<file...> <workspace> | <file...> --new <name>",
-  description: "Move unassigned files to a workspace",
+  description: "Move working copy files to a workspace",
   category: "workflow",
 };
 
-const unassignedMeta: CommandMeta = {
-  name: "unassigned",
+const wcMeta: CommandMeta = {
+  name: "wc",
   args: "<list>",
-  description: "Manage unassigned user edits",
+  description: "Manage working copy edits",
   category: "info",
 };
 
@@ -164,7 +164,7 @@ export const COMMANDS = {
   focus: focusMeta,
   daemon: daemonMeta,
   assign: assignMeta,
-  unassigned: unassignedMeta,
+  wc: wcMeta,
 } as const;
 
 export const HANDLERS: Record<string, CommandHandler> = {
@@ -207,7 +207,7 @@ export const HANDLERS: Record<string, CommandHandler> = {
   focus: (p) => focus(p.args[0], p.args.slice(1)),
   daemon: (p) => daemon(p.args[0]),
   assign: (p) => assign(p.args),
-  unassigned: (p) => unassigned(p.args[0], p.args.slice(1)),
+  wc: (p) => wc(p.args[0], p.args.slice(1)),
 };
 
 type CommandName = keyof typeof COMMANDS;

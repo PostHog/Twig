@@ -5,9 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   cleanup,
   getLogPath,
-  getWorkspacePath,
   isRunning,
-  type RepoEntry,
   readPid,
   readRepos,
 } from "../daemon/pid";
@@ -21,7 +19,7 @@ const DAEMON_PROCESS_PATH = join(__dirname, "../daemon/daemon-process.ts");
 interface DaemonStatus {
   running: boolean;
   pid?: number;
-  repos: Array<{ path: string; workspaces: string[] }>;
+  repos: string[];
   logPath: string;
 }
 
@@ -79,18 +77,8 @@ export async function daemonStatus(): Promise<Result<DaemonStatus>> {
   const pid = running ? (readPid() ?? undefined) : undefined;
   const logPath = getLogPath();
 
-  // Filter repos to only include workspaces that actually exist
-  const rawRepos = readRepos();
-  const repos: RepoEntry[] = [];
-  for (const repo of rawRepos) {
-    const validWorkspaces = repo.workspaces.filter((ws) => {
-      const wsPath = getWorkspacePath(repo.path, ws);
-      return existsSync(wsPath);
-    });
-    if (validWorkspaces.length > 0) {
-      repos.push({ path: repo.path, workspaces: validWorkspaces });
-    }
-  }
+  // Get registered repos (filter to ones that exist)
+  const repos = readRepos().filter((repoPath) => existsSync(repoPath));
 
   return ok({ running, pid, repos, logPath });
 }

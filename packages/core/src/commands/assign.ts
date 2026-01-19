@@ -1,11 +1,12 @@
 import { runJJ } from "../jj/runner";
 import {
   addWorkspace,
-  getUnassignedFiles,
-  UNASSIGNED_WORKSPACE,
+  getRepoRoot,
+  getWcFiles,
   workspaceRef,
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
+import { readFocusState } from "./focus";
 import type { Command } from "./types";
 
 export interface AssignResult {
@@ -55,9 +56,11 @@ function matchFiles(patterns: string[], availableFiles: string[]): string[] {
 }
 
 /**
- * Move files from unassigned workspace to a specific workspace.
+ * Move files from wc commit to a specific workspace.
  * Supports multiple files and glob patterns.
  * Uses jj squash to atomically move the changes.
+ *
+ * Must be in focus mode (on a wc: commit) to use this command.
  */
 export async function assignFiles(
   patterns: string[],
@@ -68,33 +71,49 @@ export async function assignFiles(
     return err(createError("INVALID_INPUT", "No files specified"));
   }
 
-  // Get files in unassigned
-  const unassignedFiles = await getUnassignedFiles(cwd);
-  if (!unassignedFiles.ok) return unassignedFiles;
+  // Get repo root
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
 
-  if (unassignedFiles.value.length === 0) {
-    return err(createError("NOT_FOUND", "No files in unassigned workspace"));
+  // Check if in focus mode
+  const focusState = readFocusState(repoPath);
+  if (focusState.workspaces.length === 0) {
+    return err(
+      createError(
+        "INVALID_STATE",
+        "Not in focus mode. Use 'arr focus add <workspace>' first.",
+      ),
+    );
+  }
+
+  // Get files in wc commit
+  const wcFiles = await getWcFiles(cwd);
+  if (!wcFiles.ok) return wcFiles;
+
+  if (wcFiles.value.length === 0) {
+    return err(createError("NOT_FOUND", "No files in working copy to assign"));
   }
 
   // Match patterns against available files
-  const filesToAssign = matchFiles(patterns, unassignedFiles.value);
+  const filesToAssign = matchFiles(patterns, wcFiles.value);
 
   if (filesToAssign.length === 0) {
     return err(
       createError(
         "NOT_FOUND",
-        `No matching files in unassigned workspace for: ${patterns.join(", ")}`,
+        `No matching files in working copy for: ${patterns.join(", ")}`,
       ),
     );
   }
 
-  // Squash files from unassigned to target workspace
-  // jj squash --from unassigned@ --into <target>@ <file1> <file2> ...
+  // Squash files from wc (current @) to target workspace
+  // jj squash --from @ --into <target>@ <file1> <file2> ...
   const result = await runJJ(
     [
       "squash",
       "--from",
-      workspaceRef(UNASSIGNED_WORKSPACE),
+      "@",
       "--into",
       workspaceRef(targetWorkspace),
       ...filesToAssign,
@@ -106,13 +125,13 @@ export async function assignFiles(
 
   return ok({
     files: filesToAssign,
-    from: UNASSIGNED_WORKSPACE,
+    from: "wc",
     to: targetWorkspace,
   });
 }
 
 /**
- * Create a new workspace from unassigned files.
+ * Create a new workspace from wc files.
  * Supports multiple files and glob patterns.
  */
 export async function assignFilesToNewWorkspace(
@@ -124,22 +143,38 @@ export async function assignFilesToNewWorkspace(
     return err(createError("INVALID_INPUT", "No files specified"));
   }
 
-  // Get files in unassigned
-  const unassignedFiles = await getUnassignedFiles(cwd);
-  if (!unassignedFiles.ok) return unassignedFiles;
+  // Get repo root
+  const rootResult = await getRepoRoot(cwd);
+  if (!rootResult.ok) return rootResult;
+  const repoPath = rootResult.value;
 
-  if (unassignedFiles.value.length === 0) {
-    return err(createError("NOT_FOUND", "No files in unassigned workspace"));
+  // Check if in focus mode
+  const focusState = readFocusState(repoPath);
+  if (focusState.workspaces.length === 0) {
+    return err(
+      createError(
+        "INVALID_STATE",
+        "Not in focus mode. Use 'arr focus add <workspace>' first.",
+      ),
+    );
+  }
+
+  // Get files in wc commit
+  const wcFiles = await getWcFiles(cwd);
+  if (!wcFiles.ok) return wcFiles;
+
+  if (wcFiles.value.length === 0) {
+    return err(createError("NOT_FOUND", "No files in working copy to assign"));
   }
 
   // Match patterns against available files
-  const filesToAssign = matchFiles(patterns, unassignedFiles.value);
+  const filesToAssign = matchFiles(patterns, wcFiles.value);
 
   if (filesToAssign.length === 0) {
     return err(
       createError(
         "NOT_FOUND",
-        `No matching files in unassigned workspace for: ${patterns.join(", ")}`,
+        `No matching files in working copy for: ${patterns.join(", ")}`,
       ),
     );
   }
@@ -148,12 +183,12 @@ export async function assignFilesToNewWorkspace(
   const createResult = await addWorkspace(newWorkspaceName, cwd);
   if (!createResult.ok) return createResult;
 
-  // Squash files from unassigned to new workspace
+  // Squash files from wc to new workspace
   const squashResult = await runJJ(
     [
       "squash",
       "--from",
-      workspaceRef(UNASSIGNED_WORKSPACE),
+      "@",
       "--into",
       workspaceRef(newWorkspaceName),
       ...filesToAssign,
@@ -165,22 +200,22 @@ export async function assignFilesToNewWorkspace(
 
   return ok({
     files: filesToAssign,
-    from: UNASSIGNED_WORKSPACE,
+    from: "wc",
     to: newWorkspaceName,
   });
 }
 
-export interface UnassignedListResult {
+export interface WcListResult {
   files: string[];
 }
 
 /**
- * List files in the unassigned workspace.
+ * List files in the wc commit (current working copy changes).
  */
-export async function listUnassigned(
+export async function listWcFiles(
   cwd = process.cwd(),
-): Promise<Result<UnassignedListResult>> {
-  const result = await getUnassignedFiles(cwd);
+): Promise<Result<WcListResult>> {
+  const result = await getWcFiles(cwd);
   if (!result.ok) return result;
 
   return ok({ files: result.value });
@@ -192,7 +227,7 @@ export const assignCommand: Command<AssignResult, [string[], string, string?]> =
     meta: {
       name: "assign",
       args: "<file...> <workspace>",
-      description: "Move unassigned files to a workspace",
+      description: "Move working copy files to a workspace",
       category: "workflow",
       flags: [
         {
@@ -205,11 +240,11 @@ export const assignCommand: Command<AssignResult, [string[], string, string?]> =
     run: assignFiles,
   };
 
-export const unassignedListCommand: Command<UnassignedListResult, [string?]> = {
+export const wcListCommand: Command<WcListResult, [string?]> = {
   meta: {
-    name: "unassigned list",
-    description: "List files in unassigned workspace",
+    name: "wc list",
+    description: "List files in working copy",
     category: "info",
   },
-  run: listUnassigned,
+  run: listWcFiles,
 };

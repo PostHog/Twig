@@ -1,4 +1,4 @@
-import { existsSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -6,16 +6,14 @@ import {
   getWorkspacePath as getGlobalWorkspacePath,
   getRepoWorkspacesDir,
 } from "../daemon/pid";
+import { createCommittedStructure } from "../init";
 import { createError, err, ok, type Result } from "../result";
 import { ensureBookmark } from "./bookmark-create";
 import { parseDiffPaths } from "./diff";
 import { runJJ } from "./runner";
 
-/** Special workspace for user edits not yet assigned to an agent */
-export const UNASSIGNED_WORKSPACE = "unassigned";
-
-/** Description used for focus merge commits */
-export const FOCUS_COMMIT_DESCRIPTION = "focus";
+/** Prefix for work-in-progress commits (private, not exported to git) */
+export const WIP_PREFIX = "wip:";
 
 /** Suffix for workspace working copy references (e.g., "agent-a@") */
 export function workspaceRef(name: string): string {
@@ -56,20 +54,13 @@ async function getTrunkChangeId(cwd: string): Promise<Result<string>> {
 }
 
 /**
- * Setup workspace links for editor integration:
- * - Symlink .git to enable git diffs/gutters
+ * Setup workspace for jj:
  * - Create .jj/.gitignore to ignore jj internals from git
  */
 export function setupWorkspaceLinks(
   workspacePath: string,
-  repoPath: string,
+  _repoPath: string,
 ): void {
-  const gitPath = join(repoPath, ".git");
-  const workspaceGitPath = join(workspacePath, ".git");
-  if (existsSync(gitPath) && !existsSync(workspaceGitPath)) {
-    symlinkSync(gitPath, workspaceGitPath);
-  }
-
   const workspaceJjGitignorePath = join(workspacePath, ".jj", ".gitignore");
   if (!existsSync(workspaceJjGitignorePath)) {
     writeFileSync(workspaceJjGitignorePath, "/*\n");
@@ -100,6 +91,9 @@ export async function addWorkspace(
   // Ensure the workspaces directory exists
   ensureRepoWorkspacesDir(repoPath);
 
+  // Ensure committed structure exists (creates committed bookmark + wc if needed)
+  await createCommittedStructure(repoPath);
+
   // Get trunk to create workspace at
   const trunkResult = await getTrunkChangeId(cwd);
   if (!trunkResult.ok) return trunkResult;
@@ -118,6 +112,13 @@ export async function addWorkspace(
     cwd,
   );
   if (!result.ok) return result;
+
+  // Set the commit description to wip: prefix (makes it private)
+  const descResult = await runJJ(
+    ["describe", workspaceRef(name), "-m", `${WIP_PREFIX} ${name}`],
+    cwd,
+  );
+  if (!descResult.ok) return descResult;
 
   // Setup editor integration links
   setupWorkspaceLinks(workspacePath, repoPath);
@@ -333,71 +334,12 @@ export async function getRepoRoot(
 }
 
 /**
- * Ensure the unassigned workspace exists, creating it on trunk if needed.
- * The unassigned workspace holds user edits not yet assigned to any agent.
+ * Get files modified in the current working copy (wc commit).
  */
-export async function ensureUnassignedWorkspace(
-  cwd = process.cwd(),
-): Promise<Result<WorkspaceInfo>> {
-  const rootResult = await getRepoRoot(cwd);
-  if (!rootResult.ok) return rootResult;
-  const repoPath = rootResult.value;
-
-  const workspacePath = getWorkspacePath(UNASSIGNED_WORKSPACE, repoPath);
-
-  // If workspace already exists in jj, return its info
-  if (existsSync(workspacePath)) {
-    const info = await getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
-    if (info.ok) return info;
-    // Directory exists but jj doesn't know about it - clean up and recreate
-    await rm(workspacePath, { recursive: true, force: true });
-  }
-
-  // Ensure the workspaces directory exists
-  ensureRepoWorkspacesDir(repoPath);
-
-  // Get trunk revision to create workspace at
-  const trunkResult = await getTrunkChangeId(cwd);
-  if (!trunkResult.ok) return trunkResult;
-
-  // Create workspace at trunk
-  const createResult = await runJJ(
-    [
-      "workspace",
-      "add",
-      workspacePath,
-      "--name",
-      UNASSIGNED_WORKSPACE,
-      "-r",
-      trunkResult.value,
-    ],
-    cwd,
-  );
-  if (!createResult.ok) return createResult;
-
-  // Setup editor integration links
-  setupWorkspaceLinks(workspacePath, repoPath);
-
-  // Get info and create bookmark
-  const infoResult = await getWorkspaceInfo(UNASSIGNED_WORKSPACE, cwd);
-  if (!infoResult.ok) return infoResult;
-
-  // Create a bookmark for the workspace so arr exit can find it
-  await ensureBookmark(UNASSIGNED_WORKSPACE, infoResult.value.changeId, cwd);
-
-  return infoResult;
-}
-
-/**
- * Get files modified in the unassigned workspace (vs trunk).
- */
-export async function getUnassignedFiles(
+export async function getWcFiles(
   cwd = process.cwd(),
 ): Promise<Result<string[]>> {
-  const result = await runJJ(
-    ["diff", "-r", workspaceRef(UNASSIGNED_WORKSPACE), "--summary"],
-    cwd,
-  );
+  const result = await runJJ(["diff", "--summary"], cwd);
   if (!result.ok) return result;
 
   return ok(parseDiffPaths(result.value.stdout));

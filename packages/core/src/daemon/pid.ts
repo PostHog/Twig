@@ -15,13 +15,6 @@ const PID_FILE = "daemon.pid";
 const LOG_FILE = "daemon.log";
 const REPOS_FILE = "repos.json";
 
-export interface RepoEntry {
-  path: string;
-  workspaces: string[];
-  /** When true, daemon watches main repo for git→unassigned sync even without focus */
-  gitMode?: boolean;
-}
-
 /**
  * Get the path to the global ~/.twig directory (migrated from ~/.array)
  */
@@ -60,21 +53,21 @@ function migrateLegacyDir(): void {
  * Get the path to the PID file
  */
 export function getPidPath(): string {
-  return join(getArrayDir(), PID_FILE);
+  return join(getTwigDir(), PID_FILE);
 }
 
 /**
  * Get the path to the log file
  */
 export function getLogPath(): string {
-  return join(getArrayDir(), LOG_FILE);
+  return join(getTwigDir(), LOG_FILE);
 }
 
 /**
  * Get the path to the repos file
  */
 export function getReposPath(): string {
-  return join(getArrayDir(), REPOS_FILE);
+  return join(getTwigDir(), REPOS_FILE);
 }
 
 /**
@@ -99,7 +92,7 @@ export function ensureArrayDir(): void {
  * Write the daemon PID to the PID file
  */
 export function writePid(pid: number): void {
-  ensureArrayDir();
+  ensureTwigDir();
   writeFileSync(getPidPath(), pid.toString(), "utf-8");
 }
 
@@ -155,7 +148,7 @@ export function cleanup(): void {
  * Append a log message to the daemon log file
  */
 export function log(message: string): void {
-  ensureArrayDir();
+  ensureTwigDir();
   const timestamp = new Date().toISOString();
   const logLine = `${timestamp}: ${message}\n`;
   try {
@@ -166,15 +159,21 @@ export function log(message: string): void {
 }
 
 /**
- * Read the registered repos from repos.json
+ * Read the registered repos from repos.json.
+ * Returns a simple array of repo paths - focus state is derived from JJ.
  */
-export function readRepos(): RepoEntry[] {
+export function readRepos(): string[] {
   const reposPath = getReposPath();
   if (!existsSync(reposPath)) return [];
 
   try {
     const content = readFileSync(reposPath, "utf-8");
-    return JSON.parse(content);
+    const data = JSON.parse(content);
+    // Handle migration from old format { path, workspaces[], gitMode? }[]
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === "object") {
+      return data.map((entry: { path: string }) => entry.path);
+    }
+    return data;
   } catch {
     return [];
   }
@@ -183,126 +182,40 @@ export function readRepos(): RepoEntry[] {
 /**
  * Write the registered repos to repos.json
  */
-export function writeRepos(repos: RepoEntry[]): void {
-  ensureArrayDir();
+export function writeRepos(repos: string[]): void {
+  ensureTwigDir();
   writeFileSync(getReposPath(), JSON.stringify(repos, null, 2), "utf-8");
 }
 
 /**
- * Register a repo with workspaces for the daemon to watch.
- * Merges with existing workspaces.
+ * Register a repo for the daemon to watch
  */
-export function registerRepo(repoPath: string, workspaces: string[]): void {
+export function addRepo(repoPath: string): void {
   const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    // Merge workspaces (avoid duplicates)
-    const allWorkspaces = new Set([...existing.workspaces, ...workspaces]);
-    existing.workspaces = [...allWorkspaces];
-  } else {
-    repos.push({ path: repoPath, workspaces });
+  if (!repos.includes(repoPath)) {
+    repos.push(repoPath);
+    writeRepos(repos);
+    log(`Registered repo: ${repoPath}`);
   }
-
-  writeRepos(repos);
-  log(
-    `Registered repo: ${repoPath} with workspaces: [${workspaces.join(", ")}]`,
-  );
-}
-
-/**
- * Set the exact list of workspaces for a repo (replaces existing).
- * Use this when updating focus to ensure repos.json matches exactly.
- */
-export function setRepoWorkspaces(
-  repoPath: string,
-  workspaces: string[],
-): void {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    existing.workspaces = workspaces;
-  } else {
-    repos.push({ path: repoPath, workspaces });
-  }
-
-  writeRepos(repos);
-  log(`Set repo workspaces: ${repoPath} -> [${workspaces.join(", ")}]`);
 }
 
 /**
  * Unregister a repo from the daemon
  */
-export function unregisterRepo(repoPath: string): void {
+export function removeRepo(repoPath: string): void {
   const repos = readRepos();
-  const filtered = repos.filter((r) => r.path !== repoPath);
-  writeRepos(filtered);
-  log(`Unregistered repo: ${repoPath}`);
+  const filtered = repos.filter((r) => r !== repoPath);
+  if (filtered.length !== repos.length) {
+    writeRepos(filtered);
+    log(`Unregistered repo: ${repoPath}`);
+  }
 }
 
 /**
- * Enable git mode for a repo (daemon watches main repo for git→unassigned sync)
+ * Check if a repo is registered
  */
-export function enableGitMode(repoPath: string): void {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    existing.gitMode = true;
-  } else {
-    repos.push({ path: repoPath, workspaces: [], gitMode: true });
-  }
-
-  writeRepos(repos);
-  log(`Enabled git mode for: ${repoPath}`);
-}
-
-/**
- * Disable git mode for a repo
- */
-export function disableGitMode(repoPath: string): void {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    existing.gitMode = false;
-    // If no workspaces and no git mode, remove the repo
-    if (existing.workspaces.length === 0) {
-      writeRepos(repos.filter((r) => r.path !== repoPath));
-      log(`Disabled git mode and removed repo: ${repoPath}`);
-      return;
-    }
-  }
-
-  writeRepos(repos);
-  log(`Disabled git mode for: ${repoPath}`);
-}
-
-/**
- * Remove specific workspaces from a repo (unregister repo if no workspaces left)
- */
-export function unregisterWorkspaces(
-  repoPath: string,
-  workspaces: string[],
-): void {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (!existing) return;
-
-  existing.workspaces = existing.workspaces.filter(
-    (ws) => !workspaces.includes(ws),
-  );
-
-  if (existing.workspaces.length === 0) {
-    // No workspaces left, remove the repo entirely
-    writeRepos(repos.filter((r) => r.path !== repoPath));
-    log(`Unregistered repo (no workspaces left): ${repoPath}`);
-  } else {
-    writeRepos(repos);
-    log(`Unregistered workspaces from ${repoPath}: [${workspaces.join(", ")}]`);
-  }
+export function isRepoRegistered(repoPath: string): boolean {
+  return readRepos().includes(repoPath);
 }
 
 /**
@@ -317,7 +230,7 @@ export function getRepoSlug(repoPath: string): string {
  * Get the path to the workspaces directory for a repo
  */
 export function getRepoWorkspacesDir(repoPath: string): string {
-  return join(getArrayDir(), "workspaces", getRepoSlug(repoPath));
+  return join(getTwigDir(), "workspaces", getRepoSlug(repoPath));
 }
 
 /**

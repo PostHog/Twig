@@ -1,7 +1,7 @@
 import {
   assignFiles,
   assignFilesToNewWorkspace,
-  listUnassigned,
+  listWcFiles,
 } from "@twig/core/commands/assign";
 import { cyan, dim, formatSuccess, green, message } from "../utils/output";
 import { requireArg, unwrap } from "../utils/run";
@@ -88,22 +88,19 @@ export async function assign(args: string[]): Promise<void> {
   }
 }
 
-export async function unassigned(
-  subcommand: string,
-  _args: string[],
-): Promise<void> {
+export async function wc(subcommand: string, _args: string[]): Promise<void> {
   switch (subcommand) {
     case "list":
     case "ls": {
-      const result = unwrap(await listUnassigned());
+      const result = unwrap(await listWcFiles());
 
       if (result.files.length === 0) {
-        message(dim("No unassigned files"));
+        message(dim("No files in working copy"));
         return;
       }
 
       message(
-        `${result.files.length} unassigned file${result.files.length === 1 ? "" : "s"}:`,
+        `${result.files.length} file${result.files.length === 1 ? "" : "s"} in working copy:`,
       );
       message("");
 
@@ -117,9 +114,9 @@ export async function unassigned(
     }
 
     default:
-      message("Usage: arr unassigned <list>");
+      message("Usage: arr wc <list>");
       message("");
       message("Subcommands:");
-      message("  list  List files in unassigned workspace");
+      message("  list  List files in working copy");
   }
 }

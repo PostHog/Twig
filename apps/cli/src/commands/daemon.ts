@@ -39,15 +39,12 @@ export async function daemon(subcommand: string): Promise<void> {
           message("");
           message("Watching repos:");
           for (const repo of status.repos) {
-            message(`  ${dim(repo.path)}`);
-            for (const ws of repo.workspaces) {
-              message(`    └─ ${ws}`);
-            }
+            message(`  ${dim(repo)}`);
           }
         } else {
           message("");
           message(
-            dim("No repos registered. Use arr preview to register workspaces."),
+            dim("No repos registered. Use arr focus to register workspaces."),
           );
         }
         message("");

@@ -9,15 +9,21 @@ export async function getTrunk(cwd = process.cwd()): Promise<string> {
   const cached = trunkCache.get(cwd);
   if (cached) return cached;
 
+  // Resolve the trunk() revset to get the actual bookmark name
   const result = await shellExecutor.execute(
     "jj",
-    ["config", "get", 'revset-aliases."trunk()"'],
+    ["log", "-r", "trunk()", "--no-graph", "-T", "bookmarks"],
     { cwd },
   );
   if (result.exitCode === 0 && result.stdout.trim()) {
-    const trunk = result.stdout.trim();
-    trunkCache.set(cwd, trunk);
-    return trunk;
+    // bookmarks template returns space-separated list, take first one
+    // Format might be "main main@origin" - we want just "main"
+    const bookmarks = result.stdout.trim().split(/\s+/);
+    const trunk = bookmarks.find((b) => !b.includes("@")) || bookmarks[0];
+    if (trunk) {
+      trunkCache.set(cwd, trunk);
+      return trunk;
+    }
   }
   throw new Error("Trunk branch not configured. Run `arr init` first.");
 }
