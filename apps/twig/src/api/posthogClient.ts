@@ -1,5 +1,5 @@
 import { logger } from "@renderer/lib/logger";
-import type { Task, TaskRun } from "@shared/types";
+import type { Task, TaskReferencesResponse, TaskRun } from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -380,5 +380,29 @@ export class PostHogAPIClient {
       query: { limit: 1000 },
     });
     return data.results ?? [];
+  }
+
+  async getTaskReferences(taskId: string): Promise<TaskReferencesResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/references/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/tasks/${taskId}/references/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch task references: ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    return {
+      results: data.results ?? data ?? [],
+      count: data.count ?? data.results?.length ?? data?.length ?? 0,
+    };
   }
 }
