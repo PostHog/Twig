@@ -19,8 +19,11 @@ const log = logger.scope("tasks");
 const taskKeys = {
   all: ["tasks"] as const,
   lists: () => [...taskKeys.all, "list"] as const,
-  list: (filters?: { repository?: string; createdBy?: number }) =>
-    [...taskKeys.lists(), filters] as const,
+  list: (filters?: {
+    repository?: string;
+    createdBy?: number;
+    originProduct?: string;
+  }) => [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
 };
@@ -36,6 +39,20 @@ export function useTasks(filters?: { repository?: string }) {
         createdBy: currentUser?.id,
       }) as unknown as Promise<Task[]>,
     { enabled: !!currentUser?.id },
+  );
+}
+
+/**
+ * Fetches auto-detected tasks (from session summaries / Analyst).
+ * These tasks have origin_product = "session_summaries" and created_by = null.
+ */
+export function useAutoDetectedTasks() {
+  return useAuthenticatedQuery(
+    taskKeys.list({ originProduct: "session_summaries" }),
+    (client) =>
+      client.getTasks({
+        originProduct: "session_summaries",
+      }) as unknown as Promise<Task[]>,
   );
 }
 
