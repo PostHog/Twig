@@ -492,7 +492,7 @@ export function SettingsView() {
                   <FolderPicker
                     value={localWorktreeLocation}
                     onChange={handleWorktreeLocationChange}
-                    placeholder="~/.array"
+                    placeholder="~/.twig"
                     size="1"
                   />
                   <Text size="1" color="gray">

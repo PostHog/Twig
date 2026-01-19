@@ -2,13 +2,15 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
-const ARRAY_DIR = ".array";
+const LEGACY_DIR = ".array";
+const TWIG_DIR = ".twig";
 const PID_FILE = "daemon.pid";
 const LOG_FILE = "daemon.log";
 const REPOS_FILE = "repos.json";
@@ -21,10 +23,37 @@ export interface RepoEntry {
 }
 
 /**
- * Get the path to the global ~/.array directory
+ * Get the path to the global ~/.twig directory (migrated from ~/.array)
+ */
+export function getTwigDir(): string {
+  return join(homedir(), TWIG_DIR);
+}
+
+/**
+ * @deprecated Use getTwigDir() instead
  */
 export function getArrayDir(): string {
-  return join(homedir(), ARRAY_DIR);
+  return getTwigDir();
+}
+
+function getLegacyDir(): string {
+  return join(homedir(), LEGACY_DIR);
+}
+
+/**
+ * Migrate ~/.array to ~/.twig if needed
+ */
+function migrateLegacyDir(): void {
+  const legacyPath = getLegacyDir();
+  const newPath = getTwigDir();
+
+  if (existsSync(legacyPath) && !existsSync(newPath)) {
+    try {
+      renameSync(legacyPath, newPath);
+    } catch {
+      // If rename fails, continue using legacy location
+    }
+  }
 }
 
 /**
@@ -49,13 +78,21 @@ export function getReposPath(): string {
 }
 
 /**
- * Ensure the ~/.array directory exists
+ * Ensure the ~/.twig directory exists (migrates from ~/.array if needed)
+ */
+export function ensureTwigDir(): void {
+  migrateLegacyDir();
+  const twigDir = getTwigDir();
+  if (!existsSync(twigDir)) {
+    mkdirSync(twigDir, { recursive: true });
+  }
+}
+
+/**
+ * @deprecated Use ensureTwigDir() instead
  */
 export function ensureArrayDir(): void {
-  const arrayDir = getArrayDir();
-  if (!existsSync(arrayDir)) {
-    mkdirSync(arrayDir, { recursive: true });
-  }
+  ensureTwigDir();
 }
 
 /**

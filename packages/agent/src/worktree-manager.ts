@@ -490,7 +490,7 @@ const ANIMALS = [
   "zebra",
 ];
 
-const WORKTREE_FOLDER_NAME = ".array";
+const WORKTREE_FOLDER_NAME = ".twig";
 
 export class WorktreeManager {
   private mainRepoPath: string;
@@ -571,7 +571,7 @@ export class WorktreeManager {
       content.includes(`/${WORKTREE_FOLDER_NAME}/`) ||
       content.includes(`/${WORKTREE_FOLDER_NAME}`)
     ) {
-      this.logger.debug("Exclude file already contains .array folder pattern");
+      this.logger.debug("Exclude file already contains .twig folder pattern");
       return;
     }
 
@@ -580,9 +580,9 @@ export class WorktreeManager {
     await fs.mkdir(infoDir, { recursive: true });
 
     // Append the pattern
-    const newContent = `${content.trimEnd()}\n\n# Array worktrees\n${ignorePattern}\n`;
+    const newContent = `${content.trimEnd()}\n\n# Twig worktrees\n${ignorePattern}\n`;
     await fs.writeFile(excludePath, newContent);
-    this.logger.info("Added .array folder to .git/info/exclude");
+    this.logger.info("Added .twig folder to .git/info/exclude");
   }
 
   private async generateUniqueWorktreeName(): Promise<string> {

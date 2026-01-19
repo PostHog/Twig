@@ -131,8 +131,8 @@ const config: ForgeConfig = {
         "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**,**/node_modules/file-icon/**}",
     },
     prune: false,
-    name: "Array",
-    executableName: "Array",
+    name: "Twig",
+    executableName: "Twig",
     icon: "./build/app-icon", // Forge adds .icns/.ico/.png based on platform
     appBundleId: "com.posthog.array",
     appCategoryType: "public.app-category.productivity",

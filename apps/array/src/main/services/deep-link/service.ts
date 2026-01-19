@@ -4,7 +4,8 @@ import { logger } from "../../lib/logger.js";
 
 const log = logger.scope("deep-link-service");
 
-const PROTOCOL = "array";
+const PROTOCOL = "twig";
+const LEGACY_PROTOCOL = "array";
 
 export type DeepLinkHandler = (
   path: string,
@@ -30,11 +31,14 @@ export class DeepLinkService {
       return;
     }
 
-    // Production: register the protocol
+    // Production: register both new and legacy protocols
     app.setAsDefaultProtocolClient(PROTOCOL);
+    app.setAsDefaultProtocolClient(LEGACY_PROTOCOL);
 
     this.protocolRegistered = true;
-    log.info(`Registered '${PROTOCOL}' protocol handler`);
+    log.info(
+      `Registered '${PROTOCOL}' and '${LEGACY_PROTOCOL}' protocol handlers`,
+    );
   }
 
   public registerHandler(key: string, handler: DeepLinkHandler): void {
@@ -53,11 +57,15 @@ export class DeepLinkService {
    * Handle an incoming deep link URL
    *
    * NOTE: Strips the protocol and main key, passing only dynamic segments to handlers.
+   * Supports both twig:// and legacy array:// protocols.
    */
   public handleUrl(url: string): boolean {
     log.info("Received deep link:", url);
 
-    if (!url.startsWith(`${PROTOCOL}://`)) {
+    const isTwigProtocol = url.startsWith(`${PROTOCOL}://`);
+    const isLegacyProtocol = url.startsWith(`${LEGACY_PROTOCOL}://`);
+
+    if (!isTwigProtocol && !isLegacyProtocol) {
       log.warn("URL does not match protocol:", url);
       return false;
     }

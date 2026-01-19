@@ -20,43 +20,48 @@ export async function loadConfig(
   worktreePath: string,
   worktreeName: string,
 ): Promise<LoadConfigResult> {
-  // Search order:
-  // 1. .array/{WORKSPACE_NAME}/array.json (workspace-specific)
-  // 2. {repo-root}/array.json (repository root)
+  // Search order (twig.json takes precedence over legacy array.json):
+  // 1. .twig/{WORKSPACE_NAME}/twig.json (workspace-specific, new)
+  // 2. .twig/{WORKSPACE_NAME}/array.json (workspace-specific, legacy)
+  // 3. .array/{WORKSPACE_NAME}/array.json (workspace-specific, legacy location)
+  // 4. {repo-root}/twig.json (repository root, new)
+  // 5. {repo-root}/array.json (repository root, legacy)
 
-  const workspaceConfigPath = path.join(
-    worktreePath,
-    ".array",
-    worktreeName,
-    "array.json",
-  );
+  const workspaceConfigPaths = [
+    path.join(worktreePath, ".twig", worktreeName, "twig.json"),
+    path.join(worktreePath, ".twig", worktreeName, "array.json"),
+    path.join(worktreePath, ".array", worktreeName, "array.json"),
+  ];
 
-  const repoConfigPath = path.join(worktreePath, "array.json");
+  const repoConfigPaths = [
+    path.join(worktreePath, "twig.json"),
+    path.join(worktreePath, "array.json"),
+  ];
 
-  // Try workspace-specific config first
-  const workspaceResult = await tryLoadConfig(workspaceConfigPath);
-  if (workspaceResult.config) {
-    log.info(`Loaded config from workspace: ${workspaceConfigPath}`);
-    return { config: workspaceResult.config, source: "workspace" };
+  // Try workspace-specific configs first
+  for (const configPath of workspaceConfigPaths) {
+    const result = await tryLoadConfig(configPath);
+    if (result.config) {
+      log.info(`Loaded config from workspace: ${configPath}`);
+      return { config: result.config, source: "workspace" };
+    }
+    if (result.errors) {
+      log.warn(`Invalid config at ${configPath}: ${result.errors.join(", ")}`);
+      return { config: null, source: null };
+    }
   }
-  if (workspaceResult.errors) {
-    log.warn(
-      `Invalid config at ${workspaceConfigPath}: ${workspaceResult.errors.join(", ")}`,
-    );
-    return { config: null, source: null };
-  }
 
-  // Try repo root config
-  const repoResult = await tryLoadConfig(repoConfigPath);
-  if (repoResult.config) {
-    log.info(`Loaded config from repo root: ${repoConfigPath}`);
-    return { config: repoResult.config, source: "repo" };
-  }
-  if (repoResult.errors) {
-    log.warn(
-      `Invalid config at ${repoConfigPath}: ${repoResult.errors.join(", ")}`,
-    );
-    return { config: null, source: null };
+  // Try repo root configs
+  for (const configPath of repoConfigPaths) {
+    const result = await tryLoadConfig(configPath);
+    if (result.config) {
+      log.info(`Loaded config from repo root: ${configPath}`);
+      return { config: result.config, source: "repo" };
+    }
+    if (result.errors) {
+      log.warn(`Invalid config at ${configPath}: ${result.errors.join(", ")}`);
+      return { config: null, source: null };
+    }
   }
 
   return { config: null, source: null };

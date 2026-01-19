@@ -1,14 +1,14 @@
 > [!IMPORTANT]
-> Array is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
+> Twig is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
 
 
-# PostHog Array Monorepo
+# PostHog Twig Monorepo
 
-This is the monorepo for PostHog's Array apps and the agent framework that powers them.
+This is the monorepo for PostHog's Twig apps and the agent framework that powers them.
 
 ## Projects
 
-- **[apps/array](./apps/array)** - Array desktop application (Electron)
+- **[apps/array](./apps/array)** - Twig desktop application (Electron)
 - **[apps/mobile](./apps/mobile)** - PostHog mobile app (React Native / Expo)
 - **[packages/agent](./packages/agent)** - The TypeScript agent framework
 
@@ -90,16 +90,19 @@ array-monorepo/
 └── package.json        # Root package.json
 ```
 
-## Workspace Configuration (array.json)
+## Workspace Configuration (twig.json)
 
-Array supports per-repository configuration through an `array.json` file. This lets you define scripts that run automatically when workspaces are created or destroyed.
+Twig supports per-repository configuration through a `twig.json` file (or legacy `array.json`). This lets you define scripts that run automatically when workspaces are created or destroyed.
 
 ### File Locations
 
-Array searches for configuration in this order:
+Twig searches for configuration in this order (first match wins):
 
-1. `.array/{workspace-name}/array.json` - Workspace-specific config
-2. `array.json` - Repository root config
+1. `.twig/{workspace-name}/twig.json` - Workspace-specific config (new)
+2. `.twig/{workspace-name}/array.json` - Workspace-specific config (legacy)
+3. `.array/{workspace-name}/array.json` - Workspace-specific config (legacy location)
+4. `twig.json` - Repository root config (new)
+5. `array.json` - Repository root config (legacy)
 
 ### Schema
 
@@ -153,7 +156,7 @@ Clean up Docker containers:
 
 ## Workspace Environment Variables
 
-Array automatically sets environment variables in all workspace terminals and scripts. These are available in `init`, `start`, and `destroy` scripts, as well as any terminal sessions opened within a workspace.
+Twig automatically sets environment variables in all workspace terminals and scripts. These are available in `init`, `start`, and `destroy` scripts, as well as any terminal sessions opened within a workspace.
 
 | Variable | Description | Example |
 |----------|-------------|---------|

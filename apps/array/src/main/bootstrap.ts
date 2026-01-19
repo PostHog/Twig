@@ -13,7 +13,7 @@ const isDev = !app.isPackaged;
 
 // Set different app names for separate single-instance locks
 const appName = isDev ? "array-dev" : "Array";
-app.setName(isDev ? "Array (Development)" : "Array");
+app.setName(isDev ? "Twig (Development)" : "Twig");
 
 const userDataPath = path.join(app.getPath("appData"), "@posthog", appName);
 app.setPath("userData", userDataPath);

@@ -95,7 +95,9 @@ app.on("open-url", (event, url) => {
 
 // Handle deep link URLs on Windows/Linux (second instance sends URL via command line)
 app.on("second-instance", (_event, commandLine) => {
-  const url = commandLine.find((arg) => arg.startsWith("array://"));
+  const url = commandLine.find(
+    (arg) => arg.startsWith("twig://") || arg.startsWith("array://"),
+  );
   if (url) {
     const deepLinkService = container.get<DeepLinkService>(
       MAIN_TOKENS.DeepLinkService,
@@ -166,10 +168,10 @@ function createWindow(): void {
   // Set up menu for keyboard shortcuts
   const template: MenuItemConstructorOptions[] = [
     {
-      label: "Array",
+      label: "Twig",
       submenu: [
         {
-          label: "About Array",
+          label: "About Twig",
           click: () => {
             const commit = __BUILD_COMMIT__ ?? "dev";
             const buildDate = __BUILD_DATE__ ?? "dev";
@@ -187,8 +189,8 @@ function createWindow(): void {
             dialog
               .showMessageBox({
                 type: "info",
-                title: "About Array",
-                message: "Array",
+                title: "About Twig",
+                message: "Twig",
                 detail: info,
                 buttons: ["Copy", "OK"],
                 defaultId: 1,
@@ -348,7 +350,9 @@ app.whenReady().then(() => {
     }
   } else {
     // On Windows/Linux, the URL comes via command line arguments
-    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("array://"));
+    const deepLinkUrl = process.argv.find(
+      (arg) => arg.startsWith("twig://") || arg.startsWith("array://"),
+    );
     if (deepLinkUrl) {
       deepLinkService.handleUrl(deepLinkUrl);
     }

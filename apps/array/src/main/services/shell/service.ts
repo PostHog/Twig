@@ -40,7 +40,7 @@ function buildShellEnv(
   }
 
   Object.assign(env, {
-    TERM_PROGRAM: "Array",
+    TERM_PROGRAM: "Twig",
     COLORTERM: "truecolor",
     FORCE_COLOR: "3",
     ...additionalEnv,
