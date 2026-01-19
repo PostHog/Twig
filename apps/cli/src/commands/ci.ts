@@ -4,10 +4,10 @@ import {
   getBranchProtectionUrl,
   getRepoInfo,
   setupCI,
-} from "@array/core/ci";
-import type { CommandMeta } from "@array/core/commands/types";
-import { shellExecutor } from "@array/core/executor";
-import { getTrunk } from "@array/core/jj";
+} from "@twig/core/ci";
+import type { CommandMeta } from "@twig/core/commands/types";
+import { shellExecutor } from "@twig/core/executor";
+import { getTrunk } from "@twig/core/jj";
 import {
   blank,
   cyan,

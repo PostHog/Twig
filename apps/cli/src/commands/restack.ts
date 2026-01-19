@@ -1,5 +1,5 @@
-import { restack as coreRestack } from "@array/core/commands/restack";
-import type { ArrContext } from "@array/core/engine";
+import { restack as coreRestack } from "@twig/core/commands/restack";
+import type { ArrContext } from "@twig/core/engine";
 import { COMMANDS } from "../registry";
 import {
   arr,

@@ -1,5 +1,5 @@
-import { previewSplit, split as splitCmd } from "@array/core/commands/split";
-import type { ArrContext } from "@array/core/engine";
+import { previewSplit, split as splitCmd } from "@twig/core/commands/split";
+import type { ArrContext } from "@twig/core/engine";
 import {
   cyan,
   dim,
@@ -26,7 +26,7 @@ export async function split(
       previewResult.error.message.includes("No paths provided")
     ) {
       // Fetch files to show hint
-      const { getSplittableFiles } = await import("@array/core/commands/split");
+      const { getSplittableFiles } = await import("@twig/core/commands/split");
       const filesResult = await getSplittableFiles();
       if (filesResult.ok && filesResult.value.length > 0) {
         hint(

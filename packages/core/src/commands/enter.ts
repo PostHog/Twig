@@ -1,4 +1,4 @@
-import { disableGitMode } from "../daemon/pid";
+import { registerRepo, setRepoMode } from "../daemon/pid";
 import { getCurrentBranch, isDetachedHead } from "../git/head";
 import { status } from "../jj/status";
 import { getRepoRoot } from "../jj/workspace";
@@ -31,10 +31,11 @@ export async function enter(cwd = process.cwd()): Promise<Result<EnterResult>> {
 
   const workingCopy = statusResult.value.workingCopy;
 
-  // Disable git mode - no longer need daemon to watch git→unassigned
+  // Enter jj mode - register repo and set mode
   const rootResult = await getRepoRoot(cwd);
   if (rootResult.ok) {
-    disableGitMode(rootResult.value);
+    registerRepo(rootResult.value, "jj");
+    setRepoMode(rootResult.value, "jj");
   }
 
   return ok({

@@ -1,7 +1,5 @@
 import { ok, type Result } from "../result";
-import { parseDiffPaths } from "./diff";
-import { runJJ } from "./runner";
-import { workspaceRef } from "./workspace";
+import { getWorkspaceFiles } from "./workspace";
 
 export interface FileOwnershipMap {
   ownership: Map<string, string[]>;
@@ -20,16 +18,10 @@ export async function buildFileOwnershipMap(
   const ownership = new Map<string, string[]>();
 
   for (const ws of workspaces) {
-    // Get files modified by this workspace (vs trunk)
-    const result = await runJJ(
-      ["diff", "-r", workspaceRef(ws), "--summary"],
-      cwd,
-    );
+    const result = await getWorkspaceFiles(ws, cwd);
     if (!result.ok) continue;
 
-    const files = parseDiffPaths(result.value.stdout);
-
-    for (const file of files) {
+    for (const file of result.value) {
       const owners = ownership.get(file) || [];
       if (!owners.includes(ws)) {
         owners.push(ws);
@@ -77,11 +69,8 @@ export async function getWorkspacesForFile(
 ): Promise<string[]> {
   const result: string[] = [];
   for (const ws of workspaces) {
-    const diff = await runJJ(
-      ["diff", "-r", workspaceRef(ws), "--summary"],
-      cwd,
-    );
-    if (diff.ok && diff.value.stdout.includes(file)) {
+    const files = await getWorkspaceFiles(ws, cwd);
+    if (files.ok && files.value.includes(file)) {
       result.push(ws);
     }
   }

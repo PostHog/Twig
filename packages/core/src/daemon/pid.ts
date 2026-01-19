@@ -1,30 +1,64 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
-const ARRAY_DIR = ".array";
+const LEGACY_DIR = ".array";
+const TWIG_DIR = ".twig";
 const PID_FILE = "daemon.pid";
 const LOG_FILE = "daemon.log";
 const REPOS_FILE = "repos.json";
 
+export type RepoMode = "git" | "jj";
+
 export interface RepoEntry {
   path: string;
-  workspaces: string[];
-  /** When true, daemon watches main repo for git→unassigned sync even without focus */
-  gitMode?: boolean;
+  /** Explicit mode: "git" = on a branch, "jj" = focus commit */
+  mode: RepoMode;
+  /** Workspaces included in the focus commit (jj mode only) */
+  focusedWorkspaces?: string[];
 }
 
 /**
- * Get the path to the global ~/.array directory
+ * Get the path to the global ~/.twig directory (migrated from ~/.array)
+ */
+export function getTwigDir(): string {
+  return join(homedir(), TWIG_DIR);
+}
+
+/**
+ * @deprecated Use getTwigDir() instead
  */
 export function getArrayDir(): string {
-  return join(homedir(), ARRAY_DIR);
+  return getTwigDir();
+}
+
+function getLegacyDir(): string {
+  return join(homedir(), LEGACY_DIR);
+}
+
+/**
+ * Migrate ~/.array to ~/.twig if needed
+ */
+function migrateLegacyDir(): void {
+  const legacyPath = getLegacyDir();
+  const newPath = getTwigDir();
+
+  if (existsSync(legacyPath) && !existsSync(newPath)) {
+    try {
+      renameSync(legacyPath, newPath);
+    } catch {
+      // If rename fails, continue using legacy location
+    }
+  }
 }
 
 /**
@@ -49,13 +83,21 @@ export function getReposPath(): string {
 }
 
 /**
- * Ensure the ~/.array directory exists
+ * Ensure the ~/.twig directory exists (migrates from ~/.array if needed)
+ */
+export function ensureTwigDir(): void {
+  migrateLegacyDir();
+  const twigDir = getTwigDir();
+  if (!existsSync(twigDir)) {
+    mkdirSync(twigDir, { recursive: true });
+  }
+}
+
+/**
+ * @deprecated Use ensureTwigDir() instead
  */
 export function ensureArrayDir(): void {
-  const arrayDir = getArrayDir();
-  if (!existsSync(arrayDir)) {
-    mkdirSync(arrayDir, { recursive: true });
-  }
+  ensureTwigDir();
 }
 
 /**
@@ -129,7 +171,8 @@ export function log(message: string): void {
 }
 
 /**
- * Read the registered repos from repos.json
+ * Read the registered repos from repos.json.
+ * Handles migration from old schema (workspaces[]) to new schema (mode, focusedWorkspaces[]).
  */
 export function readRepos(): RepoEntry[] {
   const reposPath = getReposPath();
@@ -137,7 +180,19 @@ export function readRepos(): RepoEntry[] {
 
   try {
     const content = readFileSync(reposPath, "utf-8");
-    return JSON.parse(content);
+    const raw = JSON.parse(content) as Array<{
+      path: string;
+      mode?: RepoMode;
+      workspaces?: string[]; // Old schema
+      focusedWorkspaces?: string[];
+    }>;
+
+    // Migrate old schema to new schema
+    return raw.map((entry) => ({
+      path: entry.path,
+      mode: entry.mode ?? "jj", // Default to jj mode if missing
+      focusedWorkspaces: entry.focusedWorkspaces ?? entry.workspaces ?? [],
+    }));
   } catch {
     return [];
   }
@@ -152,46 +207,25 @@ export function writeRepos(repos: RepoEntry[]): void {
 }
 
 /**
- * Register a repo with workspaces for the daemon to watch.
- * Merges with existing workspaces.
+ * Register a repo with the daemon (defaults to jj mode).
+ * Updates the mode if the repo already exists.
  */
-export function registerRepo(repoPath: string, workspaces: string[]): void {
+export function registerRepo(repoPath: string, mode: RepoMode = "jj"): void {
   const repos = readRepos();
   const existing = repos.find((r) => r.path === repoPath);
 
   if (existing) {
-    // Merge workspaces (avoid duplicates)
-    const allWorkspaces = new Set([...existing.workspaces, ...workspaces]);
-    existing.workspaces = [...allWorkspaces];
+    // Update mode if different
+    if (existing.mode !== mode) {
+      existing.mode = mode;
+      writeRepos(repos);
+      log(`Updated repo mode: ${repoPath} -> ${mode}`);
+    }
   } else {
-    repos.push({ path: repoPath, workspaces });
+    repos.push({ path: repoPath, mode });
+    writeRepos(repos);
+    log(`Registered repo: ${repoPath} in ${mode} mode`);
   }
-
-  writeRepos(repos);
-  log(
-    `Registered repo: ${repoPath} with workspaces: [${workspaces.join(", ")}]`,
-  );
-}
-
-/**
- * Set the exact list of workspaces for a repo (replaces existing).
- * Use this when updating focus to ensure repos.json matches exactly.
- */
-export function setRepoWorkspaces(
-  repoPath: string,
-  workspaces: string[],
-): void {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    existing.workspaces = workspaces;
-  } else {
-    repos.push({ path: repoPath, workspaces });
-  }
-
-  writeRepos(repos);
-  log(`Set repo workspaces: ${repoPath} -> [${workspaces.join(", ")}]`);
 }
 
 /**
@@ -205,76 +239,114 @@ export function unregisterRepo(repoPath: string): void {
 }
 
 /**
- * Enable git mode for a repo (daemon watches main repo for git→unassigned sync)
+ * Get the mode for a repo (defaults to jj if not registered)
  */
-export function enableGitMode(repoPath: string): void {
+export function getRepoMode(repoPath: string): RepoMode {
+  const repos = readRepos();
+  const existing = repos.find((r) => r.path === repoPath);
+  return existing?.mode ?? "jj";
+}
+
+/**
+ * Set the mode for a repo
+ */
+export function setRepoMode(repoPath: string, mode: RepoMode): void {
   const repos = readRepos();
   const existing = repos.find((r) => r.path === repoPath);
 
   if (existing) {
-    existing.gitMode = true;
+    existing.mode = mode;
+    // Clear focused workspaces when switching to git mode
+    if (mode === "git") {
+      existing.focusedWorkspaces = undefined;
+    }
   } else {
-    repos.push({ path: repoPath, workspaces: [], gitMode: true });
+    repos.push({ path: repoPath, mode });
   }
 
   writeRepos(repos);
-  log(`Enabled git mode for: ${repoPath}`);
+  log(`Set repo mode: ${repoPath} -> ${mode}`);
 }
 
 /**
  * Check if a repo is in git mode
  */
 export function isGitMode(repoPath: string): boolean {
-  const repos = readRepos();
-  const existing = repos.find((r) => r.path === repoPath);
-  // Default to false (jj mode) if repo not registered
-  return existing?.gitMode ?? false;
+  return getRepoMode(repoPath) === "git";
 }
 
 /**
- * Disable git mode for a repo
+ * Get the focused workspaces for a repo (jj mode only)
  */
-export function disableGitMode(repoPath: string): void {
+export function getFocusedWorkspaces(repoPath: string): string[] {
   const repos = readRepos();
   const existing = repos.find((r) => r.path === repoPath);
-
-  if (existing) {
-    existing.gitMode = false;
-    // If no workspaces and no git mode, remove the repo
-    if (existing.workspaces.length === 0) {
-      writeRepos(repos.filter((r) => r.path !== repoPath));
-      log(`Disabled git mode and removed repo: ${repoPath}`);
-      return;
-    }
-  }
-
-  writeRepos(repos);
-  log(`Disabled git mode for: ${repoPath}`);
+  return existing?.focusedWorkspaces ?? [];
 }
 
 /**
- * Remove specific workspaces from a repo (unregister repo if no workspaces left)
+ * Set the focused workspaces for a repo (jj mode only).
+ * This is the list of workspaces included in the focus commit.
  */
-export function unregisterWorkspaces(
+export function setFocusedWorkspaces(
   repoPath: string,
   workspaces: string[],
 ): void {
   const repos = readRepos();
   const existing = repos.find((r) => r.path === repoPath);
 
-  if (!existing) return;
-
-  existing.workspaces = existing.workspaces.filter(
-    (ws) => !workspaces.includes(ws),
-  );
-
-  if (existing.workspaces.length === 0) {
-    // No workspaces left, remove the repo entirely
-    writeRepos(repos.filter((r) => r.path !== repoPath));
-    log(`Unregistered repo (no workspaces left): ${repoPath}`);
+  if (existing) {
+    existing.focusedWorkspaces = workspaces;
+    // Ensure we're in jj mode when focusing workspaces
+    if (workspaces.length > 0) {
+      existing.mode = "jj";
+    }
   } else {
-    writeRepos(repos);
-    log(`Unregistered workspaces from ${repoPath}: [${workspaces.join(", ")}]`);
+    repos.push({ path: repoPath, mode: "jj", focusedWorkspaces: workspaces });
+  }
+
+  writeRepos(repos);
+  log(`Set focused workspaces: ${repoPath} -> [${workspaces.join(", ")}]`);
+}
+
+/**
+ * Add workspaces to focus (jj mode)
+ */
+export function addToFocus(repoPath: string, workspaces: string[]): void {
+  const current = getFocusedWorkspaces(repoPath);
+  const merged = [...new Set([...current, ...workspaces])];
+  setFocusedWorkspaces(repoPath, merged);
+}
+
+/**
+ * Remove workspaces from focus (jj mode)
+ */
+export function removeFromFocus(repoPath: string, workspaces: string[]): void {
+  const current = getFocusedWorkspaces(repoPath);
+  const filtered = current.filter((ws) => !workspaces.includes(ws));
+  setFocusedWorkspaces(repoPath, filtered);
+}
+
+/**
+ * Discover all workspaces for a repo from the filesystem.
+ * This is the source of truth for what workspaces exist.
+ */
+export function discoverWorkspaces(repoPath: string): string[] {
+  const workspacesDir = getRepoWorkspacesDir(repoPath);
+  if (!existsSync(workspacesDir)) return [];
+
+  try {
+    const entries = readdirSync(workspacesDir);
+    return entries.filter((name) => {
+      const fullPath = join(workspacesDir, name);
+      try {
+        return statSync(fullPath).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
   }
 }
 

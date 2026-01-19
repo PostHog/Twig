@@ -3,7 +3,7 @@ import {
   daemonStart,
   daemonStatus,
   daemonStop,
-} from "@array/core/commands/daemon";
+} from "@twig/core/commands/daemon";
 import { cyan, dim, formatSuccess, green, message, red } from "../utils/output";
 import { unwrap } from "../utils/run";
 
@@ -39,9 +39,11 @@ export async function daemon(subcommand: string): Promise<void> {
           message("");
           message("Watching repos:");
           for (const repo of status.repos) {
-            message(`  ${dim(repo.path)}`);
-            for (const ws of repo.workspaces) {
-              message(`    └─ ${ws}`);
+            message(`  ${dim(repo.path)} (${repo.mode} mode)`);
+            for (const ws of repo.allWorkspaces) {
+              const isFocused = repo.focusedWorkspaces.includes(ws);
+              const focusMarker = isFocused ? green("*") : " ";
+              message(`    ${focusMarker} ${ws}`);
             }
           }
         } else {

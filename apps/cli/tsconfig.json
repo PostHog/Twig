@@ -18,7 +18,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@array/core": ["../core/src/index.ts"]
+      "@twig/core": ["../../packages/core/src/index.ts"],
+      "@twig/core/engine": ["../../packages/core/src/engine/index.ts"],
+      "@twig/core/jj": ["../../packages/core/src/jj/index.ts"],
+      "@twig/core/stacks": ["../../packages/core/src/stacks/index.ts"],
+      "@twig/core/*": ["../../packages/core/src/*.ts"]
     }
   },
   "include": ["src/**/*", "bin/**/*", "tests/**/*"],

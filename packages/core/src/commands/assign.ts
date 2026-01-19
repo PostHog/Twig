@@ -1,28 +1,13 @@
-import { parseDiffPaths } from "../jj/diff";
 import { runJJ } from "../jj/runner";
 import {
   addWorkspace,
   getUnassignedFiles,
+  getWorkspaceFiles,
   UNASSIGNED_WORKSPACE,
   workspaceRef,
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import type { Command } from "./types";
-
-/**
- * Get files modified in a workspace (vs its parent).
- */
-async function getWorkspaceFiles(
-  workspace: string,
-  cwd: string,
-): Promise<Result<string[]>> {
-  const result = await runJJ(
-    ["diff", "-r", workspaceRef(workspace), "--summary"],
-    cwd,
-  );
-  if (!result.ok) return result;
-  return ok(parseDiffPaths(result.value.stdout));
-}
 
 export interface AssignResult {
   files: string[];

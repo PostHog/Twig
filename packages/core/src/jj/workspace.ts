@@ -413,18 +413,40 @@ export async function ensureUnassignedWorkspace(
 }
 
 /**
+ * Get files modified in a workspace (vs its parent).
+ * Runs from the workspace directory to ensure jj snapshots the working copy.
+ */
+export async function getWorkspaceFiles(
+  workspace: string,
+  cwd = process.cwd(),
+): Promise<Result<string[]>> {
+  // Get the workspace path so we run jj from there (ensures snapshot)
+  const repoRootResult = await getRepoRoot(cwd);
+  if (!repoRootResult.ok) return repoRootResult;
+
+  const workspacePath = getWorkspacePath(workspace, repoRootResult.value);
+
+  // If workspace directory doesn't exist, return empty
+  if (!existsSync(workspacePath)) {
+    return ok([]);
+  }
+
+  const result = await runJJ(
+    ["diff", "-r", workspaceRef(workspace), "--summary"],
+    workspacePath,
+  );
+  if (!result.ok) return result;
+
+  return ok(parseDiffPaths(result.value.stdout));
+}
+
+/**
  * Get files modified in the unassigned workspace (vs trunk).
  */
 export async function getUnassignedFiles(
   cwd = process.cwd(),
 ): Promise<Result<string[]>> {
-  const result = await runJJ(
-    ["diff", "-r", workspaceRef(UNASSIGNED_WORKSPACE), "--summary"],
-    cwd,
-  );
-  if (!result.ok) return result;
-
-  return ok(parseDiffPaths(result.value.stdout));
+  return getWorkspaceFiles(UNASSIGNED_WORKSPACE, cwd);
 }
 
 /**
@@ -467,13 +489,9 @@ export async function getWorkspaceFileAtParent(
   // Get the parent of the workspace's working copy
   const parentRevision = `${workspaceRef(workspaceName)}-`;
 
-  const start = performance.now();
   const result = await runJJ(
     ["file", "show", "--ignore-working-copy", filePath, "-r", parentRevision],
     cwd,
-  );
-  console.log(
-    `[timing] jj file show for ${filePath} took ${(performance.now() - start).toFixed(1)}ms`,
   );
 
   // If file doesn't exist at parent, it's a new file - return empty string

@@ -60,14 +60,17 @@
   "overrides": [
     {
       // Files using unknownAtRules
-      "includes": ["apps/array/src/renderer/styles/globals.css"],
+      "includes": [
+        "apps/twig/src/renderer/styles/globals.css",
+        "apps/mobile/global.css"
+      ],
       "linter": {
         "enabled": false
       }
     },
     {
       // API client generates a a lot of Any
-      "includes": ["apps/array/src/api/generated.ts"],
+      "includes": ["apps/twig/src/api/generated.ts"],
       "linter": {
         "enabled": false
       }
@@ -75,8 +78,8 @@
     {
       // Disallow console.* in array and agent source code - use logger instead
       "includes": [
-        "apps/array/src/**/*.ts",
-        "apps/array/src/**/*.tsx",
+        "apps/twig/src/**/*.ts",
+        "apps/twig/src/**/*.tsx",
         "packages/agent/src/**/*.ts"
       ],
       "linter": {
@@ -91,8 +94,8 @@
       // Logger implementations intentionally wrap console
       "includes": [
         "packages/agent/src/utils/logger.ts",
-        "apps/array/src/main/lib/logger.ts",
-        "apps/array/src/renderer/lib/logger.ts"
+        "apps/twig/src/main/lib/logger.ts",
+        "apps/twig/src/renderer/lib/logger.ts"
       ],
       "linter": {
         "rules": {
@@ -104,7 +107,7 @@
     },
     {
       // Test files can use console for setup/debugging
-      "includes": ["apps/array/src/test/**/*.ts"],
+      "includes": ["apps/twig/src/test/**/*.ts"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -116,8 +119,8 @@
     {
       // Renderer code should use path aliases
       "includes": [
-        "apps/array/src/renderer/**/*.ts",
-        "apps/array/src/renderer/**/*.tsx"
+        "apps/twig/src/renderer/**/*.ts",
+        "apps/twig/src/renderer/**/*.tsx"
       ],
       "linter": {
         "rules": {

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { enableGitMode } from "../daemon/pid";
+import { registerRepo, setRepoMode } from "../daemon/pid";
 import { getCurrentBranch, isDetachedHead, setHeadToBranch } from "../git/head";
 import { parseDiffPaths } from "../jj/diff";
 import { list } from "../jj/list";
@@ -86,10 +86,11 @@ export async function exit(cwd = process.cwd()): Promise<Result<ExitResult>> {
   const detached = await isDetachedHead(cwd);
 
   if (!detached) {
-    // Already in Git mode - still enable gitMode for daemon sync
+    // Already in Git mode - ensure mode is set
     const rootResult = await getRepoRoot(cwd);
     if (rootResult.ok) {
-      enableGitMode(rootResult.value);
+      registerRepo(rootResult.value, "git");
+      setRepoMode(rootResult.value, "git");
     }
     const branch = await getCurrentBranch(cwd);
     return ok({
@@ -148,10 +149,11 @@ export async function exit(cwd = process.cwd()): Promise<Result<ExitResult>> {
   // Move Git HEAD to the branch without touching working tree
   const setHeadResult = await setHeadToBranch(cwd, targetBookmark);
 
-  // Enable git mode so daemon watches for git→unassigned sync
+  // Set git mode so daemon knows to route by ownership without focus commit
   const rootResult = await getRepoRoot(cwd);
   if (rootResult.ok) {
-    enableGitMode(rootResult.value);
+    registerRepo(rootResult.value, "git");
+    setRepoMode(rootResult.value, "git");
   }
 
   if (!setHeadResult.ok) {

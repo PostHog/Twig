@@ -1,4 +1,4 @@
-import { getAllBranchMetadata } from "@array/core/git/metadata";
+import { getAllBranchMetadata } from "@twig/core/git/metadata";
 
 /**
  * Hidden debug command to dump all arr refs metadata.

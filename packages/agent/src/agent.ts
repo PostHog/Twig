@@ -572,20 +572,22 @@ This PR implements the changes described in the task.`;
 
             for (const entry of newEntries ?? []) {
               lastKnownEntryCount++;
-              // Look for user_message notifications
-              if (
-                entry.notification?.method === "sessionUpdate" &&
-                (entry.notification?.params as any)?.sessionUpdate ===
-                  "user_message"
-              ) {
-                const content = (entry.notification?.params as any)?.content;
-                if (content) {
-                  this.logger.info("Processing user interrupt", { content });
-                  // Send as new prompt - will be processed after current prompt completes
-                  await clientConnection.prompt({
-                    sessionId: taskRunId,
-                    prompt: Array.isArray(content) ? content : [content],
-                  });
+              // Look for user_message notifications (clients send session/update with user_message_chunk)
+              if (entry.notification?.method === "session/update") {
+                const update = (entry.notification?.params as any)?.update;
+                if (
+                  update?.sessionUpdate === "user_message_chunk" ||
+                  update?.sessionUpdate === "user_message"
+                ) {
+                  const content = update?.content;
+                  if (content) {
+                    this.logger.info("Processing user interrupt", { content });
+                    // Send as new prompt - will be processed after current prompt completes
+                    await clientConnection.prompt({
+                      sessionId: taskRunId,
+                      prompt: Array.isArray(content) ? content : [content],
+                    });
+                  }
                 }
               }
             }

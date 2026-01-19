@@ -18,6 +18,7 @@ import {
   mkdirSync,
   readFileSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -27,10 +28,12 @@ import { parseDiffPaths } from "../jj/diff";
 import { UNASSIGNED_WORKSPACE, workspaceRef } from "../jj/workspace";
 import {
   cleanup,
+  discoverWorkspaces,
   getReposPath,
   getWorkspacePath,
   log,
   type RepoEntry,
+  type RepoMode,
   readRepos,
   writePid,
   writeRepos,
@@ -40,6 +43,19 @@ const JJ_TIMEOUT_MS = 10000;
 const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 20;
 const DEBOUNCE_MS = 100;
+
+/**
+ * Internal daemon representation of a repo.
+ * Combines repos.json config with filesystem-discovered workspaces.
+ */
+interface DaemonRepo {
+  path: string;
+  mode: RepoMode;
+  /** All workspaces discovered from filesystem (always synced) */
+  allWorkspaces: string[];
+  /** Workspaces in the focus commit (jj mode only) */
+  focusedWorkspaces: string[];
+}
 
 interface JJResult {
   stdout: string | null;
@@ -159,48 +175,6 @@ function shouldIgnore(filename: string, ignored: Set<string>): boolean {
   return false;
 }
 
-/**
- * Get list of tracked (non-gitignored) files via jj file list
- */
-async function getTrackedFiles(cwd: string): Promise<string[]> {
-  const result = await runJJ(["file", "list"], cwd);
-  if (result === null) return [];
-  return result.trim().split("\n").filter(Boolean);
-}
-
-/**
- * Rewrite files in-place to trigger file watchers.
- * jj rebase replaces files (new inode), but VSCode watches the old inode.
- * Rewriting the file content triggers watchers on the new inode.
- */
-async function rewriteFilesInPlace(cwd: string): Promise<void> {
-  const files = await getTrackedFiles(cwd);
-  let errorCount = 0;
-
-  for (const file of files) {
-    const filePath = join(cwd, file);
-    if (existsSync(filePath)) {
-      try {
-        const stats = statSync(filePath);
-        if (stats.isFile()) {
-          const content = readFileSync(filePath);
-          writeFileSync(filePath, content);
-        }
-      } catch (err) {
-        errorCount++;
-        // Log first few errors to avoid spam
-        if (errorCount <= 3) {
-          log(`Failed to rewrite ${file}: ${err}`);
-        }
-      }
-    }
-  }
-
-  if (errorCount > 3) {
-    log(`...and ${errorCount - 3} more file rewrite errors`);
-  }
-}
-
 /** Active subscriptions: "repoPath:wsName" → subscription */
 const subscriptions: Map<string, watcher.AsyncSubscription> = new Map();
 
@@ -223,7 +197,7 @@ const repoSyncQueue: Map<
 const repoSyncing: Set<string> = new Set();
 
 /** Preview repos with dirty edits that need routing */
-const dirtyPreviews: Set<string> = new Set();
+const _dirtyPreviews: Set<string> = new Set();
 
 /** Debounce timers for workspace syncs */
 const wsDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -255,13 +229,37 @@ function finishWorkspaceSync(
 }
 
 /**
- * Rebase focus commit onto all workspace tips.
+ * Get the first parent of the current commit (the remote baseline).
+ */
+async function getFirstParent(cwd: string): Promise<string | null> {
+  const result = await runJJ(
+    ["log", "-r", "@-", "--no-graph", "-T", "commit_id"],
+    cwd,
+  );
+  if (result === null) return null;
+  return result.trim() || null;
+}
+
+/**
+ * Rebase focus commit onto remote baseline + all workspace tips.
+ * First parent is remote baseline (for git_head), rest are workspace tips (for content).
+ * Rebase updates content without replacing file inodes, so editors don't see delete/recreate.
  */
 async function rebaseFocusCommit(
   repoPath: string,
   workspaces: string[],
 ): Promise<boolean> {
+  // Get the current first parent (remote baseline) to preserve it
+  const baseline = await getFirstParent(repoPath);
+  if (baseline === null) {
+    log(`[rebase] Failed to get first parent`);
+    return false;
+  }
+
+  // Build destinations: baseline (first) + unassigned + all focused workspaces
   const destinations = [
+    "-d",
+    baseline,
     "-d",
     workspaceRef(UNASSIGNED_WORKSPACE),
     ...workspaces.flatMap((ws) => ["-d", workspaceRef(ws)]),
@@ -271,7 +269,7 @@ async function rebaseFocusCommit(
 }
 
 /**
- * Snapshot a workspace and update focus.
+ * Snapshot a workspace and update focus (jj mode only).
  */
 async function snapshotAndSync(
   repoPath: string,
@@ -285,14 +283,14 @@ async function snapshotAndSync(
   dirtyWorkspaces.delete(key);
   log(`[${key}] Starting sync`);
 
-  const repo = currentRepos.find((r) => r.path === repoPath);
-  if (!repo || repo.workspaces.length === 0) {
-    log(`[${key}] No registered workspaces, skipping`);
+  const repo = currentDaemonRepos.find((r) => r.path === repoPath);
+  if (!repo) {
+    log(`[${key}] Repo not registered, skipping`);
     finishWorkspaceSync(key, repoPath, wsName, wsPath);
     return;
   }
 
-  // Step 1: Snapshot the workspace
+  // Step 1: Snapshot the workspace (always do this)
   const t1 = performance.now();
   const snapResult = await runJJ(["status", "--quiet"], wsPath);
   if (snapResult === null) {
@@ -302,20 +300,18 @@ async function snapshotAndSync(
   }
   log(`[${key}] Snapshot complete (${(performance.now() - t1).toFixed(0)}ms)`);
 
-  // Step 2: Rebase focus commit onto all workspace tips
-  const t2 = performance.now();
-  const rebaseOk = await rebaseFocusCommit(repoPath, repo.workspaces);
-  if (!rebaseOk) {
-    log(`[${key}] Rebase failed`);
-    finishWorkspaceSync(key, repoPath, wsName, wsPath);
-    return;
+  // Step 2: Rebase focus commit onto workspace tips (jj mode only)
+  if (repo.mode === "jj" && repo.focusedWorkspaces.length > 0) {
+    const t2 = performance.now();
+    const rebaseOk = await rebaseFocusCommit(repoPath, repo.focusedWorkspaces);
+    if (!rebaseOk) {
+      log(`[${key}] Rebase failed`);
+      finishWorkspaceSync(key, repoPath, wsName, wsPath);
+      return;
+    }
+    log(`[${key}] Rebase complete (${(performance.now() - t2).toFixed(0)}ms)`);
+    // No rewriteFilesInPlace needed - rebase updates files in-place without changing inodes
   }
-  log(`[${key}] Rebase complete (${(performance.now() - t2).toFixed(0)}ms)`);
-
-  // Step 3: Rewrite files to trigger VSCode's file watcher
-  const t3 = performance.now();
-  await rewriteFilesInPlace(repoPath);
-  log(`[${key}] Rewrote files (${(performance.now() - t3).toFixed(0)}ms)`);
 
   log(
     `[${key}] Sync complete (total: ${(performance.now() - t0).toFixed(0)}ms)`,
@@ -410,10 +406,26 @@ async function watchWorkspace(
         return;
       }
 
-      const relevantEvents = events.filter((event) => {
+      // Filter out ignored files
+      let relevantEvents = events.filter((event) => {
         const relativePath = event.path.slice(wsPath.length + 1);
         return !shouldIgnore(relativePath, ignored);
       });
+
+      // Filter out files that were recently synced TO this workspace (prevents loop)
+      const recentlySynced = recentlySyncedToWorkspace.get(key);
+      if (recentlySynced && recentlySynced.size > 0) {
+        const beforeCount = relevantEvents.length;
+        relevantEvents = relevantEvents.filter((event) => {
+          const relativePath = event.path.slice(wsPath.length + 1);
+          return !recentlySynced.has(relativePath);
+        });
+        if (relevantEvents.length !== beforeCount) {
+          log(
+            `[${key}] Filtered ${beforeCount - relevantEvents.length} recently synced file(s)`,
+          );
+        }
+      }
 
       if (relevantEvents.length === 0) return;
 
@@ -490,143 +502,139 @@ async function buildOwnershipMap(
 }
 
 /**
- * Copy files from focus to target workspace directory.
- * Instead of using jj squash (which creates divergent commits),
- * we copy the file content directly and let the workspace watcher
- * pick up the changes naturally.
+ * Sync a file from preview to target workspace.
  *
- * NOTE: We intentionally do NOT run `jj restore` here. The workspace watcher
- * will trigger snapshotAndSync, which runs `jj restore` right before rebase.
- * This eliminates the visible flash where content disappears then reappears.
+ * For deletions, we check if the owner workspace is focused:
+ * - Owner IS focused → user deleted it, sync deletion
+ * - Owner NOT focused → file disappeared due to unfocus, ignore
  */
-function copyFilesToWorkspace(
-  files: string[],
+function syncFileToWorkspace(
+  file: string,
   targetWorkspace: string,
   repoPath: string,
+  focusedWorkspaces: string[],
 ): boolean {
-  if (files.length === 0) return true;
-
   const wsPath = getWorkspacePath(repoPath, targetWorkspace);
   if (!existsSync(wsPath)) return false;
 
-  for (const file of files) {
-    const srcPath = join(repoPath, file);
-    const destPath = join(wsPath, file);
+  const srcPath = join(repoPath, file);
+  const destPath = join(wsPath, file);
+  const wsKey = `${repoPath}:${targetWorkspace}`;
 
-    try {
-      if (existsSync(srcPath)) {
-        // Ensure destination directory exists
-        const destDir = join(destPath, "..");
-        if (!existsSync(destDir)) {
-          mkdirSync(destDir, { recursive: true });
-        }
-        // Copy file content
-        const content = readFileSync(srcPath);
-        writeFileSync(destPath, content);
+  try {
+    let synced = false;
+
+    if (existsSync(srcPath)) {
+      // Create or update: always sync
+      const destDir = join(destPath, "..");
+      if (!existsSync(destDir)) {
+        mkdirSync(destDir, { recursive: true });
       }
-    } catch (err) {
-      log(`[focus:${repoPath}] Failed to copy ${file}: ${err}`);
-    }
-  }
-
-  return true;
-}
-
-/**
- * Group changed files by their target workspace based on ownership.
- */
-function groupFilesByOwner(
-  changedFiles: string[],
-  ownership: Map<string, string[]>,
-  repoPath: string,
-): Map<string, string[]> {
-  const toRoute = new Map<string, string[]>();
-
-  for (const file of changedFiles) {
-    const owners = ownership.get(file) || [];
-
-    if (owners.length === 0) {
-      const files = toRoute.get(UNASSIGNED_WORKSPACE) || [];
-      files.push(file);
-      toRoute.set(UNASSIGNED_WORKSPACE, files);
-    } else if (owners.length === 1) {
-      const files = toRoute.get(owners[0]) || [];
-      files.push(file);
-      toRoute.set(owners[0], files);
+      const content = readFileSync(srcPath);
+      writeFileSync(destPath, content);
+      synced = true;
     } else {
-      log(
-        `[focus:${repoPath}] WARNING: ${file} has multiple owners: ${owners.join(", ")}`,
-      );
+      // Delete: only sync if the owner workspace is focused
+      // If not focused, the file disappeared due to unfocus, not user deletion
+      if (!focusedWorkspaces.includes(targetWorkspace)) {
+        log(
+          `[focus:${repoPath}] Ignoring deletion of ${file} - workspace ${targetWorkspace} not focused`,
+        );
+        return false;
+      }
+      if (existsSync(destPath)) {
+        unlinkSync(destPath);
+        synced = true;
+      }
     }
-  }
 
-  return toRoute;
+    // Track recently synced files to prevent feedback loop
+    if (synced) {
+      let recent = recentlySyncedToWorkspace.get(wsKey);
+      if (!recent) {
+        recent = new Set();
+        recentlySyncedToWorkspace.set(wsKey, recent);
+      }
+      recent.add(file);
+
+      // Clear after cooldown
+      setTimeout(() => {
+        const set = recentlySyncedToWorkspace.get(wsKey);
+        if (set) {
+          set.delete(file);
+          if (set.size === 0) {
+            recentlySyncedToWorkspace.delete(wsKey);
+          }
+        }
+      }, SYNC_COOLDOWN_MS);
+    }
+
+    return synced;
+  } catch (err) {
+    log(`[focus:${repoPath}] Failed to sync ${file}: ${err}`);
+  }
+  return false;
 }
 
 /**
- * Route files to workspaces and log results.
- */
-async function routeFilesToWorkspaces(
-  toRoute: Map<string, string[]>,
-  repoPath: string,
-): Promise<void> {
-  for (const [target, files] of toRoute) {
-    const success = await copyFilesToWorkspace(files, target, repoPath);
-    if (success) {
-      log(`[focus:${repoPath}] Routed ${files.length} file(s) to ${target}`);
-    } else {
-      log(`[focus:${repoPath}] Failed to route files to ${target}`);
-    }
-  }
-}
-
-/**
- * Route focus edits to appropriate workspaces.
+ * Route edits from preview to appropriate workspaces.
  *
  * Routing rules:
- * - File modified by exactly 1 agent → route to that agent
- * - File not modified by any agent → route to unassigned
- * - File modified by 2+ agents → BLOCKED (shouldn't happen)
+ * - File modified by exactly 1 workspace → route to that workspace
+ * - File not modified by any workspace → route to unassigned
+ * - File modified by 2+ workspaces → conflict (shouldn't happen)
+ *
+ * For deletions, only syncs if the owner workspace is currently focused.
+ * This prevents unfocus operations from deleting workspace files.
  */
-async function routePreviewEdits(repoPath: string): Promise<void> {
+async function routePreviewEdits(
+  repoPath: string,
+  changedFiles: string[],
+): Promise<void> {
   const t0 = performance.now();
-  log(`[focus:${repoPath}] Starting edit routing`);
+  log(
+    `[focus:${repoPath}] Starting edit routing for ${changedFiles.length} file(s)`,
+  );
 
-  const repo = currentRepos.find((r) => r.path === repoPath);
+  const repo = currentDaemonRepos.find((r) => r.path === repoPath);
   if (!repo) {
     log(`[focus:${repoPath}] Repo not registered, skipping`);
     return;
   }
 
-  const diffResult = await runJJ(["diff", "--summary"], repoPath);
-  if (!diffResult) {
-    log(`[focus:${repoPath}] No changes to route`);
-    return;
-  }
-
-  const changedFiles = parseDiffPaths(diffResult);
   if (changedFiles.length === 0) {
-    log(`[focus:${repoPath}] No tracked files changed`);
+    log(`[focus:${repoPath}] No files to route`);
     return;
   }
 
-  // Git mode (no focused workspaces): all edits go to unassigned
-  if (repo.workspaces.length === 0) {
-    await copyFilesToWorkspace(changedFiles, UNASSIGNED_WORKSPACE, repoPath);
-    log(
-      `[focus:${repoPath}] Routed ${changedFiles.length} file(s) to ${UNASSIGNED_WORKSPACE} (git mode)`,
+  // Build ownership map across ALL workspaces
+  const ownership = await buildOwnershipMap(repo.allWorkspaces, repoPath);
+
+  // Route each file to its owner
+  for (const file of changedFiles) {
+    const owners = ownership.get(file) || [];
+    let target: string;
+
+    if (owners.length === 0) {
+      target = UNASSIGNED_WORKSPACE;
+    } else if (owners.length === 1) {
+      target = owners[0];
+    } else {
+      log(
+        `[focus:${repoPath}] WARNING: ${file} has multiple owners: ${owners.join(", ")}`,
+      );
+      continue;
+    }
+
+    const synced = syncFileToWorkspace(
+      file,
+      target,
+      repoPath,
+      repo.focusedWorkspaces,
     );
-  } else if (repo.workspaces.length === 1) {
-    // Single workspace mode: all edits go directly to that workspace
-    await copyFilesToWorkspace(changedFiles, repo.workspaces[0], repoPath);
-    log(
-      `[focus:${repoPath}] Routed ${changedFiles.length} file(s) to ${repo.workspaces[0]}`,
-    );
-  } else {
-    // Multi-workspace mode: route based on ownership
-    const ownership = await buildOwnershipMap(repo.workspaces, repoPath);
-    const toRoute = groupFilesByOwner(changedFiles, ownership, repoPath);
-    await routeFilesToWorkspaces(toRoute, repoPath);
+    if (synced) {
+      log(`[focus:${repoPath}] Synced ${file} to ${target}`);
+    }
   }
 
   log(
@@ -634,47 +642,56 @@ async function routePreviewEdits(repoPath: string): Promise<void> {
   );
 }
 
+/** Accumulated changed files per repo during debounce */
+const pendingChangedFiles: Map<string, Set<string>> = new Map();
+
+/** Recently synced files per workspace - ignore changes from these to prevent loops */
+const recentlySyncedToWorkspace: Map<string, Set<string>> = new Map();
+const SYNC_COOLDOWN_MS = 500;
+
 /**
- * Trigger preview edit routing (with dirty flag handling).
+ * Trigger preview edit routing with debounce.
  */
-function triggerPreviewRoute(repoPath: string): void {
-  // Debounce handles batching - just mark dirty and schedule
-  if (dirtyPreviews.has(repoPath)) {
-    // Already scheduled, debounce will reset timer
-    routePreviewEditsDebounced(repoPath);
-    return;
+function triggerPreviewRoute(repoPath: string, changedFiles: string[]): void {
+  let pending = pendingChangedFiles.get(repoPath);
+  if (!pending) {
+    pending = new Set();
+    pendingChangedFiles.set(repoPath, pending);
+  }
+  for (const file of changedFiles) {
+    pending.add(file);
   }
 
-  dirtyPreviews.add(repoPath);
   routePreviewEditsDebounced(repoPath);
 }
 
-/**
- * Debounced version of routePreviewEdits.
- * Waits for file activity to settle before routing.
- */
-const focusDebounceTimers: Map<
+const previewDebounceTimers: Map<
   string,
   ReturnType<typeof setTimeout>
 > = new Map();
 
 function routePreviewEditsDebounced(repoPath: string): void {
-  const existing = focusDebounceTimers.get(repoPath);
+  const existing = previewDebounceTimers.get(repoPath);
   if (existing) {
     clearTimeout(existing);
   }
 
   const timer = setTimeout(async () => {
-    focusDebounceTimers.delete(repoPath);
-    dirtyPreviews.delete(repoPath);
-    await routePreviewEdits(repoPath);
+    previewDebounceTimers.delete(repoPath);
+
+    const files = pendingChangedFiles.get(repoPath);
+    pendingChangedFiles.delete(repoPath);
+
+    if (files && files.size > 0) {
+      await routePreviewEdits(repoPath, [...files]);
+    }
   }, DEBOUNCE_MS);
 
-  focusDebounceTimers.set(repoPath, timer);
+  previewDebounceTimers.set(repoPath, timer);
 }
 
 /**
- * Watch the main repo for user edits (bidirectional sync).
+ * Watch the main repo for user edits and route to workspaces.
  */
 async function watchPreview(repoPath: string): Promise<void> {
   if (focusSubscriptions.has(repoPath)) {
@@ -702,16 +719,20 @@ async function watchPreview(repoPath: string): Promise<void> {
 
       if (relevantEvents.length === 0) return;
 
+      const changedFiles = relevantEvents.map((event) =>
+        event.path.slice(repoPath.length + 1),
+      );
+
       log(
         `[focus:${repoPath}] ${relevantEvents.length} file change(s) detected`,
       );
-      triggerPreviewRoute(repoPath);
+      triggerPreviewRoute(repoPath, changedFiles);
     });
 
     focusSubscriptions.set(repoPath, subscription);
-    log(`[focus:${repoPath}] Focus watcher started`);
+    log(`[focus:${repoPath}] Preview watcher started`);
   } catch (err) {
-    log(`[focus:${repoPath}] Failed to start focus watcher: ${err}`);
+    log(`[focus:${repoPath}] Failed to start preview watcher: ${err}`);
   }
 }
 
@@ -727,27 +748,26 @@ async function unwatchPreview(repoPath: string): Promise<void> {
   }
 
   // Clear any pending debounce timers
-  const timer = focusDebounceTimers.get(repoPath);
+  const timer = previewDebounceTimers.get(repoPath);
   if (timer) {
     clearTimeout(timer);
-    focusDebounceTimers.delete(repoPath);
+    previewDebounceTimers.delete(repoPath);
   }
 }
 
-async function watchRepo(repo: RepoEntry): Promise<void> {
-  log(`Watching repo: ${repo.path}`);
+async function watchRepo(repo: DaemonRepo): Promise<void> {
+  log(
+    `Watching repo: ${repo.path} (mode: ${repo.mode}, workspaces: ${repo.allWorkspaces.length})`,
+  );
 
-  // Watch agent workspaces for changes
-  for (const wsName of repo.workspaces) {
+  // Watch ALL workspaces for changes (discovered from filesystem)
+  for (const wsName of repo.allWorkspaces) {
     const wsPath = getWorkspacePath(repo.path, wsName);
     await watchWorkspace(repo.path, wsName, wsPath);
   }
 
-  // Watch main repo for user edits (bidirectional sync)
-  // Either in focus mode (workspaces.length > 0) or git mode
-  if (repo.workspaces.length > 0 || repo.gitMode) {
-    await watchPreview(repo.path);
-  }
+  // Always watch main repo for bidirectional sync
+  await watchPreview(repo.path);
 }
 
 async function unwatchRepo(repoPath: string): Promise<void> {
@@ -766,51 +786,81 @@ async function unwatchRepo(repoPath: string): Promise<void> {
 }
 
 /** Currently watched repos (for diffing on reload) */
-let currentRepos: RepoEntry[] = [];
+let currentDaemonRepos: DaemonRepo[] = [];
+
+/**
+ * Build DaemonRepo from RepoEntry by discovering workspaces from filesystem.
+ */
+function buildDaemonRepo(entry: RepoEntry): DaemonRepo {
+  // Discover all workspaces from filesystem
+  const allWorkspaces = discoverWorkspaces(entry.path);
+
+  // Filter focused workspaces to only those that exist
+  let focusedWorkspaces = (entry.focusedWorkspaces ?? []).filter((ws) =>
+    allWorkspaces.includes(ws),
+  );
+
+  // In jj mode, unassigned is always in focus (so unowned files are always visible)
+  if (
+    entry.mode === "jj" &&
+    allWorkspaces.includes(UNASSIGNED_WORKSPACE) &&
+    !focusedWorkspaces.includes(UNASSIGNED_WORKSPACE)
+  ) {
+    focusedWorkspaces = [UNASSIGNED_WORKSPACE, ...focusedWorkspaces];
+  }
+
+  return {
+    path: entry.path,
+    mode: entry.mode,
+    allWorkspaces,
+    focusedWorkspaces,
+  };
+}
 
 async function reloadRepos(): Promise<void> {
   const rawRepos = readRepos();
 
-  // Filter to only workspaces that actually exist on disk
-  // This cleans up stale entries from manual deletions or crashes
-  const newRepos: RepoEntry[] = [];
+  // Build daemon repos from config + filesystem discovery
+  const newRepos: DaemonRepo[] = [];
   let needsWrite = false;
 
-  for (const repo of rawRepos) {
-    const validWorkspaces = repo.workspaces.filter((ws) => {
-      const wsPath = getWorkspacePath(repo.path, ws);
-      return existsSync(wsPath);
-    });
+  for (const entry of rawRepos) {
+    const daemonRepo = buildDaemonRepo(entry);
 
-    if (validWorkspaces.length !== repo.workspaces.length) {
+    // Clean up stale focused workspaces in repos.json
+    const originalFocused = entry.focusedWorkspaces ?? [];
+    if (daemonRepo.focusedWorkspaces.length !== originalFocused.length) {
       needsWrite = true;
-      const removed = repo.workspaces.filter(
-        (ws) => !validWorkspaces.includes(ws),
+      const removed = originalFocused.filter(
+        (ws) => !daemonRepo.focusedWorkspaces.includes(ws),
       );
       log(
-        `Cleaning stale workspaces from ${repo.path}: [${removed.join(", ")}]`,
+        `Cleaning stale focused workspaces from ${entry.path}: [${removed.join(", ")}]`,
       );
     }
 
-    if (validWorkspaces.length > 0 || repo.gitMode) {
-      newRepos.push({
-        path: repo.path,
-        workspaces: validWorkspaces,
-        gitMode: repo.gitMode,
-      });
+    // Only include repos that have workspaces
+    if (daemonRepo.allWorkspaces.length > 0) {
+      newRepos.push(daemonRepo);
     } else {
       needsWrite = true;
-      log(`Removing repo with no valid workspaces: ${repo.path}`);
+      log(`Removing repo with no workspaces: ${entry.path}`);
     }
   }
 
   // Update repos.json if we cleaned anything
   if (needsWrite) {
-    writeRepos(newRepos);
+    const cleanedEntries: RepoEntry[] = newRepos.map((r) => ({
+      path: r.path,
+      mode: r.mode,
+      focusedWorkspaces:
+        r.focusedWorkspaces.length > 0 ? r.focusedWorkspaces : undefined,
+    }));
+    writeRepos(cleanedEntries);
   }
 
   // Find repos to remove
-  for (const oldRepo of currentRepos) {
+  for (const oldRepo of currentDaemonRepos) {
     const stillExists = newRepos.find((r) => r.path === oldRepo.path);
     if (!stillExists) {
       await unwatchRepo(oldRepo.path);
@@ -819,14 +869,14 @@ async function reloadRepos(): Promise<void> {
 
   // Find repos to add or update
   for (const newRepo of newRepos) {
-    const oldRepo = currentRepos.find((r) => r.path === newRepo.path);
+    const oldRepo = currentDaemonRepos.find((r) => r.path === newRepo.path);
     if (!oldRepo) {
       // New repo
       await watchRepo(newRepo);
     } else {
-      // Check for workspace changes
-      const oldWs = new Set(oldRepo.workspaces);
-      const newWs = new Set(newRepo.workspaces);
+      // Check for workspace changes (based on filesystem discovery)
+      const oldWs = new Set(oldRepo.allWorkspaces);
+      const newWs = new Set(newRepo.allWorkspaces);
 
       // Removed workspaces
       for (const ws of oldWs) {
@@ -842,10 +892,28 @@ async function reloadRepos(): Promise<void> {
           await watchWorkspace(newRepo.path, ws, wsPath);
         }
       }
+
+      // Check if focused workspaces changed - sync newly focused workspaces to preview
+      const oldFocused = new Set(oldRepo.focusedWorkspaces);
+      const addedToFocus = newRepo.focusedWorkspaces.filter(
+        (ws) => !oldFocused.has(ws),
+      );
+
+      if (addedToFocus.length > 0) {
+        log(`[${newRepo.path}] Focus changed: +[${addedToFocus.join(", ")}]`);
+
+        // Sync workspaces added to focus (workspace→preview direction only)
+        for (const ws of addedToFocus) {
+          const wsPath = getWorkspacePath(newRepo.path, ws);
+          if (existsSync(wsPath)) {
+            triggerSync(newRepo.path, ws, wsPath);
+          }
+        }
+      }
     }
   }
 
-  currentRepos = newRepos;
+  currentDaemonRepos = newRepos;
 }
 
 let reposWatcher: watcher.AsyncSubscription | null = null;
@@ -904,10 +972,10 @@ async function main(): Promise<void> {
     focusSubscriptions.clear();
 
     // Clear any pending debounce timers
-    for (const timer of focusDebounceTimers.values()) {
+    for (const timer of previewDebounceTimers.values()) {
       clearTimeout(timer);
     }
-    focusDebounceTimers.clear();
+    previewDebounceTimers.clear();
 
     cleanup();
     process.exit(0);

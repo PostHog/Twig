@@ -1,4 +1,4 @@
-import { modify as coreModify } from "@array/core/commands/modify";
+import { modify as coreModify } from "@twig/core/commands/modify";
 import { green, message } from "../utils/output";
 import { unwrap } from "../utils/run";
 

@@ -1,9 +1,9 @@
-import { isGhInstalled } from "@array/core/auth";
-import { submit as submitCmd } from "@array/core/commands/submit";
-import { submitWorkspace } from "@array/core/commands/workspace-submit";
-import type { ArrContext } from "@array/core/engine";
-import { checkPrerequisites } from "@array/core/init";
-import { listWorkspaces } from "@array/core/jj/workspace";
+import { isGhInstalled } from "@twig/core/auth";
+import { submit as submitCmd } from "@twig/core/commands/submit";
+import { submitWorkspace } from "@twig/core/commands/workspace-submit";
+import type { ArrContext } from "@twig/core/engine";
+import { checkPrerequisites } from "@twig/core/init";
+import { listWorkspaces } from "@twig/core/jj/workspace";
 import {
   blank,
   cyan,

@@ -1,0 +1,101 @@
+name: Release Twig
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: twig-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    env:
+      NODE_ENV: production
+      VITE_POSTHOG_API_KEY: ${{ secrets.VITE_POSTHOG_API_KEY }}
+      VITE_POSTHOG_API_HOST: ${{ secrets.VITE_POSTHOG_API_HOST }}
+      APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_CODESIGN_CERT_BASE64: ${{ secrets.APPLE_CODESIGN_CERT_BASE64 }}
+      APPLE_CODESIGN_CERT_PASSWORD: ${{ secrets.APPLE_CODESIGN_CERT_PASSWORD }}
+      APPLE_CODESIGN_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_CODESIGN_KEYCHAIN_PASSWORD }}
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Version: $TAG_VERSION"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in package.json
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq --arg v "$APP_VERSION" '.version = $v' apps/twig/package.json > tmp.json && mv tmp.json apps/twig/package.json
+          echo "Set apps/twig/package.json version to $APP_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
+
+      - name: Build agent package
+        run: pnpm --filter @posthog/agent run build
+
+      - name: Import code signing certificate
+        if: env.APPLE_CODESIGN_IDENTITY != ''
+        env:
+          CERT_BASE64: ${{ env.APPLE_CODESIGN_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ env.APPLE_CODESIGN_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ env.APPLE_CODESIGN_KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$CERT_BASE64" ] || [ -z "$CERT_PASSWORD" ] || [ -z "$KEYCHAIN_PASSWORD" ]; then
+            echo "Missing code signing certificate secrets"
+            exit 1
+          fi
+          KEYCHAIN="$RUNNER_TEMP/codesign.keychain-db"
+          echo "$CERT_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm "$RUNNER_TEMP/certificate.p12"
+
+      - name: Build native modules
+        run: pnpm --filter twig run build-native
+
+      - name: Publish with Electron Forge
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: pnpm --filter twig run publish

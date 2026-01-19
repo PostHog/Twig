@@ -1,8 +1,8 @@
-import { workspaceAdd } from "@array/core/commands/workspace-add";
-import { workspaceList } from "@array/core/commands/workspace-list";
-import { workspaceRemove } from "@array/core/commands/workspace-remove";
-import { workspaceStatus } from "@array/core/commands/workspace-status";
-import { submitWorkspace } from "@array/core/commands/workspace-submit";
+import { workspaceAdd } from "@twig/core/commands/workspace-add";
+import { workspaceList } from "@twig/core/commands/workspace-list";
+import { workspaceRemove } from "@twig/core/commands/workspace-remove";
+import { workspaceStatus } from "@twig/core/commands/workspace-status";
+import { submitWorkspace } from "@twig/core/commands/workspace-submit";
 import {
   cyan,
   dim,

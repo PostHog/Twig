@@ -1,4 +1,4 @@
-import { status as statusCmd } from "@array/core/commands/status";
+import { status as statusCmd } from "@twig/core/commands/status";
 import { COMMANDS } from "../registry";
 import {
   arr,

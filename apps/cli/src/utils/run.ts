@@ -1,6 +1,6 @@
-import { findChange as jjFindChange } from "@array/core/jj";
-import type { Changeset } from "@array/core/parser";
-import type { Result } from "@array/core/result";
+import { findChange as jjFindChange } from "@twig/core/jj";
+import type { Changeset } from "@twig/core/parser";
+import type { Result } from "@twig/core/result";
 import {
   blank,
   cyan,

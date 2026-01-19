@@ -10,6 +10,7 @@ import {
 } from "../jj/workspace";
 import { createError, err, ok, type Result } from "../result";
 import { datePrefixedLabel } from "../slugify";
+import { refreshFocus } from "./focus";
 import type { Command } from "./types";
 
 export interface WorkspaceSubmitResult {
@@ -188,6 +189,10 @@ export async function submitWorkspace(
       );
     }
 
+    // Fetch to update tracking and refresh focus baseline
+    await runJJ(["git", "fetch"], cwd);
+    await refreshFocus(cwd);
+
     return ok({
       workspace,
       bookmark,
@@ -217,8 +222,9 @@ export async function submitWorkspace(
     );
   }
 
-  // Fetch to update tracking
+  // Fetch to update tracking and refresh focus baseline
   await runJJ(["git", "fetch"], cwd);
+  await refreshFocus(cwd);
 
   return ok({
     workspace,

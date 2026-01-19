@@ -1,5 +1,9 @@
 import { existsSync } from "node:fs";
-import { readRepos, setRepoWorkspaces, unregisterRepo } from "../daemon/pid";
+import {
+  getFocusedWorkspaces,
+  registerRepo,
+  setFocusedWorkspaces,
+} from "../daemon/pid";
 import {
   getConflictingFiles,
   getWorkspacesForFile,
@@ -35,7 +39,7 @@ export interface FocusStatus {
 }
 
 /**
- * Get focused workspaces from repos.json (single source of truth).
+ * Get focused workspaces from repos.json.
  * Only returns workspaces that actually exist on disk.
  */
 async function getFocusWorkspaces(
@@ -45,15 +49,10 @@ async function getFocusWorkspaces(
   if (!rootResult.ok) return rootResult;
   const repoPath = rootResult.value;
 
-  const repos = readRepos();
-  const repo = repos.find((r) => r.path === repoPath);
-
-  if (!repo) {
-    return ok([]);
-  }
+  const focused = getFocusedWorkspaces(repoPath);
 
   // Filter to only workspaces that actually exist
-  const existingWorkspaces = repo.workspaces.filter((ws) => {
+  const existingWorkspaces = focused.filter((ws) => {
     const wsPath = getWorkspacePath(ws, repoPath);
     return existsSync(wsPath);
   });
@@ -74,7 +73,7 @@ async function getFocusWorkspaces(
  */
 /**
  * Find all existing focus and remote baseline commits by their description.
- * Returns commit IDs to abandon.
+ * Returns change IDs to abandon (change_id is stable across rebases, unlike commit_id).
  */
 async function findFocusCommits(cwd: string): Promise<string[]> {
   // Find all commits with "focus" or "remote baseline" description that aren't immutable
@@ -85,7 +84,7 @@ async function findFocusCommits(cwd: string): Promise<string[]> {
       `(description(substring:"${FOCUS_COMMIT_DESCRIPTION}") | description(substring:"${REMOTE_BASELINE_DESCRIPTION}")) & ~immutable()`,
       "--no-graph",
       "-T",
-      'commit_id ++ "\\n"',
+      'change_id ++ "\\n"',
     ],
     cwd,
   );
@@ -135,6 +134,92 @@ async function getWorkspaceRemoteBaseline(
   return trunk;
 }
 
+/**
+ * Sync changes from the current focus commit back to the appropriate workspaces.
+ * This preserves any CRUD changes made while focused.
+ */
+async function syncFocusChangesToWorkspaces(
+  repoPath: string,
+  cwd: string,
+): Promise<void> {
+  const previouslyFocused = getFocusedWorkspaces(repoPath);
+  if (previouslyFocused.length === 0) return;
+
+  // Snapshot the current @ commit to capture any pending changes
+  await runJJ(["status", "--quiet"], cwd);
+
+  // Single-workspace focus: restore ALL changes to that workspace
+  if (previouslyFocused.length === 1) {
+    const ws = previouslyFocused[0];
+    const wsPath = getWorkspacePath(ws, repoPath);
+    if (existsSync(wsPath)) {
+      await runJJ(["restore", "--from", "@", "-d", workspaceRef(ws)], cwd);
+    }
+    return;
+  }
+
+  // Multi-workspace focus: route files to their original workspace,
+  // new files (not owned by any workspace) go to unassigned
+  const focusDiffResult = await runJJ(["diff", "-r", "@", "--summary"], cwd);
+  if (!focusDiffResult.ok) return;
+
+  const focusFiles = focusDiffResult.value.stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      // Parse summary format: "M file.txt" or "A file.txt" or "D file.txt"
+      const parts = line.trim().split(/\s+/);
+      return parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
+    });
+
+  if (focusFiles.length === 0) return;
+
+  // Build ownership map: which workspace originally owned each file
+  const fileOwnership = new Map<string, string>();
+  const allWorkspacesToCheck = [...previouslyFocused, UNASSIGNED_WORKSPACE];
+
+  for (const ws of allWorkspacesToCheck) {
+    const wsPath = getWorkspacePath(ws, repoPath);
+    if (!existsSync(wsPath)) continue;
+
+    const wsFilesResult = await runJJ(
+      ["diff", "-r", workspaceRef(ws), "--summary"],
+      cwd,
+    );
+    if (!wsFilesResult.ok) continue;
+
+    const wsFiles = wsFilesResult.value.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.trim().split(/\s+/);
+        return parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
+      });
+
+    for (const file of wsFiles) {
+      // First workspace to claim a file wins (shouldn't have conflicts in focus mode)
+      if (!fileOwnership.has(file)) {
+        fileOwnership.set(file, ws);
+      }
+    }
+  }
+
+  // Restore each file to its owning workspace
+  // Files not owned by any workspace go to unassigned
+  for (const file of focusFiles) {
+    const owner = fileOwnership.get(file) || UNASSIGNED_WORKSPACE;
+    const wsPath = getWorkspacePath(owner, repoPath);
+    if (existsSync(wsPath)) {
+      await runJJ(
+        ["restore", "--from", "@", "-d", workspaceRef(owner), file],
+        cwd,
+      );
+    }
+  }
+}
+
 async function updateFocus(
   workspaces: string[],
   cwd = process.cwd(),
@@ -147,10 +232,13 @@ async function updateFocus(
   // Find all existing focus commits to abandon after we create the new one
   const oldFocusCommits = await findFocusCommits(cwd);
 
-  const trunk = await getTrunk(cwd);
+  // Before changing focus state, sync any changes from the current focus commit
+  // back to the appropriate workspaces. This preserves CRUD changes made while focused.
+  await syncFocusChangesToWorkspaces(repoPath, cwd);
 
   if (workspaces.length === 0) {
     // Exit focus mode - go back to trunk
+    const trunk = await getTrunk(cwd);
     const result = await runJJ(["new", trunk], cwd);
     if (!result.ok) return result;
 
@@ -159,8 +247,8 @@ async function updateFocus(
       await runJJ(["abandon", ...oldFocusCommits], cwd);
     }
 
-    // Unregister repo from daemon
-    unregisterRepo(repoPath);
+    // Clear focused workspaces (stay in jj mode, just no focus)
+    setFocusedWorkspaces(repoPath, []);
 
     return ok("");
   }
@@ -179,17 +267,19 @@ async function updateFocus(
   const unassignedResult = await ensureUnassignedWorkspace(cwd);
   if (!unassignedResult.ok) return unassignedResult;
 
-  // Collect remote baselines for git_head (what's already pushed)
-  // and local tips for the working copy merge
-  const remoteBaselines: string[] = [trunk]; // Always include trunk
-  const localTips: string[] = [];
+  const trunk = await getTrunk(cwd);
 
-  // First, add unassigned workspace tip and its remote baseline
+  // Collect remote baselines (for git_head) and workspace refs (for content)
+  // Remote baseline = union of what's already pushed for all focused workspaces
+  // Workspace refs = the actual workspace tips with uncommitted work
+  const remoteBaselines: string[] = [trunk];
+  const workspaceRefs: string[] = [];
+
+  // First, add unassigned workspace
   const unassignedTipResult = await getWorkspaceTip(UNASSIGNED_WORKSPACE, cwd);
   if (unassignedTipResult.ok) {
-    localTips.push(unassignedTipResult.value);
+    workspaceRefs.push(workspaceRef(UNASSIGNED_WORKSPACE));
 
-    // Check if unassigned has a pushed bookmark
     const unassignedBaseline = await getWorkspaceRemoteBaseline(
       UNASSIGNED_WORKSPACE,
       trunk,
@@ -212,7 +302,7 @@ async function updateFocus(
 
     await snapshotWorkspace(wsPath);
 
-    // Get local tip for working copy
+    // Verify workspace exists
     const tipResult = await getWorkspaceTip(ws, cwd);
     if (!tipResult.ok) {
       return err(
@@ -222,29 +312,27 @@ async function updateFocus(
         ),
       );
     }
-    localTips.push(tipResult.value);
+    workspaceRefs.push(workspaceRef(ws));
 
-    // Get remote baseline for git_head
+    // Collect remote baseline for this workspace
     const remoteBaseline = await getWorkspaceRemoteBaseline(ws, trunk, cwd);
     if (remoteBaseline !== trunk && !remoteBaselines.includes(remoteBaseline)) {
       remoteBaselines.push(remoteBaseline);
     }
   }
 
-  // Step 1: Create the remote baseline merge (this becomes git_head's parent)
-  // This represents "what's already on the remote" for all focused workspaces
+  // Step 1: Create remote baseline (merge of all pushed refs)
+  // This becomes git_head - what's already on the remote
   let baselineRef: string;
   if (remoteBaselines.length === 1) {
     baselineRef = remoteBaselines[0];
   } else {
-    // Create a merge of all remote baselines
     const baselineMergeResult = await runJJ(
       ["new", ...remoteBaselines, "-m", REMOTE_BASELINE_DESCRIPTION],
       cwd,
     );
     if (!baselineMergeResult.ok) return baselineMergeResult;
 
-    // Get the commit id of the baseline merge
     const baselineIdResult = await runJJ(
       ["log", "-r", "@", "--no-graph", "-T", "commit_id"],
       cwd,
@@ -253,18 +341,15 @@ async function updateFocus(
     baselineRef = baselineIdResult.value.stdout.trim();
   }
 
-  // Step 2: Create the focus commit on top of the baseline
-  // git_head() will point to baselineRef (the remote baseline)
+  // Step 2: Create focus commit as merge of baseline + all workspace tips
+  // First parent = remote baseline (for git_head)
+  // Other parents = workspace tips (for content)
   const description = FOCUS_COMMIT_DESCRIPTION;
-  const newResult = await runJJ(["new", baselineRef, "-m", description], cwd);
+  const newResult = await runJJ(
+    ["new", baselineRef, ...workspaceRefs, "-m", description],
+    cwd,
+  );
   if (!newResult.ok) return newResult;
-
-  // Step 3: Restore changes from all local workspace tips into the focus commit
-  // This brings in the local (potentially unpushed) changes without making them parents
-  for (const tip of localTips) {
-    const restoreResult = await runJJ(["restore", "--from", tip], cwd);
-    if (!restoreResult.ok) return restoreResult;
-  }
 
   // Abandon all old focus commits (now that we've moved away from them)
   if (oldFocusCommits.length > 0) {
@@ -278,8 +363,9 @@ async function updateFocus(
   );
   if (!idResult.ok) return idResult;
 
-  // Set exact workspace list in repos.json (single source of truth)
-  setRepoWorkspaces(repoPath, validWorkspaces);
+  // Ensure repo is registered and in jj mode, set focused workspaces
+  registerRepo(repoPath, "jj");
+  setFocusedWorkspaces(repoPath, validWorkspaces);
 
   return ok(idResult.value.stdout.trim());
 }
@@ -484,6 +570,31 @@ export async function focusEdit(
 ): Promise<Result<FocusStatus>> {
   // Single-workspace preview = edit mode (all edits go to this workspace)
   const updateResult = await updateFocus([workspace], cwd);
+  if (!updateResult.ok) return updateResult;
+
+  return focusStatus(cwd);
+}
+
+/**
+ * Refresh the focus commit to update the remote baseline.
+ *
+ * Call this after push/pull operations that update bookmark@origin refs,
+ * so the baseline reflects the latest remote state.
+ */
+export async function refreshFocus(
+  cwd = process.cwd(),
+): Promise<Result<FocusStatus>> {
+  // Get current focused workspaces
+  const currentResult = await getFocusWorkspaces(cwd);
+  if (!currentResult.ok) return currentResult;
+
+  // If not focused, nothing to refresh
+  if (currentResult.value.length === 0) {
+    return focusStatus(cwd);
+  }
+
+  // Rebuild with current workspaces (this updates the baseline)
+  const updateResult = await updateFocus(currentResult.value, cwd);
   if (!updateResult.ok) return updateResult;
 
   return focusStatus(cwd);

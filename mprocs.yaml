@@ -1,6 +1,6 @@
 procs:
-  array:
-    cmd: ["pnpm", "--filter", "array", "run", "start"]
+  twig:
+    cmd: ["pnpm", "--filter", "twig", "run", "start"]
     cwd: .
     color: blue
     depends_on:
@@ -10,3 +10,9 @@ procs:
     cmd: ["pnpm", "--filter", "agent", "run", "dev"]
     cwd: .
     color: magenta
+
+  mobile-ios:
+    cmd: ["pnpm", "--filter", "@posthog/mobile", "run", "ios"]
+    cwd: .
+    color: green
+    autostart: false

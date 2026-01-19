@@ -1,13 +1,12 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   cleanup,
+  discoverWorkspaces,
   getLogPath,
-  getWorkspacePath,
   isRunning,
-  type RepoEntry,
+  type RepoMode,
   readPid,
   readRepos,
 } from "../daemon/pid";
@@ -18,10 +17,17 @@ import type { Command } from "./types";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DAEMON_PROCESS_PATH = join(__dirname, "../daemon/daemon-process.ts");
 
+export interface DaemonRepoStatus {
+  path: string;
+  mode: RepoMode;
+  allWorkspaces: string[];
+  focusedWorkspaces: string[];
+}
+
 export interface DaemonStatus {
   running: boolean;
   pid?: number;
-  repos: Array<{ path: string; workspaces: string[] }>;
+  repos: DaemonRepoStatus[];
   logPath: string;
 }
 
@@ -79,16 +85,21 @@ export async function daemonStatus(): Promise<Result<DaemonStatus>> {
   const pid = running ? (readPid() ?? undefined) : undefined;
   const logPath = getLogPath();
 
-  // Filter repos to only include workspaces that actually exist
+  // Build status from repos.json + filesystem discovery
   const rawRepos = readRepos();
-  const repos: RepoEntry[] = [];
+  const repos: DaemonRepoStatus[] = [];
   for (const repo of rawRepos) {
-    const validWorkspaces = repo.workspaces.filter((ws) => {
-      const wsPath = getWorkspacePath(repo.path, ws);
-      return existsSync(wsPath);
-    });
-    if (validWorkspaces.length > 0) {
-      repos.push({ path: repo.path, workspaces: validWorkspaces });
+    const allWorkspaces = discoverWorkspaces(repo.path);
+    if (allWorkspaces.length > 0) {
+      const focusedWorkspaces = (repo.focusedWorkspaces ?? []).filter((ws) =>
+        allWorkspaces.includes(ws),
+      );
+      repos.push({
+        path: repo.path,
+        mode: repo.mode,
+        allWorkspaces,
+        focusedWorkspaces,
+      });
     }
   }
 

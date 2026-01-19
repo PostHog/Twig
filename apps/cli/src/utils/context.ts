@@ -3,7 +3,7 @@ import {
   type ContextLevel,
   checkContext as checkContextCore,
   isContextValid,
-} from "@array/core/context";
+} from "@twig/core/context";
 import { COMMANDS } from "../registry";
 import { arr, blank, hint } from "./output";
 
