@@ -59,6 +59,8 @@ function HistoryTaskItem({
       worktreeName={workspace?.worktreeName ?? undefined}
       worktreePath={workspace?.worktreePath ?? workspace?.folderPath}
       workspaceMode={taskState?.workspaceMode}
+      mainRepoPath={workspace?.folderPath}
+      branchName={workspace?.branchName ?? undefined}
       lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
@@ -102,6 +104,8 @@ function PinnedTaskItem({
       worktreeName={workspace?.worktreeName ?? undefined}
       worktreePath={workspace?.worktreePath ?? workspace?.folderPath}
       workspaceMode={taskState?.workspaceMode}
+      mainRepoPath={workspace?.folderPath}
+      branchName={workspace?.branchName ?? undefined}
       lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}

@@ -1,6 +1,7 @@
 import { CrosshairIcon, CrosshairSimpleIcon } from "@phosphor-icons/react";
 import { Button, Spinner, Text, Tooltip } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@utils/toast";
 import { useCallback } from "react";
 import { selectWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
@@ -12,6 +13,7 @@ interface FocusWorkspaceButtonProps {
 export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
   const workspace = useWorkspaceStore(selectWorkspace(taskId));
   const utils = trpcReact.useUtils();
+  const queryClient = useQueryClient();
 
   // Query current branch of main repo - this is the source of truth
   const { data: currentBranch, isLoading: isBranchLoading } =
@@ -23,6 +25,7 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
   const enableFocus = trpcReact.focus.enable.useMutation({
     onSuccess: (result) => {
       utils.git.getCurrentBranch.invalidate();
+      queryClient.invalidateQueries({ queryKey: ["main-repo-branch"] });
       if (result.success) {
         toast.success(
           <>
@@ -53,6 +56,7 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
   const disableFocus = trpcReact.focus.disable.useMutation({
     onSuccess: (result) => {
       utils.git.getCurrentBranch.invalidate();
+      queryClient.invalidateQueries({ queryKey: ["main-repo-branch"] });
       if (result.success) {
         toast.success(
           <>
