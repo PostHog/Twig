@@ -665,7 +665,7 @@ export class WorktreeManager {
     const worktreeName = await worktreeNamePromise;
     const baseBranch = await baseBranchPromise;
     const worktreePath = this.getWorktreePath(worktreeName);
-    const branchName = `array/${worktreeName}`;
+    const branchName = `twig/${worktreeName}`;
 
     this.logger.info("Creating worktree", {
       worktreeName,
@@ -859,12 +859,14 @@ export class WorktreeManager {
 
       // Include worktrees that:
       // 1. Are in our worktree folder (external or in-repo)
-      // 2. Have a posthog/ branch prefix (our naming convention)
+      // 2. Have a twig/ branch prefix (our naming convention)
       const isInWorktreeFolder = worktreePath?.startsWith(worktreeFolderPath);
-      const isArrayBranch =
-        branchName?.startsWith("array/") || branchName?.startsWith("posthog/");
+      const isTwigBranch =
+        branchName?.startsWith("twig/") ||
+        branchName?.startsWith("array/") ||
+        branchName?.startsWith("posthog/");
 
-      if (worktreePath && branchName && (isInWorktreeFolder || isArrayBranch)) {
+      if (worktreePath && branchName && (isInWorktreeFolder || isTwigBranch)) {
         const worktreeName = path.basename(worktreePath);
         worktrees.push({
           worktreePath,

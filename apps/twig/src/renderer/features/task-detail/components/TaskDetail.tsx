@@ -2,6 +2,7 @@ import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { FocusWorkspaceButton } from "@features/workspace/components/FocusWorkspaceButton";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
 import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
@@ -73,6 +74,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             </Code>
           )}
           <StartWorkspaceButton taskId={taskId} />
+          <FocusWorkspaceButton taskId={taskId} />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
           <ExternalAppsOpener
