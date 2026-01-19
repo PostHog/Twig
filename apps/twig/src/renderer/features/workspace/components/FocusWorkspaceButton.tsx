@@ -146,7 +146,7 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
         ) : (
           <CrosshairSimpleIcon size={14} />
         )}
-        {isFocused ? "Focused" : "Focus"}
+        {isFocused ? "Watching" : "Watch"}
       </Button>
     </Tooltip>
   );

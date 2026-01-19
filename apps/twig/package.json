@@ -129,6 +129,7 @@
     "file-icon": "^6.0.0",
     "framer-motion": "^12.26.2",
     "idb-keyval": "^6.2.2",
+    "ignore": "^7.0.5",
     "immer": "^11.0.1",
     "inversify": "^7.10.6",
     "is-glob": "^4.0.3",
