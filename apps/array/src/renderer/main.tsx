@@ -6,7 +6,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles/globals.css";
 
-document.title = import.meta.env.DEV ? "Array (Development)" : "Array";
+document.title = import.meta.env.DEV ? "Twig (Development)" : "Twig";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");

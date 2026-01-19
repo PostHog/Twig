@@ -1,27 +1,27 @@
-# Array Development Guide
+# Twig Development Guide
 
 ## Project Structure
 
 - Monorepo with pnpm workspaces and turbo
-- `apps/array` - Electron desktop app (React + Vite)
+- `apps/array` - Twig Electron desktop app (React + Vite)
 - `packages/agent` - TypeScript agent framework wrapping Claude Agent SDK
 
 ## Commands
 
 - `pnpm install` - Install all dependencies
-- `pnpm dev` - Run both agent (watch) and array app via mprocs
+- `pnpm dev` - Run both agent (watch) and twig app via mprocs
 - `pnpm dev:agent` - Run agent package in watch mode only
-- `pnpm dev:array` - Run array desktop app only
+- `pnpm dev:array` - Run twig desktop app only
 - `pnpm build` - Build all packages (turbo)
 - `pnpm typecheck` - Type check all packages
 - `pnpm lint` - Lint and auto-fix with biome
 - `pnpm format` - Format with biome
 - `pnpm test` - Run tests across all packages
 
-### Array App Specific
+### Twig App Specific
 
 - `pnpm --filter array test` - Run vitest tests
-- `pnpm --filter array typecheck` - Type check array app
+- `pnpm --filter array typecheck` - Type check twig app
 - `pnpm --filter array package` - Package electron app
 - `pnpm --filter array make` - Make distributable
 

@@ -10,7 +10,7 @@ interface RawLogsHeaderProps {
   onToggleSearch: () => void;
   onCopyAll: () => void;
   onSearchChange: (query: string) => void;
-  searchInputRef: RefObject<HTMLInputElement | null>;
+  searchInputRef: RefObject<HTMLInputElement>;
 }
 
 export function RawLogsHeader({

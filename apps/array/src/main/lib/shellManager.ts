@@ -36,7 +36,7 @@ function buildShellEnv(
     env.LC_MONETARY = locale;
   }
 
-  env.TERM_PROGRAM = "Array";
+  env.TERM_PROGRAM = "Twig";
   env.COLORTERM = "truecolor";
   env.FORCE_COLOR = "3";
 
