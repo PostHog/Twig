@@ -121,7 +121,7 @@ export function ConversationView({
     <div className="relative flex-1">
       <div
         ref={scrollRef}
-        className="scrollbar-hide absolute inset-0 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
+        className="absolute inset-0 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
       >
         <div className="flex flex-col gap-3">
           {items.map((item) =>
