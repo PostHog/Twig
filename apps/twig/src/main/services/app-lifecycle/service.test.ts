@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AppLifecycleService } from "./service.js";
 
 const { mockApp, mockAgentService, mockTrackAppEvent, mockShutdownPostHog } =
   vi.hoisted(() => ({
@@ -43,8 +44,6 @@ vi.mock("../../../types/analytics.js", () => ({
     APP_QUIT: "app_quit",
   },
 }));
-
-import { AppLifecycleService } from "./service.js";
 
 describe("AppLifecycleService", () => {
   let service: AppLifecycleService;
