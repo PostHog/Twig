@@ -2,6 +2,7 @@ import { exec, execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
+import { isTwigBranch } from "@shared/constants";
 import { injectable } from "inversify";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type {
@@ -190,7 +191,7 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
         .split("\n")
         .filter(Boolean)
         .map((branch) => branch.trim())
-        .filter((branch) => !branch.startsWith("array/"));
+        .filter((branch) => !isTwigBranch(branch));
     } catch {
       return [];
     }
