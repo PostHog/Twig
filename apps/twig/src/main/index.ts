@@ -138,6 +138,8 @@ function setupExternalLinkHandlers(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  const isDev = !app.isPackaged;
+
   mainWindow = new BrowserWindow({
     width: 900,
     height: 600,
@@ -152,6 +154,8 @@ function createWindow(): void {
       preload: path.join(__dirname, "preload.js"),
       enableBlinkFeatures: "GetDisplayMedia",
       partition: "persist:main",
+      // Enable remote debugging in development for Chrome DevTools
+      ...(isDev && { webSecurity: false }),
     },
   });
 
