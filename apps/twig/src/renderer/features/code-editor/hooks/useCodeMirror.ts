@@ -6,6 +6,7 @@ import {
 } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useEffect, useRef } from "react";
@@ -170,7 +171,25 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
 
       if (result.action.type === "external-app") {
         const fileName = filePath.split("/").pop() || "file";
-        await handleExternalAppAction(result.action.action, filePath, fileName);
+
+        // Find workspace by matching filePath
+        const workspaces = useWorkspaceStore.getState().workspaces;
+        const workspace =
+          Object.values(workspaces).find(
+            (ws) =>
+              (ws?.worktreePath && filePath.startsWith(ws.worktreePath)) ||
+              (ws?.folderPath && filePath.startsWith(ws.folderPath)),
+          ) ?? null;
+
+        await handleExternalAppAction(
+          result.action.action,
+          filePath,
+          fileName,
+          {
+            workspace,
+            mainRepoPath: workspace?.folderPath,
+          },
+        );
       }
     };
 

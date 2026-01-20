@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { app, dialog, shell } from "electron";
 import { z } from "zod";
+import { getWorktreeLocation } from "../../services/settingsStore.js";
 import { getMainWindow } from "../context.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -143,4 +144,9 @@ export const osRouter = router({
    * Get the application version
    */
   getAppVersion: publicProcedure.query(() => app.getVersion()),
+
+  /**
+   * Get the worktree base location (e.g., ~/.twig)
+   */
+  getWorktreeLocation: publicProcedure.query(() => getWorktreeLocation()),
 });

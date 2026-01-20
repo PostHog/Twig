@@ -1,15 +1,11 @@
-import {
-  ArrowLeft,
-  ArrowsClockwise,
-  CrosshairIcon,
-  CrosshairSimpleIcon,
-} from "@phosphor-icons/react";
+import { ArrowLeft, ArrowsClockwise, GitBranch } from "@phosphor-icons/react";
 import { Button, Spinner, Text, Tooltip } from "@radix-ui/themes";
 import {
   selectIsFocusedOnWorktree,
   selectIsLoading,
   useFocusStore,
 } from "@stores/focusStore";
+import { showFocusSuccessToast } from "@utils/focusToast";
 import { toast } from "@utils/toast";
 import { useCallback } from "react";
 import { selectWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
@@ -53,27 +49,30 @@ export function FocusWorkspaceButton({
   // Handler for local workspace unfocus (return to original branch)
   const handleLocalUnfocus = useCallback(async () => {
     if (!focusSession) {
-      toast.error("Cannot return to original branch", {
+      toast.error("Could not return to original branch", {
         description: "No focused workspace found",
       });
       return;
     }
 
+    const hadStash = !!focusSession.mainStashRef;
     const result = await disableFocus();
     if (result.success) {
       toast.success(
         <>
-          Switched to{" "}
+          Returned to{" "}
           <Text style={{ color: "var(--accent-11)" }}>
             {focusSession.originalBranch}
           </Text>
         </>,
         {
-          description: result.stashPopWarning,
+          description:
+            result.stashPopWarning ??
+            (hadStash ? "Your stashed changes were restored." : undefined),
         },
       );
     } else {
-      toast.error("Could not unfocus workspace", {
+      toast.error(`Could not return to ${focusSession.originalBranch}`, {
         description: result.error,
       });
     }
@@ -87,28 +86,31 @@ export function FocusWorkspaceButton({
       !workspace.branchName ||
       !workspace.worktreePath
     ) {
-      toast.error("Cannot focus workspace", {
-        description: "Only worktree-mode workspaces can be focused",
+      toast.error("Could not edit workspace", {
+        description: "Only worktree-mode workspaces can be edited",
       });
       return;
     }
 
     if (isFocused) {
+      const hadStash = !!focusSession?.mainStashRef;
       const result = await disableFocus();
       if (result.success) {
         toast.success(
           <>
-            Switched to{" "}
+            Returned to{" "}
             <Text style={{ color: "var(--accent-11)" }}>
               {focusSession?.originalBranch}
             </Text>
           </>,
           {
-            description: result.stashPopWarning,
+            description:
+              result.stashPopWarning ??
+              (hadStash ? "Your stashed changes were restored." : undefined),
           },
         );
       } else {
-        toast.error("Could not unfocus workspace", {
+        toast.error(`Could not return to ${focusSession?.originalBranch}`, {
           description: result.error,
         });
       }
@@ -120,40 +122,29 @@ export function FocusWorkspaceButton({
       });
 
       if (result.success) {
-        toast.success(
-          <>
-            Switched to{" "}
-            <Text style={{ color: "var(--accent-11)" }}>
-              {workspace.branchName}
-            </Text>
-          </>,
-          {
-            description: focusSession?.mainStashRef
-              ? "Your uncommitted changes were stashed. Unfocus to restore them."
-              : undefined,
-          },
-        );
+        showFocusSuccessToast(workspace.branchName, result);
       } else {
-        toast.error("Could not focus workspace", {
+        toast.error("Could not edit workspace", {
           description: result.error,
         });
       }
     }
   }, [workspace, isFocused, enableFocus, disableFocus, focusSession]);
 
-  // Borrowed branches (like main) show "Switch to {branch}" instead of "Watch"
+  // Borrowed branches (like main) show "Switch to {branch}" instead of "Check out"
   const isBorrowedBranch =
     workspace?.branchName && !isTwigBranch(workspace.branchName);
 
-  // For local workspaces that are backgrounded, show "Return to {branch}" button
+  // For local workspaces that are backgrounded, show "Stop editing" button
   if (isLocalMode && isBackgrounded && focusSession) {
     return (
       <Tooltip
-        content={`Return to ${focusSession.originalBranch} and unfocus the current task`}
+        content={`Your main repo has ${focusSession.branch} checked out. Click to return to ${focusSession.originalBranch}`}
       >
         <Button
           size="1"
           variant="outline"
+          color="blue"
           onClick={handleLocalUnfocus}
           disabled={isFocusLoading}
           style={
@@ -180,37 +171,39 @@ export function FocusWorkspaceButton({
   }
 
   const tooltipContent = isFocused
-    ? "Unfocus workspace (return to original branch)"
+    ? `Your main repo has this branch. Click to return to ${focusSession?.originalBranch}`
     : isBorrowedBranch
-      ? `This task was moved to a worktree when you switched branches. Click to switch back to "${workspace.branchName}".`
-      : "Focus workspace (checkout branch in main repo)";
+      ? `Switch back to ${workspace.branchName} in your main repo`
+      : "Check out in your main repo to edit locally";
 
   const buttonLabel = isFocused
-    ? "Watching"
+    ? "Editing workspace"
     : isBorrowedBranch
       ? `Switch to ${workspace.branchName}`
-      : "Watch";
+      : "Edit workspace";
 
   return (
     <Tooltip content={tooltipContent}>
       <Button
         size="1"
-        variant={isFocused ? "solid" : "soft"}
-        color={isFocused ? "blue" : undefined}
+        variant={isFocused ? "solid" : "outline"}
+        color="blue"
         onClick={handleToggleFocus}
         disabled={isFocusLoading}
         style={
-          { flexShrink: 0, WebkitAppRegion: "no-drag" } as React.CSSProperties
+          {
+            flexShrink: 0,
+            WebkitAppRegion: "no-drag",
+            marginLeft: "var(--space-2)",
+          } as React.CSSProperties
         }
       >
         {isFocusLoading ? (
           <Spinner size="1" />
-        ) : isFocused ? (
-          <CrosshairIcon size={14} weight="fill" />
         ) : isBorrowedBranch ? (
           <ArrowsClockwise size={14} />
         ) : (
-          <CrosshairSimpleIcon size={14} />
+          <GitBranch size={14} weight={isFocused ? "fill" : "regular"} />
         )}
         {buttonLabel}
       </Button>

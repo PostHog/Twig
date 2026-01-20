@@ -2,10 +2,12 @@ import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import {
   Cloud,
   GitBranch as GitBranchIcon,
+  Laptop as LaptopIcon,
   PushPin,
   PushPinSlash,
   Trash,
 } from "@phosphor-icons/react";
+import { Tooltip } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
@@ -14,26 +16,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { SidebarItem } from "../SidebarItem";
 
-function useCurrentBranch(repoPath?: string, worktreeName?: string) {
-  return useQuery({
-    queryKey: ["current-branch", repoPath],
-    queryFn: () => {
-      if (!repoPath) throw new Error("repoPath is required");
-      return trpcVanilla.git.getCurrentBranch.query({
-        directoryPath: repoPath,
-      });
-    },
-    enabled: !!repoPath && !worktreeName,
-    staleTime: 3000,
-    refetchInterval: 3000,
-  });
-}
-
 interface TaskItemProps {
   id: string;
   label: string;
   isActive: boolean;
-  worktreeName?: string;
   worktreePath?: string;
   workspaceMode?: WorkspaceMode;
   mainRepoPath?: string;
@@ -61,28 +47,44 @@ function TaskHoverToolbar({
 }: TaskHoverToolbarProps) {
   return (
     <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-      <button
-        type="button"
-        className="flex h-5 w-5 items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
         onClick={(e) => {
           e.stopPropagation();
           onTogglePin();
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+            onTogglePin();
+          }
+        }}
         title={isPinned ? "Unpin task" : "Pin task"}
       >
         {isPinned ? <PushPinSlash size={12} /> : <PushPin size={12} />}
-      </button>
-      <button
-        type="button"
-        className="flex h-5 w-5 items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
+      </span>
+      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+            onDelete();
+          }
+        }}
         title="Delete task"
       >
         <Trash size={12} />
-      </button>
+      </span>
     </span>
   );
 }
@@ -97,8 +99,9 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
     queryFn: () =>
       trpcVanilla.git.getDiffStats.query({ directoryPath: worktreePath }),
     enabled: !!worktreePath,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
+    staleTime: 5000,
+    refetchInterval: 5000,
+    placeholderData: (prev) => prev,
   });
 
   if (!diffStats || diffStats.filesChanged === 0) {
@@ -108,25 +111,27 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
   const parts: React.ReactNode[] = [];
   if (diffStats.linesAdded > 0) {
     parts.push(
-      <span key="added" style={{ color: "var(--green-9)" }}>
+      <span key="added" className="text-green-9">
         +{diffStats.linesAdded}
       </span>,
     );
   }
   if (diffStats.linesRemoved > 0) {
     parts.push(
-      <span key="removed" style={{ color: "var(--red-9)" }}>
+      <span key="removed" className="text-red-9">
         -{diffStats.linesRemoved}
       </span>,
     );
   }
-  parts.push(<span key="files">{diffStats.filesChanged}</span>);
+  parts.push(
+    <span key="files" className="text-gray-11">
+      {diffStats.filesChanged}
+    </span>,
+  );
 
   return (
-    <span
-      className="flex shrink-0 items-center rounded border border-gray-6 bg-gray-2 px-1 text-[10px] text-gray-11"
-      style={{ gap: "4px" }}
-    >
+    <span className="flex items-center gap-1">
+      <span>·</span>
       {parts}
     </span>
   );
@@ -135,7 +140,6 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
 export function TaskItem({
   label,
   isActive,
-  worktreeName,
   worktreePath,
   workspaceMode,
   mainRepoPath,
@@ -149,7 +153,6 @@ export function TaskItem({
   onDelete,
   onTogglePin,
 }: TaskItemProps) {
-  const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
   const focusedBranch = useFocusStore(selectFocusedBranch(mainRepoPath ?? ""));
 
   const isCloudTask = workspaceMode === "cloud";
@@ -170,56 +173,58 @@ export function TaskItem({
       ? formatRelativeTime(lastActivityAt)
       : undefined;
 
-  const baseSubtitle = isCloudTask ? (
-    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-      <Cloud size={10} />
-      <span>Cloud</span>
+  const repoName = mainRepoPath?.split("/").pop();
+  const subtitle = (
+    <span className="flex items-center gap-1">
+      {repoName && <span>{repoName}</span>}
+      {repoName && activityText && <span>·</span>}
+      {activityText && <span>{activityText}</span>}
+      {!isCloudTask && worktreePath && (
+        <DiffStatsDisplay worktreePath={worktreePath} />
+      )}
     </span>
-  ) : isWatching ? (
-    <span style={{ color: "var(--blue-11)" }}>Watching</span>
-  ) : (
-    (worktreeName ?? currentBranch)
   );
 
-  const subtitle = activityText ? (
-    <span>
-      {baseSubtitle && <>{baseSubtitle} · </>}
-      {activityText}
-    </span>
-  ) : (
-    baseSubtitle
-  );
+  const isWorktreeTask = workspaceMode === "worktree";
+
+  const modeTooltip = isCloudTask
+    ? "Cloud"
+    : isWorktreeTask
+      ? "Workspace"
+      : "Local";
 
   const icon = isGenerating ? (
-    <DotsCircleSpinner size={12} className="text-accent-11" />
+    <DotsCircleSpinner size={16} className="text-accent-11" />
   ) : isUnread ? (
-    <span className="flex h-[12px] w-[12px] items-center justify-center text-[8px] text-green-11">
+    <span className="flex h-4 w-4 items-center justify-center text-[8px] text-green-11">
       ■
     </span>
   ) : isPinned ? (
-    <PushPin size={12} className="text-accent-11" />
+    <PushPin size={16} className="text-accent-11" />
+  ) : isCloudTask ? (
+    <Tooltip content={modeTooltip}>
+      <Cloud size={16} />
+    </Tooltip>
+  ) : isWorktreeTask ? (
+    <Tooltip content={modeTooltip}>
+      <GitBranchIcon size={16} className={isWatching ? "text-blue-11" : ""} />
+    </Tooltip>
   ) : (
-    <GitBranchIcon size={12} className={isWatching ? "text-blue-11" : ""} />
+    <Tooltip content={modeTooltip}>
+      <LaptopIcon size={16} />
+    </Tooltip>
   );
 
   const endContent = useMemo(
-    () => (
-      <span className="flex items-center gap-1">
-        {!isCloudTask && worktreePath && (
-          <span className="group-hover:hidden">
-            <DiffStatsDisplay worktreePath={worktreePath} />
-          </span>
-        )}
-        {onDelete && onTogglePin && (
-          <TaskHoverToolbar
-            isPinned={isPinned}
-            onDelete={onDelete}
-            onTogglePin={onTogglePin}
-          />
-        )}
-      </span>
-    ),
-    [isCloudTask, worktreePath, onDelete, onTogglePin, isPinned],
+    () =>
+      onDelete && onTogglePin ? (
+        <TaskHoverToolbar
+          isPinned={isPinned}
+          onDelete={onDelete}
+          onTogglePin={onTogglePin}
+        />
+      ) : null,
+    [onDelete, onTogglePin, isPinned],
   );
 
   return (

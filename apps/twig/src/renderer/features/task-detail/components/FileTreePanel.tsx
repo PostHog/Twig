@@ -34,6 +34,7 @@ interface LazyTreeItemProps {
   taskId: string;
   repoPath: string;
   isFileActive: (relativePath: string) => boolean;
+  mainRepoPath?: string;
 }
 
 function LazyTreeItem({
@@ -42,11 +43,13 @@ function LazyTreeItem({
   taskId,
   repoPath,
   isFileActive,
+  mainRepoPath,
 }: LazyTreeItemProps) {
   const isExpanded = useFileTreeStore(selectIsPathExpanded(taskId, entry.path));
   const togglePath = useFileTreeStore((state) => state.togglePath);
   const collapseAll = useFileTreeStore((state) => state.collapseAll);
   const openFile = usePanelLayoutStore((state) => state.openFile);
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId] ?? null);
 
   const { data: children } = useQuery({
     queryKey: ["directory", entry.path],
@@ -89,6 +92,7 @@ function LazyTreeItem({
         result.action.action,
         entry.path,
         entry.name,
+        { workspace, mainRepoPath },
       );
     }
   };
@@ -178,6 +182,7 @@ function LazyTreeItem({
             taskId={taskId}
             repoPath={repoPath}
             isFileActive={isFileActive}
+            mainRepoPath={mainRepoPath}
           />
         ))}
     </Box>
@@ -187,7 +192,9 @@ function LazyTreeItem({
 export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
   const repoPath = worktreePath ?? taskData.repoPath;
+  const mainRepoPath = workspace?.folderPath ?? taskData.repoPath;
   const queryClient = useQueryClient();
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 
@@ -250,6 +257,7 @@ export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
             taskId={taskId}
             repoPath={repoPath}
             isFileActive={isFileActive}
+            mainRepoPath={mainRepoPath}
           />
         ))}
       </Flex>
