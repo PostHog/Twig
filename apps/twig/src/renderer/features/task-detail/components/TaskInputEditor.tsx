@@ -107,8 +107,18 @@ export const TaskInputEditor = forwardRef<
         getContent,
         getText,
         setContent,
+        insertChip,
       }),
-      [focus, blur, clear, isEmpty, getContent, getText, setContent],
+      [
+        focus,
+        blur,
+        clear,
+        isEmpty,
+        getContent,
+        getText,
+        setContent,
+        insertChip,
+      ],
     );
 
     const getSubmitTooltip = () => {
