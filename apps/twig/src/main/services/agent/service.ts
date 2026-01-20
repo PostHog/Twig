@@ -671,6 +671,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         message: message as AcpMessage["message"],
       };
       emitToRenderer(acpMessage);
+
+      // Detect PR URLs in bash tool results and attach to task
+      this.detectAndAttachPrUrl(taskRunId, message);
     };
 
     const tappedReadable = createTappedReadableStream(
@@ -815,5 +818,113 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
   private toSessionResponse(session: ManagedSession): SessionResponse {
     return { sessionId: session.taskRunId, channel: session.channel };
+  }
+
+  /**
+   * Detect GitHub PR URLs in bash tool results and attach to task.
+   * This enables webhook tracking by populating the pr_url in TaskRun output.
+   */
+  private detectAndAttachPrUrl(taskRunId: string, message: unknown): void {
+    try {
+      const msg = message as {
+        method?: string;
+        params?: {
+          update?: {
+            sessionUpdate?: string;
+            _meta?: {
+              claudeCode?: {
+                toolName?: string;
+                toolResponse?: unknown;
+              };
+            };
+            content?: Array<{ type?: string; text?: string }>;
+          };
+        };
+      };
+
+      // Only process session/update notifications for tool_call_update
+      if (msg.method !== "session/update") return;
+      if (msg.params?.update?.sessionUpdate !== "tool_call_update") return;
+
+      const toolMeta = msg.params.update._meta?.claudeCode;
+      const toolName = toolMeta?.toolName;
+
+      // Only process Bash tool results
+      if (
+        !toolName ||
+        (!toolName.includes("Bash") && !toolName.includes("bash"))
+      ) {
+        return;
+      }
+
+      // Extract text content from tool response or update content
+      let textToSearch = "";
+
+      // Check toolResponse (hook response with raw output)
+      const toolResponse = toolMeta?.toolResponse;
+      if (toolResponse) {
+        if (typeof toolResponse === "string") {
+          textToSearch = toolResponse;
+        } else if (typeof toolResponse === "object" && toolResponse !== null) {
+          // May be { stdout?: string, stderr?: string } or similar
+          const respObj = toolResponse as Record<string, unknown>;
+          textToSearch =
+            String(respObj.stdout || "") + String(respObj.stderr || "");
+          if (!textToSearch && respObj.output) {
+            textToSearch = String(respObj.output);
+          }
+        }
+      }
+
+      // Also check content array
+      const content = msg.params.update.content;
+      if (Array.isArray(content)) {
+        for (const item of content) {
+          if (item.type === "text" && item.text) {
+            textToSearch += ` ${item.text}`;
+          }
+        }
+      }
+
+      if (!textToSearch) return;
+
+      // Match GitHub PR URLs
+      const prUrlMatch = textToSearch.match(
+        /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/,
+      );
+      if (!prUrlMatch) return;
+
+      const prUrl = prUrlMatch[0];
+      log.info("Detected PR URL in bash output", { taskRunId, prUrl });
+
+      // Find session and attach PR URL
+      const session = this.sessions.get(taskRunId);
+      if (!session) {
+        log.warn("Session not found for PR attachment", { taskRunId });
+        return;
+      }
+
+      // Attach asynchronously without blocking message flow
+      session.agent
+        .attachPullRequestToTask(session.taskId, prUrl)
+        .then(() => {
+          log.info("PR URL attached to task", {
+            taskRunId,
+            taskId: session.taskId,
+            prUrl,
+          });
+        })
+        .catch((err) => {
+          log.error("Failed to attach PR URL to task", {
+            taskRunId,
+            taskId: session.taskId,
+            prUrl,
+            error: err,
+          });
+        });
+    } catch (err) {
+      // Don't let detection errors break message flow
+      log.debug("Error in PR URL detection", { taskRunId, error: err });
+    }
   }
 }
