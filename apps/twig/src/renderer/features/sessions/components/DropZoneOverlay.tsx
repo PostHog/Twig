@@ -14,8 +14,10 @@ export function DropZoneOverlay({ isVisible }: DropZoneOverlayProps) {
       inset="0"
       align="center"
       justify="center"
-      className="pointer-events-none z-50 bg-accent-a3"
+      className="pointer-events-none z-50"
       style={{
+        backgroundColor: "var(--color-background)",
+        opacity: 0.9,
         border: "2px dashed var(--accent-8)",
         borderRadius: "var(--radius-3)",
         margin: "8px",
