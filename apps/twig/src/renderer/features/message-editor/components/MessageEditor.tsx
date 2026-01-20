@@ -93,8 +93,18 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         getContent,
         getText,
         setContent,
+        insertChip,
       }),
-      [focus, blur, clear, isEmpty, getContent, getText, setContent],
+      [
+        focus,
+        blur,
+        clear,
+        isEmpty,
+        getContent,
+        getText,
+        setContent,
+        insertChip,
+      ],
     );
 
     useEffect(() => {

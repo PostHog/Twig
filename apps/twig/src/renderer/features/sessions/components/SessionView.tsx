@@ -1,4 +1,7 @@
-import { MessageEditor } from "@features/message-editor/components/MessageEditor";
+import {
+  MessageEditor,
+  type MessageEditorHandle,
+} from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   type ExecutionMode,
@@ -14,13 +17,14 @@ import {
   isJsonRpcNotification,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import {
   useSessionViewActions,
   useShowRawLogs,
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
+import { DropZoneOverlay } from "./DropZoneOverlay";
 import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
@@ -164,6 +168,9 @@ export function SessionView({
   );
 
   const [isBashMode, setIsBashMode] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const editorRef = useRef<MessageEditorHandle>(null);
+  const dragCounterRef = useRef(0);
 
   const firstPendingPermission = useMemo(() => {
     const entries = Array.from(pendingPermissions.entries());
@@ -227,10 +234,67 @@ export function SessionView({
     await cancelPermission(taskId, firstPendingPermission.toolCallId);
   }, [firstPendingPermission, taskId, cancelPermission]);
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDraggingFile(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // In Electron, File objects have a 'path' property
+      const filePath = (file as File & { path?: string }).path;
+      if (filePath) {
+        editorRef.current?.insertChip({
+          type: "file",
+          id: filePath,
+          label: file.name,
+        });
+      }
+    }
+
+    editorRef.current?.focus();
+  }, []);
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
-        <Flex direction="column" height="100%" className="bg-gray-1">
+        <Flex
+          direction="column"
+          height="100%"
+          className="relative bg-gray-1"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <DropZoneOverlay isVisible={isDraggingFile} />
           {showRawLogs ? (
             <RawLogsView events={events} />
           ) : (
@@ -299,6 +363,7 @@ export function SessionView({
               }
             >
               <MessageEditor
+                ref={editorRef}
                 sessionId={sessionId}
                 placeholder="Type a message... @ to mention files, ! for bash mode"
                 onSubmit={handleSubmit}
