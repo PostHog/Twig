@@ -113,7 +113,7 @@ export interface FileDiffViewedProperties {
 // Workspace events
 export interface WorkspaceCreatedProperties {
   task_id: string;
-  mode: "cloud" | "worktree" | "root";
+  mode: "cloud" | "worktree" | "local";
 }
 
 export interface WorkspaceScriptsStartedProperties {

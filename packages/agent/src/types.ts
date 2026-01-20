@@ -252,10 +252,13 @@ export interface UrlMention {
 }
 
 // Worktree types for parallel task development
+export type BranchOwnership = "created" | "borrowed";
+
 export interface WorktreeInfo {
   worktreePath: string;
   worktreeName: string;
   branchName: string;
   baseBranch: string;
   createdAt: string;
+  branchOwnership: BranchOwnership;
 }

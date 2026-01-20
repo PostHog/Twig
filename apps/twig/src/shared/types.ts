@@ -7,15 +7,18 @@ export interface RegisteredFolder {
   exists?: boolean;
 }
 
+export type BranchOwnership = "created" | "borrowed";
+
 export interface WorktreeInfo {
   worktreePath: string;
   worktreeName: string;
   branchName: string;
   baseBranch: string;
   createdAt: string;
+  branchOwnership: BranchOwnership;
 }
 
-export type WorkspaceMode = "worktree" | "root" | "cloud";
+export type WorkspaceMode = "worktree" | "local" | "cloud";
 
 export interface TaskFolderAssociation {
   taskId: string;
@@ -72,6 +75,7 @@ export interface CreateWorkspaceOptions {
   folderPath: string;
   mode: WorkspaceMode;
   branch?: string;
+  useExistingBranch?: boolean;
 }
 
 export interface ScriptExecutionResult {

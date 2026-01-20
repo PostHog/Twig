@@ -22,6 +22,7 @@ import type {
   Workspace,
   WorkspaceErrorPayload,
   WorkspaceInfo,
+  WorkspacePromotedPayload,
   WorkspaceTerminalCreatedPayload,
   WorkspaceTerminalInfo,
   WorkspaceWarningPayload,
@@ -78,12 +79,14 @@ export const WorkspaceServiceEvent = {
   TerminalCreated: "terminalCreated",
   Error: "error",
   Warning: "warning",
+  Promoted: "promoted",
 } as const;
 
 export interface WorkspaceServiceEvents {
   [WorkspaceServiceEvent.TerminalCreated]: WorkspaceTerminalCreatedPayload;
   [WorkspaceServiceEvent.Error]: WorkspaceErrorPayload;
   [WorkspaceServiceEvent.Warning]: WorkspaceWarningPayload;
+  [WorkspaceServiceEvent.Promoted]: WorkspacePromotedPayload;
 }
 
 @injectable()
@@ -123,10 +126,17 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
   private async doCreateWorkspace(
     options: CreateWorkspaceInput,
   ): Promise<WorkspaceInfo> {
-    const { taskId, mainRepoPath, folderId, folderPath, mode, branch } =
-      options;
+    const {
+      taskId,
+      mainRepoPath,
+      folderId,
+      folderPath,
+      mode,
+      branch,
+      useExistingBranch,
+    } = options;
     log.info(
-      `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode})`,
+      `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode}, useExistingBranch: ${useExistingBranch})`,
     );
 
     if (mode === "cloud") {
@@ -155,8 +165,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       };
     }
 
-    // Root mode: skip worktree creation entirely
-    if (mode === "root") {
+    // Local mode: skip worktree creation entirely
+    if (mode === "local") {
       // try to create the branch, if it already exists just switch to it
       if (branch) {
         try {
@@ -228,7 +238,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       const initScripts = normalizeScripts(config?.scripts?.init);
       if (initScripts.length > 0) {
         log.info(
-          `Running ${initScripts.length} init script(s) for task ${taskId} (root mode)`,
+          `Running ${initScripts.length} init script(s) for task ${taskId} (local mode)`,
         );
         const initResult = await this.scriptRunner.executeScriptsWithTerminal(
           taskId,
@@ -251,7 +261,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       const startScripts = normalizeScripts(config?.scripts?.start);
       if (startScripts.length > 0) {
         log.info(
-          `Running ${startScripts.length} start script(s) for task ${taskId} (root mode)`,
+          `Running ${startScripts.length} start script(s) for task ${taskId} (local mode)`,
         );
         const startResult = await this.scriptRunner.executeScriptsWithTerminal(
           taskId,
@@ -294,12 +304,39 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     let worktree: WorktreeInfo;
 
     try {
-      worktree = await worktreeManager.createWorktree({
-        baseBranch: branch ?? undefined,
-      });
-      log.info(
-        `Created worktree: ${worktree.worktreeName} at ${worktree.worktreePath}`,
-      );
+      if (useExistingBranch && branch) {
+        // Existing branch mode: check out the branch directly (no new branch)
+        // First, ensure main repo is not on the target branch (git constraint)
+        const { stdout: currentBranch } = await execFileAsync(
+          "git",
+          ["rev-parse", "--abbrev-ref", "HEAD"],
+          { cwd: mainRepoPath },
+        );
+
+        if (currentBranch.trim() === branch) {
+          log.info(
+            `Main repo is on target branch ${branch}, detaching before creating worktree`,
+          );
+          // Detach main repo to free up the branch for the worktree
+          await execFileAsync("git", ["checkout", "--detach"], {
+            cwd: mainRepoPath,
+          });
+        }
+
+        worktree =
+          await worktreeManager.createWorktreeForExistingBranch(branch);
+        log.info(
+          `Created worktree for existing branch: ${worktree.worktreeName} at ${worktree.worktreePath} (branch: ${branch})`,
+        );
+      } else {
+        // Standard mode: create new twig/ branch
+        worktree = await worktreeManager.createWorktree({
+          baseBranch: branch ?? undefined,
+        });
+        log.info(
+          `Created worktree: ${worktree.worktreeName} at ${worktree.worktreePath}`,
+        );
+      }
 
       // Warn if worktree is empty but main repo has files
       const worktreeHasFiles = await hasTrackedFiles(worktree.worktreePath);
@@ -582,8 +619,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       return true;
     }
 
-    // Root mode: check if folder still exists
-    if (association.mode === "root") {
+    // Local mode: check if folder still exists
+    if (association.mode === "local") {
       const exists = fs.existsSync(association.folderPath);
       if (!exists) {
         log.info(
@@ -719,6 +756,101 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
 
     return workspaces;
+  }
+
+  /**
+   * Promote a local-mode task to worktree mode on an existing branch.
+   * This is used when focusing on another workspace would disrupt a local-mode task.
+   * The task gets its own worktree so it can continue working undisturbed.
+   */
+  async promoteToWorktree(
+    taskId: string,
+    mainRepoPath: string,
+    branch: string,
+  ): Promise<WorktreeInfo | null> {
+    log.info(`Promoting task ${taskId} to worktree mode on branch ${branch}`);
+
+    const association = findTaskAssociation(taskId);
+    if (!association) {
+      log.warn(`No association found for task ${taskId}`);
+      return null;
+    }
+
+    if (association.mode !== "local") {
+      log.warn(`Task ${taskId} is not in local mode, cannot promote`);
+      return null;
+    }
+
+    // Create worktree for existing branch
+    const worktreeBasePath = getWorktreeLocation();
+    const worktreeManager = new WorktreeManager({
+      mainRepoPath,
+      worktreeBasePath,
+    });
+
+    let worktree: WorktreeInfo;
+    try {
+      // First, ensure main repo is not on the target branch
+      const { stdout: currentBranch } = await execFileAsync(
+        "git",
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+        { cwd: mainRepoPath },
+      );
+
+      if (currentBranch.trim() === branch) {
+        log.info(
+          `Main repo is on target branch ${branch}, detaching before creating worktree`,
+        );
+        await execFileAsync("git", ["checkout", "--detach"], {
+          cwd: mainRepoPath,
+        });
+      }
+
+      worktree = await worktreeManager.createWorktreeForExistingBranch(branch);
+      log.info(
+        `Created worktree for promoted task: ${worktree.worktreeName} at ${worktree.worktreePath}`,
+      );
+    } catch (error) {
+      log.error(
+        `Failed to create worktree for promoted task ${taskId}:`,
+        error,
+      );
+      throw new Error(`Failed to promote task to worktree: ${String(error)}`);
+    }
+
+    // Update the association to worktree mode
+    const associations = getTaskAssociations();
+    const existingIndex = associations.findIndex((a) => a.taskId === taskId);
+    if (existingIndex >= 0) {
+      associations[existingIndex] = {
+        ...association,
+        mode: "worktree",
+        worktree,
+      };
+      foldersStore.set("taskAssociations", associations);
+      log.info(`Updated task ${taskId} association to worktree mode`);
+    }
+
+    // Notify renderer so it can update the workspace store
+    this.emit(WorkspaceServiceEvent.Promoted, {
+      taskId,
+      worktree,
+      fromBranch: branch,
+    });
+
+    return worktree;
+  }
+
+  /**
+   * Get all local-mode tasks that are associated with a given folder path.
+   * Used by FocusService to determine which tasks need to be backgrounded
+   * before focusing on a different workspace.
+   */
+  getLocalTasksForFolder(folderPath: string): Array<{ taskId: string }> {
+    const associations = getTaskAssociations();
+    return associations
+      .filter((a) => a.mode === "local" && a.folderPath === folderPath)
+      .map((a) => ({ taskId: a.taskId }));
   }
 
   private async cleanupWorktree(

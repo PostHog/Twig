@@ -26,7 +26,7 @@ function cycleMode(current: ExecutionMode): ExecutionMode {
 
 const DOT_FILL = "var(--gray-6)";
 
-type LocalWorkspaceMode = "worktree" | "root";
+type LocalWorkspaceMode = "worktree" | "local";
 
 export function TaskInput() {
   useSetHeaderContent(null);

@@ -20,11 +20,14 @@ import {
   AgentServiceEvent,
   type AgentServiceEvents,
   type Credentials,
+  type InterruptReason,
   type PromptOutput,
   type ReconnectSessionInput,
   type SessionResponse,
   type StartSessionInput,
 } from "./schemas.js";
+
+export type { InterruptReason };
 
 const log = logger.scope("agent-service");
 
@@ -130,6 +133,8 @@ interface SessionConfig {
   sdkSessionId?: string;
   model?: string;
   executionMode?: "plan" | "acceptEdits" | "default";
+  /** Additional directories Claude can access beyond cwd (for worktree support) */
+  additionalDirectories?: string[];
 }
 
 interface ManagedSession {
@@ -143,7 +148,10 @@ interface ManagedSession {
   lastActivityAt: number;
   mockNodeDir: string;
   config: SessionConfig;
+  interruptReason?: InterruptReason;
   needsRecreation: boolean;
+  promptPending: boolean;
+  pendingCwdContext?: string;
 }
 
 function getClaudeCliPath(): string {
@@ -318,6 +326,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sdkSessionId,
       model,
       executionMode,
+      additionalDirectories,
     } = config;
 
     if (!isRetry) {
@@ -369,6 +378,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               persistence: { taskId, runId: taskRunId, logUrl },
             }),
             ...(sdkSessionId && { sdkSessionId }),
+            ...(additionalDirectories?.length && {
+              claudeCode: {
+                options: { additionalDirectories },
+              },
+            }),
           },
         });
       } else {
@@ -379,6 +393,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             sessionId: taskRunId,
             model,
             ...(executionMode && { initialModeId: executionMode }),
+            ...(additionalDirectories?.length && {
+              claudeCode: {
+                options: { additionalDirectories },
+              },
+            }),
           },
         });
       }
@@ -395,6 +414,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         mockNodeDir,
         config,
         needsRecreation: false,
+        promptPending: false,
       };
 
       this.sessions.set(taskRunId, session);
@@ -428,12 +448,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     log.info("Recreating session", { taskRunId });
 
+    // Preserve state that should survive recreation
     const config = existing.config;
+    const pendingCwdContext = existing.pendingCwdContext;
+
     this.cleanupSession(taskRunId);
 
     const newSession = await this.getOrCreateSession(config, true);
     if (!newSession) {
       throw new Error(`Failed to recreate session: ${taskRunId}`);
+    }
+
+    // Restore preserved state
+    if (pendingCwdContext) {
+      newSession.pendingCwdContext = pendingCwdContext;
     }
 
     return newSession;
@@ -456,25 +484,45 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       session = await this.recreateSession(sessionId);
     }
 
+    // Prepend pending CWD context if present
+    let finalPrompt = prompt;
+    if (session.pendingCwdContext) {
+      log.info("Prepending CWD context to prompt", { sessionId });
+      finalPrompt = [
+        { type: "text", text: `_${session.pendingCwdContext}_\n\n` },
+        ...prompt,
+      ];
+      session.pendingCwdContext = undefined;
+    }
+
     session.lastActivityAt = Date.now();
+    session.promptPending = true;
 
     try {
       const result = await session.connection.prompt({
         sessionId,
-        prompt,
+        prompt: finalPrompt,
       });
-      return { stopReason: result.stopReason };
+      return {
+        stopReason: result.stopReason,
+        _meta: result._meta as PromptOutput["_meta"],
+      };
     } catch (err) {
       if (isAuthError(err)) {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
         const result = await session.connection.prompt({
           sessionId,
-          prompt,
+          prompt: finalPrompt,
         });
-        return { stopReason: result.stopReason };
+        return {
+          stopReason: result.stopReason,
+          _meta: result._meta as PromptOutput["_meta"],
+        };
       }
       throw err;
+    } finally {
+      session.promptPending = false;
     }
   }
 
@@ -492,12 +540,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
-  async cancelPrompt(sessionId: string): Promise<boolean> {
+  async cancelPrompt(
+    sessionId: string,
+    reason?: InterruptReason,
+  ): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
     try {
-      await session.connection.cancel({ sessionId });
+      await session.connection.cancel({
+        sessionId,
+        _meta: reason ? { interruptReason: reason } : undefined,
+      });
+      if (reason) {
+        session.interruptReason = reason;
+        log.info("Session interrupted", { sessionId, reason });
+      }
       return true;
     } catch (err) {
       log.error("Failed to cancel prompt", { sessionId, err });
@@ -548,6 +606,92 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   listSessions(taskId?: string): ManagedSession[] {
     const all = Array.from(this.sessions.values());
     return taskId ? all.filter((s) => s.taskId === taskId) : all;
+  }
+
+  /**
+   * Get sessions that were interrupted for a specific reason.
+   * Optionally filter by repoPath to get only sessions for a specific repo.
+   */
+  getInterruptedSessions(
+    reason: InterruptReason,
+    repoPath?: string,
+  ): ManagedSession[] {
+    return Array.from(this.sessions.values()).filter(
+      (s) =>
+        s.interruptReason === reason &&
+        (repoPath === undefined || s.repoPath === repoPath),
+    );
+  }
+
+  /**
+   * Resume an interrupted session by clearing the interrupt reason
+   * and sending a continue prompt.
+   */
+  async resumeInterruptedSession(sessionId: string): Promise<PromptOutput> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    if (!session.interruptReason) {
+      throw new Error(`Session ${sessionId} was not interrupted`);
+    }
+
+    log.info("Resuming interrupted session", {
+      sessionId,
+      reason: session.interruptReason,
+    });
+
+    // Clear the interrupt reason
+    session.interruptReason = undefined;
+
+    // Send a continue prompt
+    return this.prompt(sessionId, [
+      { type: "text", text: "Continue where you left off." },
+    ]);
+  }
+
+  /**
+   * Notify a session that its working directory context has changed.
+   * Used when focusing/unfocusing worktrees - the agent doesn't need to respawn
+   * because it has additionalDirectories configured, but it should know about the change.
+   */
+  async notifyCwdChange(
+    sessionId: string,
+    newPath: string,
+    reason: "moving_to_worktree" | "moving_to_local",
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      log.warn("Session not found for CWD notification", { sessionId });
+      return;
+    }
+
+    const contextMessage =
+      reason === "moving_to_worktree"
+        ? `Your working directory has been moved to a worktree at ${newPath} because the user focused on another task.`
+        : `Your working directory has been returned to the main repository at ${newPath}.`;
+
+    // Check if session is currently busy
+    if (session.promptPending) {
+      // Active session: send immediately with continue instruction
+      this.prompt(sessionId, [
+        {
+          type: "text",
+          text: `${contextMessage} Continue where you left off.`,
+        },
+      ]);
+    } else {
+      // Idle session: store for prepending to next user message
+      session.pendingCwdContext = contextMessage;
+    }
+
+    log.info("Notified session of CWD change", {
+      sessionId,
+      newPath,
+      reason,
+      wasPromptPending: session.promptPending,
+    });
   }
 
   async cleanupAll(): Promise<void> {
@@ -813,6 +957,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       model: "model" in params ? params.model : undefined,
       executionMode:
         "executionMode" in params ? params.executionMode : undefined,
+      additionalDirectories:
+        "additionalDirectories" in params
+          ? params.additionalDirectories
+          : undefined,
     };
   }
 

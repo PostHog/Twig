@@ -303,7 +303,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
         };
       }
 
-      // Use worktreePath for worktree mode, folderPath for root mode
+      // Use worktreePath for worktree mode, folderPath for local mode
       const scriptPath = workspace.worktreePath ?? workspace.folderPath;
       const scriptName =
         workspace.worktreeName ?? workspace.folderPath.split("/").pop() ?? "";
@@ -342,7 +342,7 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     getWorktreePath: (taskId: string) => {
       const workspace = get().workspaces[taskId];
       if (!workspace) return null;
-      // In root mode, return folderPath; in worktree mode, return worktreePath
+      // In local mode, return folderPath; in worktree mode, return worktreePath
       return workspace.worktreePath ?? workspace.folderPath;
     },
 
@@ -388,7 +388,7 @@ export const selectWorktreePath =
   (taskId: string) => (state: WorkspaceState) => {
     const workspace = state.workspaces[taskId];
     if (!workspace) return undefined;
-    // In root mode, return folderPath; in worktree mode, return worktreePath
+    // In local mode, return folderPath; in worktree mode, return worktreePath
     return workspace.worktreePath ?? workspace.folderPath;
   };
 

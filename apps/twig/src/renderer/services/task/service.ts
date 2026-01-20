@@ -175,7 +175,7 @@ export class TaskService {
       } else {
         settings.setLastUsedRunMode("local");
         settings.setLastUsedLocalWorkspaceMode(
-          workspaceMode as "worktree" | "root",
+          workspaceMode as "worktree" | "local",
         );
       }
 

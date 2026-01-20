@@ -13,7 +13,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
-type LocalWorkspaceMode = "worktree" | "root";
+type LocalWorkspaceMode = "worktree" | "local";
 
 interface TaskInputEditorProps {
   sessionId: string;
@@ -231,7 +231,7 @@ export const TaskInputEditor = forwardRef<
                     onClick={(e) => {
                       e.stopPropagation();
                       onLocalWorkspaceModeChange(
-                        isWorktreeMode ? "root" : "worktree",
+                        isWorktreeMode ? "local" : "worktree",
                       );
                     }}
                     className="worktree-toggle-button"

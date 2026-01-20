@@ -219,6 +219,8 @@ type Session = {
   lastPlanFilePath?: string;
   lastPlanContent?: string;
   abortController: AbortController;
+  /** Interrupt reason from cancel notification _meta */
+  interruptReason?: string;
 };
 
 type BackgroundTerminal =
@@ -713,6 +715,7 @@ export class ClaudeAcpAgent implements Agent {
     }
 
     this.sessions[params.sessionId].cancelled = false;
+    this.sessions[params.sessionId].interruptReason = undefined;
 
     const session = this.sessions[params.sessionId];
     const { query, input } = session;
@@ -734,8 +737,13 @@ export class ClaudeAcpAgent implements Agent {
     while (true) {
       const { value: message, done } = await query.next();
       if (done || !message) {
-        if (this.sessions[params.sessionId].cancelled) {
-          return { stopReason: "cancelled" };
+        if (session.cancelled) {
+          return {
+            stopReason: "cancelled",
+            _meta: session.interruptReason
+              ? { interruptReason: session.interruptReason }
+              : undefined,
+          };
         }
         break;
       }
@@ -771,8 +779,13 @@ export class ClaudeAcpAgent implements Agent {
           }
           break;
         case "result": {
-          if (this.sessions[params.sessionId].cancelled) {
-            return { stopReason: "cancelled" };
+          if (session.cancelled) {
+            return {
+              stopReason: "cancelled",
+              _meta: session.interruptReason
+                ? { interruptReason: session.interruptReason }
+                : undefined,
+            };
           }
 
           switch (message.subtype) {
@@ -826,7 +839,7 @@ export class ClaudeAcpAgent implements Agent {
         }
         case "user":
         case "assistant": {
-          if (this.sessions[params.sessionId].cancelled) {
+          if (session.cancelled) {
             break;
           }
 
@@ -907,8 +920,14 @@ export class ClaudeAcpAgent implements Agent {
     if (!this.sessions[params.sessionId]) {
       throw new Error("Session not found");
     }
-    this.sessions[params.sessionId].cancelled = true;
-    await this.sessions[params.sessionId].query.interrupt();
+    const session = this.sessions[params.sessionId];
+    session.cancelled = true;
+    // Capture interrupt reason from _meta if provided
+    const meta = params._meta as { interruptReason?: string } | undefined;
+    if (meta?.interruptReason) {
+      session.interruptReason = meta.interruptReason;
+    }
+    await session.query.interrupt();
   }
 
   async setSessionModel(params: SetSessionModelRequest) {
@@ -1460,11 +1479,13 @@ export class ClaudeAcpAgent implements Agent {
     this.logger.info("[RESUME] Resuming session", { params });
     const { sessionId } = params;
 
-    // Extract persistence config and SDK session ID from _meta
+    // Extract persistence config, SDK session ID, and options from _meta
     const persistence = params._meta?.persistence as
       | SessionPersistenceConfig
       | undefined;
     const sdkSessionId = params._meta?.sdkSessionId as string | undefined;
+    const claudeCodeOptions = (params._meta as NewSessionMeta | undefined)
+      ?.claudeCode?.options;
 
     if (!this.sessions[sessionId]) {
       const input = new Pushable<SDKUserMessage>();
@@ -1508,6 +1529,7 @@ export class ClaudeAcpAgent implements Agent {
         cwd: params.cwd,
         sdkSessionId,
         persistence,
+        additionalDirectories: claudeCodeOptions?.additionalDirectories,
       });
       const options: Options = {
         cwd: params.cwd,
@@ -1531,6 +1553,10 @@ export class ClaudeAcpAgent implements Agent {
         }),
         // Resume from SDK session if available
         ...(sdkSessionId && { resume: sdkSessionId }),
+        // Additional directories for worktree support
+        ...(claudeCodeOptions?.additionalDirectories && {
+          additionalDirectories: claudeCodeOptions.additionalDirectories,
+        }),
         hooks: {
           PostToolUse: [
             {

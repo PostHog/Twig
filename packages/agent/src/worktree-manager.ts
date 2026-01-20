@@ -544,6 +544,124 @@ export class WorktreeManager {
     return path.join(this.getWorktreeFolderPath(), name);
   }
 
+  /**
+   * Get the deterministic path for the local worktree.
+   * This is used when backgrounding local tasks while focusing on a worktree.
+   * Path: ~/.twig/{repoName}/local (external) or .twig/local (in-repo)
+   */
+  getLocalWorktreePath(): string {
+    return path.join(this.getWorktreeFolderPath(), "local");
+  }
+
+  /**
+   * Ensure the local worktree exists at the deterministic path.
+   * Creates it if it doesn't exist, returns existing info if it does.
+   * This is used to background local tasks when focusing on a worktree.
+   */
+  async ensureLocalWorktree(branch: string): Promise<WorktreeInfo> {
+    const localPath = this.getLocalWorktreePath();
+
+    // Check if local worktree already exists
+    try {
+      await fs.access(localPath);
+      // Worktree exists - get its info
+      const info = await this.getWorktreeInfo(localPath);
+      if (info) {
+        this.logger.info("Local worktree already exists", {
+          localPath,
+          branch,
+        });
+        return info;
+      }
+    } catch {
+      // Doesn't exist, we'll create it
+    }
+
+    this.logger.info("Creating local worktree", { localPath, branch });
+
+    // Setup: ensure folder exists or .git/info/exclude is set
+    if (!this.usesExternalPath()) {
+      await this.ensureArrayDirIgnored();
+    } else {
+      const folderPath = this.getWorktreeFolderPath();
+      await fs.mkdir(folderPath, { recursive: true });
+    }
+
+    // Get the current commit SHA - we'll create a detached worktree at this commit
+    // This avoids the "branch already checked out" error when main repo is on this branch
+    const commitSha = await this.runGitCommand(["rev-parse", "HEAD"]);
+
+    // Create a detached worktree at the current commit
+    // Using --detach allows the main repo to keep the branch checked out
+    if (this.usesExternalPath()) {
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--detach",
+        "--quiet",
+        localPath,
+        commitSha.trim(),
+      ]);
+    } else {
+      const relativePath = `./${WORKTREE_FOLDER_NAME}/local`;
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--detach",
+        "--quiet",
+        relativePath,
+        commitSha.trim(),
+      ]);
+    }
+
+    const createdAt = new Date().toISOString();
+
+    this.logger.info("Local worktree created successfully", {
+      localPath,
+      branch,
+    });
+
+    return {
+      worktreePath: localPath,
+      worktreeName: "local",
+      branchName: branch,
+      baseBranch: branch,
+      createdAt,
+      branchOwnership: "borrowed",
+    };
+  }
+
+  /**
+   * Remove the local worktree (used when bringing local back to foreground).
+   */
+  async removeLocalWorktree(): Promise<void> {
+    const localPath = this.getLocalWorktreePath();
+
+    try {
+      await fs.access(localPath);
+    } catch {
+      // Doesn't exist, nothing to do
+      this.logger.debug("Local worktree doesn't exist, nothing to remove");
+      return;
+    }
+
+    this.logger.info("Removing local worktree", { localPath });
+    await this.deleteWorktree(localPath);
+  }
+
+  /**
+   * Check if the local worktree currently exists.
+   */
+  async localWorktreeExists(): Promise<boolean> {
+    const localPath = this.getLocalWorktreePath();
+    try {
+      await fs.access(localPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async worktreeExists(name: string): Promise<boolean> {
     const worktreePath = this.getWorktreePath(name);
     try {
@@ -721,6 +839,96 @@ export class WorktreeManager {
       branchName,
       baseBranch,
       createdAt,
+      branchOwnership: "created",
+    };
+  }
+
+  /**
+   * Create a worktree for an existing branch (no new branch created).
+   * This is used when the user wants to work directly on an existing branch
+   * (e.g., a Graphite stack branch) instead of creating a new twig/ branch.
+   *
+   * IMPORTANT: The main repo must NOT have the target branch checked out,
+   * as git doesn't allow the same branch in multiple worktrees.
+   */
+  async createWorktreeForExistingBranch(branch: string): Promise<WorktreeInfo> {
+    const totalStart = Date.now();
+
+    // Verify the branch exists
+    try {
+      await this.runGitCommand(["rev-parse", "--verify", branch]);
+    } catch {
+      throw new Error(`Branch '${branch}' does not exist`);
+    }
+
+    // Generate worktree name from branch (sanitize: replace / with -)
+    const sanitizedBranchName = branch.replace(/\//g, "-");
+    let worktreeName = sanitizedBranchName;
+
+    // Ensure uniqueness
+    if (await this.worktreeExists(worktreeName)) {
+      worktreeName = `${sanitizedBranchName}-${Date.now()}`;
+    }
+
+    // Setup: ensure folder exists or .git/info/exclude is set
+    if (!this.usesExternalPath()) {
+      await this.ensureArrayDirIgnored();
+    } else {
+      const folderPath = this.getWorktreeFolderPath();
+      await fs.mkdir(folderPath, { recursive: true });
+    }
+
+    const setupTime = Date.now() - totalStart;
+    const worktreePath = this.getWorktreePath(worktreeName);
+
+    this.logger.info("Creating worktree for existing branch", {
+      worktreeName,
+      worktreePath,
+      branch,
+      external: this.usesExternalPath(),
+      setupTimeMs: setupTime,
+    });
+
+    // Create the worktree WITHOUT -b flag (checkout existing branch)
+    const gitStart = Date.now();
+    if (this.usesExternalPath()) {
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--quiet",
+        worktreePath,
+        branch,
+      ]);
+    } else {
+      const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
+      await this.runGitCommand([
+        "worktree",
+        "add",
+        "--quiet",
+        relativePath,
+        branch,
+      ]);
+    }
+    const gitTime = Date.now() - gitStart;
+
+    const createdAt = new Date().toISOString();
+
+    this.logger.info("Worktree for existing branch created successfully", {
+      worktreeName,
+      worktreePath,
+      branch,
+      setupTimeMs: setupTime,
+      gitWorktreeAddMs: gitTime,
+      totalMs: Date.now() - totalStart,
+    });
+
+    return {
+      worktreePath,
+      worktreeName,
+      branchName: branch,
+      baseBranch: branch, // For borrowed branches, baseBranch is the same as branchName
+      createdAt,
+      branchOwnership: "borrowed",
     };
   }
 
@@ -860,20 +1068,37 @@ export class WorktreeManager {
       // Include worktrees that:
       // 1. Are in our worktree folder (external or in-repo)
       // 2. Have a twig/ branch prefix (our naming convention)
+      // But never include the main repo itself
+      const isMainRepo =
+        worktreePath &&
+        path.resolve(worktreePath) === path.resolve(this.mainRepoPath);
       const isInWorktreeFolder = worktreePath?.startsWith(worktreeFolderPath);
       const isTwigBranch =
         branchName?.startsWith("twig/") ||
         branchName?.startsWith("array/") ||
         branchName?.startsWith("posthog/");
 
-      if (worktreePath && branchName && (isInWorktreeFolder || isTwigBranch)) {
+      if (
+        worktreePath &&
+        branchName &&
+        !isMainRepo &&
+        (isInWorktreeFolder || isTwigBranch)
+      ) {
         const worktreeName = path.basename(worktreePath);
+        // Infer ownership: twig/ prefixed branches are "created", others are "borrowed"
+        const branchOwnership =
+          branchName.startsWith("twig/") ||
+          branchName.startsWith("array/") ||
+          branchName.startsWith("posthog/")
+            ? "created"
+            : "borrowed";
         worktrees.push({
           worktreePath,
           worktreeName,
           branchName,
           baseBranch: "",
           createdAt: "",
+          branchOwnership,
         });
       }
     }

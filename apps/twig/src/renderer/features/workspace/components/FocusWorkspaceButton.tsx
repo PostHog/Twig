@@ -1,91 +1,85 @@
-import { CrosshairIcon, CrosshairSimpleIcon } from "@phosphor-icons/react";
+import {
+  ArrowLeft,
+  ArrowsClockwise,
+  CrosshairIcon,
+  CrosshairSimpleIcon,
+} from "@phosphor-icons/react";
 import { Button, Spinner, Text, Tooltip } from "@radix-ui/themes";
-import { trpcReact } from "@renderer/trpc";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+  selectIsFocusedOnWorktree,
+  selectIsLoading,
+  useFocusStore,
+} from "@stores/focusStore";
 import { toast } from "@utils/toast";
 import { useCallback } from "react";
 import { selectWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
 
-interface FocusWorkspaceButtonProps {
-  taskId: string;
+/** Check if branch is a twig-created branch (not borrowed) */
+function isTwigBranch(branchName: string): boolean {
+  return (
+    branchName.startsWith("twig/") ||
+    branchName.startsWith("array/") ||
+    branchName.startsWith("posthog/")
+  );
 }
 
-export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
+interface FocusWorkspaceButtonProps {
+  taskId: string;
+  repoPath?: string;
+}
+
+export function FocusWorkspaceButton({
+  taskId,
+  repoPath,
+}: FocusWorkspaceButtonProps) {
   const workspace = useWorkspaceStore(selectWorkspace(taskId));
-  const utils = trpcReact.useUtils();
-  const queryClient = useQueryClient();
 
-  // Query current branch of main repo - this is the source of truth
-  const { data: currentBranch, isLoading: isBranchLoading } =
-    trpcReact.git.getCurrentBranch.useQuery(
-      { directoryPath: workspace?.folderPath ?? "" },
-      { enabled: !!workspace?.folderPath },
-    );
+  const isLocalMode = workspace?.mode === "local" || !workspace?.mode;
+  // Use repoPath prop if provided, fall back to workspace.folderPath
+  const mainRepoPath = repoPath ?? workspace?.folderPath ?? "";
 
-  const enableFocus = trpcReact.focus.enable.useMutation({
-    onSuccess: (result) => {
-      utils.git.getCurrentBranch.invalidate();
-      queryClient.invalidateQueries({ queryKey: ["main-repo-branch"] });
-      if (result.success) {
-        toast.success(
-          <>
-            Switched to{" "}
-            <Text style={{ color: "var(--accent-11)" }}>
-              {workspace?.branchName}
-            </Text>
-          </>,
-          {
-            description: result.stashed
-              ? "Your uncommitted changes were stashed. Unfocus to restore them."
-              : undefined,
-          },
-        );
-      } else {
-        toast.error("Could not focus workspace", {
-          description: result.error,
-        });
-      }
-    },
-    onError: (error) => {
-      toast.error("Could not focus workspace", {
-        description: error.message,
+  const focusSession = useFocusStore((s) => s.session);
+  const isFocusLoading = useFocusStore(selectIsLoading);
+  const enableFocus = useFocusStore((s) => s.enableFocus);
+  const disableFocus = useFocusStore((s) => s.disableFocus);
+
+  const isFocused = useFocusStore(
+    selectIsFocusedOnWorktree(workspace?.worktreePath ?? ""),
+  );
+
+  const isBackgrounded =
+    isLocalMode && focusSession?.mainRepoPath === mainRepoPath;
+
+  // Handler for local workspace unfocus (return to original branch)
+  const handleLocalUnfocus = useCallback(async () => {
+    if (!focusSession) {
+      toast.error("Cannot return to original branch", {
+        description: "No focused workspace found",
       });
-    },
-  });
+      return;
+    }
 
-  const disableFocus = trpcReact.focus.disable.useMutation({
-    onSuccess: (result) => {
-      utils.git.getCurrentBranch.invalidate();
-      queryClient.invalidateQueries({ queryKey: ["main-repo-branch"] });
-      if (result.success) {
-        toast.success(
-          <>
-            Switched to{" "}
-            <Text style={{ color: "var(--accent-11)" }}>
-              {result.returnedToBranch}
-            </Text>
-          </>,
-          {
-            description: result.error, // stash pop warning if any
-          },
-        );
-      } else {
-        toast.error("Could not unfocus workspace", {
-          description: result.error,
-        });
-      }
-    },
-    onError: (error) => {
+    const result = await disableFocus();
+    if (result.success) {
+      toast.success(
+        <>
+          Switched to{" "}
+          <Text style={{ color: "var(--accent-11)" }}>
+            {focusSession.originalBranch}
+          </Text>
+        </>,
+        {
+          description: result.stashPopWarning,
+        },
+      );
+    } else {
       toast.error("Could not unfocus workspace", {
-        description: error.message,
+        description: result.error,
       });
-    },
-  });
+    }
+  }, [focusSession, disableFocus]);
 
-  // Focused = main repo is on this workspace's branch
-  const isFocused = currentBranch === workspace?.branchName;
-
-  const handleToggleFocus = useCallback(() => {
+  const handleToggleFocus = useCallback(async () => {
     if (!workspace) return;
 
     if (
@@ -100,36 +94,102 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
     }
 
     if (isFocused) {
-      disableFocus.mutate({
-        mainRepoPath: workspace.folderPath,
-        worktreePath: workspace.worktreePath,
-        branch: workspace.branchName,
-      });
+      const result = await disableFocus();
+      if (result.success) {
+        toast.success(
+          <>
+            Switched to{" "}
+            <Text style={{ color: "var(--accent-11)" }}>
+              {focusSession?.originalBranch}
+            </Text>
+          </>,
+          {
+            description: result.stashPopWarning,
+          },
+        );
+      } else {
+        toast.error("Could not unfocus workspace", {
+          description: result.error,
+        });
+      }
     } else {
-      enableFocus.mutate({
-        workspaceId: taskId,
+      const result = await enableFocus({
         mainRepoPath: workspace.folderPath,
         worktreePath: workspace.worktreePath,
         branch: workspace.branchName,
       });
+
+      if (result.success) {
+        toast.success(
+          <>
+            Switched to{" "}
+            <Text style={{ color: "var(--accent-11)" }}>
+              {workspace.branchName}
+            </Text>
+          </>,
+          {
+            description: focusSession?.mainStashRef
+              ? "Your uncommitted changes were stashed. Unfocus to restore them."
+              : undefined,
+          },
+        );
+      } else {
+        toast.error("Could not focus workspace", {
+          description: result.error,
+        });
+      }
     }
-  }, [workspace, isFocused, taskId, enableFocus, disableFocus]);
+  }, [workspace, isFocused, enableFocus, disableFocus, focusSession]);
+
+  // Borrowed branches (like main) show "Switch to {branch}" instead of "Watch"
+  const isBorrowedBranch =
+    workspace?.branchName && !isTwigBranch(workspace.branchName);
+
+  // For local workspaces that are backgrounded, show "Return to {branch}" button
+  if (isLocalMode && isBackgrounded && focusSession) {
+    return (
+      <Tooltip
+        content={`Return to ${focusSession.originalBranch} and unfocus the current task`}
+      >
+        <Button
+          size="1"
+          variant="outline"
+          onClick={handleLocalUnfocus}
+          disabled={isFocusLoading}
+          style={
+            { flexShrink: 0, WebkitAppRegion: "no-drag" } as React.CSSProperties
+          }
+        >
+          {isFocusLoading ? <Spinner size="1" /> : <ArrowLeft size={14} />}
+          Return to {focusSession.originalBranch}
+        </Button>
+      </Tooltip>
+    );
+  }
 
   // Only show for worktree mode workspaces with a branch and worktree path
+  // For borrowed branches, don't show when already focused (it's the normal state)
   if (
     !workspace ||
     workspace.mode !== "worktree" ||
     !workspace.branchName ||
-    !workspace.worktreePath
+    !workspace.worktreePath ||
+    (isBorrowedBranch && isFocused)
   ) {
     return null;
   }
 
-  const isLoading =
-    isBranchLoading || enableFocus.isPending || disableFocus.isPending;
   const tooltipContent = isFocused
     ? "Unfocus workspace (return to original branch)"
-    : "Focus workspace (checkout branch in main repo)";
+    : isBorrowedBranch
+      ? `This task was moved to a worktree when you switched branches. Click to switch back to "${workspace.branchName}".`
+      : "Focus workspace (checkout branch in main repo)";
+
+  const buttonLabel = isFocused
+    ? "Watching"
+    : isBorrowedBranch
+      ? `Switch to ${workspace.branchName}`
+      : "Watch";
 
   return (
     <Tooltip content={tooltipContent}>
@@ -138,19 +198,21 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
         variant={isFocused ? "solid" : "soft"}
         color={isFocused ? "blue" : undefined}
         onClick={handleToggleFocus}
-        disabled={isLoading}
+        disabled={isFocusLoading}
         style={
           { flexShrink: 0, WebkitAppRegion: "no-drag" } as React.CSSProperties
         }
       >
-        {isLoading ? (
+        {isFocusLoading ? (
           <Spinner size="1" />
         ) : isFocused ? (
           <CrosshairIcon size={14} weight="fill" />
+        ) : isBorrowedBranch ? (
+          <ArrowsClockwise size={14} />
         ) : (
           <CrosshairSimpleIcon size={14} />
         )}
-        {isFocused ? "Watching" : "Watch"}
+        {buttonLabel}
       </Button>
     </Tooltip>
   );

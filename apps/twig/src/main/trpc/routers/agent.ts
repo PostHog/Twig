@@ -6,6 +6,9 @@ import {
   cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
+  listSessionsInput,
+  listSessionsOutput,
+  notifyCwdChangeInput,
   promptInput,
   promptOutput,
   reconnectSessionInput,
@@ -41,7 +44,9 @@ export const agentRouter = router({
 
   cancelPrompt: publicProcedure
     .input(cancelPromptInput)
-    .mutation(({ input }) => getService().cancelPrompt(input.sessionId)),
+    .mutation(({ input }) =>
+      getService().cancelPrompt(input.sessionId, input.reason),
+    ),
 
   reconnect: publicProcedure
     .input(reconnectSessionInput)
@@ -117,5 +122,24 @@ export const agentRouter = router({
     .input(cancelPermissionInput)
     .mutation(({ input }) =>
       getService().cancelPermission(input.sessionId, input.toolCallId),
+    ),
+
+  listSessions: publicProcedure
+    .input(listSessionsInput)
+    .output(listSessionsOutput)
+    .query(({ input }) =>
+      getService()
+        .listSessions(input.taskId)
+        .map((s) => ({ taskRunId: s.taskRunId, repoPath: s.repoPath })),
+    ),
+
+  notifyCwdChange: publicProcedure
+    .input(notifyCwdChangeInput)
+    .mutation(({ input }) =>
+      getService().notifyCwdChange(
+        input.sessionId,
+        input.newPath,
+        input.reason,
+      ),
     ),
 });

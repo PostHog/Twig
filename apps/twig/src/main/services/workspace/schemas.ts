@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 // Base schemas
-export const workspaceModeSchema = z.enum(["worktree", "root", "cloud"]);
+// Note: "root" is deprecated, migrated to "local" on read
+export const workspaceModeSchema = z
+  .enum(["worktree", "local", "cloud", "root"])
+  .transform((val) => (val === "root" ? "local" : val));
+export const branchOwnershipSchema = z.enum(["created", "borrowed"]);
 
 export const worktreeInfoSchema = z.object({
   worktreePath: z.string(),
@@ -9,6 +13,7 @@ export const worktreeInfoSchema = z.object({
   branchName: z.string(),
   baseBranch: z.string(),
   createdAt: z.string(),
+  branchOwnership: branchOwnershipSchema.default("created"),
 });
 
 export const workspaceTerminalInfoSchema = z.object({
@@ -58,6 +63,7 @@ export const createWorkspaceInput = z.object({
   folderPath: z.string().min(2, "Folder path must be a valid directory path"),
   mode: workspaceModeSchema,
   branch: z.string().optional(),
+  useExistingBranch: z.boolean().optional(),
 });
 
 export const deleteWorkspaceInput = z.object({
@@ -113,8 +119,61 @@ export const workspaceWarningPayload = z.object({
   message: z.string(),
 });
 
+export const workspacePromotedPayload = z.object({
+  taskId: z.string(),
+  worktree: worktreeInfoSchema,
+  fromBranch: z.string(),
+});
+
+export const localBackgroundedPayload = z.object({
+  mainRepoPath: z.string(),
+  localWorktreePath: z.string(),
+  branch: z.string(),
+});
+
+export const localForegroundedPayload = z.object({
+  mainRepoPath: z.string(),
+});
+
+// Input/output schemas for local workspace backgrounding
+export const isLocalBackgroundedInput = z.object({
+  mainRepoPath: z.string(),
+});
+
+export const isLocalBackgroundedOutput = z.boolean();
+
+export const getLocalWorktreePathInput = z.object({
+  mainRepoPath: z.string(),
+});
+
+export const getLocalWorktreePathOutput = z.string();
+
+export const backgroundLocalWorkspaceInput = z.object({
+  mainRepoPath: z.string(),
+  branch: z.string(),
+});
+
+export const backgroundLocalWorkspaceOutput = z.string().nullable();
+
+export const foregroundLocalWorkspaceInput = z.object({
+  mainRepoPath: z.string(),
+});
+
+export const foregroundLocalWorkspaceOutput = z.boolean();
+
+export const getLocalTasksInput = z.object({
+  mainRepoPath: z.string(),
+});
+
+export const localTaskSchema = z.object({
+  taskId: z.string(),
+});
+
+export const getLocalTasksOutput = z.array(localTaskSchema);
+
 // Type exports
 export type WorkspaceMode = z.infer<typeof workspaceModeSchema>;
+export type BranchOwnership = z.infer<typeof branchOwnershipSchema>;
 export type WorktreeInfo = z.infer<typeof worktreeInfoSchema>;
 export type WorkspaceTerminalInfo = z.infer<typeof workspaceTerminalInfoSchema>;
 export type WorkspaceInfo = z.infer<typeof workspaceInfoSchema>;
@@ -136,3 +195,10 @@ export type WorkspaceTerminalCreatedPayload = z.infer<
 >;
 export type WorkspaceErrorPayload = z.infer<typeof workspaceErrorPayload>;
 export type WorkspaceWarningPayload = z.infer<typeof workspaceWarningPayload>;
+export type WorkspacePromotedPayload = z.infer<typeof workspacePromotedPayload>;
+export type LocalBackgroundedPayload = z.infer<typeof localBackgroundedPayload>;
+export type LocalForegroundedPayload = z.infer<typeof localForegroundedPayload>;
+export type IsLocalBackgroundedInput = z.infer<typeof isLocalBackgroundedInput>;
+export type GetLocalWorktreePathInput = z.infer<
+  typeof getLocalWorktreePathInput
+>;
