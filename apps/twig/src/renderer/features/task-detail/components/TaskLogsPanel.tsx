@@ -6,13 +6,10 @@ import {
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@features/workspace/stores/workspaceStore";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
@@ -30,9 +27,8 @@ interface TaskLogsPanelProps {
 }
 
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const repoPath = useCwd(taskId);
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
 
   const session = useSessionForTask(taskId);
   const { connectToTask, sendPrompt, cancelPrompt, clearSessionError } =
@@ -146,13 +142,13 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   }, [taskId, repoPath, task, clearSessionError, connectToTask]);
 
   const handleDelete = useCallback(() => {
-    const hasWorktree = !!worktreePath;
+    const hasWorktree = workspace?.mode === "worktree";
     deleteWithConfirm({
       taskId,
       taskTitle: task.title ?? task.description ?? "Untitled",
       hasWorktree,
     });
-  }, [taskId, task, worktreePath, deleteWithConfirm]);
+  }, [taskId, task, workspace, deleteWithConfirm]);
 
   const handleBashCommand = useCallback(
     async (command: string) => {

@@ -5,15 +5,12 @@ import { z } from "zod";
 export const workspaceModeSchema = z
   .enum(["worktree", "local", "cloud", "root"])
   .transform((val) => (val === "root" ? "local" : val));
-export const branchOwnershipSchema = z.enum(["created", "borrowed"]);
-
 export const worktreeInfoSchema = z.object({
   worktreePath: z.string(),
   worktreeName: z.string(),
-  branchName: z.string(),
+  branchName: z.string().nullable(),
   baseBranch: z.string(),
   createdAt: z.string(),
-  branchOwnership: branchOwnershipSchema.default("created"),
 });
 
 export const workspaceTerminalInfoSchema = z.object({
@@ -29,6 +26,7 @@ export const workspaceInfoSchema = z.object({
   taskId: z.string(),
   mode: workspaceModeSchema,
   worktree: worktreeInfoSchema.nullable(),
+  branchName: z.string().nullable(),
   terminalSessionIds: z.array(z.string()),
   hasStartScripts: z.boolean().optional(),
 });
@@ -95,7 +93,10 @@ export const getWorkspaceTerminalsInput = z.object({
 
 // Output schemas
 export const createWorkspaceOutput = workspaceInfoSchema;
-export const verifyWorkspaceOutput = z.boolean();
+export const verifyWorkspaceOutput = z.object({
+  exists: z.boolean(),
+  missingPath: z.string().optional(),
+});
 export const getWorkspaceInfoOutput = workspaceInfoSchema.nullable();
 export const getAllWorkspacesOutput = z.record(z.string(), workspaceSchema);
 export const runStartScriptsOutput = scriptExecutionResultSchema;
@@ -123,6 +124,11 @@ export const workspacePromotedPayload = z.object({
   taskId: z.string(),
   worktree: worktreeInfoSchema,
   fromBranch: z.string(),
+});
+
+export const branchChangedPayload = z.object({
+  taskId: z.string(),
+  branchName: z.string().nullable(),
 });
 
 export const localBackgroundedPayload = z.object({
@@ -171,9 +177,14 @@ export const localTaskSchema = z.object({
 
 export const getLocalTasksOutput = z.array(localTaskSchema);
 
+export const getWorktreeTasksInput = z.object({
+  worktreePath: z.string(),
+});
+
+export const getWorktreeTasksOutput = z.array(localTaskSchema);
+
 // Type exports
 export type WorkspaceMode = z.infer<typeof workspaceModeSchema>;
-export type BranchOwnership = z.infer<typeof branchOwnershipSchema>;
 export type WorktreeInfo = z.infer<typeof worktreeInfoSchema>;
 export type WorkspaceTerminalInfo = z.infer<typeof workspaceTerminalInfoSchema>;
 export type WorkspaceInfo = z.infer<typeof workspaceInfoSchema>;
@@ -196,6 +207,7 @@ export type WorkspaceTerminalCreatedPayload = z.infer<
 export type WorkspaceErrorPayload = z.infer<typeof workspaceErrorPayload>;
 export type WorkspaceWarningPayload = z.infer<typeof workspaceWarningPayload>;
 export type WorkspacePromotedPayload = z.infer<typeof workspacePromotedPayload>;
+export type BranchChangedPayload = z.infer<typeof branchChangedPayload>;
 export type LocalBackgroundedPayload = z.infer<typeof localBackgroundedPayload>;
 export type LocalForegroundedPayload = z.infer<typeof localForegroundedPayload>;
 export type IsLocalBackgroundedInput = z.infer<typeof isLocalBackgroundedInput>;

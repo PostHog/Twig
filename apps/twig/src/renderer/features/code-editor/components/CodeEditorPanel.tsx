@@ -1,14 +1,10 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Box } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface CodeEditorPanelProps {
   taskId: string;
@@ -18,12 +14,10 @@ interface CodeEditorPanelProps {
 
 export function CodeEditorPanel({
   taskId,
-  task,
+  task: _task,
   absolutePath,
 }: CodeEditorPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const repoPath = useCwd(taskId);
   const filePath = getRelativePath(absolutePath, repoPath);
 
   const {

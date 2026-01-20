@@ -1,6 +1,5 @@
 import { Button, Flex } from "@radix-ui/themes";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { useEffectiveWorktreePath } from "../hooks/useEffectiveWorktreePath";
 import type {
   HistoryData,
   HistoryTaskData,
@@ -45,26 +44,16 @@ function HistoryTaskItem({
   onDelete,
   onTogglePin,
 }: HistoryTaskItemProps) {
-  const workspaces = useWorkspaceStore.use.workspaces();
-
-  const workspace = workspaces[task.id];
-
-  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
-  const effectiveWorktreePath = useEffectiveWorktreePath(
-    workspace?.worktreePath,
-    workspace?.folderPath,
-    workspace?.mode,
-  );
+  const workspace = useWorkspaceStore((s) => s.workspaces[task.id]);
 
   return (
     <TaskItem
       id={task.id}
       label={task.title}
       isActive={isActive}
-      worktreePath={effectiveWorktreePath}
       workspaceMode={workspace?.mode}
       mainRepoPath={workspace?.folderPath}
-      branchName={workspace?.branchName ?? undefined}
+      worktreePath={workspace?.worktreePath ?? undefined}
       lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
@@ -94,26 +83,16 @@ function PinnedTaskItem({
   onDelete,
   onTogglePin,
 }: PinnedTaskItemProps) {
-  const workspaces = useWorkspaceStore.use.workspaces();
-
-  const workspace = workspaces[task.id];
-
-  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
-  const effectiveWorktreePath = useEffectiveWorktreePath(
-    workspace?.worktreePath,
-    workspace?.folderPath,
-    workspace?.mode,
-  );
+  const workspace = useWorkspaceStore((s) => s.workspaces[task.id]);
 
   return (
     <TaskItem
       id={task.id}
       label={task.title}
       isActive={isActive}
-      worktreePath={effectiveWorktreePath}
       workspaceMode={workspace?.mode}
       mainRepoPath={workspace?.folderPath}
-      branchName={workspace?.branchName ?? undefined}
+      worktreePath={workspace?.worktreePath ?? undefined}
       lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}

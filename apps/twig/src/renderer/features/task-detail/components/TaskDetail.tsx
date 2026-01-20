@@ -1,5 +1,6 @@
 import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FocusWorkspaceButton } from "@features/workspace/components/FocusWorkspaceButton";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
@@ -12,28 +13,23 @@ import { GitBranch, Laptop } from "@phosphor-icons/react";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useMemo } from "react";
-import {
-  selectWorkspace,
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
+import { WorktreePathDisplay } from "./WorktreePathDisplay";
 
 interface TaskDetailProps {
   task: Task;
 }
 
 export function TaskDetail({ task: initialTask }: TaskDetailProps) {
-  const taskData = useTaskData({
-    taskId: initialTask.id,
-    initialTask,
-  });
+  const taskId = initialTask.id;
+  useTaskData({ taskId, initialTask });
 
-  const worktreePath = useWorkspaceStore(selectWorktreePath(initialTask.id));
-  const effectiveRepoPath = worktreePath ?? taskData.repoPath;
+  const workspace = useWorkspaceStore((state) => state.workspaces[taskId]);
+  const effectiveRepoPath = useCwd(taskId);
 
-  useFileWatcher(effectiveRepoPath, taskData.task.id);
+  useFileWatcher(effectiveRepoPath ?? null, taskId);
 
-  const session = useSessionForTask(taskData.task.id);
+  const session = useSessionForTask(taskId);
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
 
@@ -53,15 +49,10 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   );
 
   useBlurOnEscape();
-
-  const taskId = taskData.task.id;
-
   useWorkspaceEvents(taskId);
-  const task = taskData.task;
-  const workspace = useWorkspaceStore(selectWorkspace(taskId));
-  const branchName = workspace?.branchName;
 
   const workspaceMode = workspace?.mode ?? "local";
+  const worktreePath = workspace?.worktreePath;
 
   const headerContent = useMemo(
     () => (
@@ -81,34 +72,46 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             )}
           </Tooltip>
           <Text size="2" weight="medium" truncate>
-            {task.title}
+            {initialTask.title}
           </Text>
           <StartWorkspaceButton taskId={taskId} />
-          <FocusWorkspaceButton
-            taskId={taskId}
-            repoPath={taskData.repoPath ?? undefined}
-          />
-          {branchName && (
-            <Code
-              size="1"
-              color="gray"
-              variant="ghost"
-              style={{ opacity: 0.6 }}
-            >
-              {branchName}
-            </Code>
+          <FocusWorkspaceButton taskId={taskId} />
+          {workspace?.branchName && (
+            <Tooltip content={workspace.branchName}>
+              <Code
+                size="1"
+                color="gray"
+                variant="ghost"
+                style={{
+                  opacity: 0.6,
+                  maxWidth: "200px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {workspace?.branchName}
+              </Code>
+            </Tooltip>
           )}
         </Flex>
+        {worktreePath && <WorktreePathDisplay worktreePath={worktreePath} />}
       </Flex>
     ),
-    [task.title, taskId, taskData.repoPath, branchName, workspaceMode],
+    [
+      initialTask.title,
+      taskId,
+      workspace?.branchName,
+      workspaceMode,
+      worktreePath,
+    ],
   );
 
   useSetHeaderContent(headerContent);
 
   return (
     <Box height="100%">
-      <PanelLayout taskId={taskId} task={task} />
+      <PanelLayout taskId={taskId} task={initialTask} />
     </Box>
   );
 }

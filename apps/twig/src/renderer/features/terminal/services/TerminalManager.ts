@@ -285,7 +285,6 @@ class TerminalManagerImpl {
       instance.resizeObserver = null;
     }
 
-    log.debug("Attaching terminal to DOM:", sessionId);
     instance.attachedElement = element;
 
     if (!instance.hasOpened) {
@@ -327,8 +326,6 @@ class TerminalManagerImpl {
     if (!instance || !instance.attachedElement) {
       return;
     }
-
-    log.debug("Detaching terminal from DOM:", sessionId);
 
     if (instance.resizeObserver) {
       instance.resizeObserver.disconnect();

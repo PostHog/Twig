@@ -5,17 +5,14 @@ import {
   selectIsPathExpanded,
   useFileTreeStore,
 } from "@features/right-sidebar/stores/fileTreeStore";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface FileTreePanelProps {
   taskId: string;
@@ -189,12 +186,10 @@ function LazyTreeItem({
   );
 }
 
-export function FileTreePanel({ taskId, task }: FileTreePanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
+export function FileTreePanel({ taskId, task: _task }: FileTreePanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
-  const repoPath = worktreePath ?? taskData.repoPath;
-  const mainRepoPath = workspace?.folderPath ?? taskData.repoPath;
+  const repoPath = useCwd(taskId);
+  const mainRepoPath = workspace?.folderPath;
   const queryClient = useQueryClient();
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
 

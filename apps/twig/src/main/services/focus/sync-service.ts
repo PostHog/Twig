@@ -4,7 +4,7 @@ import * as watcher from "@parcel/watcher";
 import ignore, { type Ignore } from "ignore";
 import { injectable } from "inversify";
 import { logger } from "../../lib/logger.js";
-import { git } from "./service.js";
+import { git, withGitLock } from "./service.js";
 
 const log = logger.scope("focus-sync");
 
@@ -35,12 +35,38 @@ export class FocusSyncService {
     timer: null,
   };
   private syncing = false;
+  private initialSyncing = false;
   private currentSyncPromise: Promise<void> | null = null;
 
   /** Files we recently wrote - map of absolute path to write timestamp */
   private recentWrites: Map<string, number> = new Map();
 
   async startSync(mainRepoPath: string, worktreePath: string): Promise<void> {
+    const [mainExists, worktreeExists] = await Promise.all([
+      fs
+        .access(mainRepoPath)
+        .then(() => true)
+        .catch(() => false),
+      fs
+        .access(worktreePath)
+        .then(() => true)
+        .catch(() => false),
+    ]);
+
+    if (!mainExists) {
+      log.error(
+        `Cannot start sync: main repo path does not exist: ${mainRepoPath}`,
+      );
+      return;
+    }
+
+    if (!worktreeExists) {
+      log.error(
+        `Cannot start sync: worktree path does not exist: ${worktreePath}`,
+      );
+      return;
+    }
+
     if (this.mainSubscription || this.worktreeSubscription) {
       await this.stopSync();
     }
@@ -48,74 +74,120 @@ export class FocusSyncService {
     this.mainRepoPath = mainRepoPath;
     this.worktreePath = worktreePath;
 
-    // Load .gitignore patterns
-    await this.loadGitignore(mainRepoPath);
+    await Promise.race([
+      this.loadGitignore(mainRepoPath),
+      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+    ]);
 
-    log.info(
-      `Starting bidirectional sync: ${mainRepoPath} <-> ${worktreePath}`,
-    );
+    this.initialSyncing = true;
+    try {
+      await this.copyUncommittedFiles(worktreePath, mainRepoPath);
+    } catch (error) {
+      log.warn("Initial sync failed:", error);
+    } finally {
+      this.initialSyncing = false;
+    }
 
-    // Initial sync: copy all uncommitted files from worktree to main
-    await this.copyUncommittedFiles(worktreePath, mainRepoPath);
-
-    // Start watching both directories
     const watcherIgnore = ALWAYS_IGNORE.map((p) => `**/${p}/**`);
 
-    this.mainSubscription = await watcher.subscribe(
-      mainRepoPath,
-      (err, events) => {
-        if (err) {
-          log.error("Main repo watcher error:", err);
-          return;
-        }
-        this.handleEvents("main", events);
-      },
-      { ignore: watcherIgnore },
-    );
+    try {
+      const mainSubPromise = watcher.subscribe(
+        mainRepoPath,
+        (err, events) => {
+          if (err) {
+            log.error("Main repo watcher error:", err);
+            return;
+          }
+          this.handleEvents("main", events);
+        },
+        { ignore: watcherIgnore },
+      );
 
-    this.worktreeSubscription = await watcher.subscribe(
-      worktreePath,
-      (err, events) => {
-        if (err) {
-          log.error("Worktree watcher error:", err);
-          return;
-        }
-        this.handleEvents("worktree", events);
-      },
-      { ignore: watcherIgnore },
-    );
+      const mainSubResult = await Promise.race([
+        mainSubPromise.then((sub) => ({ sub, timeout: false })),
+        new Promise<{ sub: null; timeout: true }>((resolve) =>
+          setTimeout(() => resolve({ sub: null, timeout: true }), 5000),
+        ),
+      ]);
+
+      if (mainSubResult.timeout) {
+        log.warn("Main repo watcher subscription timed out");
+      } else {
+        this.mainSubscription = mainSubResult.sub;
+      }
+    } catch (error) {
+      log.error("Failed to subscribe to main repo watcher:", error);
+    }
+
+    try {
+      const worktreeSubPromise = watcher.subscribe(
+        worktreePath,
+        (err, events) => {
+          if (err) {
+            log.error("Worktree watcher error:", err);
+            return;
+          }
+          this.handleEvents("worktree", events);
+        },
+        { ignore: watcherIgnore },
+      );
+
+      const worktreeSubResult = await Promise.race([
+        worktreeSubPromise.then((sub) => ({ sub, timeout: false })),
+        new Promise<{ sub: null; timeout: true }>((resolve) =>
+          setTimeout(() => resolve({ sub: null, timeout: true }), 5000),
+        ),
+      ]);
+
+      if (worktreeSubResult.timeout) {
+        log.warn("Worktree watcher subscription timed out");
+      } else {
+        this.worktreeSubscription = worktreeSubResult.sub;
+      }
+    } catch (error) {
+      log.error("Failed to subscribe to worktree watcher:", error);
+    }
   }
 
   async stopSync(): Promise<void> {
-    log.info("Stopping bidirectional sync");
-
     if (this.pending.timer) {
       clearTimeout(this.pending.timer);
       this.pending.timer = null;
     }
 
-    // Wait for any in-flight sync to complete
     if (this.currentSyncPromise) {
-      log.debug("Waiting for in-flight sync to complete");
-      await this.currentSyncPromise;
+      await Promise.race([
+        this.currentSyncPromise,
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     }
 
-    // Flush any remaining pending changes (without rescheduling)
     if (
       this.pending.mainToWorktree.size > 0 ||
       this.pending.worktreeToMain.size > 0
     ) {
-      await this.doFlush();
+      await Promise.race([
+        this.doFlush(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     }
 
     if (this.mainSubscription) {
-      await this.mainSubscription.unsubscribe();
+      const sub = this.mainSubscription;
       this.mainSubscription = null;
+      await Promise.race([
+        sub.unsubscribe(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     }
 
     if (this.worktreeSubscription) {
-      await this.worktreeSubscription.unsubscribe();
+      const sub = this.worktreeSubscription;
       this.worktreeSubscription = null;
+      await Promise.race([
+        sub.unsubscribe(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     }
 
     this.mainRepoPath = null;
@@ -123,64 +195,142 @@ export class FocusSyncService {
     this.pending.mainToWorktree.clear();
     this.pending.worktreeToMain.clear();
     this.recentWrites.clear();
+    this.initialSyncing = false;
   }
 
   /**
-   * Copy all uncommitted files from source to destination.
-   * Used for initial sync when focusing, and for local worktree transfers.
+   * Sync all uncommitted changes from source to destination using git diff/apply.
+   * Preserves staged vs unstaged state. Handles deletes, renames, moves correctly.
    */
   async copyUncommittedFiles(srcPath: string, dstPath: string): Promise<void> {
-    const stdout = await git(srcPath, "status", "--porcelain").catch(() => "");
+    const [stagedPatch, unstagedPatch, untrackedFiles] = await Promise.all([
+      this.gitRaw(srcPath, "diff", "--cached", "HEAD").catch(() => ""),
+      this.gitRaw(srcPath, "diff").catch(() => ""),
+      git(srcPath, "ls-files", "--others", "--exclude-standard").catch(
+        () => "",
+      ),
+    ]);
 
-    if (!stdout) {
-      log.info("No uncommitted files to copy");
+    const hasStaged = stagedPatch.length > 0;
+    const hasUnstaged = unstagedPatch.length > 0;
+    const untrackedList = untrackedFiles
+      .split("\n")
+      .filter((f) => f.trim().length > 0);
+    const hasUntracked = untrackedList.length > 0;
+
+    if (!hasStaged && !hasUnstaged && !hasUntracked) {
       return;
     }
 
-    // Load gitignore from source
-    const ig = ignore().add(ALWAYS_IGNORE);
-    try {
-      const content = await fs.readFile(
-        path.join(srcPath, ".gitignore"),
-        "utf-8",
-      );
-      ig.add(content);
-    } catch {
-      // No gitignore, that's fine
-    }
-
-    const files: string[] = [];
-    for (const line of stdout.split("\n")) {
-      if (!line.trim()) continue;
-
-      const status = line.slice(0, 2);
-      let filename = line.slice(3);
-
-      if (status.startsWith("R")) {
-        const parts = filename.split(" -> ");
-        filename = parts[parts.length - 1];
-      }
-
-      if (status[1] === "D") {
-        continue;
-      }
-
-      files.push(filename);
-    }
-
     log.info(
-      `Copying ${files.length} uncommitted files from ${srcPath} to ${dstPath}`,
+      `Syncing changes: staged=${hasStaged}, unstaged=${hasUnstaged}, untracked=${untrackedList.length} files`,
     );
 
-    for (const file of files) {
-      if (ig.ignores(file)) {
-        continue;
-      }
+    await this.cleanStaleLockFile(dstPath);
 
-      const src = path.join(srcPath, file);
-      const dst = path.join(dstPath, file);
-      await this.copyFileDirect(src, dst);
+    if (hasStaged) {
+      try {
+        await this.applyPatch(dstPath, stagedPatch, true);
+      } catch (error) {
+        log.warn("Failed to apply staged changes:", error);
+      }
     }
+
+    if (hasUnstaged) {
+      try {
+        await this.applyPatch(dstPath, unstagedPatch, false);
+      } catch (error) {
+        log.warn("Failed to apply unstaged changes:", error);
+      }
+    }
+
+    if (hasUntracked) {
+      for (const file of untrackedList) {
+        const src = path.join(srcPath, file);
+        const dst = path.join(dstPath, file);
+        await this.copyFileDirect(src, dst);
+      }
+    }
+  }
+
+  private async cleanStaleLockFile(repoPath: string): Promise<void> {
+    const possibleLockPaths = [
+      path.join(repoPath, ".git", "index.lock"),
+      path.join(repoPath, ".git", "worktrees"),
+    ];
+
+    for (const lockPath of possibleLockPaths) {
+      if (lockPath.endsWith("worktrees")) {
+        try {
+          const entries = await fs.readdir(lockPath);
+          for (const entry of entries) {
+            const worktreeLock = path.join(lockPath, entry, "index.lock");
+            await this.removeStaleLock(worktreeLock);
+          }
+        } catch {}
+      } else {
+        await this.removeStaleLock(lockPath);
+      }
+    }
+  }
+
+  private async removeStaleLock(lockPath: string): Promise<void> {
+    try {
+      const stat = await fs.stat(lockPath);
+      const ageMs = Date.now() - stat.mtimeMs;
+      if (ageMs > 5000) {
+        await fs.rm(lockPath);
+        log.info(
+          `Removed stale index.lock (age: ${Math.round(ageMs / 1000)}s)`,
+        );
+      }
+    } catch {}
+  }
+
+  private async gitRaw(cwd: string, ...args: string[]): Promise<string> {
+    return withGitLock(async () => {
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execFileAsync = promisify(execFile);
+      const { stdout } = await execFileAsync("git", args, { cwd });
+      return stdout;
+    });
+  }
+
+  private async applyPatch(
+    repoPath: string,
+    patch: string,
+    cached: boolean,
+  ): Promise<void> {
+    return withGitLock(async () => {
+      const { spawn } = await import("node:child_process");
+
+      return new Promise((resolve, reject) => {
+        const args = ["apply"];
+        if (cached) args.push("--cached");
+        args.push("-");
+
+        const proc = spawn("git", args, { cwd: repoPath });
+
+        let stderr = "";
+        proc.stderr.on("data", (data) => {
+          stderr += data.toString();
+        });
+
+        proc.on("close", (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`git apply failed (code ${code}): ${stderr}`));
+          }
+        });
+
+        proc.on("error", reject);
+
+        proc.stdin.write(patch);
+        proc.stdin.end();
+      });
+    });
   }
 
   private async copyFileDirect(
@@ -220,6 +370,8 @@ export class FocusSyncService {
     source: "main" | "worktree",
     events: watcher.Event[],
   ): void {
+    if (this.initialSyncing) return;
+
     const basePath = source === "main" ? this.mainRepoPath : this.worktreePath;
     if (!basePath) return;
 
@@ -358,7 +510,6 @@ export class FocusSyncService {
       await fs.rm(filePath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        log.debug(`File already deleted: ${filePath}`);
         return;
       }
       throw error;

@@ -1,406 +1,559 @@
 import type { FocusResult, FocusSession } from "@main/services/focus/schemas";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
+import { Saga, type SagaLogger } from "@shared/lib/saga";
 
 const log = logger.scope("focus-saga");
 
-export type EnableFocusSagaInput = Omit<
-  FocusSession,
-  "mainStashRef" | "localWorktreePath"
->;
-
-export type EnableFocusSagaResult = FocusResult & {
-  mainStashRef: string | null;
-  localWorktreePath: string | null;
+const sagaLogger: SagaLogger = {
+  info: (message, data) => log.info(message, data),
+  debug: (message, data) => log.debug(message, data),
+  error: (message, data) => log.error(message, data),
+  warn: (message, data) => log.warn(message, data),
 };
 
-export type DisableFocusSagaInput = FocusSession;
+type SessionContext = {
+  type: "detached_head";
+  branchName: string;
+  isDetached: boolean;
+};
 
-export type DisableFocusSagaResult = FocusResult;
-
-interface RollbackInput {
-  mainRepoPath: string;
-  originalBranch: string;
-  targetBranch: string;
+async function notifyTaskSessions(
+  taskId: string,
+  context: SessionContext,
+): Promise<void> {
+  const sessions = await trpcVanilla.agent.listSessions.query({ taskId });
+  for (const session of sessions) {
+    trpcVanilla.agent.notifySessionContext
+      .mutate({ sessionId: session.taskRunId, context })
+      .catch((e) => log.warn("Failed to notify session:", e));
+  }
 }
 
-interface CompleteUnfocusInput {
+async function notifyWorktreeTasks(
+  worktreePath: string,
+  context: SessionContext,
+): Promise<void> {
+  const tasks = await trpcVanilla.workspace.getWorktreeTasks.query({
+    worktreePath,
+  });
+  for (const { taskId } of tasks) {
+    await notifyTaskSessions(taskId, context);
+  }
+}
+
+async function interruptLocalAgents(mainRepoPath: string): Promise<void> {
+  const tasks = await trpcVanilla.workspace.getLocalTasks.query({
+    mainRepoPath,
+  });
+  for (const { taskId } of tasks) {
+    const sessions = await trpcVanilla.agent.listSessions.query({ taskId });
+    for (const session of sessions) {
+      trpcVanilla.agent.cancelPrompt
+        .mutate({ sessionId: session.taskRunId, reason: "moving_to_worktree" })
+        .catch((e) => log.warn("Failed to interrupt session:", e));
+    }
+  }
+}
+
+async function toRelativePath(
+  absolutePath: string,
+  mainRepoPath: string,
+): Promise<string> {
+  return trpcVanilla.focus.toRelativeWorktreePath.query({
+    absolutePath,
+    mainRepoPath,
+  });
+}
+
+async function checkout(repoPath: string, branch: string): Promise<void> {
+  const result = await trpcVanilla.focus.checkout.mutate({ repoPath, branch });
+  if (!result.success) {
+    throw new Error(result.error ?? `Failed to checkout ${branch}`);
+  }
+}
+
+async function detachWorktree(worktreePath: string): Promise<void> {
+  const result = await trpcVanilla.focus.detachWorktree.mutate({
+    worktreePath,
+  });
+  if (!result.success) {
+    throw new Error(result.error ?? "Failed to detach worktree");
+  }
+}
+
+async function reattachWorktree(
+  worktreePath: string,
+  branch: string,
+): Promise<void> {
+  const result = await trpcVanilla.focus.reattachWorktree.mutate({
+    worktreePath,
+    branch,
+  });
+  if (!result.success) {
+    throw new Error(result.error ?? "Failed to reattach worktree");
+  }
+}
+
+export interface FocusSagaInput {
   mainRepoPath: string;
+  worktreePath: string;
+  branch: string;
+  currentSession: FocusSession | null;
+}
+
+export type FocusSagaResult = FocusResult & {
+  session: FocusSession | null;
+  wasSwap: boolean;
+};
+
+export type DisableSagaResult = FocusResult;
+
+interface EnableInput {
+  mainRepoPath: string;
+  worktreePath: string;
+  branch: string;
   originalBranch: string;
-  targetBranch: string;
+}
+
+interface EnableOutput {
   mainStashRef: string | null;
+  commitSha: string;
 }
 
-export async function runEnableFocusSaga(
-  input: EnableFocusSagaInput,
-): Promise<EnableFocusSagaResult> {
-  const { mainRepoPath, worktreePath, branch, originalBranch } = input;
-  let mainStashRef: string | null = null;
-  let localWorktreePath: string | null = null;
+class FocusEnableSaga extends Saga<EnableInput, EnableOutput> {
+  constructor() {
+    super(sagaLogger);
+  }
 
-  try {
-    // Write ref FIRST with status='focusing' for crash recovery
-    await trpcVanilla.focus.writeRef.mutate({
-      mainRepoPath,
-      data: {
-        status: "focusing",
-        originalBranch,
-        targetBranch: branch,
-        mainStashRef: null,
-        localWorktreePath: null,
+  protected async execute(input: EnableInput): Promise<EnableOutput> {
+    const { mainRepoPath, worktreePath, branch, originalBranch } = input;
+
+    await this.readOnlyStep("interrupt_local_agents", () =>
+      interruptLocalAgents(mainRepoPath),
+    );
+
+    const mainStashRef = await this.step({
+      name: "stash_dirty_changes",
+      execute: async () => {
+        const isDirty = await trpcVanilla.focus.isDirty.query({
+          repoPath: mainRepoPath,
+        });
+        if (!isDirty) return null;
+
+        const timestamp = new Date().toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const result = await trpcVanilla.focus.stash.mutate({
+          repoPath: mainRepoPath,
+          message: `twig: focusing ${branch} (${timestamp})`,
+        });
+        if (!result.success) throw new Error(result.error ?? "Failed to stash");
+        return result.stashRef ?? null;
+      },
+      rollback: async (ref) => {
+        if (ref)
+          await trpcVanilla.focus.stashApply
+            .mutate({ repoPath: mainRepoPath, stashRef: ref })
+            .catch(() => {});
       },
     });
 
-    // Clean up any stale local worktree first
-    const isLocalFocused = await trpcVanilla.focus.isLocalFocused
-      .query({ mainRepoPath })
-      .catch(() => false);
-
-    if (isLocalFocused) {
-      log.info("Cleaning up stale local worktree");
-      await trpcVanilla.focus.unfocusLocal
-        .mutate({ mainRepoPath })
-        .catch((e) => log.warn("Failed to cleanup local worktree:", e));
-    }
-
-    // Background local workspace if needed
-    const localTasks = await trpcVanilla.workspace.getLocalTasks.query({
-      mainRepoPath,
+    await this.step({
+      name: "detach_worktree",
+      execute: async () => {
+        await detachWorktree(worktreePath);
+        await notifyWorktreeTasks(worktreePath, {
+          type: "detached_head",
+          branchName: branch,
+          isDetached: true,
+        });
+      },
+      rollback: async () => {
+        await trpcVanilla.focus.reattachWorktree
+          .mutate({ worktreePath, branch })
+          .catch(() => {});
+        await notifyWorktreeTasks(worktreePath, {
+          type: "detached_head",
+          branchName: branch,
+          isDetached: false,
+        });
+      },
     });
 
-    if (localTasks.length > 0) {
-      log.info(`Backgrounding local workspace (${localTasks.length} task(s))`);
-      localWorktreePath = await trpcVanilla.focus.focusLocal.mutate({
-        mainRepoPath,
-        branch: originalBranch,
-      });
+    await this.step({
+      name: "checkout_branch",
+      execute: () => checkout(mainRepoPath, branch),
+      rollback: async () => {
+        await trpcVanilla.focus.checkout
+          .mutate({ repoPath: mainRepoPath, branch: originalBranch })
+          .catch(() => {});
+      },
+    });
 
-      // Notify agent sessions about the directory change
-      // No respawn needed - sessions have additionalDirectories configured at startup
-      if (localWorktreePath) {
-        for (const { taskId } of localTasks) {
-          const sessions = await trpcVanilla.agent.listSessions.query({
-            taskId,
-          });
-          for (const session of sessions) {
-            trpcVanilla.agent.notifyCwdChange
-              .mutate({
-                sessionId: session.taskRunId,
-                newPath: localWorktreePath,
-                reason: "moving_to_worktree",
-              })
-              .catch((e) =>
-                log.warn("Failed to notify session of CWD change:", e),
-              );
-          }
+    await this.step({
+      name: "start_sync",
+      execute: () =>
+        trpcVanilla.focus.startSync.mutate({ mainRepoPath, worktreePath }),
+      rollback: () => trpcVanilla.focus.stopSync.mutate().catch(() => {}),
+    });
+
+    const commitSha = await this.readOnlyStep("get_commit_sha", () =>
+      trpcVanilla.focus.getCommitSha.query({ repoPath: mainRepoPath }),
+    );
+
+    await this.step({
+      name: "save_session",
+      execute: () =>
+        trpcVanilla.focus.saveSession.mutate({
+          mainRepoPath,
+          worktreePath,
+          branch,
+          originalBranch,
+          mainStashRef,
+          commitSha,
+        }),
+      rollback: () =>
+        trpcVanilla.focus.deleteSession
+          .mutate({ mainRepoPath })
+          .catch(() => {}),
+    });
+
+    await this.step({
+      name: "start_watching_main_repo",
+      execute: () =>
+        trpcVanilla.focus.startWatchingMainRepo.mutate({ mainRepoPath }),
+      rollback: () =>
+        trpcVanilla.focus.stopWatchingMainRepo.mutate().catch(() => {}),
+    });
+
+    return { mainStashRef, commitSha };
+  }
+}
+
+class FocusDisableSaga extends Saga<
+  FocusSession,
+  { stashPopWarning?: string }
+> {
+  constructor() {
+    super(sagaLogger);
+  }
+
+  protected async execute(
+    input: FocusSession,
+  ): Promise<{ stashPopWarning?: string }> {
+    const { mainRepoPath, worktreePath, branch, originalBranch, mainStashRef } =
+      input;
+
+    await this.readOnlyStep("stop_watching_main_repo", () =>
+      trpcVanilla.focus.stopWatchingMainRepo.mutate(),
+    );
+
+    await this.step({
+      name: "stop_sync",
+      execute: () => trpcVanilla.focus.stopSync.mutate(),
+      rollback: () =>
+        trpcVanilla.focus.startSync
+          .mutate({ mainRepoPath, worktreePath })
+          .catch(() => {}),
+    });
+
+    await this.readOnlyStep("clean_working_tree", () =>
+      trpcVanilla.focus.cleanWorkingTree.mutate({ repoPath: mainRepoPath }),
+    );
+
+    await this.step({
+      name: "checkout_original_branch",
+      execute: () => checkout(mainRepoPath, originalBranch),
+      rollback: async () => {
+        await trpcVanilla.focus.checkout
+          .mutate({ repoPath: mainRepoPath, branch })
+          .catch(() => {});
+      },
+    });
+
+    await this.step({
+      name: "reattach_worktree",
+      execute: async () => {
+        await reattachWorktree(worktreePath, branch);
+        await notifyWorktreeTasks(worktreePath, {
+          type: "detached_head",
+          branchName: branch,
+          isDetached: false,
+        });
+      },
+      rollback: async () => {
+        await trpcVanilla.focus.detachWorktree
+          .mutate({ worktreePath })
+          .catch(() => {});
+      },
+    });
+
+    let stashPopWarning: string | undefined;
+    if (mainStashRef) {
+      stashPopWarning = await this.readOnlyStep("restore_stash", async () => {
+        const result = await trpcVanilla.focus.stashApply.mutate({
+          repoPath: mainRepoPath,
+          stashRef: mainStashRef,
+        });
+        if (!result.success) {
+          const warning = `Stash apply failed: ${result.error}. Run 'git stash apply ${mainStashRef}' manually.`;
+          log.warn(warning);
+          return warning;
         }
-      }
-    }
-
-    // Stash if dirty
-    const isDirty = await trpcVanilla.focus.isDirty.query({
-      repoPath: mainRepoPath,
-    });
-
-    if (isDirty) {
-      log.info("Stashing uncommitted changes");
-      const stashResult = await trpcVanilla.focus.stash.mutate({
-        repoPath: mainRepoPath,
-        message: "twig-focus: auto-stash",
-      });
-
-      if (!stashResult.success) {
-        throw new Error(stashResult.error ?? "Failed to stash");
-      }
-
-      mainStashRef = stashResult.stashRef ?? null;
-    }
-
-    // Detach worktree
-    log.info(`Detaching worktree at ${worktreePath}`);
-    const detachResult = await trpcVanilla.focus.detachWorktree.mutate({
-      worktreePath,
-    });
-
-    if (!detachResult.success) {
-      throw new Error(detachResult.error ?? "Failed to detach worktree");
-    }
-
-    // Checkout branch in main repo
-    log.info(`Checking out branch ${branch} in main repo`);
-    const checkoutResult = await trpcVanilla.focus.checkout.mutate({
-      repoPath: mainRepoPath,
-      branch,
-    });
-
-    if (!checkoutResult.success) {
-      throw new Error(checkoutResult.error ?? `Failed to checkout ${branch}`);
-    }
-
-    // Attach local worktree to original branch (now that main released it)
-    if (localWorktreePath) {
-      log.info(`Attaching local worktree to branch ${originalBranch}`);
-      await trpcVanilla.focus.reattachWorktree.mutate({
-        worktreePath: localWorktreePath,
-        branch: originalBranch,
+        return undefined;
       });
     }
 
-    // Start sync service
-    log.info("Starting sync service");
-    await trpcVanilla.focus.startSync.mutate({
-      mainRepoPath,
-      worktreePath,
+    await this.readOnlyStep("delete_session", () =>
+      trpcVanilla.focus.deleteSession.mutate({ mainRepoPath }),
+    );
+
+    return { stashPopWarning };
+  }
+}
+
+interface FocusOutput {
+  session: FocusSession;
+  wasSwap: boolean;
+}
+
+class FocusSaga extends Saga<FocusSagaInput, FocusOutput> {
+  constructor() {
+    super(sagaLogger);
+  }
+
+  protected async execute(input: FocusSagaInput): Promise<FocusOutput> {
+    const { mainRepoPath, worktreePath, branch, currentSession } = input;
+
+    const wasSwap = await this.readOnlyStep("check_swap", async () => {
+      if (!currentSession || currentSession.mainRepoPath !== mainRepoPath)
+        return false;
+      if (currentSession.worktreePath === worktreePath) {
+        throw new AlreadyFocusedError(currentSession);
+      }
+      return true;
     });
 
-    // Update ref to status='focused'
-    await trpcVanilla.focus.writeRef.mutate({
-      mainRepoPath,
-      data: {
-        status: "focused",
-        originalBranch,
-        targetBranch: branch,
-        mainStashRef,
-        localWorktreePath,
+    if (wasSwap) {
+      await this.step({
+        name: "unfocus_current",
+        execute: async () => {
+          const result = await new FocusDisableSaga().run(currentSession!);
+          if (!result.success)
+            throw new Error(`Failed to unfocus: ${result.error}`);
+        },
+        rollback: async () => {},
+      });
+    }
+
+    const currentBranch = await this.readOnlyStep(
+      "get_current_branch",
+      async () => {
+        const branch = await trpcVanilla.git.getCurrentBranch.query({
+          directoryPath: mainRepoPath,
+        });
+        if (!branch) throw new Error("Could not determine current branch");
+        return branch;
       },
+    );
+
+    await this.readOnlyStep("validate", async () => {
+      const error = await trpcVanilla.focus.validateFocusOperation.query({
+        mainRepoPath,
+        currentBranch,
+        targetBranch: branch,
+      });
+      if (error) throw new Error(error);
     });
 
-    log.info("Enable focus completed");
-    return { success: true, mainStashRef, localWorktreePath };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.error("Enable focus failed:", message);
-
-    // Best-effort rollback
-    await runRollbackFocusSaga({
-      mainRepoPath,
-      originalBranch,
-      targetBranch: branch,
-    }).catch((e) => log.error("Rollback failed:", e));
+    const enableResult = await this.step({
+      name: "enable_focus",
+      execute: async () => {
+        const result = await new FocusEnableSaga().run({
+          mainRepoPath,
+          worktreePath,
+          branch,
+          originalBranch: currentBranch,
+        });
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      rollback: async () => {},
+    });
 
     return {
-      success: false,
-      error: message,
-      mainStashRef: null,
-      localWorktreePath: null,
+      session: {
+        mainRepoPath,
+        worktreePath,
+        branch,
+        originalBranch: currentBranch,
+        mainStashRef: enableResult.mainStashRef,
+        commitSha: enableResult.commitSha,
+      },
+      wasSwap,
     };
   }
 }
 
-export async function runDisableFocusSaga(
-  input: DisableFocusSagaInput,
-): Promise<DisableFocusSagaResult> {
-  const { mainRepoPath, worktreePath, branch, originalBranch, mainStashRef } =
-    input;
+class AlreadyFocusedError extends Error {
+  constructor(public session: FocusSession) {
+    super("Already focused on this worktree");
+  }
+}
 
-  try {
-    // Write ref with status='unfocusing' for crash recovery
-    await trpcVanilla.focus.writeRef.mutate({
-      mainRepoPath,
-      data: {
-        status: "unfocusing",
-        originalBranch,
-        targetBranch: branch,
-        mainStashRef,
-        localWorktreePath: input.localWorktreePath,
-      },
-    });
+interface RestoreInput {
+  mainRepoPath: string;
+}
 
-    // Stop sync service
-    log.info("Stopping sync service");
-    await trpcVanilla.focus.stopSync.mutate();
+class FocusRestoreSaga extends Saga<RestoreInput, FocusSession | null> {
+  constructor() {
+    super(sagaLogger);
+  }
 
-    // Detach local worktree if it exists
-    const isLocalFocused = await trpcVanilla.focus.isLocalFocused
-      .query({ mainRepoPath })
-      .catch(() => false);
+  protected async execute(input: RestoreInput): Promise<FocusSession | null> {
+    const { mainRepoPath } = input;
 
-    if (isLocalFocused) {
-      const localPath = await trpcVanilla.focus.getLocalWorktreePath
-        .query({ mainRepoPath })
-        .catch(() => null);
+    const session = await this.readOnlyStep("get_session", () =>
+      trpcVanilla.focus.getSession.query({ mainRepoPath }),
+    );
 
-      if (localPath) {
-        log.info(`Detaching local worktree at ${localPath}`);
-        await trpcVanilla.focus.detachWorktree.mutate({
-          worktreePath: localPath,
-        });
-      }
-    }
+    if (!session) return null;
 
-    // Checkout original branch in main
-    log.info(`Checking out original branch ${originalBranch}`);
-    const checkoutResult = await trpcVanilla.focus.checkout.mutate({
-      repoPath: mainRepoPath,
-      branch: originalBranch,
-    });
+    const { worktreePath, branch, originalBranch } = session;
 
-    if (!checkoutResult.success) {
-      throw new Error(
-        checkoutResult.error ?? `Failed to checkout ${originalBranch}`,
-      );
-    }
+    const relWorktreePath = await toRelativePath(worktreePath, mainRepoPath);
 
-    // Reattach worktree to its branch
-    log.info(`Reattaching worktree to branch ${branch}`);
-    const reattachResult = await trpcVanilla.focus.reattachWorktree.mutate({
-      worktreePath,
-      branch,
-    });
-
-    if (!reattachResult.success) {
-      throw new Error(reattachResult.error ?? "Failed to reattach worktree");
-    }
-
-    // Clean main working tree
-    await trpcVanilla.focus.cleanWorkingTree.mutate({
-      repoPath: mainRepoPath,
-    });
-
-    // Pop stash if we had one
-    let stashPopWarning: string | undefined;
-    if (mainStashRef) {
-      log.info("Popping stashed changes");
-      const popResult = await trpcVanilla.focus.stashPop.mutate({
-        repoPath: mainRepoPath,
-      });
-
-      if (!popResult.success) {
-        stashPopWarning = `Stash pop failed: ${popResult.error}. Run 'git stash pop' manually.`;
-        log.warn(stashPopWarning);
-      }
-    }
-
-    // Foreground local workspace (remove local worktree)
-    const localTasks = await trpcVanilla.workspace.getLocalTasks.query({
-      mainRepoPath,
-    });
-
-    if (localTasks.length > 0) {
-      log.info(`Foregrounding local workspace (${localTasks.length} task(s))`);
-
-      // Notify agent sessions about the directory change
-      // No respawn needed - sessions have additionalDirectories configured at startup
-      for (const { taskId } of localTasks) {
-        const sessions = await trpcVanilla.agent.listSessions.query({ taskId });
-        for (const session of sessions) {
-          trpcVanilla.agent.notifyCwdChange
-            .mutate({
-              sessionId: session.taskRunId,
-              newPath: mainRepoPath,
-              reason: "moving_to_local",
-            })
-            .catch((e) =>
-              log.warn("Failed to notify session of CWD change:", e),
-            );
+    const validatedSession = await this.readOnlyStep(
+      "validate_state",
+      async (): Promise<FocusSession | null> => {
+        if (originalBranch === branch) {
+          log.error(
+            `Corrupt session: originalBranch === branch (${originalBranch})`,
+          );
+          await trpcVanilla.focus.deleteSession.mutate({ mainRepoPath });
+          return null;
         }
-      }
 
-      await trpcVanilla.focus.unfocusLocal
-        .mutate({ mainRepoPath })
-        .catch((e) => log.warn("Failed to unfocus local:", e));
-    }
+        const exists = await trpcVanilla.focus.worktreeExistsAtPath.query({
+          relativePath: relWorktreePath,
+        });
+        if (!exists) {
+          log.warn(
+            `Worktree not found at ${relWorktreePath}. Clearing session.`,
+          );
+          await trpcVanilla.focus.deleteSession.mutate({ mainRepoPath });
+          return null;
+        }
 
-    // Delete ref (operation complete)
-    await trpcVanilla.focus.deleteRef.mutate({ mainRepoPath });
+        const currentBranch = await trpcVanilla.git.getCurrentBranch.query({
+          directoryPath: mainRepoPath,
+        });
+        if (!currentBranch) {
+          log.warn("Main repo is in detached HEAD state. Clearing session.");
+          await trpcVanilla.focus.deleteSession.mutate({ mainRepoPath });
+          return null;
+        }
 
-    log.info("Disable focus completed");
-    return { success: true, stashPopWarning };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.error("Disable focus failed:", message);
-    return { success: false, error: message };
+        if (currentBranch !== branch) {
+          const currentCommitSha = await trpcVanilla.focus.getCommitSha.query({
+            repoPath: mainRepoPath,
+          });
+
+          if (currentCommitSha === session.commitSha) {
+            log.info(
+              `Branch was renamed while app was closed: ${branch} -> ${currentBranch}. Updating session.`,
+            );
+            const updatedSession: FocusSession = {
+              ...session,
+              branch: currentBranch,
+            };
+            await trpcVanilla.focus.saveSession.mutate(updatedSession);
+            return updatedSession;
+          } else {
+            log.warn(
+              `Branch changed and commit differs. Likely checkout to different branch. Clearing session.`,
+            );
+            await trpcVanilla.focus.deleteSession.mutate({ mainRepoPath });
+            return null;
+          }
+        }
+
+        return session;
+      },
+    );
+
+    if (!validatedSession) return null;
+
+    await this.readOnlyStep("start_sync", () =>
+      trpcVanilla.focus.startSync.mutate({
+        mainRepoPath,
+        worktreePath: validatedSession.worktreePath,
+      }),
+    );
+
+    await this.readOnlyStep("start_watching_main_repo", () =>
+      trpcVanilla.focus.startWatchingMainRepo.mutate({ mainRepoPath }),
+    );
+
+    log.info(`Restored focus session for branch ${validatedSession.branch}`);
+
+    return validatedSession;
   }
 }
 
-export async function runRollbackFocusSaga(
-  input: RollbackInput,
-): Promise<void> {
-  const { mainRepoPath, originalBranch, targetBranch } = input;
+export async function runFocusSaga(
+  input: FocusSagaInput,
+): Promise<FocusSagaResult> {
+  const saga = new FocusSaga();
+  const result = await saga.run(input);
 
-  log.info("Rolling back focus operation");
-
-  try {
-    await trpcVanilla.focus.stopSync.mutate().catch(() => {});
-
-    const currentBranch = await trpcVanilla.git.getCurrentBranch.query({
-      directoryPath: mainRepoPath,
-    });
-
-    if (currentBranch === targetBranch) {
-      await trpcVanilla.focus.checkout
-        .mutate({ repoPath: mainRepoPath, branch: originalBranch })
-        .catch(() => {});
+  if (!result.success) {
+    if (result.error === "Already focused on this worktree") {
+      return { success: true, session: input.currentSession!, wasSwap: false };
     }
-
-    const worktreePath = await trpcVanilla.focus.findWorktreeByBranch
-      .query({ mainRepoPath, branch: targetBranch })
-      .catch(() => null);
-
-    if (worktreePath) {
-      await trpcVanilla.focus.reattachWorktree
-        .mutate({ worktreePath, branch: targetBranch })
-        .catch(() => {});
-    }
-
-    await trpcVanilla.focus.unfocusLocal
-      .mutate({ mainRepoPath })
-      .catch(() => {});
-
-    await trpcVanilla.focus.deleteRef.mutate({ mainRepoPath });
-
-    log.info("Rollback completed");
-  } catch (error) {
-    log.error("Rollback error:", error);
-    await trpcVanilla.focus.deleteRef.mutate({ mainRepoPath }).catch(() => {});
+    return {
+      success: false,
+      error: result.error,
+      session: null,
+      wasSwap: false,
+    };
   }
+
+  return {
+    success: true,
+    session: result.data.session,
+    wasSwap: result.data.wasSwap,
+  };
 }
 
-export async function runCompleteUnfocusSaga(
-  input: CompleteUnfocusInput,
-): Promise<void> {
-  const { mainRepoPath, originalBranch, targetBranch, mainStashRef } = input;
+export async function runDisableFocusSaga(
+  input: FocusSession,
+): Promise<DisableSagaResult> {
+  const saga = new FocusDisableSaga();
+  const result = await saga.run(input);
 
-  log.info("Completing interrupted unfocus operation");
-
-  try {
-    await trpcVanilla.focus.stopSync.mutate().catch(() => {});
-
-    const currentBranch = await trpcVanilla.git.getCurrentBranch.query({
-      directoryPath: mainRepoPath,
-    });
-
-    if (currentBranch !== originalBranch) {
-      await trpcVanilla.focus.checkout
-        .mutate({ repoPath: mainRepoPath, branch: originalBranch })
-        .catch(() => {});
-    }
-
-    const worktreePath = await trpcVanilla.focus.findWorktreeByBranch
-      .query({ mainRepoPath, branch: targetBranch })
-      .catch(() => null);
-
-    if (worktreePath) {
-      await trpcVanilla.focus.reattachWorktree
-        .mutate({ worktreePath, branch: targetBranch })
-        .catch(() => {});
-    }
-
-    if (mainStashRef) {
-      await trpcVanilla.focus.stashPop
-        .mutate({ repoPath: mainRepoPath })
-        .catch((e) => log.warn("Stash pop failed:", e));
-    }
-
-    await trpcVanilla.focus.unfocusLocal
-      .mutate({ mainRepoPath })
-      .catch(() => {});
-
-    await trpcVanilla.focus.deleteRef.mutate({ mainRepoPath });
-
-    log.info("Complete unfocus finished");
-  } catch (error) {
-    log.error("Complete unfocus error:", error);
-    await trpcVanilla.focus.deleteRef.mutate({ mainRepoPath }).catch(() => {});
+  if (!result.success) {
+    return { success: false, error: result.error };
   }
+
+  return { success: true, stashPopWarning: result.data.stashPopWarning };
+}
+
+export async function runRestoreSaga(
+  mainRepoPath: string,
+): Promise<FocusSession | null> {
+  const saga = new FocusRestoreSaga();
+  const result = await saga.run({ mainRepoPath });
+
+  if (!result.success) {
+    if (result.error === "Invalid focus state") return null;
+    log.error(`Failed to restore focus state: ${result.error}`);
+    return null;
+  }
+
+  return result.data;
 }

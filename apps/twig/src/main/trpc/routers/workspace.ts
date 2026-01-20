@@ -11,6 +11,8 @@ import {
   getWorkspaceInfoOutput,
   getWorkspaceTerminalsInput,
   getWorkspaceTerminalsOutput,
+  getWorktreeTasksInput,
+  getWorktreeTasksOutput,
   isWorkspaceRunningInput,
   isWorkspaceRunningOutput,
   runStartScriptsInput,
@@ -92,8 +94,14 @@ export const workspaceRouter = router({
       getService().getLocalTasksForFolder(input.mainRepoPath),
     ),
 
+  getWorktreeTasks: publicProcedure
+    .input(getWorktreeTasksInput)
+    .output(getWorktreeTasksOutput)
+    .query(({ input }) => getService().getWorktreeTasks(input.worktreePath)),
+
   onTerminalCreated: subscribe(WorkspaceServiceEvent.TerminalCreated),
   onError: subscribe(WorkspaceServiceEvent.Error),
   onWarning: subscribe(WorkspaceServiceEvent.Warning),
   onPromoted: subscribe(WorkspaceServiceEvent.Promoted),
+  onBranchChanged: subscribe(WorkspaceServiceEvent.BranchChanged),
 });

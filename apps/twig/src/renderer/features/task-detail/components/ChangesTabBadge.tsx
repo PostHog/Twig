@@ -1,25 +1,16 @@
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
-import { useEffectiveWorktreePath } from "@/renderer/features/sidebar/hooks/useEffectiveWorktreePath";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesTabBadgeProps {
   taskId: string;
   task: Task;
 }
 
-export function ChangesTabBadge({ taskId, task }: ChangesTabBadgeProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
-  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
-  const repoPath = useEffectiveWorktreePath(
-    workspace?.worktreePath,
-    workspace?.folderPath ?? taskData.repoPath,
-    workspace?.mode,
-  );
+export function ChangesTabBadge({ taskId, task: _task }: ChangesTabBadgeProps) {
+  const repoPath = useCwd(taskId);
 
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", repoPath],

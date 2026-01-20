@@ -10,21 +10,20 @@ import {
 import { Tooltip } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
-import { isTwigBranch } from "@shared/constants";
 import type { WorkspaceMode } from "@shared/types";
-import { selectFocusedBranch, useFocusStore } from "@stores/focusStore";
+import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useCwd } from "../../hooks/useCwd";
 import { SidebarItem } from "../SidebarItem";
 
 interface TaskItemProps {
   id: string;
   label: string;
   isActive: boolean;
-  worktreePath?: string;
   workspaceMode?: WorkspaceMode;
   mainRepoPath?: string;
-  branchName?: string;
+  worktreePath?: string;
   lastActivityAt?: number;
   isGenerating?: boolean;
   isUnread?: boolean;
@@ -91,15 +90,19 @@ function TaskHoverToolbar({
 }
 
 interface DiffStatsDisplayProps {
-  worktreePath: string;
+  taskId: string;
 }
 
-function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
+function DiffStatsDisplay({ taskId }: DiffStatsDisplayProps) {
+  const effectivePath = useCwd(taskId);
+
   const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", worktreePath],
+    queryKey: ["diff-stats", effectivePath],
     queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({ directoryPath: worktreePath }),
-    enabled: !!worktreePath,
+      trpcVanilla.git.getDiffStats.query({
+        directoryPath: effectivePath as string,
+      }),
+    enabled: !!effectivePath,
     staleTime: 5000,
     refetchInterval: 5000,
     placeholderData: (prev) => prev,
@@ -139,12 +142,12 @@ function DiffStatsDisplay({ worktreePath }: DiffStatsDisplayProps) {
 }
 
 export function TaskItem({
+  id,
   label,
   isActive,
-  worktreePath,
   workspaceMode,
   mainRepoPath,
-  branchName,
+  worktreePath,
   lastActivityAt,
   isGenerating,
   isUnread,
@@ -154,16 +157,11 @@ export function TaskItem({
   onDelete,
   onTogglePin,
 }: TaskItemProps) {
-  const focusedBranch = useFocusStore(selectFocusedBranch(mainRepoPath ?? ""));
+  const isFocused = useFocusStore(
+    selectIsFocusedOnWorktree(worktreePath ?? ""),
+  );
 
   const isCloudTask = workspaceMode === "cloud";
-  const hasTwigBranch = branchName ? isTwigBranch(branchName) : false;
-  // Only show "Watching" indicator for twig-created branches, not borrowed ones
-  const isWatching = !!(
-    branchName &&
-    focusedBranch === branchName &&
-    hasTwigBranch
-  );
 
   const activityText = isGenerating
     ? "Generating..."
@@ -177,9 +175,7 @@ export function TaskItem({
       {repoName && <span>{repoName}</span>}
       {repoName && activityText && <span>·</span>}
       {activityText && <span>{activityText}</span>}
-      {!isCloudTask && worktreePath && (
-        <DiffStatsDisplay worktreePath={worktreePath} />
-      )}
+      {!isCloudTask && <DiffStatsDisplay taskId={id} />}
     </span>
   );
 
@@ -205,7 +201,7 @@ export function TaskItem({
     </Tooltip>
   ) : isWorktreeTask ? (
     <Tooltip content={modeTooltip}>
-      <GitBranchIcon size={16} className={isWatching ? "text-blue-11" : ""} />
+      <GitBranchIcon size={16} className={isFocused ? "text-blue-11" : ""} />
     </Tooltip>
   ) : (
     <Tooltip content={modeTooltip}>

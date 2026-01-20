@@ -93,7 +93,6 @@ export const cancelSessionInput = z.object({
 export const interruptReasonSchema = z.enum([
   "user_request",
   "moving_to_worktree",
-  "moving_to_local",
 ]);
 export type InterruptReason = z.infer<typeof interruptReasonSchema>;
 
@@ -198,13 +197,24 @@ export const listSessionsInput = z.object({
   taskId: z.string(),
 });
 
-export const notifyCwdChangeInput = z.object({
-  sessionId: z.string(),
-  newPath: z.string(),
-  reason: z.enum(["moving_to_worktree", "moving_to_local"]),
+export const detachedHeadContext = z.object({
+  type: z.literal("detached_head"),
+  branchName: z.string(),
+  isDetached: z.boolean(),
 });
 
-export type NotifyCwdChangeInput = z.infer<typeof notifyCwdChangeInput>;
+export const sessionContextChangeSchema = detachedHeadContext;
+
+export type SessionContextChange = z.infer<typeof sessionContextChangeSchema>;
+
+export const notifySessionContextInput = z.object({
+  sessionId: z.string(),
+  context: sessionContextChangeSchema,
+});
+
+export type NotifySessionContextInput = z.infer<
+  typeof notifySessionContextInput
+>;
 
 export const sessionInfoSchema = z.object({
   taskRunId: z.string(),

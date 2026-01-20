@@ -5,7 +5,7 @@ import {
   checkoutInput,
   findWorktreeInput,
   focusResultSchema,
-  getCurrentStateOutput,
+  focusSessionSchema,
   mainRepoPathInput,
   reattachInput,
   repoPathInput,
@@ -13,9 +13,12 @@ import {
   stashResultSchema,
   syncInput,
   worktreeInput,
-  writeRefInput,
 } from "../../services/focus/schemas.js";
-import type { FocusService } from "../../services/focus/service.js";
+import {
+  type FocusService,
+  FocusServiceEvent,
+  type FocusServiceEvents,
+} from "../../services/focus/service.js";
 import type { FocusSyncService } from "../../services/focus/sync-service.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -23,11 +26,34 @@ const getService = () => container.get<FocusService>(MAIN_TOKENS.FocusService);
 const getSyncService = () =>
   container.get<FocusSyncService>(MAIN_TOKENS.FocusSyncService);
 
+function subscribe<K extends keyof FocusServiceEvents>(event: K) {
+  return publicProcedure.subscription(async function* (opts) {
+    const service = getService();
+    const iterable = service.toIterable(event, { signal: opts.signal });
+    for await (const data of iterable) {
+      yield data;
+    }
+  });
+}
+
 export const focusRouter = router({
-  getCurrentState: publicProcedure
+  getSession: publicProcedure
     .input(mainRepoPathInput)
-    .output(getCurrentStateOutput)
-    .query(({ input }) => getService().getCurrentState(input.mainRepoPath)),
+    .output(focusSessionSchema.nullable())
+    .query(({ input }) => getService().getSession(input.mainRepoPath)),
+
+  saveSession: publicProcedure
+    .input(focusSessionSchema)
+    .mutation(({ input }) => getService().saveSession(input)),
+
+  deleteSession: publicProcedure
+    .input(mainRepoPathInput)
+    .mutation(({ input }) => getService().deleteSession(input.mainRepoPath)),
+
+  isFocusActive: publicProcedure
+    .input(mainRepoPathInput)
+    .output(z.boolean())
+    .query(({ input }) => getService().isFocusActive(input.mainRepoPath)),
 
   validateFocusOperation: publicProcedure
     .input(
@@ -50,11 +76,40 @@ export const focusRouter = router({
     .output(z.boolean())
     .query(({ input }) => getService().isDirty(input.repoPath)),
 
+  getCommitSha: publicProcedure
+    .input(repoPathInput)
+    .output(z.string())
+    .query(({ input }) => getService().getCommitSha(input.repoPath)),
+
   findWorktreeByBranch: publicProcedure
     .input(findWorktreeInput)
     .output(z.string().nullable())
     .query(({ input }) =>
       getService().findWorktreeByBranch(input.mainRepoPath, input.branch),
+    ),
+
+  toRelativeWorktreePath: publicProcedure
+    .input(z.object({ absolutePath: z.string(), mainRepoPath: z.string() }))
+    .output(z.string())
+    .query(({ input }) =>
+      getService().toRelativeWorktreePath(
+        input.absolutePath,
+        input.mainRepoPath,
+      ),
+    ),
+
+  toAbsoluteWorktreePath: publicProcedure
+    .input(z.object({ relativePath: z.string() }))
+    .output(z.string())
+    .query(({ input }) =>
+      getService().toAbsoluteWorktreePath(input.relativePath),
+    ),
+
+  worktreeExistsAtPath: publicProcedure
+    .input(z.object({ relativePath: z.string() }))
+    .output(z.boolean())
+    .query(({ input }) =>
+      getService().worktreeExistsAtPath(input.relativePath),
     ),
 
   // Mutations
@@ -67,6 +122,13 @@ export const focusRouter = router({
     .input(repoPathInput)
     .output(focusResultSchema)
     .mutation(({ input }) => getService().stashPop(input.repoPath)),
+
+  stashApply: publicProcedure
+    .input(z.object({ repoPath: z.string(), stashRef: z.string() }))
+    .output(focusResultSchema)
+    .mutation(({ input }) =>
+      getService().stashApply(input.repoPath, input.stashRef),
+    ),
 
   checkout: publicProcedure
     .input(checkoutInput)
@@ -91,16 +153,6 @@ export const focusRouter = router({
     .input(repoPathInput)
     .mutation(({ input }) => getService().cleanWorkingTree(input.repoPath)),
 
-  writeRef: publicProcedure
-    .input(writeRefInput)
-    .mutation(({ input }) =>
-      getService().writeFocusRef(input.mainRepoPath, input.data),
-    ),
-
-  deleteRef: publicProcedure
-    .input(mainRepoPathInput)
-    .mutation(({ input }) => getService().deleteFocusRef(input.mainRepoPath)),
-
   startSync: publicProcedure
     .input(syncInput)
     .mutation(({ input }) =>
@@ -109,27 +161,16 @@ export const focusRouter = router({
 
   stopSync: publicProcedure.mutation(() => getSyncService().stopSync()),
 
-  focusLocal: publicProcedure
-    .input(z.object({ mainRepoPath: z.string(), branch: z.string() }))
-    .output(z.string().nullable())
+  startWatchingMainRepo: publicProcedure
+    .input(mainRepoPathInput)
     .mutation(({ input }) =>
-      getService().focusLocal(input.mainRepoPath, input.branch),
+      getService().startWatchingMainRepo(input.mainRepoPath),
     ),
 
-  unfocusLocal: publicProcedure
-    .input(mainRepoPathInput)
-    .output(z.boolean())
-    .mutation(({ input }) => getService().unfocusLocal(input.mainRepoPath)),
+  stopWatchingMainRepo: publicProcedure.mutation(() =>
+    getService().stopWatchingMainRepo(),
+  ),
 
-  isLocalFocused: publicProcedure
-    .input(mainRepoPathInput)
-    .output(z.boolean())
-    .query(({ input }) => getService().isLocalFocused(input.mainRepoPath)),
-
-  getLocalWorktreePath: publicProcedure
-    .input(mainRepoPathInput)
-    .output(z.string())
-    .query(({ input }) =>
-      getService().getLocalWorktreePath(input.mainRepoPath),
-    ),
+  onBranchRenamed: subscribe(FocusServiceEvent.BranchRenamed),
+  onForeignBranchCheckout: subscribe(FocusServiceEvent.ForeignBranchCheckout),
 });
