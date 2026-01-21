@@ -202,17 +202,6 @@ export function InlinePermissionSelector({
     [customInput, options, onSelect],
   );
 
-  const handleOptionClick = (index: number) => {
-    if (disabled) return;
-    const opt = allOptions[index];
-    if (isCustomOption(opt.optionId)) {
-      setSelectedIndex(index);
-      setIsCustomInputMode(true);
-    } else {
-      onSelect(opt.optionId);
-    }
-  };
-
   return (
     <Box
       ref={containerRef}
@@ -258,10 +247,9 @@ export function InlinePermissionSelector({
               key={option.optionId}
               align="center"
               gap="1"
-              className={`cursor-pointer py-0.5 ${
+              className={`py-0.5 ${
                 isSelected ? "text-gray-12" : "text-gray-10"
               }`}
-              onClick={() => handleOptionClick(index)}
             >
               <span
                 className={`inline-block w-3 text-xs ${
