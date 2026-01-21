@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UpdatesEvent } from "./schemas.js";
 
 // Use vi.hoisted to ensure mocks are available when vi.mock is hoisted
-const { mockApp, mockAutoUpdater } = vi.hoisted(() => ({
+const { mockApp, mockAutoUpdater, mockLifecycleService } = vi.hoisted(() => ({
   mockAutoUpdater: {
     setFeedURL: vi.fn(),
     checkForUpdates: vi.fn(),
@@ -14,6 +14,10 @@ const { mockApp, mockAutoUpdater } = vi.hoisted(() => ({
     getVersion: vi.fn(() => "1.0.0"),
     on: vi.fn(),
     whenReady: vi.fn(() => Promise.resolve()),
+  },
+  mockLifecycleService: {
+    shutdown: vi.fn(() => Promise.resolve()),
+    setQuittingForUpdate: vi.fn(),
   },
 }));
 
@@ -30,6 +34,12 @@ vi.mock("../../lib/logger.js", () => ({
       warn: vi.fn(),
       debug: vi.fn(),
     }),
+  },
+}));
+
+vi.mock("../../di/tokens.js", () => ({
+  MAIN_TOKENS: {
+    AppLifecycleService: Symbol.for("AppLifecycleService"),
   },
 }));
 
@@ -72,6 +82,10 @@ describe("UpdatesService", () => {
     delete process.env.ELECTRON_DISABLE_AUTO_UPDATE;
 
     service = new UpdatesService();
+    // Manually inject the mock lifecycle service (normally done by DI container)
+    (
+      service as unknown as { lifecycleService: typeof mockLifecycleService }
+    ).lifecycleService = mockLifecycleService;
   });
 
   afterEach(() => {
@@ -292,8 +306,8 @@ describe("UpdatesService", () => {
   });
 
   describe("installUpdate", () => {
-    it("returns false when no update is ready", () => {
-      const result = service.installUpdate();
+    it("returns false when no update is ready", async () => {
+      const result = await service.installUpdate();
       expect(result).toEqual({ installed: false });
     });
 
@@ -309,8 +323,10 @@ describe("UpdatesService", () => {
         updateDownloadedHandler({}, "Release notes", "v2.0.0");
       }
 
-      const result = service.installUpdate();
+      const result = await service.installUpdate();
       expect(result).toEqual({ installed: true });
+      expect(mockLifecycleService.shutdown).toHaveBeenCalled();
+      expect(mockLifecycleService.setQuittingForUpdate).toHaveBeenCalled();
       expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalled();
     });
 
@@ -330,7 +346,7 @@ describe("UpdatesService", () => {
         throw new Error("Failed to install");
       });
 
-      const result = service.installUpdate();
+      const result = await service.installUpdate();
       expect(result).toEqual({ installed: false });
     });
   });

@@ -27,19 +27,18 @@ import "./lib/logger";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
-import type { AgentService } from "./services/agent/service.js";
 import type { DockBadgeService } from "./services/dock-badge/service.js";
 import type { UIService } from "./services/ui/service.js";
 import { setMainWindowGetter } from "./trpc/context.js";
 import { trpcRouter } from "./trpc/index.js";
 
 import "./services/index.js";
+import type { AppLifecycleService } from "./services/app-lifecycle/service.js";
 import type { DeepLinkService } from "./services/deep-link/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
 import type { OAuthService } from "./services/oauth/service.js";
 import {
   initializePostHog,
-  shutdownPostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
 import type { TaskLinkService } from "./services/task-link/service";
@@ -365,19 +364,26 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", async () => {
   if (process.platform !== "darwin") {
-    trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
-    await shutdownPostHog();
+    const lifecycleService = container.get<AppLifecycleService>(
+      MAIN_TOKENS.AppLifecycleService,
+    );
+    await lifecycleService.shutdown();
     app.quit();
   }
 });
 
 app.on("before-quit", async (event) => {
+  const lifecycleService = container.get<AppLifecycleService>(
+    MAIN_TOKENS.AppLifecycleService,
+  );
+
+  // If quitting to install an update, don't block - let the updater handle it
+  if (lifecycleService.isQuittingForUpdate) {
+    return;
+  }
+
   event.preventDefault();
-  const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
-  await agentService.cleanupAll();
-  trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
-  await shutdownPostHog();
-  app.exit(0);
+  await lifecycleService.shutdownAndExit();
 });
 
 app.on("activate", () => {
@@ -389,8 +395,10 @@ app.on("activate", () => {
 // Handle process signals to ensure clean shutdown
 const handleShutdownSignal = async (_signal: string) => {
   try {
-    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
-    await agentService.cleanupAll();
+    const lifecycleService = container.get<AppLifecycleService>(
+      MAIN_TOKENS.AppLifecycleService,
+    );
+    await lifecycleService.shutdown();
   } catch (_err) {}
   process.exit(0);
 };
@@ -402,16 +410,20 @@ process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 // Handle uncaught exceptions to attempt cleanup before crash
 process.on("uncaughtException", async (_error) => {
   try {
-    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
-    await agentService.cleanupAll();
+    const lifecycleService = container.get<AppLifecycleService>(
+      MAIN_TOKENS.AppLifecycleService,
+    );
+    await lifecycleService.shutdown();
   } catch (_cleanupErr) {}
   process.exit(1);
 });
 
 process.on("unhandledRejection", async (_reason) => {
   try {
-    const agentService = container.get<AgentService>(MAIN_TOKENS.AgentService);
-    await agentService.cleanupAll();
+    const lifecycleService = container.get<AppLifecycleService>(
+      MAIN_TOKENS.AppLifecycleService,
+    );
+    await lifecycleService.shutdown();
   } catch (_cleanupErr) {}
   process.exit(1);
 });
