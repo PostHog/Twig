@@ -66,6 +66,15 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
         const folders = get().folders;
         for (const folder of folders) {
+          trpcVanilla.focus.restore
+            .mutate({ mainRepoPath: folder.path })
+            .catch((error) => {
+              log.error(
+                `Failed to restore focus state for ${folder.path}:`,
+                error,
+              );
+            });
+
           get()
             .cleanupOrphanedWorktrees(folder.path)
             .catch((error) => {

@@ -1,11 +1,12 @@
 import { CheckIcon, InfoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { Card, Flex, Spinner, Text } from "@radix-ui/themes";
+import type { ReactNode } from "react";
 import { toast as sonnerToast } from "sonner";
 
 interface ToastProps {
   id: string | number;
   type: "loading" | "success" | "error" | "info" | "warning";
-  title: string;
+  title: ReactNode;
   description?: string;
 }
 
@@ -54,7 +55,7 @@ function ToastComponent(props: ToastProps) {
 }
 
 export const toast = {
-  loading: (title: string, description?: string) => {
+  loading: (title: ReactNode, description?: string) => {
     return sonnerToast.custom((id) => (
       <ToastComponent
         id={id}
@@ -66,7 +67,7 @@ export const toast = {
   },
 
   success: (
-    title: string,
+    title: ReactNode,
     options?: { description?: string; id?: string | number },
   ) => {
     return sonnerToast.custom(
@@ -83,7 +84,7 @@ export const toast = {
   },
 
   error: (
-    title: string,
+    title: ReactNode,
     options?: { description?: string; id?: string | number },
   ) => {
     return sonnerToast.custom(
@@ -99,7 +100,7 @@ export const toast = {
     );
   },
 
-  info: (title: string, description?: string) => {
+  info: (title: ReactNode, description?: string) => {
     return sonnerToast.custom((id) => (
       <ToastComponent
         id={id}
@@ -111,7 +112,7 @@ export const toast = {
   },
 
   warning: (
-    title: string,
+    title: ReactNode,
     options?: { description?: string; id?: string | number; duration?: number },
   ) => {
     return sonnerToast.custom(

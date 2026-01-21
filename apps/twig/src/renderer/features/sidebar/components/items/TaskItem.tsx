@@ -28,6 +28,20 @@ function useCurrentBranch(repoPath?: string, worktreeName?: string) {
   });
 }
 
+function useMainRepoBranch(mainRepoPath?: string) {
+  return useQuery({
+    queryKey: ["main-repo-branch", mainRepoPath],
+    queryFn: () => {
+      if (!mainRepoPath) throw new Error("mainRepoPath is required");
+      return trpcVanilla.git.getCurrentBranch.query({
+        directoryPath: mainRepoPath,
+      });
+    },
+    enabled: !!mainRepoPath,
+    staleTime: 0,
+  });
+}
+
 interface TaskItemProps {
   id: string;
   label: string;
@@ -35,6 +49,8 @@ interface TaskItemProps {
   worktreeName?: string;
   worktreePath?: string;
   workspaceMode?: WorkspaceMode;
+  mainRepoPath?: string;
+  branchName?: string;
   lastActivityAt?: number;
   isGenerating?: boolean;
   isUnread?: boolean;
@@ -135,6 +151,8 @@ export function TaskItem({
   worktreeName,
   worktreePath,
   workspaceMode,
+  mainRepoPath,
+  branchName,
   lastActivityAt,
   isGenerating,
   isUnread,
@@ -145,8 +163,10 @@ export function TaskItem({
   onTogglePin,
 }: TaskItemProps) {
   const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
+  const { data: mainRepoBranch } = useMainRepoBranch(mainRepoPath);
 
   const isCloudTask = workspaceMode === "cloud";
+  const isWatching = !!(branchName && mainRepoBranch === branchName);
 
   const activityText = isGenerating
     ? "Generating..."
@@ -159,6 +179,8 @@ export function TaskItem({
       <Cloud size={10} />
       <span>Cloud</span>
     </span>
+  ) : isWatching ? (
+    <span style={{ color: "var(--blue-11)" }}>Watching</span>
   ) : (
     (worktreeName ?? currentBranch)
   );
@@ -181,7 +203,7 @@ export function TaskItem({
   ) : isPinned ? (
     <PushPin size={12} className="text-accent-11" />
   ) : (
-    <GitBranchIcon size={12} />
+    <GitBranchIcon size={12} className={isWatching ? "text-blue-11" : ""} />
   );
 
   const endContent = useMemo(
