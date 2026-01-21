@@ -12,6 +12,7 @@ import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useMemo } from "react";
 import {
+  selectWorkspace,
   selectWorktreePath,
   useWorkspaceStore,
 } from "@/renderer/features/workspace/stores/workspaceStore";
@@ -56,10 +57,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   useWorkspaceEvents(taskId);
   const task = taskData.task;
-  const workspace = useWorkspaceStore(
-    (state) => state.workspaces[taskId] ?? null,
-  );
-
+  const workspace = useWorkspaceStore(selectWorkspace(taskId));
   const branchName = workspace?.branchName;
 
   const headerContent = useMemo(
