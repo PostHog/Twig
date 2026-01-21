@@ -1,6 +1,7 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { Button, Flex } from "@radix-ui/themes";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
+import { useEffectiveWorktreePath } from "../hooks/useEffectiveWorktreePath";
 import type {
   HistoryData,
   HistoryTaskData,
@@ -51,13 +52,19 @@ function HistoryTaskItem({
   const workspace = workspaces[task.id];
   const taskState = taskStates[task.id];
 
+  const effectiveWorktreePath = useEffectiveWorktreePath(
+    workspace?.worktreePath,
+    workspace?.folderPath,
+    taskState?.workspaceMode,
+  );
+
   return (
     <TaskItem
       id={task.id}
       label={task.title}
       isActive={isActive}
       worktreeName={workspace?.worktreeName ?? undefined}
-      worktreePath={workspace?.worktreePath ?? workspace?.folderPath}
+      worktreePath={effectiveWorktreePath}
       workspaceMode={taskState?.workspaceMode}
       mainRepoPath={workspace?.folderPath}
       branchName={workspace?.branchName ?? undefined}
@@ -96,13 +103,19 @@ function PinnedTaskItem({
   const workspace = workspaces[task.id];
   const taskState = taskStates[task.id];
 
+  const effectiveWorktreePath = useEffectiveWorktreePath(
+    workspace?.worktreePath,
+    workspace?.folderPath,
+    taskState?.workspaceMode,
+  );
+
   return (
     <TaskItem
       id={task.id}
       label={task.title}
       isActive={isActive}
       worktreeName={workspace?.worktreeName ?? undefined}
-      worktreePath={workspace?.worktreePath ?? workspace?.folderPath}
+      worktreePath={effectiveWorktreePath}
       workspaceMode={taskState?.workspaceMode}
       mainRepoPath={workspace?.folderPath}
       branchName={workspace?.branchName ?? undefined}

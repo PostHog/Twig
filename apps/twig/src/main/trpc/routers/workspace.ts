@@ -5,6 +5,8 @@ import {
   createWorkspaceOutput,
   deleteWorkspaceInput,
   getAllWorkspacesOutput,
+  getLocalTasksInput,
+  getLocalTasksOutput,
   getWorkspaceInfoInput,
   getWorkspaceInfoOutput,
   getWorkspaceTerminalsInput,
@@ -83,7 +85,15 @@ export const workspaceRouter = router({
     .output(getWorkspaceTerminalsOutput)
     .query(({ input }) => getService().getWorkspaceTerminals(input.taskId)),
 
+  getLocalTasks: publicProcedure
+    .input(getLocalTasksInput)
+    .output(getLocalTasksOutput)
+    .query(({ input }) =>
+      getService().getLocalTasksForFolder(input.mainRepoPath),
+    ),
+
   onTerminalCreated: subscribe(WorkspaceServiceEvent.TerminalCreated),
   onError: subscribe(WorkspaceServiceEvent.Error),
   onWarning: subscribe(WorkspaceServiceEvent.Warning),
+  onPromoted: subscribe(WorkspaceServiceEvent.Promoted),
 });

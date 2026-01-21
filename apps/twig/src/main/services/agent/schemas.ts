@@ -23,6 +23,8 @@ export const sessionConfigSchema = z.object({
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
   executionMode: executionModeSchema.optional(),
+  /** Additional directories Claude can access beyond cwd (for worktree support) */
+  additionalDirectories: z.array(z.string()).optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
@@ -42,6 +44,8 @@ export const startSessionInput = z.object({
   executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   createPR: z.boolean().optional(),
+  /** Additional directories Claude can access beyond cwd (for worktree support) */
+  additionalDirectories: z.array(z.string()).optional(),
 });
 
 export type StartSessionInput = z.infer<typeof startSessionInput>;
@@ -71,6 +75,11 @@ export type PromptInput = z.infer<typeof promptInput>;
 
 export const promptOutput = z.object({
   stopReason: z.string(),
+  _meta: z
+    .object({
+      interruptReason: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type PromptOutput = z.infer<typeof promptOutput>;
@@ -80,9 +89,18 @@ export const cancelSessionInput = z.object({
   sessionId: z.string(),
 });
 
+// Interrupt reason schema
+export const interruptReasonSchema = z.enum([
+  "user_request",
+  "moving_to_worktree",
+  "moving_to_local",
+]);
+export type InterruptReason = z.infer<typeof interruptReasonSchema>;
+
 // Cancel prompt input
 export const cancelPromptInput = z.object({
   sessionId: z.string(),
+  reason: interruptReasonSchema.optional(),
 });
 
 // Reconnect session input
@@ -95,6 +113,8 @@ export const reconnectSessionInput = z.object({
   projectId: z.number(),
   logUrl: z.string().optional(),
   sdkSessionId: z.string().optional(),
+  /** Additional directories Claude can access beyond cwd (for worktree support) */
+  additionalDirectories: z.array(z.string()).optional(),
 });
 
 export type ReconnectSessionInput = z.infer<typeof reconnectSessionInput>;
@@ -173,3 +193,22 @@ export const cancelPermissionInput = z.object({
 });
 
 export type CancelPermissionInput = z.infer<typeof cancelPermissionInput>;
+
+export const listSessionsInput = z.object({
+  taskId: z.string(),
+});
+
+export const notifyCwdChangeInput = z.object({
+  sessionId: z.string(),
+  newPath: z.string(),
+  reason: z.enum(["moving_to_worktree", "moving_to_local"]),
+});
+
+export type NotifyCwdChangeInput = z.infer<typeof notifyCwdChangeInput>;
+
+export const sessionInfoSchema = z.object({
+  taskRunId: z.string(),
+  repoPath: z.string(),
+});
+
+export const listSessionsOutput = z.array(sessionInfoSchema);

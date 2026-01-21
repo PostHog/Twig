@@ -9,6 +9,7 @@ import {
 import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
+import { selectFocusedBranch, useFocusStore } from "@stores/focusStore";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { SidebarItem } from "../SidebarItem";
@@ -25,20 +26,6 @@ function useCurrentBranch(repoPath?: string, worktreeName?: string) {
     enabled: !!repoPath && !worktreeName,
     staleTime: 3000,
     refetchInterval: 3000,
-  });
-}
-
-function useMainRepoBranch(mainRepoPath?: string) {
-  return useQuery({
-    queryKey: ["main-repo-branch", mainRepoPath],
-    queryFn: () => {
-      if (!mainRepoPath) throw new Error("mainRepoPath is required");
-      return trpcVanilla.git.getCurrentBranch.query({
-        directoryPath: mainRepoPath,
-      });
-    },
-    enabled: !!mainRepoPath,
-    staleTime: 0,
   });
 }
 
@@ -163,10 +150,19 @@ export function TaskItem({
   onTogglePin,
 }: TaskItemProps) {
   const { data: currentBranch } = useCurrentBranch(worktreePath, worktreeName);
-  const { data: mainRepoBranch } = useMainRepoBranch(mainRepoPath);
+  const focusedBranch = useFocusStore(selectFocusedBranch(mainRepoPath ?? ""));
 
   const isCloudTask = workspaceMode === "cloud";
-  const isWatching = !!(branchName && mainRepoBranch === branchName);
+  const isTwigBranch =
+    branchName?.startsWith("twig/") ||
+    branchName?.startsWith("array/") ||
+    branchName?.startsWith("posthog/");
+  // Only show "Watching" indicator for twig-created branches, not borrowed ones
+  const isWatching = !!(
+    branchName &&
+    focusedBranch === branchName &&
+    isTwigBranch
+  );
 
   const activityText = isGenerating
     ? "Generating..."

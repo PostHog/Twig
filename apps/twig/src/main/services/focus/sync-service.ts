@@ -35,6 +35,7 @@ export class FocusSyncService {
     timer: null,
   };
   private syncing = false;
+  private currentSyncPromise: Promise<void> | null = null;
 
   /** Files we recently wrote - map of absolute path to write timestamp */
   private recentWrites: Map<string, number> = new Map();
@@ -55,7 +56,7 @@ export class FocusSyncService {
     );
 
     // Initial sync: copy all uncommitted files from worktree to main
-    await this.performInitialSync(worktreePath, mainRepoPath);
+    await this.copyUncommittedFiles(worktreePath, mainRepoPath);
 
     // Start watching both directories
     const watcherIgnore = ALWAYS_IGNORE.map((p) => `**/${p}/**`);
@@ -93,12 +94,18 @@ export class FocusSyncService {
       this.pending.timer = null;
     }
 
-    // Flush any pending changes before stopping
+    // Wait for any in-flight sync to complete
+    if (this.currentSyncPromise) {
+      log.debug("Waiting for in-flight sync to complete");
+      await this.currentSyncPromise;
+    }
+
+    // Flush any remaining pending changes (without rescheduling)
     if (
       this.pending.mainToWorktree.size > 0 ||
       this.pending.worktreeToMain.size > 0
     ) {
-      await this.flushPending();
+      await this.doFlush();
     }
 
     if (this.mainSubscription) {
@@ -119,18 +126,27 @@ export class FocusSyncService {
   }
 
   /**
-   * Copy all uncommitted files from worktree to main.
-   * This ensures main has all the worktree's changes when focus starts.
+   * Copy all uncommitted files from source to destination.
+   * Used for initial sync when focusing, and for local worktree transfers.
    */
-  private async performInitialSync(
-    worktreePath: string,
-    mainRepoPath: string,
-  ): Promise<void> {
-    const stdout = await git(worktreePath, "status", "--porcelain");
+  async copyUncommittedFiles(srcPath: string, dstPath: string): Promise<void> {
+    const stdout = await git(srcPath, "status", "--porcelain").catch(() => "");
 
     if (!stdout) {
-      log.info("No uncommitted files to sync");
+      log.info("No uncommitted files to copy");
       return;
+    }
+
+    // Load gitignore from source
+    const ig = ignore().add(ALWAYS_IGNORE);
+    try {
+      const content = await fs.readFile(
+        path.join(srcPath, ".gitignore"),
+        "utf-8",
+      );
+      ig.add(content);
+    } catch {
+      // No gitignore, that's fine
     }
 
     const files: string[] = [];
@@ -153,17 +169,34 @@ export class FocusSyncService {
     }
 
     log.info(
-      `Initial sync: copying ${files.length} files from worktree to main`,
+      `Copying ${files.length} uncommitted files from ${srcPath} to ${dstPath}`,
     );
 
     for (const file of files) {
-      if (this.gitignore.ignores(file)) {
+      if (ig.ignores(file)) {
         continue;
       }
 
-      const srcPath = path.join(worktreePath, file);
-      const dstPath = path.join(mainRepoPath, file);
-      await this.copyFile(srcPath, dstPath);
+      const src = path.join(srcPath, file);
+      const dst = path.join(dstPath, file);
+      await this.copyFileDirect(src, dst);
+    }
+  }
+
+  private async copyFileDirect(
+    srcPath: string,
+    dstPath: string,
+  ): Promise<void> {
+    try {
+      const srcStat = await fs.stat(srcPath);
+      if (!srcStat.isFile()) return;
+
+      await fs.mkdir(path.dirname(dstPath), { recursive: true });
+      await fs.copyFile(srcPath, dstPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.warn(`Failed to copy file: ${srcPath}`, error);
+      }
     }
   }
 
@@ -233,6 +266,12 @@ export class FocusSyncService {
       return;
     }
 
+    this.currentSyncPromise = this.doFlush();
+    await this.currentSyncPromise;
+    this.currentSyncPromise = null;
+  }
+
+  private async doFlush(): Promise<void> {
     this.syncing = true;
     this.pending.timer = null;
 

@@ -2,6 +2,7 @@ import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
 import type { RegisteredFolder } from "@shared/types";
 import { create } from "zustand";
+import { useFocusStore } from "./focusStore";
 
 const log = logger.scope("registered-folders-store");
 
@@ -66,8 +67,9 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
         const folders = get().folders;
         for (const folder of folders) {
-          trpcVanilla.focus.restore
-            .mutate({ mainRepoPath: folder.path })
+          useFocusStore
+            .getState()
+            .restore(folder.path)
             .catch((error) => {
               log.error(
                 `Failed to restore focus state for ${folder.path}:`,

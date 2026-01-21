@@ -132,8 +132,23 @@ function subscribeToChannel(taskRunId: string) {
           if (session) {
             session.events.push(payload as AcpMessage);
 
-            // Handle mode updates from ExitPlanMode approval
+            // Track isPromptPending from ACP events (handles backend-initiated prompts)
             const msg = (payload as AcpMessage).message;
+            if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
+              session.isPromptPending = true;
+            }
+            if (
+              "id" in msg &&
+              "result" in msg &&
+              typeof msg.result === "object" &&
+              msg.result !== null &&
+              "stopReason" in msg.result
+            ) {
+              // This is a prompt response
+              session.isPromptPending = false;
+            }
+
+            // Handle mode updates from ExitPlanMode approval
             if (
               "method" in msg &&
               msg.method === "session/update" &&
@@ -618,6 +633,12 @@ const useStore = create<SessionStore>()(
       addSession(session);
       subscribeToChannel(taskRunId);
 
+      // Proactively get the local worktree path so the agent has access to both
+      // the main repo and the local worktree when/if we focus a worktree later
+      const localWorktreePath = await trpcVanilla.focus.getLocalWorktreePath
+        .query({ mainRepoPath: repoPath })
+        .catch(() => null);
+
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -627,6 +648,11 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         logUrl,
         sdkSessionId,
+        // Add the local worktree as an additional directory so the agent
+        // can access it if the user focuses a worktree later
+        ...(localWorktreePath && {
+          additionalDirectories: [localWorktreePath],
+        }),
       });
 
       if (result) {
@@ -680,6 +706,12 @@ const useStore = create<SessionStore>()(
       const persistedMode = getPersistedTaskMode(taskId);
       const effectiveMode = executionMode ?? persistedMode;
 
+      // Proactively get the local worktree path so the agent has access to both
+      // the main repo and the local worktree when/if we focus a worktree later
+      const localWorktreePath = await trpcVanilla.focus.getLocalWorktreePath
+        .query({ mainRepoPath: repoPath })
+        .catch(() => null);
+
       const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
@@ -690,6 +722,11 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         model: defaultModel,
         executionMode: effectiveMode,
+        // Add the local worktree as an additional directory so the agent
+        // can access it if the user focuses a worktree later
+        ...(localWorktreePath && {
+          additionalDirectories: [localWorktreePath],
+        }),
       });
 
       const session = createBaseSession(

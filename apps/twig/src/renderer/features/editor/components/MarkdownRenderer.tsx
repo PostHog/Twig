@@ -77,7 +77,14 @@ const components: Components = {
   },
   pre: ({ children }) => <CodeBlock size="1">{children}</CodeBlock>,
   em: ({ children }) => (
-    <Em style={{ color: "var(--accent-10)" }}>{children}</Em>
+    <Em style={{ fontSize: "var(--font-size-1)", color: "var(--accent-10)" }}>
+      {children}
+    </Em>
+  ),
+  i: ({ children }) => (
+    <i style={{ fontSize: "var(--font-size-1)", color: "var(--accent-10)" }}>
+      {children}
+    </i>
   ),
   strong: ({ children }) => (
     <strong

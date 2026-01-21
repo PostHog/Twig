@@ -42,6 +42,7 @@ interface Turn {
   items: RenderItem[];
   isComplete: boolean;
   stopReason?: string;
+  interruptReason?: string;
   durationMs: number;
   toolCalls: Map<string, ToolCall>;
 }
@@ -165,6 +166,17 @@ interface TurnViewProps {
   taskId?: string;
 }
 
+function getInterruptMessage(reason?: string): string {
+  switch (reason) {
+    case "moving_to_worktree":
+      return "Paused to move agent to worktree";
+    case "moving_to_local":
+      return "Paused to return agent to main repository";
+    default:
+      return "Interrupted by user";
+  }
+}
+
 const TurnView = memo(function TurnView({
   turn,
   repoPath,
@@ -205,7 +217,7 @@ const TurnView = memo(function TurnView({
           <Flex align="center" gap="2" className="text-gray-9">
             <XCircle size={14} />
             <Text size="1" color="gray">
-              Interrupted by user
+              {getInterruptMessage(turn.interruptReason)}
             </Text>
           </Flex>
         </Box>
@@ -269,7 +281,12 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
       if (!turn) continue;
       turn.isComplete = true;
       turn.durationMs += event.ts; // Complete the duration calculation
-      turn.stopReason = (msg.result as { stopReason?: string })?.stopReason;
+      const result = msg.result as {
+        stopReason?: string;
+        _meta?: { interruptReason?: string };
+      };
+      turn.stopReason = result?.stopReason;
+      turn.interruptReason = result?._meta?.interruptReason;
       pendingPrompts.delete(msg.id);
       continue;
     }
@@ -318,13 +335,14 @@ function extractUserContent(params: unknown): string {
   const p = params as { prompt?: ContentBlock[] };
   if (!p?.prompt?.length) return "";
 
-  // Find first visible text block (skip hidden context blocks)
-  const textBlock = p.prompt.find((b): b is TextBlockWithMeta => {
+  // Concatenate all visible text blocks (skip hidden context blocks)
+  const visibleTextBlocks = p.prompt.filter((b): b is TextBlockWithMeta => {
     if (b.type !== "text") return false;
     const meta = (b as TextBlockWithMeta)._meta;
     return !meta?.ui?.hidden;
   });
-  return textBlock?.text ?? "";
+
+  return visibleTextBlocks.map((b) => b.text).join("");
 }
 
 function mergeToolCallUpdate(existing: ToolCall, update: SessionUpdate) {

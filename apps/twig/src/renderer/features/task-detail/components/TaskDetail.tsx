@@ -11,6 +11,7 @@ import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
 import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
 import { useMemo } from "react";
 import {
   selectWorkspace,
@@ -60,6 +61,9 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   const task = taskData.task;
   const workspace = useWorkspaceStore(selectWorkspace(taskId));
   const branchName = workspace?.branchName;
+  const isFocused = useFocusStore(
+    selectIsFocusedOnWorktree(workspace?.worktreePath ?? ""),
+  );
 
   const headerContent = useMemo(
     () => (
@@ -69,12 +73,21 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             {task.title}
           </Text>
           {branchName && (
-            <Code size="1" color="gray" variant="ghost">
+            <Code
+              size="1"
+              color={isFocused ? "blue" : "gray"}
+              variant="ghost"
+              style={!isFocused ? { opacity: 0.6 } : undefined}
+            >
               {branchName}
+              {!isFocused && " · not checked out"}
             </Code>
           )}
           <StartWorkspaceButton taskId={taskId} />
-          <FocusWorkspaceButton taskId={taskId} />
+          <FocusWorkspaceButton
+            taskId={taskId}
+            repoPath={taskData.repoPath ?? undefined}
+          />
         </Flex>
         <Flex align="center" gap="2" flexShrink="0">
           <ExternalAppsOpener
@@ -84,7 +97,15 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         </Flex>
       </Flex>
     ),
-    [task.title, branchName, workspace, taskId, effectiveRepoPath],
+    [
+      task.title,
+      branchName,
+      isFocused,
+      workspace,
+      taskId,
+      effectiveRepoPath,
+      taskData.repoPath,
+    ],
   );
 
   useSetHeaderContent(headerContent);
