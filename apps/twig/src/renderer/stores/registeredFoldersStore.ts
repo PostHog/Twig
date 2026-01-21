@@ -49,7 +49,9 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
         for (const folder of deletedFolders) {
           trpcVanilla.folders.removeFolder
             .mutate({ folderId: folder.id })
-            .catch((err) => log.error(`Failed to remove deleted folder ${folder.path}:`, err));
+            .catch((err) =>
+              log.error(`Failed to remove deleted folder ${folder.path}:`, err),
+            );
         }
         const existingFolders = loadedFolders.filter((f) => f.exists !== false);
 
