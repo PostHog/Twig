@@ -1,4 +1,6 @@
+import * as os from "node:os";
 import { WorktreeManager } from "@posthog/agent";
+import { LEGACY_DATA_DIRS } from "@shared/constants";
 import { app } from "electron";
 import Store from "electron-store";
 import type {
@@ -74,6 +76,49 @@ export const foldersStore = new Store<FoldersSchema>({
 });
 
 const log = logger.scope("store");
+
+/**
+ * Migrate stored worktree paths from legacy directories to current.
+ * This updates taskAssociations that have paths like ~/.array/... to ~/.twig/...
+ */
+export function migrateStoredWorktreePaths(): void {
+  const currentLocation = getWorktreeLocation();
+  const associations = foldersStore.get("taskAssociations", []);
+  let migrated = false;
+
+  const legacyPaths = LEGACY_DATA_DIRS.map((dir) => `${os.homedir()}/${dir}/`);
+  const currentPath = `${currentLocation}/`;
+
+  const updatedAssociations = associations.map((assoc) => {
+    if (!assoc.worktree?.worktreePath) return assoc;
+
+    for (const legacyPath of legacyPaths) {
+      if (assoc.worktree.worktreePath.startsWith(legacyPath)) {
+        const newWorktreePath = assoc.worktree.worktreePath.replace(
+          legacyPath,
+          currentPath,
+        );
+        log.info(
+          `Migrating worktree path: ${assoc.worktree.worktreePath} -> ${newWorktreePath}`,
+        );
+        migrated = true;
+        return {
+          ...assoc,
+          worktree: {
+            ...assoc.worktree,
+            worktreePath: newWorktreePath,
+          },
+        };
+      }
+    }
+    return assoc;
+  });
+
+  if (migrated) {
+    foldersStore.set("taskAssociations", updatedAssociations);
+    log.info("Worktree path migration complete");
+  }
+}
 
 export async function clearAllStoreData(): Promise<void> {
   const associations = foldersStore.get("taskAssociations", []);

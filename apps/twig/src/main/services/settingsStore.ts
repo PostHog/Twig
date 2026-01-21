@@ -1,6 +1,7 @@
 import { existsSync, renameSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { DATA_DIR, LEGACY_DATA_DIRS } from "@shared/constants";
 import { app } from "electron";
 import Store from "electron-store";
 
@@ -8,31 +9,35 @@ interface SettingsSchema {
   worktreeLocation: string;
 }
 
-const LEGACY_DIR_NAME = ".array";
-const CURRENT_DIR_NAME = ".twig";
-
 function getDefaultWorktreeLocation(): string {
-  return path.join(os.homedir(), CURRENT_DIR_NAME);
+  return path.join(os.homedir(), DATA_DIR);
 }
 
-function getLegacyWorktreeLocation(): string {
-  return path.join(os.homedir(), LEGACY_DIR_NAME);
+function getLegacyWorktreeLocations(): string[] {
+  return LEGACY_DATA_DIRS.map((dir) => path.join(os.homedir(), dir));
 }
 
 /**
- * Migrate ~/.array to ~/.twig if needed (one-time migration)
+ * Migrate legacy directories to current if needed (one-time migration)
  */
 function migrateWorktreeDirectory(): void {
-  const legacyPath = getLegacyWorktreeLocation();
   const newPath = getDefaultWorktreeLocation();
 
-  // Only migrate if legacy exists and new doesn't
-  if (existsSync(legacyPath) && !existsSync(newPath)) {
-    try {
-      renameSync(legacyPath, newPath);
-    } catch {
-      // If rename fails (e.g., cross-device), leave as-is
-      // User can manually migrate or continue using legacy location
+  // Only migrate if new path doesn't exist yet
+  if (existsSync(newPath)) {
+    return;
+  }
+
+  // Try to migrate from each legacy location (first one found wins)
+  for (const legacyPath of getLegacyWorktreeLocations()) {
+    if (existsSync(legacyPath)) {
+      try {
+        renameSync(legacyPath, newPath);
+        return;
+      } catch {
+        // If rename fails (e.g., cross-device), leave as-is
+        // User can manually migrate or continue using legacy location
+      }
     }
   }
 }
@@ -57,16 +62,18 @@ export const settingsStore = new Store<SettingsSchema>({
 });
 
 /**
- * Migrate stored worktree setting from ~/.array to ~/.twig if it was the default
+ * Migrate stored worktree setting from legacy to current if it was a legacy default
  */
 function migrateWorktreeSetting(): void {
   const stored = settingsStore.get("worktreeLocation");
-  const legacyDefault = getLegacyWorktreeLocation();
   const newDefault = getDefaultWorktreeLocation();
 
-  // If user had the legacy default, update to new default
-  if (stored === legacyDefault && existsSync(newDefault)) {
-    settingsStore.set("worktreeLocation", newDefault);
+  // If user had a legacy default, update to new default
+  for (const legacyPath of getLegacyWorktreeLocations()) {
+    if (stored === legacyPath && existsSync(newDefault)) {
+      settingsStore.set("worktreeLocation", newDefault);
+      return;
+    }
   }
 }
 
@@ -75,6 +82,24 @@ migrateWorktreeSetting();
 
 export function getWorktreeLocation(): string {
   return settingsStore.get("worktreeLocation", getDefaultWorktreeLocation());
+}
+
+/**
+ * Get all worktree locations to check (current + legacy).
+ * Use this when searching for existing worktrees for backwards compatibility.
+ */
+export function getAllWorktreeLocations(): string[] {
+  const primary = getWorktreeLocation();
+  const locations = [primary];
+
+  // Add legacy locations if they exist and aren't the primary
+  for (const legacyPath of getLegacyWorktreeLocations()) {
+    if (legacyPath !== primary && existsSync(legacyPath)) {
+      locations.push(legacyPath);
+    }
+  }
+
+  return locations;
 }
 
 export function setWorktreeLocation(location: string): void {

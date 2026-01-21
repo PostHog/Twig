@@ -43,6 +43,7 @@ import {
 } from "./services/posthog-analytics.js";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
+import { migrateStoredWorktreePaths } from "./utils/store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -320,6 +321,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Migrate stored worktree paths from legacy directories (e.g., ~/.array -> ~/.twig)
+  migrateStoredWorktreePaths();
+
   createWindow();
   ensureClaudeConfigDir();
 

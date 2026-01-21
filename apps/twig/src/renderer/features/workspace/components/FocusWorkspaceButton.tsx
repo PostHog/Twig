@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowsClockwise, GitBranch } from "@phosphor-icons/react";
 import { Button, Spinner, Text, Tooltip } from "@radix-ui/themes";
+import { isTwigBranch } from "@shared/constants";
 import {
   selectIsFocusedOnWorktree,
   selectIsLoading,
@@ -9,15 +10,6 @@ import { showFocusSuccessToast } from "@utils/focusToast";
 import { toast } from "@utils/toast";
 import { useCallback } from "react";
 import { selectWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
-
-/** Check if branch is a twig-created branch (not borrowed) */
-function isTwigBranch(branchName: string): boolean {
-  return (
-    branchName.startsWith("twig/") ||
-    branchName.startsWith("array/") ||
-    branchName.startsWith("posthog/")
-  );
-}
 
 interface FocusWorkspaceButtonProps {
   taskId: string;

@@ -10,6 +10,7 @@ import {
 import { Tooltip } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
+import { isTwigBranch } from "@shared/constants";
 import type { WorkspaceMode } from "@shared/types";
 import { selectFocusedBranch, useFocusStore } from "@stores/focusStore";
 import { useQuery } from "@tanstack/react-query";
@@ -156,15 +157,12 @@ export function TaskItem({
   const focusedBranch = useFocusStore(selectFocusedBranch(mainRepoPath ?? ""));
 
   const isCloudTask = workspaceMode === "cloud";
-  const isTwigBranch =
-    branchName?.startsWith("twig/") ||
-    branchName?.startsWith("array/") ||
-    branchName?.startsWith("posthog/");
+  const hasTwigBranch = branchName ? isTwigBranch(branchName) : false;
   // Only show "Watching" indicator for twig-created branches, not borrowed ones
   const isWatching = !!(
     branchName &&
     focusedBranch === branchName &&
-    isTwigBranch
+    hasTwigBranch
   );
 
   const activityText = isGenerating

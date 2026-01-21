@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { isTwigBranch, makeBranchName } from "./constants.js";
 import type { WorktreeInfo } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
@@ -783,7 +784,7 @@ export class WorktreeManager {
     const worktreeName = await worktreeNamePromise;
     const baseBranch = await baseBranchPromise;
     const worktreePath = this.getWorktreePath(worktreeName);
-    const branchName = `twig/${worktreeName}`;
+    const branchName = makeBranchName(worktreeName);
 
     this.logger.info("Creating worktree", {
       worktreeName,
@@ -1073,25 +1074,19 @@ export class WorktreeManager {
         worktreePath &&
         path.resolve(worktreePath) === path.resolve(this.mainRepoPath);
       const isInWorktreeFolder = worktreePath?.startsWith(worktreeFolderPath);
-      const isTwigBranch =
-        branchName?.startsWith("twig/") ||
-        branchName?.startsWith("array/") ||
-        branchName?.startsWith("posthog/");
+      const hasTwigBranch = branchName ? isTwigBranch(branchName) : false;
 
       if (
         worktreePath &&
         branchName &&
         !isMainRepo &&
-        (isInWorktreeFolder || isTwigBranch)
+        (isInWorktreeFolder || hasTwigBranch)
       ) {
         const worktreeName = path.basename(worktreePath);
         // Infer ownership: twig/ prefixed branches are "created", others are "borrowed"
-        const branchOwnership =
-          branchName.startsWith("twig/") ||
-          branchName.startsWith("array/") ||
-          branchName.startsWith("posthog/")
-            ? "created"
-            : "borrowed";
+        const branchOwnership = isTwigBranch(branchName)
+          ? "created"
+          : "borrowed";
         worktrees.push({
           worktreePath,
           worktreeName,
