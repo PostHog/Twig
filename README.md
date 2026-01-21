@@ -192,3 +192,39 @@ Reference the workspace path:
 echo "Working in: $TWIG_WORKSPACE_NAME"
 echo "Root repo: $TWIG_ROOT_PATH"
 ```
+
+## Troubleshooting
+
+### Electron failed to install correctly
+
+If you see this error when running `pnpm dev`:
+
+```
+Error: Electron failed to install correctly, please delete node_modules/electron and try installing again
+```
+
+The electron binary didn't download during install. Fix it by running the install script manually:
+
+```bash
+cd node_modules/electron && node install.js
+```
+
+Or nuke it and reinstall:
+
+```bash
+rm -rf node_modules/electron && pnpm install && cd node_modules/electron && node install.js
+```
+
+### Native module crash (libc++abi / Napi::Error)
+
+If the app crashes with something like:
+
+```
+libc++abi: terminating due to uncaught exception of type Napi::Error
+```
+
+Native modules (like node-pty) need to be rebuilt for your Electron version:
+
+```bash
+pnpm --filter twig exec electron-rebuild
+```
