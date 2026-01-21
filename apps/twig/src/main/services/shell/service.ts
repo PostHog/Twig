@@ -1,11 +1,13 @@
 import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
+import path from "node:path";
 import { injectable } from "inversify";
 import * as pty from "node-pty";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store.js";
+import { getWorktreeLocation } from "../settingsStore.js";
 import { buildWorkspaceEnv } from "../workspace/workspaceEnv.js";
 import { type ExecuteOutput, ShellEvent, type ShellEvents } from "./schemas.js";
 
@@ -162,11 +164,24 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       return undefined;
     }
 
+    const folders = foldersStore.get("folders", []);
+    const folder = folders.find((f) => f.id === association.folderId);
+    if (!folder) return undefined;
+
+    let worktreePath: string | null = null;
+    let worktreeName: string | null = null;
+
+    if (association.mode === "worktree") {
+      worktreeName = association.worktree;
+      const worktreeBasePath = getWorktreeLocation();
+      worktreePath = path.join(worktreeBasePath, folder.name, worktreeName);
+    }
+
     return buildWorkspaceEnv({
       taskId,
-      folderPath: association.folderPath,
-      worktreePath: association.worktree?.worktreePath ?? null,
-      worktreeName: association.worktree?.worktreeName ?? null,
+      folderPath: folder.path,
+      worktreePath,
+      worktreeName,
       mode: association.mode,
     });
   }

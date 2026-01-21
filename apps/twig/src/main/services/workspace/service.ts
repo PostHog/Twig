@@ -1,5 +1,6 @@
 import { exec, execFile } from "node:child_process";
 import * as fs from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { WorktreeManager } from "@posthog/agent";
@@ -13,10 +14,14 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store";
+import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
+import type { FocusService } from "../focus/service.js";
+import { FocusServiceEvent } from "../focus/service.js";
 import { getWorktreeLocation } from "../settingsStore";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import type {
+  BranchChangedPayload,
   CreateWorkspaceInput,
   ScriptExecutionResult,
   Workspace,
@@ -43,12 +48,16 @@ function findTaskAssociation(
   return getTaskAssociations().find((a) => a.taskId === taskId);
 }
 
-function clearWorktreeFromAssociation(taskId: string): void {
-  const associations = getTaskAssociations();
-  const updated = associations.map((a) =>
-    a.taskId === taskId ? (({ worktree: _, ...rest }) => rest)(a) : a,
-  );
-  foldersStore.set("taskAssociations", updated);
+function getFolderPath(folderId: string): string | null {
+  const folders = foldersStore.get("folders", []);
+  const folder = folders.find((f) => f.id === folderId);
+  return folder?.path ?? null;
+}
+
+function deriveWorktreePath(folderPath: string, worktreeName: string): string {
+  const worktreeBasePath = getWorktreeLocation();
+  const repoName = path.basename(folderPath);
+  return path.join(worktreeBasePath, repoName, worktreeName);
 }
 
 async function hasTrackedFiles(repoPath: string): Promise<boolean> {
@@ -73,6 +82,35 @@ async function hasAnyFiles(repoPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * Get the current branch name for a repo or worktree by reading its Git HEAD file.
+ * Returns null if in detached HEAD state or doesn't exist.
+ */
+async function getBranchFromPath(repoPath: string): Promise<string | null> {
+  try {
+    const gitPath = path.join(repoPath, ".git");
+    const stat = await fsPromises.stat(gitPath);
+
+    let headPath: string;
+    if (stat.isDirectory()) {
+      // Regular repo - .git is a directory
+      headPath = path.join(gitPath, "HEAD");
+    } else {
+      // Worktree - .git is a file pointing to gitdir
+      const gitContent = await fsPromises.readFile(gitPath, "utf-8");
+      const gitdirMatch = gitContent.match(/gitdir:\s*(.+)/);
+      if (!gitdirMatch) return null;
+      headPath = path.join(gitdirMatch[1].trim(), "HEAD");
+    }
+
+    const headContent = await fsPromises.readFile(headPath, "utf-8");
+    const branchMatch = headContent.match(/ref: refs\/heads\/(.+)/);
+    return branchMatch ? branchMatch[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 const log = logger.scope("workspace");
 
 export const WorkspaceServiceEvent = {
@@ -80,6 +118,7 @@ export const WorkspaceServiceEvent = {
   Error: "error",
   Warning: "warning",
   Promoted: "promoted",
+  BranchChanged: "branchChanged",
 } as const;
 
 export interface WorkspaceServiceEvents {
@@ -87,12 +126,14 @@ export interface WorkspaceServiceEvents {
   [WorkspaceServiceEvent.Error]: WorkspaceErrorPayload;
   [WorkspaceServiceEvent.Warning]: WorkspaceWarningPayload;
   [WorkspaceServiceEvent.Promoted]: WorkspacePromotedPayload;
+  [WorkspaceServiceEvent.BranchChanged]: BranchChangedPayload;
 }
 
 @injectable()
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   private scriptRunner: ScriptRunner;
   private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
+  private branchWatcherInitialized = false;
 
   constructor() {
     super();
@@ -101,6 +142,137 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         this.emit(WorkspaceServiceEvent.TerminalCreated, info);
       },
     });
+  }
+
+  /**
+   * Initialize branch change watching. Should be called after app is ready.
+   * Subscribes to GitStateChanged events and checks for branch renames.
+   */
+  initBranchWatcher(): void {
+    if (this.branchWatcherInitialized) return;
+    this.branchWatcherInitialized = true;
+
+    const fileWatcher = container.get<FileWatcherService>(
+      MAIN_TOKENS.FileWatcherService,
+    );
+    const focusService = container.get<FocusService>(MAIN_TOKENS.FocusService);
+
+    fileWatcher.on(
+      FileWatcherEvent.GitStateChanged,
+      this.handleGitStateChanged.bind(this),
+    );
+
+    focusService.on(
+      FocusServiceEvent.BranchRenamed,
+      this.handleFocusBranchRenamed.bind(this),
+    );
+
+    log.info("Branch watcher initialized");
+  }
+
+  private handleFocusBranchRenamed({
+    worktreePath,
+    newBranch,
+  }: {
+    mainRepoPath: string;
+    worktreePath: string;
+    oldBranch: string;
+    newBranch: string;
+  }): void {
+    const associations = getTaskAssociations();
+    for (const assoc of associations) {
+      if (assoc.mode !== "worktree") continue;
+      const folderPath = getFolderPath(assoc.folderId);
+      if (!folderPath) continue;
+      const derivedPath = deriveWorktreePath(folderPath, assoc.worktree);
+      if (derivedPath === worktreePath && assoc.branchName !== newBranch) {
+        this.updateAssociationBranchName(assoc.taskId, newBranch);
+        this.emit(WorkspaceServiceEvent.BranchChanged, {
+          taskId: assoc.taskId,
+          branchName: newBranch,
+        });
+      }
+    }
+  }
+
+  private async handleGitStateChanged({
+    repoPath,
+  }: {
+    repoPath: string;
+  }): Promise<void> {
+    const associations = getTaskAssociations();
+
+    for (const assoc of associations) {
+      const folderPath = getFolderPath(assoc.folderId);
+      if (!folderPath) continue;
+
+      if (assoc.mode === "worktree") {
+        const worktreePath = deriveWorktreePath(folderPath, assoc.worktree);
+        if (worktreePath !== repoPath) continue;
+
+        const currentBranch = await getBranchFromPath(repoPath);
+        if (currentBranch !== null && currentBranch !== assoc.branchName) {
+          this.updateAssociationBranchName(assoc.taskId, currentBranch);
+          this.emit(WorkspaceServiceEvent.BranchChanged, {
+            taskId: assoc.taskId,
+            branchName: currentBranch,
+          });
+        }
+      } else if (assoc.mode === "local") {
+        if (folderPath !== repoPath) continue;
+
+        const localWorktreePath =
+          await this.getLocalWorktreePathIfExists(folderPath);
+        const branchPath = localWorktreePath ?? folderPath;
+        const currentBranch = await getBranchFromPath(branchPath);
+
+        if (currentBranch === null && localWorktreePath) {
+          continue;
+        }
+
+        this.emit(WorkspaceServiceEvent.BranchChanged, {
+          taskId: assoc.taskId,
+          branchName: currentBranch,
+        });
+      }
+    }
+  }
+
+  private updateAssociationBranchName(
+    taskId: string,
+    branchName: string,
+  ): void {
+    const associations = getTaskAssociations();
+    const index = associations.findIndex((a) => a.taskId === taskId);
+    if (index < 0) return;
+
+    const assoc = associations[index];
+    if (assoc.mode !== "worktree") return;
+
+    associations[index] = { ...assoc, branchName };
+    foldersStore.set("taskAssociations", associations);
+    log.info(`Updated branch name for task ${taskId}: ${branchName}`);
+  }
+
+  private async getLocalWorktreePathIfExists(
+    mainRepoPath: string,
+  ): Promise<string | null> {
+    try {
+      const worktreeBasePath = getWorktreeLocation();
+      const worktreeManager = new WorktreeManager({
+        mainRepoPath,
+        worktreeBasePath,
+      });
+      const localPath = worktreeManager.getLocalWorktreePath();
+      const exists = await worktreeManager.localWorktreeExists();
+      if (exists) {
+        return localPath;
+      }
+      return null;
+    } catch (error) {
+      log.warn(`Error checking local worktree for ${mainRepoPath}:`, error);
+      return null;
+    }
   }
 
   async createWorkspace(options: CreateWorkspaceInput): Promise<WorkspaceInfo> {
@@ -145,8 +317,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       const association: TaskFolderAssociation = {
         taskId,
         folderId,
-        folderPath,
-        mode,
+        mode: "cloud" as const,
       };
 
       if (existingIndex >= 0) {
@@ -160,17 +331,15 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         taskId,
         mode,
         worktree: null,
+        branchName: null,
         terminalSessionIds: [],
         hasStartScripts: false,
       };
     }
 
-    // Local mode: skip worktree creation entirely
     if (mode === "local") {
-      // try to create the branch, if it already exists just switch to it
       if (branch) {
         try {
-          // Check if already on the target branch
           const { stdout: currentBranch } = await execFileAsync(
             "git",
             ["rev-parse", "--abbrev-ref", "HEAD"],
@@ -202,14 +371,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         }
       }
 
-      // Save task association without worktree
       const associations = getTaskAssociations();
       const existingIndex = associations.findIndex((a) => a.taskId === taskId);
       const association: TaskFolderAssociation = {
         taskId,
         folderId,
-        folderPath,
-        mode,
+        mode: "local" as const,
       };
 
       if (existingIndex >= 0) {
@@ -286,10 +453,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         }
       }
 
+      const localBranch = await getBranchFromPath(folderPath);
       return {
         taskId,
         mode,
         worktree: null,
+        branchName: localBranch,
         terminalSessionIds,
         hasStartScripts: startScripts.length > 0,
       };
@@ -358,15 +527,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       throw new Error(`Failed to create worktree: ${String(error)}`);
     }
 
-    // Save task association with worktree
     const associations = getTaskAssociations();
     const existingIndex = associations.findIndex((a) => a.taskId === taskId);
     const association: TaskFolderAssociation = {
       taskId,
       folderId,
-      folderPath,
-      mode,
-      worktree,
+      mode: "worktree" as const,
+      worktree: worktree.worktreeName,
+      branchName: worktree.branchName ?? `twig/${worktree.worktreeName}`,
     };
 
     if (existingIndex >= 0) {
@@ -452,6 +620,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       taskId,
       mode,
       worktree,
+      branchName: worktree.branchName,
       terminalSessionIds,
       hasStartScripts: startScripts.length > 0,
     };
@@ -466,7 +635,6 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       return;
     }
 
-    // Cloud mode: just remove the association, no local cleanup needed
     if (association.mode === "cloud") {
       this.removeTaskAssociation(taskId);
       log.info(`Cloud workspace deleted for task ${taskId}`);
@@ -474,77 +642,79 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
 
     const folderId = association.folderId;
-    const folderPath = association.folderPath;
-    const isWorktreeMode =
-      association.mode === "worktree" && association.worktree;
+    const folderPath = getFolderPath(folderId);
+    if (!folderPath) {
+      log.warn(`No folder found for task ${taskId}, removing association only`);
+      this.removeTaskAssociation(taskId);
+      return;
+    }
 
-    // Determine script execution path
-    const scriptPath = isWorktreeMode
-      ? association.worktree?.worktreePath
-      : folderPath;
-    const scriptName = isWorktreeMode
-      ? association.worktree?.worktreeName
-      : path.basename(folderPath);
+    let scriptPath: string;
+    let scriptName: string;
+    let worktreePath: string | null = null;
+    let worktreeName: string | null = null;
 
-    // Load config and run destroy scripts (silent)
-    if (scriptPath && scriptName) {
-      const { config } = await loadConfig(scriptPath, scriptName);
-      const destroyScripts = normalizeScripts(config?.scripts?.destroy);
+    if (association.mode === "worktree") {
+      worktreeName = association.worktree;
+      worktreePath = deriveWorktreePath(folderPath, worktreeName);
+      scriptPath = worktreePath;
+      scriptName = worktreeName;
+    } else {
+      scriptPath = folderPath;
+      scriptName = path.basename(folderPath);
+    }
 
-      if (destroyScripts.length > 0) {
-        log.info(
-          `Running ${destroyScripts.length} destroy script(s) for task ${taskId}`,
+    const { config } = await loadConfig(scriptPath, scriptName);
+    const destroyScripts = normalizeScripts(config?.scripts?.destroy);
+
+    if (destroyScripts.length > 0) {
+      log.info(
+        `Running ${destroyScripts.length} destroy script(s) for task ${taskId}`,
+      );
+
+      const workspaceEnv = await buildWorkspaceEnv({
+        taskId,
+        folderPath,
+        worktreePath,
+        worktreeName,
+        mode: association.mode,
+      });
+
+      const destroyResult = await this.scriptRunner.executeScriptsSilent(
+        destroyScripts,
+        scriptPath,
+        workspaceEnv,
+      );
+
+      if (!destroyResult.success) {
+        log.warn(
+          `Some destroy scripts failed for task ${taskId}: ${destroyResult.errors.join(", ")}`,
         );
-
-        const workspaceEnv = await buildWorkspaceEnv({
+        this.emitWorkspaceError(
           taskId,
-          folderPath,
-          worktreePath: association.worktree?.worktreePath ?? null,
-          worktreeName: association.worktree?.worktreeName ?? null,
-          mode: association.mode,
-        });
-
-        const destroyResult = await this.scriptRunner.executeScriptsSilent(
-          destroyScripts,
-          scriptPath,
-          workspaceEnv,
+          `Destroy scripts failed: ${destroyResult.errors.join(", ")}`,
         );
-
-        if (!destroyResult.success) {
-          log.warn(
-            `Some destroy scripts failed for task ${taskId}: ${destroyResult.errors.join(", ")}`,
-          );
-          this.emitWorkspaceError(
-            taskId,
-            `Destroy scripts failed: ${destroyResult.errors.join(", ")}`,
-          );
-        }
       }
     }
 
-    // Cleanup terminal sessions
     cleanupWorkspaceSessions(taskId);
 
-    // Only delete worktree if in worktree mode
-    if (isWorktreeMode && association.worktree?.worktreePath) {
-      await this.cleanupWorktree(
-        taskId,
-        mainRepoPath,
-        association.worktree.worktreePath,
-      );
+    if (association.mode === "worktree" && worktreePath) {
+      await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
 
-      // Check if any other workspaces remain for this folder
       const otherWorkspacesForFolder = getTaskAssociations().filter(
-        (a) => a.folderId === folderId && a.worktree,
+        (a) =>
+          a.folderId === folderId &&
+          a.taskId !== taskId &&
+          a.mode === "worktree",
       );
 
       if (otherWorkspacesForFolder.length === 0) {
         await this.cleanupRepoWorktreeFolder(folderPath);
       }
-    } else {
-      // Root mode: just remove the association
-      this.removeTaskAssociation(taskId);
     }
+
+    this.removeTaskAssociation(taskId);
 
     log.info(`Workspace deleted for task ${taskId}`);
   }
@@ -608,43 +778,47 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
   }
 
-  async verifyWorkspaceExists(taskId: string): Promise<boolean> {
+  async verifyWorkspaceExists(
+    taskId: string,
+  ): Promise<{ exists: boolean; missingPath?: string }> {
     const association = findTaskAssociation(taskId);
     if (!association) {
-      return false;
+      return { exists: false };
     }
 
-    // Cloud mode: always exists (no local files to verify)
     if (association.mode === "cloud") {
-      return true;
+      return { exists: true };
     }
 
-    // Local mode: check if folder still exists
+    const folderPath = getFolderPath(association.folderId);
+    if (!folderPath) {
+      this.removeTaskAssociation(taskId);
+      return { exists: false, missingPath: "(folder not found)" };
+    }
+
     if (association.mode === "local") {
-      const exists = fs.existsSync(association.folderPath);
+      const exists = fs.existsSync(folderPath);
       if (!exists) {
         log.info(
           `Folder for task ${taskId} no longer exists, removing association`,
         );
         this.removeTaskAssociation(taskId);
+        return { exists: false, missingPath: folderPath };
       }
-      return exists;
+      return { exists: true };
     }
 
-    // Worktree mode: check if worktree exists
-    if (!association.worktree) {
-      return false;
-    }
-
-    const exists = fs.existsSync(association.worktree.worktreePath);
+    const worktreePath = deriveWorktreePath(folderPath, association.worktree);
+    const exists = fs.existsSync(worktreePath);
     if (!exists) {
       log.info(
-        `Worktree for task ${taskId} no longer exists, clearing association`,
+        `Worktree for task ${taskId} no longer exists, removing association`,
       );
-      clearWorktreeFromAssociation(taskId);
+      this.removeTaskAssociation(taskId);
+      return { exists: false, missingPath: worktreePath };
     }
 
-    return exists;
+    return { exists: true };
   }
 
   async runStartScripts(
@@ -662,9 +836,10 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
 
     const association = findTaskAssociation(taskId);
+    const folderPath = association ? getFolderPath(association.folderId) : null;
     const workspaceEnv = await buildWorkspaceEnv({
       taskId,
-      folderPath: association?.folderPath ?? worktreePath,
+      folderPath: folderPath ?? worktreePath,
       worktreePath,
       worktreeName,
       mode: association?.mode ?? "worktree",
@@ -688,16 +863,41 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     return result;
   }
 
-  getWorkspaceInfo(taskId: string): WorkspaceInfo | null {
+  async getWorkspaceInfo(taskId: string): Promise<WorkspaceInfo | null> {
     const association = findTaskAssociation(taskId);
     if (!association) {
       return null;
     }
 
+    const folderPath = getFolderPath(association.folderId);
+    let worktreeInfo: WorktreeInfo | null = null;
+    let branchName: string | null = null;
+
+    if (association.mode === "worktree") {
+      if (folderPath) {
+        const worktreePath = deriveWorktreePath(
+          folderPath,
+          association.worktree,
+        );
+        const gitBranch = await getBranchFromPath(worktreePath);
+        branchName = gitBranch ?? association.branchName;
+        worktreeInfo = {
+          worktreePath,
+          worktreeName: association.worktree,
+          branchName,
+          baseBranch: "main",
+          createdAt: new Date().toISOString(),
+        };
+      }
+    } else if (association.mode === "local" && folderPath) {
+      branchName = await getBranchFromPath(folderPath);
+    }
+
     return {
       taskId,
       mode: association.mode,
-      worktree: association.worktree ?? null,
+      worktree: worktreeInfo,
+      branchName,
       terminalSessionIds: this.scriptRunner.getTaskSessions(taskId),
     };
   }
@@ -726,30 +926,53 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     const workspaces: Record<string, Workspace> = {};
 
     for (const assoc of associations) {
-      const isWorktreeMode = assoc.mode === "worktree" && assoc.worktree;
-      const configPath = isWorktreeMode
-        ? assoc.worktree?.worktreePath
-        : assoc.folderPath;
-      const configName = isWorktreeMode
-        ? assoc.worktree?.worktreeName
-        : path.basename(assoc.folderPath);
+      const folderPath = getFolderPath(assoc.folderId);
+      if (!folderPath) continue;
+
+      let configPath: string;
+      let configName: string;
+      let worktreePath: string | null = null;
+      let worktreeName: string | null = null;
+
+      if (assoc.mode === "worktree") {
+        worktreeName = assoc.worktree;
+        worktreePath = deriveWorktreePath(folderPath, worktreeName);
+        configPath = worktreePath;
+        configName = worktreeName;
+      } else {
+        configPath = folderPath;
+        configName = path.basename(folderPath);
+      }
 
       let startScripts: string[] = [];
-      if (configPath && configName) {
+      try {
         const { config } = await loadConfig(configPath, configName);
         startScripts = normalizeScripts(config?.scripts?.start);
+      } catch {
+        /* config load failed, no start scripts */
+      }
+
+      let branchName: string | null = null;
+      if (assoc.mode === "worktree" && worktreePath) {
+        const gitBranch = await getBranchFromPath(worktreePath);
+        branchName = gitBranch ?? assoc.branchName;
+      } else if (assoc.mode === "local") {
+        const localWorktreePath =
+          await this.getLocalWorktreePathIfExists(folderPath);
+        const branchPath = localWorktreePath ?? folderPath;
+        branchName = await getBranchFromPath(branchPath);
       }
 
       workspaces[assoc.taskId] = {
         taskId: assoc.taskId,
         folderId: assoc.folderId,
-        folderPath: assoc.folderPath,
+        folderPath,
         mode: assoc.mode,
-        worktreePath: assoc.worktree?.worktreePath ?? null,
-        worktreeName: assoc.worktree?.worktreeName ?? null,
-        branchName: assoc.worktree?.branchName ?? null,
-        baseBranch: assoc.worktree?.baseBranch ?? null,
-        createdAt: assoc.worktree?.createdAt ?? new Date().toISOString(),
+        worktreePath,
+        worktreeName,
+        branchName,
+        baseBranch: null,
+        createdAt: new Date().toISOString(),
         terminalSessionIds: this.scriptRunner.getTaskSessions(assoc.taskId),
         hasStartScripts: startScripts.length > 0,
       };
@@ -818,20 +1041,21 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       throw new Error(`Failed to promote task to worktree: ${String(error)}`);
     }
 
-    // Update the association to worktree mode
     const associations = getTaskAssociations();
     const existingIndex = associations.findIndex((a) => a.taskId === taskId);
     if (existingIndex >= 0) {
-      associations[existingIndex] = {
-        ...association,
-        mode: "worktree",
-        worktree,
+      const newAssoc: TaskFolderAssociation = {
+        taskId,
+        folderId: association.folderId,
+        mode: "worktree" as const,
+        worktree: worktree.worktreeName,
+        branchName: worktree.branchName ?? branch,
       };
+      associations[existingIndex] = newAssoc;
       foldersStore.set("taskAssociations", associations);
       log.info(`Updated task ${taskId} association to worktree mode`);
     }
 
-    // Notify renderer so it can update the workspace store
     this.emit(WorkspaceServiceEvent.Promoted, {
       taskId,
       worktree,
@@ -841,16 +1065,32 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     return worktree;
   }
 
-  /**
-   * Get all local-mode tasks that are associated with a given folder path.
-   * Used by FocusService to determine which tasks need to be backgrounded
-   * before focusing on a different workspace.
-   */
   getLocalTasksForFolder(folderPath: string): Array<{ taskId: string }> {
     const associations = getTaskAssociations();
+    const folders = foldersStore.get("folders", []);
+    const folder = folders.find((f) => f.path === folderPath);
+    if (!folder) return [];
+
     return associations
-      .filter((a) => a.mode === "local" && a.folderPath === folderPath)
+      .filter((a) => a.mode === "local" && a.folderId === folder.id)
       .map((a) => ({ taskId: a.taskId }));
+  }
+
+  getWorktreeTasks(worktreePath: string): Array<{ taskId: string }> {
+    const associations = getTaskAssociations();
+    const result: Array<{ taskId: string }> = [];
+
+    for (const assoc of associations) {
+      if (assoc.mode !== "worktree") continue;
+      const folderPath = getFolderPath(assoc.folderId);
+      if (!folderPath) continue;
+      const derivedPath = deriveWorktreePath(folderPath, assoc.worktree);
+      if (derivedPath === worktreePath) {
+        result.push({ taskId: assoc.taskId });
+      }
+    }
+
+    return result;
   }
 
   private async cleanupWorktree(
@@ -877,8 +1117,6 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     } catch (error) {
       log.error(`Failed to delete worktree for task ${taskId}:`, error);
     }
-
-    clearWorktreeFromAssociation(taskId);
   }
 
   private emitWorkspaceError(taskId: string, message: string): void {

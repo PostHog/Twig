@@ -79,7 +79,7 @@ function workspaceInfoToWorkspace(
     mode: info.mode,
     worktreePath: info.worktree?.worktreePath ?? null,
     worktreeName: info.worktree?.worktreeName ?? null,
-    branchName: info.worktree?.branchName ?? null,
+    branchName: info.branchName,
     baseBranch: info.worktree?.baseBranch ?? null,
     createdAt: info.worktree?.createdAt ?? new Date().toISOString(),
     terminalSessionIds: info.terminalSessionIds,
@@ -160,11 +160,11 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
     },
 
     verifyWorkspace: async (taskId: string) => {
-      const exists = await trpcVanilla.workspace.verify.query({ taskId });
-      if (!exists) {
+      const result = await trpcVanilla.workspace.verify.query({ taskId });
+      if (!result.exists) {
         set((state) => ({ workspaces: omitKey(state.workspaces, taskId) }));
       }
-      return exists ?? false;
+      return result.exists;
     },
 
     ensureWorkspace: async (

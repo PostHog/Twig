@@ -151,7 +151,7 @@ interface ManagedSession {
   interruptReason?: InterruptReason;
   needsRecreation: boolean;
   promptPending: boolean;
-  pendingCwdContext?: string;
+  pendingContext?: string;
 }
 
 function getClaudeCliPath(): string {
@@ -450,7 +450,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     // Preserve state that should survive recreation
     const config = existing.config;
-    const pendingCwdContext = existing.pendingCwdContext;
+    const pendingContext = existing.pendingContext;
 
     this.cleanupSession(taskRunId);
 
@@ -460,8 +460,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     // Restore preserved state
-    if (pendingCwdContext) {
-      newSession.pendingCwdContext = pendingCwdContext;
+    if (pendingContext) {
+      newSession.pendingContext = pendingContext;
     }
 
     return newSession;
@@ -484,15 +484,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       session = await this.recreateSession(sessionId);
     }
 
-    // Prepend pending CWD context if present
+    // Prepend pending context if present
     let finalPrompt = prompt;
-    if (session.pendingCwdContext) {
-      log.info("Prepending CWD context to prompt", { sessionId });
+    if (session.pendingContext) {
+      log.info("Prepending context to prompt", { sessionId });
       finalPrompt = [
-        { type: "text", text: `_${session.pendingCwdContext}_\n\n` },
+        {
+          type: "text",
+          text: `_${session.pendingContext}_\n\n`,
+          _meta: { ui: { hidden: true } },
+        },
         ...prompt,
       ];
-      session.pendingCwdContext = undefined;
+      session.pendingContext = undefined;
     }
 
     session.lastActivityAt = Date.now();
@@ -652,25 +656,21 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   /**
-   * Notify a session that its working directory context has changed.
+   * Notify a session of a context change (CWD moved, detached HEAD, etc).
    * Used when focusing/unfocusing worktrees - the agent doesn't need to respawn
    * because it has additionalDirectories configured, but it should know about the change.
    */
-  async notifyCwdChange(
+  async notifySessionContext(
     sessionId: string,
-    newPath: string,
-    reason: "moving_to_worktree" | "moving_to_local",
+    context: import("./schemas.js").SessionContextChange,
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      log.warn("Session not found for CWD notification", { sessionId });
+      log.warn("Session not found for context notification", { sessionId });
       return;
     }
 
-    const contextMessage =
-      reason === "moving_to_worktree"
-        ? `Your working directory has been moved to a worktree at ${newPath} because the user focused on another task.`
-        : `Your working directory has been returned to the main repository at ${newPath}.`;
+    const contextMessage = this.buildContextMessage(context);
 
     // Check if session is currently busy
     if (session.promptPending) {
@@ -679,19 +679,33 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         {
           type: "text",
           text: `${contextMessage} Continue where you left off.`,
+          _meta: { ui: { hidden: true } },
         },
       ]);
     } else {
       // Idle session: store for prepending to next user message
-      session.pendingCwdContext = contextMessage;
+      session.pendingContext = contextMessage;
     }
 
-    log.info("Notified session of CWD change", {
+    log.info("Notified session of context change", {
       sessionId,
-      newPath,
-      reason,
+      context,
       wasPromptPending: session.promptPending,
     });
+  }
+
+  private buildContextMessage(
+    context: import("./schemas.js").SessionContextChange,
+  ): string {
+    if (context.isDetached) {
+      return `Your worktree is now on detached HEAD while the user edits in their main repo. The branch is \`${context.branchName}\`.
+
+For git operations while detached:
+- Commit: works normally
+- Push: \`git push origin HEAD:refs/heads/${context.branchName}\`
+- Pull: \`git fetch origin ${context.branchName} && git merge FETCH_HEAD\``;
+    }
+    return `Your worktree is back on branch \`${context.branchName}\`. Normal git commands work again.`;
   }
 
   async cleanupAll(): Promise<void> {

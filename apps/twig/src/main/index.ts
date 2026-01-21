@@ -43,7 +43,8 @@ import {
 } from "./services/posthog-analytics.js";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
-import { migrateStoredWorktreePaths } from "./utils/store.js";
+import type { WorkspaceService } from "./services/workspace/service.js";
+import { migrateTaskAssociations } from "./utils/store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -321,8 +322,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  // Migrate stored worktree paths from legacy directories (e.g., ~/.array -> ~/.twig)
-  migrateStoredWorktreePaths();
+  migrateTaskAssociations();
 
   createWindow();
   ensureClaudeConfigDir();
@@ -347,6 +347,12 @@ app.whenReady().then(() => {
 
   // Preload external app icons in background
   container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
+
+  // Initialize workspace branch watcher for live branch rename detection
+  const workspaceService = container.get<WorkspaceService>(
+    MAIN_TOKENS.WorkspaceService,
+  );
+  workspaceService.initBranchWatcher();
 
   // Handle case where app was launched by a deep link
   if (process.platform === "darwin") {

@@ -1,7 +1,7 @@
 import { existsSync, renameSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { DATA_DIR, LEGACY_DATA_DIRS } from "@shared/constants";
+import { LEGACY_DATA_DIRS, WORKSPACES_DIR } from "@shared/constants";
 import { app } from "electron";
 import Store from "electron-store";
 
@@ -10,7 +10,7 @@ interface SettingsSchema {
 }
 
 function getDefaultWorktreeLocation(): string {
-  return path.join(os.homedir(), DATA_DIR);
+  return path.join(os.homedir(), WORKSPACES_DIR);
 }
 
 function getLegacyWorktreeLocations(): string[] {

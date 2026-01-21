@@ -169,9 +169,7 @@ interface TurnViewProps {
 function getInterruptMessage(reason?: string): string {
   switch (reason) {
     case "moving_to_worktree":
-      return "Paused to move agent to worktree";
-    case "moving_to_local":
-      return "Paused to return agent to main repository";
+      return "Paused while worktree is focused";
     default:
       return "Interrupted by user";
   }
@@ -188,13 +186,16 @@ const TurnView = memo(function TurnView({
   const showGitResult =
     gitAction.isGitAction && gitAction.actionType && turn.isComplete;
 
+  const showUserMessage = turn.userContent.trim().length > 0;
+
   return (
     <Box className="flex flex-col gap-2">
-      {gitAction.isGitAction && gitAction.actionType ? (
-        <GitActionMessage actionType={gitAction.actionType} />
-      ) : (
-        <UserMessage content={turn.userContent} />
-      )}
+      {showUserMessage &&
+        (gitAction.isGitAction && gitAction.actionType ? (
+          <GitActionMessage actionType={gitAction.actionType} />
+        ) : (
+          <UserMessage content={turn.userContent} />
+        ))}
       {turn.items.map((item, i) => (
         <SessionUpdateView
           key={`${item.sessionUpdate}-${i}`}

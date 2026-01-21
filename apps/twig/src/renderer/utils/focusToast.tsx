@@ -1,13 +1,12 @@
 import { Text } from "@radix-ui/themes";
-import type { EnableFocusResult } from "@stores/focusStore";
+import type { FocusSagaResult } from "@stores/focusStore";
 import { toast } from "@utils/toast";
 
 export function showFocusSuccessToast(
   branchName: string,
-  result: EnableFocusResult,
+  result: FocusSagaResult,
 ): void {
-  // Only show stash message if we actually stashed from original branch (not a swap)
-  const showStashMessage = !!result.mainStashRef && !result.wasSwap;
+  const showStashMessage = !!result.session?.mainStashRef && !result.wasSwap;
   toast.success(
     <>
       Now editing{" "}
@@ -15,7 +14,7 @@ export function showFocusSuccessToast(
     </>,
     {
       description: showStashMessage
-        ? "Your changes were stashed and will be restored when you return."
+        ? "Your local changes were stashed and will be restored when you return."
         : undefined,
     },
   );

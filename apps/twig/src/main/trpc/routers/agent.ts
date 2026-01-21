@@ -8,7 +8,7 @@ import {
   cancelSessionInput,
   listSessionsInput,
   listSessionsOutput,
-  notifyCwdChangeInput,
+  notifySessionContextInput,
   promptInput,
   promptOutput,
   reconnectSessionInput,
@@ -133,13 +133,9 @@ export const agentRouter = router({
         .map((s) => ({ taskRunId: s.taskRunId, repoPath: s.repoPath })),
     ),
 
-  notifyCwdChange: publicProcedure
-    .input(notifyCwdChangeInput)
+  notifySessionContext: publicProcedure
+    .input(notifySessionContextInput)
     .mutation(({ input }) =>
-      getService().notifyCwdChange(
-        input.sessionId,
-        input.newPath,
-        input.reason,
-      ),
+      getService().notifySessionContext(input.sessionId, input.context),
     ),
 });

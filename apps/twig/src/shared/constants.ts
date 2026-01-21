@@ -15,8 +15,9 @@ export function isTwigBranch(branchName: string): boolean {
 
 /**
  * Data directory conventions.
- * - Reading: Accept all directories for backwards compatibility
- * - Writing: Always use DATA_DIR (.twig)
+ * - Worktrees stored in WORKSPACES_DIR (~/.twig/workspaces)
+ * - LEGACY_DATA_DIRS are old locations that need migration (only .array)
  */
 export const DATA_DIR = ".twig";
+export const WORKSPACES_DIR = ".twig/workspaces";
 export const LEGACY_DATA_DIRS = [".array"];

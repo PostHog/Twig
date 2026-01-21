@@ -633,16 +633,6 @@ const useStore = create<SessionStore>()(
       addSession(session);
       subscribeToChannel(taskRunId);
 
-      // For local-mode sessions (not worktree), proactively get the local worktree path
-      // so the agent has access to both the main repo and the local worktree when/if
-      // we focus a worktree later. Skip this for worktree sessions (paths inside ~/.twig).
-      const isWorktreeSession = repoPath.includes("/.twig/");
-      const localWorktreePath = isWorktreeSession
-        ? null
-        : await trpcVanilla.focus.getLocalWorktreePath
-            .query({ mainRepoPath: repoPath })
-            .catch(() => null);
-
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -652,11 +642,6 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         logUrl,
         sdkSessionId,
-        // Add the local worktree as an additional directory so the agent
-        // can access it if the user focuses a worktree later (local-mode only)
-        ...(localWorktreePath && {
-          additionalDirectories: [localWorktreePath],
-        }),
       });
 
       if (result) {
@@ -666,11 +651,6 @@ const useStore = create<SessionStore>()(
             await trpcVanilla.agent.setMode.mutate({
               sessionId: taskRunId,
               modeId: persistedMode,
-            });
-            log.info("Restored persisted mode after reconnect", {
-              taskId,
-              taskRunId,
-              mode: persistedMode,
             });
           } catch (error) {
             log.warn("Failed to restore persisted mode after reconnect", {
@@ -710,16 +690,6 @@ const useStore = create<SessionStore>()(
       const persistedMode = getPersistedTaskMode(taskId);
       const effectiveMode = executionMode ?? persistedMode;
 
-      // For local-mode sessions (not worktree), proactively get the local worktree path
-      // so the agent has access to both the main repo and the local worktree when/if
-      // we focus a worktree later. Skip this for worktree sessions (paths inside ~/.twig).
-      const isWorktreeSession = repoPath.includes("/.twig/");
-      const localWorktreePath = isWorktreeSession
-        ? null
-        : await trpcVanilla.focus.getLocalWorktreePath
-            .query({ mainRepoPath: repoPath })
-            .catch(() => null);
-
       const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
@@ -730,11 +700,6 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         model: defaultModel,
         executionMode: effectiveMode,
-        // Add the local worktree as an additional directory so the agent
-        // can access it if the user focuses a worktree later (local-mode only)
-        ...(localWorktreePath && {
-          additionalDirectories: [localWorktreePath],
-        }),
       });
 
       const session = createBaseSession(
@@ -846,13 +811,14 @@ const useStore = create<SessionStore>()(
           // For non-cloud sessions, check workspace existence (local filesystem check)
           // This should happen before the offline check so users see workspace errors
           if (!isCloud && latestRun?.id && latestRun?.log_url) {
-            const workspaceExists = await trpcVanilla.workspace.verify.query({
+            const workspaceResult = await trpcVanilla.workspace.verify.query({
               taskId,
             });
 
-            if (!workspaceExists) {
+            if (!workspaceResult.exists) {
               log.warn("Workspace no longer exists, showing error state", {
                 taskId,
+                missingPath: workspaceResult.missingPath,
               });
               const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
               const events = convertStoredEntriesToEvents(rawEntries);
@@ -861,8 +827,9 @@ const useStore = create<SessionStore>()(
               session.events = events;
               session.logUrl = latestRun.log_url;
               session.status = "error";
-              session.errorMessage =
-                "The working directory for this task no longer exists. Please start a new task.";
+              session.errorMessage = workspaceResult.missingPath
+                ? `Working directory no longer exists: ${workspaceResult.missingPath}`
+                : "The working directory for this task no longer exists. Please start a new task.";
 
               addSession(session);
               return;

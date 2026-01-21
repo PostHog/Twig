@@ -56,7 +56,9 @@ export class FsService {
         "utf-8",
       );
     } catch (error) {
-      log.error(`Failed to read file ${filePath}:`, error);
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.error(`Failed to read file ${filePath}:`, error);
+      }
       return null;
     }
   }

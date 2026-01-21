@@ -7,28 +7,22 @@ export interface RegisteredFolder {
   exists?: boolean;
 }
 
-export type BranchOwnership = "created" | "borrowed";
-
-export interface WorktreeInfo {
-  worktreePath: string;
-  worktreeName: string;
-  branchName: string;
-  baseBranch: string;
-  createdAt: string;
-  branchOwnership: BranchOwnership;
-}
-
 export type WorkspaceMode = "worktree" | "local" | "cloud";
 
-export interface TaskFolderAssociation {
+interface TaskFolderAssociationBase {
   taskId: string;
   folderId: string;
-  folderPath: string;
-  mode: WorkspaceMode;
-  worktree?: WorktreeInfo;
 }
 
-// Workspace types for array.json configuration
+export type TaskFolderAssociation =
+  | (TaskFolderAssociationBase & { mode: "local" })
+  | (TaskFolderAssociationBase & { mode: "cloud" })
+  | (TaskFolderAssociationBase & {
+      mode: "worktree";
+      worktree: string;
+      branchName: string;
+    });
+
 export interface ArrayConfig {
   scripts?: {
     init?: string | string[];
@@ -37,10 +31,19 @@ export interface ArrayConfig {
   };
 }
 
+export interface WorktreeInfo {
+  worktreePath: string;
+  worktreeName: string;
+  branchName: string | null;
+  baseBranch: string;
+  createdAt: string;
+}
+
 export interface WorkspaceInfo {
   taskId: string;
   mode: WorkspaceMode;
   worktree: WorktreeInfo | null;
+  branchName: string | null;
   terminalSessionIds: string[];
   hasStartScripts?: boolean;
 }

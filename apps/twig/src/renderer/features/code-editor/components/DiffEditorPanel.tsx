@@ -3,16 +3,12 @@ import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirro
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Box } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface DiffEditorPanelProps {
   taskId: string;
@@ -22,12 +18,10 @@ interface DiffEditorPanelProps {
 
 export function DiffEditorPanel({
   taskId,
-  task,
+  task: _task,
   absolutePath,
 }: DiffEditorPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const repoPath = useCwd(taskId);
   const filePath = getRelativePath(absolutePath, repoPath);
   const queryClient = useQueryClient();
   const closeDiffTabsForFile = usePanelLayoutStore(

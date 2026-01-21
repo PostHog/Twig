@@ -14,24 +14,16 @@ export const stashResultSchema = focusResultSchema.extend({
 
 export type StashResult = z.infer<typeof stashResultSchema>;
 
-export const focusRefDataSchema = z.object({
-  status: z.enum(["focusing", "focused", "unfocusing"]),
+export const focusSessionSchema = z.object({
+  mainRepoPath: z.string(),
+  worktreePath: z.string(),
+  branch: z.string(),
   originalBranch: z.string(),
-  targetBranch: z.string(),
   mainStashRef: z.string().nullable(),
-  localWorktreePath: z.string().nullable(),
+  commitSha: z.string(),
 });
 
-export type FocusRefData = z.infer<typeof focusRefDataSchema>;
-
-export interface FocusSession {
-  mainRepoPath: string;
-  worktreePath: string;
-  branch: string;
-  originalBranch: string;
-  mainStashRef: string | null;
-  localWorktreePath: string | null;
-}
+export type FocusSession = z.infer<typeof focusSessionSchema>;
 
 export const repoPathInput = z.object({ repoPath: z.string() });
 export const mainRepoPathInput = z.object({ mainRepoPath: z.string() });
@@ -48,10 +40,6 @@ export const reattachInput = z.object({
   worktreePath: z.string(),
   branch: z.string(),
 });
-export const writeRefInput = z.object({
-  mainRepoPath: z.string(),
-  data: focusRefDataSchema,
-});
 export const syncInput = z.object({
   mainRepoPath: z.string(),
   worktreePath: z.string(),
@@ -59,9 +47,4 @@ export const syncInput = z.object({
 export const findWorktreeInput = z.object({
   mainRepoPath: z.string(),
   branch: z.string(),
-});
-
-export const getCurrentStateOutput = z.object({
-  refData: focusRefDataSchema.nullable(),
-  currentBranch: z.string().nullable(),
 });

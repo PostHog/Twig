@@ -5,11 +5,15 @@ import { useAuthStore } from "@features/auth/stores/authStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Flex, Spinner, Text } from "@radix-ui/themes";
 import { initializePostHog } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import { initializeConnectivityStore } from "@renderer/stores/connectivityStore";
-import { trpcVanilla } from "@renderer/trpc/client";
+import { useFocusStore } from "@renderer/stores/focusStore";
+import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@utils/toast";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+
+const log = logger.scope("app");
 
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
@@ -65,6 +69,45 @@ function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Global branch change listener - updates store when branch is renamed
+  trpcReact.workspace.onBranchChanged.useSubscription(undefined, {
+    onData: (data) => {
+      const workspace = useWorkspaceStore.getState().getWorkspace(data.taskId);
+      if (workspace) {
+        useWorkspaceStore.getState().updateWorkspace(data.taskId, {
+          ...workspace,
+          branchName: data.branchName,
+        });
+      }
+    },
+  });
+
+  // Listen for branch renames when a worktree is focused
+  trpcReact.focus.onBranchRenamed.useSubscription(undefined, {
+    onData: ({ worktreePath, newBranch }) => {
+      useFocusStore.getState().updateSessionBranch(worktreePath, newBranch);
+      const workspaces = useWorkspaceStore.getState().workspaces;
+      for (const [taskId, workspace] of Object.entries(workspaces)) {
+        if (workspace.worktreePath === worktreePath) {
+          useWorkspaceStore.getState().updateWorkspace(taskId, {
+            ...workspace,
+            branchName: newBranch,
+          });
+        }
+      }
+    },
+  });
+
+  // Auto-unfocus when user manually checks out to a different branch
+  trpcReact.focus.onForeignBranchCheckout.useSubscription(undefined, {
+    onData: async ({ focusedBranch, foreignBranch }) => {
+      log.warn(
+        `Foreign branch checkout detected: ${focusedBranch} -> ${foreignBranch}. Auto-unfocusing.`,
+      );
+      await useFocusStore.getState().disableFocus();
+    },
+  });
 
   useEffect(() => {
     initializeOAuth().finally(() => setIsLoading(false));

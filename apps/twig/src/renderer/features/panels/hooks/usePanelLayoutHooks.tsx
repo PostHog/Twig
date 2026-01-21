@@ -1,17 +1,10 @@
 import { FileIcon } from "@components/ui/FileIcon";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
-import {
-  selectTaskRepoPath,
-  useTaskExecutionStore,
-} from "@features/task-detail/stores/taskExecutionStore";
 import { ChatCenteredText, Terminal } from "@phosphor-icons/react";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode, Tab } from "../store/panelTypes";
@@ -84,14 +77,11 @@ export function useTabInjection(
   task: Task,
   closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const storedRepoPath = useTaskExecutionStore(selectTaskRepoPath(taskId));
-  const repoPath = worktreePath || storedRepoPath || "";
+  const repoPath = useCwd(taskId) ?? "";
 
   return useMemo(
     () =>
       tabs.map((tab) => {
-        // Populate absolute paths for file and diff tabs
         let updatedData = tab.data;
         if (tab.data.type === "file" || tab.data.type === "diff") {
           const absolutePath = `${repoPath}/${tab.data.relativePath}`;
@@ -102,7 +92,6 @@ export function useTabInjection(
           };
         }
 
-        // Generate icon based on tab type
         let icon = tab.icon;
         if (!icon) {
           if (tab.data.type === "file" || tab.data.type === "diff") {

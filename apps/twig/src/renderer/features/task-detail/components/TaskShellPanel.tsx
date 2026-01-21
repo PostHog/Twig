@@ -1,14 +1,10 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { ShellTerminal } from "@features/terminal/components/ShellTerminal";
 import { useTerminalStore } from "@features/terminal/stores/terminalStore";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Box } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useEffect } from "react";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskShellPanelProps {
   taskId: string;
@@ -16,12 +12,17 @@ interface TaskShellPanelProps {
   shellId?: string;
 }
 
-export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
+export function TaskShellPanel({
+  taskId,
+  task: _task,
+  shellId,
+}: TaskShellPanelProps) {
   const stateKey = shellId ? `${taskId}-${shellId}` : taskId;
   const tabId = shellId || "shell";
 
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId)) ?? null;
+  const folderPath = useWorkspaceStore(
+    (state) => state.workspaces[taskId]?.folderPath,
+  );
 
   const processName = useTerminalStore(
     (state) => state.terminalStates[stateKey]?.processName,
@@ -41,11 +42,9 @@ export function TaskShellPanel({ taskId, task, shellId }: TaskShellPanelProps) {
     }
   }, [processName, taskId, tabId, updateTabLabel]);
 
-  const effectiveCwd = worktreePath || taskData.repoPath || undefined;
-
   return (
     <Box height="100%">
-      <ShellTerminal cwd={effectiveCwd} stateKey={stateKey} taskId={taskId} />
+      <ShellTerminal cwd={folderPath} stateKey={stateKey} taskId={taskId} />
     </Box>
   );
 }

@@ -97,25 +97,28 @@ export class FoldersService {
 
   async removeFolder(folderId: string): Promise<void> {
     const folders = foldersStore.get("folders", []);
+    const folder = folders.find((f) => f.id === folderId);
     const associations = foldersStore.get("taskAssociations", []);
 
     const associationsToRemove = associations.filter(
       (a) => a.folderId === folderId,
     );
     for (const assoc of associationsToRemove) {
-      if (assoc.worktree) {
+      if (assoc.mode === "worktree" && folder) {
+        const worktreeBasePath = getWorktreeLocation();
+        const worktreePath = path.join(
+          worktreeBasePath,
+          folder.name,
+          assoc.worktree,
+        );
         try {
-          const worktreeBasePath = getWorktreeLocation();
           const manager = new WorktreeManager({
-            mainRepoPath: assoc.folderPath,
+            mainRepoPath: folder.path,
             worktreeBasePath,
           });
-          await manager.deleteWorktree(assoc.worktree.worktreePath);
+          await manager.deleteWorktree(worktreePath);
         } catch (error) {
-          log.error(
-            `Failed to delete worktree ${assoc.worktree.worktreePath}:`,
-            error,
-          );
+          log.error(`Failed to delete worktree ${worktreePath}:`, error);
         }
       }
     }
@@ -145,13 +148,19 @@ export class FoldersService {
   ): Promise<CleanupOrphanedWorktreesOutput> {
     const worktreeBasePath = getWorktreeLocation();
     const manager = new WorktreeManager({ mainRepoPath, worktreeBasePath });
+    const repoName = path.basename(mainRepoPath);
 
     const associations = foldersStore.get("taskAssociations", []);
     const associatedWorktreePaths: string[] = [];
 
     for (const assoc of associations) {
-      if (assoc.worktree?.worktreePath) {
-        associatedWorktreePaths.push(assoc.worktree.worktreePath);
+      if (assoc.mode === "worktree") {
+        const worktreePath = path.join(
+          worktreeBasePath,
+          repoName,
+          assoc.worktree,
+        );
+        associatedWorktreePaths.push(worktreePath);
       }
     }
 

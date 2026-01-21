@@ -2,8 +2,8 @@ import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
-import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import {
   ArrowCounterClockwiseIcon,
   CaretDownIcon,
@@ -29,7 +29,6 @@ import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useEffectiveWorktreePath } from "@/renderer/features/sidebar/hooks/useEffectiveWorktreePath";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesPanelProps {
@@ -361,15 +360,9 @@ function ChangedFileItem({
   );
 }
 
-export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
-  const taskData = useTaskData({ taskId, initialTask: task });
+export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
-  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
-  const repoPath = useEffectiveWorktreePath(
-    workspace?.worktreePath,
-    workspace?.folderPath ?? taskData.repoPath,
-    workspace?.mode,
-  );
+  const repoPath = useCwd(taskId);
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const pendingPermissions = usePendingPermissionsForTask(taskId);
@@ -471,7 +464,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
               taskId={taskId}
               repoPath={repoPath}
               isActive={isFileActive(file)}
-              mainRepoPath={workspace?.folderPath ?? taskData.repoPath}
+              mainRepoPath={workspace?.folderPath}
             />
           ))}
           <Flex align="center" justify="center" gap="1" py="2">

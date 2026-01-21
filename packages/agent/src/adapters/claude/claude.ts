@@ -747,10 +747,6 @@ export class ClaudeAcpAgent implements Agent {
         }
         break;
       }
-      this.logger.debug("SDK message received", {
-        type: message.type,
-        subtype: (message as { subtype?: string }).subtype,
-      });
 
       switch (message.type) {
         case "system":
@@ -823,7 +819,6 @@ export class ClaudeAcpAgent implements Agent {
           break;
         }
         case "stream_event": {
-          this.logger.debug("Stream event", { eventType: message.event?.type });
           for (const notification of streamEventToAcpNotifications(
             message,
             params.sessionId,

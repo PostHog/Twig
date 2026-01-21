@@ -217,7 +217,10 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
           return;
         }
         const isRelevant = events.some(
-          (e) => e.path.endsWith("/HEAD") || e.path.endsWith("/index"),
+          (e) =>
+            e.path.endsWith("/HEAD") ||
+            e.path.endsWith("/index") ||
+            e.path.includes("/refs/heads/"),
         );
         if (isRelevant) {
           this.emit(FileWatcherEvent.GitStateChanged, { repoPath });
