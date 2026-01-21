@@ -633,11 +633,15 @@ const useStore = create<SessionStore>()(
       addSession(session);
       subscribeToChannel(taskRunId);
 
-      // Proactively get the local worktree path so the agent has access to both
-      // the main repo and the local worktree when/if we focus a worktree later
-      const localWorktreePath = await trpcVanilla.focus.getLocalWorktreePath
-        .query({ mainRepoPath: repoPath })
-        .catch(() => null);
+      // For local-mode sessions (not worktree), proactively get the local worktree path
+      // so the agent has access to both the main repo and the local worktree when/if
+      // we focus a worktree later. Skip this for worktree sessions (paths inside ~/.twig).
+      const isWorktreeSession = repoPath.includes("/.twig/");
+      const localWorktreePath = isWorktreeSession
+        ? null
+        : await trpcVanilla.focus.getLocalWorktreePath
+            .query({ mainRepoPath: repoPath })
+            .catch(() => null);
 
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
@@ -649,7 +653,7 @@ const useStore = create<SessionStore>()(
         logUrl,
         sdkSessionId,
         // Add the local worktree as an additional directory so the agent
-        // can access it if the user focuses a worktree later
+        // can access it if the user focuses a worktree later (local-mode only)
         ...(localWorktreePath && {
           additionalDirectories: [localWorktreePath],
         }),
@@ -706,11 +710,15 @@ const useStore = create<SessionStore>()(
       const persistedMode = getPersistedTaskMode(taskId);
       const effectiveMode = executionMode ?? persistedMode;
 
-      // Proactively get the local worktree path so the agent has access to both
-      // the main repo and the local worktree when/if we focus a worktree later
-      const localWorktreePath = await trpcVanilla.focus.getLocalWorktreePath
-        .query({ mainRepoPath: repoPath })
-        .catch(() => null);
+      // For local-mode sessions (not worktree), proactively get the local worktree path
+      // so the agent has access to both the main repo and the local worktree when/if
+      // we focus a worktree later. Skip this for worktree sessions (paths inside ~/.twig).
+      const isWorktreeSession = repoPath.includes("/.twig/");
+      const localWorktreePath = isWorktreeSession
+        ? null
+        : await trpcVanilla.focus.getLocalWorktreePath
+            .query({ mainRepoPath: repoPath })
+            .catch(() => null);
 
       const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
@@ -723,7 +731,7 @@ const useStore = create<SessionStore>()(
         model: defaultModel,
         executionMode: effectiveMode,
         // Add the local worktree as an additional directory so the agent
-        // can access it if the user focuses a worktree later
+        // can access it if the user focuses a worktree later (local-mode only)
         ...(localWorktreePath && {
           additionalDirectories: [localWorktreePath],
         }),

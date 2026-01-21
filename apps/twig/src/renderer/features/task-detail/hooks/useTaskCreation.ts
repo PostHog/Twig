@@ -143,6 +143,9 @@ export function useTaskCreation({
 
     try {
       const content = editor.getContent();
+
+      log.info("Submitting task", { workspaceMode, selectedDirectory });
+
       const input = prepareTaskInput(content, {
         selectedDirectory,
         selectedRepository,

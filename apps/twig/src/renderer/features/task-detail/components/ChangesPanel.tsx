@@ -29,10 +29,8 @@ import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import {
-  selectWorktreePath,
-  useWorkspaceStore,
-} from "@/renderer/features/workspace/stores/workspaceStore";
+import { useEffectiveWorktreePath } from "@/renderer/features/sidebar/hooks/useEffectiveWorktreePath";
+import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesPanelProps {
   taskId: string;
@@ -44,6 +42,7 @@ interface ChangedFileItemProps {
   taskId: string;
   repoPath: string;
   isActive: boolean;
+  mainRepoPath?: string;
 }
 
 function getStatusIndicator(status: GitFileStatus): {
@@ -108,6 +107,7 @@ function ChangedFileItem({
   taskId,
   repoPath,
   isActive,
+  mainRepoPath,
 }: ChangedFileItemProps) {
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const closeDiffTabsForFile = usePanelLayoutStore(
@@ -115,6 +115,7 @@ function ChangedFileItem({
   );
   const queryClient = useQueryClient();
   const { detectedApps } = useExternalAppsStore();
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId] ?? null);
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -134,6 +135,11 @@ function ChangedFileItem({
     openDiff(taskId, file.path, file.status, false);
   };
 
+  const workspaceContext = {
+    workspace,
+    mainRepoPath,
+  };
+
   const handleContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
@@ -143,7 +149,12 @@ function ChangedFileItem({
     if (!result.action) return;
 
     if (result.action.type === "external-app") {
-      await handleExternalAppAction(result.action.action, fullPath, fileName);
+      await handleExternalAppAction(
+        result.action.action,
+        fullPath,
+        fileName,
+        workspaceContext,
+      );
     }
   };
 
@@ -152,6 +163,7 @@ function ChangedFileItem({
       { type: "open-in-app", appId },
       fullPath,
       fileName,
+      workspaceContext,
     );
 
     // blur active element to dismiss any open tooltip
@@ -351,8 +363,13 @@ function ChangedFileItem({
 
 export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
   const taskData = useTaskData({ taskId, initialTask: task });
-  const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const repoPath = worktreePath ?? taskData.repoPath;
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
+  const repoPath = useEffectiveWorktreePath(
+    workspace?.worktreePath,
+    workspace?.folderPath ?? taskData.repoPath,
+    workspace?.mode,
+  );
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
   const pendingPermissions = usePendingPermissionsForTask(taskId);
@@ -367,6 +384,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
     enabled: !!repoPath,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+    placeholderData: (prev) => prev,
   });
 
   const getActiveIndex = useCallback((): number => {
@@ -453,6 +471,7 @@ export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
               taskId={taskId}
               repoPath={repoPath}
               isActive={isFileActive(file)}
+              mainRepoPath={workspace?.folderPath ?? taskData.repoPath}
             />
           ))}
           <Flex align="center" justify="center" gap="1" py="2">

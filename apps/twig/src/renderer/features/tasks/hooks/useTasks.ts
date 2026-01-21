@@ -5,6 +5,7 @@ import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
+import { useFocusStore } from "@renderer/stores/focusStore";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
@@ -127,9 +128,19 @@ export function useDeleteTask() {
   const mutation = useAuthenticatedMutation(
     async (client, taskId: string) => {
       const workspaceStore = useWorkspaceStore.getState();
+      const focusStore = useFocusStore.getState();
       const workspace = workspaceStore.workspaces[taskId];
 
       if (workspace) {
+        // If this workspace is currently focused/watched, unfocus first
+        if (
+          focusStore.session?.worktreePath === workspace.worktreePath &&
+          workspace.worktreePath
+        ) {
+          log.info("Unfocusing workspace before deletion");
+          await focusStore.disableFocus();
+        }
+
         try {
           await workspaceStore.deleteWorkspace(taskId, workspace.folderPath);
         } catch (error) {

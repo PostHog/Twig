@@ -12,8 +12,7 @@ import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HistoryView } from "./HistoryView";
-import { HomeItem } from "./items/HomeItem";
-import { SidebarFooter } from "./SidebarFooter";
+import { NewTaskItem } from "./items/HomeItem";
 
 function SidebarMenuComponent() {
   const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
@@ -41,7 +40,7 @@ function SidebarMenuComponent() {
     taskMap.set(task.id, task);
   }
 
-  const handleHomeClick = () => {
+  const handleNewTaskClick = () => {
     navigateToTaskInput();
   };
 
@@ -94,16 +93,15 @@ function SidebarMenuComponent() {
             height: "100%",
             overflowY: "auto",
             overflowX: "hidden",
-            paddingBottom: "52px",
           }}
         >
           <Flex direction="column" py="2">
-            <HomeItem
-              isActive={sidebarData.isHomeActive}
-              onClick={handleHomeClick}
-            />
-
-            <div className="mx-2 my-2 border-gray-6 border-t" />
+            <Box mb="2">
+              <NewTaskItem
+                isActive={sidebarData.isHomeActive}
+                onClick={handleNewTaskClick}
+              />
+            </Box>
 
             <HistoryView
               historyData={sidebarData.historyData}
@@ -116,7 +114,6 @@ function SidebarMenuComponent() {
             />
           </Flex>
         </Box>
-        <SidebarFooter />
       </Box>
     </>
   );

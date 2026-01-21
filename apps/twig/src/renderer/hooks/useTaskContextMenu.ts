@@ -2,6 +2,7 @@ import {
   useDeleteTask,
   useDuplicateTask,
 } from "@features/tasks/hooks/useTasks";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
@@ -48,10 +49,16 @@ export function useTaskContextMenu() {
             break;
           case "external-app":
             if (worktreePath) {
+              const workspace =
+                useWorkspaceStore.getState().workspaces[task.id] ?? null;
               await handleExternalAppAction(
                 result.action.action,
                 worktreePath,
                 task.title,
+                {
+                  workspace,
+                  mainRepoPath: workspace?.folderPath,
+                },
               );
             }
             break;

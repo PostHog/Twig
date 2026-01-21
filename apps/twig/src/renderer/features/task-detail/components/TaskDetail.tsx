@@ -1,6 +1,5 @@
 import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
-import { ExternalAppsOpener } from "@features/task-detail/components/ExternalAppsOpener";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { FocusWorkspaceButton } from "@features/workspace/components/FocusWorkspaceButton";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
@@ -9,9 +8,9 @@ import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { useStatusBar } from "@hooks/useStatusBar";
-import { Box, Code, Flex, Text } from "@radix-ui/themes";
+import { GitBranch, Laptop } from "@phosphor-icons/react";
+import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
 import { useMemo } from "react";
 import {
   selectWorkspace,
@@ -61,51 +60,48 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   const task = taskData.task;
   const workspace = useWorkspaceStore(selectWorkspace(taskId));
   const branchName = workspace?.branchName;
-  const isFocused = useFocusStore(
-    selectIsFocusedOnWorktree(workspace?.worktreePath ?? ""),
-  );
+
+  const workspaceMode = workspace?.mode ?? "local";
 
   const headerContent = useMemo(
     () => (
       <Flex align="center" justify="between" gap="2" width="100%">
         <Flex align="center" gap="2" minWidth="0">
+          <Tooltip
+            content={
+              workspaceMode === "worktree"
+                ? "Worktree workspace"
+                : "Local workspace"
+            }
+          >
+            {workspaceMode === "worktree" ? (
+              <GitBranch size={16} style={{ flexShrink: 0, opacity: 0.6 }} />
+            ) : (
+              <Laptop size={16} style={{ flexShrink: 0, opacity: 0.6 }} />
+            )}
+          </Tooltip>
           <Text size="2" weight="medium" truncate>
             {task.title}
           </Text>
-          {branchName && (
-            <Code
-              size="1"
-              color={isFocused ? "blue" : "gray"}
-              variant="ghost"
-              style={!isFocused ? { opacity: 0.6 } : undefined}
-            >
-              {branchName}
-              {!isFocused && " · not checked out"}
-            </Code>
-          )}
           <StartWorkspaceButton taskId={taskId} />
           <FocusWorkspaceButton
             taskId={taskId}
             repoPath={taskData.repoPath ?? undefined}
           />
-        </Flex>
-        <Flex align="center" gap="2" flexShrink="0">
-          <ExternalAppsOpener
-            targetPath={effectiveRepoPath}
-            label={workspace?.worktreeName ?? undefined}
-          />
+          {branchName && (
+            <Code
+              size="1"
+              color="gray"
+              variant="ghost"
+              style={{ opacity: 0.6 }}
+            >
+              {branchName}
+            </Code>
+          )}
         </Flex>
       </Flex>
     ),
-    [
-      task.title,
-      branchName,
-      isFocused,
-      workspace,
-      taskId,
-      effectiveRepoPath,
-      taskData.repoPath,
-    ],
+    [task.title, taskId, taskData.repoPath, branchName, workspaceMode],
   );
 
   useSetHeaderContent(headerContent);

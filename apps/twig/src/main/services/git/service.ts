@@ -34,8 +34,12 @@ export interface GitServiceEvents {
   [GitServiceEvent.CloneProgress]: CloneProgressPayload;
 }
 
+const FETCH_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
+
 @injectable()
 export class GitService extends TypedEventEmitter<GitServiceEvents> {
+  private lastFetchTime = new Map<string, number>();
+
   public async detectRepo(
     directoryPath: string,
   ): Promise<DetectRepoResult | null> {
@@ -475,13 +479,18 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
           };
         }
 
-        try {
-          await execAsync("git fetch --quiet", {
-            cwd: directoryPath,
-            timeout: 10000,
-          });
-        } catch {
-          // Fetch failed (likely offline), continue with stale data
+        const now = Date.now();
+        const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
+        if (now - lastFetch > FETCH_THROTTLE_MS) {
+          try {
+            await execAsync("git fetch --quiet", {
+              cwd: directoryPath,
+              timeout: 10000,
+            });
+            this.lastFetchTime.set(directoryPath, now);
+          } catch {
+            // Fetch failed (likely offline), continue with stale data
+          }
         }
 
         const { stdout: revList } = await execAsync(

@@ -3,6 +3,7 @@ import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import { trpcVanilla } from "@renderer/trpc";
 import { create } from "zustand";
+import type { EnableFocusSagaResult } from "./sagas/focusSagas";
 import {
   type EnableFocusSagaInput,
   runCompleteUnfocusSaga,
@@ -11,11 +12,22 @@ import {
   runRollbackFocusSaga,
 } from "./sagas/focusSagas";
 
-function invalidateBranchQueries() {
+function invalidateFocusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["current-branch"] });
+  // Delay git-related invalidations to let git operations (stash pop, file copy) settle
+  setTimeout(() => {
+    queryClient.invalidateQueries({ queryKey: ["diff-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["changed-files-head"] });
+    queryClient.invalidateQueries({ queryKey: ["git-sync-status"] });
+  }, 1000);
 }
 
 export type { FocusResult, FocusSession } from "@main/services/focus/schemas";
+export type { EnableFocusSagaResult } from "./sagas/focusSagas";
+
+export type EnableFocusResult = EnableFocusSagaResult & {
+  wasSwap: boolean;
+};
 
 const log = logger.scope("focus-store");
 
@@ -31,7 +43,7 @@ interface FocusState {
   isDisabling: boolean;
   error: string | null;
 
-  enableFocus: (params: EnableFocusParams) => Promise<FocusResult>;
+  enableFocus: (params: EnableFocusParams) => Promise<EnableFocusResult>;
   disableFocus: () => Promise<FocusResult>;
   restore: (mainRepoPath: string) => Promise<void>;
   clearError: () => void;
@@ -43,21 +55,31 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
   isDisabling: false,
   error: null,
 
-  enableFocus: async (params: EnableFocusParams): Promise<FocusResult> => {
+  enableFocus: async (
+    params: EnableFocusParams,
+  ): Promise<EnableFocusResult> => {
     const { mainRepoPath, worktreePath, branch } = params;
     const { session } = get();
 
     set({ isEnabling: true, error: null });
+
+    let wasSwap = false;
 
     try {
       // If already focused on something else, unfocus first
       if (session && session.mainRepoPath === mainRepoPath) {
         if (session.worktreePath === worktreePath) {
           set({ isEnabling: false });
-          return { success: true };
+          return {
+            success: true,
+            mainStashRef: session.mainStashRef,
+            localWorktreePath: session.localWorktreePath,
+            wasSwap: false,
+          };
         }
 
         log.info("Swapping focus: unfocusing current workspace first");
+        wasSwap = true;
         const unfocusResult = await runDisableFocusSaga({
           mainRepoPath: session.mainRepoPath,
           worktreePath: session.worktreePath,
@@ -72,6 +94,9 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
           return {
             success: false,
             error: `Failed to unfocus: ${unfocusResult.error}`,
+            mainStashRef: null,
+            localWorktreePath: null,
+            wasSwap,
           };
         }
 
@@ -82,6 +107,17 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
         directoryPath: mainRepoPath,
       });
 
+      if (!currentBranch) {
+        set({ isEnabling: false, error: "Could not determine current branch" });
+        return {
+          success: false,
+          error: "Could not determine current branch",
+          mainStashRef: null,
+          localWorktreePath: null,
+          wasSwap,
+        };
+      }
+
       const validationError =
         await trpcVanilla.focus.validateFocusOperation.query({
           mainRepoPath,
@@ -91,39 +127,51 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
 
       if (validationError) {
         set({ isEnabling: false, error: validationError });
-        return { success: false, error: validationError };
+        return {
+          success: false,
+          error: validationError,
+          mainStashRef: null,
+          localWorktreePath: null,
+          wasSwap,
+        };
       }
 
       const sagaInput: EnableFocusSagaInput = {
         mainRepoPath,
         worktreePath,
         branch,
-        originalBranch: currentBranch!,
+        originalBranch: currentBranch,
       };
 
       const result = await runEnableFocusSaga(sagaInput);
 
       if (result.success) {
-        const session: FocusSession = {
+        const newSession: FocusSession = {
           mainRepoPath,
           worktreePath,
           branch,
-          originalBranch: currentBranch!,
+          originalBranch: currentBranch,
           mainStashRef: result.mainStashRef,
           localWorktreePath: result.localWorktreePath,
         };
 
-        set({ session, isEnabling: false });
-        invalidateBranchQueries();
-        return { success: true };
+        set({ session: newSession, isEnabling: false });
+        invalidateFocusRelatedQueries();
+        return { ...result, wasSwap };
       }
 
       set({ isEnabling: false, error: result.error ?? null });
-      return { success: false, error: result.error };
+      return { ...result, wasSwap };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       set({ isEnabling: false, error: message });
-      return { success: false, error: message };
+      return {
+        success: false,
+        error: message,
+        mainStashRef: null,
+        localWorktreePath: null,
+        wasSwap,
+      };
     }
   },
 
@@ -147,7 +195,7 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
 
       if (result.success) {
         set({ session: null, isDisabling: false });
-        invalidateBranchQueries();
+        invalidateFocusRelatedQueries();
         return { success: true, stashPopWarning: result.stashPopWarning };
       }
 

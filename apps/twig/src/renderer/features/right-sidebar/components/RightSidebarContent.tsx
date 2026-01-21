@@ -1,7 +1,9 @@
 import { ChangesPanel } from "@features/task-detail/components/ChangesPanel";
 import { FileTreePanel } from "@features/task-detail/components/FileTreePanel";
+import { FolderSimple, GitDiff } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
+import type React from "react";
 import { useState } from "react";
 
 interface RightSidebarContentProps {
@@ -14,30 +16,40 @@ type TabId = "changes" | "files";
 interface TabProps {
   id: TabId;
   label: string;
+  icon: React.ReactNode;
   isActive: boolean;
   onClick: () => void;
 }
 
-function Tab({ label, isActive, onClick }: TabProps) {
+function Tab({ label, icon, isActive, onClick }: TabProps) {
   return (
-    <Box
+    <Flex
       onClick={onClick}
-      px="3"
-      py="2"
+      align="center"
+      gap="1"
+      pl="3"
+      pr="3"
+      className="flex-shrink-0 cursor-pointer select-none border-r border-b-2"
       style={{
-        cursor: "pointer",
-        borderBottom: isActive
-          ? "2px solid var(--accent-9)"
-          : "2px solid transparent",
-        color: isActive ? "var(--gray-12)" : "var(--gray-11)",
-        userSelect: "none",
+        borderRightColor: "var(--gray-6)",
+        borderBottomColor: isActive ? "var(--accent-10)" : "transparent",
+        color: isActive ? "var(--accent-12)" : "var(--gray-11)",
+        height: "31px",
       }}
-      className={isActive ? "" : "hover:bg-gray-2"}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.color = "var(--gray-12)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.color = "var(--gray-11)";
+        }
+      }}
     >
-      <Text size="2" weight={isActive ? "medium" : "regular"}>
-        {label}
-      </Text>
-    </Box>
+      <Box style={{ display: "flex", alignItems: "center" }}>{icon}</Box>
+      <Text size="1">{label}</Text>
+    </Flex>
   );
 }
 
@@ -62,12 +74,14 @@ export function RightSidebarContent({
         <Tab
           id="changes"
           label="Changes"
+          icon={<GitDiff size={14} />}
           isActive={activeTab === "changes"}
           onClick={() => setActiveTab("changes")}
         />
         <Tab
           id="files"
           label="Files"
+          icon={<FolderSimple size={14} />}
           isActive={activeTab === "files"}
           onClick={() => setActiveTab("files")}
         />

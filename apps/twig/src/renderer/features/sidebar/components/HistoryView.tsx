@@ -1,4 +1,3 @@
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { Button, Flex } from "@radix-ui/themes";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useEffectiveWorktreePath } from "../hooks/useEffectiveWorktreePath";
@@ -47,15 +46,14 @@ function HistoryTaskItem({
   onTogglePin,
 }: HistoryTaskItemProps) {
   const workspaces = useWorkspaceStore.use.workspaces();
-  const taskStates = useTaskExecutionStore((state) => state.taskStates);
 
   const workspace = workspaces[task.id];
-  const taskState = taskStates[task.id];
 
+  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
   const effectiveWorktreePath = useEffectiveWorktreePath(
     workspace?.worktreePath,
     workspace?.folderPath,
-    taskState?.workspaceMode,
+    workspace?.mode,
   );
 
   return (
@@ -63,9 +61,8 @@ function HistoryTaskItem({
       id={task.id}
       label={task.title}
       isActive={isActive}
-      worktreeName={workspace?.worktreeName ?? undefined}
       worktreePath={effectiveWorktreePath}
-      workspaceMode={taskState?.workspaceMode}
+      workspaceMode={workspace?.mode}
       mainRepoPath={workspace?.folderPath}
       branchName={workspace?.branchName ?? undefined}
       lastActivityAt={task.lastActivityAt}
@@ -98,15 +95,14 @@ function PinnedTaskItem({
   onTogglePin,
 }: PinnedTaskItemProps) {
   const workspaces = useWorkspaceStore.use.workspaces();
-  const taskStates = useTaskExecutionStore((state) => state.taskStates);
 
   const workspace = workspaces[task.id];
-  const taskState = taskStates[task.id];
 
+  // Use workspace.mode as source of truth (not taskState.workspaceMode which may default incorrectly)
   const effectiveWorktreePath = useEffectiveWorktreePath(
     workspace?.worktreePath,
     workspace?.folderPath,
-    taskState?.workspaceMode,
+    workspace?.mode,
   );
 
   return (
@@ -114,9 +110,8 @@ function PinnedTaskItem({
       id={task.id}
       label={task.title}
       isActive={isActive}
-      worktreeName={workspace?.worktreeName ?? undefined}
       worktreePath={effectiveWorktreePath}
-      workspaceMode={taskState?.workspaceMode}
+      workspaceMode={workspace?.mode}
       mainRepoPath={workspace?.folderPath}
       branchName={workspace?.branchName ?? undefined}
       lastActivityAt={task.lastActivityAt}

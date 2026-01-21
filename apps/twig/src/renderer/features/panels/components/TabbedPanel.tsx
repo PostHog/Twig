@@ -1,6 +1,5 @@
 import { useDroppable } from "@dnd-kit/react";
-import { SquareSplitHorizontalIcon } from "@phosphor-icons/react";
-import { PlusIcon } from "@radix-ui/react-icons";
+import { SquareSplitHorizontalIcon, Terminal } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type React from "react";
@@ -34,6 +33,7 @@ function TabBarButton({ ariaLabel, onClick, children }: TabBarButtonProps) {
         justifyContent: "center",
         background: isHovered ? "var(--gray-4)" : "var(--color-background)",
         border: "none",
+        borderBottom: "1px solid var(--gray-6)",
         cursor: "pointer",
         color: "var(--gray-11)",
       }}
@@ -212,7 +212,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               )}
               {onAddTerminal && (
                 <TabBarButton ariaLabel="Add terminal" onClick={onAddTerminal}>
-                  <PlusIcon width={12} height={12} />
+                  <Terminal size={14} />
                 </TabBarButton>
               )}
             </Flex>
