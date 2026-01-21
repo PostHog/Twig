@@ -1,3 +1,4 @@
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useEffect, useState } from "react";
 
@@ -7,6 +8,7 @@ interface TorchGlowProps {
 
 export function TorchGlow({ containerRef }: TorchGlowProps) {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
+  const cursorGlow = useSettingsStore((state) => state.cursorGlow);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -41,8 +43,8 @@ export function TorchGlow({ containerRef }: TorchGlowProps) {
     };
   }, [containerRef]);
 
-  // Only show in dark mode when hovering
-  if (!isDarkMode || !isHovering || !mousePos) return null;
+  // Only show in dark mode when hovering and cursor glow is enabled
+  if (!isDarkMode || !cursorGlow || !isHovering || !mousePos) return null;
 
   return (
     <>
