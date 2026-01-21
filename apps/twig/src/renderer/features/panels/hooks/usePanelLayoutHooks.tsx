@@ -1,6 +1,9 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { TabContentRenderer } from "@features/task-detail/components/TabContentRenderer";
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import {
+  selectTaskRepoPath,
+  useTaskExecutionStore,
+} from "@features/task-detail/stores/taskExecutionStore";
 import { ChatCenteredText, Terminal } from "@phosphor-icons/react";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -82,9 +85,7 @@ export function useTabInjection(
   closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
   const worktreePath = useWorkspaceStore(selectWorktreePath(taskId));
-  const storedRepoPath = useTaskExecutionStore(
-    (state) => state.taskStates[taskId]?.repoPath ?? null,
-  );
+  const storedRepoPath = useTaskExecutionStore(selectTaskRepoPath(taskId));
   const repoPath = worktreePath || storedRepoPath || "";
 
   return useMemo(

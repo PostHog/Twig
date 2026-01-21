@@ -1,4 +1,8 @@
-import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
+import {
+  selectTaskRepoExists,
+  selectTaskRepoPath,
+  useTaskExecutionStore,
+} from "@features/task-detail/stores/taskExecutionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { Task } from "@shared/types";
 import { cloneStore } from "@stores/cloneStore";
@@ -27,12 +31,8 @@ export function useTaskData({ taskId, initialTask }: UseTaskDataParams) {
   }, [initializeRepoPath, taskId, task]);
 
   // Subscribe to specific fields reactively to avoid unnecessary rerenders
-  const repoPath = useTaskExecutionStore(
-    (state) => state.taskStates[taskId]?.repoPath ?? null,
-  );
-  const repoExists = useTaskExecutionStore(
-    (state) => state.taskStates[taskId]?.repoExists ?? null,
-  );
+  const repoPath = useTaskExecutionStore(selectTaskRepoPath(taskId));
+  const repoExists = useTaskExecutionStore(selectTaskRepoExists(taskId));
 
   const repository = getTaskRepository(task);
 

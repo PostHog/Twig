@@ -43,11 +43,23 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
     (async () => {
       try {
         const loadedFolders = await loadFolders();
+
+        // Remove folders that no longer exist on disk
+        const deletedFolders = loadedFolders.filter((f) => f.exists === false);
+        for (const folder of deletedFolders) {
+          trpcVanilla.folders.removeFolder
+            .mutate({ folderId: folder.id })
+            .catch((err) =>
+              log.error(`Failed to remove deleted folder ${folder.path}:`, err),
+            );
+        }
+        const existingFolders = loadedFolders.filter((f) => f.exists !== false);
+
         // Merge with existing state to preserve folders added during load
         set((state) => {
           // Dedupe by id, local state wins for freshness
           const byId = new Map<string, RegisteredFolder>();
-          for (const f of loadedFolders) byId.set(f.id, f);
+          for (const f of existingFolders) byId.set(f.id, f);
           for (const f of state.folders) byId.set(f.id, f);
           return { folders: Array.from(byId.values()), isLoaded: true };
         });
@@ -140,6 +152,7 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
 
       getRecentFolders: (limit = 5) => {
         return [...get().folders]
+          .filter((f) => f.exists !== false)
           .sort(
             (a, b) =>
               new Date(b.lastAccessed).getTime() -

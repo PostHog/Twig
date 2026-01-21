@@ -147,3 +147,12 @@ export const useTaskExecutionStore = create<TaskExecutionStore>()(
     },
   ),
 );
+
+// Selector factories for parameterized access (taskId-based)
+export const selectTaskRepoPath =
+  (taskId: string) => (state: TaskExecutionStore) =>
+    state.taskStates[taskId]?.repoPath ?? null;
+
+export const selectTaskRepoExists =
+  (taskId: string) => (state: TaskExecutionStore) =>
+    state.taskStates[taskId]?.repoExists ?? null;

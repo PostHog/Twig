@@ -1,7 +1,10 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { isFileTabActiveInTree, usePanelLayoutStore } from "@features/panels";
-import { useFileTreeStore } from "@features/right-sidebar/stores/fileTreeStore";
+import {
+  selectIsPathExpanded,
+  useFileTreeStore,
+} from "@features/right-sidebar/stores/fileTreeStore";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
@@ -40,9 +43,7 @@ function LazyTreeItem({
   repoPath,
   isFileActive,
 }: LazyTreeItemProps) {
-  const isExpanded = useFileTreeStore(
-    (state) => state.expandedPaths[taskId]?.has(entry.path) ?? false,
-  );
+  const isExpanded = useFileTreeStore(selectIsPathExpanded(taskId, entry.path));
   const togglePath = useFileTreeStore((state) => state.togglePath);
   const collapseAll = useFileTreeStore((state) => state.collapseAll);
   const openFile = usePanelLayoutStore((state) => state.openFile);

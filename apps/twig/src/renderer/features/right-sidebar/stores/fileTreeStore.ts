@@ -38,3 +38,8 @@ export const useFileTreeStore = create<FileTreeStore>()((set) => ({
       },
     })),
 }));
+
+// Selector factory for checking if a path is expanded
+export const selectIsPathExpanded =
+  (taskId: string, path: string) => (state: FileTreeStore) =>
+    state.expandedPaths[taskId]?.has(path) ?? false;

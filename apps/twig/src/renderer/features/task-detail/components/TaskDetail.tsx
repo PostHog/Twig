@@ -11,7 +11,11 @@ import { useStatusBar } from "@hooks/useStatusBar";
 import { Box, Code, Flex, Text } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useMemo } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
+import {
+  selectWorkspace,
+  selectWorktreePath,
+  useWorkspaceStore,
+} from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskDetailProps {
   task: Task;
@@ -23,9 +27,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     initialTask,
   });
 
-  const worktreePath = useWorkspaceStore(
-    (state) => state.workspaces[initialTask.id]?.worktreePath,
-  );
+  const worktreePath = useWorkspaceStore(selectWorktreePath(initialTask.id));
   const effectiveRepoPath = worktreePath ?? taskData.repoPath;
 
   useFileWatcher(effectiveRepoPath, taskData.task.id);
@@ -55,10 +57,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   useWorkspaceEvents(taskId);
   const task = taskData.task;
-  const workspace = useWorkspaceStore(
-    (state) => state.workspaces[taskId] ?? null,
-  );
-
+  const workspace = useWorkspaceStore(selectWorkspace(taskId));
   const branchName = workspace?.branchName;
 
   const headerContent = useMemo(
