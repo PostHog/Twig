@@ -23,6 +23,8 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "test": "vitest run",
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "test:e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed",
     "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/twig/scripts/patch-electron-name.sh"
   },
   "keywords": [
@@ -35,6 +37,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
+    "@playwright/test": "^1.42.0",
     "@electron-forge/cli": "^7.10.2",
     "@electron-forge/maker-dmg": "^7.10.2",
     "@electron-forge/maker-zip": "^7.10.2",

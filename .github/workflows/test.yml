@@ -1,4 +1,4 @@
-name: Test
+name: Run unit and integration tests
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,3 +35,53 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+  integration-test:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc
+        run: pnpm --filter @posthog/electron-trpc build
+
+      - name: Build agent
+        run: pnpm --filter agent build
+
+      - name: Build native modules
+        run: pnpm --filter twig run build-native
+
+      - name: Package Electron app
+        run: pnpm --filter twig run package
+
+      - name: Install Playwright
+        run: pnpm --filter twig exec playwright install --with-deps chromium
+
+      - name: Run E2E smoke tests
+        run: pnpm --filter twig run test:e2e
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/twig/playwright-report/
+          retention-days: 7
