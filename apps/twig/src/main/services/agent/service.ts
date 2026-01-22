@@ -14,12 +14,12 @@ import {
   Agent,
   CloudConnection,
   type CloudConnectionEvents,
-  type FileSyncEvent,
-  FileSyncManager,
   type JsonRpcMessage,
   getLlmGatewayUrl,
   type OnLogCallback,
   PostHogAPIClient,
+  resumeFromLog,
+  TreeTracker,
 } from "@posthog/agent";
 import { app } from "electron";
 import { injectable } from "inversify";
@@ -167,7 +167,8 @@ interface ManagedSession {
   isCloud: boolean;
   cloudRunId?: string;
   cloudConnection?: CloudConnection;
-  fileSyncManager?: FileSyncManager;
+  // Tree-based state tracking
+  treeTracker?: TreeTracker;
 }
 
 function getClaudeCliPath(): string {
@@ -508,17 +509,27 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    log.info("Prompt called", { sessionId, isCloud: session.isCloud, hasCloudConnection: !!session.cloudConnection });
+    log.info("Prompt called", {
+      sessionId,
+      isCloud: session.isCloud,
+      hasCloudConnection: !!session.cloudConnection,
+    });
 
     // Route to cloud if in cloud mode
     if (session.isCloud && session.cloudConnection) {
       session.lastActivityAt = Date.now();
       // Extract text content from ContentBlock array for cloud prompt
       const textContent = prompt
-        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .filter(
+          (block): block is { type: "text"; text: string } =>
+            block.type === "text",
+        )
         .map((block) => block.text)
         .join("\n");
-      log.info("Sending prompt to cloud", { sessionId, contentLength: textContent.length });
+      log.info("Sending prompt to cloud", {
+        sessionId,
+        contentLength: textContent.length,
+      });
       await session.cloudConnection.prompt(textContent);
       log.info("Cloud prompt sent successfully", { sessionId });
       return { stopReason: "end_turn" };
@@ -677,7 +688,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
-  private async switchToCloud(session: ManagedSession): Promise<CloudModeResult> {
+  private async switchToCloud(
+    session: ManagedSession,
+  ): Promise<CloudModeResult> {
     const { taskRunId, taskId, config, repoPath } = session;
     log.info("Switching to cloud mode", { sessionId: taskRunId, taskId });
 
@@ -685,15 +698,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "cloud",
-      message: "Syncing files to cloud...",
+      message: "Capturing state for cloud...",
     });
 
     try {
-      // 1. Cancel current local agent operation gracefully
-      try {
-        await session.connection.cancel({ sessionId: taskRunId });
-      } catch {
-        // Ignore cancel errors - agent might not be running
+      // 1. Stop local agent and capture tree state
+      log.info("Stopping local agent and capturing tree state", { taskRunId });
+      const treeSnapshot = await session.agent.stop();
+      if (treeSnapshot) {
+        log.info("Tree state captured", {
+          taskRunId,
+          treeHash: treeSnapshot.treeHash,
+          filesChanged: treeSnapshot.filesChanged.length,
+        });
       }
 
       // 2. Create API client for PostHog operations
@@ -703,39 +720,43 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         projectId: config.credentials.projectId,
       });
 
-      // 3. Sync local file changes to S3 before switching
-      const fileSyncManager = new FileSyncManager({
-        workingDirectory: repoPath,
-        taskId,
-        runId: taskRunId,
-        apiClient,
-      });
-
-      try {
-        log.info("Syncing local files to S3", { taskRunId, repoPath });
-        const manifest = await fileSyncManager.syncFilesToS3(repoPath);
-        log.info("Local files synced to S3", {
-          taskRunId,
-          fileCount: Object.keys(manifest.files).length,
-          deletedCount: manifest.deleted_files.length,
-        });
-      } catch (err) {
-        log.warn("Failed to sync local files to S3, continuing anyway", { taskRunId, err });
-      }
-
-      // 4. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
+      // 3. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
+      // The cloud agent will call resume(taskId) which reads the log including tree_snapshot
       await apiClient.updateTaskRun(taskId, taskRunId, {
         environment: "cloud",
       });
 
       log.info("Task run environment switched to cloud", { taskRunId });
 
+      // 4. Create TreeTracker for tracking tree snapshot events from cloud
+      const treeTracker = new TreeTracker({
+        repositoryPath: repoPath,
+        taskId,
+        runId: taskRunId,
+        apiClient,
+      });
+
       // 5. Create CloudConnection and connect via SSE
       log.info("[SWITCH_CLOUD] Creating CloudConnection", { taskRunId });
       const cloudConnectionEvents: CloudConnectionEvents = {
         onEvent: (event: JsonRpcMessage) => {
-          log.info("[SWITCH_CLOUD] onEvent callback triggered", { method: event.method });
+          log.debug("[SWITCH_CLOUD] onEvent callback triggered", {
+            method: event.method,
+          });
           this.handleCloudEvent(taskRunId, event);
+
+          // Handle tree_snapshot events to keep local tree in sync
+          if (event.method === "_posthog/tree_snapshot") {
+            const params = event.params as
+              | { treeHash?: string; archiveUrl?: string }
+              | undefined;
+            if (params?.treeHash) {
+              treeTracker.setLastTreeHash(params.treeHash);
+              log.info("Tree snapshot received from cloud", {
+                treeHash: params.treeHash,
+              });
+            }
+          }
         },
         onError: (error: Error) => {
           log.error("Cloud connection error", { sessionId: taskRunId, error });
@@ -758,26 +779,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         onDisconnect: () => {
           log.info("Cloud connection disconnected", { sessionId: taskRunId });
         },
-        onFileSync: async (event: FileSyncEvent) => {
-          log.info("File sync event received", {
-            sessionId: taskRunId,
-            type: event.type,
-            path: event.relativePath,
-          });
-          try {
-            await fileSyncManager.applyFileChange({
-              type: event.type,
-              path: join(session.repoPath, event.relativePath),
-              relativePath: event.relativePath,
-              storagePath: event.storagePath,
-              contentHash: event.contentHash,
-              size: event.size,
-            });
-            log.info("File synced locally", { path: event.relativePath });
-          } catch (err) {
-            log.error("Failed to sync file locally", { path: event.relativePath, err });
-          }
-        },
       };
 
       const cloudConnection = new CloudConnection(
@@ -794,13 +795,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       // Connect to cloud
       await cloudConnection.connect();
 
-      // 5. Update session state
+      // 6. Update session state
       session.isCloud = true;
       session.cloudRunId = taskRunId;
       session.cloudConnection = cloudConnection;
-      session.fileSyncManager = fileSyncManager;
+      session.treeTracker = treeTracker;
 
-      // 6. Emit success event
+      // 7. Emit success event
       this.emit(AgentServiceEvent.ModeChanged, {
         sessionId: taskRunId,
         mode: "cloud",
@@ -814,7 +815,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         message: "Successfully moved to cloud",
       };
     } catch (error) {
-      log.error("Failed to switch to cloud mode", { sessionId: taskRunId, error });
+      log.error("Failed to switch to cloud mode", {
+        sessionId: taskRunId,
+        error,
+      });
 
       // Revert to local mode on failure
       this.emit(AgentServiceEvent.ModeChanged, {
@@ -827,7 +831,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
-  private async switchToLocal(session: ManagedSession): Promise<CloudModeResult> {
+  private async switchToLocal(
+    session: ManagedSession,
+  ): Promise<CloudModeResult> {
     const { taskRunId, taskId, config, repoPath, cloudConnection } = session;
     log.info("Switching to local mode", { sessionId: taskRunId });
 
@@ -835,11 +841,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "local",
-      message: "Syncing files from cloud...",
+      message: "Restoring state from cloud...",
     });
 
     try {
-      // 1. Close cloud connection gracefully
+      // 1. Send close to cloud agent (it will call stop() and capture final tree state)
       if (cloudConnection) {
         try {
           await cloudConnection.close();
@@ -848,50 +854,47 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         }
       }
 
-      // 2. Fetch and apply file manifest from cloud
+      // 2. Create API client for PostHog operations
       const apiClient = new PostHogAPIClient({
         apiUrl: config.credentials.apiHost,
         getApiKey: () => this.getToken(config.credentials.apiKey),
         projectId: config.credentials.projectId,
       });
 
+      // 3. Resume from log - restores tree state and conversation
       try {
-        log.info("Fetching file manifest from cloud", { taskRunId });
-        const manifest = await apiClient.getFileManifest(taskId, taskRunId);
+        log.info("Resuming from log to restore cloud state", { taskRunId });
+        const resumeState = await resumeFromLog({
+          taskId,
+          runId: taskRunId,
+          repositoryPath: repoPath,
+          apiClient,
+        });
 
-        if (manifest) {
-          const fileSyncManager = new FileSyncManager({
-            workingDirectory: repoPath,
-            taskId,
-            runId: taskRunId,
-            apiClient,
-          });
+        log.info("State restored from log", {
+          taskRunId,
+          hasSnapshot: !!resumeState.latestSnapshot,
+          conversationTurns: resumeState.conversation.length,
+          interrupted: resumeState.interrupted,
+        });
 
-          log.info("Applying cloud file changes locally", {
-            taskRunId,
-            fileCount: Object.keys(manifest.files).length,
-            deletedCount: manifest.deleted_files.length,
-          });
-
-          await fileSyncManager.applyManifest(manifest, repoPath);
-          log.info("Cloud file changes applied locally", { taskRunId });
-        } else {
-          log.info("No file manifest found, skipping file sync", { taskRunId });
+        // Update agent's tree tracker with latest hash if available
+        const agentTreeTracker = session.agent.getTreeTracker();
+        if (agentTreeTracker && resumeState.latestSnapshot) {
+          agentTreeTracker.setLastTreeHash(resumeState.latestSnapshot.treeHash);
         }
       } catch (err) {
-        log.warn("Failed to apply cloud file changes, continuing anyway", { taskRunId, err });
+        log.warn("Failed to resume from log, continuing without state restore", {
+          taskRunId,
+          err,
+        });
       }
 
-      // 3. Clean up existing file sync manager
-      if (session.fileSyncManager) {
-        session.fileSyncManager.clear();
-      }
-
-      // 4. Update session state
+      // 4. Clean up session state
       session.isCloud = false;
       session.cloudRunId = undefined;
       session.cloudConnection = undefined;
-      session.fileSyncManager = undefined;
+      session.treeTracker = undefined;
 
       // 5. Emit success event
       this.emit(AgentServiceEvent.ModeChanged, {
@@ -907,7 +910,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         message: "Successfully moved to local",
       };
     } catch (error) {
-      log.error("Failed to switch to local mode", { sessionId: taskRunId, error });
+      log.error("Failed to switch to local mode", {
+        sessionId: taskRunId,
+        error,
+      });
       throw error;
     }
   }

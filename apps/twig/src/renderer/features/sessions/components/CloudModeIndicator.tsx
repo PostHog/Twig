@@ -1,4 +1,7 @@
-import { Cloud as CloudIcon, Desktop as DesktopIcon } from "@phosphor-icons/react";
+import {
+  Cloud as CloudIcon,
+  Desktop as DesktopIcon,
+} from "@phosphor-icons/react";
 import { Badge, Flex, Kbd, Text, Tooltip } from "@radix-ui/themes";
 
 interface CloudModeIndicatorProps {

@@ -344,7 +344,9 @@ export class FileSyncManager {
   async getChangedFiles(
     repoPath: string,
     baseCommit?: string | null,
-  ): Promise<Array<{ path: string; status: "added" | "modified" | "deleted" }>> {
+  ): Promise<
+    Array<{ path: string; status: "added" | "modified" | "deleted" }>
+  > {
     const changedFiles: Array<{
       path: string;
       status: "added" | "modified" | "deleted";
@@ -360,9 +362,12 @@ export class FileSyncManager {
         );
         diffOutput = stdout;
       } else {
-        const { stdout } = await execAsync("git diff --name-status HEAD~1 HEAD", {
-          cwd: repoPath,
-        });
+        const { stdout } = await execAsync(
+          "git diff --name-status HEAD~1 HEAD",
+          {
+            cwd: repoPath,
+          },
+        );
         diffOutput = stdout;
       }
 
@@ -509,10 +514,7 @@ export class FileSyncManager {
    * Apply a file manifest to the local filesystem.
    * Called when switching from cloud to local mode.
    */
-  async applyManifest(
-    manifest: FileManifest,
-    repoPath: string,
-  ): Promise<void> {
+  async applyManifest(manifest: FileManifest, repoPath: string): Promise<void> {
     this.logger.info("Applying file manifest", {
       fileCount: Object.keys(manifest.files).length,
       deletedCount: manifest.deleted_files.length,
@@ -535,11 +537,12 @@ export class FileSyncManager {
 
         // Download file by hash
         const storagePath = `files/${meta.hash}`;
-        const presignedUrl = await this.config.apiClient.getArtifactPresignedUrl(
-          this.config.taskId,
-          this.config.runId,
-          storagePath,
-        );
+        const presignedUrl =
+          await this.config.apiClient.getArtifactPresignedUrl(
+            this.config.taskId,
+            this.config.runId,
+            storagePath,
+          );
 
         if (!presignedUrl) {
           // Try alternative path format

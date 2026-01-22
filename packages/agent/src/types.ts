@@ -142,3 +142,24 @@ export interface FileManifest {
   files: Record<string, FileManifestEntry>;
   deleted_files: string[];
 }
+
+// Device info for tracking where work happens
+export interface DeviceInfo {
+  id: string;
+  type: "local" | "cloud";
+  name?: string;
+}
+
+// Agent execution mode
+export type AgentMode = "interactive" | "background";
+
+// Tree snapshot for state capture
+export interface TreeSnapshotEvent {
+  treeHash: string;
+  baseCommit: string | null;
+  archiveUrl?: string;
+  filesChanged: string[];
+  timestamp: string;
+  interrupted?: boolean;
+  device?: DeviceInfo;
+}

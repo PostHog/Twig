@@ -24,20 +24,11 @@ export interface JsonRpcMessage {
   id?: string | number;
 }
 
-export interface FileSyncEvent {
-  type: "file_created" | "file_modified" | "file_deleted";
-  relativePath: string;
-  storagePath?: string;
-  contentHash?: string;
-  size?: number;
-}
-
 export interface CloudConnectionEvents {
   onEvent: (event: JsonRpcMessage) => void;
   onError?: (error: Error) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
-  onFileSync?: (event: FileSyncEvent) => void;
 }
 
 export class CloudConnection {
@@ -88,7 +79,11 @@ export class CloudConnection {
 
   async sendMessage(message: JsonRpcMessage): Promise<void> {
     const url = this.buildSyncUrl();
-    this.logger.info("Sending message to cloud", { url, method: message.method, params: message.params });
+    this.logger.info("Sending message to cloud", {
+      url,
+      method: message.method,
+      params: message.params,
+    });
 
     const response = await fetch(url, {
       method: "POST",
@@ -100,11 +95,16 @@ export class CloudConnection {
       body: JSON.stringify(message),
     });
 
-    this.logger.info("Message sent, response status", { status: response.status });
+    this.logger.info("Message sent, response status", {
+      status: response.status,
+    });
 
     if (response.status !== 202) {
       const text = await response.text();
-      this.logger.error("Failed to send message", { status: response.status, text });
+      this.logger.error("Failed to send message", {
+        status: response.status,
+        text,
+      });
       throw new Error(`Failed to send message: ${response.status} ${text}`);
     }
   }
@@ -187,7 +187,10 @@ export class CloudConnection {
         }
 
         const chunk = decoder.decode(value, { stream: true });
-        this.logger.debug("[SSE_STREAM] Received chunk", { length: chunk.length, chunk: chunk.substring(0, 200) });
+        this.logger.debug("[SSE_STREAM] Received chunk", {
+          length: chunk.length,
+          chunk: chunk.substring(0, 200),
+        });
         buffer += chunk;
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -198,30 +201,34 @@ export class CloudConnection {
         for (const line of lines) {
           if (line.startsWith("id:")) {
             currentEventId = line.slice(3).trim();
-            this.logger.debug("[SSE_STREAM] Parsed event ID", { eventId: currentEventId });
+            this.logger.debug("[SSE_STREAM] Parsed event ID", {
+              eventId: currentEventId,
+            });
           } else if (line.startsWith("data:")) {
             currentData = line.slice(5).trim();
-            this.logger.debug("[SSE_STREAM] Parsed data line", { dataLength: currentData.length });
+            this.logger.debug("[SSE_STREAM] Parsed data line", {
+              dataLength: currentData.length,
+            });
           } else if (line === "" && currentData) {
             // Empty line signals end of event
-            this.logger.info("[SSE_STREAM] Complete event received", { eventId: currentEventId, dataPreview: currentData.substring(0, 100) });
+            this.logger.info("[SSE_STREAM] Complete event received", {
+              eventId: currentEventId,
+              dataPreview: currentData.substring(0, 100),
+            });
             try {
               const message = JSON.parse(currentData) as JsonRpcMessage;
-              this.logger.info("[SSE_STREAM] Parsed message", { method: message.method, hasParams: !!message.params });
+              this.logger.info("[SSE_STREAM] Parsed message", {
+                method: message.method,
+                hasParams: !!message.params,
+              });
               if (currentEventId) {
                 this.lastEventId = currentEventId;
               }
-              // Route file sync events separately
-              if (message.method === "_posthog/file_sync" && this.events.onFileSync) {
-                const params = message.params as FileSyncEvent | undefined;
-                if (params) {
-                  this.logger.info("[SSE_STREAM] Routing to file sync handler");
-                  this.events.onFileSync(params);
-                }
-              } else {
-                this.logger.info("[SSE_STREAM] Routing to onEvent handler", { method: message.method });
-                this.events.onEvent(message);
-              }
+              // Route all events through onEvent handler
+              this.logger.info("[SSE_STREAM] Routing to onEvent handler", {
+                method: message.method,
+              });
+              this.events.onEvent(message);
             } catch (error) {
               this.logger.warn("[SSE_STREAM] Failed to parse SSE event", {
                 data: currentData,

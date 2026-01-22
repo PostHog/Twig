@@ -1,4 +1,5 @@
 import type { ArtifactType, FileManifest, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
+import { getLlmGatewayUrl } from "./utils/gateway.js";
 
 export interface TaskArtifactUploadPayload {
   name: string;
@@ -10,25 +11,15 @@ export interface TaskArtifactUploadPayload {
 export type TaskRunUpdate = Partial<
   Pick<
     TaskRun,
-    "status" | "branch" | "stage" | "error_message" | "output" | "state" | "environment"
+    | "status"
+    | "branch"
+    | "stage"
+    | "error_message"
+    | "output"
+    | "state"
+    | "environment"
   >
 >;
-
-export function getLlmGatewayUrl(posthogHost: string): string {
-  const url = new URL(posthogHost);
-  const hostname = url.hostname;
-
-  // TODO: Migrate to twig
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return `${url.protocol}//localhost:3308/array`;
-  }
-
-  const regionMatch = hostname.match(/^(us|eu)\.posthog\.com$/);
-  const region = regionMatch ? regionMatch[1] : "us";
-
-  // TODO: Migrate to twig
-  return `https://gateway.${region}.posthog.com/array`;
-}
 
 export class PostHogAPIClient {
   private config: PostHogAPIConfig;
@@ -91,6 +82,13 @@ export class PostHogAPIClient {
     return getLlmGatewayUrl(this.baseUrl);
   }
 
+  async getTaskRun(taskId: string, runId: string): Promise<TaskRun> {
+    const teamId = this.getTeamId();
+    return this.apiRequest<TaskRun>(
+      `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/`,
+    );
+  }
+
   async updateTaskRun(
     taskId: string,
     runId: string,
@@ -149,7 +147,10 @@ export class PostHogAPIClient {
   ): Promise<string | null> {
     const teamId = this.getTeamId();
     try {
-      const response = await this.apiRequest<{ url: string; expires_in: number }>(
+      const response = await this.apiRequest<{
+        url: string;
+        expires_in: number;
+      }>(
         `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/artifacts/presign/`,
         {
           method: "POST",

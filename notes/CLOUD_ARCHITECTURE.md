@@ -9,7 +9,6 @@ This creates two distinct experiences:
 **Interactive Mode** — "I'm watching"
 
 - Real-time feedback as the agent works
-- Files sync to your local machine instantly
 - You can interrupt, redirect, answer questions
 - Feels like pair programming
 
@@ -24,11 +23,13 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 
 ### Key Goals
 
-1. **Local-first feel** — Edit in Twig or your IDE, changes sync automatically
-2. **Survive disconnection** — Close your laptop, agent keeps working
-3. **Seamless resume** — Reconnect and catch up instantly
-4. **Multiple clients** — Laptop, phone, Slack, API—all work
-5. **Simple recovery** — If sandbox dies, state is recoverable
+1. **Seamless handoff** — Move sessions between local and cloud without losing state
+2. **Local-first feel** — Edit in Twig or your IDE, changes sync automatically
+3. **Survive disconnection** — Close your laptop, agent keeps working
+4. **Seamless resume** — Reconnect and catch up instantly
+5. **Multiple clients** — Laptop, phone, Slack, API—all work
+6. **Simple recovery** — If sandbox dies, state is recoverable
+7. **Resume anywhere** — Stop on cloud, resume on local (or vice versa)
 
 ---
 
@@ -46,11 +47,16 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 │                              BACKEND                                     │
 │                                                                          │
 │   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    │
-│   │   Sync API      │    │    Temporal     │    │   S3 Storage    │    │
+│   │   Sync API      │    │    Temporal     │    │   Storage       │    │
 │   │   (FastAPI)     │◄──►│    Workflow     │◄──►│                 │    │
-│   └─────────────────┘    └─────────────────┘    │  - Event logs   │    │
-│                                                 │  - File content │    │
-│                                                 └─────────────────┘    │
+│   └─────────────────┘    └─────────────────┘    │  - ClickHouse   │    │
+│          │                                      │    (events)     │    │
+│          │                                      │  - S3 (trees)   │    │
+│          ▼                                      └─────────────────┘    │
+│   ┌─────────────────┐                                                  │
+│   │     Kafka       │◄── Event streaming                               │
+│   │   (real-time)   │                                                  │
+│   └─────────────────┘                                                  │
 └─────────────────────────────────────────────────────────────────────────┘
                          ▲                              │
                          │ SSE (events)                 │ SSE (commands)
@@ -59,10 +65,11 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 │                              SANDBOX                                     │
 │                                                                          │
 │   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    │
-│   │   Agent Server  │◄──►│  File Watcher   │───►│   S3 Upload     │    │
-│   │   (message loop)│    │                 │    │   (by hash)     │    │
+│   │   Agent Server  │◄──►│  Tree Tracker   │───►│   S3 Upload     │    │
+│   │   (message loop)│    │  (diff-tree)    │    │   (trees only)  │    │
 │   └─────────────────┘    └─────────────────┘    └─────────────────┘    │
-│           │                                                              │
+│           │                      │                                      │
+│           │                      └───► Kafka (events)                   │
 │           └──────────────► Git Repository ◄─────────────────────────────│
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -70,162 +77,260 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 **Data flow:**
 
 1. Agent writes files in sandbox
-2. File watcher uploads content to S3 (by hash) and emits events
-3. Events flow to clients via SSE stream
-4. Clients fetch file content from S3 and write locally
-5. Local edits reverse the flow: upload to S3, notify sandbox
+2. Tree tracker periodically computes `git diff-tree` since last snapshot
+3. Trees (not individual files) are uploaded to S3
+4. All events (including tree snapshots) stream to Kafka → ClickHouse for persistence
+5. Clients receive real-time events via SSE (backed by Kafka)
+6. On handoff: client restores full state from latest tree + ClickHouse event history
 
-**Key insight:** S3 is the source of truth for file content. The event log is the source of truth for what happened. Git commits are used as durable checkpoints.
+**Key insight:** Git trees are the source of truth for file state. ClickHouse is the source of truth for what happened (event log). Kafka provides real-time streaming. No real-time file sync—state transfer happens via `resume(task_id)`.
 
 ---
 
-## File Synchronization
+## Storage Architecture
 
-### Content-Addressed Storage
+### Events → Kafka → ClickHouse
 
-Files are stored in S3 by hash. Events contain only metadata (path + hash), not content which may be very large.
+Agent events flow through Kafka for real-time delivery and are persisted to ClickHouse for querying and replay:
+
+```
+Agent ──► Kafka Topic ──► ClickHouse Table
+              │
+              └──► SSE Stream to Clients (real-time)
+```
+
+**Benefits of ClickHouse:**
+
+- Sub-second queries on event history
+- Efficient storage for JSONL-style event data
+- Native support for time-series queries (replay from timestamp, Last-Event-ID)
+- Scales with PostHog's existing infrastructure
+
+### Tree Archives → S3
+
+Tree archives (compressed working directory snapshots) still go to S3:
 
 ```
 S3 Structure:
-  files/
-    sha256_abc123...  → file content (any file with this hash)
-    sha256_def456...  → file content (deduplicated)
-
-  logs/
-    run_{id}.jsonl    → event log
+  trees/
+    {tree_hash}.tar.gz    → compressed tree contents
+    {tree_hash}.manifest  → file listing with hashes
 ```
+
+**Why S3 for trees:**
+
+- Large binary blobs (tens/hundreds of MB)
+- Infrequent access (only on resume)
+- Cost-effective for storage
+
+### ClickHouse Schema
+
+```sql
+CREATE TABLE agent_events (
+    team_id UInt64,
+    task_id UUID,
+    run_id UUID,
+    event_id UInt64,  -- monotonic per run, used for Last-Event-ID
+    timestamp DateTime64(3),
+    method String,
+    params String,  -- JSON
+    device_id String,
+    device_type Enum8('local' = 1, 'cloud' = 2),
+    device_name Nullable(String)
+) ENGINE = MergeTree()
+ORDER BY (team_id, task_id, run_id, event_id);
+```
+
+---
+
+## Tree-Based Storage
+
+### Git Trees Instead of Individual Files
+
+Instead of uploading every file change, we use `git diff-tree` to capture state changes as trees. This is more efficient and aligns with how git already tracks changes.
 
 **Benefits:**
 
-- Deduplication (same content = same hash = stored once)
-- Multiple clients fetch from S3 (don't need sandbox to be alive)
-- Files survive sandbox death
-- Cache indefinitely (content never changes for a given hash)
+- Atomic snapshots (entire working state, not individual files)
+- Efficient transfer (only changed trees uploaded)
+- Natural git integration (trees are git's native unit)
+- Simpler recovery (restore a tree, not replay file events)
 
-### Sandbox → Client Flow
+### Tree Capture Flow
 
 ```
-Agent writes file
+Agent works on files
        │
        ▼
-File watcher detects change
+Tree tracker detects significant change
+(commit, tool completion, or periodic)
        │
-       ├──► Hash content (sha256)
+       ├──► git write-tree (capture current state)
        │
-       ├──► PUT to S3: files/{hash}
+       ├──► git diff-tree (compare to last snapshot)
        │
-       └──► Emit event: { path, hash, action }
+       ├──► Pack changed files into tree archive
+       │
+       ├──► PUT to S3: trees/{tree_hash}.tar.gz
+       │
+       └──► Emit event to Kafka: { tree_hash, base_commit, files_changed }
                     │
-                    ▼
-            Event log (S3) ───► SSE stream to clients
-                                        │
-                                        ▼
-                               Client receives event
-                                        │
-                                        ├──► GET from S3: files/{hash}
-                                        │
-                                        └──► Write to local filesystem
+                    ├──► Kafka → ClickHouse (persistence)
+                    │
+                    └──► Kafka → SSE stream to clients (real-time)
 ```
 
-### Client → Sandbox Flow (Local Edits)
+### When Trees Are Captured
+
+- After each git commit
+- After significant tool completions (file writes, bash commands)
+- On stop (final tree before shutdown)
+- Periodically (every N minutes of activity)
+
+---
+
+## Resume & State
+
+Since tree snapshots are captured continuously into ClickHouse, we can resume from any point. There's no special "pause" operation—state just exists.
+
+### State = Task + Tree
+
+Everything needed to resume is in ClickHouse:
+
+```typescript
+// From the latest tree_snapshot event in ClickHouse
+interface ResumeState {
+  task_id: string
+  base_commit: string    // Git commit the tree is based on
+  tree_hash: string      // The diff-tree reference
+  tree_url: string       // S3 location of tree archive
+}
+```
+
+To resume a task anywhere:
+1. Find task by `task_id`
+2. Query ClickHouse for latest `tree_snapshot` event
+3. That contains `base_commit` + `tree_hash` + `tree_url`
+4. Restore from there
+
+### Resume Flow
 
 ```
-User edits file locally
+resume(task_id) called
        │
-       ▼
-Local file watcher detects change
+       ├──► Query ClickHouse for task_id events
        │
-       ├──► Hash content (sha256)
+       ├──► Find latest tree_snapshot event
        │
-       ├──► PUT to S3: files/{hash}
+       ├──► Clone/fetch repo to base_commit
        │
-       └──► POST event: { path, hash, action }
+       ├──► Download tree archive from S3 tree_url
+       │
+       ├──► Apply tree on top of base_commit
+       │
+       └──► Start agent with conversation from ClickHouse
                     │
                     ▼
-            Backend pushes to agent via SSE
-                    │
-                    ▼
-            Agent fetches from S3, overwrites file
-                    │
-                    ▼
-            Agent sees file changed, adapts
+            Agent continues where it left off
 ```
 
-### Conflict Resolution: Local Wins
+### Handoff Scenarios
 
-No merge logic. When user edits locally:
+All handoffs are just: stop current environment, resume elsewhere.
 
-1. Content goes to S3
-2. Sandbox is notified
-3. Sandbox overwrites its version
-4. Agent notices and adapts
+**Local → Cloud:**
 
-The agent will be able to handle situations where a local change overwrites it's own change gracefully.
+```
+Local Twig                     Backend                         Cloud Sandbox
+    │                            │                                  │
+    │── stop local agent         │                                  │
+    │   (tree snapshot to        │                                  │
+    │    Kafka → ClickHouse)     │                                  │
+    │                            │                                  │
+    │── startCloud(task_id) ────►│                                  │
+    │                            │── provision sandbox ────────────►│
+    │                            │── resume(task_id) ──────────────►│
+    │                            │                                  │── restore from ClickHouse
+    │                            │◄── ready ────────────────────────│
+    │◄── connected ──────────────│                                  │
+```
+
+**Cloud → Local:**
+
+```
+Cloud Sandbox                  Backend                         Local Twig
+    │                            │                                  │
+    │── stop() ─────────────────►│                                  │
+    │   (final tree to Kafka)    │                                  │
+    │── shutdown ────────────────│                                  │
+    │                            │                                  │
+    │                            │◄── pullToLocal(task_id) ─────────│
+    │                            │                                  │── resume(task_id)
+    │                            │                                  │── restore from ClickHouse
+    │                            │                                  │── continue locally
+```
+
+**Resume later (any environment):**
+
+```
+... time passes ...
+    │
+    │── resume(task_id) ──────► restore from latest tree in ClickHouse
+    │── continue working
+```
+
+### Robustness Requirements
+
+Resume must handle:
+
+1. **Partial uploads** — Tree upload must complete before stop confirms
+2. **Large repos** — Stream tree archives, don't load in memory
+3. **Network failures** — Retry with exponential backoff
+4. **Conversation replay** — Rebuild conversation from ClickHouse events
+5. **Concurrent access** — Prevent two environments from running same task simultaneously
 
 ---
 
 ## State & Recovery
 
-### The Event Log is the source of truth
+### Events in ClickHouse = Recovery
 
-No separate checkpointing mechanism. The combination of:
-
-- Event log (what happened)
-- S3 content-addressed files (file contents by hash)
-- Git commits (durable snapshots)
-
-...gives us everything needed to recover.
+Recovery is just `resume(task_id)`. ClickHouse has everything:
 
 ```
-Event Log (run_{id}.jsonl):
+ClickHouse Events (task_id = xxx):
 
-  { method: "_posthog/git_commit", params: { sha: "abc123" } }
-  { method: "_posthog/file_change", params: { path: "src/foo.py", hash: "sha256_aaa" } }
-  { method: "_posthog/file_change", params: { path: "src/bar.py", hash: "sha256_bbb" } }
-  { method: "_posthog/git_commit", params: { sha: "def456" } }        ◄── latest commit
-  { method: "_posthog/file_change", params: { path: "src/foo.py", hash: "sha256_ccc" } }
-  { method: "_posthog/file_change", params: { path: "src/baz.py", hash: "sha256_ddd" } }
+  { method: "_posthog/git_commit", params: { sha: "abc123" }, device: { id: "dev_1", type: "local" } }
+  { method: "_posthog/tree_snapshot", params: { tree_hash: "def456", base_commit: "abc123", ... }, device: { id: "dev_1", type: "local" } }
+  { method: "_posthog/user_message", params: { content: "..." }, device: { id: "dev_1", type: "local" } }
+  { method: "agent_message_chunk", params: { text: "..." }, device: { id: "dev_1", type: "local" } }
+  -- handoff to cloud --
+  { method: "_posthog/git_commit", params: { sha: "ghi789" }, device: { id: "sandbox_x", type: "cloud" } }
+  { method: "_posthog/tree_snapshot", params: { tree_hash: "jkl012", ... }, device: { id: "sandbox_x", type: "cloud" } }
 ```
 
-**To recover current state:**
+Device changes are visible naturally in the event stream—no explicit handoff events needed.
 
-1. Find latest `git_commit` event → checkout that commit
-2. Replay `file_change` events since the last commit → apply uncommitted changes
-3. Fetch file contents from S3 by hash
+**To resume:** Query ClickHouse for latest `tree_snapshot`, restore from it, replay conversation.
 
-### Recovery Flow
+**If tree expired in S3:** Fall back to latest `git_commit` (loses uncommitted work).
 
-```
-Sandbox dies or needs recovery
-         │
-         ▼
-Read event log from S3
-Find latest git_commit
-         │
-         ▼
-Provision new sandbox
-git checkout {commit_sha}
-         │
-         ▼
-For each file_change after commit:
-  - Fetch content from S3 by hash
-  - Write to filesystem
-         │
-         ▼
-Resume agent with conversation history
-```
+### Trees vs Commits
 
-### Agent Commits as Durable Checkpoints
+| Mechanism | When | What's captured | Durability |
+|-----------|------|-----------------|------------|
+| Tree snapshot | After tool completions, on stop | Working tree (uncommitted) | 30 days in S3 |
+| Git commit | On significant changes | Committed files | Permanent (pushed to remote) |
 
-The agent commits periodically on significant changes. This creates permanent checkpoints — even if S3 files expire (30-day TTL), we can always recover to any commit.
+**Best practice:** Agent commits frequently so that even if trees expire, minimal work is lost.
 
 ### Data Retention
 
-| Data | Retention | Recovery |
-|------|-----------|----------|
-| Git commits | Permanent | Always recoverable |
-| S3 file content | 30 days | Uncommitted changes for 30 days |
-| Event log | Indefinite | History/debugging |
+| Data | Storage | Retention | Recovery |
+|------|---------|-----------|----------|
+| Git commits | Remote repo | Permanent | Always recoverable (committed work only) |
+| Tree archives | S3 | 30 days | Full state including uncommitted |
+| Event history | ClickHouse | Configurable | Conversation + history |
 
 ---
 
@@ -253,7 +358,7 @@ The agent runs in a message loop rather than single execution:
 │                    │                 │                          │
 │                    │  - Process msg  │                          │
 │                    │  - Run tools    │                          │
-│                    │  - Emit events  │                          │
+│                    │  - Emit events  │ ──► Kafka                │
 │                    │  - Ask questions│                          │
 │                    │                 │                          │
 │                    └─────────────────┘                          │
@@ -263,11 +368,71 @@ The agent runs in a message loop rather than single execution:
 **Message types:**
 
 - `user_message` — New prompt or response to question
-- `file_sync` — Files changed locally, agent should notice
 - `cancel` — Stop current operation
-- `close` — Shut down gracefully
+- `stop` — Shut down agent (writes final tree, then exits)
 
 **How commands reach the agent:** On startup, the agent opens an outbound SSE connection to the backend. Client commands (prompts, cancel, mode switch) are pushed directly through this connection to give as close to a local experience for latency as possible. This bypasses Temporal for real-time operations.
+
+### Agent Resume API
+
+The agent exposes `resume` and `stop` as the core lifecycle operations:
+
+```typescript
+interface Agent {
+  // Resume from a task's latest state (reads from ClickHouse)
+  resume(taskId: string): Promise<void>
+
+  // Stop agent, ensuring final tree is written
+  stop(): Promise<void>
+}
+```
+
+**Resume implementation:**
+
+```typescript
+async resume(taskId: string): Promise<void> {
+  // 1. Query ClickHouse for events
+  const events = await this.queryEvents(taskId)
+
+  // 2. Find latest tree snapshot
+  const treeEvent = events.findLast(e => e.method === "_posthog/tree_snapshot")
+  if (!treeEvent) {
+    throw new Error("No tree snapshot found")
+  }
+
+  const { base_commit, tree_hash, tree_url } = treeEvent.params
+
+  // 3. Checkout base commit
+  await git.fetch()
+  await git.checkout(base_commit)
+
+  // 4. Download and apply tree from S3
+  const archive = await this.downloadTreeArchive(tree_url)
+  await this.applyTreeArchive(archive)
+
+  // 5. Rebuild conversation from events
+  const conversation = this.rebuildConversationFromEvents(events)
+  this.loadConversation(conversation)
+
+  // 6. Ready to continue
+  this.emit("resumed", { taskId })
+}
+```
+
+**Stop implementation:**
+
+```typescript
+async stop(): Promise<void> {
+  // 1. Wait for safe point (not mid-tool-execution)
+  await this.waitForSafePoint()
+
+  // 2. Capture final tree snapshot (→ S3 + Kafka)
+  await this.captureTreeSnapshot()
+
+  // 3. Clean shutdown
+  this.emit("stopped")
+}
+```
 
 ### Temporal Workflow
 
@@ -278,24 +443,29 @@ Temporal handles **lifecycle only**, not message routing:
 class CloudSessionWorkflow:
 
     @workflow.signal
-    def close(self):
-        self.should_close = True
+    def stop(self):
+        self.should_stop = True
 
     @workflow.run
-    async def run(self, input):
+    async def run(self, input: SessionInput):
+        # Always provision fresh - resume logic is in the agent
         sandbox_id = await provision_sandbox(input)
-        await start_agent_server(sandbox_id)  # Agent connects to backend via SSE
 
-        # Just wait for close or timeout - messages go direct via SSE
-        while not self.should_close:
+        # Agent handles resume(task_id) internally if resuming
+        await start_agent_server(sandbox_id, task_id=input.task_id)
+
+        while not self.should_stop:
             try:
                 await workflow.wait_condition(
-                    lambda: self.should_close,
+                    lambda: self.should_stop,
                     timeout=timedelta(minutes=10)
                 )
             except asyncio.TimeoutError:
-                break  # Inactivity timeout
+                # Inactivity timeout - agent writes final tree on stop
+                break
 
+        # Tell agent to stop (it will write final tree)
+        await stop_agent(sandbox_id)
         await cleanup_sandbox(sandbox_id)
 ```
 
@@ -303,41 +473,47 @@ class CloudSessionWorkflow:
 
 - Temporal provisions sandbox and handles cleanup
 - Messages/commands go directly via SSE (not through Temporal)
-- 10-min inactivity timeout triggers cleanup
-- Client disconnection doesn't stop the agent
+- Agent handles resume internally (reads state from ClickHouse)
+- 10-min inactivity triggers stop
+- Agent always writes tree on stop → always resumable
 
 ---
 
 ## Twig Integration
 
-In Twig, the `AgentService` (main process) talks to agents through a connection. For cloud mode, we swap the transport without changing the rest of the app.
+In Twig, the `AgentService` (main process) talks to agents through a provider interface. For cloud mode, we swap the provider without changing the rest of the app.
 
 ```
-Renderer ──tRPC──► AgentService ──► Connection
+Renderer ──tRPC──► AgentService ──► SessionProvider
                                         │
                           ┌─────────────┴─────────────┐
                           │                           │
                           ▼                           ▼
-                  LocalConnection             CloudConnection
+                  LocalProvider               CloudProvider
                   (in-process SDK)            (SSE to backend)
 ```
 
-**The connection interface** (simplified):
+**The provider interface** (simplified):
 
 ```typescript
-interface AgentConnection {
-  prompt(params: { sessionId: string; prompt: string }): AsyncIterable<AcpMessage>
-  cancel(params: { sessionId: string }): Promise<void>
-  setMode(params: { sessionId: string; mode: string }): Promise<void>
+interface SessionProvider {
+  readonly capabilities: SessionCapabilities
+  readonly executionEnvironment: "local" | "cloud"
+
+  connect(config: SessionConfig): Promise<void>
+  disconnect(): Promise<void>
+  prompt(blocks: ContentBlock[]): Promise<{ stopReason: string }>
+  cancelPrompt(): Promise<boolean>
+
   onEvent(handler: (event: AcpMessage) => void): void
 }
 ```
 
 **Key files:**
 
-- `apps/twig/src/main/services/agent/service.ts` — AgentService, picks connection type
-- `apps/twig/src/main/services/agent/local-connection.ts` — Current ACP/SDK logic (extract)
-- `apps/twig/src/main/services/agent/cloud-connection.ts` — New, ~200 lines
+- `apps/twig/src/main/services/agent/service.ts` — AgentService, picks provider type
+- `apps/twig/src/main/services/agent/providers/local-provider.ts` — Local ACP/SDK logic
+- `apps/twig/src/main/services/agent/providers/cloud-provider.ts` — Cloud SSE logic
 
 ---
 
@@ -347,10 +523,10 @@ interface AgentConnection {
 
 Following [MCP's pattern](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http):
 
-- **POST** — Client sends messages (user input, file sync, cancel)
+- **POST** — Client sends messages (user input, cancel, stop)
 - **GET** — Client opens SSE stream for server events
 - **Session-Id header** — Identifies the session (run ID)
-- **Last-Event-ID header** — Resume from where you left off
+- **Last-Event-ID header** — Resume from where you left off (maps to ClickHouse event_id)
 
 ### Endpoint
 
@@ -388,17 +564,20 @@ HTTP/1.1 200 OK
 Content-Type: text/event-stream
 
 id: 124
-data: {"jsonrpc":"2.0","method":"_posthog/file_change","params":{"path":"src/auth.py","hash":"abc123"}}
+data: {"jsonrpc":"2.0","method":"_posthog/tree_snapshot","params":{"tree_hash":"abc123","base_commit":"def456","files_changed":["src/auth.py"]}}
 
 id: 125
 data: {"jsonrpc":"2.0","method":"agent_message_chunk","params":{"text":"I found the issue..."}}
 ```
 
-### Why Not WebSocket?
+**Event replay:** When `Last-Event-ID` is provided, backend queries ClickHouse for events with `event_id > Last-Event-ID`, replays those, then switches to live Kafka stream.
 
-- SSE will work much better with our infrastructure (load balancing across multiple pods)
-- Built-in resumability via `Last-Event-ID`
-- Easier to manage (stateless servers)
+### Why SSE + Kafka + ClickHouse?
+
+- **Kafka** — Real-time event streaming, handles multiple consumers
+- **ClickHouse** — Efficient event replay, sub-second queries
+- **SSE** — Works with load balancing, built-in resumability via `Last-Event-ID`
+- No WebSocket state to manage across pods
 
 ---
 
@@ -410,9 +589,10 @@ data: {"jsonrpc":"2.0","method":"agent_message_chunk","params":{"text":"I found 
 Client                          Backend                         Sandbox
   │                                │                               │
   │── GET /sync (SSE) ────────────►│                               │
+  │                                │◄── Kafka subscription         │
   │                                │                               │
-  │◄── file_change ────────────────│◄── file written ──────────────│
-  │◄── agent_message ──────────────│◄── agent output ──────────────│
+  │◄── tree_snapshot ──────────────│◄── tree captured (Kafka) ─────│
+  │◄── agent_message ──────────────│◄── agent output (Kafka) ──────│
   │                                │                               │
   │── POST /sync {message} ───────►│── push via SSE ──────────────►│
   │◄── 202 Accepted ───────────────│                               │
@@ -424,12 +604,15 @@ Client                          Backend                         Sandbox
                                 Backend                         Sandbox
                                    │                               │
                                    │◄── agent keeps working ───────│
-                                   │◄── events to S3 log ──────────│
+                                   │◄── events to Kafka ───────────│
+                                   │         │                     │
+                                   │         ▼                     │
+                                   │    ClickHouse (persisted)     │
                                    │                               │
                                    │    (no client connected)      │
 ```
 
-Agent continues autonomously. Events accumulate in S3.
+Agent continues autonomously. Events persist to ClickHouse via Kafka.
 
 ### Resume (Reconnect)
 
@@ -438,39 +621,46 @@ Client                          Backend
   │                                │
   │── GET /sync ──────────────────►│
   │   Last-Event-ID: 50            │
-  │                                │
-  │◄── id:51 (from S3 log) ────────│  Replay missed events
+  │                                │── Query ClickHouse (id > 50)
+  │◄── id:51 (from ClickHouse) ────│  Replay missed events
   │◄── id:52 ──────────────────────│
   │◄── ... ────────────────────────│
-  │◄── id:100 (live) ──────────────│  Switch to live stream
+  │◄── id:100 (live from Kafka) ───│  Switch to live stream
 ```
 
-Client catches up instantly, then receives live events.
+Client catches up instantly from ClickHouse, then receives live events from Kafka.
 
 ---
 
 ## Event Format
 
-JSON-RPC 2.0 notifications, stored as NDJSON:
+JSON-RPC 2.0 notifications with device metadata:
 
 ```typescript
 {
   "jsonrpc": "2.0",
-  "method": "_posthog/file_change",
+  "method": "_posthog/tree_snapshot",
   "params": {
-    "path": "src/auth.py",
-    "action": "modified",
-    "hash": "sha256_abc123"
+    "tree_hash": "abc123def456",
+    "base_commit": "789xyz",
+    "files_changed": ["src/auth.py", "src/utils.py"],
+    "archive_url": "s3://bucket/trees/abc123def456.tar.gz"
+  },
+  "device": {
+    "id": "device_abc123",
+    "type": "local" | "cloud",
+    "name": "James's MacBook Pro"  // optional, for display
   }
 }
 ```
 
+The `device` field on every event lets the log naturally show where work happened—no special lifecycle events needed.
+
 ### Event Types
 
-**File sync:**
+**State tracking:**
 
-- `_posthog/file_change` — File created/modified/deleted (sandbox → client)
-- `_posthog/file_sync` — Client pushing local changes (client → sandbox)
+- `_posthog/tree_snapshot` — Working tree captured (includes tree_hash, base_commit, files list)
 - `_posthog/git_commit` — Agent committed changes
 
 **Agent interaction:**
@@ -480,15 +670,14 @@ JSON-RPC 2.0 notifications, stored as NDJSON:
 - `_posthog/user_message` — User input
 - `tool_call` / `tool_result` — Tool usage
 
-**Session:**
+**Mode:**
 
-- `_posthog/session_start` — Session began
-- `_posthog/session_close` — Session ended
+- `_posthog/mode_change` — Switched between interactive/background (background disables questions)
 
 **Control:**
 
 - `_posthog/cancel` — Cancel current operation
-- `_posthog/ack` — Acknowledgment
+- `_posthog/error` — Something went wrong (includes error details)
 
 ---
 
@@ -496,3 +685,5 @@ JSON-RPC 2.0 notifications, stored as NDJSON:
 
 - [MCP Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
 - [Temporal Signals](https://docs.temporal.io/workflows#signal)
+- [ClickHouse Documentation](https://clickhouse.com/docs)
+- [Kafka Documentation](https://kafka.apache.org/documentation/)
