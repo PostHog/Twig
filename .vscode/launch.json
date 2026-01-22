@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Twig (Main Process)",
+      "name": "_main",
       "type": "node",
       "request": "attach",
       "port": 5858,
@@ -15,7 +15,7 @@
       "remoteRoot": "${workspaceFolder}"
     },
     {
-      "name": "Debug Twig (Renderer Process)",
+      "name": "_renderer",
       "type": "chrome",
       "request": "attach",
       "port": 9222,
@@ -32,10 +32,10 @@
   ],
   "compounds": [
     {
-      "name": "Debug Twig (Main + Renderer)",
+      "name": "Debug app (Main + Renderer)",
       "configurations": [
-        "Debug Twig (Main Process)",
-        "Debug Twig (Renderer Process)"
+        "_main",
+        "_renderer"
       ],
       "preLaunchTask": "start-dev-with-debug",
       "stopAll": true
