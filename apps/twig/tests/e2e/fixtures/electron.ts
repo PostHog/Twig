@@ -8,7 +8,7 @@ import {
 } from "@playwright/test";
 
 function getAppPath(): string {
-  const outDir = path.join(__dirname, "../../out");
+  const outDir = path.join(__dirname, "../../../out");
 
   if (process.platform === "darwin") {
     const arm64Path = path.join(
