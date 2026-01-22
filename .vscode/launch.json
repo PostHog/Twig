@@ -33,10 +33,7 @@
   "compounds": [
     {
       "name": "Debug app (Main + Renderer)",
-      "configurations": [
-        "_main",
-        "_renderer"
-      ],
+      "configurations": ["_main", "_renderer"],
       "preLaunchTask": "start-dev-with-debug",
       "stopAll": true
     }
