@@ -349,6 +349,9 @@ importers:
       framer-motion:
         specifier: ^12.26.2
         version: 12.26.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      fzf:
+        specifier: ^0.5.2
+        version: 0.5.2
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
@@ -6253,6 +6256,9 @@ packages:
   fuse.js@7.1.0:
     resolution: {integrity: sha512-trLf4SzuuUxfusZADLINj+dE8clK1frKdmqiJNb1Es75fmI5oY6X2mxLVUciLLjxqw/xr72Dhy+lER6dGd02FQ==}
     engines: {node: '>=10'}
+
+  fzf@0.5.2:
+    resolution: {integrity: sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==}
 
   galactus@1.0.0:
     resolution: {integrity: sha512-R1fam6D4CyKQGNlvJne4dkNF+PvUUl7TAJInvTGa9fti9qAv95quQz29GXapA4d8Ec266mJJxFVh82M4GIIGDQ==}
@@ -16535,6 +16541,8 @@ snapshots:
   function-bind@1.1.2: {}
 
   fuse.js@7.1.0: {}
+
+  fzf@0.5.2: {}
 
   galactus@1.0.0:
     dependencies:

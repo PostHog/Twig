@@ -2,8 +2,11 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
+import { FileWatcherEvent } from "../file-watcher/schemas.js";
+import type { FileWatcherService } from "../file-watcher/service.js";
 import { getChangedFilesForRepo } from "../git.js";
 import type { FileEntry } from "./schemas.js";
 
@@ -15,10 +18,31 @@ export class FsService {
   private static readonly CACHE_TTL = 30000;
   private cache = new Map<string, { files: FileEntry[]; timestamp: number }>();
 
+  constructor(
+    @inject(MAIN_TOKENS.FileWatcherService)
+    private fileWatcher: FileWatcherService,
+  ) {
+    this.fileWatcher.on(FileWatcherEvent.FileChanged, ({ repoPath }) => {
+      this.invalidateCache(repoPath);
+    });
+
+    this.fileWatcher.on(FileWatcherEvent.FileDeleted, ({ repoPath }) => {
+      this.invalidateCache(repoPath);
+    });
+
+    this.fileWatcher.on(FileWatcherEvent.DirectoryChanged, ({ repoPath }) => {
+      this.invalidateCache(repoPath);
+    });
+
+    this.fileWatcher.on(FileWatcherEvent.GitStateChanged, ({ repoPath }) => {
+      this.invalidateCache(repoPath);
+    });
+  }
+
   async listRepoFiles(
     repoPath: string,
     query?: string,
-    limit = 50,
+    limit?: number,
   ): Promise<FileEntry[]> {
     if (!repoPath) return [];
 
@@ -32,17 +56,25 @@ export class FsService {
 
       const cached = this.cache.get(repoPath);
       if (cached && Date.now() - cached.timestamp < FsService.CACHE_TTL) {
-        return cached.files.slice(0, limit);
+        return limit ? cached.files.slice(0, limit) : cached.files;
       }
 
       const files = await this.gitLsFiles(repoPath);
       const entries = this.toFileEntries(files, changedFiles);
       this.cache.set(repoPath, { files: entries, timestamp: Date.now() });
 
-      return entries.slice(0, limit);
+      return limit ? entries.slice(0, limit) : entries;
     } catch (error) {
       log.error("Error listing repo files:", error);
       return [];
+    }
+  }
+
+  invalidateCache(repoPath?: string): void {
+    if (repoPath) {
+      this.cache.delete(repoPath);
+    } else {
+      this.cache.clear();
     }
   }
 
@@ -73,7 +105,7 @@ export class FsService {
       content,
       "utf-8",
     );
-    this.cache.delete(repoPath);
+    this.invalidateCache(repoPath);
   }
 
   private resolvePath(repoPath: string, filePath: string): string {
