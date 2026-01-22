@@ -55,14 +55,10 @@ export function SettingsView() {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
   const {
-    autoRunTasks,
-    createPR,
     cursorGlow,
     desktopNotifications,
     autoConvertLongText,
     sendMessagesWith,
-    setAutoRunTasks,
-    setCreatePR,
     setCursorGlow,
     setDesktopNotifications,
     setAutoConvertLongText,
@@ -106,30 +102,6 @@ export function SettingsView() {
   }, [worktreeLocation]);
 
   // Tracked settings handlers
-  const handleAutoRunChange = useCallback(
-    (checked: boolean) => {
-      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-        setting_name: "auto_run_tasks",
-        new_value: checked,
-        old_value: autoRunTasks,
-      });
-      setAutoRunTasks(checked);
-    },
-    [autoRunTasks, setAutoRunTasks],
-  );
-
-  const handleCreatePRChange = useCallback(
-    (checked: boolean) => {
-      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-        setting_name: "create_pr",
-        new_value: checked,
-        old_value: createPR,
-      });
-      setCreatePR(checked);
-    },
-    [createPR, setCreatePR],
-  );
-
   const handleDarkModeChange = useCallback(() => {
     track(ANALYTICS_EVENTS.SETTING_CHANGED, {
       setting_name: "dark_mode",
@@ -430,49 +402,6 @@ export function SettingsView() {
                       <Select.Item value="cmd+enter">⌘ Enter</Select.Item>
                     </Select.Content>
                   </Select.Root>
-                </Flex>
-              </Flex>
-            </Card>
-          </Flex>
-
-          <Box className="border-gray-6 border-t" />
-
-          {/* Task Execution Section */}
-          <Flex direction="column" gap="3">
-            <Heading size="3">Task execution</Heading>
-            <Card>
-              <Flex direction="column" gap="4">
-                <Flex align="center" justify="between">
-                  <Flex direction="column" gap="1">
-                    <Text size="1" weight="medium">
-                      Auto-run new tasks
-                    </Text>
-                    <Text size="1" color="gray">
-                      Automatically start tasks after creation
-                    </Text>
-                  </Flex>
-                  <Switch
-                    checked={autoRunTasks}
-                    onCheckedChange={handleAutoRunChange}
-                    size="1"
-                  />
-                </Flex>
-
-                <Flex align="center" justify="between">
-                  <Flex direction="column" gap="1">
-                    <Text size="1" weight="medium">
-                      Create PR for local runs
-                    </Text>
-                    <Text size="1" color="gray">
-                      Automatically create a pull request when local tasks
-                      complete
-                    </Text>
-                  </Flex>
-                  <Switch
-                    checked={createPR}
-                    onCheckedChange={handleCreatePRChange}
-                    size="1"
-                  />
                 </Flex>
               </Flex>
             </Card>
