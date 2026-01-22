@@ -64,7 +64,6 @@ export function useCreateTask() {
         description: string;
         repository?: string;
         github_integration?: number;
-        autoRun?: boolean;
         createdFrom?: "cli" | "command-menu";
       },
     ) =>
@@ -76,7 +75,6 @@ export function useCreateTask() {
     {
       onSuccess: (_task, variables) => {
         track(ANALYTICS_EVENTS.TASK_CREATED, {
-          auto_run: variables.autoRun || false,
           created_from: variables.createdFrom || "cli",
           repository_provider: variables.repository ? "github" : "none",
         });

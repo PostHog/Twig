@@ -79,7 +79,6 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    autoRun: boolean;
     executionMode?: "plan" | "acceptEdits";
   },
 ): TaskCreationInput {
@@ -91,7 +90,6 @@ function prepareTaskInput(
     githubIntegrationId: options.githubIntegrationId,
     workspaceMode: options.workspaceMode,
     branch: options.branch,
-    autoRun: options.autoRun,
     executionMode: options.executionMode,
   };
 }
@@ -150,7 +148,6 @@ export function useTaskCreation({
         githubIntegrationId,
         workspaceMode,
         branch,
-        autoRun: true,
         executionMode,
       });
 

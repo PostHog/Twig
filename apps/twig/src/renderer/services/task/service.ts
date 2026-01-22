@@ -119,7 +119,7 @@ export class TaskService {
 
     // No existing workspace - run full saga to set it up
     const saga = new TaskCreationSaga({ posthogClient });
-    const result = await saga.run({ taskId, autoRun: true });
+    const result = await saga.run({ taskId });
 
     if (result.success) {
       this.updateStoresOnSuccess(result.data);
