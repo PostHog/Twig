@@ -258,7 +258,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
                   tr.insertText(" ", pos + chipNode.nodeSize);
                   view.dispatch(tr);
                 }
-              } catch (error) {
+              } catch (_error) {
                 toast.error("Failed to paste image");
               }
             }
