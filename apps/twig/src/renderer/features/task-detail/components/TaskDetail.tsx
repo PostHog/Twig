@@ -1,3 +1,4 @@
+import { FilePicker } from "@features/command/components/FilePicker";
 import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -12,7 +13,8 @@ import { useStatusBar } from "@hooks/useStatusBar";
 import { GitBranch, Laptop } from "@phosphor-icons/react";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { WorktreePathDisplay } from "./WorktreePathDisplay";
 
@@ -26,6 +28,14 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   const workspace = useWorkspaceStore((state) => state.workspaces[taskId]);
   const effectiveRepoPath = useCwd(taskId);
+
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
+
+  useHotkeys("mod+p", () => setFilePickerOpen(true), {
+    enableOnContentEditable: true,
+    enableOnFormTags: true,
+    preventDefault: true,
+  });
 
   useFileWatcher(effectiveRepoPath ?? null, taskId);
 
@@ -112,6 +122,12 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   return (
     <Box height="100%">
       <PanelLayout taskId={taskId} task={initialTask} />
+      <FilePicker
+        open={filePickerOpen}
+        onOpenChange={setFilePickerOpen}
+        taskId={taskId}
+        repoPath={effectiveRepoPath}
+      />
     </Box>
   );
 }

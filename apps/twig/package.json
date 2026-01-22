@@ -128,6 +128,7 @@
     "electron-store": "^11.0.0",
     "file-icon": "^6.0.0",
     "framer-motion": "^12.26.2",
+    "fzf": "^0.5.2",
     "idb-keyval": "^6.2.2",
     "ignore": "^7.0.5",
     "immer": "^11.0.1",
