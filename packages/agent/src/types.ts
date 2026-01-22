@@ -1,12 +1,3 @@
-// import and export to keep a single type file
-
-import type { SessionNotification } from "@agentclientprotocol/sdk";
-import type {
-  CanUseTool,
-  PermissionResult,
-} from "@anthropic-ai/claude-agent-sdk";
-export type { CanUseTool, PermissionResult, SessionNotification };
-
 /**
  * Stored custom notification following ACP extensibility model.
  * Custom notifications use underscore-prefixed methods (e.g., `_posthog/phase_start`).
@@ -104,87 +95,10 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
-export interface SupportingFile {
-  name: string;
-  content: string;
-  type: ArtifactType;
-  created_at: string;
-}
-
-export interface TaskArtifactUploadPayload {
-  name: string;
-  type: ArtifactType;
-  content: string;
-  content_type?: string;
-}
-
-export enum PermissionMode {
-  PLAN = "plan",
-  DEFAULT = "default",
-  ACCEPT_EDITS = "acceptEdits",
-  BYPASS = "bypassPermissions",
-}
-
-export interface ExecutionOptions {
-  repositoryPath?: string;
-  permissionMode?: PermissionMode;
-}
-
 export interface TaskExecutionOptions {
   repositoryPath?: string;
-  permissionMode?: PermissionMode;
-  isCloudMode?: boolean; // Determines local vs cloud behavior (local pauses after each phase)
-  createPR?: boolean; // Whether to create PR after build (defaults to false)
-  autoProgress?: boolean;
-  queryOverrides?: Record<string, unknown>;
-  // Fine-grained permission control (only applied to build phase)
-  // See: https://docs.claude.com/en/api/agent-sdk/permissions
-  canUseTool?: CanUseTool;
-  skipGitBranch?: boolean; // Skip creating a task-specific git branch
-  framework?: "claude"; // Agent framework to use (defaults to "claude")
-  task?: Task; // Pre-fetched task to avoid redundant API call
-  isReconnect?: boolean; // Session recreation - skip RUN_STARTED notification
+  adapter?: "claude";
 }
-
-export interface ExecutionResult {
-  // biome-ignore lint/suspicious/noExplicitAny: Results array contains varying SDK response types
-  results: any[];
-}
-
-export interface PlanResult {
-  plan: string;
-}
-
-export interface TaskExecutionResult {
-  task: Task;
-  plan?: string;
-  executionResult?: ExecutionResult;
-}
-
-// MCP Server configuration types (re-exported from Claude SDK for convenience)
-export type McpServerConfig =
-  | {
-      type?: "stdio";
-      command: string;
-      args?: string[];
-      env?: Record<string, string>;
-    }
-  | {
-      type: "sse";
-      url: string;
-      headers?: Record<string, string>;
-    }
-  | {
-      type: "http";
-      url: string;
-      headers?: Record<string, string>;
-    }
-  | {
-      type: "sdk";
-      name: string;
-      // biome-ignore lint/suspicious/noExplicitAny: McpServer instance type from external SDK
-      instance?: any;
-    };
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -195,64 +109,17 @@ export type OnLogCallback = (
   data?: unknown,
 ) => void;
 
-export interface AgentConfig {
-  workingDirectory?: string;
-
-  // PostHog API configuration (optional - enables PostHog integration when provided)
-  posthogApiUrl?: string;
-  getPosthogApiKey?: () => string;
-  posthogProjectId?: number;
-
-  // PostHog MCP configuration
-  posthogMcpUrl?: string;
-
-  // MCP Server configuration
-  // Additional MCP servers (PostHog MCP is always included by default)
-  // You can override the PostHog MCP config by providing mcpServers.posthog
-  mcpServers?: Record<string, McpServerConfig>;
-
-  // Logging configuration
-  debug?: boolean;
-  onLog?: OnLogCallback;
-
-  // Fine-grained permission control for direct run() calls
-  // See: https://docs.claude.com/en/api/agent-sdk/permissions
-  canUseTool?: CanUseTool;
-}
-
 export interface PostHogAPIConfig {
   apiUrl: string;
   getApiKey: () => string;
   projectId: number;
 }
 
-// URL mention types
-export type ResourceType =
-  | "error"
-  | "experiment"
-  | "insight"
-  | "feature_flag"
-  | "generic";
-
-export interface PostHogResource {
-  type: ResourceType;
-  id: string;
-  url: string;
-  title?: string;
-  content: string;
-  // biome-ignore lint/suspicious/noExplicitAny: Metadata contains varying resource-specific fields
-  metadata?: Record<string, any>;
+export interface AgentConfig {
+  posthog?: PostHogAPIConfig;
+  debug?: boolean;
+  onLog?: OnLogCallback;
 }
-
-export interface UrlMention {
-  url: string;
-  type: ResourceType;
-  id?: string;
-  label?: string;
-}
-
-// Worktree types for parallel task development
-export type BranchOwnership = "created" | "borrowed";
 
 export interface WorktreeInfo {
   worktreePath: string;
@@ -260,5 +127,4 @@ export interface WorktreeInfo {
   branchName: string;
   baseBranch: string;
   createdAt: string;
-  branchOwnership: BranchOwnership;
 }

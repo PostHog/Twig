@@ -4,7 +4,6 @@ import type {
   ToolCallLocation,
   ToolKind,
 } from "@agentclientprotocol/sdk";
-import type { HookCallback, HookInput } from "@anthropic-ai/claude-agent-sdk";
 import type {
   ToolResultBlockParam,
   WebSearchToolResultBlockParam,
@@ -625,7 +624,7 @@ export function planEntries(input: { todos: ClaudePlanEntry[] }): PlanEntry[] {
   }));
 }
 
-export function markdownEscape(text: string): string {
+function markdownEscape(text: string): string {
   let escapedText = "```";
   for (const [m] of text.matchAll(/^```+/gm)) {
     while (m.length >= escapedText.length) {
@@ -634,60 +633,3 @@ export function markdownEscape(text: string): string {
   }
   return `${escapedText}\n${text}${text.endsWith("\n") ? "" : "\n"}${escapedText}`;
 }
-
-/* A global variable to store callbacks that should be executed when receiving hooks from Claude Code */
-const toolUseCallbacks: {
-  [toolUseId: string]: {
-    onPostToolUseHook?: (
-      toolUseID: string,
-      toolInput: unknown,
-      toolResponse: unknown,
-    ) => Promise<void>;
-  };
-} = {};
-
-/* Setup callbacks that will be called when receiving hooks from Claude Code */
-export const registerHookCallback = (
-  toolUseID: string,
-  {
-    onPostToolUseHook,
-  }: {
-    onPostToolUseHook?: (
-      toolUseID: string,
-      toolInput: unknown,
-      toolResponse: unknown,
-    ) => Promise<void>;
-  },
-) => {
-  toolUseCallbacks[toolUseID] = {
-    onPostToolUseHook,
-  };
-};
-
-/* A callback for Claude Code that is called when receiving a PostToolUse hook */
-export const createPostToolUseHook =
-  (
-    logger: Logger = new Logger({ prefix: "[createPostToolUseHook]" }),
-  ): HookCallback =>
-  async (
-    input: HookInput,
-    toolUseID: string | undefined,
-  ): Promise<{ continue: boolean }> => {
-    if (input.hook_event_name === "PostToolUse" && toolUseID) {
-      const onPostToolUseHook = toolUseCallbacks[toolUseID]?.onPostToolUseHook;
-      if (onPostToolUseHook) {
-        await onPostToolUseHook(
-          toolUseID,
-          input.tool_input,
-          input.tool_response,
-        );
-        delete toolUseCallbacks[toolUseID]; // Cleanup after execution
-      } else {
-        logger.error(
-          `No onPostToolUseHook found for tool use ID: ${toolUseID}`,
-        );
-        delete toolUseCallbacks[toolUseID];
-      }
-    }
-    return { continue: true };
-  };
