@@ -107,7 +107,7 @@ describe("DeepLinkService", () => {
 
   describe("handleUrl", () => {
     beforeEach(() => {
-      service.registerHandler("task", (path, params) => {
+      service.registerHandler("task", (path, _params) => {
         return path.length > 0;
       });
       service.registerHandler("oauth", () => true);
@@ -120,7 +120,10 @@ describe("DeepLinkService", () => {
 
         const result = service.handleUrl("twig://test/foo");
         expect(result).toBe(true);
-        expect(handler).toHaveBeenCalledWith("foo", expect.any(URLSearchParams));
+        expect(handler).toHaveBeenCalledWith(
+          "foo",
+          expect.any(URLSearchParams),
+        );
       });
 
       it("passes path segments to handler", () => {
@@ -135,7 +138,7 @@ describe("DeepLinkService", () => {
       });
 
       it("passes query parameters to handler", () => {
-        const handler = vi.fn((path, params) => {
+        const handler = vi.fn((_path, params) => {
           expect(params.get("token")).toBe("secret");
           expect(params.get("redirect")).toBe("home");
           return true;
@@ -162,7 +165,10 @@ describe("DeepLinkService", () => {
 
         const result = service.handleUrl("array://task/123");
         expect(result).toBe(true);
-        expect(handler).toHaveBeenCalledWith("123", expect.any(URLSearchParams));
+        expect(handler).toHaveBeenCalledWith(
+          "123",
+          expect.any(URLSearchParams),
+        );
       });
 
       it("works identically to twig:// protocol", () => {

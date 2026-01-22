@@ -179,7 +179,9 @@ describe("ConnectivityService", () => {
       const callCountBefore = mockNet.isOnline.mock.calls.length;
 
       await vi.advanceTimersByTimeAsync(3000);
-      expect(mockNet.isOnline.mock.calls.length).toBeGreaterThan(callCountBefore);
+      expect(mockNet.isOnline.mock.calls.length).toBeGreaterThan(
+        callCountBefore,
+      );
 
       const callCountAfterFirst = mockNet.isOnline.mock.calls.length;
 

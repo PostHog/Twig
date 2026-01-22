@@ -270,7 +270,7 @@ describe("ShellService", () => {
 
   describe("execute", () => {
     it("executes command and returns output", async () => {
-      mockExec.mockImplementation((cmd, opts, callback) => {
+      mockExec.mockImplementation((_cmd, _opts, callback) => {
         callback(null, "command output", "");
       });
 
@@ -284,7 +284,7 @@ describe("ShellService", () => {
     });
 
     it("returns stderr on command errors", async () => {
-      mockExec.mockImplementation((cmd, opts, callback) => {
+      mockExec.mockImplementation((_cmd, _opts, callback) => {
         callback({ code: 1 }, "", "error message");
       });
 
@@ -298,7 +298,7 @@ describe("ShellService", () => {
     });
 
     it("handles command timeout", async () => {
-      mockExec.mockImplementation((cmd, opts, callback) => {
+      mockExec.mockImplementation((_cmd, opts, callback) => {
         // Verify timeout is set
         expect(opts.timeout).toBe(60000);
         callback(null, "output", "");
@@ -317,7 +317,7 @@ describe("ShellService", () => {
     });
 
     it("returns empty strings when stdout/stderr are undefined", async () => {
-      mockExec.mockImplementation((cmd, opts, callback) => {
+      mockExec.mockImplementation((_cmd, _opts, callback) => {
         callback(null, undefined, undefined);
       });
 

@@ -78,8 +78,8 @@ vi.mock("../settingsStore.js", () => ({
   getWorktreeLocation: vi.fn(() => "/tmp/worktrees"),
 }));
 
-import { FoldersService } from "./service.js";
 import { isGitRepository } from "../git.js";
+import { FoldersService } from "./service.js";
 
 describe("FoldersService", () => {
   let service: FoldersService;
@@ -210,7 +210,9 @@ describe("FoldersService", () => {
     });
 
     it("throws error for invalid folder path", async () => {
-      await expect(service.addFolder("")).rejects.toThrow("Invalid folder path");
+      await expect(service.addFolder("")).rejects.toThrow(
+        "Invalid folder path",
+      );
     });
 
     it("prompts to initialize git for non-git folder", async () => {
@@ -311,10 +313,9 @@ describe("FoldersService", () => {
 
       await service.removeFolder("folder-1");
 
-      expect(mockFoldersStore.set).toHaveBeenCalledWith(
-        "taskAssociations",
-        [{ taskId: "task-2", folderId: "folder-2", mode: "root" }],
-      );
+      expect(mockFoldersStore.set).toHaveBeenCalledWith("taskAssociations", [
+        { taskId: "task-2", folderId: "folder-2", mode: "root" },
+      ]);
     });
   });
 
@@ -361,9 +362,8 @@ describe("FoldersService", () => {
         errors: [],
       });
 
-      const result = await service.cleanupOrphanedWorktrees(
-        "/home/user/project",
-      );
+      const result =
+        await service.cleanupOrphanedWorktrees("/home/user/project");
 
       expect(result.deleted).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
@@ -390,9 +390,7 @@ describe("FoldersService", () => {
       await service.cleanupOrphanedWorktrees("/home/user/project");
 
       expect(mockWorktreeManager.cleanupOrphanedWorktrees).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.stringContaining("twig-task-1"),
-        ]),
+        expect.arrayContaining([expect.stringContaining("twig-task-1")]),
       );
     });
   });
