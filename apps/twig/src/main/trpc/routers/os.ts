@@ -149,4 +149,40 @@ export const osRouter = router({
    * Get the worktree base location (e.g., ~/.twig)
    */
   getWorktreeLocation: publicProcedure.query(() => getWorktreeLocation()),
+
+  /**
+   * Save clipboard image data to a temp file
+   * Returns the file path for use as a file attachment
+   */
+  saveClipboardImage: publicProcedure
+    .input(
+      z.object({
+        base64Data: z.string(),
+        mimeType: z.string(),
+        originalName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const extension = input.mimeType.split("/")[1] || "png";
+      const isGenericName =
+        !input.originalName ||
+        input.originalName === "image.png" ||
+        input.originalName === "image.jpeg" ||
+        input.originalName === "image.jpg";
+      const displayName = isGenericName
+        ? `clipboard.${extension}`
+        : input.originalName;
+      // Add timestamp to actual filename to avoid collisions
+      const baseName = displayName.replace(/\.[^.]+$/, "");
+      const filename = `${baseName}-${Date.now()}.${extension}`;
+      const tempDir = path.join(os.tmpdir(), "twig-clipboard");
+
+      await fsPromises.mkdir(tempDir, { recursive: true });
+      const filePath = path.join(tempDir, filename);
+
+      const buffer = Buffer.from(input.base64Data, "base64");
+      await fsPromises.writeFile(filePath, buffer);
+
+      return { path: filePath, name: displayName };
+    }),
 });

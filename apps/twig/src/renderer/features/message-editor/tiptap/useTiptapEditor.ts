@@ -1,3 +1,4 @@
+import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
 import { useEditor } from "@tiptap/react";
@@ -206,6 +207,64 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
           }
 
           return false;
+        },
+        handlePaste: (view, event) => {
+          const items = event.clipboardData?.items;
+          if (!items) return false;
+
+          const imageItems: DataTransferItem[] = [];
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith("image/")) {
+              imageItems.push(item);
+            }
+          }
+
+          if (imageItems.length === 0) return false;
+
+          event.preventDefault();
+
+          // Process images asynchronously
+          (async () => {
+            for (const item of imageItems) {
+              const file = item.getAsFile();
+              if (!file) continue;
+
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                const base64 = btoa(
+                  new Uint8Array(arrayBuffer).reduce(
+                    (data, byte) => data + String.fromCharCode(byte),
+                    "",
+                  ),
+                );
+
+                const result = await trpcVanilla.os.saveClipboardImage.mutate({
+                  base64Data: base64,
+                  mimeType: file.type,
+                  originalName: file.name,
+                });
+
+                const chipNode = view.state.schema.nodes.mentionChip?.create({
+                  type: "file",
+                  id: result.path,
+                  label: result.name,
+                });
+
+                if (chipNode) {
+                  const { tr } = view.state;
+                  const pos = view.state.selection.from;
+                  tr.insert(pos, chipNode);
+                  tr.insertText(" ", pos + chipNode.nodeSize);
+                  view.dispatch(tr);
+                }
+              } catch (error) {
+                toast.error("Failed to paste image");
+              }
+            }
+          })();
+
+          return true;
         },
       },
       onCreate: ({ editor: e }) => {
