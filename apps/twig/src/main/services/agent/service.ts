@@ -190,6 +190,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   /**
+   * Mark all sessions for recreation (developer tool for testing token refresh).
+   * Sessions will be recreated before their next prompt.
+   */
+  public markAllSessionsForRecreation(): number {
+    let count = 0;
+    for (const session of this.sessions.values()) {
+      session.needsRecreation = true;
+      count++;
+    }
+    log.info("Marked all sessions for recreation (dev tool)", {
+      sessionCount: count,
+    });
+    return count;
+  }
+
+  /**
    * Respond to a pending permission request from the UI.
    * This resolves the promise that the agent is waiting on.
    */
@@ -450,7 +466,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const config = existing.config;
     const pendingContext = existing.pendingContext;
 
-    this.cleanupSession(taskRunId);
+    await this.cleanupSession(taskRunId);
 
     const newSession = await this.getOrCreateSession(config, true);
     if (!newSession) {
@@ -532,8 +548,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
-    this.cleanupSession(sessionId);
-    return true;
+    try {
+      session.agent.cancelTask(session.taskId);
+      await this.cleanupSession(sessionId);
+      return true;
+    } catch (_err) {
+      await this.cleanupSession(sessionId);
+      return false;
+    }
   }
 
   async cancelPrompt(
@@ -783,9 +805,25 @@ For git operations while detached:
     }
   }
 
-  private cleanupSession(taskRunId: string): void {
+  private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      // Cancel any ongoing operations
+      try {
+        if (!session.connection.signal.aborted) {
+          await session.connection.cancel({ sessionId: taskRunId });
+        }
+      } catch {
+        // Ignore cancel errors
+      }
+
+      // Cleanup agent (closes streams, aborts subprocess)
+      try {
+        await session.agent.cleanup();
+      } catch {
+        // Ignore cleanup errors
+      }
+
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
       this.sessions.delete(taskRunId);
     }

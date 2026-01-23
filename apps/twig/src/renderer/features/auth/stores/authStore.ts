@@ -126,6 +126,10 @@ export const useAuthStore = create<AuthState>()(
               projectId,
             });
 
+            trpcVanilla.agent.updateToken
+              .mutate({ token: tokenResponse.access_token })
+              .catch((err) => log.warn("Failed to update agent token", err));
+
             // Clear any cached data from previous sessions AFTER setting new auth
             queryClient.clear();
 
@@ -243,6 +247,10 @@ export const useAuthStore = create<AuthState>()(
                   client,
                   ...(projectId && { projectId }),
                 });
+
+                trpcVanilla.agent.updateToken
+                  .mutate({ token: tokenResponse.access_token })
+                  .catch((err) => log.warn("Failed to update agent token", err));
 
                 get().scheduleTokenRefresh();
                 return; // Success
@@ -383,6 +391,10 @@ export const useAuthStore = create<AuthState>()(
                   client,
                   projectId,
                 });
+
+                trpcVanilla.agent.updateToken
+                  .mutate({ token: currentTokens.accessToken })
+                  .catch((err) => log.warn("Failed to update agent token", err));
 
                 get().scheduleTokenRefresh();
 
