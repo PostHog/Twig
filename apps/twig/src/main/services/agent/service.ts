@@ -549,11 +549,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     if (!session) return false;
 
     try {
-      session.agent.cancelTask(session.taskId);
       await this.cleanupSession(sessionId);
       return true;
     } catch (_err) {
-      await this.cleanupSession(sessionId);
       return false;
     }
   }

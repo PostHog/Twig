@@ -53,11 +53,9 @@ export const agentRouter = router({
     .output(sessionResponseSchema.nullable())
     .mutation(({ input }) => getService().reconnectSession(input)),
 
-  updateToken: publicProcedure
-    .input(tokenUpdateInput)
-    .mutation(({ input }) => {
-      getService().updateToken(input.token);
-    }),
+  updateToken: publicProcedure.input(tokenUpdateInput).mutation(({ input }) => {
+    getService().updateToken(input.token);
+  }),
 
   setModel: publicProcedure
     .input(setModelInput)
@@ -139,7 +137,6 @@ export const agentRouter = router({
       getService().notifySessionContext(input.sessionId, input.context),
     ),
 
-  // Developer tool: mark all sessions for recreation (tests token refresh flow)
   markAllForRecreation: publicProcedure.mutation(() =>
     getService().markAllSessionsForRecreation(),
   ),

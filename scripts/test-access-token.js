@@ -26,7 +26,9 @@ async function validateToken(token, region, projectId) {
   console.log("-".repeat(60));
 
   // Test 1: Get tasks
-  console.log(`\n1. GET /api/projects/${projectId}/tasks/?limit=500&created_by=1`);
+  console.log(
+    `\n1. GET /api/projects/${projectId}/tasks/?limit=500&created_by=1`,
+  );
   try {
     const response = await fetch(
       `${cloudUrl}/api/projects/${projectId}/tasks/?limit=500&created_by=1`,
@@ -35,7 +37,7 @@ async function validateToken(token, region, projectId) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -60,7 +62,7 @@ async function validateToken(token, region, projectId) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -75,14 +77,16 @@ async function validateToken(token, region, projectId) {
     console.log(`   ERROR: ${error.message}`);
   }
 
-  console.log("\n" + "-".repeat(60));
+  console.log(`\n${"-".repeat(60)}`);
 }
 
 // Main
 const args = process.argv.slice(2);
 
 if (args.length < 2) {
-  console.log("Usage: node scripts/test-access-token.js <access_token> <project_id> [region]");
+  console.log(
+    "Usage: node scripts/test-access-token.js <access_token> <project_id> [region]",
+  );
   console.log("");
   console.log("Arguments:");
   console.log("  access_token   Your OAuth access token");

@@ -261,7 +261,9 @@ export const useAuthStore = create<AuthState>()(
 
                 trpcVanilla.agent.updateToken
                   .mutate({ token: tokenResponse.access_token })
-                  .catch((err) => log.warn("Failed to update agent token", err));
+                  .catch((err) =>
+                    log.warn("Failed to update agent token", err),
+                  );
 
                 get().scheduleTokenRefresh();
                 return; // Success
@@ -407,7 +409,9 @@ export const useAuthStore = create<AuthState>()(
 
                 trpcVanilla.agent.updateToken
                   .mutate({ token: currentTokens.accessToken })
-                  .catch((err) => log.warn("Failed to update agent token", err));
+                  .catch((err) =>
+                    log.warn("Failed to update agent token", err),
+                  );
 
                 get().scheduleTokenRefresh();
 
