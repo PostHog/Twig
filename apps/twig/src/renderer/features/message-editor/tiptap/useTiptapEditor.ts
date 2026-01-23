@@ -224,7 +224,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
           event.preventDefault();
 
-          // Process images asynchronously
           (async () => {
             for (const item of imageItems) {
               const file = item.getAsFile();
