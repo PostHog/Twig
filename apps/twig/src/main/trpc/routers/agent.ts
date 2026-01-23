@@ -18,7 +18,7 @@ import {
   setModelInput,
   startSessionInput,
   subscribeSessionInput,
-  tokenRefreshInput,
+  tokenUpdateInput,
 } from "../../services/agent/schemas.js";
 import type { AgentService } from "../../services/agent/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -53,11 +53,9 @@ export const agentRouter = router({
     .output(sessionResponseSchema.nullable())
     .mutation(({ input }) => getService().reconnectSession(input)),
 
-  refreshToken: publicProcedure
-    .input(tokenRefreshInput)
-    .mutation(({ input }) => {
-      getService().updateToken(input.newToken);
-    }),
+  updateToken: publicProcedure.input(tokenUpdateInput).mutation(({ input }) => {
+    getService().updateToken(input.token);
+  }),
 
   setModel: publicProcedure
     .input(setModelInput)
@@ -138,4 +136,8 @@ export const agentRouter = router({
     .mutation(({ input }) =>
       getService().notifySessionContext(input.sessionId, input.context),
     ),
+
+  markAllForRecreation: publicProcedure.mutation(() =>
+    getService().markAllSessionsForRecreation(),
+  ),
 });
