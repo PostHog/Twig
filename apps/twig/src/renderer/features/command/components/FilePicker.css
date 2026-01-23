@@ -105,8 +105,8 @@
 }
 
 .rt-PopoverContent:has(.file-picker-popover) {
-  padding: 0 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
