@@ -205,7 +205,9 @@ export const useAuthStore = create<AuthState>()(
                     log.warn(
                       `Token refresh ${result.errorCode} (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES}): ${result.error}`,
                     );
-                    lastError = new Error(result.error || "Token refresh failed");
+                    lastError = new Error(
+                      result.error || "Token refresh failed",
+                    );
                     continue; // Retry
                   }
 
@@ -296,7 +298,6 @@ export const useAuthStore = create<AuthState>()(
 
         scheduleTokenRefresh: () => {
           const state = get();
-          console.log("state", state);
 
           if (refreshTimeoutId) {
             window.clearTimeout(refreshTimeoutId);
