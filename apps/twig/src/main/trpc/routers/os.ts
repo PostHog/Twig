@@ -171,7 +171,7 @@ export const osRouter = router({
         input.originalName === "image.jpg";
       const displayName = isGenericName
         ? `clipboard.${extension}`
-        : input.originalName;
+        : input.originalName!;
       // Add timestamp to actual filename to avoid collisions
       const baseName = displayName.replace(/\.[^.]+$/, "");
       const filename = `${baseName}-${Date.now()}.${extension}`;
