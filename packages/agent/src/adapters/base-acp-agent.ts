@@ -16,16 +16,18 @@ import type {
   WriteTextFileResponse,
 } from "@agentclientprotocol/sdk";
 import { Logger } from "@/utils/logger.js";
-import type { SessionState } from "./types.js";
 
-export interface BaseSession extends SessionState {
-  abortController: AbortController;
+export interface BaseSession {
+  notificationHistory: SessionNotification[];
+  cancelled: boolean;
   interruptReason?: string;
+  abortController: AbortController;
 }
 
 export abstract class BaseAcpAgent implements Agent {
   abstract readonly adapterName: string;
-  protected sessions: { [key: string]: BaseSession } = {};
+  protected session: BaseSession | null = null;
+  protected sessionId: string | null = null;
   client: AgentSideConnection;
   protected logger: Logger;
   protected fileContentCache: { [key: string]: string } = {};
@@ -38,26 +40,49 @@ export abstract class BaseAcpAgent implements Agent {
   abstract initialize(request: InitializeRequest): Promise<InitializeResponse>;
   abstract newSession(params: NewSessionRequest): Promise<NewSessionResponse>;
   abstract prompt(params: PromptRequest): Promise<PromptResponse>;
-  abstract cancel(params: CancelNotification): Promise<void>;
+  protected abstract interruptSession(): Promise<void>;
 
-  async closeAllSessions(): Promise<void> {
-    for (const [sessionId, session] of Object.entries(this.sessions)) {
-      try {
-        await this.cancel({ sessionId });
-        session.abortController.abort();
-        this.logger.info("Closed session", { sessionId });
-      } catch (err) {
-        this.logger.warn("Failed to close session", { sessionId, error: err });
-      }
+  async cancel(params: CancelNotification): Promise<void> {
+    if (this.sessionId !== params.sessionId || !this.session) {
+      throw new Error("Session not found");
     }
-    this.sessions = {};
+    this.session.cancelled = true;
+    const meta = params._meta as { interruptReason?: string } | undefined;
+    if (meta?.interruptReason) {
+      this.session.interruptReason = meta.interruptReason;
+    }
+    await this.interruptSession();
+  }
+
+  async closeSession(): Promise<void> {
+    if (!this.session || !this.sessionId) {
+      return;
+    }
+    try {
+      await this.cancel({ sessionId: this.sessionId });
+      this.session.abortController.abort();
+      this.logger.info("Closed session", { sessionId: this.sessionId });
+    } catch (err) {
+      this.logger.warn("Failed to close session", {
+        sessionId: this.sessionId,
+        error: err,
+      });
+    }
+    this.session = null;
+    this.sessionId = null;
+  }
+
+  hasSession(sessionId: string): boolean {
+    return this.sessionId === sessionId && this.session !== null;
   }
 
   appendNotification(
     sessionId: string,
     notification: SessionNotification,
   ): void {
-    this.sessions[sessionId]?.notificationHistory.push(notification);
+    if (this.sessionId === sessionId && this.session) {
+      this.session.notificationHistory.push(notification);
+    }
   }
 
   async readTextFile(
