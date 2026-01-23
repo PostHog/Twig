@@ -1,18 +1,12 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Logger } from "./utils/logger.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface GitConfig {
   repositoryPath: string;
   logger?: Logger;
-}
-
-export interface BranchInfo {
-  name: string;
-  exists: boolean;
-  isCurrentBranch: boolean;
 }
 
 export class GitManager {
@@ -22,61 +16,32 @@ export class GitManager {
   constructor(config: GitConfig) {
     this.repositoryPath = config.repositoryPath;
     this.logger =
-      config.logger || new Logger({ debug: false, prefix: "[GitManager]" });
+      config.logger ?? new Logger({ debug: false, prefix: "[GitManager]" });
   }
 
-  private escapeShellArg(str: string): string {
-    return str
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"')
-      .replace(/`/g, "\\`")
-      .replace(/\$/g, "\\$");
-  }
-
-  private async runGitCommand(command: string): Promise<string> {
+  async runGit(args: string[]): Promise<string> {
     try {
-      const { stdout } = await execAsync(
-        `cd "${this.repositoryPath}" && git ${command}`,
-      );
+      const { stdout } = await execFileAsync("git", args, {
+        cwd: this.repositoryPath,
+      });
       return stdout.trim();
     } catch (error) {
-      throw new Error(`Git command failed: ${command}\n${error}`);
-    }
-  }
-
-  private async runCommand(command: string): Promise<string> {
-    try {
-      const { stdout } = await execAsync(
-        `cd "${this.repositoryPath}" && ${command}`,
-      );
-      return stdout.trim();
-    } catch (error) {
-      throw new Error(`Command failed: ${command}\n${error}`);
-    }
-  }
-
-  async isGitRepository(): Promise<boolean> {
-    try {
-      await this.runGitCommand("rev-parse --git-dir");
-      return true;
-    } catch {
-      return false;
+      throw new Error(`Git command failed: git ${args.join(" ")}\n${error}`);
     }
   }
 
   async getCurrentBranch(): Promise<string> {
-    return await this.runGitCommand("branch --show-current");
+    return await this.runGit(["branch", "--show-current"]);
   }
 
   async getDefaultBranch(): Promise<string> {
     try {
-      // Try to get the default branch from remote
-      const remoteBranch = await this.runGitCommand(
-        "symbolic-ref refs/remotes/origin/HEAD",
-      );
+      const remoteBranch = await this.runGit([
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+      ]);
       return remoteBranch.replace("refs/remotes/origin/", "");
     } catch {
-      // Fallback: check if main exists, otherwise use master
       if (await this.branchExists("main")) {
         return "main";
       } else if (await this.branchExists("master")) {
@@ -91,7 +56,7 @@ export class GitManager {
 
   async branchExists(branchName: string): Promise<boolean> {
     try {
-      await this.runGitCommand(`rev-parse --verify ${branchName}`);
+      await this.runGit(["rev-parse", "--verify", branchName]);
       return true;
     } catch {
       return false;
@@ -100,11 +65,11 @@ export class GitManager {
 
   async createBranch(branchName: string, baseBranch?: string): Promise<void> {
     const base = baseBranch || (await this.getCurrentBranch());
-    await this.runGitCommand(`checkout -b ${branchName} ${base}`);
+    await this.runGit(["checkout", "-b", branchName, base]);
   }
 
   async switchToBranch(branchName: string): Promise<void> {
-    await this.runGitCommand(`checkout ${branchName}`);
+    await this.runGit(["checkout", branchName]);
   }
 
   async resetToDefaultBranchIfNeeded(): Promise<boolean> {
@@ -146,17 +111,10 @@ export class GitManager {
     }
   }
 
-  async addFiles(paths: string[]): Promise<void> {
-    const pathList = paths.map((p) => `"${this.escapeShellArg(p)}"`).join(" ");
-    await this.runGitCommand(`add ${pathList}`);
-  }
-
   async addAllPostHogFiles(): Promise<void> {
     try {
-      // Use -A flag to add all changes (including new files) and ignore errors if directory is empty
-      await this.runGitCommand("add -A .posthog/");
+      await this.runGit(["add", "-A", ".posthog/"]);
     } catch (error) {
-      // If the directory doesn't exist or has no files, that's fine - just log and continue
       this.logger.debug("No PostHog files to add", { error });
     }
   }
@@ -167,13 +125,16 @@ export class GitManager {
       allowEmpty?: boolean;
     },
   ): Promise<string> {
-    const command = this.buildCommitCommand(message, options);
-    return await this.runGitCommand(command);
+    const args = ["commit", "-m", message];
+    if (options?.allowEmpty) {
+      args.push("--allow-empty");
+    }
+    return await this.runGit(args);
   }
 
   async hasChanges(): Promise<boolean> {
     try {
-      const status = await this.runGitCommand("status --porcelain");
+      const status = await this.runGit(["status", "--porcelain"]);
       if (!status || status.trim().length === 0) {
         return false;
       }
@@ -191,7 +152,7 @@ export class GitManager {
 
   async hasStagedChanges(): Promise<boolean> {
     try {
-      const status = await this.runGitCommand("diff --cached --name-only");
+      const status = await this.runGit(["diff", "--cached", "--name-only"]);
       return status.length > 0;
     } catch {
       return false;
@@ -207,20 +168,6 @@ export class GitManager {
     }
   }
 
-  private async generateUniqueBranchName(baseName: string): Promise<string> {
-    if (!(await this.branchExists(baseName))) {
-      return baseName;
-    }
-
-    let counter = 1;
-    let uniqueName = `${baseName}-${counter}`;
-    while (await this.branchExists(uniqueName)) {
-      counter++;
-      uniqueName = `${baseName}-${counter}`;
-    }
-    return uniqueName;
-  }
-
   private async ensureOnDefaultBranch(): Promise<string> {
     const defaultBranch = await this.getDefaultBranch();
     const currentBranch = await this.getCurrentBranch();
@@ -231,91 +178,6 @@ export class GitManager {
     }
 
     return defaultBranch;
-  }
-
-  private buildCommitCommand(
-    message: string,
-    options?: {
-      allowEmpty?: boolean;
-    },
-  ): string {
-    let command = `commit -m "${this.escapeShellArg(message)}"`;
-
-    if (options?.allowEmpty) {
-      command += " --allow-empty";
-    }
-
-    return command;
-  }
-
-  async getRemoteUrl(): Promise<string | null> {
-    try {
-      return await this.runGitCommand("remote get-url origin");
-    } catch {
-      return null;
-    }
-  }
-
-  async pushBranch(branchName: string, force: boolean = false): Promise<void> {
-    const forceFlag = force ? "--force" : "";
-    await this.runGitCommand(`push ${forceFlag} -u origin ${branchName}`);
-  }
-
-  /**
-   * Tracks whether commits were made during an operation by comparing HEAD SHA
-   * before and after. Returns an object with methods to finalize the operation.
-   *
-   * Usage:
-   * const tracker = await gitManager.trackCommitsDuring();
-   * // ... do work that might create commits ...
-   * const result = await tracker.finalize({ commitMessage: 'fallback message', push: true });
-   */
-  async trackCommitsDuring(): Promise<{
-    finalize: (options: {
-      commitMessage: string;
-      push?: boolean;
-    }) => Promise<{ commitCreated: boolean; pushedBranch: boolean }>;
-  }> {
-    const initialSha = await this.getCommitSha("HEAD");
-
-    return {
-      finalize: async (options) => {
-        const currentSha = await this.getCommitSha("HEAD");
-        const externalCommitsCreated = initialSha !== currentSha;
-        const hasUncommittedChanges = await this.hasChanges();
-
-        // If no commits and no changes, nothing to do
-        if (!externalCommitsCreated && !hasUncommittedChanges) {
-          return { commitCreated: false, pushedBranch: false };
-        }
-
-        let commitCreated = externalCommitsCreated;
-
-        // Commit any remaining uncommitted changes
-        if (hasUncommittedChanges) {
-          await this.runGitCommand("add .");
-          const hasStagedChanges = await this.hasStagedChanges();
-
-          if (hasStagedChanges) {
-            await this.commitChanges(options.commitMessage);
-            commitCreated = true;
-          }
-        }
-
-        // Push if requested and commits were made
-        let pushedBranch = false;
-        if (options.push && commitCreated) {
-          const currentBranch = await this.getCurrentBranch();
-          await this.pushBranch(currentBranch);
-          pushedBranch = true;
-          this.logger.info("Pushed branch after operation", {
-            branch: currentBranch,
-          });
-        }
-
-        return { commitCreated, pushedBranch };
-      },
-    };
   }
 
   async createTaskBranch(taskSlug: string): Promise<string> {
@@ -335,185 +197,11 @@ export class GitManager {
     return branchName;
   }
 
-  async createTaskPlanningBranch(
-    taskId: string,
-    baseBranch?: string,
-  ): Promise<string> {
-    const baseName = `posthog/task-${taskId}-planning`;
-    const branchName = await this.generateUniqueBranchName(baseName);
-
-    this.logger.debug("Creating unique planning branch", {
-      branchName,
-      taskId,
-    });
-
-    const base = baseBranch || (await this.ensureOnDefaultBranch());
-    await this.createBranch(branchName, base);
-
-    return branchName;
-  }
-
-  async createTaskImplementationBranch(
-    taskId: string,
-    planningBranchName?: string,
-  ): Promise<string> {
-    const baseName = `posthog/task-${taskId}-implementation`;
-    const branchName = await this.generateUniqueBranchName(baseName);
-
-    this.logger.debug("Creating unique implementation branch", {
-      branchName,
-      taskId,
-      currentBranch: await this.getCurrentBranch(),
-    });
-
-    // Determine base branch: explicit param > current planning branch > default
-    let baseBranch = planningBranchName;
-
-    if (!baseBranch) {
-      const currentBranch = await this.getCurrentBranch();
-      if (currentBranch.includes("-planning")) {
-        baseBranch = currentBranch;
-        this.logger.debug("Using current planning branch", { baseBranch });
-      } else {
-        baseBranch = await this.ensureOnDefaultBranch();
-        this.logger.debug("Using default branch", { baseBranch });
-      }
-    }
-
-    this.logger.debug("Creating implementation branch from base", {
-      baseBranch,
-      branchName,
-    });
-    await this.createBranch(branchName, baseBranch);
-
-    this.logger.info("Implementation branch created", {
-      branchName,
-      currentBranch: await this.getCurrentBranch(),
-    });
-
-    return branchName;
-  }
-
-  async commitPlan(taskId: string, taskTitle: string): Promise<string> {
-    const currentBranch = await this.getCurrentBranch();
-    this.logger.debug("Committing plan", { taskId, currentBranch });
-
-    await this.addAllPostHogFiles();
-
-    const hasChanges = await this.hasStagedChanges();
-    this.logger.debug("Checking for staged changes", { hasChanges });
-
-    if (!hasChanges) {
-      this.logger.info("No plan changes to commit", { taskId });
-      return "No changes to commit";
-    }
-
-    const message = `📋 Add plan for task: ${taskTitle}
-
-Task ID: ${taskId}
-
-This commit contains the implementation plan and supporting documentation
-for the task. Review the plan before proceeding with implementation.`;
-
-    const result = await this.commitChanges(message);
-    this.logger.info("Plan committed", { taskId, taskTitle });
-    return result;
-  }
-
-  async commitImplementation(
-    taskId: string,
-    taskTitle: string,
-    planSummary?: string,
-  ): Promise<string> {
-    await this.runGitCommand("add .");
-
-    const hasChanges = await this.hasStagedChanges();
-    if (!hasChanges) {
-      this.logger.warn("No implementation changes to commit", { taskId });
-      return "No changes to commit";
-    }
-
-    let message = `✨ Implement task: ${taskTitle}
-
-Task ID: ${taskId}`;
-
-    if (planSummary) {
-      message += `\n\nPlan Summary:\n${planSummary}`;
-    }
-
-    message += `\n\nThis commit implements the changes described in the task plan.`;
-
-    const result = await this.commitChanges(message);
-    this.logger.info("Implementation committed", { taskId, taskTitle });
-    return result;
-  }
-
-  async deleteBranch(
-    branchName: string,
-    force: boolean = false,
-  ): Promise<void> {
-    const forceFlag = force ? "-D" : "-d";
-    await this.runGitCommand(`branch ${forceFlag} ${branchName}`);
-  }
-
-  async deleteRemoteBranch(branchName: string): Promise<void> {
-    await this.runGitCommand(`push origin --delete ${branchName}`);
-  }
-
-  async getBranchInfo(branchName: string): Promise<BranchInfo> {
-    const exists = await this.branchExists(branchName);
-    const currentBranch = await this.getCurrentBranch();
-
-    return {
-      name: branchName,
-      exists,
-      isCurrentBranch: branchName === currentBranch,
-    };
-  }
-
-  async getCommitSha(ref: string = "HEAD"): Promise<string> {
-    return await this.runGitCommand(`rev-parse ${ref}`);
-  }
-
-  async getCommitMessage(ref: string = "HEAD"): Promise<string> {
-    return await this.runGitCommand(`log -1 --pretty=%B ${ref}`);
-  }
-
-  async createPullRequest(
-    branchName: string,
-    title: string,
-    body: string,
-    baseBranch?: string,
-  ): Promise<string> {
-    const currentBranch = await this.getCurrentBranch();
-    if (currentBranch !== branchName) {
-      await this.ensureCleanWorkingDirectory("creating PR");
-      await this.switchToBranch(branchName);
-    }
-
-    await this.pushBranch(branchName);
-
-    let command = `gh pr create --title "${this.escapeShellArg(title)}" --body "${this.escapeShellArg(body)}"`;
-
-    if (baseBranch) {
-      command += ` --base ${baseBranch}`;
-    }
-
-    try {
-      const prUrl = await this.runCommand(command);
-      return prUrl.trim();
-    } catch (error) {
-      throw new Error(`Failed to create PR: ${error}`);
-    }
-  }
-
   async getTaskBranch(taskSlug: string): Promise<string | null> {
     try {
-      // Get all branches matching the task slug pattern
-      const branches = await this.runGitCommand("branch --list --all");
+      const branches = await this.runGit(["branch", "--list", "--all"]);
       const branchPattern = `posthog/task-${taskSlug}`;
 
-      // Look for exact match or with counter suffix
       const lines = branches
         .split("\n")
         .map((l) => l.trim().replace(/^\*\s+/, ""));
@@ -528,50 +216,6 @@ Task ID: ${taskId}`;
     } catch (error) {
       this.logger.debug("Failed to get task branch", { taskSlug, error });
       return null;
-    }
-  }
-
-  async commitAndPush(
-    message: string,
-    options?: { allowEmpty?: boolean },
-  ): Promise<void> {
-    const hasChanges = await this.hasStagedChanges();
-
-    if (!hasChanges && !options?.allowEmpty) {
-      this.logger.debug("No changes to commit, skipping");
-      return;
-    }
-
-    const command = this.buildCommitCommand(message, options);
-    await this.runGitCommand(command);
-
-    // Push to origin
-    const currentBranch = await this.getCurrentBranch();
-    await this.pushBranch(currentBranch);
-
-    this.logger.info("Committed and pushed changes", {
-      branch: currentBranch,
-      message,
-    });
-  }
-
-  async isWorktree(): Promise<boolean> {
-    try {
-      // In a worktree, .git is a file pointing to the main repo's .git/worktrees/{name}
-      // In a normal repo, .git is a directory
-      const result = await this.runGitCommand(
-        "rev-parse --git-common-dir --git-dir",
-      );
-      const lines = result.split("\n");
-      if (lines.length >= 2) {
-        const commonDir = lines[0].trim();
-        const gitDir = lines[1].trim();
-        // If they're different, we're in a worktree
-        return commonDir !== gitDir;
-      }
-      return false;
-    } catch {
-      return false;
     }
   }
 }

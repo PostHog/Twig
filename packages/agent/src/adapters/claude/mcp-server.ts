@@ -7,7 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as diff from "diff";
 import { z } from "zod";
 import { Logger } from "@/utils/logger.js";
-import type { ClaudeAcpAgent } from "./claude.js";
+import type { ClaudeAcpAgent } from "./agent.js";
 import { extractLinesWithByteLimit, sleep, unreachable } from "./utils.js";
 
 export const SYSTEM_REMINDER = `
@@ -37,7 +37,20 @@ export const toolNames = {
   bashOutput: SERVER_PREFIX + unqualifiedToolNames.bashOutput,
 };
 
-export const EDIT_TOOL_NAMES = [toolNames.edit, toolNames.write];
+type McpToolResult = { content: Array<{ type: "text"; text: string }> };
+
+function sessionNotFound(): McpToolResult {
+  return {
+    content: [{ type: "text", text: "The user has left the building" }],
+  };
+}
+
+function toolError(operation: string, error: unknown): McpToolResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    content: [{ type: "text", text: `${operation} failed: ${message}` }],
+  };
+}
 
 export function createMcpServer(
   agent: ClaudeAcpAgent,
@@ -98,16 +111,8 @@ Usage:
       },
       async (input) => {
         try {
-          const session = agent.sessions[sessionId];
-          if (!session) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: "The user has left the building",
-                },
-              ],
-            };
+          if (!agent.sessions[sessionId]) {
+            return sessionNotFound();
           }
 
           const readResponse = await agent.readTextFile({
@@ -121,27 +126,22 @@ Usage:
             throw new Error(`No file contents for ${input.file_path}.`);
           }
 
-          // Extract lines with byte limit enforcement
           const result = extractLinesWithByteLimit(
             readResponse.content,
             defaults.maxFileSize,
           );
 
-          // Construct informative message about what was read
           let readInfo = "";
           if (input.offset > 1 || result.wasLimited) {
             readInfo = "\n\n<file-read-info>";
-
             if (result.wasLimited) {
               readInfo += `Read ${result.linesRead} lines (hit 50KB limit). `;
             } else {
               readInfo += `Read lines ${input.offset}-${result.linesRead}. `;
             }
-
             if (result.wasLimited) {
               readInfo += `Continue with offset=${result.linesRead}.`;
             }
-
             readInfo += "</file-read-info>";
           }
 
@@ -153,15 +153,8 @@ Usage:
               },
             ],
           };
-        } catch (error: any) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Reading file failed: ${error.message}`,
-              },
-            ],
-          };
+        } catch (error) {
+          return toolError("Reading file", error);
         }
       },
     );
@@ -201,35 +194,17 @@ Usage:
       },
       async (input) => {
         try {
-          const session = agent.sessions[sessionId];
-          if (!session) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: "The user has left the building",
-                },
-              ],
-            };
+          if (!agent.sessions[sessionId]) {
+            return sessionNotFound();
           }
           await agent.writeTextFile({
             sessionId,
             path: input.file_path,
             content: input.content,
           });
-
-          return {
-            content: [],
-          };
-        } catch (error: any) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Writing file failed: ${error.message}`,
-              },
-            ],
-          };
+          return { content: [] };
+        } catch (error) {
+          return toolError("Writing file", error);
         }
       },
     );
@@ -276,16 +251,8 @@ Usage:
       },
       async (input) => {
         try {
-          const session = agent.sessions[sessionId];
-          if (!session) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: "The user has left the building",
-                },
-              ],
-            };
+          if (!agent.sessions[sessionId]) {
+            return sessionNotFound();
           }
 
           const readResponse = await agent.readTextFile({
@@ -313,30 +280,15 @@ Usage:
             readResponse.content,
             newContent,
           );
-
           await agent.writeTextFile({
             sessionId,
             path: input.file_path,
             content: newContent,
           });
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: patch,
-              },
-            ],
-          };
-        } catch (error: any) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Editing file failed: ${error?.message ?? String(error)}`,
-              },
-            ],
-          };
+          return { content: [{ type: "text", text: patch }] };
+        } catch (error) {
+          return toolError("Editing file", error);
         }
       },
     );
@@ -382,16 +334,8 @@ Output: Create directory 'foo'`),
         },
       },
       async (input, extra) => {
-        const session = agent.sessions[sessionId];
-        if (!session) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "The user has left the building",
-              },
-            ],
-          };
+        if (!agent.sessions[sessionId]) {
+          return sessionNotFound();
         }
 
         const toolCallId = extra._meta?.["claudecode/toolUseId"];

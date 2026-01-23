@@ -341,19 +341,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     this.setupEnvironment(credentials, mockNodeDir);
 
     const agent = new Agent({
-      workingDirectory: repoPath,
-      posthogApiUrl: credentials.apiHost,
-      getPosthogApiKey: () => this.getToken(credentials.apiKey),
-      posthogProjectId: credentials.projectId,
+      posthog: {
+        apiUrl: credentials.apiHost,
+        getApiKey: () => this.getToken(credentials.apiKey),
+        projectId: credentials.projectId,
+      },
       debug: !app.isPackaged,
       onLog: onAgentLog,
     });
 
     try {
-      const { clientStreams } = await agent.runTaskV2(taskId, taskRunId, {
-        skipGitBranch: true,
-        isReconnect,
-      });
+      const { clientStreams } = await agent.run(taskId, taskRunId);
 
       const connection = this.createClientConnection(
         taskRunId,
@@ -534,14 +532,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
-    try {
-      session.agent.cancelTask(session.taskId);
-      this.cleanupSession(sessionId);
-      return true;
-    } catch (_err) {
-      this.cleanupSession(sessionId);
-      return false;
-    }
+    this.cleanupSession(sessionId);
+    return true;
   }
 
   async cancelPrompt(
@@ -724,14 +716,7 @@ For git operations while detached:
         log.warn("Failed to send ACP cancel", { taskRunId, error: err });
       }
 
-      // Step 2: Cancel via agent (triggers AbortController)
-      try {
-        session.agent.cancelTask(session.taskId);
-      } catch (err) {
-        log.warn("Failed to cancel task", { taskRunId, error: err });
-      }
-
-      // Step 3: Cleanup agent connection (closes streams, aborts subprocess)
+      // Step 2: Cleanup agent connection (closes streams, aborts subprocess)
       try {
         await session.agent.cleanup();
       } catch (err) {
