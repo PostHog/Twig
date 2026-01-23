@@ -25,6 +25,14 @@ describe("DeepLinkService", () => {
   let service: DeepLinkService;
   let originalDefaultApp: boolean | undefined;
 
+  const setDefaultApp = (value: boolean | undefined) => {
+    Object.defineProperty(process, "defaultApp", {
+      value,
+      writable: true,
+      configurable: true,
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     originalDefaultApp = process.defaultApp;
@@ -32,12 +40,12 @@ describe("DeepLinkService", () => {
   });
 
   afterEach(() => {
-    process.defaultApp = originalDefaultApp;
+    setDefaultApp(originalDefaultApp);
   });
 
   describe("registerProtocol", () => {
     it("registers both twig and array protocols in production", () => {
-      process.defaultApp = false;
+      setDefaultApp(false);
 
       service.registerProtocol();
 
@@ -47,7 +55,7 @@ describe("DeepLinkService", () => {
     });
 
     it("skips protocol registration in development mode", () => {
-      process.defaultApp = true;
+      setDefaultApp(true);
 
       service.registerProtocol();
 
@@ -55,7 +63,7 @@ describe("DeepLinkService", () => {
     });
 
     it("prevents multiple registrations", () => {
-      process.defaultApp = false;
+      setDefaultApp(false);
 
       service.registerProtocol();
       service.registerProtocol();
