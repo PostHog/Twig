@@ -30,7 +30,6 @@ export interface TaskCreationInput {
   workspaceMode?: WorkspaceMode;
   branch?: string | null;
   githubIntegrationId?: number;
-  autoRun?: boolean;
   // Execution mode: "plan" starts in plan mode (read-only), "acceptEdits" auto-approves edits, undefined starts in default mode
   executionMode?: "plan" | "acceptEdits";
 }
@@ -172,11 +171,11 @@ export class TaskCreationSaga extends Saga<
     const shouldConnect =
       !!input.taskId || // Open: always connect to load chat history
       workspaceMode === "cloud" || // Cloud create: always connect
-      (agentCwd && input.autoRun); // Local create: only if autoRun
+      !!agentCwd; // Local create: always connect if we have a cwd
 
     if (shouldConnect) {
       const initialPrompt =
-        !input.taskId && input.autoRun && input.content
+        !input.taskId && input.content
           ? await this.readOnlyStep("build_prompt_blocks", () =>
               buildPromptBlocks(
                 input.content!,

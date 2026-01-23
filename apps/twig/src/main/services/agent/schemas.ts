@@ -43,7 +43,6 @@ export const startSessionInput = z.object({
   model: z.string().optional(),
   executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
-  createPR: z.boolean().optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });

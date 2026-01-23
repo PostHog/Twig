@@ -17,13 +17,13 @@ const MODE_CONFIG: Record<
 > = {
   local: {
     label: "Local",
-    description: "Runs on your machine",
-    icon: <Laptop size={14} weight="regular" />,
+    description: "Edits your repo directly on current branch",
+    icon: <Laptop size={16} weight="regular" />,
   },
   worktree: {
     label: "Workspace",
-    description: "Runs in a separate working copy",
-    icon: <GitBranch size={14} weight="regular" />,
+    description: "Edits a copy so your work stays isolated",
+    icon: <GitBranch size={16} weight="regular" />,
   },
 };
 
@@ -49,13 +49,39 @@ export function WorkspaceModeSelect({
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Content align="start" size="1">
-        <DropdownMenu.Item onSelect={() => onChange("worktree")}>
-          <GitBranch size={14} />
-          Workspace
+        <DropdownMenu.Item
+          onSelect={() => onChange("worktree")}
+          style={{ padding: "6px 8px", height: "auto" }}
+        >
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <GitBranch
+              size={12}
+              style={{ marginTop: 2, flexShrink: 0, color: "var(--gray-11)" }}
+            />
+            <div>
+              <Text size="1">{MODE_CONFIG.worktree.label}</Text>
+              <Text size="1" color="gray" style={{ display: "block" }}>
+                {MODE_CONFIG.worktree.description}
+              </Text>
+            </div>
+          </div>
         </DropdownMenu.Item>
-        <DropdownMenu.Item onSelect={() => onChange("local")}>
-          <Laptop size={14} />
-          Local
+        <DropdownMenu.Item
+          onSelect={() => onChange("local")}
+          style={{ padding: "6px 8px", height: "auto" }}
+        >
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <Laptop
+              size={12}
+              style={{ marginTop: 2, flexShrink: 0, color: "var(--gray-11)" }}
+            />
+            <div>
+              <Text size="1">{MODE_CONFIG.local.label}</Text>
+              <Text size="1" color="gray" style={{ display: "block" }}>
+                {MODE_CONFIG.local.description}
+              </Text>
+            </div>
+          </div>
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
