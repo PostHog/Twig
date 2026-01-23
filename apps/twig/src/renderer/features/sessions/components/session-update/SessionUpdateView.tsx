@@ -114,5 +114,7 @@ export function SessionUpdateView({
       return (
         <TaskNotificationView status={item.status} summary={item.summary} />
       );
+    default:
+      return null;
   }
 }
