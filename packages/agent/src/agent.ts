@@ -42,6 +42,10 @@ export class Agent {
       const apiKey = this.posthogAPI.getApiKey();
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+      process.env.OPENAI_BASE_URL = gatewayUrl;
+      process.env.OPENAI_API_KEY = apiKey;
+      process.env.GEMINI_BASE_URL = gatewayUrl;
+      process.env.GEMINI_API_KEY = apiKey;
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;

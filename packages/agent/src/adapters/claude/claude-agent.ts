@@ -146,7 +146,7 @@ async function getAvailableSlashCommands(
 
 export class ClaudeAcpAgent extends BaseAcpAgent {
   readonly adapterName = "claude";
-  declare session: Session | null;
+  declare session: Session;
   toolUseCache: ToolUseCache;
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
@@ -237,13 +237,6 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         },
       });
     }, 0);
-  }
-
-  private getSession(): Session {
-    if (!this.session) {
-      throw new Error("Session not found");
-    }
-    return this.session;
   }
 
   private registerPersistence(
@@ -420,11 +413,10 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
   }
 
   async prompt(params: PromptRequest): Promise<PromptResponse> {
-    const session = this.getSession();
-    session.cancelled = false;
-    session.interruptReason = undefined;
+    this.session.cancelled = false;
+    this.session.interruptReason = undefined;
 
-    const { query: q, input } = session;
+    const { query: q, input } = this.session;
 
     for (const chunk of params.prompt) {
       const userNotification = {
@@ -441,7 +433,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     input.push(promptToClaude({ ...params, prompt: params.prompt }));
 
     const context = {
-      session,
+      session: this.session,
       sessionId: params.sessionId,
       client: this.client,
       toolUseCache: this.toolUseCache,
@@ -452,11 +444,11 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     while (true) {
       const { value: message, done } = await q.next();
       if (done || !message) {
-        if (session.cancelled) {
+        if (this.session.cancelled) {
           return {
             stopReason: "cancelled",
-            _meta: session.interruptReason
-              ? { interruptReason: session.interruptReason }
+            _meta: this.session.interruptReason
+              ? { interruptReason: this.session.interruptReason }
               : undefined,
           };
         }
@@ -506,30 +498,24 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
   }
 
   protected async interruptSession(): Promise<void> {
-    if (!this.session) {
-      return;
-    }
     await this.session.query.interrupt();
   }
 
   async setSessionModel(params: SetSessionModelRequest) {
-    const session = this.getSession();
-    await session.query.setModel(params.modelId);
+    await this.session.query.setModel(params.modelId);
   }
 
   async setSessionMode(
     params: SetSessionModeRequest,
   ): Promise<SetSessionModeResponse> {
-    const session = this.getSession();
-
     switch (params.modeId) {
       case "default":
       case "acceptEdits":
       case "bypassPermissions":
       case "plan":
-        session.permissionMode = params.modeId;
+        this.session.permissionMode = params.modeId;
         try {
-          await session.query.setPermissionMode(params.modeId);
+          await this.session.query.setPermissionMode(params.modeId);
         } catch (error) {
           const errorMessage =
             error instanceof Error && error.message
@@ -549,17 +535,16 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
 
   canUseTool(sessionId: string): CanUseTool {
     return async (toolName, toolInput, { suggestions, toolUseID }) => {
-      if (this.sessionId !== sessionId || !this.session) {
+      if (this.sessionId !== sessionId) {
         return {
           behavior: "deny",
           message: "Session not found",
           interrupt: true,
         };
       }
-      const session = this.session;
 
       const context = {
-        session,
+        session: this.session,
         toolName,
         toolInput: toolInput as Record<string, unknown>,
         toolUseID,
@@ -592,15 +577,6 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
       return {};
     }
 
-    if (method === "session/setMode") {
-      const { sessionId, modeId } = params as {
-        sessionId: string;
-        modeId: string;
-      };
-      await this.setSessionMode({ sessionId, modeId });
-      return {};
-    }
-
     throw RequestError.methodNotFound(method);
   }
 
@@ -610,7 +586,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     this.logger.info("[RESUME] Resuming session", { params });
     const { sessionId } = params;
 
-    if (this.sessionId === sessionId && this.session) {
+    if (this.sessionId === sessionId) {
       return {};
     }
 

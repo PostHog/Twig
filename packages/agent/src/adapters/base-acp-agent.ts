@@ -26,8 +26,8 @@ export interface BaseSession {
 
 export abstract class BaseAcpAgent implements Agent {
   abstract readonly adapterName: string;
-  protected session: BaseSession | null = null;
-  protected sessionId: string | null = null;
+  protected session!: BaseSession;
+  protected sessionId!: string;
   client: AgentSideConnection;
   protected logger: Logger;
   protected fileContentCache: { [key: string]: string } = {};
@@ -43,7 +43,7 @@ export abstract class BaseAcpAgent implements Agent {
   protected abstract interruptSession(): Promise<void>;
 
   async cancel(params: CancelNotification): Promise<void> {
-    if (this.sessionId !== params.sessionId || !this.session) {
+    if (this.sessionId !== params.sessionId) {
       throw new Error("Session not found");
     }
     this.session.cancelled = true;
@@ -55,9 +55,6 @@ export abstract class BaseAcpAgent implements Agent {
   }
 
   async closeSession(): Promise<void> {
-    if (!this.session || !this.sessionId) {
-      return;
-    }
     try {
       await this.cancel({ sessionId: this.sessionId });
       this.session.abortController.abort();
@@ -68,19 +65,17 @@ export abstract class BaseAcpAgent implements Agent {
         error: err,
       });
     }
-    this.session = null;
-    this.sessionId = null;
   }
 
   hasSession(sessionId: string): boolean {
-    return this.sessionId === sessionId && this.session !== null;
+    return this.sessionId === sessionId;
   }
 
   appendNotification(
     sessionId: string,
     notification: SessionNotification,
   ): void {
-    if (this.sessionId === sessionId && this.session) {
+    if (this.sessionId === sessionId) {
       this.session.notificationHistory.push(notification);
     }
   }
