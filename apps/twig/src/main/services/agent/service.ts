@@ -169,7 +169,7 @@ interface ManagedSession {
   taskId: string;
   repoPath: string;
   agent: Agent;
-  connection: ClientSideConnection;
+  clientSideConnection: ClientSideConnection;
   channel: string;
   createdAt: number;
   lastActivityAt: number;
@@ -449,7 +449,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         taskId,
         repoPath,
         agent,
-        connection,
+        clientSideConnection: connection,
         channel,
         createdAt: Date.now(),
         lastActivityAt: Date.now(),
@@ -465,6 +465,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       }
       return session;
     } catch (err) {
+      try {
+        await agent.cleanup();
+      } catch {
+        log.debug("Agent cleanup failed during error handling", { taskRunId });
+      }
       this.cleanupMockNodeEnvironment(mockNodeDir);
       if (!isRetry && isAuthError(err)) {
         log.warn(
@@ -545,7 +550,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     session.promptPending = true;
 
     try {
-      const result = await session.connection.prompt({
+      const result = await session.clientSideConnection.prompt({
         sessionId,
         prompt: finalPrompt,
       });
@@ -557,7 +562,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       if (isAuthError(err)) {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
-        const result = await session.connection.prompt({
+        const result = await session.clientSideConnection.prompt({
           sessionId,
           prompt: finalPrompt,
         });
@@ -592,7 +597,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     if (!session) return false;
 
     try {
-      await session.connection.cancel({
+      await session.clientSideConnection.cancel({
         sessionId,
         _meta: reason ? { interruptReason: reason } : undefined,
       });
@@ -618,7 +623,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.connection.extMethod("session/setModel", {
+      await session.clientSideConnection.extMethod("session/setModel", {
         sessionId,
         modelId,
       });
@@ -636,7 +641,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.connection.extMethod("session/setMode", {
+      await session.clientSideConnection.extMethod("session/setMode", {
         sessionId,
         modeId,
       });
@@ -750,32 +755,15 @@ For git operations while detached:
 
   @preDestroy()
   async cleanupAll(): Promise<void> {
+    const sessionIds = Array.from(this.sessions.keys());
     log.info("Cleaning up all agent sessions", {
-      sessionCount: this.sessions.size,
+      sessionCount: sessionIds.length,
     });
 
-    for (const [taskRunId, session] of this.sessions) {
-      // Step 1: Send ACP cancel notification for any ongoing prompt turns
-      try {
-        if (!session.connection.signal.aborted) {
-          await session.connection.cancel({ sessionId: taskRunId });
-          log.info("Sent ACP cancel for session", { taskRunId });
-        }
-      } catch (err) {
-        log.warn("Failed to send ACP cancel", { taskRunId, error: err });
-      }
-
-      // Step 2: Cleanup agent connection (closes streams, aborts subprocess)
-      try {
-        await session.agent.cleanup();
-      } catch (err) {
-        log.warn("Failed to cleanup agent", { taskRunId, error: err });
-      }
-
-      this.cleanupMockNodeEnvironment(session.mockNodeDir);
+    for (const taskRunId of sessionIds) {
+      await this.cleanupSession(taskRunId);
     }
 
-    this.sessions.clear();
     log.info("All agent sessions cleaned up");
   }
 
@@ -835,22 +823,11 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
-      // Cancel any ongoing operations
-      try {
-        if (!session.connection.signal.aborted) {
-          await session.connection.cancel({ sessionId: taskRunId });
-        }
-      } catch {
-        // Ignore cancel errors
-      }
-
-      // Cleanup agent (closes streams, aborts subprocess)
       try {
         await session.agent.cleanup();
       } catch {
-        // Ignore cleanup errors
+        log.debug("Agent cleanup failed", { taskRunId });
       }
-
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
       this.sessions.delete(taskRunId);
     }
