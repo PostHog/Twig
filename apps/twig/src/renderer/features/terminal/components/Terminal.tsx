@@ -1,5 +1,6 @@
 import { Box } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc";
+import { useSettingsStore } from "@stores/settingsStore";
 import { useThemeStore } from "@stores/themeStore";
 import "@xterm/xterm/css/xterm.css";
 import { useCallback, useEffect, useRef } from "react";
@@ -26,6 +27,15 @@ export function Terminal({
 }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
+  const terminalFontFamily = useSettingsStore(
+    (state) => state.terminalFontFamily,
+  );
+  const terminalFontFamilyLoaded = useSettingsStore(
+    (state) => state.terminalFontFamilyLoaded,
+  );
+  const loadTerminalFontFamily = useSettingsStore(
+    (state) => state.loadTerminalFontFamily,
+  );
 
   // Create instance (idempotent)
   useEffect(() => {
@@ -55,6 +65,16 @@ export function Terminal({
   useEffect(() => {
     terminalManager.setTheme(isDarkMode);
   }, [isDarkMode]);
+
+  useEffect(() => {
+    if (!terminalFontFamilyLoaded) {
+      loadTerminalFontFamily();
+    }
+  }, [terminalFontFamilyLoaded, loadTerminalFontFamily]);
+
+  useEffect(() => {
+    terminalManager.setFontFamily(terminalFontFamily);
+  }, [terminalFontFamily]);
 
   // Subscribe to shell data events
   trpcReact.shell.onData.useSubscription(

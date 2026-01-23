@@ -7,16 +7,22 @@ export type SendMessagesWith = "enter" | "cmd+enter";
 interface SettingsState {
   terminalLayoutMode: TerminalLayoutMode;
   sendMessagesWith: SendMessagesWith;
+  terminalFontFamily: string;
+  terminalFontFamilyLoaded: boolean;
   isLoading: boolean;
   loadTerminalLayout: () => Promise<void>;
   setTerminalLayout: (mode: TerminalLayoutMode) => Promise<void>;
   loadSendMessagesWith: () => Promise<void>;
   setSendMessagesWith: (mode: SendMessagesWith) => Promise<void>;
+  loadTerminalFontFamily: () => Promise<void>;
+  setTerminalFontFamily: (fontFamily: string) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>()((set) => ({
   terminalLayoutMode: "split",
   sendMessagesWith: "enter",
+  terminalFontFamily: "monospace",
+  terminalFontFamilyLoaded: false,
   isLoading: true,
 
   loadTerminalLayout: async () => {
@@ -63,6 +69,36 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
         value: mode,
       });
       set({ sendMessagesWith: mode });
+    } catch (_error) {}
+  },
+
+  loadTerminalFontFamily: async () => {
+    try {
+      const fontFamily = await trpcVanilla.secureStore.getItem.query({
+        key: "terminalFontFamily",
+      });
+      if (typeof fontFamily === "string" && fontFamily.trim()) {
+        set({ terminalFontFamily: fontFamily, terminalFontFamilyLoaded: true });
+        return;
+      }
+      set({ terminalFontFamilyLoaded: true });
+    } catch (_error) {
+      set({ terminalFontFamilyLoaded: true });
+    }
+  },
+
+  setTerminalFontFamily: async (fontFamily: string) => {
+    const trimmedFontFamily = fontFamily.trim();
+    const normalizedFontFamily = trimmedFontFamily || "monospace";
+    try {
+      await trpcVanilla.secureStore.setItem.query({
+        key: "terminalFontFamily",
+        value: normalizedFontFamily,
+      });
+      set({
+        terminalFontFamily: trimmedFontFamily,
+        terminalFontFamilyLoaded: true,
+      });
     } catch (_error) {}
   },
 }));

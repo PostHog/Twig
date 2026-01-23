@@ -19,16 +19,17 @@ import {
   Spinner,
   Switch,
   Text,
+  TextField,
 } from "@radix-ui/themes";
 import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
 import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
 import type { CloudRegion } from "@shared/types/oauth";
-import { useSettingsStore as useTerminalLayoutStore } from "@stores/settingsStore";
+import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { trpcReact, trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 import { useThemeStore } from "../../../stores/themeStore";
@@ -47,6 +48,23 @@ const REGION_URLS: Record<CloudRegion, string> = {
   dev: "localhost:8010",
 };
 
+const CUSTOM_TERMINAL_FONT_VALUE = "custom";
+const CUSTOM_TERMINAL_FONT_COMMIT_DELAY_MS = 400;
+const TERMINAL_FONT_PRESETS = [
+  {
+    label: "System monospace",
+    value: "monospace",
+  },
+  {
+    label: "MesloLGL Nerd Font Mono",
+    value: '"MesloLGL Nerd Font Mono", monospace',
+  },
+  {
+    label: "JetBrains Mono",
+    value: '"JetBrains Mono", monospace',
+  },
+];
+
 export function SettingsView() {
   useSetHeaderContent(null);
 
@@ -64,11 +82,23 @@ export function SettingsView() {
     setAutoConvertLongText,
     setSendMessagesWith,
   } = useSettingsStore();
-  const terminalLayoutMode = useTerminalLayoutStore(
+  const terminalLayoutMode = useTerminalSettingsStore(
     (state) => state.terminalLayoutMode,
   );
-  const setTerminalLayout = useTerminalLayoutStore(
+  const setTerminalLayout = useTerminalSettingsStore(
     (state) => state.setTerminalLayout,
+  );
+  const terminalFontFamily = useTerminalSettingsStore(
+    (state) => state.terminalFontFamily,
+  );
+  const terminalFontFamilyLoaded = useTerminalSettingsStore(
+    (state) => state.terminalFontFamilyLoaded,
+  );
+  const loadTerminalFontFamily = useTerminalSettingsStore(
+    (state) => state.loadTerminalFontFamily,
+  );
+  const setTerminalFontFamily = useTerminalSettingsStore(
+    (state) => state.setTerminalFontFamily,
   );
   const openShortcutsSheet = useShortcutsSheetStore((state) => state.open);
 
@@ -94,12 +124,40 @@ export function SettingsView() {
     message?: string;
     type?: "info" | "success" | "error";
   }>({});
+  const [customTerminalFont, setCustomTerminalFont] = useState<string>("");
+  const customFontSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (worktreeLocation) {
       setLocalWorktreeLocation(worktreeLocation);
     }
   }, [worktreeLocation]);
+
+  useEffect(() => {
+    if (!terminalFontFamilyLoaded) {
+      loadTerminalFontFamily();
+    }
+  }, [terminalFontFamilyLoaded, loadTerminalFontFamily]);
+
+  useEffect(() => {
+    return () => {
+      if (customFontSaveTimeoutRef.current) {
+        clearTimeout(customFontSaveTimeoutRef.current);
+        customFontSaveTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const matchesPreset = TERMINAL_FONT_PRESETS.some(
+      (preset) => preset.value === terminalFontFamily,
+    );
+    if (!matchesPreset) {
+      setCustomTerminalFont(terminalFontFamily);
+    }
+  }, [terminalFontFamily]);
 
   // Tracked settings handlers
   const handleDarkModeChange = useCallback(() => {
@@ -139,6 +197,91 @@ export function SettingsView() {
     [terminalLayoutMode, setTerminalLayout],
   );
 
+  const clearCustomFontSaveTimeout = useCallback(() => {
+    if (customFontSaveTimeoutRef.current) {
+      clearTimeout(customFontSaveTimeoutRef.current);
+      customFontSaveTimeoutRef.current = null;
+    }
+  }, []);
+
+  const commitCustomTerminalFont = useCallback(
+    (value: string) => {
+      const normalizedValue = value.trim();
+      if (!normalizedValue) {
+        return;
+      }
+
+      const previousValue = terminalFontFamily.trim() || "monospace";
+      if (normalizedValue === previousValue) {
+        return;
+      }
+
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "terminal_font_family",
+        new_value: normalizedValue,
+        old_value: previousValue,
+      });
+
+      setTerminalFontFamily(normalizedValue);
+    },
+    [setTerminalFontFamily, terminalFontFamily],
+  );
+
+  const handleTerminalFontChange = useCallback(
+    (value: string) => {
+      clearCustomFontSaveTimeout();
+
+      if (value === CUSTOM_TERMINAL_FONT_VALUE) {
+        if (!customTerminalFont.trim()) {
+          setTerminalFontFamily("");
+          return;
+        }
+
+        commitCustomTerminalFont(customTerminalFont);
+        return;
+      }
+
+      if (value === terminalFontFamily) {
+        return;
+      }
+
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "terminal_font_family",
+        new_value: value,
+        old_value: terminalFontFamily,
+      });
+
+      setTerminalFontFamily(value);
+    },
+    [
+      clearCustomFontSaveTimeout,
+      commitCustomTerminalFont,
+      customTerminalFont,
+      setTerminalFontFamily,
+      terminalFontFamily,
+    ],
+  );
+
+  const handleCustomTerminalFontChange = useCallback(
+    (value: string) => {
+      setCustomTerminalFont(value);
+      clearCustomFontSaveTimeout();
+      customFontSaveTimeoutRef.current = setTimeout(() => {
+        commitCustomTerminalFont(value);
+      }, CUSTOM_TERMINAL_FONT_COMMIT_DELAY_MS);
+    },
+    [clearCustomFontSaveTimeout, commitCustomTerminalFont],
+  );
+
+  const handleCustomTerminalFontBlur = useCallback(() => {
+    clearCustomFontSaveTimeout();
+    commitCustomTerminalFont(customTerminalFont);
+  }, [
+    clearCustomFontSaveTimeout,
+    commitCustomTerminalFont,
+    customTerminalFont,
+  ]);
+
   const handleAutoConvertLongTextChange = useCallback(
     (checked: boolean) => {
       track(ANALYTICS_EVENTS.SETTING_CHANGED, {
@@ -162,6 +305,12 @@ export function SettingsView() {
     },
     [sendMessagesWith, setSendMessagesWith],
   );
+
+  const terminalFontSelection = TERMINAL_FONT_PRESETS.some(
+    (preset) => preset.value === terminalFontFamily,
+  )
+    ? terminalFontFamily
+    : CUSTOM_TERMINAL_FONT_VALUE;
 
   const handleWorktreeLocationChange = async (newLocation: string) => {
     setLocalWorktreeLocation(newLocation);
@@ -312,6 +461,49 @@ export function SettingsView() {
                     Split pane shows the terminal in a separate pane beneath the
                     logs. Tabbed shows the terminal as a tab alongside logs.
                   </Text>
+                </Flex>
+
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="medium">
+                    Terminal font
+                  </Text>
+                  <Select.Root
+                    value={terminalFontSelection}
+                    onValueChange={handleTerminalFontChange}
+                    size="1"
+                  >
+                    <Select.Trigger />
+                    <Select.Content>
+                      {TERMINAL_FONT_PRESETS.map((preset) => (
+                        <Select.Item key={preset.value} value={preset.value}>
+                          {preset.label}
+                        </Select.Item>
+                      ))}
+                      <Select.Item value={CUSTOM_TERMINAL_FONT_VALUE}>
+                        Custom font family
+                      </Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                  <Text size="1" color="gray">
+                    Uses locally installed fonts. Nerd fonts are recommended for
+                    prompt glyphs.
+                  </Text>
+                  {terminalFontSelection === CUSTOM_TERMINAL_FONT_VALUE && (
+                    <Flex direction="column" gap="1">
+                      <TextField.Root
+                        size="1"
+                        placeholder="Enter font family"
+                        value={customTerminalFont}
+                        onChange={(event) =>
+                          handleCustomTerminalFontChange(event.target.value)
+                        }
+                        onBlur={handleCustomTerminalFontBlur}
+                      />
+                      <Text size="1" color="gray">
+                        Example: MesloLGL Nerd Font Mono
+                      </Text>
+                    </Flex>
+                  )}
                 </Flex>
               </Flex>
             </Card>
