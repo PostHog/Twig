@@ -6,11 +6,13 @@ export type CloudRegion = z.infer<typeof cloudRegion>;
 /**
  * Error codes for OAuth operations.
  * - network_error: Transient network issue, should retry
+ * - server_error: Server error (5xx), should retry
  * - auth_error: Authentication failed (invalid token, 401/403), should logout
  * - unknown_error: Other errors
  */
 export const oAuthErrorCode = z.enum([
   "network_error",
+  "server_error",
   "auth_error",
   "unknown_error",
 ]);

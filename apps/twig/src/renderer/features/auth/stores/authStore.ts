@@ -38,6 +38,7 @@ interface AuthState {
   tokenExpiry: number | null; // Unix timestamp in milliseconds
   cloudRegion: CloudRegion | null;
   storedTokens: StoredTokens | null;
+  staleTokens: StoredTokens | null;
 
   // PostHog client
   isAuthenticated: boolean;
@@ -66,6 +67,7 @@ export const useAuthStore = create<AuthState>()(
         tokenExpiry: null,
         cloudRegion: null,
         storedTokens: null,
+        staleTokens: null,
 
         // PostHog client
         isAuthenticated: false,
@@ -195,15 +197,22 @@ export const useAuthStore = create<AuthState>()(
                 });
 
                 if (!result.success || !result.data) {
-                  // Network errors should retry, auth errors should logout immediately
-                  if (result.errorCode === "network_error") {
+                  // Network/server errors should retry, auth errors should logout immediately
+                  if (
+                    result.errorCode === "network_error" ||
+                    result.errorCode === "server_error"
+                  ) {
                     log.warn(
-                      `Token refresh network error (attempt ${attempt + 1}): ${result.error}`,
+                      `Token refresh ${result.errorCode} (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES}): ${result.error}`,
                     );
+                    lastError = new Error(result.error || "Token refresh failed");
                     continue; // Retry
                   }
 
                   // Auth error or unknown - logout
+                  log.error(
+                    `Token refresh failed with ${result.errorCode}: ${result.error}`,
+                  );
                   get().logout();
                   throw new Error(result.error || "Token refresh failed");
                 }
@@ -271,7 +280,9 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // All retries exhausted
-            log.error("Token refresh failed after all retries");
+            log.error(
+              `Token refresh failed after all retries: ${lastError?.message || "Unknown error"}`,
+            );
             get().logout();
             throw lastError || new Error("Token refresh failed");
           };
@@ -285,6 +296,7 @@ export const useAuthStore = create<AuthState>()(
 
         scheduleTokenRefresh: () => {
           const state = get();
+          console.log("state", state);
 
           if (refreshTimeoutId) {
             window.clearTimeout(refreshTimeoutId);
@@ -469,12 +481,15 @@ export const useAuthStore = create<AuthState>()(
 
           useNavigationStore.getState().navigateToTaskInput();
 
+          const currentTokens = get().storedTokens;
+
           set({
             oauthAccessToken: null,
             oauthRefreshToken: null,
             tokenExpiry: null,
             cloudRegion: null,
             storedTokens: null,
+            staleTokens: currentTokens,
             isAuthenticated: false,
             client: null,
             projectId: null,
@@ -487,6 +502,7 @@ export const useAuthStore = create<AuthState>()(
         partialize: (state) => ({
           cloudRegion: state.cloudRegion,
           storedTokens: state.storedTokens,
+          staleTokens: state.staleTokens,
           projectId: state.projectId,
         }),
       },
