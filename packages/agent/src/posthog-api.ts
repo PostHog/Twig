@@ -11,14 +11,16 @@ export function getLlmGatewayUrl(posthogHost: string): string {
   const url = new URL(posthogHost);
   const hostname = url.hostname;
 
+  // TODO: Migrate to twig
   if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return `${url.protocol}//localhost:3308/twig`;
+    return `${url.protocol}//localhost:3308/array`;
   }
 
   const regionMatch = hostname.match(/^(us|eu)\.posthog\.com$/);
   const region = regionMatch ? regionMatch[1] : "us";
 
-  return `https://gateway.${region}.posthog.com/twig`;
+  // TODO: Migrate to twig
+  return `https://gateway.${region}.posthog.com/array`;
 }
 
 export class PostHogAPIClient {
