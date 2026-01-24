@@ -5,7 +5,7 @@ export const POSTHOG_EU_CLIENT_ID = "AIvijgMS0dxKEmr5z6odvRd8Pkh5vts3nPTzgzU9";
 export const POSTHOG_DEV_CLIENT_ID = "DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ";
 
 export const OAUTH_SCOPES = [
-  // Array app needs
+  // Twig app needs
   "user:read",
   "project:read",
   "task:write",

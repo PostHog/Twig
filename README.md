@@ -35,12 +35,12 @@ pnpm --filter agent build
 ### Running in Development
 
 ```bash
-# Run both agent (watch mode) and array app in parallel
+# Run both agent (watch mode) and twig app in parallel
 pnpm dev
 
 # Or run them separately:
-pnpm dev:agent   # Run agent in watch mode
-pnpm dev:array   # Run array app
+pnpm dev:agent  # Run agent in watch mode
+pnpm dev:twig   # Run twig app
 ```
 
 ### Mobile App
@@ -80,9 +80,9 @@ pnpm test
 ## Project Structure
 
 ```
-array-monorepo/
+twig-monorepo/
 ├── apps/
-│   ├── array/          # Electron desktop app
+│   ├── twig/          # Electron desktop app
 │   └── mobile/         # React Native mobile app (Expo)
 ├── packages/
 │   └── agent/          # Agent framework

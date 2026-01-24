@@ -237,6 +237,7 @@ function subscribeToChannel(taskRunId: string) {
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
+                   // TODO: Migrate to twig
                   method: "_array/permission_request",
                   params: {
                     toolCallId: payload.toolCallId,
@@ -333,6 +334,7 @@ function createUserShellExecuteEvent(
     ts: Date.now(),
     message: {
       jsonrpc: "2.0",
+      // TODO: Migrate to twig
       method: "_array/user_shell_execute",
       params: { command, cwd, result },
     },
@@ -358,6 +360,7 @@ function getUserShellExecutesSinceLastPrompt(
 
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") break;
 
+    // TODO: Migrate to twig
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "_array/user_shell_execute"
@@ -1046,6 +1049,7 @@ const useStore = create<SessionStore>()(
             type: "notification",
             timestamp: new Date().toISOString(),
             notification: {
+              // TODO: Migrate to twig
               method: "_array/user_shell_execute",
               params: { command, cwd, result },
             },
@@ -1107,6 +1111,7 @@ const useStore = create<SessionStore>()(
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
+                  // TODO: Migrate to twig
                   method: "_array/permission_response",
                   params: {
                     toolCallId,
@@ -1177,6 +1182,7 @@ const useStore = create<SessionStore>()(
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
+                  // TODO: Migrate to twig
                   method: "_array/permission_response",
                   params: {
                     toolCallId,

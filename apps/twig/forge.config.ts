@@ -134,7 +134,7 @@ const config: ForgeConfig = {
     name: "Twig",
     executableName: "Twig",
     icon: "./build/app-icon", // Forge adds .icns/.ico/.png based on platform
-    appBundleId: "com.posthog.array",
+    appBundleId: "com.posthog.array", // TODO: Migrate to twig
     appCategoryType: "public.app-category.productivity",
     extraResource: existsSync("build/Assets.car") ? ["build/Assets.car"] : [],
     extendInfo: existsSync("build/Assets.car")
@@ -162,7 +162,7 @@ const config: ForgeConfig = {
         ? {
             "code-sign": {
               "signing-identity": appleCodesignIdentity,
-              identifier: "com.posthog.array",
+              identifier: "com.posthog.array", // TODO: Migrate to twig
             },
           }
         : {}),

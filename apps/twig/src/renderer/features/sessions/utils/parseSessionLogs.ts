@@ -130,9 +130,12 @@ export function findPendingPermissions(
       | Record<string, unknown>
       | undefined;
 
+    // TODO: Migrate to twig
     if (method === "_array/permission_request" && params?.toolCallId) {
       requests.set(params.toolCallId as string, entry);
     }
+
+    // TODO: Migrate to twig
     if (method === "_array/permission_response" && params?.toolCallId) {
       responses.add(params.toolCallId as string);
     }

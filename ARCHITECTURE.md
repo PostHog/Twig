@@ -1,8 +1,8 @@
-# Contributing to Array
+# Contributing to Twig
 
 ## Architecture Overview
 
-Array is an Electron app with a React renderer. The main process handles system operations (stateless), while the renderer owns all application state.
+Twig is an Electron app with a React renderer. The main process handles system operations (stateless), while the renderer owns all application state.
 
 ```
 Main Process (Node.js)                      Renderer Process (React)

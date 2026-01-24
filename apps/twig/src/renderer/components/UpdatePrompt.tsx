@@ -38,7 +38,7 @@ export function UpdatePrompt() {
       } else if (status.checking === false && status.upToDate) {
         setCheckingForUpdates(false);
         const versionSuffix = status.version ? ` (v${status.version})` : "";
-        setCheckResultMessage(`Array is up to date${versionSuffix}`);
+        setCheckResultMessage(`Twig is up to date${versionSuffix}`);
       } else if (status.checking === false) {
         setCheckingForUpdates(false);
       } else if (status.checking === true) {
@@ -105,7 +105,7 @@ export function UpdatePrompt() {
             <Flex direction="column" gap="3">
               <Dialog.Title className="mb-0">Update ready</Dialog.Title>
               <Dialog.Description>
-                A new version of Array has finished downloading. Restart now to
+                A new version of Twig has finished downloading. Restart now to
                 install it or choose Later to keep working and update next time.
               </Dialog.Description>
               {errorMessage ? (

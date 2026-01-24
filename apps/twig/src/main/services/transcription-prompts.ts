@@ -5,7 +5,7 @@
  * - Generating concise summaries of transcribed audio
  * - Extracting actionable tasks from conversations
  *
- * Future: Move to user-editable config file (~/.array/prompts.json)
+ * Future: Move to user-editable config file (~/.twig/prompts.json)
  */
 
 export const SUMMARY_PROMPT = `Create a very brief (3-7 words) title that summarizes what this conversation is about.
