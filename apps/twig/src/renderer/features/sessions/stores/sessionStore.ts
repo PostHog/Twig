@@ -49,6 +49,7 @@ export interface AgentSession {
   status: "connecting" | "connected" | "disconnected" | "error";
   errorMessage?: string;
   isPromptPending: boolean;
+  promptStartedAt: number | null;
   isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
@@ -133,9 +134,11 @@ function subscribeToChannel(taskRunId: string) {
             session.events.push(payload as AcpMessage);
 
             // Track isPromptPending from ACP events (handles backend-initiated prompts)
-            const msg = (payload as AcpMessage).message;
+            const acpMsg = payload as AcpMessage;
+            const msg = acpMsg.message;
             if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
               session.isPromptPending = true;
+              session.promptStartedAt = acpMsg.ts;
             }
             if (
               "id" in msg &&
@@ -146,6 +149,7 @@ function subscribeToChannel(taskRunId: string) {
             ) {
               // This is a prompt response
               session.isPromptPending = false;
+              session.promptStartedAt = null;
             }
 
             // Handle session/update notifications
@@ -462,6 +466,7 @@ function createBaseSession(
     startedAt: Date.now(),
     status: "connecting",
     isPromptPending: false,
+    promptStartedAt: null,
     isCloud,
     currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
@@ -772,7 +777,10 @@ const useStore = create<SessionStore>()(
       session: AgentSession,
       blocks: ContentBlock[],
     ): Promise<{ stopReason: string }> => {
-      updateSession(session.taskRunId, { isPromptPending: true });
+      updateSession(session.taskRunId, {
+        isPromptPending: true,
+        promptStartedAt: Date.now(),
+      });
 
       try {
         return await trpcVanilla.agent.prompt.mutate({
@@ -780,7 +788,10 @@ const useStore = create<SessionStore>()(
           prompt: blocks,
         });
       } finally {
-        updateSession(session.taskRunId, { isPromptPending: false });
+        updateSession(session.taskRunId, {
+          isPromptPending: false,
+          promptStartedAt: null,
+        });
       }
     };
 

@@ -47,6 +47,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
+  const promptStartedAt = session?.promptStartedAt;
 
   const isConnecting = useRef(false);
 
@@ -177,6 +178,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             taskId={taskId}
             isRunning={isRunning}
             isPromptPending={isPromptPending}
+            promptStartedAt={promptStartedAt}
             onSendPrompt={handleSendPrompt}
             onBashCommand={handleBashCommand}
             onCancelPrompt={handleCancelPrompt}

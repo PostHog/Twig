@@ -52,6 +52,7 @@ type ConversationItem = Turn | UserShellExecute;
 interface ConversationViewProps {
   events: AcpMessage[];
   isPromptPending: boolean;
+  promptStartedAt?: number | null;
   repoPath?: string | null;
   isCloud?: boolean;
   taskId?: string;
@@ -63,6 +64,7 @@ const SHOW_BUTTON_THRESHOLD = 300;
 export function ConversationView({
   events,
   isPromptPending,
+  promptStartedAt,
   repoPath,
   isCloud = false,
   taskId,
@@ -141,6 +143,7 @@ export function ConversationView({
         </div>
         <SessionFooter
           isPromptPending={isPromptPending}
+          promptStartedAt={promptStartedAt}
           lastGenerationDuration={
             lastTurn?.isComplete ? lastTurn.durationMs : null
           }
