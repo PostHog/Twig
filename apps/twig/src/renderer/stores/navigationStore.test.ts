@@ -29,7 +29,7 @@ const mockTask: Task = {
   slug: "test-task",
   title: "Test task",
   description: "Test task description",
-  origin_product: "array",
+  origin_product: "twig",
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
 };

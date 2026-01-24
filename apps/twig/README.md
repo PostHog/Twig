@@ -1,4 +1,4 @@
-# PostHog - Array
+# PostHog - Twig
 
 The PostHog desktop task manager
 
@@ -70,7 +70,7 @@ You can set these environment variables instead of entering credentials in the a
 ## Project Structure
 
 ```
-array/
+twig/
 ├── src/
 │   ├── main/           # Electron main process
 │   ├── renderer/       # React app
@@ -102,8 +102,8 @@ pnpm make
 
 Output will be in:
 
-- `out/Array-darwin-arm64/Array.app` - Packaged app
-- `out/make/Array-*.dmg` - macOS installer
+- `out/Twig-darwin-arm64/Twig.app` - Packaged app
+- `out/make/Twig-*.dmg` - macOS installer
 - `out/make/zip/` - ZIP archives
 
 **Note:** Native modules for the DMG maker are automatically compiled via the `prePackage` hook. If you need to manually rebuild them, run:

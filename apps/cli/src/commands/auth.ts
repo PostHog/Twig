@@ -54,7 +54,7 @@ export async function auth(): Promise<void> {
     return;
   }
 
-  message("To submit PRs, Array needs access to GitHub.");
+  message("To submit PRs, Twig needs access to GitHub.");
   blank();
 
   const method = await select("Authenticate via:", [
