@@ -20,9 +20,10 @@ export function TaskShellPanel({
   const stateKey = shellId ? `${taskId}-${shellId}` : taskId;
   const tabId = shellId || "shell";
 
-  const folderPath = useWorkspaceStore(
-    (state) => state.workspaces[taskId]?.folderPath,
-  );
+  const workspacePath = useWorkspaceStore((state) => {
+    const workspace = state.workspaces[taskId];
+    return workspace?.worktreePath ?? workspace?.folderPath;
+  });
 
   const processName = useTerminalStore(
     (state) => state.terminalStates[stateKey]?.processName,
@@ -42,9 +43,13 @@ export function TaskShellPanel({
     }
   }, [processName, taskId, tabId, updateTabLabel]);
 
+  if (!workspacePath) {
+    return null;
+  }
+
   return (
     <Box height="100%">
-      <ShellTerminal cwd={folderPath} stateKey={stateKey} taskId={taskId} />
+      <ShellTerminal cwd={workspacePath} stateKey={stateKey} taskId={taskId} />
     </Box>
   );
 }
