@@ -251,7 +251,7 @@ function subscribeToChannel(taskRunId: string) {
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
-                   // TODO: Migrate to twig
+                  // TODO: Migrate to twig
                   method: "_array/permission_request",
                   params: {
                     toolCallId: payload.toolCallId,
