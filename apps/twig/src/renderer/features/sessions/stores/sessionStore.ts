@@ -148,15 +148,25 @@ function subscribeToChannel(taskRunId: string) {
               session.isPromptPending = false;
             }
 
-            // Handle mode updates from ExitPlanMode approval
+            // Handle session/update notifications
             if (
               "method" in msg &&
               msg.method === "session/update" &&
               "params" in msg
             ) {
               const params = msg.params as {
-                update?: { sessionUpdate?: string; currentModeId?: string };
+                update?: {
+                  sessionUpdate?: string;
+                  currentModeId?: string;
+                  inputTokens?: number;
+                  outputTokens?: number;
+                  cacheReadTokens?: number;
+                  cacheCreationTokens?: number;
+                  contextWindow?: number;
+                };
               };
+
+              // Handle mode updates from ExitPlanMode approval
               if (
                 params?.update?.sessionUpdate === "current_mode_update" &&
                 params.update.currentModeId
@@ -171,6 +181,54 @@ function subscribeToChannel(taskRunId: string) {
                   setPersistedTaskMode(session.taskId, newMode);
                   log.info("Session mode updated", { taskRunId, newMode });
                 }
+              }
+
+              // Handle status updates (e.g., compacting)
+              // Note: The event is already pushed at line 143 via the raw payload,
+              // so we only log here - no need to push a duplicate synthetic event
+              if (params?.update?.sessionUpdate === "status") {
+                const statusUpdate = params.update as unknown as {
+                  sessionUpdate: "status";
+                  status: string;
+                };
+                log.info("Received status update", {
+                  taskRunId,
+                  status: statusUpdate.status,
+                });
+              }
+
+              // Handle error notifications (e.g., context window exceeded)
+              // Note: The event is already pushed at line 143 via the raw payload,
+              // so we only log here - no need to push a duplicate synthetic event
+              if (params?.update?.sessionUpdate === "error") {
+                const errorUpdate = params.update as unknown as {
+                  sessionUpdate: "error";
+                  errorType: string;
+                  message: string;
+                };
+                log.error("Received error notification", {
+                  taskRunId,
+                  errorType: errorUpdate.errorType,
+                  message: errorUpdate.message,
+                });
+              }
+
+              // Handle task notifications (background task completion)
+              // Note: The event is already pushed at line 143 via the raw payload,
+              // so we only log here - no need to push a duplicate synthetic event
+              if (params?.update?.sessionUpdate === "task_notification") {
+                const taskUpdate = params.update as unknown as {
+                  sessionUpdate: "task_notification";
+                  taskId: string;
+                  status: "completed" | "failed" | "stopped";
+                  summary: string;
+                  outputFile: string;
+                };
+                log.info("Received task notification", {
+                  taskRunId,
+                  taskId: taskUpdate.taskId,
+                  status: taskUpdate.status,
+                });
               }
             }
           }

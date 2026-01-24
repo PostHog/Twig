@@ -25,6 +25,8 @@ export const POSTHOG_NOTIFICATIONS = {
   CONSOLE: "_posthog/console",
   /** SDK session ID notification (for resumption) */
   SDK_SESSION: "_posthog/sdk_session",
+  /** Conversation was compacted (context summarized) */
+  COMPACT_BOUNDARY: "_posthog/compact_boundary",
 } as const;
 
 export type PostHogNotificationType =
@@ -71,10 +73,20 @@ export interface SdkSessionPayload {
   sdkSessionId: string;
 }
 
+/**
+ * Conversation compaction boundary notification
+ */
+export interface CompactBoundaryPayload {
+  sessionId: string;
+  trigger: "manual" | "auto";
+  preTokens: number;
+}
+
 export type PostHogNotificationPayload =
   | BranchCreatedPayload
   | RunStartedPayload
   | TaskCompletePayload
   | ErrorNotificationPayload
   | ConsoleNotificationPayload
-  | SdkSessionPayload;
+  | SdkSessionPayload
+  | CompactBoundaryPayload;

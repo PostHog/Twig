@@ -35,29 +35,31 @@ export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
 
   return (
-    <Flex align="center" gap="1" py="1">
-      <Text
-        size="1"
-        style={{
-          color: config.colorVar,
-          fontFamily: "monospace",
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-        }}
-      >
-        {config.icon}
-        {config.label}
-      </Text>
-      <Text
-        size="1"
-        style={{
-          color: "var(--gray-9)",
-          fontFamily: "monospace",
-        }}
-      >
-        (shift+tab to cycle)
-      </Text>
+    <Flex align="center" justify="between" py="1">
+      <Flex align="center" gap="1">
+        <Text
+          size="1"
+          style={{
+            color: config.colorVar,
+            fontFamily: "monospace",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+        >
+          {config.icon}
+          {config.label}
+        </Text>
+        <Text
+          size="1"
+          style={{
+            color: "var(--gray-9)",
+            fontFamily: "monospace",
+          }}
+        >
+          (shift+tab to cycle)
+        </Text>
+      </Flex>
     </Flex>
   );
 }

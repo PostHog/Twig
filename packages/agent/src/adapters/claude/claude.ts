@@ -757,7 +757,7 @@ export class ClaudeAcpAgent implements Agent {
                 const session = this.sessions[params.sessionId];
                 if (session && !session.sdkSessionId) {
                   session.sdkSessionId = message.session_id;
-                  this.client.extNotification("_posthog/sdk_session", {
+                  await this.client.extNotification("_posthog/sdk_session", {
                     sessionId: params.sessionId,
                     sdkSessionId: message.session_id,
                   });
@@ -765,10 +765,63 @@ export class ClaudeAcpAgent implements Agent {
               }
               break;
             case "compact_boundary":
-            case "hook_response":
-            case "status":
-              // Todo: process via status api: https://docs.claude.com/en/docs/claude-code/hooks#hook-output
+              await this.client.extNotification("_posthog/compact_boundary", {
+                sessionId: params.sessionId,
+                trigger: message.compact_metadata.trigger,
+                preTokens: message.compact_metadata.pre_tokens,
+              });
               break;
+            case "hook_response":
+              // Hook responses are informational, log but don't process further
+              this.logger.info("Hook response received", {
+                hookName: message.hook_name,
+                hookEvent: message.hook_event,
+              });
+              break;
+            case "status":
+              // Handle status updates, particularly compacting status
+              if (message.status === "compacting") {
+                this.logger.info("Session compacting started", {
+                  sessionId: params.sessionId,
+                });
+                // Emit status notification so UI can show compaction is happening
+                const compactingNotification = {
+                  sessionId: params.sessionId,
+                  update: {
+                    sessionUpdate: "status",
+                    status: "compacting",
+                  },
+                } as unknown as SessionNotification;
+                await this.client.sessionUpdate(compactingNotification);
+                this.appendNotification(
+                  params.sessionId,
+                  compactingNotification,
+                );
+              }
+              break;
+            case "task_notification": {
+              // Handle task completion notifications from the new task system (SDK 0.2.x)
+              this.logger.info("Task notification received", {
+                sessionId: params.sessionId,
+                taskId: message.task_id,
+                status: message.status,
+                summary: message.summary,
+              });
+              // Emit notification for UI display
+              const taskNotification = {
+                sessionId: params.sessionId,
+                update: {
+                  sessionUpdate: "task_notification",
+                  taskId: message.task_id,
+                  status: message.status,
+                  summary: message.summary,
+                  outputFile: message.output_file,
+                },
+              } as unknown as SessionNotification;
+              await this.client.sessionUpdate(taskNotification);
+              this.appendNotification(params.sessionId, taskNotification);
+              break;
+            }
             default:
               unreachable(message, this.logger);
               break;

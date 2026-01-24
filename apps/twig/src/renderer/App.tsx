@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@components/ErrorBoundary";
 import { LoginTransition } from "@components/LoginTransition";
 import { MainLayout } from "@components/MainLayout";
 import { AuthScreen } from "@features/auth/components/AuthScreen";
@@ -138,7 +139,7 @@ function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary name="App">
       <AnimatePresence mode="wait">
         {!isAuthenticated ? (
           <motion.div
@@ -164,7 +165,7 @@ function App() {
         isAnimating={showTransition}
         onComplete={handleTransitionComplete}
       />
-    </>
+    </ErrorBoundary>
   );
 }
 
