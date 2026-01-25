@@ -18,8 +18,8 @@ import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
 import { FocusServiceEvent } from "../focus/service.js";
-import type { ShellService } from "../shell/service.js";
 import { getWorktreeLocation } from "../settingsStore";
+import type { ShellService } from "../shell/service.js";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import type {
   BranchChangedPayload,
@@ -414,13 +414,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.info(
           `Running ${initScripts.length} init script(s) for task ${taskId} (local mode)`,
         );
-        const initResult = await this.ensureScriptRunner().executeScriptsWithTerminal(
-          taskId,
-          initScripts,
-          "init",
-          folderPath,
-          { failFast: true, workspaceEnv },
-        );
+        const initResult =
+          await this.ensureScriptRunner().executeScriptsWithTerminal(
+            taskId,
+            initScripts,
+            "init",
+            folderPath,
+            { failFast: true, workspaceEnv },
+          );
         terminalSessionIds = initResult.terminalSessionIds;
 
         if (!initResult.success) {
@@ -437,13 +438,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.info(
           `Running ${startScripts.length} start script(s) for task ${taskId} (local mode)`,
         );
-        const startResult = await this.ensureScriptRunner().executeScriptsWithTerminal(
-          taskId,
-          startScripts,
-          "start",
-          folderPath,
-          { failFast: false, workspaceEnv },
-        );
+        const startResult =
+          await this.ensureScriptRunner().executeScriptsWithTerminal(
+            taskId,
+            startScripts,
+            "start",
+            folderPath,
+            { failFast: false, workspaceEnv },
+          );
         terminalSessionIds = [
           ...terminalSessionIds,
           ...startResult.terminalSessionIds,
@@ -570,13 +572,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       log.info(
         `Running ${initScripts.length} init script(s) for task ${taskId}`,
       );
-      const initResult = await this.ensureScriptRunner().executeScriptsWithTerminal(
-        taskId,
-        initScripts,
-        "init",
-        worktree.worktreePath,
-        { failFast: true, workspaceEnv },
-      );
+      const initResult =
+        await this.ensureScriptRunner().executeScriptsWithTerminal(
+          taskId,
+          initScripts,
+          "init",
+          worktree.worktreePath,
+          { failFast: true, workspaceEnv },
+        );
 
       terminalSessionIds = initResult.terminalSessionIds;
 
@@ -598,13 +601,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       log.info(
         `Running ${startScripts.length} start script(s) for task ${taskId}`,
       );
-      const startResult = await this.ensureScriptRunner().executeScriptsWithTerminal(
-        taskId,
-        startScripts,
-        "start",
-        worktree.worktreePath,
-        { failFast: false, workspaceEnv },
-      );
+      const startResult =
+        await this.ensureScriptRunner().executeScriptsWithTerminal(
+          taskId,
+          startScripts,
+          "start",
+          worktree.worktreePath,
+          { failFast: false, workspaceEnv },
+        );
 
       terminalSessionIds = [
         ...terminalSessionIds,
@@ -687,11 +691,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         mode: association.mode,
       });
 
-      const destroyResult = await this.ensureScriptRunner().executeScriptsSilent(
-        destroyScripts,
-        scriptPath,
-        workspaceEnv,
-      );
+      const destroyResult =
+        await this.ensureScriptRunner().executeScriptsSilent(
+          destroyScripts,
+          scriptPath,
+          workspaceEnv,
+        );
 
       if (!destroyResult.success) {
         log.warn(
@@ -980,7 +985,9 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         branchName,
         baseBranch: null,
         createdAt: new Date().toISOString(),
-        terminalSessionIds: this.ensureScriptRunner().getTaskSessions(assoc.taskId),
+        terminalSessionIds: this.ensureScriptRunner().getTaskSessions(
+          assoc.taskId,
+        ),
         hasStartScripts: startScripts.length > 0,
       };
     }
