@@ -367,7 +367,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
 
     try {
-      const { clientStreams } = await agent.run(taskId, taskRunId);
+      const acpConnection = await agent.run(taskId, taskRunId);
+      const { clientStreams } = acpConnection;
 
       const connection = this.createClientConnection(
         taskRunId,
@@ -955,6 +956,30 @@ For git operations while detached:
             session.config.sdkSessionId = sdkSessionId;
             log.info("SDK session ID captured", { sessionId, sdkSessionId });
           }
+        }
+
+        // Forward extension notifications to the renderer as ACP messages
+        // The extNotification callback doesn't write to the stream, so we need
+        // to manually emit these to the renderer
+        if (
+          method === "_posthog/status" ||
+          method === "_posthog/task_notification" ||
+          method === "_posthog/compact_boundary"
+        ) {
+          log.info("Forwarding extension notification to renderer", {
+            method,
+            taskRunId,
+          });
+          const acpMessage: AcpMessage = {
+            type: "acp_message",
+            ts: Date.now(),
+            message: {
+              jsonrpc: "2.0",
+              method,
+              params,
+            } as AcpMessage["message"],
+          };
+          emitToRenderer(acpMessage);
         }
       },
     };

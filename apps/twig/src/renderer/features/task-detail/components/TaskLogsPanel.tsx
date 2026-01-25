@@ -1,4 +1,5 @@
 import { BackgroundWrapper } from "@components/BackgroundWrapper";
+import { ErrorBoundary } from "@components/ErrorBoundary";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { SessionView } from "@features/sessions/components/SessionView";
 import {
@@ -170,21 +171,23 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   return (
     <BackgroundWrapper>
       <Box height="100%" width="100%">
-        <SessionView
-          events={events}
-          taskId={taskId}
-          isRunning={isRunning}
-          isPromptPending={isPromptPending}
-          onSendPrompt={handleSendPrompt}
-          onBashCommand={handleBashCommand}
-          onCancelPrompt={handleCancelPrompt}
-          repoPath={repoPath}
-          isCloud={session?.isCloud ?? false}
-          hasError={hasError}
-          errorMessage={errorMessage}
-          onRetry={handleRetry}
-          onDelete={handleDelete}
-        />
+        <ErrorBoundary name="SessionView">
+          <SessionView
+            events={events}
+            taskId={taskId}
+            isRunning={isRunning}
+            isPromptPending={isPromptPending}
+            onSendPrompt={handleSendPrompt}
+            onBashCommand={handleBashCommand}
+            onCancelPrompt={handleCancelPrompt}
+            repoPath={repoPath}
+            isCloud={session?.isCloud ?? false}
+            hasError={hasError}
+            errorMessage={errorMessage}
+            onRetry={handleRetry}
+            onDelete={handleDelete}
+          />
+        </ErrorBoundary>
       </Box>
     </BackgroundWrapper>
   );

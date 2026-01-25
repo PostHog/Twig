@@ -188,6 +188,18 @@ const TurnView = memo(function TurnView({
 
   const showUserMessage = turn.userContent.trim().length > 0;
 
+  // Check if a compacting status should show as complete
+  // (complete if there are items after it in the turn)
+  const isCompactingComplete = (index: number, item: RenderItem) => {
+    if (
+      item.sessionUpdate === "status" &&
+      (item as { status?: string }).status === "compacting"
+    ) {
+      return index < turn.items.length - 1;
+    }
+    return false;
+  };
+
   return (
     <Box className="flex flex-col gap-2">
       {showUserMessage &&
@@ -196,15 +208,23 @@ const TurnView = memo(function TurnView({
         ) : (
           <UserMessage content={turn.userContent} />
         ))}
-      {turn.items.map((item, i) => (
-        <SessionUpdateView
-          key={`${item.sessionUpdate}-${i}`}
-          item={item}
-          toolCalls={turn.toolCalls}
-          taskId={taskId}
-          turnCancelled={wasCancelled}
-        />
-      ))}
+      {turn.items.map((item, i) => {
+        // For status items, compute isComplete at render time
+        const renderItem =
+          item.sessionUpdate === "status" &&
+          (item as { status?: string }).status === "compacting"
+            ? { ...item, isComplete: isCompactingComplete(i, item) }
+            : item;
+        return (
+          <SessionUpdateView
+            key={`${item.sessionUpdate}-${i}`}
+            item={renderItem}
+            toolCalls={turn.toolCalls}
+            taskId={taskId}
+            turnCancelled={wasCancelled}
+          />
+        );
+      })}
       {showGitResult && repoPath && gitAction.actionType && (
         <GitActionResult
           actionType={gitAction.actionType}
@@ -321,6 +341,59 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
         });
       }
     }
+
+    // Compact boundary messages
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/compact_boundary" &&
+      currentTurn
+    ) {
+      const params = msg.params as {
+        trigger: "manual" | "auto";
+        preTokens: number;
+      };
+      currentTurn.items.push({
+        sessionUpdate: "compact_boundary",
+        trigger: params.trigger,
+        preTokens: params.preTokens,
+      });
+    }
+
+    // Status messages (e.g., compacting in progress)
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/status" &&
+      currentTurn
+    ) {
+      const params = msg.params as {
+        status: string;
+      };
+      currentTurn.items.push({
+        sessionUpdate: "status",
+        status: params.status,
+      });
+    }
+
+    // Task notification messages (background task completion)
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/task_notification" &&
+      currentTurn
+    ) {
+      const params = msg.params as {
+        taskId: string;
+        status: "completed" | "failed" | "stopped";
+        summary: string;
+        outputFile: string;
+      };
+      currentTurn.items.push({
+        sessionUpdate: "task_notification",
+        taskId: params.taskId,
+        status: params.status,
+        summary: params.summary,
+        outputFile: params.outputFile,
+      });
+    }
   }
 
   return items;
@@ -391,6 +464,24 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
     case "current_mode_update":
       turn.items.push(update);
       break;
+
+    // Handle custom session updates
+    default: {
+      // Check for our custom session update types
+      const customUpdate = update as unknown as {
+        sessionUpdate: string;
+        status?: string;
+        errorType?: string;
+        message?: string;
+      };
+      if (
+        customUpdate.sessionUpdate === "status" ||
+        customUpdate.sessionUpdate === "error"
+      ) {
+        turn.items.push(customUpdate as unknown as SessionUpdate);
+      }
+      break;
+    }
   }
 }
 
