@@ -136,6 +136,7 @@ class TerminalManagerImpl {
   private instances = new Map<string, TerminalInstance>();
   private listeners = new Map<EventType, Set<Listener<EventType>>>();
   private isDarkMode = true;
+  private fontFamily = "monospace";
 
   has(sessionId: string): boolean {
     return this.instances.has(sessionId);
@@ -159,7 +160,7 @@ class TerminalManagerImpl {
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 12,
-      fontFamily: "monospace",
+      fontFamily: this.fontFamily,
       theme: getTerminalTheme(this.isDarkMode),
       cursorStyle: "block",
       cursorWidth: 8,
@@ -403,6 +404,20 @@ class TerminalManagerImpl {
 
     for (const instance of this.instances.values()) {
       instance.term.options.theme = theme;
+    }
+  }
+
+  setFontFamily(fontFamily: string): void {
+    const normalized = fontFamily.trim() || "monospace";
+    if (this.fontFamily === normalized) {
+      return;
+    }
+
+    this.fontFamily = normalized;
+
+    for (const instance of this.instances.values()) {
+      instance.term.options.fontFamily = normalized;
+      instance.fitAddon.fit();
     }
   }
 
