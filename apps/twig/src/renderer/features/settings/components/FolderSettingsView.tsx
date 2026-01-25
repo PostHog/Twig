@@ -1,5 +1,5 @@
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { Warning } from "@phosphor-icons/react";
+import { ArrowLeft, Warning } from "@phosphor-icons/react";
 import {
   Box,
   Button,
@@ -43,12 +43,23 @@ export function FolderSettingsView() {
     return (
       <Box height="100%" overflowY="auto">
         <Box p="6" style={{ maxWidth: "600px", margin: "0 auto" }}>
-          <Callout.Root color="red">
-            <Callout.Icon>
-              <Warning />
-            </Callout.Icon>
-            <Callout.Text>Repository not found</Callout.Text>
-          </Callout.Root>
+          <Flex direction="column" gap="4">
+            <Callout.Root color="red">
+              <Callout.Icon>
+                <Warning />
+              </Callout.Icon>
+              <Callout.Text>Repository not found</Callout.Text>
+            </Callout.Root>
+            <Button
+              variant="soft"
+              size="2"
+              onClick={() => navigateToTaskInput()}
+              style={{ alignSelf: "flex-start" }}
+            >
+              <ArrowLeft size={16} />
+              Back to home
+            </Button>
+          </Flex>
         </Box>
       </Box>
     );
@@ -128,6 +139,16 @@ export function FolderSettingsView() {
                 </Button>
               </Flex>
             </Card>
+
+            <Button
+              variant="soft"
+              size="2"
+              onClick={() => navigateToTaskInput()}
+              style={{ alignSelf: "flex-start" }}
+            >
+              <ArrowLeft size={16} />
+              Back to home
+            </Button>
           </Flex>
         </Box>
       </Box>
