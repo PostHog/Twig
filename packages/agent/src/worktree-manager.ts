@@ -3,7 +3,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
-import { makeBranchName } from "./constants.js";
+import { GitManager } from "./git-manager.js";
 import type { WorktreeInfo } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
@@ -74,29 +74,23 @@ export class WorktreeManager {
   private worktreeBasePath: string | null;
   private repoName: string;
   private logger: Logger;
+  private gitManager: GitManager;
 
   constructor(config: WorktreeConfig) {
     this.mainRepoPath = config.mainRepoPath;
     this.worktreeBasePath = config.worktreeBasePath || null;
     this.repoName = path.basename(config.mainRepoPath);
     this.logger =
-      config.logger ||
+      config.logger ??
       new Logger({ debug: false, prefix: "[WorktreeManager]" });
+    this.gitManager = new GitManager({
+      repositoryPath: config.mainRepoPath,
+      logger: this.logger,
+    });
   }
 
   private usesExternalPath(): boolean {
     return this.worktreeBasePath !== null;
-  }
-
-  private async runGitCommand(args: string[]): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync("git", args, {
-        cwd: this.mainRepoPath,
-      });
-      return stdout.trim();
-    } catch (error) {
-      throw new Error(`Git command failed: git ${args.join(" ")}\n${error}`);
-    }
   }
 
   private randomElement<T>(array: T[]): T {
@@ -128,105 +122,6 @@ export class WorktreeManager {
     return path.join(this.getWorktreeFolderPath(), "local");
   }
 
-  /**
-   * Ensure the local worktree exists at the deterministic path.
-   * Creates it if it doesn't exist, returns existing info if it does.
-   * This is used to background local tasks when focusing on a worktree.
-   */
-  async ensureLocalWorktree(branch: string): Promise<WorktreeInfo> {
-    const localPath = this.getLocalWorktreePath();
-
-    // Check if local worktree already exists
-    try {
-      await fs.access(localPath);
-      // Worktree exists - get its info
-      const info = await this.getWorktreeInfo(localPath);
-      if (info) {
-        this.logger.info("Local worktree already exists", {
-          localPath,
-          branch,
-        });
-        return info;
-      }
-    } catch {
-      // Doesn't exist, we'll create it
-    }
-
-    this.logger.info("Creating local worktree", { localPath, branch });
-
-    // Setup: ensure folder exists or .git/info/exclude is set
-    if (!this.usesExternalPath()) {
-      await this.ensureArrayDirIgnored();
-    } else {
-      const folderPath = this.getWorktreeFolderPath();
-      await fs.mkdir(folderPath, { recursive: true });
-    }
-
-    // Get the current commit SHA - we'll create a detached worktree at this commit
-    // This avoids the "branch already checked out" error when main repo is on this branch
-    const commitSha = await this.runGitCommand(["rev-parse", "HEAD"]);
-
-    // Create a detached worktree at the current commit
-    // Using --detach allows the main repo to keep the branch checked out
-    if (this.usesExternalPath()) {
-      await this.runGitCommand([
-        "worktree",
-        "add",
-        "--detach",
-        "--quiet",
-        localPath,
-        commitSha.trim(),
-      ]);
-    } else {
-      const relativePath = `./${WORKTREE_FOLDER_NAME}/local`;
-      await this.runGitCommand([
-        "worktree",
-        "add",
-        "--detach",
-        "--quiet",
-        relativePath,
-        commitSha.trim(),
-      ]);
-    }
-
-    const createdAt = new Date().toISOString();
-
-    this.logger.info("Local worktree created successfully", {
-      localPath,
-      branch,
-    });
-
-    return {
-      worktreePath: localPath,
-      worktreeName: "local",
-      branchName: branch,
-      baseBranch: branch,
-      createdAt,
-      branchOwnership: "borrowed",
-    };
-  }
-
-  /**
-   * Remove the local worktree (used when bringing local back to foreground).
-   */
-  async removeLocalWorktree(): Promise<void> {
-    const localPath = this.getLocalWorktreePath();
-
-    try {
-      await fs.access(localPath);
-    } catch {
-      // Doesn't exist, nothing to do
-      this.logger.debug("Local worktree doesn't exist, nothing to remove");
-      return;
-    }
-
-    this.logger.info("Removing local worktree", { localPath });
-    await this.deleteWorktree(localPath);
-  }
-
-  /**
-   * Check if the local worktree currently exists.
-   */
   async localWorktreeExists(): Promise<boolean> {
     const localPath = this.getLocalWorktreePath();
     try {
@@ -296,34 +191,6 @@ export class WorktreeManager {
     return name;
   }
 
-  private async getDefaultBranch(): Promise<string> {
-    // Try all methods in parallel for speed
-    const [symbolicRef, mainExists, masterExists] = await Promise.allSettled([
-      this.runGitCommand(["symbolic-ref", "refs/remotes/origin/HEAD"]),
-      this.runGitCommand(["rev-parse", "--verify", "main"]),
-      this.runGitCommand(["rev-parse", "--verify", "master"]),
-    ]);
-
-    // Prefer symbolic ref (most accurate)
-    if (symbolicRef.status === "fulfilled") {
-      return symbolicRef.value.replace("refs/remotes/origin/", "");
-    }
-
-    // Fallback to main if it exists
-    if (mainExists.status === "fulfilled") {
-      return "main";
-    }
-
-    // Fallback to master if it exists
-    if (masterExists.status === "fulfilled") {
-      return "master";
-    }
-
-    throw new Error(
-      "Cannot determine default branch. No main or master branch found.",
-    );
-  }
-
   async createWorktree(options?: {
     baseBranch?: string;
   }): Promise<WorktreeInfo> {
@@ -348,7 +215,7 @@ export class WorktreeManager {
     // Get default branch in parallel if not provided
     const baseBranchPromise = options?.baseBranch
       ? Promise.resolve(options.baseBranch)
-      : this.getDefaultBranch();
+      : this.gitManager.getDefaultBranch();
     setupPromises.push(baseBranchPromise);
 
     // Wait for all setup to complete
@@ -358,7 +225,7 @@ export class WorktreeManager {
     const worktreeName = await worktreeNamePromise;
     const baseBranch = await baseBranchPromise;
     const worktreePath = this.getWorktreePath(worktreeName);
-    const branchName = makeBranchName(worktreeName);
+    const branchName = worktreeName;
 
     this.logger.info("Creating worktree", {
       worktreeName,
@@ -373,7 +240,7 @@ export class WorktreeManager {
     const gitStart = Date.now();
     if (this.usesExternalPath()) {
       // Use absolute path for external worktrees
-      await this.runGitCommand([
+      await this.gitManager.runGit([
         "worktree",
         "add",
         "--quiet",
@@ -385,7 +252,7 @@ export class WorktreeManager {
     } else {
       // Use relative path from repo root for in-repo worktrees
       const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-      await this.runGitCommand([
+      await this.gitManager.runGit([
         "worktree",
         "add",
         "--quiet",
@@ -414,7 +281,6 @@ export class WorktreeManager {
       branchName,
       baseBranch,
       createdAt,
-      branchOwnership: "created",
     };
   }
 
@@ -431,7 +297,7 @@ export class WorktreeManager {
 
     // Verify the branch exists
     try {
-      await this.runGitCommand(["rev-parse", "--verify", branch]);
+      await this.gitManager.runGit(["rev-parse", "--verify", branch]);
     } catch {
       throw new Error(`Branch '${branch}' does not exist`);
     }
@@ -467,7 +333,7 @@ export class WorktreeManager {
     // Create the worktree WITHOUT -b flag (checkout existing branch)
     const gitStart = Date.now();
     if (this.usesExternalPath()) {
-      await this.runGitCommand([
+      await this.gitManager.runGit([
         "worktree",
         "add",
         "--quiet",
@@ -476,7 +342,7 @@ export class WorktreeManager {
       ]);
     } else {
       const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-      await this.runGitCommand([
+      await this.gitManager.runGit([
         "worktree",
         "add",
         "--quiet",
@@ -501,9 +367,8 @@ export class WorktreeManager {
       worktreePath,
       worktreeName,
       branchName: branch,
-      baseBranch: branch, // For borrowed branches, baseBranch is the same as branchName
+      baseBranch: branch,
       createdAt,
-      branchOwnership: "borrowed",
     };
   }
 
@@ -578,7 +443,7 @@ export class WorktreeManager {
       try {
         await fs.rm(worktreePath, { recursive: true, force: true });
         // Also prune the worktree list
-        await this.runGitCommand(["worktree", "prune"]);
+        await this.gitManager.runGit(["worktree", "prune"]);
         this.logger.info("Worktree cleaned up manually", { worktreePath });
       } catch (cleanupError) {
         this.logger.error("Failed to cleanup worktree", {
@@ -593,7 +458,7 @@ export class WorktreeManager {
   async getWorktreeInfo(worktreePath: string): Promise<WorktreeInfo | null> {
     try {
       // Parse the worktree list to find info about this worktree
-      const output = await this.runGitCommand([
+      const output = await this.gitManager.runGit([
         "worktree",
         "list",
         "--porcelain",
@@ -610,7 +475,7 @@ export class WorktreeManager {
 
   async listWorktrees(): Promise<WorktreeInfo[]> {
     try {
-      const output = await this.runGitCommand([
+      const output = await this.gitManager.runGit([
         "worktree",
         "list",
         "--porcelain",
@@ -653,54 +518,11 @@ export class WorktreeManager {
           branchName,
           baseBranch: "",
           createdAt: "",
-          branchOwnership: "created",
         });
       }
     }
 
     return worktrees;
-  }
-
-  async isWorktree(repoPath: string): Promise<boolean> {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["rev-parse", "--is-inside-work-tree"],
-        { cwd: repoPath },
-      );
-      if (stdout.trim() !== "true") {
-        return false;
-      }
-
-      // Check if there's a .git file (worktrees have a .git file, not a .git directory)
-      const gitPath = path.join(repoPath, ".git");
-      const stat = await fs.stat(gitPath);
-      return stat.isFile(); // Worktrees have .git as a file, main repos have .git as a directory
-    } catch {
-      return false;
-    }
-  }
-
-  async getMainRepoPathFromWorktree(
-    worktreePath: string,
-  ): Promise<string | null> {
-    try {
-      const gitFilePath = path.join(worktreePath, ".git");
-      const content = await fs.readFile(gitFilePath, "utf-8");
-
-      // The .git file in a worktree contains: gitdir: /path/to/main/.git/worktrees/name
-      const match = content.match(/gitdir:\s*(.+)/);
-      if (match) {
-        const gitDir = match[1].trim();
-        // Go up from .git/worktrees/name to get the main repo path
-        // The gitdir points to something like: /main/repo/.git/worktrees/worktree-name
-        const mainGitDir = path.resolve(gitDir, "..", "..", "..");
-        return mainGitDir;
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   async cleanupOrphanedWorktrees(associatedWorktreePaths: string[]): Promise<{

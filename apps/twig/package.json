@@ -23,6 +23,8 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "generate-client": "tsx scripts/update-openapi-client.ts",
     "test": "vitest run",
+    "test:e2e": "playwright test --config=tests/e2e/playwright.config.ts",
+    "test:e2e:headed": "playwright test --config=tests/e2e/playwright.config.ts --headed",
     "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/twig/scripts/patch-electron-name.sh"
   },
   "keywords": [
@@ -42,6 +44,7 @@
     "@electron-forge/publisher-github": "^7.10.2",
     "@electron-forge/shared-types": "^7.10.2",
     "@electron/rebuild": "^4.0.1",
+    "@playwright/test": "^1.42.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -55,6 +58,7 @@
     "electron": "^30.0.0",
     "fuse.js": "^7.1.0",
     "husky": "^9.1.7",
+    "jimp": "^1.6.0",
     "jsdom": "^26.0.0",
     "lint-staged": "^15.5.2",
     "postcss": "^8.4.33",
@@ -128,6 +132,7 @@
     "electron-store": "^11.0.0",
     "file-icon": "^6.0.0",
     "framer-motion": "^12.26.2",
+    "fzf": "^0.5.2",
     "idb-keyval": "^6.2.2",
     "ignore": "^7.0.5",
     "immer": "^11.0.1",

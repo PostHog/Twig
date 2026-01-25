@@ -1,7 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import type { EditorContent } from "@features/message-editor/utils/content";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { get } from "@renderer/di/container";
@@ -80,7 +79,6 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    autoRun: boolean;
     executionMode?: "plan" | "acceptEdits";
   },
 ): TaskCreationInput {
@@ -92,7 +90,6 @@ function prepareTaskInput(
     githubIntegrationId: options.githubIntegrationId,
     workspaceMode: options.workspaceMode,
     branch: options.branch,
-    autoRun: options.autoRun,
     executionMode: options.executionMode,
   };
 }
@@ -122,7 +119,6 @@ export function useTaskCreation({
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
   const { isAuthenticated } = useAuthStore();
-  const { autoRunTasks } = useSettingsStore();
   const { invalidateTasks } = useCreateTask();
   const { isOnline } = useConnectivity();
 
@@ -152,7 +148,6 @@ export function useTaskCreation({
         githubIntegrationId,
         workspaceMode,
         branch,
-        autoRun: autoRunTasks,
         executionMode,
       });
 
@@ -195,7 +190,6 @@ export function useTaskCreation({
     githubIntegrationId,
     workspaceMode,
     branch,
-    autoRunTasks,
     executionMode,
     invalidateTasks,
     navigateToTask,

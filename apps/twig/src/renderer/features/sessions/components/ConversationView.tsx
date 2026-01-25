@@ -358,6 +358,42 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
         preTokens: params.preTokens,
       });
     }
+
+    // Status messages (e.g., compacting in progress)
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/status" &&
+      currentTurn
+    ) {
+      const params = msg.params as {
+        status: string;
+      };
+      currentTurn.items.push({
+        sessionUpdate: "status",
+        status: params.status,
+      });
+    }
+
+    // Task notification messages (background task completion)
+    if (
+      isJsonRpcNotification(msg) &&
+      msg.method === "_posthog/task_notification" &&
+      currentTurn
+    ) {
+      const params = msg.params as {
+        taskId: string;
+        status: "completed" | "failed" | "stopped";
+        summary: string;
+        outputFile: string;
+      };
+      currentTurn.items.push({
+        sessionUpdate: "task_notification",
+        taskId: params.taskId,
+        status: params.status,
+        summary: params.summary,
+        outputFile: params.outputFile,
+      });
+    }
   }
 
   return items;

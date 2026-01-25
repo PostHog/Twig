@@ -180,10 +180,19 @@ export class OAuthService {
       if (!response.ok) {
         // 401/403 are auth errors - the token is invalid
         const isAuthError = response.status === 401 || response.status === 403;
+        // 5xx are server errors - should be retried
+        const isServerError = response.status >= 500;
+        log.warn(
+          `Token refresh failed: ${response.status} ${response.statusText}`,
+        );
         return {
           success: false,
-          error: `Token refresh failed: ${response.statusText}`,
-          errorCode: isAuthError ? "auth_error" : "unknown_error",
+          error: `Token refresh failed: ${response.status} ${response.statusText}`,
+          errorCode: isAuthError
+            ? "auth_error"
+            : isServerError
+              ? "server_error"
+              : "unknown_error",
         };
       }
 

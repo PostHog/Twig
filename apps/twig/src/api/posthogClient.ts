@@ -1,4 +1,3 @@
-import type { AgentEvent } from "@posthog/agent";
 import { logger } from "@renderer/lib/logger";
 import type { Task, TaskRun } from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
@@ -258,7 +257,7 @@ export class PostHogAPIClient {
     }
   }
 
-  async getTaskLogs(taskId: string): Promise<AgentEvent[]> {
+  async getTaskLogs(taskId: string): Promise<StoredLogEntry[]> {
     try {
       const task = (await this.getTask(taskId)) as unknown as Task;
       const logUrl = task?.latest_run?.log_url;
@@ -284,7 +283,7 @@ export class PostHogAPIClient {
       return content
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as AgentEvent);
+        .map((line) => JSON.parse(line) as StoredLogEntry);
     } catch (err) {
       log.warn("Failed to fetch task logs from latest run", err);
       return [];

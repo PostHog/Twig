@@ -28,7 +28,6 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "pnpm exec tsc --noEmit",
-    "example": "tsx example.ts",
     "prepublishOnly": "pnpm run build"
   },
   "engines": {

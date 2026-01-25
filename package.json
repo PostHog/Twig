@@ -20,6 +20,8 @@
     "test": "turbo test",
     "test:bun": "turbo test --filter=@twig/core --filter=@twig/cli",
     "test:vitest": "pnpm --filter twig --filter @posthog/electron-trpc test",
+    "test:e2e": "pnpm --filter twig test:e2e",
+    "test:e2e:headed": "pnpm --filter twig test:e2e:headed",
     "clean": "pnpm -r clean",
     "knip": "knip",
     "prepare": "husky",

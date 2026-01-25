@@ -182,54 +182,6 @@ function subscribeToChannel(taskRunId: string) {
                   log.info("Session mode updated", { taskRunId, newMode });
                 }
               }
-
-              // Handle status updates (e.g., compacting)
-              // Note: The event is already pushed at line 143 via the raw payload,
-              // so we only log here - no need to push a duplicate synthetic event
-              if (params?.update?.sessionUpdate === "status") {
-                const statusUpdate = params.update as unknown as {
-                  sessionUpdate: "status";
-                  status: string;
-                };
-                log.info("Received status update", {
-                  taskRunId,
-                  status: statusUpdate.status,
-                });
-              }
-
-              // Handle error notifications (e.g., context window exceeded)
-              // Note: The event is already pushed at line 143 via the raw payload,
-              // so we only log here - no need to push a duplicate synthetic event
-              if (params?.update?.sessionUpdate === "error") {
-                const errorUpdate = params.update as unknown as {
-                  sessionUpdate: "error";
-                  errorType: string;
-                  message: string;
-                };
-                log.error("Received error notification", {
-                  taskRunId,
-                  errorType: errorUpdate.errorType,
-                  message: errorUpdate.message,
-                });
-              }
-
-              // Handle task notifications (background task completion)
-              // Note: The event is already pushed at line 143 via the raw payload,
-              // so we only log here - no need to push a duplicate synthetic event
-              if (params?.update?.sessionUpdate === "task_notification") {
-                const taskUpdate = params.update as unknown as {
-                  sessionUpdate: "task_notification";
-                  taskId: string;
-                  status: "completed" | "failed" | "stopped";
-                  summary: string;
-                  outputFile: string;
-                };
-                log.info("Received task notification", {
-                  taskRunId,
-                  taskId: taskUpdate.taskId,
-                  status: taskUpdate.status,
-                });
-              }
             }
           }
         });
@@ -1418,30 +1370,3 @@ export const useCurrentModeForTask = (
     return session?.currentMode;
   });
 };
-
-// Token refresh subscription
-let lastKnownToken: string | null = null;
-useAuthStore.subscribe(
-  (state) => state.oauthAccessToken,
-  (newToken) => {
-    if (!newToken || newToken === lastKnownToken) return;
-    lastKnownToken = newToken;
-
-    const sessions = useStore.getState().sessions;
-    for (const session of Object.values(sessions)) {
-      if (session.status === "connected" && !session.isCloud) {
-        trpcVanilla.agent.refreshToken
-          .mutate({
-            taskRunId: session.taskRunId,
-            newToken,
-          })
-          .catch((err) => {
-            log.warn("Failed to update session token", {
-              taskRunId: session.taskRunId,
-              error: err,
-            });
-          });
-      }
-    }
-  },
-);

@@ -33,6 +33,7 @@ import { setMainWindowGetter } from "./trpc/context.js";
 import { trpcRouter } from "./trpc/index.js";
 
 import "./services/index.js";
+import type { AgentService } from "./services/agent/service.js";
 import type { AppLifecycleService } from "./services/app-lifecycle/service.js";
 import type { DeepLinkService } from "./services/deep-link/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
@@ -255,6 +256,19 @@ function createWindow(): void {
               label: "Clear application storage",
               click: () => {
                 container.get<UIService>(MAIN_TOKENS.UIService).clearStorage();
+              },
+            },
+            {
+              label: "Mark all agent sessions for recreation",
+              click: () => {
+                const count = container
+                  .get<AgentService>(MAIN_TOKENS.AgentService)
+                  .markAllSessionsForRecreation();
+                dialog.showMessageBox({
+                  type: "info",
+                  title: "Sessions Marked",
+                  message: `Marked ${count} session(s) for recreation.\n\nThey will be recreated on the next prompt.`,
+                });
               },
             },
           ],

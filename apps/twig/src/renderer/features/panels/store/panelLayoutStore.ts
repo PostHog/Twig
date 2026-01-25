@@ -35,9 +35,12 @@ function getFileExtension(filePath: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : "";
 }
 
+const MAX_RECENT_FILES = 10;
+
 export interface TaskLayout {
   panelTree: PanelNode;
   openFiles: string[];
+  recentFiles: string[];
   draggingTabId: string | null;
   draggingTabPanelId: string | null;
   focusedPanelId: string | null;
@@ -282,6 +285,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             [taskId]: {
               panelTree: createDefaultPanelTree(terminalLayoutMode),
               openFiles: [],
+              recentFiles: [],
               openArtifacts: [],
               draggingTabId: null,
               draggingTabPanelId: null,
@@ -293,7 +297,24 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
-        set((state) => openTab(state, taskId, tabId, asPreview));
+        set((state) => {
+          const afterOpenTab = openTab(state, taskId, tabId, asPreview);
+          const layout = afterOpenTab.taskLayouts[taskId];
+          if (!layout) return afterOpenTab;
+
+          const recentFiles = [
+            filePath,
+            ...(layout.recentFiles || []).filter((f) => f !== filePath),
+          ].slice(0, MAX_RECENT_FILES);
+
+          return {
+            ...afterOpenTab,
+            taskLayouts: {
+              ...afterOpenTab.taskLayouts,
+              [taskId]: { ...layout, recentFiles },
+            },
+          };
+        });
 
         track(ANALYTICS_EVENTS.FILE_OPENED, {
           file_extension: getFileExtension(filePath),

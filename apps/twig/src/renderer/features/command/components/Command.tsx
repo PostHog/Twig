@@ -1,5 +1,6 @@
 import { Command as CmdkCommand } from "cmdk";
 import React from "react";
+import "./Command.css";
 
 interface CommandRootProps extends React.ComponentProps<typeof CmdkCommand> {
   className?: string;
@@ -122,8 +123,36 @@ const CommandEmpty = React.forwardRef<
 
 CommandEmpty.displayName = "CommandEmpty";
 
+interface CommandDialogProps
+  extends React.ComponentProps<typeof CmdkCommand.Dialog> {
+  className?: string;
+  contentClassName?: string;
+}
+
+const CommandDialog = ({
+  className,
+  contentClassName,
+  children,
+  ...props
+}: CommandDialogProps) => {
+  return (
+    <CmdkCommand.Dialog
+      label="Command menu"
+      className={className}
+      contentClassName={`command-dialog-content ${contentClassName || ""}`}
+      overlayClassName="command-dialog-overlay"
+      {...props}
+    >
+      {children}
+    </CmdkCommand.Dialog>
+  );
+};
+
+CommandDialog.displayName = "CommandDialog";
+
 export const Command = {
   Root: CommandRoot,
+  Dialog: CommandDialog,
   Input: CommandInput,
   List: CommandList,
   Item: CommandItem,

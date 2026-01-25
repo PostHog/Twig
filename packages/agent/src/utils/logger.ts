@@ -1,15 +1,5 @@
 import type { LogLevel as LogLevelType, OnLogCallback } from "../types.js";
 
-/**
- * Simple logger utility with configurable debug mode and external log forwarding
- */
-export enum LogLevel {
-  ERROR = 0,
-  WARN = 1,
-  INFO = 2,
-  DEBUG = 3,
-}
-
 export interface LoggerConfig {
   debug?: boolean;
   prefix?: string;
@@ -28,14 +18,6 @@ export class Logger {
     this.prefix = config.prefix ?? "[PostHog Agent]";
     this.scope = config.scope ?? "agent";
     this.onLog = config.onLog;
-  }
-
-  setDebug(enabled: boolean) {
-    this.debugEnabled = enabled;
-  }
-
-  setOnLog(onLog: OnLogCallback | undefined) {
-    this.onLog = onLog;
   }
 
   private formatMessage(
@@ -87,18 +69,6 @@ export class Logger {
     this.emitLog("debug", message, data);
   }
 
-  log(level: LogLevelType, message: string, data?: unknown, scope?: string) {
-    const originalScope = this.scope;
-    if (scope) {
-      this.scope = scope;
-    }
-    this.emitLog(level, message, data);
-    this.scope = originalScope;
-  }
-
-  /**
-   * Create a child logger with additional prefix and scope
-   */
   child(childPrefix: string): Logger {
     return new Logger({
       debug: this.debugEnabled,

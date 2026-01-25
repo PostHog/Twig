@@ -43,7 +43,6 @@ export const startSessionInput = z.object({
   model: z.string().optional(),
   executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
-  createPR: z.boolean().optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
@@ -118,10 +117,9 @@ export const reconnectSessionInput = z.object({
 
 export type ReconnectSessionInput = z.infer<typeof reconnectSessionInput>;
 
-// Token refresh input
-export const tokenRefreshInput = z.object({
-  taskRunId: z.string(),
-  newToken: z.string(),
+// Token update input - updates the global token for all agent operations
+export const tokenUpdateInput = z.object({
+  token: z.string(),
 });
 
 // Set model input

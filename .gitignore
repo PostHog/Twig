@@ -41,3 +41,8 @@ AGENTS.md
 
 # Session store used for example-client.ts
 .session-store.json
+
+# Playwright
+playwright-results/
+playwright-report/
+test-results/

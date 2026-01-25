@@ -1,4 +1,4 @@
-import { CheckCircle, Spinner } from "@phosphor-icons/react";
+import { Spinner } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 
 interface StatusNotificationViewProps {
@@ -12,16 +12,7 @@ export function StatusNotificationView({
 }: StatusNotificationViewProps) {
   if (status === "compacting") {
     if (isComplete) {
-      return (
-        <Box className="my-1 border-green-6 border-l-2 py-1 pl-3 dark:border-green-8">
-          <Flex align="center" gap="2">
-            <CheckCircle size={14} weight="fill" className="text-green-9" />
-            <Text size="1" className="text-gray-11">
-              Compacting complete
-            </Text>
-          </Flex>
-        </Box>
-      );
+      return null;
     }
     return (
       <Box className="my-1 border-blue-6 border-l-2 py-1 pl-3 dark:border-blue-8">

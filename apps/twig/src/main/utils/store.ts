@@ -55,7 +55,7 @@ const schema = {
         taskId: { type: "string" as const },
         folderId: { type: "string" as const },
         mode: { type: "string" as const },
-        worktree: { type: "string" as const },
+        worktree: {},
         branchName: { type: "string" as const },
       },
       required: ["taskId", "folderId", "mode"],
