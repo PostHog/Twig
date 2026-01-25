@@ -206,6 +206,31 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   }
 
   /**
+   * Flag to force invalid sdkSessionId on next reconnect (dev tool for testing error handling).
+   */
+  private forceInvalidSdkSessionId = false;
+
+  /**
+   * Enable forcing an invalid sdkSessionId on the next reconnect.
+   * This triggers the "No conversation found" error for testing.
+   */
+  public setForceInvalidSdkSessionId(enabled: boolean): void {
+    this.forceInvalidSdkSessionId = enabled;
+    log.info("Force invalid sdkSessionId", { enabled });
+  }
+
+  /**
+   * Check and consume the forceInvalidSdkSessionId flag.
+   */
+  private consumeForceInvalidSdkSessionId(): boolean {
+    if (this.forceInvalidSdkSessionId) {
+      this.forceInvalidSdkSessionId = false;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Respond to a pending permission request from the UI.
    * This resolves the promise that the agent is waiting on.
    */
@@ -384,22 +409,44 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       const mcpServers = this.buildMcpServers(credentials);
 
       if (isReconnect) {
-        await connection.extMethod("_posthog/session/resume", {
-          sessionId: taskRunId,
-          cwd: repoPath,
-          mcpServers,
-          _meta: {
-            ...(logUrl && {
-              persistence: { taskId, runId: taskRunId, logUrl },
-            }),
-            ...(sdkSessionId && { sdkSessionId }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
-              },
-            }),
-          },
-        });
+        // Dev tool: force invalid sdkSessionId to test error handling
+        const effectiveSdkSessionId = this.consumeForceInvalidSdkSessionId()
+          ? "00000000-0000-0000-0000-000000000000"
+          : sdkSessionId;
+
+        if (effectiveSdkSessionId !== sdkSessionId) {
+          log.warn("Using forced invalid sdkSessionId for testing", {
+            original: sdkSessionId,
+            forced: effectiveSdkSessionId,
+          });
+        }
+
+        try {
+          await connection.extMethod("_posthog/session/resume", {
+            sessionId: taskRunId,
+            cwd: repoPath,
+            mcpServers,
+            _meta: {
+              ...(logUrl && {
+                persistence: { taskId, runId: taskRunId, logUrl },
+              }),
+              ...(effectiveSdkSessionId && {
+                sdkSessionId: effectiveSdkSessionId,
+              }),
+              ...(additionalDirectories?.length && {
+                claudeCode: {
+                  options: { additionalDirectories },
+                },
+              }),
+            },
+          });
+        } catch (resumeError) {
+          log.error("Failed to resume session via extMethod", {
+            taskRunId,
+            error: resumeError,
+          });
+          throw resumeError;
+        }
       } else {
         await connection.newSession({
           cwd: repoPath,

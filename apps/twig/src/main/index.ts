@@ -271,6 +271,20 @@ function createWindow(): void {
                 });
               },
             },
+            {
+              label: "Force invalid SDK session on next reconnect",
+              click: () => {
+                container
+                  .get<AgentService>(MAIN_TOKENS.AgentService)
+                  .setForceInvalidSdkSessionId(true);
+                dialog.showMessageBox({
+                  type: "info",
+                  title: "Flag Set",
+                  message:
+                    "Next session reconnect will use an invalid sdkSessionId.\n\nNavigate away and back to a task to trigger the error.",
+                });
+              },
+            },
           ],
         },
       ],
