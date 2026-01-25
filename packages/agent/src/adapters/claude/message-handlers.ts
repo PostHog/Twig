@@ -35,23 +35,61 @@ export async function handleSystemMessage(
   message: any,
   context: MessageHandlerContext,
 ): Promise<void> {
+  const { session, sessionId, client, logger } = context;
+
   switch (message.subtype) {
     case "init":
       if (message.session_id) {
-        const session = context.session;
         if (session && !session.sdkSessionId) {
           session.sdkSessionId = message.session_id;
-          context.client.extNotification("_posthog/sdk_session", {
-            sessionId: context.sessionId,
+          await client.extNotification("_posthog/sdk_session", {
+            sessionId,
             sdkSessionId: message.session_id,
           });
         }
       }
       break;
     case "compact_boundary":
-    case "hook_response":
-    case "status":
+      await client.extNotification("_posthog/compact_boundary", {
+        sessionId,
+        trigger: message.compact_metadata.trigger,
+        preTokens: message.compact_metadata.pre_tokens,
+      });
       break;
+    case "hook_response":
+      // Hook responses are informational, log but don't process further
+      logger.info("Hook response received", {
+        hookName: message.hook_name,
+        hookEvent: message.hook_event,
+      });
+      break;
+    case "status":
+      // Handle status updates (e.g., compacting in progress)
+      if (message.status === "compacting") {
+        logger.info("Session compacting started", { sessionId });
+        await client.extNotification("_posthog/status", {
+          sessionId,
+          status: "compacting",
+        });
+      }
+      break;
+    case "task_notification": {
+      // Handle task completion notifications from the new task system (SDK 0.2.x)
+      logger.info("Task notification received", {
+        sessionId,
+        taskId: message.task_id,
+        status: message.status,
+        summary: message.summary,
+      });
+      await client.extNotification("_posthog/task_notification", {
+        sessionId,
+        taskId: message.task_id,
+        status: message.status,
+        summary: message.summary,
+        outputFile: message.output_file,
+      });
+      break;
+    }
     default:
       break;
   }

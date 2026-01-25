@@ -148,15 +148,25 @@ function subscribeToChannel(taskRunId: string) {
               session.isPromptPending = false;
             }
 
-            // Handle mode updates from ExitPlanMode approval
+            // Handle session/update notifications
             if (
               "method" in msg &&
               msg.method === "session/update" &&
               "params" in msg
             ) {
               const params = msg.params as {
-                update?: { sessionUpdate?: string; currentModeId?: string };
+                update?: {
+                  sessionUpdate?: string;
+                  currentModeId?: string;
+                  inputTokens?: number;
+                  outputTokens?: number;
+                  cacheReadTokens?: number;
+                  cacheCreationTokens?: number;
+                  contextWindow?: number;
+                };
               };
+
+              // Handle mode updates from ExitPlanMode approval
               if (
                 params?.update?.sessionUpdate === "current_mode_update" &&
                 params.update.currentModeId

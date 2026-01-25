@@ -1,8 +1,12 @@
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 
 import { AgentMessage } from "./AgentMessage";
+import { CompactBoundaryView } from "./CompactBoundaryView";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { CurrentModeView } from "./CurrentModeView";
+import { ErrorNotificationView } from "./ErrorNotificationView";
+import { StatusNotificationView } from "./StatusNotificationView";
+import { TaskNotificationView } from "./TaskNotificationView";
 import { ThoughtView } from "./ThoughtView";
 import { ToolCallBlock } from "./ToolCallBlock";
 
@@ -13,6 +17,28 @@ export type RenderItem =
       level: string;
       message: string;
       timestamp?: string;
+    }
+  | {
+      sessionUpdate: "compact_boundary";
+      trigger: "manual" | "auto";
+      preTokens: number;
+    }
+  | {
+      sessionUpdate: "status";
+      status: string;
+      isComplete?: boolean;
+    }
+  | {
+      sessionUpdate: "error";
+      errorType: string;
+      message: string;
+    }
+  | {
+      sessionUpdate: "task_notification";
+      taskId: string;
+      status: "completed" | "failed" | "stopped";
+      summary: string;
+      outputFile: string;
     };
 
 interface SessionUpdateViewProps {
@@ -62,6 +88,31 @@ export function SessionUpdateView({
           message={item.message}
           timestamp={item.timestamp}
         />
+      );
+    case "compact_boundary":
+      return (
+        <CompactBoundaryView
+          trigger={item.trigger}
+          preTokens={item.preTokens}
+        />
+      );
+    case "status":
+      return (
+        <StatusNotificationView
+          status={item.status}
+          isComplete={item.isComplete}
+        />
+      );
+    case "error":
+      return (
+        <ErrorNotificationView
+          errorType={item.errorType}
+          message={item.message}
+        />
+      );
+    case "task_notification":
+      return (
+        <TaskNotificationView status={item.status} summary={item.summary} />
       );
   }
 }
