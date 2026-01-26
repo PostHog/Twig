@@ -94,7 +94,7 @@ interface SessionActions {
     customInput?: string,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
-  clearSessionError: (taskId: string) => void;
+  clearSessionError: (taskId: string) => Promise<void>;
 }
 
 interface AuthCredentials {
@@ -651,38 +651,52 @@ const useStore = create<SessionStore>()(
       addSession(session);
       subscribeToChannel(taskRunId);
 
-      const result = await trpcVanilla.agent.reconnect.mutate({
-        taskId,
-        taskRunId,
-        repoPath,
-        apiKey: auth.apiKey,
-        apiHost: auth.apiHost,
-        projectId: auth.projectId,
-        logUrl,
-        sdkSessionId,
-      });
+      try {
+        const result = await trpcVanilla.agent.reconnect.mutate({
+          taskId,
+          taskRunId,
+          repoPath,
+          apiKey: auth.apiKey,
+          apiHost: auth.apiHost,
+          projectId: auth.projectId,
+          logUrl,
+          sdkSessionId,
+        });
 
-      if (result) {
-        updateSession(taskRunId, { status: "connected" });
-        if (persistedMode) {
-          try {
-            await trpcVanilla.agent.setMode.mutate({
-              sessionId: taskRunId,
-              modeId: persistedMode,
-            });
-          } catch (error) {
-            log.warn("Failed to restore persisted mode after reconnect", {
-              taskId,
-              error,
-            });
+        if (result) {
+          updateSession(taskRunId, { status: "connected" });
+          if (persistedMode) {
+            try {
+              await trpcVanilla.agent.setMode.mutate({
+                sessionId: taskRunId,
+                modeId: persistedMode,
+              });
+            } catch (error) {
+              log.warn("Failed to restore persisted mode after reconnect", {
+                taskId,
+                error,
+              });
+            }
           }
+        } else {
+          unsubscribeFromChannel(taskRunId);
+          updateSession(taskRunId, {
+            status: "error",
+            errorMessage:
+              "Failed to reconnect to the agent. Please restart the task.",
+          });
         }
-      } else {
+      } catch (error) {
+        // Handle reconnection errors - session already added, just update status
         unsubscribeFromChannel(taskRunId);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        log.error("Failed to reconnect to session", { taskId, error });
         updateSession(taskRunId, {
           status: "error",
           errorMessage:
-            "Failed to reconnect to the agent. Please restart the task.",
+            errorMessage ||
+            "Failed to reconnect to the agent. Please try again.",
         });
       }
     };
@@ -790,11 +804,51 @@ const useStore = create<SessionStore>()(
           sessionId: session.taskRunId,
           prompt: blocks,
         });
+      } catch (error) {
+        // Check if this is a fatal error that means the session is dead
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const errorDetails = (error as { data?: { details?: string } }).data
+          ?.details;
+
+        const isFatalError =
+          errorMessage.includes("Internal error") ||
+          errorDetails?.includes("process exited") ||
+          errorDetails?.includes("Session did not end") ||
+          errorDetails?.includes("not ready for writing") ||
+          errorDetails?.includes("Session not found");
+
+        if (isFatalError) {
+          log.error("Fatal prompt error, setting session to error state", {
+            taskRunId: session.taskRunId,
+            errorMessage,
+            errorDetails,
+          });
+          updateSession(session.taskRunId, {
+            status: "error",
+            errorMessage:
+              errorDetails ||
+              "Session connection lost. Please retry or start a new task.",
+            isPromptPending: false,
+            promptStartedAt: null,
+          });
+        } else {
+          updateSession(session.taskRunId, {
+            isPromptPending: false,
+            promptStartedAt: null,
+          });
+        }
+
+        throw error;
       } finally {
-        updateSession(session.taskRunId, {
-          isPromptPending: false,
-          promptStartedAt: null,
-        });
+        // Only clear pending state if not already done in catch
+        const currentSession = get().sessions[session.taskRunId];
+        if (currentSession?.isPromptPending) {
+          updateSession(session.taskRunId, {
+            isPromptPending: false,
+            promptStartedAt: null,
+          });
+        }
       }
     };
 
@@ -959,6 +1013,22 @@ const useStore = create<SessionStore>()(
 
           const session = getSessionByTaskId(taskId);
           if (!session) throw new Error("No active session for task");
+
+          // Don't send if session is not connected
+          if (session.status !== "connected") {
+            if (session.status === "error") {
+              throw new Error(
+                session.errorMessage ||
+                  "Session is in error state. Please retry or start a new task.",
+              );
+            }
+            if (session.status === "connecting") {
+              throw new Error(
+                "Session is still connecting. Please wait and try again.",
+              );
+            }
+            throw new Error(`Session is not ready (status: ${session.status})`);
+          }
 
           let blocks: ContentBlock[] =
             typeof prompt === "string"
@@ -1234,9 +1304,26 @@ const useStore = create<SessionStore>()(
           }
         },
 
-        clearSessionError: (taskId: string) => {
+        clearSessionError: async (taskId: string) => {
           const session = getSessionByTaskId(taskId);
           if (session) {
+            // Cancel the agent session on the main process to clean up the dead subprocess
+            try {
+              await trpcVanilla.agent.cancel.mutate({
+                sessionId: session.taskRunId,
+              });
+              log.info("Cancelled agent session for retry", {
+                taskId,
+                taskRunId: session.taskRunId,
+              });
+            } catch (error) {
+              // Ignore errors - session may already be cleaned up
+              log.warn("Failed to cancel agent session during error clear", {
+                taskId,
+                error,
+              });
+            }
+            unsubscribeFromChannel(session.taskRunId);
             removeSession(session.taskRunId);
           }
           connectAttempts.delete(taskId);

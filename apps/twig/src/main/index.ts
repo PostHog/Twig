@@ -431,23 +431,10 @@ process.on("SIGTERM", () => handleShutdownSignal("SIGTERM"));
 process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
-// Handle uncaught exceptions to attempt cleanup before crash
-process.on("uncaughtException", async (_error) => {
-  try {
-    const lifecycleService = container.get<AppLifecycleService>(
-      MAIN_TOKENS.AppLifecycleService,
-    );
-    await lifecycleService.shutdown();
-  } catch (_cleanupErr) {}
-  process.exit(1);
+process.on("uncaughtException", (_error) => {
+  // TODO: Report to error tracking service
 });
 
-process.on("unhandledRejection", async (_reason) => {
-  try {
-    const lifecycleService = container.get<AppLifecycleService>(
-      MAIN_TOKENS.AppLifecycleService,
-    );
-    await lifecycleService.shutdown();
-  } catch (_cleanupErr) {}
-  process.exit(1);
+process.on("unhandledRejection", (_reason, _promise) => {
+  // TODO: Report to error tracking service
 });
