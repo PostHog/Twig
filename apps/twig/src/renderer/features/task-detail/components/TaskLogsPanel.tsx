@@ -137,9 +137,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const { appendUserShellExecute } = useSessionActions();
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = useCallback(async () => {
     if (!repoPath) return;
-    clearSessionError(taskId);
+    await clearSessionError(taskId);
     connectToTask({ task, repoPath });
   }, [taskId, repoPath, task, clearSessionError, connectToTask]);
 

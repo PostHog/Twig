@@ -94,7 +94,7 @@ interface SessionActions {
     customInput?: string,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
-  clearSessionError: (taskId: string) => void;
+  clearSessionError: (taskId: string) => Promise<void>;
 }
 
 interface AuthCredentials {
@@ -1303,9 +1303,26 @@ const useStore = create<SessionStore>()(
           }
         },
 
-        clearSessionError: (taskId: string) => {
+        clearSessionError: async (taskId: string) => {
           const session = getSessionByTaskId(taskId);
           if (session) {
+            // Cancel the agent session on the main process to clean up the dead subprocess
+            try {
+              await trpcVanilla.agent.cancel.mutate({
+                sessionId: session.taskRunId,
+              });
+              log.info("Cancelled agent session for retry", {
+                taskId,
+                taskRunId: session.taskRunId,
+              });
+            } catch (error) {
+              // Ignore errors - session may already be cleaned up
+              log.warn("Failed to cancel agent session during error clear", {
+                taskId,
+                error,
+              });
+            }
+            unsubscribeFromChannel(session.taskRunId);
             removeSession(session.taskRunId);
           }
           connectAttempts.delete(taskId);
