@@ -695,7 +695,8 @@ const useStore = create<SessionStore>()(
         updateSession(taskRunId, {
           status: "error",
           errorMessage:
-            errorMessage || "Failed to reconnect to the agent. Please try again.",
+            errorMessage ||
+            "Failed to reconnect to the agent. Please try again.",
         });
       }
     };

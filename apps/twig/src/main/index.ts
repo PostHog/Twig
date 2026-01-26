@@ -445,12 +445,10 @@ process.on("SIGTERM", () => handleShutdownSignal("SIGTERM"));
 process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error);
+process.on("uncaughtException", (_error) => {
   // TODO: Report to error tracking service
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled rejection at:", promise, "reason:", reason);
+process.on("unhandledRejection", (_reason, _promise) => {
   // TODO: Report to error tracking service
 });
