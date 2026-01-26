@@ -366,9 +366,9 @@ export class OAuthService {
       error: "Authorization failed",
     };
     const messages = {
-      success: "You can close this window and return to Array",
-      cancelled: "You can close this window and return to Array",
-      error: "You can close this window and return to Array",
+      success: "You can close this window and return to Twig.",
+      cancelled: "You can close this window and return to Twig.",
+      error: "You can close this window and return to Twig.",
     };
 
     return `<!DOCTYPE html>
