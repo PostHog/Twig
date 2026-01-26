@@ -8,6 +8,8 @@ import {
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { useState } from "react";
 
+const ANSI_REGEX = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-9;]*m`, "g");
+
 interface ExecuteToolViewProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
@@ -45,7 +47,7 @@ export function ExecuteToolView({
   const isIncomplete = status === "pending" || status === "in_progress";
   const isLoading = isIncomplete && !turnCancelled;
 
-  const output = getOutputFromContent(content) ?? "";
+  const output = (getOutputFromContent(content) ?? "").replace(ANSI_REGEX, "");
   const hasOutput = output.trim().length > 0;
   const outputLines = output.split("\n");
   const isCollapsible = outputLines.length > COLLAPSED_LINE_COUNT;
