@@ -76,7 +76,7 @@
       }
     },
     {
-      // Disallow console.* in array and agent source code - use logger instead
+      // Disallow console.* in twig and agent source code - use logger instead
       "includes": [
         "apps/twig/src/**/*.ts",
         "apps/twig/src/**/*.tsx",

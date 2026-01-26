@@ -28,7 +28,7 @@ export function ConnectivityPrompt({
           </Flex>
           <Dialog.Description>
             <Text size="2" color="gray">
-              Array requires an internet connection to use AI features. Check
+              Twig requires an internet connection to use AI features. Check
               your connection and try again.
             </Text>
           </Dialog.Description>

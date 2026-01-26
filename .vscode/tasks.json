@@ -38,7 +38,7 @@
     {
       "label": "start-electron-with-debug",
       "type": "shell",
-      "command": "pnpm --filter array start:debug",
+      "command": "pnpm --filter twig start:debug",
       "isBackground": true,
       "problemMatcher": {
         "pattern": {
@@ -56,7 +56,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "array"
+        "group": "twig"
       },
       "options": {
         "env": {

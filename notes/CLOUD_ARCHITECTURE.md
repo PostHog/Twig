@@ -24,7 +24,7 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 
 ### Key Goals
 
-1. **Local-first feel** — Edit in Array or your IDE, changes sync automatically
+1. **Local-first feel** — Edit in Twig or your IDE, changes sync automatically
 2. **Survive disconnection** — Close your laptop, agent keeps working
 3. **Seamless resume** — Reconnect and catch up instantly
 4. **Multiple clients** — Laptop, phone, Slack, API—all work
@@ -37,7 +37,7 @@ Most cloud agent implementations force you to choose one or the other. The goal 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                              CLIENTS                                     │
-│    Array Desktop    │    Slack Bot    │    API    │    Mobile App       │
+│    Twig Desktop    │    Slack Bot    │    API    │    Mobile App       │
 └─────────────────────────────────────────────────────────────────────────┘
                                    │
                                    │ Streamable HTTP (SSE + POST)
@@ -308,9 +308,9 @@ class CloudSessionWorkflow:
 
 ---
 
-## Array Integration
+## Twig Integration
 
-In Array, the `AgentService` (main process) talks to agents through a connection. For cloud mode, we swap the transport without changing the rest of the app.
+In Twig, the `AgentService` (main process) talks to agents through a connection. For cloud mode, we swap the transport without changing the rest of the app.
 
 ```
 Renderer ──tRPC──► AgentService ──► Connection
@@ -335,9 +335,9 @@ interface AgentConnection {
 
 **Key files:**
 
-- `apps/array/src/main/services/agent/service.ts` — AgentService, picks connection type
-- `apps/array/src/main/services/agent/local-connection.ts` — Current ACP/SDK logic (extract)
-- `apps/array/src/main/services/agent/cloud-connection.ts` — New, ~200 lines
+- `apps/twig/src/main/services/agent/service.ts` — AgentService, picks connection type
+- `apps/twig/src/main/services/agent/local-connection.ts` — Current ACP/SDK logic (extract)
+- `apps/twig/src/main/services/agent/cloud-connection.ts` — New, ~200 lines
 
 ---
 

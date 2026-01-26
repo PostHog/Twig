@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Array (Main Process)",
+      "name": "Debug Twig (Main Process)",
       "type": "node",
       "request": "attach",
       "port": 5858,
@@ -15,11 +15,11 @@
       "remoteRoot": "${workspaceFolder}"
     },
     {
-      "name": "Debug Array (Renderer Process)",
+      "name": "Debug Twig (Renderer Process)",
       "type": "chrome",
       "request": "attach",
       "port": 9222,
-      "webRoot": "${workspaceFolder}/apps/array",
+      "webRoot": "${workspaceFolder}/apps/twig",
       "timeout": 60000,
       "sourceMaps": true,
       "sourceMapPathOverrides": {
@@ -32,10 +32,10 @@
   ],
   "compounds": [
     {
-      "name": "Debug Array (Main + Renderer)",
+      "name": "Debug Twig (Main + Renderer)",
       "configurations": [
-        "Debug Array (Main Process)",
-        "Debug Array (Renderer Process)"
+        "Debug Twig (Main Process)",
+        "Debug Twig (Renderer Process)"
       ],
       "preLaunchTask": "start-dev-with-debug",
       "stopAll": true
