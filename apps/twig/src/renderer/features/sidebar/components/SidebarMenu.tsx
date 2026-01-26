@@ -6,7 +6,7 @@ import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
@@ -35,6 +35,22 @@ function SidebarMenuComponent() {
     currentUser,
   });
 
+  const previousTaskIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentTaskId =
+      view.type === "task-detail" && view.data ? view.data.id : null;
+
+    if (
+      previousTaskIdRef.current &&
+      previousTaskIdRef.current !== currentTaskId
+    ) {
+      markAsViewed(previousTaskIdRef.current);
+    }
+
+    previousTaskIdRef.current = currentTaskId;
+  }, [view, markAsViewed]);
+
   const taskMap = new Map<string, Task>();
   for (const task of allTasks) {
     taskMap.set(task.id, task);
@@ -47,7 +63,6 @@ function SidebarMenuComponent() {
   const handleTaskClick = (taskId: string) => {
     const task = taskMap.get(taskId);
     if (task) {
-      markAsViewed(taskId);
       navigateToTask(task);
     }
   };

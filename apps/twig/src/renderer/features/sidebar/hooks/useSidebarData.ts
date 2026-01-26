@@ -44,6 +44,7 @@ export interface TaskData {
   isGenerating?: boolean;
   isUnread?: boolean;
   isPinned?: boolean;
+  needsPermission?: boolean;
 }
 
 export interface HistoryTaskData extends TaskData {
@@ -196,7 +197,7 @@ function buildHistoryData(
   lastViewedAt: Record<string, number>,
   localActivityAt: Record<string, number>,
   pinnedTaskIds: Set<string>,
-  activeTaskId: string | null,
+  _activeTaskId: string | null,
   visibleCount: number,
 ): HistoryData {
   const getSessionForTask = (taskId: string): AgentSession | undefined => {
@@ -218,11 +219,8 @@ function buildHistoryData(
       : apiUpdatedAt;
 
     const taskLastViewedAt = lastViewedAt[task.id];
-    const isCurrentlyViewing = activeTaskId === task.id;
     const isUnread =
-      !isCurrentlyViewing &&
-      taskLastViewedAt !== undefined &&
-      lastActivityAt > taskLastViewedAt;
+      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
 
     return {
       id: task.id,
@@ -232,6 +230,7 @@ function buildHistoryData(
       isGenerating: session?.isPromptPending ?? false,
       isUnread,
       isPinned: pinnedTaskIds.has(task.id),
+      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
       folderName: folder?.name,
     };
   });
@@ -239,13 +238,13 @@ function buildHistoryData(
   // Filter out pinned tasks - they will be shown in their own section
   const unpinnedTasks = historyTasks.filter((t) => !pinnedTaskIds.has(t.id));
 
-  // Partition into active (unread) and inactive tasks
+  // Partition into active (unread or needs permission) and inactive tasks
   const activeTasks = unpinnedTasks
-    .filter((t) => t.isUnread)
+    .filter((t) => t.isUnread || t.needsPermission)
     .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
 
   const inactiveTasks = unpinnedTasks
-    .filter((t) => !t.isUnread)
+    .filter((t) => !t.isUnread && !t.needsPermission)
     .sort((a, b) => b.createdAt - a.createdAt);
 
   // Apply pagination to inactive tasks only (active always shown)
@@ -267,7 +266,7 @@ function buildPinnedData(
   lastViewedAt: Record<string, number>,
   localActivityAt: Record<string, number>,
   pinnedTaskIds: Set<string>,
-  activeTaskId: string | null,
+  _activeTaskId: string | null,
 ): PinnedData {
   const getSessionForTask = (taskId: string): AgentSession | undefined => {
     return Object.values(sessions).find((s) => s.taskId === taskId);
@@ -287,11 +286,8 @@ function buildPinnedData(
       : apiUpdatedAt;
 
     const taskLastViewedAt = lastViewedAt[task.id];
-    const isCurrentlyViewing = activeTaskId === task.id;
     const isUnread =
-      !isCurrentlyViewing &&
-      taskLastViewedAt !== undefined &&
-      lastActivityAt > taskLastViewedAt;
+      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
 
     return {
       id: task.id,
@@ -300,6 +296,7 @@ function buildPinnedData(
       isGenerating: session?.isPromptPending ?? false,
       isUnread,
       isPinned: true,
+      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
     };
   });
 
@@ -370,7 +367,6 @@ export function useSidebarData({
 
       const tasksWithActivity = folderTasks.map((task) => {
         const session = getSessionForTask(task.id);
-        // Use max of task.updated_at and local activity timestamp for accurate ordering
         const apiUpdatedAt = new Date(task.updated_at).getTime();
         const localActivity = localActivityAt[task.id];
         const lastActivityAt = localActivity
@@ -382,6 +378,7 @@ export function useSidebarData({
           lastActivityAt,
           isGenerating: session?.isPromptPending ?? false,
           isPinned,
+          needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
         };
       });
 
@@ -399,12 +396,15 @@ export function useSidebarData({
         name: folder.name,
         path: folder.path,
         tasks: tasksWithActivity.map(
-          ({ task, lastActivityAt, isGenerating, isPinned }) => {
+          ({
+            task,
+            lastActivityAt,
+            isGenerating,
+            isPinned,
+            needsPermission,
+          }) => {
             const taskLastViewedAt = lastViewedAt[task.id];
-            const isCurrentlyViewing = activeTaskId === task.id;
-            // Only show unread if: user has viewed it before AND there's new activity since
             const isUnread =
-              !isCurrentlyViewing &&
               taskLastViewedAt !== undefined &&
               lastActivityAt > taskLastViewedAt;
 
@@ -415,6 +415,7 @@ export function useSidebarData({
               isGenerating,
               isUnread,
               isPinned,
+              needsPermission,
             };
           },
         ),
@@ -427,7 +428,6 @@ export function useSidebarData({
     localActivityAt,
     pinnedTaskIds,
     lastViewedAt,
-    activeTaskId,
   ]);
 
   const historyData = useMemo(

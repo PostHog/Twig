@@ -58,6 +58,7 @@ function HistoryTaskItem({
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
+      needsPermission={task.needsPermission}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDelete={onDelete}
@@ -97,6 +98,7 @@ function PinnedTaskItem({
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
+      needsPermission={task.needsPermission}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDelete={onDelete}
