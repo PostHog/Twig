@@ -197,7 +197,7 @@ function buildHistoryData(
   lastViewedAt: Record<string, number>,
   localActivityAt: Record<string, number>,
   pinnedTaskIds: Set<string>,
-  activeTaskId: string | null,
+  _activeTaskId: string | null,
   visibleCount: number,
 ): HistoryData {
   const getSessionForTask = (taskId: string): AgentSession | undefined => {
@@ -219,11 +219,8 @@ function buildHistoryData(
       : apiUpdatedAt;
 
     const taskLastViewedAt = lastViewedAt[task.id];
-    const isCurrentlyViewing = activeTaskId === task.id;
     const isUnread =
-      !isCurrentlyViewing &&
-      taskLastViewedAt !== undefined &&
-      lastActivityAt > taskLastViewedAt;
+      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
 
     return {
       id: task.id,
@@ -241,13 +238,13 @@ function buildHistoryData(
   // Filter out pinned tasks - they will be shown in their own section
   const unpinnedTasks = historyTasks.filter((t) => !pinnedTaskIds.has(t.id));
 
-  // Partition into active (unread) and inactive tasks
+  // Partition into active (unread or needs permission) and inactive tasks
   const activeTasks = unpinnedTasks
-    .filter((t) => t.isUnread)
+    .filter((t) => t.isUnread || t.needsPermission)
     .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
 
   const inactiveTasks = unpinnedTasks
-    .filter((t) => !t.isUnread)
+    .filter((t) => !t.isUnread && !t.needsPermission)
     .sort((a, b) => b.createdAt - a.createdAt);
 
   // Apply pagination to inactive tasks only (active always shown)
@@ -269,7 +266,7 @@ function buildPinnedData(
   lastViewedAt: Record<string, number>,
   localActivityAt: Record<string, number>,
   pinnedTaskIds: Set<string>,
-  activeTaskId: string | null,
+  _activeTaskId: string | null,
 ): PinnedData {
   const getSessionForTask = (taskId: string): AgentSession | undefined => {
     return Object.values(sessions).find((s) => s.taskId === taskId);
@@ -289,11 +286,8 @@ function buildPinnedData(
       : apiUpdatedAt;
 
     const taskLastViewedAt = lastViewedAt[task.id];
-    const isCurrentlyViewing = activeTaskId === task.id;
     const isUnread =
-      !isCurrentlyViewing &&
-      taskLastViewedAt !== undefined &&
-      lastActivityAt > taskLastViewedAt;
+      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
 
     return {
       id: task.id,
@@ -410,9 +404,7 @@ export function useSidebarData({
             needsPermission,
           }) => {
             const taskLastViewedAt = lastViewedAt[task.id];
-            const isCurrentlyViewing = activeTaskId === task.id;
             const isUnread =
-              !isCurrentlyViewing &&
               taskLastViewedAt !== undefined &&
               lastActivityAt > taskLastViewedAt;
 
@@ -436,7 +428,6 @@ export function useSidebarData({
     localActivityAt,
     pinnedTaskIds,
     lastViewedAt,
-    activeTaskId,
   ]);
 
   const historyData = useMemo(
