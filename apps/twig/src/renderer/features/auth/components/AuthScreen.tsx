@@ -1,3 +1,4 @@
+import { DraggableTitleBar } from "@components/DraggableTitleBar";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { Box, Callout, Flex, Select, Spinner, Text } from "@radix-ui/themes";
 import caveHero from "@renderer/assets/images/cave-hero.jpg";
@@ -52,6 +53,7 @@ export function AuthScreen() {
 
   return (
     <Flex height="100vh" style={{ position: "relative" }}>
+      <DraggableTitleBar />
       {/* Full-screen cave painting background */}
       <div
         style={{

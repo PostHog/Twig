@@ -7,7 +7,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import { useHeaderStore } from "@stores/headerStore";
 import { useNavigationStore } from "@stores/navigationStore";
 
-const HEADER_HEIGHT = 40;
+export const HEADER_HEIGHT = 40;
 const COLLAPSED_WIDTH = 110;
 
 export function HeaderRow() {
