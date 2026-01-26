@@ -92,6 +92,7 @@ export const cancelSessionInput = z.object({
 export const interruptReasonSchema = z.enum([
   "user_request",
   "moving_to_worktree",
+  "modeSwitch",
 ]);
 export type InterruptReason = z.infer<typeof interruptReasonSchema>;
 
@@ -243,3 +244,28 @@ export const cloudModeResultSchema = z.object({
 });
 
 export type CloudModeResult = z.infer<typeof cloudModeResultSchema>;
+
+// Session capabilities schema
+export const sessionCapabilitiesSchema = z.object({
+  supportsModelSwitch: z.boolean(),
+  supportsModeSwitch: z.boolean(),
+  supportsGitStatus: z.boolean(),
+  supportsTerminal: z.boolean(),
+  supportsReconnect: z.boolean(),
+});
+
+export type SessionCapabilities = z.infer<typeof sessionCapabilitiesSchema>;
+
+// Session status schema (for unified status query)
+export const sessionStatusSchema = z.object({
+  executionEnvironment: z.enum(["local", "cloud"]),
+  isTransitioning: z.boolean(),
+  capabilities: sessionCapabilitiesSchema,
+});
+
+export type SessionStatus = z.infer<typeof sessionStatusSchema>;
+
+// Get session status input
+export const getSessionStatusInput = z.object({
+  sessionId: z.string(),
+});

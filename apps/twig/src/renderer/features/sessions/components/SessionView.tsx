@@ -40,6 +40,7 @@ function cycleMode(current: ExecutionMode): ExecutionMode {
 interface SessionViewProps {
   events: AcpMessage[];
   taskId?: string;
+  taskRunId?: string;
   isRunning: boolean;
   isPromptPending?: boolean;
   promptStartedAt?: number | null;
@@ -47,11 +48,13 @@ interface SessionViewProps {
   onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
-  isCloud?: boolean;
+  executionEnvironment?: "local" | "cloud";
+  isTransitioning?: boolean;
   hasError?: boolean;
   errorMessage?: string;
   onRetry?: () => void;
   onDelete?: () => void;
+  supportsModeSwitch?: boolean;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -60,6 +63,7 @@ const DEFAULT_ERROR_MESSAGE =
 export function SessionView({
   events,
   taskId,
+  taskRunId: _taskRunId,
   isRunning,
   isPromptPending = false,
   promptStartedAt,
@@ -67,11 +71,13 @@ export function SessionView({
   onBashCommand,
   onCancelPrompt,
   repoPath,
-  isCloud = false,
+  executionEnvironment = "local",
+  isTransitioning = false,
   hasError = false,
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
   onDelete,
+  supportsModeSwitch = true,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -83,10 +89,10 @@ export function SessionView({
   const currentMode: ExecutionMode = sessionMode ?? "default";
 
   const handleModeChange = useCallback(() => {
-    if (!taskId || isCloud) return;
+    if (!taskId || !supportsModeSwitch) return;
     const nextMode = cycleMode(currentMode);
     setSessionMode(taskId, nextMode);
-  }, [taskId, currentMode, isCloud, setSessionMode]);
+  }, [taskId, currentMode, supportsModeSwitch, setSessionMode]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -95,7 +101,8 @@ export function SessionView({
     repoPath,
     disabled: !isRunning,
     isLoading: isPromptPending,
-    isCloud,
+    isCloud: executionEnvironment === "cloud",
+    isTransitioning,
   });
 
   useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [
@@ -107,16 +114,16 @@ export function SessionView({
     "shift+tab",
     (e) => {
       e.preventDefault();
-      if (!taskId || isCloud) return;
+      if (!taskId || !supportsModeSwitch) return;
       const nextMode = cycleMode(currentMode);
       setSessionMode(taskId, nextMode);
     },
     {
       enableOnFormTags: true,
       enableOnContentEditable: true,
-      enabled: !isCloud && isRunning,
+      enabled: supportsModeSwitch && isRunning,
     },
-    [taskId, currentMode, isCloud, isRunning, setSessionMode],
+    [taskId, currentMode, supportsModeSwitch, isRunning, setSessionMode],
   );
 
   const latestPlan = useMemo((): Plan | null => {
@@ -189,7 +196,7 @@ export function SessionView({
       const selectedOption = firstPendingPermission.options.find(
         (o) => o.optionId === optionId,
       );
-      if (selectedOption?.kind === "allow_always" && !isCloud) {
+      if (selectedOption?.kind === "allow_always" && supportsModeSwitch) {
         setSessionMode(taskId, "acceptEdits");
       }
 
@@ -226,7 +233,7 @@ export function SessionView({
       taskId,
       respondToPermission,
       onSendPrompt,
-      isCloud,
+      supportsModeSwitch,
       setSessionMode,
     ],
   );
@@ -305,7 +312,7 @@ export function SessionView({
               isPromptPending={isPromptPending}
               promptStartedAt={promptStartedAt}
               repoPath={repoPath}
-              isCloud={isCloud}
+              executionEnvironment={executionEnvironment}
               taskId={taskId}
             />
           )}
@@ -374,7 +381,7 @@ export function SessionView({
                 onBashModeChange={setIsBashMode}
                 onCancel={onCancelPrompt}
                 currentMode={currentMode}
-                onModeChange={!isCloud ? handleModeChange : undefined}
+                onModeChange={supportsModeSwitch ? handleModeChange : undefined}
               />
             </Box>
           )}

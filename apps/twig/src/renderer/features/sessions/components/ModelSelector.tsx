@@ -6,6 +6,7 @@ import {
   type ModelProvider,
 } from "@shared/types/models";
 import { Fragment } from "react";
+import { useSessionCapabilities } from "@/renderer/hooks/useSessionStatus";
 import { useSessionActions, useSessionForTask } from "../stores/sessionStore";
 
 interface ModelSelectorProps {
@@ -23,6 +24,7 @@ export function ModelSelector({
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const { setSessionModel } = useSessionActions();
   const session = useSessionForTask(taskId);
+  const { data: capabilities } = useSessionCapabilities(session?.taskRunId);
 
   // Use session model if available, otherwise fall back to default
   const activeModel = session?.model ?? defaultModel;
@@ -32,8 +34,12 @@ export function ModelSelector({
     setDefaultModel(value);
     onModelChange?.(value);
 
-    // If there's an active session, update the model mid-session
-    if (taskId && session?.status === "connected" && !session.isCloud) {
+    // If there's an active session with model switch support, update the model mid-session
+    if (
+      taskId &&
+      session?.status === "connected" &&
+      capabilities?.supportsModelSwitch
+    ) {
       setSessionModel(taskId, value);
     }
   };

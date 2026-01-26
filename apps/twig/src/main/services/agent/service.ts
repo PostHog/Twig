@@ -1,39 +1,20 @@
-import { mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  type Client,
-  ClientSideConnection,
-  type ContentBlock,
-  ndJsonStream,
-  PROTOCOL_VERSION,
-  type RequestPermissionRequest,
-  type RequestPermissionResponse,
-} from "@agentclientprotocol/sdk";
-import {
-  Agent,
-  CloudConnection,
-  type CloudConnectionEvents,
-  type JsonRpcMessage,
-  getLlmGatewayUrl,
-  type OnLogCallback,
-  PostHogAPIClient,
-  resumeFromLog,
-  TreeTracker,
-} from "@posthog/agent";
-import { app } from "electron";
+import { hostname } from "node:os";
+import type { ContentBlock } from "@agentclientprotocol/sdk";
+import { PostHogAPIClient, resumeFromLog } from "@posthog/agent";
 import { injectable } from "inversify";
-import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import { CloudProvider } from "./providers/cloud-provider.js";
+import { LocalProvider } from "./providers/local-provider.js";
+import type { SessionProvider, SessionStatus } from "./providers/types.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
   type CloudModeResult,
-  type Credentials,
   type InterruptReason,
   type PromptOutput,
   type ReconnectSessionInput,
+  type SessionConfig,
   type SessionResponse,
   type StartSessionInput,
 } from "./schemas.js";
@@ -49,156 +30,32 @@ function isAuthError(error: unknown): boolean {
   );
 }
 
-type MessageCallback = (message: unknown) => void;
-
-class NdJsonTap {
-  private decoder = new TextDecoder();
-  private buffer = "";
-
-  constructor(private onMessage: MessageCallback) {}
-
-  process(chunk: Uint8Array): void {
-    this.buffer += this.decoder.decode(chunk, { stream: true });
-    const lines = this.buffer.split("\n");
-    this.buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        this.onMessage(JSON.parse(line));
-      } catch {
-        // Not valid JSON, skip
-      }
-    }
-  }
-}
-
-function createTappedReadableStream(
-  underlying: ReadableStream<Uint8Array>,
-  onMessage: MessageCallback,
-): ReadableStream<Uint8Array> {
-  const reader = underlying.getReader();
-  const tap = new NdJsonTap(onMessage);
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const { value, done } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
-      }
-      tap.process(value);
-      controller.enqueue(value);
-    },
-  });
-}
-
-function createTappedWritableStream(
-  underlying: WritableStream<Uint8Array>,
-  onMessage: MessageCallback,
-): WritableStream<Uint8Array> {
-  const tap = new NdJsonTap(onMessage);
-
-  return new WritableStream<Uint8Array>({
-    async write(chunk) {
-      tap.process(chunk);
-      const writer = underlying.getWriter();
-      await writer.write(chunk);
-      writer.releaseLock();
-    },
-    async close() {
-      const writer = underlying.getWriter();
-      await writer.close();
-      writer.releaseLock();
-    },
-    async abort(reason) {
-      const writer = underlying.getWriter();
-      await writer.abort(reason);
-      writer.releaseLock();
-    },
-  });
-}
-
-const onAgentLog: OnLogCallback = (level, scope, message, data) => {
-  const scopedLog = logger.scope(scope);
-  if (data !== undefined) {
-    scopedLog[level as keyof typeof scopedLog](message, data);
-  } else {
-    scopedLog[level](message);
-  }
-};
-
-interface AcpMcpServer {
-  name: string;
-  type: "http";
-  url: string;
-  headers: Array<{ name: string; value: string }>;
-}
-
-interface SessionConfig {
-  taskId: string;
-  taskRunId: string;
-  repoPath: string;
-  credentials: Credentials;
-  logUrl?: string;
-  sdkSessionId?: string;
-  model?: string;
-  executionMode?: "plan" | "acceptEdits" | "default";
-  /** Additional directories Claude can access beyond cwd (for worktree support) */
-  additionalDirectories?: string[];
-}
-
 interface ManagedSession {
   taskRunId: string;
   taskId: string;
   repoPath: string;
-  agent: Agent;
-  connection: ClientSideConnection;
   channel: string;
   createdAt: number;
   lastActivityAt: number;
-  mockNodeDir: string;
   config: SessionConfig;
-  interruptReason?: InterruptReason;
-  needsRecreation: boolean;
-  promptPending: boolean;
-  pendingContext?: string;
-  // Cloud mode state
-  isCloud: boolean;
-  cloudRunId?: string;
-  cloudConnection?: CloudConnection;
-  // Tree-based state tracking
-  treeTracker?: TreeTracker;
-}
-
-function getClaudeCliPath(): string {
-  const appPath = app.getAppPath();
-  return app.isPackaged
-    ? join(`${appPath}.unpacked`, ".vite/build/claude-cli/cli.js")
-    : join(appPath, ".vite/build/claude-cli/cli.js");
-}
-
-interface PendingPermission {
-  resolve: (response: RequestPermissionResponse) => void;
-  reject: (error: Error) => void;
-  sessionId: string;
-  toolCallId: string;
+  provider: SessionProvider;
+  isTransitioning: boolean;
+  cleanupEventHandler?: () => void;
+  cleanupPermissionHandler?: () => void;
 }
 
 @injectable()
 export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
-  private pendingPermissions = new Map<string, PendingPermission>();
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
 
-    // Mark all sessions for recreation - they'll be recreated before the next prompt.
-    // We don't recreate immediately because the subprocess may be mid-response or
-    // waiting on a permission prompt. Recreation happens at a safe point.
     for (const session of this.sessions.values()) {
-      session.needsRecreation = true;
+      if (session.provider instanceof LocalProvider) {
+        session.provider.markForRecreation();
+      }
     }
 
     log.info("Token updated, marked sessions for recreation", {
@@ -206,15 +63,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
   }
 
-  /**
-   * Mark all sessions for recreation (developer tool for testing token refresh).
-   * Sessions will be recreated before their next prompt.
-   */
   public markAllSessionsForRecreation(): number {
     let count = 0;
     for (const session of this.sessions.values()) {
-      session.needsRecreation = true;
-      count++;
+      if (session.provider instanceof LocalProvider) {
+        session.provider.markForRecreation();
+        count++;
+      }
     }
     log.info("Marked all sessions for recreation (dev tool)", {
       sessionCount: count,
@@ -222,10 +77,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return count;
   }
 
-  /**
-   * Respond to a pending permission request from the UI.
-   * This resolves the promise that the agent is waiting on.
-   */
   public respondToPermission(
     sessionId: string,
     toolCallId: string,
@@ -233,100 +84,42 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     selectedOptionIds?: string[],
     customInput?: string,
   ): void {
-    const key = `${sessionId}:${toolCallId}`;
-    const pending = this.pendingPermissions.get(key);
-
-    if (!pending) {
-      log.warn("No pending permission found", { sessionId, toolCallId });
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      log.warn("No session found for permission response", { sessionId });
       return;
     }
 
-    log.info("Permission response received", {
-      sessionId,
-      toolCallId,
-      optionId,
-      selectedOptionIds,
-      hasCustomInput: !!customInput,
-    });
-
-    pending.resolve({
-      outcome: {
-        outcome: "selected",
+    if (session.provider instanceof LocalProvider) {
+      session.provider.respondToPermission(
+        toolCallId,
         optionId,
-        // Include multi-select and custom input in the response
-        ...(selectedOptionIds && { selectedOptionIds }),
-        ...(customInput && { customInput }),
-      },
-    });
-
-    this.pendingPermissions.delete(key);
+        selectedOptionIds,
+        customInput,
+      );
+    }
   }
 
-  /**
-   * Cancel a pending permission request.
-   * This resolves the promise with a "cancelled" outcome per ACP spec.
-   */
   public cancelPermission(sessionId: string, toolCallId: string): void {
-    const key = `${sessionId}:${toolCallId}`;
-    const pending = this.pendingPermissions.get(key);
-
-    if (!pending) {
-      log.warn("No pending permission found to cancel", {
-        sessionId,
-        toolCallId,
-      });
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      log.warn("No session found for permission cancellation", { sessionId });
       return;
     }
 
-    log.info("Permission cancelled", { sessionId, toolCallId });
-
-    pending.resolve({
-      outcome: {
-        outcome: "cancelled",
-      },
-    });
-
-    this.pendingPermissions.delete(key);
+    if (session.provider instanceof LocalProvider) {
+      session.provider.cancelPermission(toolCallId);
+    }
   }
 
   private getToken(fallback: string): string {
     return this.currentToken || fallback;
   }
 
-  private buildMcpServers(credentials: Credentials): AcpMcpServer[] {
-    const servers: AcpMcpServer[] = [];
-
-    const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
-    const token = this.getToken(credentials.apiKey);
-
-    servers.push({
-      name: "posthog",
-      type: "http",
-      url: mcpUrl,
-      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
-    });
-
-    return servers;
-  }
-
-  private getPostHogMcpUrl(apiHost: string): string {
-    if (
-      apiHost.includes("localhost") ||
-      apiHost.includes("127.0.0.1") ||
-      !app.isPackaged
-    ) {
-      return "http://localhost:8787/mcp";
-    }
-    return "https://mcp.posthog.com/mcp";
-  }
-
   async startSession(params: StartSessionInput): Promise<SessionResponse> {
     this.validateSessionParams(params);
     const config = this.toSessionConfig(params);
-    const session = await this.getOrCreateSession(config, false);
-    if (!session) {
-      throw new Error("Failed to create session");
-    }
+    const session = await this.createLocalSession(config, false);
     return this.toSessionResponse(session);
   }
 
@@ -341,26 +134,26 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     const config = this.toSessionConfig(params);
-    const session = await this.getOrCreateSession(config, true);
-    return session ? this.toSessionResponse(session) : null;
+    const existingSession = this.sessions.get(config.taskRunId);
+    if (existingSession) {
+      return this.toSessionResponse(existingSession);
+    }
+
+    try {
+      const session = await this.createLocalSession(config, true);
+      return this.toSessionResponse(session);
+    } catch (err) {
+      log.error("Failed to reconnect session", err);
+      return null;
+    }
   }
 
-  private async getOrCreateSession(
+  private async createLocalSession(
     config: SessionConfig,
     isReconnect: boolean,
     isRetry = false,
-  ): Promise<ManagedSession | null> {
-    const {
-      taskId,
-      taskRunId,
-      repoPath,
-      credentials,
-      logUrl,
-      sdkSessionId,
-      model,
-      executionMode,
-      additionalDirectories,
-    } = config;
+  ): Promise<ManagedSession> {
+    const { taskRunId, taskId, repoPath } = config;
 
     if (!isRetry) {
       const existing = this.sessions.get(taskRunId);
@@ -370,223 +163,102 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     const channel = `agent-event:${taskRunId}`;
-    const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
-    this.setupEnvironment(credentials, mockNodeDir);
 
-    const agent = new Agent({
-      posthog: {
-        apiUrl: credentials.apiHost,
-        getApiKey: () => this.getToken(credentials.apiKey),
-        projectId: credentials.projectId,
+    const provider = new LocalProvider({
+      getToken: (fallback) => this.getToken(fallback),
+      onPrUrlDetected: (taskId, prUrl) => {
+        const session = this.sessions.get(taskRunId);
+        if (session && session.provider instanceof LocalProvider) {
+          const agent = session.provider.getAgent();
+          if (agent) {
+            agent.attachPullRequestToTask(taskId, prUrl).catch((err) => {
+              log.error("Failed to attach PR URL", { err });
+            });
+          }
+        }
       },
-      debug: !app.isPackaged,
-      onLog: onAgentLog,
     });
 
     try {
-      const acpConnection = await agent.run(taskId, taskRunId);
-      const { clientStreams } = acpConnection;
-
-      const connection = this.createClientConnection(
-        taskRunId,
-        channel,
-        clientStreams,
-      );
-
-      await connection.initialize({
-        protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {},
-      });
-
-      const mcpServers = this.buildMcpServers(credentials);
-
-      if (isReconnect) {
-        await connection.extMethod("_posthog/session/resume", {
-          sessionId: taskRunId,
-          cwd: repoPath,
-          mcpServers,
-          _meta: {
-            ...(logUrl && {
-              persistence: { taskId, runId: taskRunId, logUrl },
-            }),
-            ...(sdkSessionId && { sdkSessionId }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
-              },
-            }),
-          },
-        });
-      } else {
-        await connection.newSession({
-          cwd: repoPath,
-          mcpServers,
-          _meta: {
-            sessionId: taskRunId,
-            model,
-            ...(executionMode && { initialModeId: executionMode }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
-              },
-            }),
-          },
-        });
-      }
+      await provider.connect(config, isReconnect);
 
       const session: ManagedSession = {
         taskRunId,
         taskId,
         repoPath,
-        agent,
-        connection,
         channel,
         createdAt: Date.now(),
         lastActivityAt: Date.now(),
-        mockNodeDir,
         config,
-        needsRecreation: false,
-        promptPending: false,
-        isCloud: false,
+        provider,
+        isTransitioning: false,
       };
 
+      this.setupProviderEventHandlers(session);
       this.sessions.set(taskRunId, session);
+
       if (isRetry) {
         log.info("Session created after auth retry", { taskRunId });
       }
+
       return session;
     } catch (err) {
-      this.cleanupMockNodeEnvironment(mockNodeDir);
+      await provider.cleanup();
+
       if (!isRetry && isAuthError(err)) {
         log.warn(
           `Auth error during ${isReconnect ? "reconnect" : "create"}, retrying`,
           { taskRunId },
         );
-        return this.getOrCreateSession(config, isReconnect, true);
+        return this.createLocalSession(config, isReconnect, true);
       }
+
       log.error(
         `Failed to ${isReconnect ? "reconnect" : "create"} session${isRetry ? " after retry" : ""}`,
         err,
       );
-      if (isReconnect) return null;
       throw err;
     }
   }
 
-  private async recreateSession(taskRunId: string): Promise<ManagedSession> {
-    const existing = this.sessions.get(taskRunId);
-    if (!existing) {
-      throw new Error(`Session not found for recreation: ${taskRunId}`);
-    }
+  private setupProviderEventHandlers(session: ManagedSession): void {
+    const { taskRunId, provider } = session;
 
-    log.info("Recreating session", { taskRunId });
+    session.cleanupEventHandler = provider.onEvent((event) => {
+      this.emit(AgentServiceEvent.SessionEvent, {
+        sessionId: taskRunId,
+        payload: event,
+      });
+    });
 
-    // Preserve state that should survive recreation
-    const config = existing.config;
-    const pendingContext = existing.pendingContext;
-
-    await this.cleanupSession(taskRunId);
-
-    const newSession = await this.getOrCreateSession(config, true);
-    if (!newSession) {
-      throw new Error(`Failed to recreate session: ${taskRunId}`);
-    }
-
-    // Restore preserved state
-    if (pendingContext) {
-      newSession.pendingContext = pendingContext;
-    }
-
-    return newSession;
+    session.cleanupPermissionHandler = provider.onPermission((request) => {
+      log.info("Emitting permission request to renderer", {
+        sessionId: taskRunId,
+        toolCallId: request.toolCallId,
+      });
+      this.emit(AgentServiceEvent.PermissionRequest, {
+        sessionId: taskRunId,
+        ...request,
+      });
+    });
   }
 
   async prompt(
     sessionId: string,
     prompt: ContentBlock[],
   ): Promise<PromptOutput> {
-    let session = this.sessions.get(sessionId);
+    const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
     log.info("Prompt called", {
       sessionId,
-      isCloud: session.isCloud,
-      hasCloudConnection: !!session.cloudConnection,
+      executionEnvironment: session.provider.executionEnvironment,
     });
 
-    // Route to cloud if in cloud mode
-    if (session.isCloud && session.cloudConnection) {
-      session.lastActivityAt = Date.now();
-      // Extract text content from ContentBlock array for cloud prompt
-      const textContent = prompt
-        .filter(
-          (block): block is { type: "text"; text: string } =>
-            block.type === "text",
-        )
-        .map((block) => block.text)
-        .join("\n");
-      log.info("Sending prompt to cloud", {
-        sessionId,
-        contentLength: textContent.length,
-      });
-      await session.cloudConnection.prompt(textContent);
-      log.info("Cloud prompt sent successfully", { sessionId });
-      return { stopReason: "end_turn" };
-    }
-
-    // Recreate session if marked (token was refreshed while session was active)
-    if (session.needsRecreation) {
-      log.info("Recreating session before prompt (token refreshed)", {
-        sessionId,
-      });
-      session = await this.recreateSession(sessionId);
-    }
-
-    // Prepend pending context if present
-    let finalPrompt = prompt;
-    if (session.pendingContext) {
-      log.info("Prepending context to prompt", { sessionId });
-      finalPrompt = [
-        {
-          type: "text",
-          text: `_${session.pendingContext}_\n\n`,
-          _meta: { ui: { hidden: true } },
-        },
-        ...prompt,
-      ];
-      session.pendingContext = undefined;
-    }
-
     session.lastActivityAt = Date.now();
-    session.promptPending = true;
-
-    try {
-      const result = await session.connection.prompt({
-        sessionId,
-        prompt: finalPrompt,
-      });
-      return {
-        stopReason: result.stopReason,
-        _meta: result._meta as PromptOutput["_meta"],
-      };
-    } catch (err) {
-      if (isAuthError(err)) {
-        log.warn("Auth error during prompt, recreating session", { sessionId });
-        session = await this.recreateSession(sessionId);
-        const result = await session.connection.prompt({
-          sessionId,
-          prompt: finalPrompt,
-        });
-        return {
-          stopReason: result.stopReason,
-          _meta: result._meta as PromptOutput["_meta"],
-        };
-      }
-      throw err;
-    } finally {
-      session.promptPending = false;
-    }
+    return session.provider.prompt(prompt);
   }
 
   async cancelSession(sessionId: string): Promise<boolean> {
@@ -594,9 +266,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     if (!session) return false;
 
     try {
-      await this.cleanupSession(sessionId);
+      await session.provider.disconnect();
+      this.cleanupSession(sessionId);
       return true;
-    } catch (_err) {
+    } catch {
+      this.cleanupSession(sessionId);
       return false;
     }
   }
@@ -608,35 +282,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
-    // Route to cloud if in cloud mode
-    if (session.isCloud && session.cloudConnection) {
-      try {
-        await session.cloudConnection.cancel();
-        return true;
-      } catch (err) {
-        log.error("Failed to cancel cloud prompt", { sessionId, err });
-        return false;
-      }
-    }
-
-    try {
-      await session.connection.cancel({
-        sessionId,
-        _meta: reason ? { interruptReason: reason } : undefined,
-      });
-      if (reason) {
-        session.interruptReason = reason;
-        log.info("Session interrupted", { sessionId, reason });
-      }
-      return true;
-    } catch (err) {
-      log.error("Failed to cancel prompt", { sessionId, err });
-      return false;
-    }
+    return session.provider.cancelPrompt(reason);
   }
 
   getSession(taskRunId: string): ManagedSession | undefined {
     return this.sessions.get(taskRunId);
+  }
+
+  getSessionStatus(sessionId: string): SessionStatus | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session) return undefined;
+
+    return {
+      executionEnvironment: session.provider.executionEnvironment,
+      isTransitioning: session.isTransitioning,
+      capabilities: session.provider.capabilities,
+    };
   }
 
   async setSessionModel(sessionId: string, modelId: string): Promise<void> {
@@ -645,15 +306,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    try {
-      await session.connection.extMethod("session/setModel", {
-        sessionId,
-        modelId,
-      });
+    if (!session.provider.capabilities.supportsModelSwitch) {
+      throw new Error("Model switching not supported in this execution mode");
+    }
+
+    if (session.provider.setModel) {
+      await session.provider.setModel(modelId);
       log.info("Session model updated", { sessionId, modelId });
-    } catch (err) {
-      log.error("Failed to set session model", { sessionId, modelId, err });
-      throw err;
     }
   }
 
@@ -663,15 +322,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    try {
-      await session.connection.extMethod("session/setMode", {
-        sessionId,
-        modeId,
-      });
+    if (!session.provider.capabilities.supportsModeSwitch) {
+      throw new Error("Mode switching not supported in this execution mode");
+    }
+
+    if (session.provider.setMode) {
+      await session.provider.setMode(modeId);
       log.info("Session mode updated", { sessionId, modeId });
-    } catch (err) {
-      log.error("Failed to set session mode", { sessionId, modeId, err });
-      throw err;
     }
   }
 
@@ -681,7 +338,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    if (session.isCloud) {
+    if (session.provider.executionEnvironment === "cloud") {
       return this.switchToLocal(session);
     } else {
       return this.switchToCloud(session);
@@ -691,122 +348,85 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private async switchToCloud(
     session: ManagedSession,
   ): Promise<CloudModeResult> {
-    const { taskRunId, taskId, config, repoPath } = session;
+    const { taskRunId, taskId, config } = session;
     log.info("Switching to cloud mode", { sessionId: taskRunId, taskId });
 
-    // Emit transitioning event
+    session.isTransitioning = true;
+
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "cloud",
       message: "Capturing state for cloud...",
     });
 
+    this.emitSystemMessage(taskRunId, "⏳ Switching to cloud mode...");
+
     try {
-      // 1. Stop local agent and capture tree state
+      if (!(session.provider instanceof LocalProvider)) {
+        throw new Error("Cannot switch to cloud: not in local mode");
+      }
+
+      const localProvider = session.provider;
+
       log.info("Stopping local agent and capturing tree state", { taskRunId });
-      const treeSnapshot = await session.agent.stop();
+      const treeSnapshot = await localProvider.stop();
+
+      const apiClient = await localProvider.createApiClient();
+      if (!apiClient) {
+        throw new Error("Failed to create API client");
+      }
+
       if (treeSnapshot) {
-        log.info("Tree state captured", {
+        log.info("Tree state captured, persisting to log", {
           taskRunId,
           treeHash: treeSnapshot.treeHash,
           filesChanged: treeSnapshot.filesChanged.length,
         });
+
+        await apiClient.appendTaskRunLog(taskId, taskRunId, [
+          {
+            type: "notification",
+            timestamp: new Date().toISOString(),
+            notification: {
+              jsonrpc: "2.0",
+              method: "_posthog/tree_snapshot",
+              params: {
+                ...treeSnapshot,
+                device: { id: "local", type: "local", name: hostname() },
+              },
+            },
+          },
+        ]);
+        log.info("Tree snapshot persisted to log", { taskRunId });
       }
 
-      // 2. Create API client for PostHog operations
-      const apiClient = new PostHogAPIClient({
-        apiUrl: config.credentials.apiHost,
-        getApiKey: () => this.getToken(config.credentials.apiKey),
-        projectId: config.credentials.projectId,
-      });
-
-      // 3. Update existing task run to switch environment to cloud (triggers cloud workflow on backend)
-      // The cloud agent will call resume(taskId) which reads the log including tree_snapshot
       await apiClient.updateTaskRun(taskId, taskRunId, {
         environment: "cloud",
       });
 
       log.info("Task run environment switched to cloud", { taskRunId });
 
-      // 4. Create TreeTracker for tracking tree snapshot events from cloud
-      const treeTracker = new TreeTracker({
-        repositoryPath: repoPath,
-        taskId,
-        runId: taskRunId,
-        apiClient,
+      session.cleanupEventHandler?.();
+      session.cleanupPermissionHandler?.();
+      await localProvider.cleanup();
+
+      const cloudProvider = new CloudProvider({
+        getToken: (fallback) => this.getToken(fallback),
       });
 
-      // 5. Create CloudConnection and connect via SSE
-      log.info("[SWITCH_CLOUD] Creating CloudConnection", { taskRunId });
-      const cloudConnectionEvents: CloudConnectionEvents = {
-        onEvent: (event: JsonRpcMessage) => {
-          log.debug("[SWITCH_CLOUD] onEvent callback triggered", {
-            method: event.method,
-          });
-          this.handleCloudEvent(taskRunId, event);
+      await cloudProvider.connect(config, false);
 
-          // Handle tree_snapshot events to keep local tree in sync
-          if (event.method === "_posthog/tree_snapshot") {
-            const params = event.params as
-              | { treeHash?: string; archiveUrl?: string }
-              | undefined;
-            if (params?.treeHash) {
-              treeTracker.setLastTreeHash(params.treeHash);
-              log.info("Tree snapshot received from cloud", {
-                treeHash: params.treeHash,
-              });
-            }
-          }
-        },
-        onError: (error: Error) => {
-          log.error("Cloud connection error", { sessionId: taskRunId, error });
-          this.emit(AgentServiceEvent.SessionEvent, {
-            sessionId: taskRunId,
-            payload: {
-              type: "acp_message",
-              ts: Date.now(),
-              message: {
-                jsonrpc: "2.0",
-                method: "error",
-                params: { message: error.message },
-              },
-            },
-          });
-        },
-        onConnect: () => {
-          log.info("Cloud connection established", { sessionId: taskRunId });
-        },
-        onDisconnect: () => {
-          log.info("Cloud connection disconnected", { sessionId: taskRunId });
-        },
-      };
+      session.provider = cloudProvider;
+      this.setupProviderEventHandlers(session);
+      session.isTransitioning = false;
 
-      const cloudConnection = new CloudConnection(
-        {
-          apiHost: config.credentials.apiHost,
-          apiKey: this.getToken(config.credentials.apiKey),
-          projectId: config.credentials.projectId,
-          taskId,
-          runId: taskRunId,
-        },
-        cloudConnectionEvents,
-      );
-
-      // Connect to cloud
-      await cloudConnection.connect();
-
-      // 6. Update session state
-      session.isCloud = true;
-      session.cloudRunId = taskRunId;
-      session.cloudConnection = cloudConnection;
-      session.treeTracker = treeTracker;
-
-      // 7. Emit success event
       this.emit(AgentServiceEvent.ModeChanged, {
         sessionId: taskRunId,
         mode: "cloud",
         message: "Running in cloud",
       });
+
+      this.emitSystemMessage(taskRunId, "☁️ Switched to cloud mode");
 
       log.info("Successfully switched to cloud mode", { sessionId: taskRunId });
 
@@ -820,7 +440,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         error,
       });
 
-      // Revert to local mode on failure
+      session.isTransitioning = false;
+
       this.emit(AgentServiceEvent.ModeChanged, {
         sessionId: taskRunId,
         mode: "local",
@@ -834,34 +455,43 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private async switchToLocal(
     session: ManagedSession,
   ): Promise<CloudModeResult> {
-    const { taskRunId, taskId, config, repoPath, cloudConnection } = session;
+    const { taskRunId, taskId, config, repoPath } = session;
     log.info("Switching to local mode", { sessionId: taskRunId });
 
-    // Emit transitioning event
+    session.isTransitioning = true;
+
     this.emit(AgentServiceEvent.ModeChanged, {
       sessionId: taskRunId,
       mode: "local",
       message: "Restoring state from cloud...",
     });
 
+    this.emitSystemMessage(taskRunId, "⏳ Switching to local mode...");
+
     try {
-      // 1. Send close to cloud agent (it will call stop() and capture final tree state)
-      if (cloudConnection) {
-        try {
-          await cloudConnection.close();
-        } catch {
-          // Ignore close errors
-        }
+      if (!(session.provider instanceof CloudProvider)) {
+        throw new Error("Cannot switch to local: not in cloud mode");
       }
 
-      // 2. Create API client for PostHog operations
+      const cloudProvider = session.provider;
+
+      try {
+        const cloudConnection = cloudProvider.getCloudConnection();
+        if (cloudConnection) {
+          await cloudConnection.close();
+        }
+      } catch {
+        // Ignore close errors
+      }
+
       const apiClient = new PostHogAPIClient({
         apiUrl: config.credentials.apiHost,
         getApiKey: () => this.getToken(config.credentials.apiKey),
         projectId: config.credentials.projectId,
       });
 
-      // 3. Resume from log - restores tree state and conversation
+      let pendingContext: string | undefined;
+
       try {
         log.info("Resuming from log to restore cloud state", { taskRunId });
         const resumeState = await resumeFromLog({
@@ -878,30 +508,63 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           interrupted: resumeState.interrupted,
         });
 
-        // Update agent's tree tracker with latest hash if available
-        const agentTreeTracker = session.agent.getTreeTracker();
-        if (agentTreeTracker && resumeState.latestSnapshot) {
-          agentTreeTracker.setLastTreeHash(resumeState.latestSnapshot.treeHash);
+        if (resumeState.conversation.length > 0) {
+          const lastAssistantTurn = [...resumeState.conversation]
+            .reverse()
+            .find((turn) => turn.role === "assistant");
+          if (lastAssistantTurn) {
+            const textContent = lastAssistantTurn.content
+              .filter(
+                (block): block is { type: "text"; text: string } =>
+                  block.type === "text",
+              )
+              .map((block) => block.text)
+              .join("\n");
+            if (textContent) {
+              pendingContext = `Session resumed from cloud. Last assistant response: ${textContent.slice(0, 500)}${textContent.length > 500 ? "..." : ""}`;
+            }
+          }
         }
       } catch (err) {
-        log.warn("Failed to resume from log, continuing without state restore", {
-          taskRunId,
-          err,
-        });
+        log.warn(
+          "Failed to resume from log, continuing without state restore",
+          { taskRunId, err },
+        );
       }
 
-      // 4. Clean up session state
-      session.isCloud = false;
-      session.cloudRunId = undefined;
-      session.cloudConnection = undefined;
-      session.treeTracker = undefined;
+      session.cleanupEventHandler?.();
+      session.cleanupPermissionHandler?.();
+      await cloudProvider.cleanup();
 
-      // 5. Emit success event
+      const localProvider = new LocalProvider({
+        getToken: (fallback) => this.getToken(fallback),
+        onPrUrlDetected: (taskId, prUrl) => {
+          const agent = localProvider.getAgent();
+          if (agent) {
+            agent.attachPullRequestToTask(taskId, prUrl).catch((err) => {
+              log.error("Failed to attach PR URL", { err });
+            });
+          }
+        },
+      });
+
+      await localProvider.connect(config, true);
+
+      if (pendingContext) {
+        localProvider.setPendingContext(pendingContext);
+      }
+
+      session.provider = localProvider;
+      this.setupProviderEventHandlers(session);
+      session.isTransitioning = false;
+
       this.emit(AgentServiceEvent.ModeChanged, {
         sessionId: taskRunId,
         mode: "local",
         message: "Running locally",
       });
+
+      this.emitSystemMessage(taskRunId, "💻 Switched to local mode");
 
       log.info("Successfully switched to local mode", { sessionId: taskRunId });
 
@@ -914,63 +577,37 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         sessionId: taskRunId,
         error,
       });
+
+      session.isTransitioning = false;
+
       throw error;
     }
   }
 
-  private handleCloudEvent(sessionId: string, event: JsonRpcMessage): void {
-    log.info("[CLOUD_EVENT] Received cloud event", {
-      sessionId,
-      method: event.method,
-      hasParams: !!event.params,
-    });
-    log.debug("[CLOUD_EVENT] Full event", { event });
-
-    // Transform cloud events to ACP message format for UI
-    const acpMessage: AcpMessage = {
-      type: "acp_message",
-      ts: Date.now(),
-      message: event as AcpMessage["message"],
-    };
-
-    log.info("[CLOUD_EVENT] Emitting to renderer", {
-      sessionId,
-      method: event.method,
-    });
-
+  private emitSystemMessage(sessionId: string, text: string): void {
     this.emit(AgentServiceEvent.SessionEvent, {
       sessionId,
-      payload: acpMessage,
+      payload: {
+        type: "acp_message",
+        ts: Date.now(),
+        message: {
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId,
+            update: {
+              sessionUpdate: "system_message",
+              content: { type: "text", text },
+            },
+          },
+        },
+      },
     });
-  }
-
-  async promptCloud(sessionId: string, content: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session?.isCloud || !session.cloudConnection) {
-      throw new Error("Session is not in cloud mode");
-    }
-
-    await session.cloudConnection.prompt(content);
-  }
-
-  async cancelCloudPrompt(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    if (!session?.isCloud || !session.cloudConnection) {
-      return false;
-    }
-
-    try {
-      await session.cloudConnection.cancel();
-      return true;
-    } catch (error) {
-      log.error("Failed to cancel cloud prompt", { sessionId, error });
-      return false;
-    }
   }
 
   isCloudMode(sessionId: string): boolean {
     const session = this.sessions.get(sessionId);
-    return session?.isCloud ?? false;
+    return session?.provider.executionEnvironment === "cloud";
   }
 
   listSessions(taskId?: string): ManagedSession[] {
@@ -978,54 +615,44 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return taskId ? all.filter((s) => s.taskId === taskId) : all;
   }
 
-  /**
-   * Get sessions that were interrupted for a specific reason.
-   * Optionally filter by repoPath to get only sessions for a specific repo.
-   */
   getInterruptedSessions(
     reason: InterruptReason,
     repoPath?: string,
   ): ManagedSession[] {
-    return Array.from(this.sessions.values()).filter(
-      (s) =>
-        s.interruptReason === reason &&
-        (repoPath === undefined || s.repoPath === repoPath),
-    );
+    return Array.from(this.sessions.values()).filter((s) => {
+      if (!(s.provider instanceof LocalProvider)) return false;
+      const providerReason = s.provider.getInterruptReason();
+      return (
+        providerReason === reason &&
+        (repoPath === undefined || s.repoPath === repoPath)
+      );
+    });
   }
 
-  /**
-   * Resume an interrupted session by clearing the interrupt reason
-   * and sending a continue prompt.
-   */
   async resumeInterruptedSession(sessionId: string): Promise<PromptOutput> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    if (!session.interruptReason) {
+    if (!(session.provider instanceof LocalProvider)) {
+      throw new Error("Cannot resume: not a local session");
+    }
+
+    const reason = session.provider.getInterruptReason();
+    if (!reason) {
       throw new Error(`Session ${sessionId} was not interrupted`);
     }
 
-    log.info("Resuming interrupted session", {
-      sessionId,
-      reason: session.interruptReason,
-    });
+    log.info("Resuming interrupted session", { sessionId, reason });
 
-    // Clear the interrupt reason
-    session.interruptReason = undefined;
+    session.provider.clearInterruptReason();
 
-    // Send a continue prompt
     return this.prompt(sessionId, [
       { type: "text", text: "Continue where you left off." },
     ]);
   }
 
-  /**
-   * Notify a session of a context change (CWD moved, detached HEAD, etc).
-   * Used when focusing/unfocusing worktrees - the agent doesn't need to respawn
-   * because it has additionalDirectories configured, but it should know about the change.
-   */
   async notifySessionContext(
     sessionId: string,
     context: import("./schemas.js").SessionContextChange,
@@ -1036,11 +663,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       return;
     }
 
-    const contextMessage = this.buildContextMessage(context);
+    if (!(session.provider instanceof LocalProvider)) {
+      log.warn("Context notification not supported in cloud mode", {
+        sessionId,
+      });
+      return;
+    }
 
-    // Check if session is currently busy
-    if (session.promptPending) {
-      // Active session: send immediately with continue instruction
+    const contextMessage = this.buildContextMessage(context);
+    const provider = session.provider;
+
+    if (provider.isPromptPending()) {
       this.prompt(sessionId, [
         {
           type: "text",
@@ -1049,14 +682,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         },
       ]);
     } else {
-      // Idle session: store for prepending to next user message
-      session.pendingContext = contextMessage;
+      provider.setPendingContext(contextMessage);
     }
 
     log.info("Notified session of context change", {
       sessionId,
       context,
-      wasPromptPending: session.promptPending,
+      wasPromptPending: provider.isPromptPending(),
     });
   }
 
@@ -1080,266 +712,26 @@ For git operations while detached:
     });
 
     for (const [taskRunId, session] of this.sessions) {
-      // Step 1: Send ACP cancel notification for any ongoing prompt turns
       try {
-        if (!session.connection.signal.aborted) {
-          await session.connection.cancel({ sessionId: taskRunId });
-          log.info("Sent ACP cancel for session", { taskRunId });
-        }
+        session.cleanupEventHandler?.();
+        session.cleanupPermissionHandler?.();
+        await session.provider.disconnect();
       } catch (err) {
-        log.warn("Failed to send ACP cancel", { taskRunId, error: err });
+        log.warn("Failed to cleanup session", { taskRunId, error: err });
       }
-
-      // Step 2: Cleanup agent connection (closes streams, aborts subprocess)
-      try {
-        await session.agent.cleanup();
-      } catch (err) {
-        log.warn("Failed to cleanup agent", { taskRunId, error: err });
-      }
-
-      this.cleanupMockNodeEnvironment(session.mockNodeDir);
     }
 
     this.sessions.clear();
     log.info("All agent sessions cleaned up");
   }
 
-  private setupEnvironment(
-    credentials: Credentials,
-    mockNodeDir: string,
-  ): void {
-    const token = this.getToken(credentials.apiKey);
-    const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
-    process.env.PATH = newPath;
-    process.env.POSTHOG_AUTH_HEADER = `Bearer ${token}`;
-    process.env.ANTHROPIC_API_KEY = token;
-    process.env.ANTHROPIC_AUTH_TOKEN = token;
-
-    const llmGatewayUrl = getLlmGatewayUrl(credentials.apiHost);
-    process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
-
-    const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
-      ? llmGatewayUrl
-      : `${llmGatewayUrl}/v1`;
-    process.env.OPENAI_BASE_URL = openaiBaseUrl;
-    process.env.OPENAI_API_KEY = token;
-    process.env.LLM_GATEWAY_URL = llmGatewayUrl;
-
-    process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
-
-    process.env.POSTHOG_API_KEY = token;
-    process.env.POSTHOG_API_URL = credentials.apiHost;
-    process.env.POSTHOG_PROJECT_ID = String(credentials.projectId);
-  }
-
-  private setupMockNodeEnvironment(sessionId: string): string {
-    const mockNodeDir = join(tmpdir(), `array-agent-node-${sessionId}`);
-    try {
-      mkdirSync(mockNodeDir, { recursive: true });
-      const nodeSymlinkPath = join(mockNodeDir, "node");
-      try {
-        rmSync(nodeSymlinkPath, { force: true });
-      } catch {
-        /* ignore */
-      }
-      symlinkSync(process.execPath, nodeSymlinkPath);
-    } catch (err) {
-      log.warn("Failed to setup mock node environment", err);
-    }
-    return mockNodeDir;
-  }
-
-  private cleanupMockNodeEnvironment(mockNodeDir: string): void {
-    try {
-      rmSync(mockNodeDir, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private async cleanupSession(taskRunId: string): Promise<void> {
+  private cleanupSession(taskRunId: string): void {
     const session = this.sessions.get(taskRunId);
     if (session) {
-      // Cancel any ongoing operations
-      try {
-        if (!session.connection.signal.aborted) {
-          await session.connection.cancel({ sessionId: taskRunId });
-        }
-      } catch {
-        // Ignore cancel errors
-      }
-
-      // Cleanup agent (closes streams, aborts subprocess)
-      try {
-        await session.agent.cleanup();
-      } catch {
-        // Ignore cleanup errors
-      }
-
-      this.cleanupMockNodeEnvironment(session.mockNodeDir);
+      session.cleanupEventHandler?.();
+      session.cleanupPermissionHandler?.();
       this.sessions.delete(taskRunId);
     }
-  }
-
-  private createClientConnection(
-    taskRunId: string,
-    _channel: string,
-    clientStreams: { readable: ReadableStream; writable: WritableStream },
-  ): ClientSideConnection {
-    // Capture service reference for use in client callbacks
-    const service = this;
-
-    const emitToRenderer = (payload: unknown) => {
-      // Emit event via TypedEventEmitter for tRPC subscription
-      this.emit(AgentServiceEvent.SessionEvent, {
-        sessionId: taskRunId,
-        payload,
-      });
-    };
-
-    const onAcpMessage = (message: unknown) => {
-      const acpMessage: AcpMessage = {
-        type: "acp_message",
-        ts: Date.now(),
-        message: message as AcpMessage["message"],
-      };
-      emitToRenderer(acpMessage);
-
-      // Detect PR URLs in bash tool results and attach to task
-      this.detectAndAttachPrUrl(taskRunId, message);
-    };
-
-    const tappedReadable = createTappedReadableStream(
-      clientStreams.readable as ReadableStream<Uint8Array>,
-      onAcpMessage,
-    );
-
-    const tappedWritable = createTappedWritableStream(
-      clientStreams.writable as WritableStream<Uint8Array>,
-      onAcpMessage,
-    );
-
-    const client: Client = {
-      async requestPermission(
-        params: RequestPermissionRequest,
-      ): Promise<RequestPermissionResponse> {
-        const toolName =
-          (params.toolCall?.rawInput as { toolName?: string } | undefined)
-            ?.toolName || "";
-        const toolCallId = params.toolCall?.toolCallId || "";
-
-        log.info("requestPermission called", {
-          sessionId: taskRunId,
-          toolCallId,
-          toolName,
-          title: params.toolCall?.title,
-          optionCount: params.options.length,
-        });
-
-        // If we have a toolCallId, always prompt the user for permission.
-        // The claude.ts adapter only calls requestPermission when user input is needed.
-        // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
-        if (toolCallId) {
-          log.info("Permission request requires user input", {
-            sessionId: taskRunId,
-            toolCallId,
-            toolName,
-            title: params.toolCall?.title,
-          });
-
-          return new Promise((resolve, reject) => {
-            const key = `${taskRunId}:${toolCallId}`;
-            service.pendingPermissions.set(key, {
-              resolve,
-              reject,
-              sessionId: taskRunId,
-              toolCallId,
-            });
-
-            log.info("Emitting permission request to renderer", {
-              sessionId: taskRunId,
-              toolCallId,
-            });
-            service.emit(AgentServiceEvent.PermissionRequest, {
-              sessionId: taskRunId,
-              toolCallId,
-              title: params.toolCall?.title || "Permission Required",
-              options: params.options.map((o) => ({
-                kind: o.kind,
-                name: o.name,
-                optionId: o.optionId,
-                description: (o as { description?: string }).description,
-              })),
-              rawInput: params.toolCall?.rawInput,
-            });
-          });
-        }
-
-        // Fallback: no toolCallId means we can't track the response, auto-approve
-        log.warn("No toolCallId in permission request, auto-approving", {
-          sessionId: taskRunId,
-          toolName,
-        });
-        const allowOption = params.options.find(
-          (o) => o.kind === "allow_once" || o.kind === "allow_always",
-        );
-        return {
-          outcome: {
-            outcome: "selected",
-            optionId: allowOption?.optionId ?? params.options[0].optionId,
-          },
-        };
-      },
-
-      async sessionUpdate() {
-        // session/update notifications flow through the tapped stream
-      },
-
-      extNotification: async (
-        method: string,
-        params: Record<string, unknown>,
-      ): Promise<void> => {
-        if (method === "_posthog/sdk_session") {
-          const { sessionId, sdkSessionId } = params as {
-            sessionId: string;
-            sdkSessionId: string;
-          };
-          const session = this.sessions.get(sessionId);
-          if (session) {
-            session.config.sdkSessionId = sdkSessionId;
-            log.info("SDK session ID captured", { sessionId, sdkSessionId });
-          }
-        }
-
-        // Forward extension notifications to the renderer as ACP messages
-        // The extNotification callback doesn't write to the stream, so we need
-        // to manually emit these to the renderer
-        if (
-          method === "_posthog/status" ||
-          method === "_posthog/task_notification" ||
-          method === "_posthog/compact_boundary"
-        ) {
-          log.info("Forwarding extension notification to renderer", {
-            method,
-            taskRunId,
-          });
-          const acpMessage: AcpMessage = {
-            type: "acp_message",
-            ts: Date.now(),
-            message: {
-              jsonrpc: "2.0",
-              method,
-              params,
-            } as AcpMessage["message"],
-          };
-          emitToRenderer(acpMessage);
-        }
-      },
-    };
-
-    const clientStream = ndJsonStream(tappedWritable, tappedReadable);
-
-    return new ClientSideConnection((_agent) => client, clientStream);
   }
 
   private validateSessionParams(
@@ -1379,113 +771,5 @@ For git operations while detached:
 
   private toSessionResponse(session: ManagedSession): SessionResponse {
     return { sessionId: session.taskRunId, channel: session.channel };
-  }
-
-  /**
-   * Detect GitHub PR URLs in bash tool results and attach to task.
-   * This enables webhook tracking by populating the pr_url in TaskRun output.
-   */
-  private detectAndAttachPrUrl(taskRunId: string, message: unknown): void {
-    try {
-      const msg = message as {
-        method?: string;
-        params?: {
-          update?: {
-            sessionUpdate?: string;
-            _meta?: {
-              claudeCode?: {
-                toolName?: string;
-                toolResponse?: unknown;
-              };
-            };
-            content?: Array<{ type?: string; text?: string }>;
-          };
-        };
-      };
-
-      // Only process session/update notifications for tool_call_update
-      if (msg.method !== "session/update") return;
-      if (msg.params?.update?.sessionUpdate !== "tool_call_update") return;
-
-      const toolMeta = msg.params.update._meta?.claudeCode;
-      const toolName = toolMeta?.toolName;
-
-      // Only process Bash tool results
-      if (
-        !toolName ||
-        (!toolName.includes("Bash") && !toolName.includes("bash"))
-      ) {
-        return;
-      }
-
-      // Extract text content from tool response or update content
-      let textToSearch = "";
-
-      // Check toolResponse (hook response with raw output)
-      const toolResponse = toolMeta?.toolResponse;
-      if (toolResponse) {
-        if (typeof toolResponse === "string") {
-          textToSearch = toolResponse;
-        } else if (typeof toolResponse === "object" && toolResponse !== null) {
-          // May be { stdout?: string, stderr?: string } or similar
-          const respObj = toolResponse as Record<string, unknown>;
-          textToSearch =
-            String(respObj.stdout || "") + String(respObj.stderr || "");
-          if (!textToSearch && respObj.output) {
-            textToSearch = String(respObj.output);
-          }
-        }
-      }
-
-      // Also check content array
-      const content = msg.params.update.content;
-      if (Array.isArray(content)) {
-        for (const item of content) {
-          if (item.type === "text" && item.text) {
-            textToSearch += ` ${item.text}`;
-          }
-        }
-      }
-
-      if (!textToSearch) return;
-
-      // Match GitHub PR URLs
-      const prUrlMatch = textToSearch.match(
-        /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/,
-      );
-      if (!prUrlMatch) return;
-
-      const prUrl = prUrlMatch[0];
-      log.info("Detected PR URL in bash output", { taskRunId, prUrl });
-
-      // Find session and attach PR URL
-      const session = this.sessions.get(taskRunId);
-      if (!session) {
-        log.warn("Session not found for PR attachment", { taskRunId });
-        return;
-      }
-
-      // Attach asynchronously without blocking message flow
-      session.agent
-        .attachPullRequestToTask(session.taskId, prUrl)
-        .then(() => {
-          log.info("PR URL attached to task", {
-            taskRunId,
-            taskId: session.taskId,
-            prUrl,
-          });
-        })
-        .catch((err) => {
-          log.error("Failed to attach PR URL to task", {
-            taskRunId,
-            taskId: session.taskId,
-            prUrl,
-            error: err,
-          });
-        });
-    } catch (err) {
-      // Don't let detection errors break message flow
-      log.debug("Error in PR URL detection", { taskRunId, error: err });
-    }
   }
 }

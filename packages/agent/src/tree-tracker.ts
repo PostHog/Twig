@@ -11,12 +11,9 @@
  */
 
 import { exec } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
-import { createGzip, createGunzip } from "node:zlib";
-import { pipeline } from "node:stream/promises";
 import * as tar from "tar";
 import type { PostHogAPIClient } from "./posthog-api.js";
 import { Logger } from "./utils/logger.js";
@@ -28,6 +25,7 @@ export interface TreeSnapshot {
   baseCommit: string | null;
   archiveUrl?: string;
   filesChanged: string[];
+  filesDeleted?: string[];
   timestamp: string;
   interrupted?: boolean;
 }
@@ -144,14 +142,16 @@ export class TreeTracker {
         // No commits yet
       }
 
-      // Get list of changed files
+      // Get list of changed and deleted files
       const filesChanged = await this.getChangedFiles(this.lastTreeHash);
+      const filesDeleted = await this.getDeletedFiles(this.lastTreeHash);
 
       // Create snapshot object
       const snapshot: TreeSnapshot = {
         treeHash,
         baseCommit,
         filesChanged,
+        filesDeleted: filesDeleted.length > 0 ? filesDeleted : undefined,
         timestamp: new Date().toISOString(),
         interrupted: options?.interrupted,
       };
@@ -170,7 +170,12 @@ export class TreeTracker {
       this.logger.info("Tree captured", {
         treeHash,
         filesChanged: filesChanged.length,
+        filesDeleted: filesDeleted.length,
         interrupted: options?.interrupted,
+        archiveUrl: snapshot.archiveUrl,
+        minioPath: snapshot.archiveUrl
+          ? `posthog/${snapshot.archiveUrl}`
+          : null,
       });
 
       return snapshot;
@@ -234,6 +239,61 @@ export class TreeTracker {
   }
 
   /**
+   * Get list of files deleted since last snapshot.
+   * Uses git status to detect deleted files (marked with 'D').
+   */
+  private async getDeletedFiles(
+    previousTreeHash: string | null,
+  ): Promise<string[]> {
+    const deleted: string[] = [];
+
+    try {
+      // Get deleted files from git status
+      const { stdout: statusOutput } = await execAsync(
+        "git status --porcelain",
+        { cwd: this.repositoryPath },
+      );
+
+      for (const line of statusOutput.split("\n")) {
+        if (!line.trim() || line.includes(".posthog/")) continue;
+        const status = line.slice(0, 2);
+        const filePath = line.slice(3).trim();
+
+        // 'D ' = deleted in index, ' D' = deleted in working tree
+        if (status.includes("D") && filePath) {
+          deleted.push(filePath);
+        }
+      }
+
+      // If we have a previous tree hash, also check for files that were removed between snapshots
+      if (previousTreeHash) {
+        try {
+          const { stdout } = await execAsync(
+            `git diff-tree --no-commit-id --name-status -r ${previousTreeHash} HEAD`,
+            { cwd: this.repositoryPath },
+          );
+          for (const line of stdout.split("\n")) {
+            if (!line.trim()) continue;
+            const [status, ...pathParts] = line.split("\t");
+            const filePath = pathParts.join("\t");
+            if (status === "D" && filePath && !filePath.includes(".posthog/")) {
+              if (!deleted.includes(filePath)) {
+                deleted.push(filePath);
+              }
+            }
+          }
+        } catch {
+          // Ignore diff errors
+        }
+      }
+    } catch (error) {
+      this.logger.warn("Failed to get deleted files", { error });
+    }
+
+    return deleted;
+  }
+
+  /**
    * Create and upload a tar.gz archive of changed files.
    */
   private async uploadTreeArchive(
@@ -289,7 +349,16 @@ export class TreeTracker {
       await rm(archivePath, { force: true });
 
       if (artifacts.length > 0) {
-        return artifacts[0].storage_path ?? null;
+        const storagePath = artifacts[0].storage_path ?? null;
+        if (storagePath) {
+          this.logger.info("Tree archive uploaded to Minio", {
+            minioPath: `posthog/${storagePath}`,
+            minioConsole: `http://localhost:19001/browser/posthog/${storagePath}`,
+            treeHash,
+            filesCount: filesChanged.length,
+          });
+        }
+        return storagePath;
       }
     } catch (error) {
       this.logger.warn("Failed to upload tree archive", { error });
@@ -308,9 +377,17 @@ export class TreeTracker {
    * Download and apply a tree archive from a snapshot.
    */
   async applyTreeSnapshot(snapshot: TreeSnapshot): Promise<void> {
-    if (!snapshot.archiveUrl || !this.apiClient) {
-      this.logger.warn("No archive URL or API client for snapshot");
-      return;
+    if (!this.apiClient) {
+      throw new Error("Cannot apply snapshot: API client not configured");
+    }
+
+    if (!snapshot.archiveUrl) {
+      this.logger.warn("Cannot apply snapshot: no archive URL", {
+        treeHash: snapshot.treeHash,
+        filesChanged: snapshot.filesChanged?.length ?? 0,
+        filesDeleted: snapshot.filesDeleted?.length ?? 0,
+      });
+      throw new Error("Cannot apply snapshot: no archive URL");
     }
 
     const tmpDir = join(this.repositoryPath, ".posthog", "tmp");
@@ -319,25 +396,21 @@ export class TreeTracker {
     try {
       await mkdir(tmpDir, { recursive: true });
 
-      // Get presigned URL for download
-      const presignedUrl = await this.apiClient.getArtifactPresignedUrl(
+      // Download archive via API (works from Docker containers)
+      const arrayBuffer = await this.apiClient.downloadArtifact(
         this.taskId,
         this.runId,
         snapshot.archiveUrl,
       );
 
-      if (!presignedUrl) {
-        throw new Error("Failed to get presigned URL for tree archive");
+      if (!arrayBuffer) {
+        throw new Error("Failed to download tree archive");
       }
 
-      // Download archive
-      const response = await fetch(presignedUrl);
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      await writeFile(archivePath, Buffer.from(arrayBuffer));
+      // Artifact content is stored as base64, decode it
+      const base64Content = Buffer.from(arrayBuffer).toString("utf-8");
+      const binaryContent = Buffer.from(base64Content, "base64");
+      await writeFile(archivePath, binaryContent);
 
       // If there's a base commit, checkout to it first
       if (snapshot.baseCommit) {
@@ -359,11 +432,28 @@ export class TreeTracker {
         cwd: this.repositoryPath,
       });
 
+      // Delete files that were removed during the snapshot period
+      if (snapshot.filesDeleted?.length) {
+        for (const filePath of snapshot.filesDeleted) {
+          const fullPath = join(this.repositoryPath, filePath);
+          try {
+            await rm(fullPath, { force: true });
+            this.logger.debug(`Deleted file: ${filePath}`);
+          } catch {
+            // File may not exist, which is fine
+          }
+        }
+        this.logger.info(
+          `Deleted ${snapshot.filesDeleted.length} files from snapshot`,
+        );
+      }
+
       this.lastTreeHash = snapshot.treeHash;
 
       this.logger.info("Tree snapshot applied", {
         treeHash: snapshot.treeHash,
         filesChanged: snapshot.filesChanged.length,
+        filesDeleted: snapshot.filesDeleted?.length ?? 0,
       });
 
       // Clean up

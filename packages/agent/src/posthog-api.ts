@@ -164,6 +164,31 @@ export class PostHogAPIClient {
   }
 
   /**
+   * Download artifact content by storage path
+   * Gets a presigned URL and fetches the content
+   */
+  async downloadArtifact(
+    taskId: string,
+    runId: string,
+    storagePath: string,
+  ): Promise<ArrayBuffer | null> {
+    const url = await this.getArtifactPresignedUrl(taskId, runId, storagePath);
+    if (!url) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download artifact: ${response.status}`);
+      }
+      return response.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Fetch logs from S3 using presigned URL from TaskRun
    * @param taskRun - The task run containing the log_url
    * @returns Array of stored entries, or empty array if no logs available

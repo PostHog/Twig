@@ -268,7 +268,7 @@ export class CloudConnection {
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    const delay = this.reconnectDelay * 2 ** (this.reconnectAttempts - 1);
     this.logger.info("Attempting reconnect", {
       attempt: this.reconnectAttempts,
       delay,

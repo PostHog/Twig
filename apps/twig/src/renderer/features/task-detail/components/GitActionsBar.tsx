@@ -30,6 +30,7 @@ import {
 } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { trpcVanilla } from "@renderer/trpc";
+import { useSessionCapabilities } from "@/renderer/hooks/useSessionStatus";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import {
@@ -111,16 +112,19 @@ export function GitActionsBar({
   const { sendPrompt } = useSessionActions();
   const session = useSessionForTask(taskId);
   const queryClient = useQueryClient();
+  const { data: capabilities } = useSessionCapabilities(session?.taskRunId);
 
-  const isCloud = session?.isCloud ?? false;
+  const supportsGitStatus = capabilities?.supportsGitStatus ?? true;
 
   const { smartAction, ahead, behind, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
-    enabled: !isCloud,
+    enabled: supportsGitStatus,
   });
 
-  const effectiveAction: SmartGitAction = isCloud ? "commit-push" : smartAction;
+  const effectiveAction: SmartGitAction = supportsGitStatus
+    ? smartAction
+    : "commit-push";
 
   const handleAction = useCallback(
     async (actionType: GitActionType, prompt: string) => {
@@ -184,16 +188,16 @@ export function GitActionsBar({
     return null;
   }
 
-  if (!isCloud && !isFetched) {
+  if (supportsGitStatus && !isFetched) {
     return null;
   }
 
-  if (!isCloud && !smartAction) {
+  if (supportsGitStatus && !smartAction) {
     return null;
   }
 
   const statusParts: string[] = [];
-  if (!isCloud) {
+  if (supportsGitStatus) {
     if (ahead > 0) {
       statusParts.push(`${ahead} ahead`);
     }

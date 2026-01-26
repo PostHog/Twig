@@ -54,7 +54,7 @@ interface ConversationViewProps {
   isPromptPending: boolean;
   promptStartedAt?: number | null;
   repoPath?: string | null;
-  isCloud?: boolean;
+  executionEnvironment?: "local" | "cloud";
   taskId?: string;
 }
 
@@ -66,7 +66,7 @@ export function ConversationView({
   isPromptPending,
   promptStartedAt,
   repoPath,
-  isCloud = false,
+  executionEnvironment = "local",
   taskId,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -133,7 +133,7 @@ export function ConversationView({
                 key={item.id}
                 turn={item}
                 repoPath={repoPath}
-                isCloud={isCloud}
+                executionEnvironment={executionEnvironment}
                 taskId={taskId}
               />
             ) : (
@@ -165,7 +165,7 @@ export function ConversationView({
 interface TurnViewProps {
   turn: Turn;
   repoPath?: string | null;
-  isCloud?: boolean;
+  executionEnvironment?: "local" | "cloud";
   taskId?: string;
 }
 
@@ -181,7 +181,7 @@ function getInterruptMessage(reason?: string): string {
 const TurnView = memo(function TurnView({
   turn,
   repoPath,
-  isCloud = false,
+  executionEnvironment = "local",
   taskId,
 }: TurnViewProps) {
   const wasCancelled = turn.stopReason === "cancelled";
@@ -233,7 +233,7 @@ const TurnView = memo(function TurnView({
           actionType={gitAction.actionType}
           repoPath={repoPath}
           turnId={turn.id}
-          isCloud={isCloud}
+          executionEnvironment={executionEnvironment}
         />
       )}
       {wasCancelled && (
@@ -432,6 +432,7 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
   switch (update.sessionUpdate) {
     case "user_message_chunk":
       // Skip - we get user content from the prompt request
+      // (user_message_chunk is echoed back by the server but we already showed it)
       break;
 
     case "agent_message_chunk":

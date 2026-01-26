@@ -1,6 +1,6 @@
 import "./message-editor.css";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { CloudModeIndicator } from "@features/sessions/components/CloudModeIndicator";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -54,6 +54,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
     const isCloud = context?.isCloud ?? false;
+    const isTransitioning = context?.isTransitioning ?? false;
     const repoPath = context?.repoPath;
     const isDisabled = disabled || !isOnline;
 
@@ -160,7 +161,10 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
                 bash mode
               </Text>
             )}
-            <CloudModeIndicator isCloud={isCloud} />
+            <CloudModeIndicator
+              isCloud={isCloud}
+              isTransitioning={isTransitioning}
+            />
           </Flex>
           <Flex gap="4" align="center">
             {isLoading && onCancel ? (

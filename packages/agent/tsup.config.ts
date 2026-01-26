@@ -58,6 +58,7 @@ export default defineConfig({
     ...builtinModules,
     ...builtinModules.map((m) => `node:${m}`),
     "@anthropic-ai/claude-agent-sdk",
+    "@agentclientprotocol/sdk",
     "dotenv",
     "openai",
     "zod",

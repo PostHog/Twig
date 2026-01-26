@@ -183,7 +183,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             onBashCommand={handleBashCommand}
             onCancelPrompt={handleCancelPrompt}
             repoPath={repoPath}
-            isCloud={session?.isCloud ?? false}
+            executionEnvironment={session?.isCloud ? "cloud" : "local"}
             hasError={hasError}
             errorMessage={errorMessage}
             onRetry={handleRetry}

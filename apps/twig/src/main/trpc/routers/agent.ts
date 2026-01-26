@@ -7,6 +7,7 @@ import {
   cancelPromptInput,
   cancelSessionInput,
   cloudModeResultSchema,
+  getSessionStatusInput,
   listSessionsInput,
   listSessionsOutput,
   notifySessionContextInput,
@@ -15,6 +16,7 @@ import {
   reconnectSessionInput,
   respondToPermissionInput,
   sessionResponseSchema,
+  sessionStatusSchema,
   setModeInput,
   setModelInput,
   startSessionInput,
@@ -132,6 +134,11 @@ export const agentRouter = router({
         .listSessions(input.taskId)
         .map((s) => ({ taskRunId: s.taskRunId, repoPath: s.repoPath })),
     ),
+
+  getSessionStatus: publicProcedure
+    .input(getSessionStatusInput)
+    .output(sessionStatusSchema.nullable())
+    .query(({ input }) => getService().getSessionStatus(input.sessionId) ?? null),
 
   notifySessionContext: publicProcedure
     .input(notifySessionContextInput)

@@ -159,6 +159,7 @@ export interface TreeSnapshotEvent {
   baseCommit: string | null;
   archiveUrl?: string;
   filesChanged: string[];
+  filesDeleted?: string[];
   timestamp: string;
   interrupted?: boolean;
   device?: DeviceInfo;

@@ -13,15 +13,16 @@ interface GitActionResultProps {
   actionType: GitActionType;
   repoPath: string;
   turnId: string;
-  isCloud?: boolean;
+  executionEnvironment?: "local" | "cloud";
 }
 
 export function GitActionResult({
   actionType,
   repoPath,
   turnId,
-  isCloud = false,
+  executionEnvironment = "local",
 }: GitActionResultProps) {
+  const isCloud = executionEnvironment === "cloud";
   const canQueryGit = !isCloud && !!repoPath;
 
   const { data: commitInfo } = useQuery({

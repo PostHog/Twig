@@ -44,67 +44,84 @@ Most cloud agent implementations force you to choose one or the other. The goal 
                                    │ Streamable HTTP (SSE + POST)
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              BACKEND                                     │
+│                         POSTHOG BACKEND                                  │
 │                                                                          │
 │   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    │
 │   │   Sync API      │    │    Temporal     │    │   Storage       │    │
 │   │   (FastAPI)     │◄──►│    Workflow     │◄──►│                 │    │
 │   └─────────────────┘    └─────────────────┘    │  - ClickHouse   │    │
-│          │                                      │    (events)     │    │
-│          │                                      │  - S3 (trees)   │    │
-│          ▼                                      └─────────────────┘    │
-│   ┌─────────────────┐                                                  │
-│   │     Kafka       │◄── Event streaming                               │
-│   │   (real-time)   │                                                  │
-│   └─────────────────┘                                                  │
-└─────────────────────────────────────────────────────────────────────────┘
-                         ▲                              │
-                         │ SSE (events)                 │ SSE (commands)
-                         │                              ▼
+│          │                      │               │    (events)     │    │
+│          │                      │               │  - S3 (trees)   │    │
+│          ▼                      │               │  - Kafka        │    │
+│   ┌─────────────────┐           │               └─────────────────┘    │
+│   │  Redis Pub/Sub  │           │                       ▲               │
+│   │  (real-time)    │           │                       │               │
+│   └─────────────────┘           │               append_log API          │
+│          │                      │                       │               │
+└──────────┼──────────────────────┼───────────────────────┼───────────────┘
+           │                      │                       │
+           │ SSE (commands)       │ provision_sandbox     │
+           ▼                      ▼                       │
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              SANDBOX                                     │
+│                    SANDBOX (Docker/Modal)                                │
 │                                                                          │
-│   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    │
-│   │   Agent Server  │◄──►│  Tree Tracker   │───►│   S3 Upload     │    │
-│   │   (message loop)│    │  (diff-tree)    │    │   (trees only)  │    │
-│   └─────────────────┘    └─────────────────┘    └─────────────────┘    │
-│           │                      │                                      │
-│           │                      └───► Kafka (events)                   │
-│           └──────────────► Git Repository ◄─────────────────────────────│
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                   @posthog/agent-server                          │   │
+│   │                   (packages/agent-server/)                       │   │
+│   │                                                                  │   │
+│   │   AgentServer class:                                             │   │
+│   │     - SSE connection to backend (GET /sync) for commands         │   │
+│   │     - ACP connection to Claude CLI subprocess                    │   │
+│   │     - TreeTracker for capturing file state                       │   │
+│   │     - Events persisted via POST /append_log ─────────────────────┼───┘
+│   │                                                                  │   │
+│   └───────────────────────────┬──────────────────────────────────────┘   │
+│                               │                                          │
+│                               │ ACP (Agent Client Protocol)              │
+│                               ▼                                          │
+│                    ┌─────────────────────┐                               │
+│                    │     Claude CLI      │                               │
+│                    │   (subprocess)      │                               │
+│                    └─────────────────────┘                               │
+│                               │                                          │
+│                               ▼                                          │
+│                    ┌─────────────────────┐                               │
+│                    │   Git Repository    │                               │
+│                    └─────────────────────┘                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Data flow:**
 
-1. Agent writes files in sandbox
-2. Tree tracker periodically computes `git diff-tree` since last snapshot
-3. Trees (not individual files) are uploaded to S3
-4. All events (including tree snapshots) stream to Kafka → ClickHouse for persistence
-5. Clients receive real-time events via SSE (backed by Kafka)
-6. On handoff: client restores full state from latest tree + ClickHouse event history
+1. User sends message (Client → POST /sync → Backend → Redis `to-agent` channel)
+2. Agent server receives command via SSE stream (GET /sync)
+3. Agent server calls `clientConnection.prompt()` via ACP to Claude CLI
+4. Claude generates response (streamed via ACP `sessionUpdate` callbacks)
+5. Agent server persists each event via `POST /append_log`
+6. Backend distributes events to connected clients via SSE + stores to S3/Kafka/ClickHouse
 
-**Key insight:** Git trees are the source of truth for file state. ClickHouse is the source of truth for what happened (event log). Kafka provides real-time streaming. No real-time file sync—state transfer happens via `resume(task_id)`.
+**Key insight:** Git trees are the source of truth for file state. ClickHouse is the source of truth for events. The backend handles all persistence (ClickHouse for events, S3 for tree archives, Kafka for real-time streaming) via the `append_log` API. The agent server doesn't write directly to these stores—it calls the backend API.
 
 ---
 
 ## Storage Architecture
 
-### Events → Kafka → ClickHouse
+### Events → append_log API → ClickHouse
 
-Agent events flow through Kafka for real-time delivery and are persisted to ClickHouse for querying and replay:
+Agent events flow through the `append_log` API. The backend handles distribution and persistence:
 
 ```
-Agent ──► Kafka Topic ──► ClickHouse Table
-              │
-              └──► SSE Stream to Clients (real-time)
+Agent ──► POST /append_log ──► Backend ──┬──► ClickHouse (persistent event log)
+                                         ├──► Kafka (real-time streaming)
+                                         └──► SSE to clients (if connected)
 ```
 
-**Benefits of ClickHouse:**
+**Why the agent doesn't write directly to Kafka/ClickHouse:**
 
-- Sub-second queries on event history
-- Efficient storage for JSONL-style event data
-- Native support for time-series queries (replay from timestamp, Last-Event-ID)
-- Scales with PostHog's existing infrastructure
+- Simpler agent implementation (just HTTP calls)
+- Backend can add metadata, validate, rate-limit
+- Single source of truth for event routing logic
+- Agent doesn't need Kafka/ClickHouse credentials in sandbox
 
 ### Tree Archives → S3
 
@@ -162,7 +179,7 @@ Instead of uploading every file change, we use `git diff-tree` to capture state 
 Agent works on files
        │
        ▼
-Tree tracker detects significant change
+TreeTracker detects significant change
 (commit, tool completion, or periodic)
        │
        ├──► git write-tree (capture current state)
@@ -171,13 +188,14 @@ Tree tracker detects significant change
        │
        ├──► Pack changed files into tree archive
        │
-       ├──► PUT to S3: trees/{tree_hash}.tar.gz
-       │
-       └──► Emit event to Kafka: { tree_hash, base_commit, files_changed }
+       └──► POST /append_log with _posthog/tree_snapshot event
                     │
-                    ├──► Kafka → ClickHouse (persistence)
-                    │
-                    └──► Kafka → SSE stream to clients (real-time)
+                    ▼
+            Backend handles:
+                    ├──► PUT to S3: trees/{tree_hash}.tar.gz (archive only)
+                    ├──► Persist event to ClickHouse (event log)
+                    ├──► Kafka for real-time streaming
+                    └──► SSE to connected clients
 ```
 
 ### When Trees Are Captured
@@ -191,11 +209,11 @@ Tree tracker detects significant change
 
 ## Resume & State
 
-Since tree snapshots are captured continuously into ClickHouse, we can resume from any point. There's no special "pause" operation—state just exists.
+Since tree snapshots are captured continuously via `append_log`, we can resume from any point. There's no special "pause" operation—state just exists.
 
 ### State = Task + Tree
 
-Everything needed to resume is in ClickHouse:
+Everything needed to resume is in ClickHouse (events) and S3 (tree archives):
 
 ```typescript
 // From the latest tree_snapshot event in ClickHouse
@@ -209,26 +227,23 @@ interface ResumeState {
 
 To resume a task anywhere:
 1. Find task by `task_id`
-2. Query ClickHouse for latest `tree_snapshot` event
-3. That contains `base_commit` + `tree_hash` + `tree_url`
-4. Restore from there
+2. Query ClickHouse for task run events via backend API
+3. Find latest `tree_snapshot` event with `base_commit` + `tree_hash` + `tree_url`
+4. Download tree archive from S3
+5. Restore from there
 
 ### Resume Flow
 
 ```
-resume(task_id) called
+resumeFromLog(taskId, runId) called
        │
-       ├──► Query ClickHouse for task_id events
+       ├──► Fetch events from backend API (queries ClickHouse)
        │
-       ├──► Find latest tree_snapshot event
+       ├──► Parse events to find latest tree_snapshot
        │
-       ├──► Clone/fetch repo to base_commit
+       ├──► Return resume state: { latestSnapshot, interrupted }
        │
-       ├──► Download tree archive from S3 tree_url
-       │
-       ├──► Apply tree on top of base_commit
-       │
-       └──► Start agent with conversation from ClickHouse
+       └──► Agent server sets TreeTracker to last known state
                     │
                     ▼
             Agent continues where it left off
@@ -244,13 +259,13 @@ All handoffs are just: stop current environment, resume elsewhere.
 Local Twig                     Backend                         Cloud Sandbox
     │                            │                                  │
     │── stop local agent         │                                  │
-    │   (tree snapshot to        │                                  │
-    │    Kafka → ClickHouse)     │                                  │
+    │   (tree snapshot via       │                                  │
+    │    append_log)             │                                  │
     │                            │                                  │
     │── startCloud(task_id) ────►│                                  │
     │                            │── provision sandbox ────────────►│
-    │                            │── resume(task_id) ──────────────►│
-    │                            │                                  │── restore from ClickHouse
+    │                            │── start agent-server ───────────►│
+    │                            │                                  │── resumeFromLog()
     │                            │◄── ready ────────────────────────│
     │◄── connected ──────────────│                                  │
 ```
@@ -261,12 +276,13 @@ Local Twig                     Backend                         Cloud Sandbox
 Cloud Sandbox                  Backend                         Local Twig
     │                            │                                  │
     │── stop() ─────────────────►│                                  │
-    │   (final tree to Kafka)    │                                  │
+    │   (final tree via          │                                  │
+    │    append_log)             │                                  │
     │── shutdown ────────────────│                                  │
     │                            │                                  │
     │                            │◄── pullToLocal(task_id) ─────────│
-    │                            │                                  │── resume(task_id)
-    │                            │                                  │── restore from ClickHouse
+    │                            │                                  │── resumeFromLog()
+    │                            │                                  │── restore from S3 logs
     │                            │                                  │── continue locally
 ```
 
@@ -275,7 +291,7 @@ Cloud Sandbox                  Backend                         Local Twig
 ```
 ... time passes ...
     │
-    │── resume(task_id) ──────► restore from latest tree in ClickHouse
+    │── resumeFromLog(task_id) ──────► query ClickHouse, restore tree from S3
     │── continue working
 ```
 
@@ -286,7 +302,7 @@ Resume must handle:
 1. **Partial uploads** — Tree upload must complete before stop confirms
 2. **Large repos** — Stream tree archives, don't load in memory
 3. **Network failures** — Retry with exponential backoff
-4. **Conversation replay** — Rebuild conversation from ClickHouse events
+4. **Conversation replay** — Rebuild conversation from log events
 5. **Concurrent access** — Prevent two environments from running same task simultaneously
 
 ---
@@ -295,7 +311,7 @@ Resume must handle:
 
 ### Events in ClickHouse = Recovery
 
-Recovery is just `resume(task_id)`. ClickHouse has everything:
+Recovery is just `resumeFromLog(taskId, runId)`. ClickHouse has all events:
 
 ```
 ClickHouse Events (task_id = xxx):
@@ -311,7 +327,7 @@ ClickHouse Events (task_id = xxx):
 
 Device changes are visible naturally in the event stream—no explicit handoff events needed.
 
-**To resume:** Query ClickHouse for latest `tree_snapshot`, restore from it, replay conversation.
+**To resume:** Query ClickHouse for latest `tree_snapshot`, download archive from S3, restore from it.
 
 **If tree expired in S3:** Fall back to latest `git_commit` (loses uncommitted work).
 
@@ -336,101 +352,118 @@ Device changes are visible naturally in the event stream—no explicit handoff e
 
 ## Agent Architecture
 
-### Server Mode
+### The @posthog/agent-server Package
 
-The agent runs in a message loop rather than single execution:
+The agent server runs in cloud sandboxes (Docker/Modal) and is implemented in:
+
+```
+packages/agent-server/
+├── src/
+│   ├── agent-server.ts   # Main AgentServer class
+│   ├── index.ts          # CLI entry point + exports
+│   └── types.ts          # AgentServerConfig, DeviceInfo, TreeSnapshot
+├── package.json
+└── tsup.config.ts
+```
+
+### How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        AGENT SERVER                              │
+│                    AgentServer (cloud sandbox)                   │
 │                                                                  │
-│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-│   │  Message    │    │   Control   │    │   Event     │        │
-│   │  Queue      │    │   Queue     │    │   Emitter   │        │
-│   │  (input)    │    │  (signals)  │    │  (output)   │        │
-│   └──────┬──────┘    └──────┬──────┘    └──────▲──────┘        │
-│          │                  │                  │                │
-│          └──────────────────┼──────────────────┘                │
-│                             │                                    │
-│                    ┌────────▼────────┐                          │
-│                    │                 │                          │
-│                    │   Agent Loop    │                          │
-│                    │                 │                          │
-│                    │  - Process msg  │                          │
-│                    │  - Run tools    │                          │
-│                    │  - Emit events  │ ──► Kafka                │
-│                    │  - Ask questions│                          │
-│                    │                 │                          │
-│                    └─────────────────┘                          │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                    SSE Connection                        │   │
+│   │               (GET /sync from backend)                   │   │
+│   │                                                          │   │
+│   │   Receives: user_message, cancel, stop commands          │   │
+│   └──────────────────────────┬───────────────────────────────┘   │
+│                              │                                    │
+│                              ▼                                    │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                    ACP Connection                        │   │
+│   │             (to Claude CLI subprocess)                   │   │
+│   │                                                          │   │
+│   │   clientConnection.prompt() → sessionUpdate callbacks    │   │
+│   └──────────────────────────┬───────────────────────────────┘   │
+│                              │                                    │
+│                              ▼                                    │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                    TreeTracker                           │   │
+│   │               (captures file state)                      │   │
+│   │                                                          │   │
+│   │   After file changes → _posthog/tree_snapshot events     │   │
+│   └──────────────────────────┬───────────────────────────────┘   │
+│                              │                                    │
+│                              ▼                                    │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                 POST /append_log                         │   │
+│   │            (persist events to backend)                   │   │
+│   └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Message types:**
+### Key Methods
+
+- `start()` — Connect SSE, initialize ACP, resume from previous state, process initial prompt
+- `stop()` — Capture final tree state, cleanup connections
+- `handleUserMessage()` — Process user prompt via `clientConnection.prompt()`
+- `captureTreeState()` — Capture and emit `_posthog/tree_snapshot` events
+
+### Dependencies
+
+- `@posthog/agent` — Core agent SDK (createAcpConnection, TreeTracker, resumeFromLog)
+- `@agentclientprotocol/sdk` — ACP protocol (ClientSideConnection)
+
+### Message Types
 
 - `user_message` — New prompt or response to question
 - `cancel` — Stop current operation
 - `stop` — Shut down agent (writes final tree, then exits)
 
-**How commands reach the agent:** On startup, the agent opens an outbound SSE connection to the backend. Client commands (prompts, cancel, mode switch) are pushed directly through this connection to give as close to a local experience for latency as possible. This bypasses Temporal for real-time operations.
+**How commands reach the agent:** On startup, the agent server opens an outbound SSE connection to the backend (`GET /sync`). When a client sends a command via `POST /sync`, the backend routes it through Redis pub/sub to all connected SSE streams for that run. This bypasses Temporal for real-time operations, giving low-latency interactive feel.
 
 ### Agent Resume API
 
-The agent exposes `resume` and `stop` as the core lifecycle operations:
+The agent-server uses `resumeFromLog` from `@posthog/agent` to restore state:
 
 ```typescript
-interface Agent {
-  // Resume from a task's latest state (reads from ClickHouse)
-  resume(taskId: string): Promise<void>
+// In agent-server/src/agent-server.ts
+private async resumeFromPreviousState(): Promise<void> {
+  const resumeState = await resumeFromLog({
+    taskId,
+    runId,
+    repositoryPath,
+    apiClient,  // PostHogAPIClient fetches logs from backend
+    logger,
+  })
 
-  // Stop agent, ensuring final tree is written
-  stop(): Promise<void>
-}
-```
-
-**Resume implementation:**
-
-```typescript
-async resume(taskId: string): Promise<void> {
-  // 1. Query ClickHouse for events
-  const events = await this.queryEvents(taskId)
-
-  // 2. Find latest tree snapshot
-  const treeEvent = events.findLast(e => e.method === "_posthog/tree_snapshot")
-  if (!treeEvent) {
-    throw new Error("No tree snapshot found")
+  if (resumeState.latestSnapshot) {
+    // Set tree tracker to continue from last known state
+    this.treeTracker.setLastTreeHash(resumeState.latestSnapshot.treeHash)
   }
-
-  const { base_commit, tree_hash, tree_url } = treeEvent.params
-
-  // 3. Checkout base commit
-  await git.fetch()
-  await git.checkout(base_commit)
-
-  // 4. Download and apply tree from S3
-  const archive = await this.downloadTreeArchive(tree_url)
-  await this.applyTreeArchive(archive)
-
-  // 5. Rebuild conversation from events
-  const conversation = this.rebuildConversationFromEvents(events)
-  this.loadConversation(conversation)
-
-  // 6. Ready to continue
-  this.emit("resumed", { taskId })
 }
 ```
+
+The `resumeFromLog` function:
+1. Fetches task run logs from the backend API (which reads from S3)
+2. Parses NDJSON entries to find latest `_posthog/tree_snapshot`
+3. Returns the resume state including latest snapshot and interrupted flag
 
 **Stop implementation:**
 
 ```typescript
 async stop(): Promise<void> {
-  // 1. Wait for safe point (not mid-tool-execution)
-  await this.waitForSafePoint()
+  // 1. Capture final tree state via POST /append_log
+  await this.captureTreeState({ interrupted: true, force: true })
 
-  // 2. Capture final tree snapshot (→ S3 + Kafka)
-  await this.captureTreeSnapshot()
+  // 2. Clean up ACP connection
+  if (this.acpConnection) {
+    await this.acpConnection.cleanup()
+  }
 
-  // 3. Clean shutdown
-  this.emit("stopped")
+  // 3. Close SSE connection
+  this.sseAbortController?.abort()
 }
 ```
 
@@ -473,7 +506,7 @@ class CloudSessionWorkflow:
 
 - Temporal provisions sandbox and handles cleanup
 - Messages/commands go directly via SSE (not through Temporal)
-- Agent handles resume internally (reads state from ClickHouse)
+- Agent handles resume internally (reads state from backend API → S3 logs)
 - 10-min inactivity triggers stop
 - Agent always writes tree on stop → always resumable
 
@@ -511,9 +544,20 @@ interface SessionProvider {
 
 **Key files:**
 
+Array packages:
+- `packages/agent/` — Core agent SDK (createAcpConnection, TreeTracker, CloudConnection, resumeFromLog)
+- `packages/agent-server/` — Cloud sandbox runner (@posthog/agent-server CLI)
+- `packages/core/` — Shared business logic for jj/GitHub operations
+
+Twig app:
 - `apps/twig/src/main/services/agent/service.ts` — AgentService, picks provider type
 - `apps/twig/src/main/services/agent/providers/local-provider.ts` — Local ACP/SDK logic
-- `apps/twig/src/main/services/agent/providers/cloud-provider.ts` — Cloud SSE logic
+- `apps/twig/src/main/services/agent/providers/cloud-provider.ts` — Cloud SSE logic (uses CloudConnection)
+
+PostHog backend (not in this repo):
+- `products/tasks/backend/api.py` — Sync and append_log endpoints
+- `products/tasks/backend/sync/router.py` — Redis pub/sub for real-time routing
+- `products/tasks/temporal/process_task/` — Temporal workflow for sandbox lifecycle
 
 ---
 
@@ -526,7 +570,7 @@ Following [MCP's pattern](https://modelcontextprotocol.io/specification/2025-03-
 - **POST** — Client sends messages (user input, cancel, stop)
 - **GET** — Client opens SSE stream for server events
 - **Session-Id header** — Identifies the session (run ID)
-- **Last-Event-ID header** — Resume from where you left off (maps to ClickHouse event_id)
+- **Last-Event-ID header** — Resume from where you left off
 
 ### Endpoint
 
@@ -570,14 +614,16 @@ id: 125
 data: {"jsonrpc":"2.0","method":"agent_message_chunk","params":{"text":"I found the issue..."}}
 ```
 
-**Event replay:** When `Last-Event-ID` is provided, backend queries ClickHouse for events with `event_id > Last-Event-ID`, replays those, then switches to live Kafka stream.
+**Event replay:** When `Last-Event-ID` is provided, backend replays missed events from storage, then continues with live events.
 
 ### Why SSE + Kafka + ClickHouse?
 
 - **Kafka** — Real-time event streaming, handles multiple consumers
-- **ClickHouse** — Efficient event replay, sub-second queries
+- **ClickHouse** — Efficient event replay and queries, persistent storage
 - **SSE** — Works with load balancing, built-in resumability via `Last-Event-ID`
 - No WebSocket state to manage across pods
+
+The backend handles all storage concerns. The agent and clients only interact via HTTP endpoints (`/sync` and `/append_log`).
 
 ---
 
@@ -588,13 +634,12 @@ data: {"jsonrpc":"2.0","method":"agent_message_chunk","params":{"text":"I found 
 ```
 Client                          Backend                         Sandbox
   │                                │                               │
-  │── GET /sync (SSE) ────────────►│                               │
-  │                                │◄── Kafka subscription         │
+  │── GET /sync (SSE) ────────────►│◄── GET /sync (SSE) ───────────│
   │                                │                               │
-  │◄── tree_snapshot ──────────────│◄── tree captured (Kafka) ─────│
-  │◄── agent_message ──────────────│◄── agent output (Kafka) ──────│
+  │◄── tree_snapshot ──────────────│◄── POST /append_log ──────────│
+  │◄── agent_message ──────────────│◄── POST /append_log ──────────│
   │                                │                               │
-  │── POST /sync {message} ───────►│── push via SSE ──────────────►│
+  │── POST /sync {message} ───────►│── (via Redis pub/sub) ───────►│
   │◄── 202 Accepted ───────────────│                               │
 ```
 
@@ -604,15 +649,16 @@ Client                          Backend                         Sandbox
                                 Backend                         Sandbox
                                    │                               │
                                    │◄── agent keeps working ───────│
-                                   │◄── events to Kafka ───────────│
+                                   │◄── POST /append_log ──────────│
                                    │         │                     │
                                    │         ▼                     │
-                                   │    ClickHouse (persisted)     │
+                                   │    ClickHouse (events)        │
+                                   │    S3 (tree archives)         │
                                    │                               │
                                    │    (no client connected)      │
 ```
 
-Agent continues autonomously. Events persist to ClickHouse via Kafka.
+Agent continues autonomously. Events persist to ClickHouse via `append_log` API.
 
 ### Resume (Reconnect)
 
@@ -628,7 +674,7 @@ Client                          Backend
   │◄── id:100 (live from Kafka) ───│  Switch to live stream
 ```
 
-Client catches up instantly from ClickHouse, then receives live events from Kafka.
+Client catches up from ClickHouse, then receives live events via Kafka.
 
 ---
 
@@ -684,6 +730,7 @@ The `device` field on every event lets the log naturally show where work happene
 ## References
 
 - [MCP Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
+- [Agent Client Protocol (ACP)](https://github.com/anthropics/acp)
 - [Temporal Signals](https://docs.temporal.io/workflows#signal)
 - [ClickHouse Documentation](https://clickhouse.com/docs)
 - [Kafka Documentation](https://kafka.apache.org/documentation/)

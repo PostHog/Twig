@@ -14,6 +14,7 @@ export interface EditorContext {
   disabled: boolean;
   isLoading: boolean;
   isCloud: boolean;
+  isTransitioning: boolean;
 }
 
 interface DraftState {
@@ -79,6 +80,8 @@ export const useDraftStore = create<DraftStore>()(
               disabled: context.disabled ?? existing?.disabled ?? false,
               isLoading: context.isLoading ?? existing?.isLoading ?? false,
               isCloud: context.isCloud ?? existing?.isCloud ?? false,
+              isTransitioning:
+                context.isTransitioning ?? existing?.isTransitioning ?? false,
             };
           }),
 

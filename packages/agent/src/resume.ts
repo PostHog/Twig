@@ -15,11 +15,10 @@
 
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type { PostHogAPIClient } from "./posthog-api.js";
-import { TreeTracker, type TreeSnapshot } from "./tree-tracker.js";
+import { TreeTracker } from "./tree-tracker.js";
 import type {
   DeviceInfo,
   StoredNotification,
-  TaskRun,
   TreeSnapshotEvent,
 } from "./types.js";
 import { Logger } from "./utils/logger.js";
@@ -106,24 +105,42 @@ export async function resumeFromLog(
   if (latestSnapshot) {
     logger.info("Found tree snapshot", {
       treeHash: latestSnapshot.treeHash,
+      hasArchiveUrl: !!latestSnapshot.archiveUrl,
+      filesChanged: latestSnapshot.filesChanged?.length ?? 0,
+      filesDeleted: latestSnapshot.filesDeleted?.length ?? 0,
       interrupted: latestSnapshot.interrupted,
     });
 
-    const treeTracker = new TreeTracker({
-      repositoryPath: config.repositoryPath,
-      taskId: config.taskId,
-      runId: config.runId,
-      apiClient: config.apiClient,
-      logger: logger.child("TreeTracker"),
-    });
-
-    try {
-      await treeTracker.applyTreeSnapshot(latestSnapshot);
-      treeTracker.setLastTreeHash(latestSnapshot.treeHash);
-    } catch (error) {
-      logger.warn("Failed to apply tree snapshot, continuing without it", {
-        error,
+    // Warn if snapshot has no archive URL (can't restore files)
+    if (!latestSnapshot.archiveUrl) {
+      logger.warn(
+        "Snapshot found but has no archive URL - files cannot be restored",
+        {
+          treeHash: latestSnapshot.treeHash,
+          filesChanged: latestSnapshot.filesChanged?.length ?? 0,
+        },
+      );
+    } else {
+      const treeTracker = new TreeTracker({
+        repositoryPath: config.repositoryPath,
+        taskId: config.taskId,
+        runId: config.runId,
+        apiClient: config.apiClient,
+        logger: logger.child("TreeTracker"),
       });
+
+      try {
+        await treeTracker.applyTreeSnapshot(latestSnapshot);
+        treeTracker.setLastTreeHash(latestSnapshot.treeHash);
+        logger.info("Tree snapshot applied successfully", {
+          treeHash: latestSnapshot.treeHash,
+        });
+      } catch (error) {
+        logger.warn("Failed to apply tree snapshot, continuing without it", {
+          error,
+          treeHash: latestSnapshot.treeHash,
+        });
+      }
     }
   }
 
@@ -156,7 +173,14 @@ function findLatestTreeSnapshot(
 ): TreeSnapshotEvent | null {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
-    if (entry.notification?.method === "_posthog/tree_snapshot") {
+    // Note: snapshots can be written two ways:
+    // 1. Via extNotification (ACP SDK adds underscore prefix) → __posthog/tree_snapshot
+    // 2. Via direct API call → _posthog/tree_snapshot
+    const method = entry.notification?.method;
+    if (
+      method === "__posthog/tree_snapshot" ||
+      method === "_posthog/tree_snapshot"
+    ) {
       const params = entry.notification.params as TreeSnapshotEvent | undefined;
       if (params?.treeHash) {
         return params;
