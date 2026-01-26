@@ -16,18 +16,22 @@ export function formatDuration(ms: number): string {
   return `${secs}.${centiseconds.toString().padStart(2, "0")}s`;
 }
 
-export function GeneratingIndicator() {
+interface GeneratingIndicatorProps {
+  startedAt?: number | null;
+}
+
+export function GeneratingIndicator({ startedAt }: GeneratingIndicatorProps) {
   const [elapsed, setElapsed] = useState(0);
   const [activityIndex, setActivityIndex] = useState(0);
 
   useEffect(() => {
-    const startTime = Date.now();
+    const startTime = startedAt ?? Date.now();
     const interval = setInterval(() => {
       setElapsed(Date.now() - startTime);
     }, 50);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [startedAt]);
 
   useEffect(() => {
     const interval = setInterval(() => {

@@ -4,19 +4,21 @@ import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
 
 interface SessionFooterProps {
   isPromptPending: boolean;
+  promptStartedAt?: number | null;
   lastGenerationDuration: number | null;
   lastStopReason?: string;
 }
 
 export function SessionFooter({
   isPromptPending,
+  promptStartedAt,
   lastGenerationDuration,
   lastStopReason,
 }: SessionFooterProps) {
   if (isPromptPending) {
     return (
       <Box className="pt-3 pb-1">
-        <GeneratingIndicator />
+        <GeneratingIndicator startedAt={promptStartedAt} />
       </Box>
     );
   }
