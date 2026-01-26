@@ -17,7 +17,9 @@ type ViewType =
   | "task-input"
   | "task-preview"
   | "settings"
-  | "folder-settings";
+  | "folder-settings"
+  | "autonomy-tasks"
+  | "autonomy-onboarding";
 
 interface ViewState {
   type: ViewType;
@@ -35,6 +37,8 @@ interface NavigationStore {
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
+  navigateToAutonomyTasks: () => void;
+  navigateToAutonomyOnboarding: () => void;
   toggleSettings: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -159,6 +163,17 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
+        },
+
+        navigateToAutonomyTasks: () => {
+          navigate({ type: "autonomy-tasks" });
+          track(ANALYTICS_EVENTS.TASK_VIEWED, {
+            task_id: "autonomy-tasks",
+          });
+        },
+
+        navigateToAutonomyOnboarding: () => {
+          navigate({ type: "autonomy-onboarding" });
         },
 
         toggleSettings: () => {

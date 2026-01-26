@@ -1,10 +1,11 @@
+import { useAutonomyFeatureFlag } from "@features/autonomy/hooks/useAutonomyFeatureFlag";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useAutoDetectedTasks } from "@features/tasks/hooks/useTasks";
+import { useProjectQuery } from "@hooks/useProjectQuery";
 import {
   ArrowRightIcon,
   ArrowsClockwiseIcon,
   SparkleIcon,
-  XIcon,
 } from "@phosphor-icons/react";
 import {
   Box,
@@ -16,72 +17,11 @@ import {
 } from "@radix-ui/themes";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import type { Task } from "@shared/types";
-import { useState } from "react";
 import { useSuggestedTasksStore } from "../stores/suggestedTasksStore";
-
-const AUTO_DETECTED_INFO_DISMISSED_KEY = "autoDetectedTasksInfoDismissed";
-
-// Mock tasks for development - realistic issues from a Dropbox-like product called Hedgebox
-const DEV_MOCK_AUTO_DETECTED_TASKS: Task[] = [
-  {
-    id: "mock-task-1",
-    task_number: 1,
-    slug: "fix-upload-progress-indicator",
-    title: "Upload progress bar freezes at 99% for large files",
-    description:
-      "Multiple users observed waiting 30+ seconds with the progress bar stuck at 99% when uploading files over 100MB. The upload eventually completes but the UI doesn't reflect this, causing users to cancel and retry unnecessarily.",
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    origin_product: "session_summaries",
-  },
-  {
-    id: "mock-task-2",
-    task_number: 2,
-    slug: "share-link-permission-confusion",
-    title: "Users confused by 'Anyone with link' vs 'Specific people' sharing",
-    description:
-      "Session recordings show users toggling between sharing options multiple times before giving up. Several users shared sensitive documents with 'Anyone with link' when they intended to restrict access to specific team members.",
-    created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    origin_product: "session_summaries",
-  },
-  {
-    id: "mock-task-3",
-    task_number: 3,
-    slug: "search-not-finding-recent-files",
-    title: "Search fails to find files uploaded in the last hour",
-    description:
-      "Users searching for recently uploaded files get no results, then navigate manually through folders to find the file. Search indexing appears delayed, causing frustration and repeated search attempts.",
-    created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    origin_product: "session_summaries",
-  },
-  {
-    id: "mock-task-4",
-    task_number: 4,
-    slug: "drag-drop-fails-silently",
-    title: "Drag and drop to folders fails silently on nested folders",
-    description:
-      "When dragging files to deeply nested folders (3+ levels), the drop appears to succeed but files end up in the parent folder instead. No error message is shown, leaving users confused about where their files went.",
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    origin_product: "session_summaries",
-  },
-  {
-    id: "mock-task-5",
-    task_number: 5,
-    slug: "sync-conflict-resolution-unclear",
-    title: "Sync conflict modal doesn't show file preview or timestamps",
-    description:
-      "When a sync conflict occurs, users must choose between 'Keep local' or 'Keep remote' without seeing the actual content differences or when each version was modified. Most users pick randomly or cancel entirely.",
-    created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    origin_product: "session_summaries",
-  },
-];
 
 interface SuggestedTasksProps {
   editorRef: React.RefObject<MessageEditorHandle | null>;
+  selectedDirectory: string;
 }
 
 function LoadingSkeleton() {
@@ -97,11 +37,14 @@ function LoadingSkeleton() {
   );
 }
 
-interface AnalystSetupCTAProps {
+interface AutonomySetupCTAProps {
   onSetup: () => void;
+  repoName: string | null;
 }
 
-function AnalystSetupCTA({ onSetup }: AnalystSetupCTAProps) {
+function AutonomySetupCTA({ onSetup, repoName }: AutonomySetupCTAProps) {
+  const isDisabled = !repoName;
+
   return (
     <Box
       mt="3"
@@ -110,27 +53,28 @@ function AnalystSetupCTA({ onSetup }: AnalystSetupCTAProps) {
     >
       <Flex direction="column" align="center" gap="2">
         <Text size="1" color="gray" align="center">
-          Detect issues from real product usage.
+          <strong>Let your product build itself.</strong>
           <br />
-          <strong>Analyst</strong> continuously analyzes user sessions for you,
-          looking for issues.
-          <br />
-          Each suggested task above addresses a potential issue.
+          Twig Autonomy continuously identifies high-impact tasks by analyzing
+          your product's usage and operations. Ship what matters, faster than
+          ever.
         </Text>
-        <Button size="1" variant="soft" onClick={onSetup}>
+        <Button
+          size="1"
+          variant="soft"
+          onClick={onSetup}
+          disabled={isDisabled}
+          title={isDisabled ? "Select a repository first" : undefined}
+        >
+          {repoName ? `Set up Autonomy for ${repoName}` : "Set up Autonomy"}
           <SparkleIcon size={14} />
-          Set up Analyst
         </Button>
       </Flex>
     </Box>
   );
 }
 
-interface AutoDetectedInfoBannerProps {
-  onDismiss: () => void;
-}
-
-function AutoDetectedInfoBanner({ onDismiss }: AutoDetectedInfoBannerProps) {
+function AutoDetectedInfoBanner() {
   return (
     <Box
       mt="3"
@@ -145,27 +89,27 @@ function AutoDetectedInfoBanner({ onDismiss }: AutoDetectedInfoBannerProps) {
           align="center"
           className="cursor-default text-pretty"
         >
-          <strong>Analyst</strong> continuously analyzes user sessions for you,
+          <strong>Autonomy</strong> continuously analyzes user sessions for you,
           looking for issues.
           <br />
           Each suggested task above addresses a potential issue.
         </Text>
-        <IconButton
-          size="1"
-          variant="ghost"
-          color="gray"
-          onClick={onDismiss}
-          title="Dismiss"
-          className="flex-shrink-0"
-        >
-          <XIcon size={12} />
-        </IconButton>
       </Flex>
     </Box>
   );
 }
 
-export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
+export function SuggestedTasks({
+  editorRef,
+  selectedDirectory,
+}: SuggestedTasksProps) {
+  const isAutonomyEnabled = useAutonomyFeatureFlag();
+  const { data: project } = useProjectQuery();
+  const isProactiveTasksEnabled = (
+    project as
+      | { proactive_tasks_enabled?: boolean }
+      | undefined // We won't need the cast when posthog/posthog#45813 is merged
+  )?.proactive_tasks_enabled;
   const staticSuggestions = useSuggestedTasksStore((state) =>
     state.getSuggestions(),
   );
@@ -175,32 +119,18 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
   const incrementUsage = useSuggestedTasksStore(
     (state) => state.incrementUsage,
   );
-  const { navigateToTaskPreview } = useNavigationStore();
+  const {
+    navigateToTaskPreview,
+    navigateToAutonomyTasks,
+    navigateToAutonomyOnboarding,
+  } = useNavigationStore();
+  const repoName = selectedDirectory?.split("/").pop() || null;
 
-  const { data: fetchedAutoDetectedTasks = [], isLoading: isFetching } =
-    useAutoDetectedTasks();
+  const { data: autoDetectedTasks = [], isLoading: isFetching } =
+    useAutoDetectedTasks({ enabled: isProactiveTasksEnabled === true });
 
-  // In development, use mock tasks for testing
-  const isDev = import.meta.env.DEV;
-  const autoDetectedTasks = isDev
-    ? DEV_MOCK_AUTO_DETECTED_TASKS
-    : fetchedAutoDetectedTasks;
-  const isLoading = isDev ? false : isFetching;
-
-  const [hasAutoDetectedTasks, setHasAutoDetectedTasks] = useState(isDev);
-
-  // Track if the info banner has been dismissed (persisted to localStorage)
-  const [isInfoDismissed, setIsInfoDismissed] = useState(() => {
-    return localStorage.getItem(AUTO_DETECTED_INFO_DISMISSED_KEY) === "true";
-  });
-
-  const handleDismissInfo = () => {
-    setIsInfoDismissed(true);
-    localStorage.setItem(AUTO_DETECTED_INFO_DISMISSED_KEY, "true");
-  };
-
-  // Show CTA if user hasn't used Analyst yet (no session_summaries tasks exist)
-  const isAnalystConfigured = hasAutoDetectedTasks;
+  // Derive hasAutoDetectedTasks from actual data
+  const hasAutoDetectedTasks = autoDetectedTasks.length > 0;
 
   const handleStaticSuggestionClick = (
     suggestionTitle: string,
@@ -217,9 +147,16 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
     navigateToTaskPreview(task);
   };
 
-  if (staticSuggestions.length === 0 && !hasAutoDetectedTasks && !isLoading) {
-    return !isAnalystConfigured ? (
-      <AnalystSetupCTA onSetup={() => setHasAutoDetectedTasks(true)} />
+  // Only show Autonomy-related UI if the feature flag is enabled
+  if (staticSuggestions.length === 0 && !hasAutoDetectedTasks && !isFetching) {
+    if (!isAutonomyEnabled) {
+      return null;
+    }
+    return !hasAutoDetectedTasks && !isProactiveTasksEnabled ? (
+      <AutonomySetupCTA
+        onSetup={navigateToAutonomyOnboarding}
+        repoName={repoName}
+      />
     ) : null;
   }
 
@@ -241,9 +178,9 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
         )}
       </Flex>
 
-      {isLoading && <LoadingSkeleton />}
-
-      {!isLoading && hasAutoDetectedTasks && (
+      {isFetching ? (
+        <LoadingSkeleton />
+      ) : hasAutoDetectedTasks ? (
         <Flex direction="column" gap="2">
           {autoDetectedTasks.slice(0, 3).map((task) => (
             <button
@@ -281,10 +218,19 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
               />
             </button>
           ))}
+          {autoDetectedTasks.length > 3 && (
+            <Button
+              variant="ghost"
+              size="1"
+              onClick={() => navigateToAutonomyTasks()}
+              className="self-start"
+            >
+              View all {autoDetectedTasks.length} tasks
+              <ArrowRightIcon size={12} />
+            </Button>
+          )}
         </Flex>
-      )}
-
-      {!isLoading && !hasAutoDetectedTasks && (
+      ) : (
         <Flex direction="column" gap="2">
           {staticSuggestions.map((suggestion, index) => {
             const IconComponent = suggestion.icon;
@@ -318,12 +264,15 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
         </Flex>
       )}
 
-      {!isAnalystConfigured && (
-        <AnalystSetupCTA onSetup={() => setHasAutoDetectedTasks(true)} />
-      )}
-      {hasAutoDetectedTasks && !isInfoDismissed && (
-        <AutoDetectedInfoBanner onDismiss={handleDismissInfo} />
-      )}
+      {isAutonomyEnabled &&
+        !hasAutoDetectedTasks &&
+        !isProactiveTasksEnabled && (
+          <AutonomySetupCTA
+            onSetup={navigateToAutonomyOnboarding}
+            repoName={repoName}
+          />
+        )}
+      {hasAutoDetectedTasks && <AutoDetectedInfoBanner />}
     </Box>
   );
 }

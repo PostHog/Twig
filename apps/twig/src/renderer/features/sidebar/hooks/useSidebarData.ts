@@ -83,7 +83,9 @@ interface ViewState {
     | "task-input"
     | "task-preview"
     | "settings"
-    | "folder-settings";
+    | "folder-settings"
+    | "autonomy-tasks"
+    | "autonomy-onboarding";
   data?: Task;
 }
 
