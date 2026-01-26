@@ -4,7 +4,7 @@ import * as fsPromises from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { WorktreeManager } from "@posthog/agent";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import type {
   TaskFolderAssociation,
   WorktreeInfo,
@@ -19,6 +19,7 @@ import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
 import { FocusServiceEvent } from "../focus/service.js";
 import { getWorktreeLocation } from "../settingsStore";
+import type { ShellService } from "../shell/service.js";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import type {
   BranchChangedPayload,
@@ -32,7 +33,7 @@ import type {
   WorkspaceTerminalInfo,
   WorkspaceWarningPayload,
 } from "./schemas.js";
-import { cleanupWorkspaceSessions, ScriptRunner } from "./scriptRunner";
+import { ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
 
 const execAsync = promisify(exec);
@@ -131,17 +132,23 @@ export interface WorkspaceServiceEvents {
 
 @injectable()
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
-  private scriptRunner: ScriptRunner;
+  @inject(MAIN_TOKENS.ShellService)
+  private shellService!: ShellService;
+
+  private scriptRunner!: ScriptRunner;
   private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
   private branchWatcherInitialized = false;
 
-  constructor() {
-    super();
-    this.scriptRunner = new ScriptRunner({
-      onTerminalCreated: (info) => {
-        this.emit(WorkspaceServiceEvent.TerminalCreated, info);
-      },
-    });
+  private ensureScriptRunner(): ScriptRunner {
+    if (!this.scriptRunner) {
+      this.scriptRunner = new ScriptRunner({
+        shellService: this.shellService,
+        onTerminalCreated: (info) => {
+          this.emit(WorkspaceServiceEvent.TerminalCreated, info);
+        },
+      });
+    }
+    return this.scriptRunner;
   }
 
   /**
@@ -407,13 +414,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.info(
           `Running ${initScripts.length} init script(s) for task ${taskId} (local mode)`,
         );
-        const initResult = await this.scriptRunner.executeScriptsWithTerminal(
-          taskId,
-          initScripts,
-          "init",
-          folderPath,
-          { failFast: true, workspaceEnv },
-        );
+        const initResult =
+          await this.ensureScriptRunner().executeScriptsWithTerminal(
+            taskId,
+            initScripts,
+            "init",
+            folderPath,
+            { failFast: true, workspaceEnv },
+          );
         terminalSessionIds = initResult.terminalSessionIds;
 
         if (!initResult.success) {
@@ -430,13 +438,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.info(
           `Running ${startScripts.length} start script(s) for task ${taskId} (local mode)`,
         );
-        const startResult = await this.scriptRunner.executeScriptsWithTerminal(
-          taskId,
-          startScripts,
-          "start",
-          folderPath,
-          { failFast: false, workspaceEnv },
-        );
+        const startResult =
+          await this.ensureScriptRunner().executeScriptsWithTerminal(
+            taskId,
+            startScripts,
+            "start",
+            folderPath,
+            { failFast: false, workspaceEnv },
+          );
         terminalSessionIds = [
           ...terminalSessionIds,
           ...startResult.terminalSessionIds,
@@ -563,13 +572,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       log.info(
         `Running ${initScripts.length} init script(s) for task ${taskId}`,
       );
-      const initResult = await this.scriptRunner.executeScriptsWithTerminal(
-        taskId,
-        initScripts,
-        "init",
-        worktree.worktreePath,
-        { failFast: true, workspaceEnv },
-      );
+      const initResult =
+        await this.ensureScriptRunner().executeScriptsWithTerminal(
+          taskId,
+          initScripts,
+          "init",
+          worktree.worktreePath,
+          { failFast: true, workspaceEnv },
+        );
 
       terminalSessionIds = initResult.terminalSessionIds;
 
@@ -591,13 +601,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       log.info(
         `Running ${startScripts.length} start script(s) for task ${taskId}`,
       );
-      const startResult = await this.scriptRunner.executeScriptsWithTerminal(
-        taskId,
-        startScripts,
-        "start",
-        worktree.worktreePath,
-        { failFast: false, workspaceEnv },
-      );
+      const startResult =
+        await this.ensureScriptRunner().executeScriptsWithTerminal(
+          taskId,
+          startScripts,
+          "start",
+          worktree.worktreePath,
+          { failFast: false, workspaceEnv },
+        );
 
       terminalSessionIds = [
         ...terminalSessionIds,
@@ -680,11 +691,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         mode: association.mode,
       });
 
-      const destroyResult = await this.scriptRunner.executeScriptsSilent(
-        destroyScripts,
-        scriptPath,
-        workspaceEnv,
-      );
+      const destroyResult =
+        await this.ensureScriptRunner().executeScriptsSilent(
+          destroyScripts,
+          scriptPath,
+          workspaceEnv,
+        );
 
       if (!destroyResult.success) {
         log.warn(
@@ -697,7 +709,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       }
     }
 
-    cleanupWorkspaceSessions(taskId);
+    this.ensureScriptRunner().cleanupTaskSessions(taskId);
 
     if (association.mode === "worktree" && worktreePath) {
       await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
@@ -845,7 +857,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       mode: association?.mode ?? "worktree",
     });
 
-    const result = await this.scriptRunner.executeScriptsWithTerminal(
+    const result = await this.ensureScriptRunner().executeScriptsWithTerminal(
       taskId,
       startScripts,
       "start",
@@ -898,21 +910,21 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       mode: association.mode,
       worktree: worktreeInfo,
       branchName,
-      terminalSessionIds: this.scriptRunner.getTaskSessions(taskId),
+      terminalSessionIds: this.ensureScriptRunner().getTaskSessions(taskId),
     };
   }
 
   isWorkspaceRunning(taskId: string): boolean {
-    const sessions = this.scriptRunner.getTaskSessions(taskId);
+    const sessions = this.ensureScriptRunner().getTaskSessions(taskId);
     return sessions.length > 0;
   }
 
   getWorkspaceTerminals(taskId: string): WorkspaceTerminalInfo[] {
-    const sessionIds = this.scriptRunner.getTaskSessions(taskId);
+    const sessionIds = this.ensureScriptRunner().getTaskSessions(taskId);
     const terminals: WorkspaceTerminalInfo[] = [];
 
     for (const sessionId of sessionIds) {
-      const info = this.scriptRunner.getSessionInfo(sessionId);
+      const info = this.ensureScriptRunner().getSessionInfo(sessionId);
       if (info) {
         terminals.push(info);
       }
@@ -973,7 +985,9 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         branchName,
         baseBranch: null,
         createdAt: new Date().toISOString(),
-        terminalSessionIds: this.scriptRunner.getTaskSessions(assoc.taskId),
+        terminalSessionIds: this.ensureScriptRunner().getTaskSessions(
+          assoc.taskId,
+        ),
         hasStartScripts: startScripts.length > 0,
       };
     }

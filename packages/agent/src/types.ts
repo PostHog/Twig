@@ -20,7 +20,7 @@ export interface StoredNotification {
  */
 export type StoredEntry = StoredNotification;
 
-// PostHog Task model (matches Array's OpenAPI schema)
+// PostHog Task model (matches Twig's OpenAPI schema)
 export interface Task {
   id: string;
   task_number?: number;

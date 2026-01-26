@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import path from "node:path";
@@ -13,8 +13,39 @@ import { type ExecuteOutput, ShellEvent, type ShellEvents } from "./schemas.js";
 
 const log = logger.scope("shell");
 
-interface ShellSession {
+/**
+ * Kill a process and all its children by killing the process group.
+ * On Unix, we use process.kill(-pid) to kill the entire process group.
+ * On Windows, we use taskkill with /T flag to kill the process tree.
+ */
+function killProcessTree(pid: number): void {
+  try {
+    if (platform() === "win32") {
+      // Windows: use taskkill with /T to kill process tree
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+    } else {
+      // Unix: kill the process group by using negative PID
+      // This sends SIGTERM to all processes in the group
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        // If SIGTERM fails (process may have already exited), try SIGKILL
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          // Process group may have already exited
+        }
+      }
+    }
+  } catch (err) {
+    log.warn(`Failed to kill process tree for PID ${pid}`, err);
+  }
+}
+
+export interface ShellSession {
   pty: pty.IPty;
+  exitPromise: Promise<{ exitCode: number }>;
+  command?: string;
 }
 
 function getDefaultShell(): string {
@@ -51,6 +82,14 @@ function buildShellEnv(
   return env;
 }
 
+export interface CreateSessionOptions {
+  sessionId: string;
+  cwd?: string;
+  taskId?: string;
+  initialCommand?: string;
+  additionalEnv?: Record<string, string>;
+}
+
 @injectable()
 export class ShellService extends TypedEventEmitter<ShellEvents> {
   private sessions = new Map<string, ShellSession>();
@@ -60,11 +99,19 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
     cwd?: string,
     taskId?: string,
   ): Promise<void> {
-    if (this.sessions.has(sessionId)) {
-      return;
+    await this.createSession({ sessionId, cwd, taskId });
+  }
+
+  async createSession(options: CreateSessionOptions): Promise<ShellSession> {
+    const { sessionId, cwd, taskId, initialCommand, additionalEnv } = options;
+
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      return existing;
     }
 
-    const additionalEnv = await this.getTaskEnv(taskId);
+    const taskEnv = await this.getTaskEnv(taskId);
+    const mergedEnv = { ...taskEnv, ...additionalEnv };
     const workingDir = this.resolveWorkingDir(sessionId, cwd);
     const shell = getDefaultShell();
 
@@ -77,8 +124,13 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       cols: 80,
       rows: 24,
       cwd: workingDir,
-      env: buildShellEnv(additionalEnv),
+      env: buildShellEnv(mergedEnv),
       encoding: null,
+    });
+
+    let resolveExit: (result: { exitCode: number }) => void;
+    const exitPromise = new Promise<{ exitCode: number }>((resolve) => {
+      resolveExit = resolve;
     });
 
     ptyProcess.onData((data: string) => {
@@ -89,29 +141,92 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       log.info(`Shell session ${sessionId} exited with code ${exitCode}`);
       this.sessions.delete(sessionId);
       this.emit(ShellEvent.Exit, { sessionId, exitCode });
+      resolveExit({ exitCode });
     });
 
-    this.sessions.set(sessionId, { pty: ptyProcess });
+    if (initialCommand) {
+      setTimeout(() => {
+        ptyProcess.write(`${initialCommand}\n`);
+      }, 100);
+    }
+
+    const session: ShellSession = {
+      pty: ptyProcess,
+      exitPromise,
+      command: initialCommand,
+    };
+
+    this.sessions.set(sessionId, session);
+    return session;
   }
 
   write(sessionId: string, data: string): void {
-    this.getSession(sessionId).pty.write(data);
+    this.getSessionOrThrow(sessionId).pty.write(data);
   }
 
   resize(sessionId: string, cols: number, rows: number): void {
-    this.getSession(sessionId).pty.resize(cols, rows);
+    this.getSessionOrThrow(sessionId).pty.resize(cols, rows);
   }
 
   check(sessionId: string): boolean {
     return this.sessions.has(sessionId);
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
+  }
+
+  getSession(sessionId: string): ShellSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  getSessionsByPrefix(prefix: string): string[] {
+    const result: string[] = [];
+    for (const sessionId of this.sessions.keys()) {
+      if (sessionId.startsWith(prefix)) {
+        result.push(sessionId);
+      }
+    }
+    return result;
+  }
+
+  destroyByPrefix(prefix: string): void {
+    for (const sessionId of this.sessions.keys()) {
+      if (sessionId.startsWith(prefix)) {
+        this.destroy(sessionId);
+      }
+    }
+  }
+
   destroy(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
+      // Kill the entire process tree, not just the shell
+      // This ensures child processes like `pnpm dev` are properly cleaned up
+      const pid = session.pty.pid;
+      killProcessTree(pid);
+      // Also call pty.kill() to ensure the PTY is properly closed
       session.pty.kill();
       this.sessions.delete(sessionId);
     }
+  }
+
+  /**
+   * Destroy all active shell sessions.
+   * Used during application shutdown to ensure all child processes are cleaned up.
+   */
+  destroyAll(): void {
+    log.info(`Destroying all shell sessions (${this.sessions.size} active)`);
+    for (const sessionId of this.sessions.keys()) {
+      this.destroy(sessionId);
+    }
+  }
+
+  /**
+   * Get the count of active sessions.
+   */
+  getSessionCount(): number {
+    return this.sessions.size;
   }
 
   getProcess(sessionId: string): string | null {
@@ -130,7 +245,7 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
     });
   }
 
-  private getSession(sessionId: string): ShellSession {
+  private getSessionOrThrow(sessionId: string): ShellSession {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Shell session ${sessionId} not found`);

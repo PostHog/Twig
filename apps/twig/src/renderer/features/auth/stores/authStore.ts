@@ -502,6 +502,7 @@ export const useAuthStore = create<AuthState>()(
         },
       }),
       {
+        // TODO: Migrate to twig
         name: "array-auth",
         storage: electronStorage,
         partialize: (state) => ({

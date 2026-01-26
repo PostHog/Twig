@@ -12,6 +12,7 @@ const AuthStateSchema = z.object({
 
 type AuthState = z.infer<typeof AuthStateSchema>;
 
+// TODO: Migrate to twig
 const AUTH_CONFIG_DIR = ".config/array";
 const AUTH_FILE = "auth.json";
 
