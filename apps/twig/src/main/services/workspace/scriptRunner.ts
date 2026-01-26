@@ -3,8 +3,9 @@ import * as fs from "node:fs";
 import { promisify } from "node:util";
 import { randomSuffix } from "../../../shared/utils/id";
 import { logger } from "../../lib/logger";
-import { shellManager } from "../../lib/shellManager";
 import { getMainWindow } from "../../trpc/context.js";
+import { ShellEvent } from "../shell/schemas.js";
+import type { ShellService } from "../shell/service.js";
 import type {
   ScriptExecutionResult,
   WorkspaceTerminalCreatedPayload,
@@ -19,14 +20,36 @@ function generateSessionId(taskId: string, scriptType: string): string {
 }
 
 export interface ScriptRunnerOptions {
+  shellService: ShellService;
   onTerminalCreated: (info: WorkspaceTerminalCreatedPayload) => void;
 }
 
 export class ScriptRunner {
+  private shellService: ShellService;
   private onTerminalCreated: (info: WorkspaceTerminalCreatedPayload) => void;
+  private subscribedSessions = new Set<string>();
 
   constructor(options: ScriptRunnerOptions) {
+    this.shellService = options.shellService;
     this.onTerminalCreated = options.onTerminalCreated;
+    this.setupEventForwarding();
+  }
+
+  private setupEventForwarding(): void {
+    this.shellService.on(ShellEvent.Data, ({ sessionId, data }) => {
+      if (this.subscribedSessions.has(sessionId)) {
+        const mainWindow = getMainWindow();
+        mainWindow?.webContents.send(`shell:data:${sessionId}`, data);
+      }
+    });
+
+    this.shellService.on(ShellEvent.Exit, ({ sessionId, exitCode }) => {
+      if (this.subscribedSessions.has(sessionId)) {
+        const mainWindow = getMainWindow();
+        mainWindow?.webContents.send(`shell:exit:${sessionId}`, { exitCode });
+        this.subscribedSessions.delete(sessionId);
+      }
+    });
   }
 
   async executeScriptsWithTerminal(
@@ -49,23 +72,15 @@ export class ScriptRunner {
       };
     }
 
-    const mainWindow = getMainWindow();
-    if (!mainWindow) {
-      return {
-        success: false,
-        terminalSessionIds: [],
-        errors: ["No main window available"],
-      };
-    }
-
     for (const command of commands) {
       const sessionId = generateSessionId(taskId, scriptType);
       log.info(`Starting ${scriptType} script for task ${taskId}: ${command}`);
 
       try {
-        const session = shellManager.createSession({
+        this.subscribedSessions.add(sessionId);
+
+        const session = await this.shellService.createSession({
           sessionId,
-          webContents: mainWindow.webContents,
           cwd,
           initialCommand: command,
           additionalEnv: options.workspaceEnv,
@@ -140,7 +155,7 @@ export class ScriptRunner {
   }
 
   getSessionInfo(sessionId: string): WorkspaceTerminalInfo | null {
-    const session = shellManager.getSession(sessionId);
+    const session = this.shellService.getSession(sessionId);
     if (!session) return null;
 
     return {
@@ -153,15 +168,15 @@ export class ScriptRunner {
   }
 
   isSessionRunning(sessionId: string): boolean {
-    return shellManager.hasSession(sessionId);
+    return this.shellService.hasSession(sessionId);
   }
 
   getTaskSessions(taskId: string): string[] {
-    return shellManager.getSessionsByPrefix(`workspace-${taskId}-`);
+    return this.shellService.getSessionsByPrefix(`workspace-${taskId}-`);
   }
-}
 
-export function cleanupWorkspaceSessions(taskId: string): void {
-  log.info(`Cleaning up workspace sessions for task: ${taskId}`);
-  shellManager.destroyByPrefix(`workspace-${taskId}-`);
+  cleanupTaskSessions(taskId: string): void {
+    log.info(`Cleaning up workspace sessions for task: ${taskId}`);
+    this.shellService.destroyByPrefix(`workspace-${taskId}-`);
+  }
 }
