@@ -98,7 +98,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       editable: !disabled,
       autofocus: autoFocus ? "end" : false,
       editorProps: {
-        attributes: { class: EDITOR_CLASS },
+        attributes: { class: EDITOR_CLASS, spellcheck: "false" },
         handleKeyDown: (view, event) => {
           if (event.key === "Enter") {
             const sendMessagesWith =
