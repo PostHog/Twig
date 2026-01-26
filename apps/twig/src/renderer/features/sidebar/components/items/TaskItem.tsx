@@ -1,5 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import {
+  BellRinging,
   Cloud,
   GitBranch as GitBranchIcon,
   Laptop as LaptopIcon,
@@ -28,6 +29,7 @@ interface TaskItemProps {
   isGenerating?: boolean;
   isUnread?: boolean;
   isPinned?: boolean;
+  needsPermission?: boolean;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
@@ -152,6 +154,7 @@ export function TaskItem({
   isGenerating,
   isUnread,
   isPinned = false,
+  needsPermission = false,
   onClick,
   onContextMenu,
   onDelete,
@@ -163,18 +166,24 @@ export function TaskItem({
 
   const isCloudTask = workspaceMode === "cloud";
 
-  const activityText = isGenerating
-    ? "Generating..."
-    : lastActivityAt
-      ? formatRelativeTime(lastActivityAt)
-      : undefined;
+  const activityText = needsPermission
+    ? "Needs permission"
+    : isGenerating
+      ? "Generating..."
+      : lastActivityAt
+        ? formatRelativeTime(lastActivityAt)
+        : undefined;
 
   const repoName = mainRepoPath?.split("/").pop();
   const subtitle = (
     <span className="flex items-center gap-1">
       {repoName && <span>{repoName}</span>}
       {repoName && activityText && <span>·</span>}
-      {activityText && <span>{activityText}</span>}
+      {activityText && (
+        <span className={needsPermission ? "text-blue-11" : ""}>
+          {activityText}
+        </span>
+      )}
       {!isCloudTask && <DiffStatsDisplay taskId={id} />}
     </span>
   );
@@ -187,7 +196,9 @@ export function TaskItem({
       ? "Workspace"
       : "Local";
 
-  const icon = isGenerating ? (
+  const icon = needsPermission ? (
+    <BellRinging size={16} className="text-blue-11" />
+  ) : isGenerating ? (
     <DotsCircleSpinner size={16} className="text-accent-11" />
   ) : isUnread ? (
     <span className="flex h-4 w-4 items-center justify-center text-[8px] text-green-11">

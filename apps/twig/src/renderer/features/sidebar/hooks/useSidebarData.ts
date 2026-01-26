@@ -44,6 +44,7 @@ export interface TaskData {
   isGenerating?: boolean;
   isUnread?: boolean;
   isPinned?: boolean;
+  needsPermission?: boolean;
 }
 
 export interface HistoryTaskData extends TaskData {
@@ -232,6 +233,7 @@ function buildHistoryData(
       isGenerating: session?.isPromptPending ?? false,
       isUnread,
       isPinned: pinnedTaskIds.has(task.id),
+      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
       folderName: folder?.name,
     };
   });
@@ -300,6 +302,7 @@ function buildPinnedData(
       isGenerating: session?.isPromptPending ?? false,
       isUnread,
       isPinned: true,
+      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
     };
   });
 
@@ -370,7 +373,6 @@ export function useSidebarData({
 
       const tasksWithActivity = folderTasks.map((task) => {
         const session = getSessionForTask(task.id);
-        // Use max of task.updated_at and local activity timestamp for accurate ordering
         const apiUpdatedAt = new Date(task.updated_at).getTime();
         const localActivity = localActivityAt[task.id];
         const lastActivityAt = localActivity
@@ -382,6 +384,7 @@ export function useSidebarData({
           lastActivityAt,
           isGenerating: session?.isPromptPending ?? false,
           isPinned,
+          needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
         };
       });
 
@@ -399,10 +402,15 @@ export function useSidebarData({
         name: folder.name,
         path: folder.path,
         tasks: tasksWithActivity.map(
-          ({ task, lastActivityAt, isGenerating, isPinned }) => {
+          ({
+            task,
+            lastActivityAt,
+            isGenerating,
+            isPinned,
+            needsPermission,
+          }) => {
             const taskLastViewedAt = lastViewedAt[task.id];
             const isCurrentlyViewing = activeTaskId === task.id;
-            // Only show unread if: user has viewed it before AND there's new activity since
             const isUnread =
               !isCurrentlyViewing &&
               taskLastViewedAt !== undefined &&
@@ -415,6 +423,7 @@ export function useSidebarData({
               isGenerating,
               isUnread,
               isPinned,
+              needsPermission,
             };
           },
         ),
