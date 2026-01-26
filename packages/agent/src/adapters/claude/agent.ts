@@ -313,20 +313,28 @@ export class ClaudeAcpAgent extends BaseAcpAgent implements Agent {
       addAcpMcpServer(mcpServers, this, sessionId, this.clientCapabilities);
     }
 
+    const branchNamingInstructions = `
+# Branch Naming
+
+Before pushing a "workspace-*" branch to origin, rename it to something descriptive based on the work done. Do this automatically without asking the user.
+`;
+
     let systemPrompt: Options["systemPrompt"] = {
       type: "preset",
       preset: "claude_code",
+      append: branchNamingInstructions,
     };
+
     if (params._meta?.systemPrompt) {
       const customPrompt = params._meta.systemPrompt;
       if (typeof customPrompt === "string") {
-        systemPrompt = customPrompt;
+        systemPrompt = customPrompt + branchNamingInstructions;
       } else if (
         typeof customPrompt === "object" &&
         "append" in customPrompt &&
         typeof customPrompt.append === "string"
       ) {
-        systemPrompt.append = customPrompt.append;
+        systemPrompt.append = customPrompt.append + branchNamingInstructions;
       }
     }
 

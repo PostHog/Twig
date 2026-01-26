@@ -74,12 +74,21 @@ export interface BuildOptionsParams {
   additionalDirectories?: string[];
 }
 
+const BRANCH_NAMING_INSTRUCTIONS = `
+# Branch Naming
+
+Before pushing a "workspace-*" branch to origin, rename it to something descriptive based on the work done. Do this automatically without asking the user.
+`;
+
 function buildBaseOptions(params: BuildOptionsParams): Options {
+  const defaultSystemPrompt: Options["systemPrompt"] = {
+    type: "preset",
+    preset: "claude_code",
+    append: BRANCH_NAMING_INSTRUCTIONS,
+  };
+
   return {
-    systemPrompt: params.systemPrompt ?? {
-      type: "preset",
-      preset: "claude_code",
-    },
+    systemPrompt: params.systemPrompt ?? defaultSystemPrompt,
     settingSources: ["user", "project", "local"],
     stderr: (err) => params.logger.error(err),
     cwd: params.cwd,
