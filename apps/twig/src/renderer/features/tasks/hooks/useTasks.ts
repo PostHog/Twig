@@ -43,16 +43,17 @@ export function useTasks(filters?: { repository?: string }) {
 }
 
 /**
- * Fetches auto-detected tasks (from session summaries / Analyst).
+ * Fetches auto-detected tasks (from session summaries / Autonomy).
  * These tasks have origin_product = "session_summaries" and created_by = null.
  */
-export function useAutoDetectedTasks() {
+export function useAutoDetectedTasks(options?: { enabled?: boolean }) {
   return useAuthenticatedQuery(
     taskKeys.list({ originProduct: "session_summaries" }),
     (client) =>
       client.getTasks({
         originProduct: "session_summaries",
       }) as unknown as Promise<Task[]>,
+    options,
   );
 }
 

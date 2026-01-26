@@ -405,4 +405,55 @@ export class PostHogAPIClient {
       count: data.count ?? data.results?.length ?? data?.length ?? 0,
     };
   }
+
+  /**
+   * Run a HogQL query against the PostHog query API
+   */
+  async runQuery<T = unknown>(query: {
+    kind: string;
+    query: string;
+  }): Promise<T> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/query/`);
+    const response = await this.api.fetcher.fetch({
+      method: "post",
+      url,
+      path: `/api/projects/${teamId}/query/`,
+      overrides: {
+        body: JSON.stringify(query),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to run query: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Update the current team/project settings
+   */
+  async updateTeam(updates: {
+    proactive_tasks_enabled?: boolean;
+    session_recording_opt_in?: boolean;
+    autocapture_exceptions_opt_in?: boolean;
+  }): Promise<Schemas.Team> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/`);
+    const response = await this.api.fetcher.fetch({
+      method: "patch",
+      url,
+      path: `/api/projects/${teamId}/`,
+      overrides: {
+        body: JSON.stringify(updates),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update team: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
 }
