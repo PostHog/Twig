@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { WorktreeManager } from "@posthog/agent";
+import { WorktreeManager } from "@posthog/agent/worktree-manager";
 import { dialog } from "electron";
 import { injectable } from "inversify";
 import { generateId } from "../../../shared/utils/id.js";

@@ -1,5 +1,4 @@
 import type { WorkspaceMode } from "@shared/types";
-import { DEFAULT_MODEL } from "@shared/types/models";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -12,7 +11,6 @@ interface SettingsStore {
   lastUsedRunMode: "local" | "cloud";
   lastUsedLocalWorkspaceMode: LocalWorkspaceMode;
   lastUsedWorkspaceMode: WorkspaceMode;
-  defaultModel: string;
   desktopNotifications: boolean;
   cursorGlow: boolean;
   autoConvertLongText: boolean;
@@ -22,7 +20,6 @@ interface SettingsStore {
   setLastUsedRunMode: (mode: "local" | "cloud") => void;
   setLastUsedLocalWorkspaceMode: (mode: LocalWorkspaceMode) => void;
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
-  setDefaultModel: (model: string) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
   setAutoConvertLongText: (enabled: boolean) => void;
@@ -36,7 +33,6 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedRunMode: "local",
       lastUsedLocalWorkspaceMode: "worktree",
       lastUsedWorkspaceMode: "worktree",
-      defaultModel: DEFAULT_MODEL,
       desktopNotifications: true,
       cursorGlow: false,
       autoConvertLongText: true,
@@ -47,7 +43,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setLastUsedLocalWorkspaceMode: (mode) =>
         set({ lastUsedLocalWorkspaceMode: mode }),
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
-      setDefaultModel: (model) => set({ defaultModel: model }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setCursorGlow: (enabled) => set({ cursorGlow: enabled }),
