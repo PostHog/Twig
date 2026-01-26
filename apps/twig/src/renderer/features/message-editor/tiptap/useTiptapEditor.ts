@@ -292,6 +292,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
         }
 
         draftRef.current?.saveDraft(e);
+
+        e.commands.scrollIntoView();
       },
     },
     [sessionId, disabled, fileMentions, commands, placeholder],
