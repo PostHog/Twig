@@ -137,20 +137,33 @@ export function createTappedWritableStream(
         onMessage(line);
       }
 
-      const writer = underlying.getWriter();
-      await writer.write(chunk);
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.write(chunk);
+        writer.releaseLock();
+      } catch (err) {
+        // Stream may be closed if subprocess crashed - log but don't throw
+        logger?.error("ACP write error", err);
+      }
     },
     async close() {
-      const writer = underlying.getWriter();
-      await writer.close();
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.close();
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
     },
     async abort(reason: unknown) {
       logger?.warn("Tapped stream aborted", { reason });
-      const writer = underlying.getWriter();
-      await writer.abort(reason);
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.abort(reason);
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
     },
   });
 }

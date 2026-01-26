@@ -71,13 +71,25 @@ function createTappedReadableStream(
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const { value, done } = await reader.read();
-      if (done) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        tap.process(value);
+        controller.enqueue(value);
+      } catch (err) {
+        // Stream may be closed if subprocess crashed - close gracefully
+        log.warn("Stream read failed (subprocess may have crashed)", {
+          error: err,
+        });
         controller.close();
-        return;
       }
-      tap.process(value);
-      controller.enqueue(value);
+    },
+    cancel() {
+      // Release the reader when stream is cancelled
+      reader.releaseLock();
     },
   });
 }
@@ -91,19 +103,34 @@ function createTappedWritableStream(
   return new WritableStream<Uint8Array>({
     async write(chunk) {
       tap.process(chunk);
-      const writer = underlying.getWriter();
-      await writer.write(chunk);
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.write(chunk);
+        writer.releaseLock();
+      } catch (err) {
+        // Stream may be closed if subprocess crashed - log but don't throw
+        log.warn("Stream write failed (subprocess may have crashed)", {
+          error: err,
+        });
+      }
     },
     async close() {
-      const writer = underlying.getWriter();
-      await writer.close();
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.close();
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
     },
     async abort(reason) {
-      const writer = underlying.getWriter();
-      await writer.abort(reason);
-      writer.releaseLock();
+      try {
+        const writer = underlying.getWriter();
+        await writer.abort(reason);
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
     },
   });
 }
