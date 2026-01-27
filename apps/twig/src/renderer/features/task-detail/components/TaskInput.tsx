@@ -14,7 +14,12 @@ import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
 
-const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+const EXECUTION_MODES: ExecutionMode[] = [
+  "plan",
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+];
 
 function cycleMode(current: ExecutionMode): ExecutionMode {
   const currentIndex = EXECUTION_MODES.indexOf(current);

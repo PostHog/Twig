@@ -1,6 +1,6 @@
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
-import { Circle, Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
+import { LockOpen, Circle,Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +32,11 @@ const modeConfig: Record<
     label: "auto-accept edits",
     icon: <ShieldCheck size={12} weight="fill" />,
     colorVar: "var(--green-11)",
+  },
+  bypassPermissions: {
+    label: "bypass permissions",
+    icon: <LockOpen size={12} weight="bold" />,
+    colorVar: "var(--red-11)",
   },
 };
 

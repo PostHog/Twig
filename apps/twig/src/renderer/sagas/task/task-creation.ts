@@ -30,8 +30,8 @@ export interface TaskCreationInput {
   workspaceMode?: WorkspaceMode;
   branch?: string | null;
   githubIntegrationId?: number;
-  // Execution mode: "plan" starts in plan mode (read-only), "acceptEdits" auto-approves edits, undefined starts in default mode
-  executionMode?: "plan" | "acceptEdits";
+  // Execution mode: "plan" starts in plan mode (read-only), "acceptEdits" auto-approves edits, "bypassPermissions" skips all permission prompts, undefined starts in default mode
+  executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
 }
 
 export interface TaskCreationOutput {

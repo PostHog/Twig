@@ -38,7 +38,11 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 // Re-export for external consumers
 export type { PermissionRequest };
 
-export type ExecutionMode = "plan" | "default" | "acceptEdits";
+export type ExecutionMode =
+  | "plan"
+  | "default"
+  | "acceptEdits"
+  | "bypassPermissions";
 
 export interface AgentModelOption {
   modelId: string;
@@ -84,7 +88,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: "plan" | "acceptEdits";
+    executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -460,7 +464,7 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
-  executionMode?: "plan" | "acceptEdits",
+  executionMode?: "plan" | "acceptEdits" | "bypassPermissions",
 ): AgentSession {
   return {
     taskRunId,
@@ -726,7 +730,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: "plan" | "acceptEdits",
+      executionMode?: "plan" | "acceptEdits" | "bypassPermissions",
     ) => {
       if (!auth.client) {
         throw new Error(
