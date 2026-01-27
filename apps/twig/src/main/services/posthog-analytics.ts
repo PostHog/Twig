@@ -83,3 +83,15 @@ export function getPostHogClient() {
 export function resetUser() {
   currentUserId = null;
 }
+
+export function captureException(
+  error: unknown,
+  additionalProperties?: Record<string, unknown>,
+) {
+  if (!posthogClient) {
+    return;
+  }
+
+  const distinctId = currentUserId || "anonymous-app-event";
+  posthogClient.captureException(error, distinctId, additionalProperties);
+}
