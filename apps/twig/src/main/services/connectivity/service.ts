@@ -1,5 +1,5 @@
 import { net } from "electron";
-import { injectable, postConstruct } from "inversify";
+import { injectable, postConstruct, preDestroy } from "inversify";
 import { getBackoffDelay } from "../../../shared/utils/backoff.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -101,5 +101,13 @@ export class ConnectivityService extends TypedEventEmitter<ConnectivityEvents> {
 
       this.schedulePoll();
     }, interval);
+  }
+
+  @preDestroy()
+  stopPolling(): void {
+    if (this.pollTimeoutId) {
+      clearTimeout(this.pollTimeoutId);
+      this.pollTimeoutId = null;
+    }
   }
 }

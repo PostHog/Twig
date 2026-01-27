@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
 import { app } from "electron";
-import { injectable } from "inversify";
+import { injectable, preDestroy } from "inversify";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import {
@@ -87,6 +87,15 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     await w.files.unsubscribe();
     await w.git?.unsubscribe();
     this.watchers.delete(repoPath);
+  }
+
+  @preDestroy()
+  async shutdown(): Promise<void> {
+    log.info("Shutting down file watcher service", {
+      watcherCount: this.watchers.size,
+    });
+    const repoPaths = Array.from(this.watchers.keys());
+    await Promise.all(repoPaths.map((repoPath) => this.stopWatching(repoPath)));
   }
 
   private get snapshotsDir(): string {
