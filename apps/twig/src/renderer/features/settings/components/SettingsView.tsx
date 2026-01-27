@@ -649,7 +649,7 @@ export function SettingsView() {
                     </Flex>
                     <Text size="1" color="gray">
                       Enables "Bypass Permissions" mode in the execution mode
-                      selector. When active, Claude will not ask for approval
+                      selector. When active, Twig will not ask for approval
                       before running potentially dangerous commands.
                     </Text>
                   </Flex>
@@ -882,7 +882,7 @@ export function SettingsView() {
           <AlertDialog.Description size="2">
             <Flex direction="column" gap="3">
               <Text color="red" weight="medium">
-                In Bypass Permissions mode, Claude will not ask for your
+                In Bypass Permissions mode, Twig will not ask for your
                 approval before running potentially dangerous commands.
               </Text>
               <Text>
