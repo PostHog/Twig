@@ -876,7 +876,7 @@ export function SettingsView() {
             <Flex align="center" gap="2">
               <Warning size={20} weight="fill" color="var(--red-9)" />
               <Text color="red" weight="bold">
-                WARNING: Enable Bypass Permissions mode
+                Enable Bypass Permissions mode
               </Text>
             </Flex>
           </AlertDialog.Title>
@@ -895,13 +895,6 @@ export function SettingsView() {
                 By proceeding, you accept all responsibility for actions taken
                 while running in Bypass Permissions mode.
               </Text>
-              <Link
-                href="https://docs.anthropic.com/en/docs/claude-code/security"
-                target="_blank"
-                size="2"
-              >
-                https://docs.anthropic.com/en/docs/claude-code/security
-              </Link>
             </Flex>
           </AlertDialog.Description>
           <Flex gap="3" mt="4" justify="end">

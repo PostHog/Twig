@@ -10,6 +10,7 @@ import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
+import { DiffStatsIndicator } from "./DiffStatsIndicator";
 import { EditorToolbar } from "./EditorToolbar";
 import { ModeIndicatorInput } from "./ModeIndicatorInput";
 
@@ -206,11 +207,13 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
           </Flex>
         </Flex>
         {onModeChange && currentMode && (
-          <ModeIndicatorInput
-            mode={currentMode}
-            onModeChange={onModeChange}
-            taskId={taskId}
-          />
+          <Flex align="center" gap="2">
+            <ModeIndicatorInput
+              mode={currentMode}
+              onModeChange={onModeChange}
+            />
+            <DiffStatsIndicator repoPath={repoPath} />
+          </Flex>
         )}
       </Flex>
     );
