@@ -86,7 +86,6 @@ function createSuggestion(
 
     command: ({ editor, range, props }) => {
       const item = props as SuggestionItem;
-      const label = item.label.split("/").pop() ?? item.label;
 
       editor
         .chain()
@@ -98,7 +97,7 @@ function createSuggestion(
             attrs: {
               type: "file",
               id: item.id,
-              label,
+              label: item.label,
             },
           },
           { type: "text", text: " " },
