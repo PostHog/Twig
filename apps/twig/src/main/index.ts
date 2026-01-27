@@ -14,6 +14,7 @@ import type { DockBadgeService } from "./services/dock-badge/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
 import type { OAuthService } from "./services/oauth/service.js";
 import {
+  captureException,
   initializePostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
@@ -123,8 +124,13 @@ process.on("uncaughtException", (error) => {
     return;
   }
   log.error("Uncaught exception", error);
+
+  captureException(error, { source: "main", type: "uncaughtException" });
 });
 
 process.on("unhandledRejection", (reason) => {
   log.error("Unhandled rejection", reason);
+
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  captureException(error, { source: "main", type: "unhandledRejection" });
 });
