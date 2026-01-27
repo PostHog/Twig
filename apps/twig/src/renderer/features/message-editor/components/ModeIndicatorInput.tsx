@@ -7,13 +7,15 @@ import {
   Pencil,
   ShieldCheck,
 } from "@phosphor-icons/react";
-import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQuery } from "@tanstack/react-query";
+import { Flex, Select, Text } from "@radix-ui/themes";
+import { EXECUTION_MODES } from "@shared/constants";
 
 interface ModeIndicatorInputProps {
   mode: ExecutionMode;
   taskId?: string;
+  onModeChange: (mode: ExecutionMode) => void;
 }
 
 const modeConfig: Record<
@@ -26,27 +28,31 @@ const modeConfig: Record<
 > = {
   plan: {
     label: "plan mode on",
-    icon: <Pause size={12} weight="bold" />,
+    icon: <Pause size={12} weight="bold" color="var(--amber-11)" />,
     colorVar: "var(--amber-11)",
   },
   default: {
     label: "default mode",
-    icon: <Pencil size={12} />,
+    icon: <Pencil size={12} color="var(--gray-11)" />,
     colorVar: "var(--gray-11)",
   },
   acceptEdits: {
     label: "auto-accept edits",
-    icon: <ShieldCheck size={12} weight="fill" />,
+    icon: <ShieldCheck size={12} weight="fill" color="var(--green-11)" />,
     colorVar: "var(--green-11)",
   },
   bypassPermissions: {
     label: "bypass permissions",
-    icon: <LockOpen size={12} weight="bold" />,
+    icon: <LockOpen size={12} weight="bold" color="var(--red-11)" />,
     colorVar: "var(--red-11)",
   },
 };
 
-export function ModeIndicatorInput({ mode, taskId }: ModeIndicatorInputProps) {
+export function ModeIndicatorInput({
+  mode,
+  onModeChange,
+  taskId,
+}: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
   const repoPath = useCwd(taskId ?? "");
 
@@ -65,30 +71,38 @@ export function ModeIndicatorInput({ mode, taskId }: ModeIndicatorInputProps) {
   const hasDiffStats = diffStats && diffStats.filesChanged > 0;
 
   return (
-    <Flex align="center" justify="between" py="1">
-      <Flex align="center" gap="1">
-        <Text
-          size="1"
-          style={{
-            color: config.colorVar,
-            fontFamily: "monospace",
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-          }}
-        >
+    <Select.Root
+      value={mode}
+      onValueChange={onModeChange}
+      disabled={disabled}
+      size="1"
+    >
+      <Select.Trigger
+        className="w-fit"
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+      >
+        <Flex align="center" gap="1">
           {config.icon}
-          {config.label}
-        </Text>
-        <Text
-          size="1"
-          style={{
-            color: "var(--gray-9)",
-            fontFamily: "monospace",
-          }}
-        >
-          (shift+tab to cycle)
-        </Text>
+          <Text
+            size="1"
+            style={{
+              color: config.colorVar,
+              fontFamily: "monospace",
+            }}
+          >
+            {config.label}
+          </Text>
+          <Text
+            size="1"
+            style={{
+              color: "var(--gray-9)",
+              fontFamily: "monospace",
+            }}
+          >
+            (shift+tab to cycle)
+          </Text>
         {hasDiffStats && (
           <Text
             size="1"
@@ -113,7 +127,55 @@ export function ModeIndicatorInput({ mode, taskId }: ModeIndicatorInputProps) {
             </span>
           </Text>
         )}
-      </Flex>
-    </Flex>
+        </Flex>
+      </Select.Trigger>
+      <Select.Content>
+        {EXECUTION_MODES.map((modeOption) => {
+          const optionConfig = modeConfig[modeOption];
+          const hoverBgClass =
+            modeOption === "plan"
+              ? "hover:!bg-[var(--amber-11)]"
+              : modeOption === "default"
+                ? "hover:!bg-[var(--gray-11)]"
+                : modeOption === "acceptEdits"
+                  ? "hover:!bg-[var(--green-11)]"
+                  : "hover:!bg-[var(--red-11)]";
+          return (
+            <Select.Item
+              key={modeOption}
+              value={modeOption}
+              className={`group transition-colors ${hoverBgClass}`}
+            >
+              <Flex
+                align="center"
+                gap="1"
+                className="group-hover:!text-[black] [&_svg]:group-hover:!text-[black] [&_svg]:group-hover:!fill-[black] [&_svg_path]:group-hover:!fill-[black] [&_svg_path]:group-hover:!stroke-[black]"
+                style={{
+                  color: optionConfig.colorVar,
+                  fontFamily: "monospace",
+                }}
+              >
+                <span className="group-hover:[&_svg]:!text-[black] group-hover:[&_svg]:!fill-[black] group-hover:[&_svg_path]:!fill-[black] group-hover:[&_svg_path]:!stroke-[black]">
+                  {optionConfig.icon}
+                </span>
+                <Text size="1" className="group-hover:!text-[black]">
+                  {optionConfig.label}
+                </Text>
+              </Flex>
+            </Select.Item>
+          );
+        })}
+      </Select.Content>
+      <style>{`
+        .group:hover svg {
+          color: black !important;
+          fill: black !important;
+        }
+        .group:hover svg path {
+          fill: black !important;
+          stroke: black !important;
+        }
+      `}</style>
+    </Select.Root>
   );
 }
