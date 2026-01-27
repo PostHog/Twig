@@ -16,6 +16,7 @@ export interface SuggestionItem {
   id: string;
   label: string;
   description?: string;
+  filename?: string;
 }
 
 export interface FileSuggestionItem extends SuggestionItem {
