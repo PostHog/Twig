@@ -34,7 +34,8 @@ export function DiffStatsIndicator({ repoPath }: DiffStatsIndicatorProps) {
           fontFamily: "monospace",
         }}
       >
-        {diffStats.filesChanged} {diffStats.filesChanged === 1 ? "file" : "files"}
+        {diffStats.filesChanged}{" "}
+        {diffStats.filesChanged === 1 ? "file" : "files"}
       </Text>
       <Text
         size="1"
