@@ -1248,6 +1248,21 @@ const useStore = create<SessionStore>()(
             return;
           }
 
+          // Always remove permission from UI state first - the user has taken action
+          // and we should clear the selector regardless of backend success
+          const currentState = get();
+          const sess = currentState.sessions[session.taskRunId];
+          if (sess) {
+            const newPermissions = new Map(sess.pendingPermissions);
+            newPermissions.delete(toolCallId);
+            set((draft) => {
+              if (draft.sessions[session.taskRunId]) {
+                draft.sessions[session.taskRunId].pendingPermissions =
+                  newPermissions;
+              }
+            });
+          }
+
           try {
             await trpcVanilla.agent.respondToPermission.mutate({
               sessionId: session.taskRunId,
@@ -1256,20 +1271,6 @@ const useStore = create<SessionStore>()(
               selectedOptionIds,
               customInput,
             });
-
-            // Create new Map outside of Immer (Maps don't work well with Immer proxies)
-            const currentState = get();
-            const sess = currentState.sessions[session.taskRunId];
-            if (sess) {
-              const newPermissions = new Map(sess.pendingPermissions);
-              newPermissions.delete(toolCallId);
-              set((draft) => {
-                if (draft.sessions[session.taskRunId]) {
-                  draft.sessions[session.taskRunId].pendingPermissions =
-                    newPermissions;
-                }
-              });
-            }
 
             log.info("Permission response sent", {
               taskId,
@@ -1329,24 +1330,26 @@ const useStore = create<SessionStore>()(
             return;
           }
 
+          // Always remove permission from UI state first - the user has taken action
+          // and we should clear the selector regardless of backend success
+          const currentState = get();
+          const sess = currentState.sessions[session.taskRunId];
+          if (sess) {
+            const newPermissions = new Map(sess.pendingPermissions);
+            newPermissions.delete(toolCallId);
+            set((draft) => {
+              if (draft.sessions[session.taskRunId]) {
+                draft.sessions[session.taskRunId].pendingPermissions =
+                  newPermissions;
+              }
+            });
+          }
+
           try {
             await trpcVanilla.agent.cancelPermission.mutate({
               sessionId: session.taskRunId,
               toolCallId,
             });
-
-            const currentState = get();
-            const sess = currentState.sessions[session.taskRunId];
-            if (sess) {
-              const newPermissions = new Map(sess.pendingPermissions);
-              newPermissions.delete(toolCallId);
-              set((draft) => {
-                if (draft.sessions[session.taskRunId]) {
-                  draft.sessions[session.taskRunId].pendingPermissions =
-                    newPermissions;
-                }
-              });
-            }
 
             log.info("Permission cancelled", { taskId, toolCallId });
 
