@@ -1,15 +1,11 @@
 import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import {
-  cycleExecutionMode,
-  type ExecutionMode,
-} from "@features/sessions/stores/sessionStore";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { EXECUTION_MODES } from "@shared/constants";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -47,11 +43,9 @@ export function TaskInput() {
     }
   }, [allowBypassPermissions, executionMode]);
 
-  const handleModeChange = useCallback(() => {
-    setExecutionMode((current) =>
-      cycleExecutionMode(current, allowBypassPermissions),
-    );
-  }, [allowBypassPermissions]);
+  const handleModeChange = useCallback((mode: ExecutionMode) => {
+    setExecutionMode(mode);
+  }, []);
 
   const { githubIntegration } = useRepositoryIntegration();
 

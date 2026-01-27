@@ -89,11 +89,13 @@ export function SessionView({
     }
   }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
 
-  const handleModeChange = useCallback(() => {
-    if (!taskId || isCloud) return;
-    const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
-    setSessionMode(taskId, nextMode);
-  }, [taskId, currentMode, isCloud, setSessionMode, allowBypassPermissions]);
+  const handleModeChange = useCallback(
+    (mode: ExecutionMode) => {
+      if (!taskId || isCloud) return;
+      setSessionMode(taskId, mode);
+    },
+    [taskId, isCloud, setSessionMode],
+  );
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
