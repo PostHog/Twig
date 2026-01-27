@@ -284,6 +284,26 @@ export function SessionView({
     editorRef.current?.focus();
   }, []);
 
+  // Click anywhere in chat pane to focus editor (except interactive elements)
+  const handlePaneClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+
+    // Check if click was on or inside an interactive element
+    const interactiveSelector =
+      'button, a, input, textarea, select, [role="button"], [role="link"], [contenteditable="true"], [data-interactive]';
+    if (target.closest(interactiveSelector)) {
+      return;
+    }
+
+    // Don't focus if user is selecting text
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+      return;
+    }
+
+    editorRef.current?.focus();
+  }, []);
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
@@ -291,6 +311,7 @@ export function SessionView({
           direction="column"
           height="100%"
           className="relative bg-gray-1"
+          onClick={handlePaneClick}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
