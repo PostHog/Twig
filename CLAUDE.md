@@ -88,6 +88,12 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tR
 
 - Shared business logic for jj/GitHub operations
 
+## Agent Integration Guidelines
+
+- **No rawInput**: Don't use Claude Code SDK's `rawInput` - only use Zod validated meta fields. This keeps us agent agnostic and gives us a maintainable, extensible format for logs.
+- **Use ACP SDK types**: Don't roll your own types for things available in the ACP SDK. Import types directly from `@anthropic-ai/claude-agent-sdk` TypeScript SDK.
+- **Permissions via tool calls**: If something requires user input/approval, implement it through a tool call with a permission instead of custom methods + notifications. Avoid patterns like `_array/permission_request`.
+
 ## Key Libraries
 
 - React 18, Radix UI Themes, Tailwind CSS
