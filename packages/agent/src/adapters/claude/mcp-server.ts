@@ -7,7 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as diff from "diff";
 import { z } from "zod";
 import { Logger } from "@/utils/logger.js";
-import type { ClaudeAcpAgent } from "./agent.js";
+import type { ClaudeAcpAgent } from "./claude-agent.js";
 import { extractLinesWithByteLimit, sleep, unreachable } from "./utils.js";
 
 export const SYSTEM_REMINDER = `
@@ -111,7 +111,7 @@ Usage:
       },
       async (input) => {
         try {
-          if (!agent.sessions[sessionId]) {
+          if (!agent.hasSession(sessionId)) {
             return sessionNotFound();
           }
 
@@ -194,7 +194,7 @@ Usage:
       },
       async (input) => {
         try {
-          if (!agent.sessions[sessionId]) {
+          if (!agent.hasSession(sessionId)) {
             return sessionNotFound();
           }
           await agent.writeTextFile({
@@ -251,7 +251,7 @@ Usage:
       },
       async (input) => {
         try {
-          if (!agent.sessions[sessionId]) {
+          if (!agent.hasSession(sessionId)) {
             return sessionNotFound();
           }
 
@@ -334,7 +334,7 @@ Output: Create directory 'foo'`),
         },
       },
       async (input, extra) => {
-        if (!agent.sessions[sessionId]) {
+        if (!agent.hasSession(sessionId)) {
           return sessionNotFound();
         }
 

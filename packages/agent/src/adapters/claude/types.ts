@@ -1,5 +1,4 @@
 import type {
-  SessionNotification,
   TerminalHandle,
   TerminalOutputResponse,
 } from "@agentclientprotocol/sdk";
@@ -10,18 +9,15 @@ import type {
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Pushable } from "@/utils/streams.js";
+import type { BaseSession } from "../base-acp-agent.js";
 
-export type Session = {
+export type Session = BaseSession & {
   query: Query;
   input: Pushable<SDKUserMessage>;
-  cancelled: boolean;
   permissionMode: PermissionMode;
-  notificationHistory: SessionNotification[];
   sdkSessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;
-  abortController: AbortController;
-  interruptReason?: string;
 };
 
 export type ToolUseCache = {

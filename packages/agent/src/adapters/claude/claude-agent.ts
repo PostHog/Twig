@@ -5,7 +5,6 @@ import {
   type AgentSideConnection,
   type AuthenticateRequest,
   type AvailableCommand,
-  type CancelNotification,
   type ClientCapabilities,
   type InitializeRequest,
   type InitializeResponse,
@@ -147,7 +146,7 @@ async function getAvailableSlashCommands(
 
 export class ClaudeAcpAgent extends BaseAcpAgent {
   readonly adapterName = "claude";
-  declare sessions: { [key: string]: Session };
+  declare session: Session | null;
   toolUseCache: ToolUseCache;
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
@@ -175,7 +174,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       notificationHistory: [],
       abortController,
     };
-    this.sessions[sessionId] = session;
+    this.session = session;
+    this.sessionId = sessionId;
     return session;
   }
 
@@ -239,12 +239,11 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     }, 0);
   }
 
-  private getSession(sessionId: string): Session {
-    const session = this.sessions[sessionId];
-    if (!session) {
+  private getSession(): Session {
+    if (!this.session) {
       throw new Error("Session not found");
     }
-    return session;
+    return this.session;
   }
 
   private registerPersistence(
@@ -421,7 +420,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
   }
 
   async prompt(params: PromptRequest): Promise<PromptResponse> {
-    const session = this.getSession(params.sessionId);
+    const session = this.getSession();
     session.cancelled = false;
     session.interruptReason = undefined;
 
@@ -506,25 +505,22 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     throw new Error("Session did not end in result");
   }
 
-  async cancel(params: CancelNotification): Promise<void> {
-    const session = this.getSession(params.sessionId);
-    session.cancelled = true;
-    const meta = params._meta as { interruptReason?: string } | undefined;
-    if (meta?.interruptReason) {
-      session.interruptReason = meta.interruptReason;
+  protected async interruptSession(): Promise<void> {
+    if (!this.session) {
+      return;
     }
-    await session.query.interrupt();
+    await this.session.query.interrupt();
   }
 
   async setSessionModel(params: SetSessionModelRequest) {
-    const session = this.getSession(params.sessionId);
+    const session = this.getSession();
     await session.query.setModel(params.modelId);
   }
 
   async setSessionMode(
     params: SetSessionModeRequest,
   ): Promise<SetSessionModeResponse> {
-    const session = this.getSession(params.sessionId);
+    const session = this.getSession();
 
     switch (params.modeId) {
       case "default":
@@ -553,14 +549,14 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
 
   canUseTool(sessionId: string): CanUseTool {
     return async (toolName, toolInput, { suggestions, toolUseID }) => {
-      const session = this.sessions[sessionId];
-      if (!session) {
+      if (this.sessionId !== sessionId || !this.session) {
         return {
           behavior: "deny",
           message: "Session not found",
           interrupt: true,
         };
       }
+      const session = this.session;
 
       const context = {
         session,
@@ -614,7 +610,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     this.logger.info("[RESUME] Resuming session", { params });
     const { sessionId } = params;
 
-    if (this.sessions[sessionId]) {
+    if (this.sessionId === sessionId && this.session) {
       return {};
     }
 

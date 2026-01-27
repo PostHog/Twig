@@ -9,7 +9,7 @@ import type {
   PermissionMode,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "@/utils/logger.js";
-import type { ClaudeAcpAgent } from "./agent.js";
+import type { ClaudeAcpAgent } from "./claude-agent.js";
 import { createPostToolUseHook } from "./hooks.js";
 import { createMcpServer, toolNames } from "./mcp-server.js";
 import { clearStatsigCache } from "./plan-utils.js";

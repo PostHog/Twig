@@ -6,7 +6,7 @@ import {
   createTappedWritableStream,
   type StreamPair,
 } from "@/utils/streams.js";
-import { ClaudeAcpAgent } from "./claude/agent.js";
+import { ClaudeAcpAgent } from "./claude/claude-agent.js";
 
 export type AgentAdapter = "claude";
 
@@ -92,7 +92,7 @@ export function createAcpConnection(
       logger.info("Cleaning up ACP connection");
 
       if (agent) {
-        await agent.closeAllSessions();
+        await agent.closeSession();
       }
 
       // Then close the streams to properly terminate the ACP connection
