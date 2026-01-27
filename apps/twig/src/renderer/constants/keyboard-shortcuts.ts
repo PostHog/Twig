@@ -8,7 +8,8 @@ export const SHORTCUTS = {
   TOGGLE_LEFT_SIDEBAR: "mod+b",
   TOGGLE_RIGHT_SIDEBAR: "mod+shift+b",
   CLOSE_TAB: "mod+w",
-  SWITCH_TAB: "mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
+  SWITCH_TAB: "ctrl+1,ctrl+2,ctrl+3,ctrl+4,ctrl+5,ctrl+6,ctrl+7,ctrl+8,ctrl+9",
+  SWITCH_TASK: "mod+0,mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
   OPEN_IN_EDITOR: "mod+o",
   COPY_PATH: "mod+shift+c",
   TASK_REFRESH: "mod+r",
@@ -58,6 +59,12 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
     category: "general",
   },
   {
+    id: "switch-task",
+    keys: "mod+0-9",
+    description: "Switch to task 1-9 (0 = home)",
+    category: "navigation",
+  },
+  {
     id: "go-back",
     keys: SHORTCUTS.GO_BACK,
     description: "Go back",
@@ -83,7 +90,7 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   },
   {
     id: "switch-tab",
-    keys: "mod+1-9",
+    keys: "ctrl+1-9",
     description: "Switch to tab 1-9",
     category: "panels",
     context: "Task detail",

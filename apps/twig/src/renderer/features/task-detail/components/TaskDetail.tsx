@@ -13,8 +13,8 @@ import { useStatusBar } from "@hooks/useStatusBar";
 import { GitBranch, Laptop } from "@phosphor-icons/react";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
-import { useMemo, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
+import { useEffect, useMemo, useState } from "react";
+import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { WorktreePathDisplay } from "./WorktreePathDisplay";
 
@@ -30,6 +30,15 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   const effectiveRepoPath = useCwd(taskId);
 
   const [filePickerOpen, setFilePickerOpen] = useState(false);
+
+  const { enableScope, disableScope } = useHotkeysContext();
+
+  useEffect(() => {
+    enableScope("taskDetail");
+    return () => {
+      disableScope("taskDetail");
+    };
+  }, [enableScope, disableScope]);
 
   useHotkeys("mod+p", () => setFilePickerOpen(true), {
     enableOnContentEditable: true,
