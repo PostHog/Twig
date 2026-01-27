@@ -355,7 +355,7 @@ Output: Create directory 'foo'`),
           command: input.command,
           env: [{ name: "CLAUDECODE", value: "1" }],
           sessionId,
-          outputByteLimit: 32_000n,
+          outputByteLimit: 32_000,
         });
 
         await agent.client.sessionUpdate({
