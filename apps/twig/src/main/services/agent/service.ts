@@ -641,10 +641,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.extMethod("session/setMode", {
-        sessionId,
-        modeId,
-      });
+      await session.clientSideConnection.setSessionMode({ sessionId, modeId });
       log.info("Session mode updated", { sessionId, modeId });
     } catch (err) {
       log.error("Failed to set session mode", { sessionId, modeId, err });
