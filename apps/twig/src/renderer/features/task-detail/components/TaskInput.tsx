@@ -9,7 +9,6 @@ import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import { EXECUTION_MODES } from "@shared/constants";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect, useRef, useState } from "react";

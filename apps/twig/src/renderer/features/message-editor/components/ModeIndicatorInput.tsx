@@ -71,12 +71,7 @@ export function ModeIndicatorInput({
   const hasDiffStats = diffStats && diffStats.filesChanged > 0;
 
   return (
-    <Select.Root
-      value={mode}
-      onValueChange={onModeChange}
-      disabled={disabled}
-      size="1"
-    >
+    <Select.Root value={mode} onValueChange={onModeChange} size="1">
       <Select.Trigger
         className="w-fit"
         onClick={(e) => {
