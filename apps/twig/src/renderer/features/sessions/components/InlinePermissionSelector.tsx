@@ -2,11 +2,17 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
+export type PermissionOptionKind =
+  | "allow_once"
+  | "allow_always"
+  | "custom"
+  | "reject_once";
+
 export interface PermissionOption {
   optionId: string;
   name: string;
   description?: string;
-  kind: string;
+  kind: PermissionOptionKind;
 }
 
 interface InlinePermissionSelectorProps {
@@ -29,6 +35,12 @@ export function InlinePermissionSelector({
   const [customInput, setCustomInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const sortPriority: Record<PermissionOptionKind, number> = {
+    allow_once: 500,
+    reject_once: 400,
+    allow_always: 300,
+    custom: 100,
+  };
 
   // Auto-focus the container when component mounts to capture keyboard events
   useEffect(() => {
@@ -57,7 +69,10 @@ export function InlinePermissionSelector({
         { optionId: "_custom", name: "Other", description: "", kind: "custom" },
       ];
     }
-    return filteredOptions;
+    // sorts so that higher priority comes first (ie descending order)
+    return filteredOptions.sort(
+      (a, b) => sortPriority[b.kind] - sortPriority[a.kind],
+    );
   }, [options]);
 
   const numOptions = allOptions.length;
