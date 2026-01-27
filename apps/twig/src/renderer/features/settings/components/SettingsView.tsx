@@ -882,8 +882,8 @@ export function SettingsView() {
           <AlertDialog.Description size="2">
             <Flex direction="column" gap="3">
               <Text color="red" weight="medium">
-                In Bypass Permissions mode, Twig will not ask for your
-                approval before running potentially dangerous commands.
+                In Bypass Permissions mode, Twig will not ask for your approval
+                before running potentially dangerous commands.
               </Text>
               <Text>
                 This mode should only be used in a sandboxed container/VM that
