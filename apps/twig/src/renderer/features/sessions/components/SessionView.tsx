@@ -5,6 +5,7 @@ import {
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   type ExecutionMode,
+  cycleExecutionMode,
   useCurrentModeForTask,
   usePendingPermissionsForTask,
   useSessionActions,
@@ -29,28 +30,6 @@ import { DropZoneOverlay } from "./DropZoneOverlay";
 import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
-
-function getExecutionModes(allowBypassPermissions: boolean): ExecutionMode[] {
-  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
-  if (allowBypassPermissions) {
-    modes.push("bypassPermissions");
-  }
-  return modes;
-}
-
-function cycleMode(
-  current: ExecutionMode,
-  allowBypassPermissions: boolean,
-): ExecutionMode {
-  const modes = getExecutionModes(allowBypassPermissions);
-  const currentIndex = modes.indexOf(current);
-  // If current mode is not in the list (e.g., bypass was disabled), reset to default
-  if (currentIndex === -1) {
-    return "default";
-  }
-  const nextIndex = (currentIndex + 1) % modes.length;
-  return modes[nextIndex];
-}
 
 interface SessionViewProps {
   events: AcpMessage[];
@@ -112,7 +91,7 @@ export function SessionView({
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
-    const nextMode = cycleMode(currentMode, allowBypassPermissions);
+    const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
     setSessionMode(taskId, nextMode);
   }, [taskId, currentMode, isCloud, setSessionMode, allowBypassPermissions]);
 
@@ -136,7 +115,7 @@ export function SessionView({
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleMode(currentMode, allowBypassPermissions);
+      const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
       setSessionMode(taskId, nextMode);
     },
     {

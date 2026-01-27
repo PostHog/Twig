@@ -1,7 +1,10 @@
 import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import {
+  type ExecutionMode,
+  cycleExecutionMode,
+} from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { Flex } from "@radix-ui/themes";
@@ -13,28 +16,6 @@ import { useTaskCreation } from "../hooks/useTaskCreation";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
-
-function getExecutionModes(allowBypassPermissions: boolean): ExecutionMode[] {
-  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
-  if (allowBypassPermissions) {
-    modes.push("bypassPermissions");
-  }
-  return modes;
-}
-
-function cycleMode(
-  current: ExecutionMode,
-  allowBypassPermissions: boolean,
-): ExecutionMode {
-  const modes = getExecutionModes(allowBypassPermissions);
-  const currentIndex = modes.indexOf(current);
-  // If current mode is not in the list (e.g., bypass was disabled), reset to default
-  if (currentIndex === -1) {
-    return "default";
-  }
-  const nextIndex = (currentIndex + 1) % modes.length;
-  return modes[nextIndex];
-}
 
 const DOT_FILL = "var(--gray-6)";
 
@@ -66,7 +47,9 @@ export function TaskInput() {
   }, [allowBypassPermissions, executionMode]);
 
   const handleModeChange = useCallback(() => {
-    setExecutionMode((current) => cycleMode(current, allowBypassPermissions));
+    setExecutionMode((current) =>
+      cycleExecutionMode(current, allowBypassPermissions),
+    );
   }, [allowBypassPermissions]);
 
   const { githubIntegration } = useRepositoryIntegration();

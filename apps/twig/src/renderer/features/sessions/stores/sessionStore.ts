@@ -44,6 +44,29 @@ export type ExecutionMode =
   | "acceptEdits"
   | "bypassPermissions";
 
+export function getExecutionModes(
+  allowBypassPermissions: boolean,
+): ExecutionMode[] {
+  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+  if (allowBypassPermissions) {
+    modes.push("bypassPermissions");
+  }
+  return modes;
+}
+
+export function cycleExecutionMode(
+  current: ExecutionMode,
+  allowBypassPermissions: boolean,
+): ExecutionMode {
+  const modes = getExecutionModes(allowBypassPermissions);
+  const currentIndex = modes.indexOf(current);
+  if (currentIndex === -1) {
+    return "default";
+  }
+  const nextIndex = (currentIndex + 1) % modes.length;
+  return modes[nextIndex];
+}
+
 export interface AgentModelOption {
   modelId: string;
   name: string;
