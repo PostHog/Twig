@@ -19,10 +19,10 @@ This is the monorepo for PostHog's Twig apps and the agent framework that powers
 | [README.md](./README.md) | This file - monorepo overview, setup, and configuration |
 | [CLAUDE.md](./CLAUDE.md) | Development guide for Claude Code / AI assistants - code style, patterns, testing |
 | [UPDATES.md](./UPDATES.md) | Release versioning and git tagging guide |
-| [apps/twig/README.md](./apps/twig/README.md) | Twig desktop app setup, distribution, and workspace configuration |
+| [apps/twig/README.md](./apps/twig/README.md) | Twig desktop app setup - Electron, React, tRPC |
 | [apps/twig/ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) | Implementation patterns - DI, tRPC, state management, events |
 | [apps/mobile/README.md](./apps/mobile/README.md) | PostHog mobile app - Expo, EAS builds, TestFlight |
-| [apps/cli/README.md](./apps/cli/README.md) | `arr` CLI - stacked PR management with Jujutsu |
+| [apps/cli/README.md](./apps/cli/README.md) | CLI - stacked PR management with Jujutsu |
 
 ## Development
 
