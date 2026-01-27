@@ -1,4 +1,8 @@
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import {
+  type ExecutionMode,
+  getExecutionModes,
+} from "@features/sessions/stores/sessionStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import {
   Circle,
@@ -9,7 +13,6 @@ import {
 } from "@phosphor-icons/react";
 import { Flex, Select, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
-import { EXECUTION_MODES } from "@shared/constants";
 import { useQuery } from "@tanstack/react-query";
 
 interface ModeIndicatorInputProps {
