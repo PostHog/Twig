@@ -110,7 +110,9 @@ export function useDraftSync(
 
   const draftActions = useDraftStore((s) => s.actions);
   const draft = useDraftStore((s) => s.drafts[sessionId] ?? null);
-  const pendingContent = useDraftStore((s) => s.pendingContent[sessionId] ?? null);
+  const pendingContent = useDraftStore(
+    (s) => s.pendingContent[sessionId] ?? null,
+  );
   const hasHydrated = useDraftStore((s) => s._hasHydrated);
 
   // Reset restoration flag when sessionId changes (e.g., navigating between tasks)

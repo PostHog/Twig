@@ -152,7 +152,13 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     }
 
     requestFocus(taskId);
-  }, [taskId, cancelPrompt, popAllQueuedMessages, setPendingContent, requestFocus]);
+  }, [
+    taskId,
+    cancelPrompt,
+    popAllQueuedMessages,
+    setPendingContent,
+    requestFocus,
+  ]);
 
   const { appendUserShellExecute } = useSessionActions();
 

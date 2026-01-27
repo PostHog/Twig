@@ -170,12 +170,14 @@ function subscribeToChannel(taskRunId: string) {
                 // Schedule queue processing outside of setState
                 setTimeout(() => {
                   const actions = useStore.getState().actions;
-                  actions.sendPrompt(taskId, nextMessageContent).catch((err) => {
-                    log.error("Failed to send queued message", {
-                      taskId,
-                      error: err,
+                  actions
+                    .sendPrompt(taskId, nextMessageContent)
+                    .catch((err) => {
+                      log.error("Failed to send queued message", {
+                        taskId,
+                        error: err,
+                      });
                     });
-                  });
                 }, 0);
               }
             }
