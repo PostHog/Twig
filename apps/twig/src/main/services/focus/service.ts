@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import * as watcher from "@parcel/watcher";
-import { injectable } from "inversify";
+import { injectable, preDestroy } from "inversify";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter";
 import { type FocusSession, focusStore } from "../../utils/store.js";
@@ -108,6 +108,7 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
     });
   }
 
+  @preDestroy()
   async stopWatchingMainRepo(): Promise<void> {
     if (this.mainRepoWatcher) {
       await this.mainRepoWatcher.unsubscribe();

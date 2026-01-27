@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppLifecycleService } from "./service.js";
 
-const { mockApp, mockAgentService, mockTrackAppEvent, mockShutdownPostHog } =
+const { mockApp, mockContainer, mockTrackAppEvent, mockShutdownPostHog } =
   vi.hoisted(() => ({
     mockApp: {
       exit: vi.fn(),
     },
-    mockAgentService: {
-      cleanupAll: vi.fn(() => Promise.resolve()),
+    mockContainer: {
+      unbindAll: vi.fn(() => Promise.resolve()),
     },
     mockTrackAppEvent: vi.fn(),
     mockShutdownPostHog: vi.fn(() => Promise.resolve()),
@@ -33,10 +33,8 @@ vi.mock("../posthog-analytics.js", () => ({
   shutdownPostHog: mockShutdownPostHog,
 }));
 
-vi.mock("../../di/tokens.js", () => ({
-  MAIN_TOKENS: {
-    AgentService: Symbol.for("AgentService"),
-  },
+vi.mock("../../di/container.js", () => ({
+  container: mockContainer,
 }));
 
 vi.mock("../../../types/analytics.js", () => ({
@@ -50,11 +48,7 @@ describe("AppLifecycleService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-
     service = new AppLifecycleService();
-    (
-      service as unknown as { agentService: typeof mockAgentService }
-    ).agentService = mockAgentService;
   });
 
   describe("isQuittingForUpdate", () => {
@@ -69,9 +63,9 @@ describe("AppLifecycleService", () => {
   });
 
   describe("shutdown", () => {
-    it("cleans up agents", async () => {
+    it("unbinds all container services", async () => {
       await service.shutdown();
-      expect(mockAgentService.cleanupAll).toHaveBeenCalled();
+      expect(mockContainer.unbindAll).toHaveBeenCalled();
     });
 
     it("tracks app quit event", async () => {
@@ -87,8 +81,8 @@ describe("AppLifecycleService", () => {
     it("calls cleanup steps in order", async () => {
       const callOrder: string[] = [];
 
-      mockAgentService.cleanupAll.mockImplementation(async () => {
-        callOrder.push("cleanupAll");
+      mockContainer.unbindAll.mockImplementation(async () => {
+        callOrder.push("unbindAll");
       });
       mockTrackAppEvent.mockImplementation(() => {
         callOrder.push("trackAppEvent");
@@ -100,16 +94,14 @@ describe("AppLifecycleService", () => {
       await service.shutdown();
 
       expect(callOrder).toEqual([
-        "cleanupAll",
+        "unbindAll",
         "trackAppEvent",
         "shutdownPostHog",
       ]);
     });
 
-    it("continues shutdown if agent cleanup fails", async () => {
-      mockAgentService.cleanupAll.mockRejectedValue(
-        new Error("cleanup failed"),
-      );
+    it("continues shutdown if container unbind fails", async () => {
+      mockContainer.unbindAll.mockRejectedValue(new Error("unbind failed"));
 
       await service.shutdown();
 
@@ -120,7 +112,6 @@ describe("AppLifecycleService", () => {
     it("continues shutdown if PostHog shutdown fails", async () => {
       mockShutdownPostHog.mockRejectedValue(new Error("posthog failed"));
 
-      // Should not throw
       await expect(service.shutdown()).resolves.toBeUndefined();
     });
   });
@@ -129,8 +120,8 @@ describe("AppLifecycleService", () => {
     it("calls shutdown before exit", async () => {
       const callOrder: string[] = [];
 
-      mockAgentService.cleanupAll.mockImplementation(async () => {
-        callOrder.push("cleanupAll");
+      mockContainer.unbindAll.mockImplementation(async () => {
+        callOrder.push("unbindAll");
       });
       mockApp.exit.mockImplementation(() => {
         callOrder.push("exit");
@@ -138,7 +129,7 @@ describe("AppLifecycleService", () => {
 
       await service.shutdownAndExit();
 
-      expect(callOrder[0]).toBe("cleanupAll");
+      expect(callOrder[0]).toBe("unbindAll");
       expect(callOrder[callOrder.length - 1]).toBe("exit");
     });
 

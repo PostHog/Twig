@@ -12,7 +12,7 @@ import {
 } from "@agentclientprotocol/sdk";
 import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
 import { app } from "electron";
-import { injectable } from "inversify";
+import { injectable, preDestroy } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -748,6 +748,7 @@ For git operations while detached:
     return `Your worktree is back on branch \`${context.branchName}\`. Normal git commands work again.`;
   }
 
+  @preDestroy()
   async cleanupAll(): Promise<void> {
     log.info("Cleaning up all agent sessions", {
       sessionCount: this.sessions.size,

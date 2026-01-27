@@ -2,7 +2,7 @@ import { exec, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import path from "node:path";
-import { injectable } from "inversify";
+import { injectable, preDestroy } from "inversify";
 import * as pty from "node-pty";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -215,6 +215,7 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
    * Destroy all active shell sessions.
    * Used during application shutdown to ensure all child processes are cleaned up.
    */
+  @preDestroy()
   destroyAll(): void {
     log.info(`Destroying all shell sessions (${this.sessions.size} active)`);
     for (const sessionId of this.sessions.keys()) {

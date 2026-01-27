@@ -1,5 +1,5 @@
 import { app, autoUpdater } from "electron";
-import { inject, injectable, postConstruct } from "inversify";
+import { inject, injectable, postConstruct, preDestroy } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -30,6 +30,7 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   private pendingNotification = false;
   private checkingForUpdates = false;
   private checkTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private checkIntervalId: ReturnType<typeof setInterval> | null = null;
   private downloadedVersion: string | null = null;
   private initialized = false;
 
@@ -155,7 +156,10 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     this.performCheck();
 
     // Set up periodic checks
-    setInterval(() => this.performCheck(), UpdatesService.CHECK_INTERVAL_MS);
+    this.checkIntervalId = setInterval(
+      () => this.performCheck(),
+      UpdatesService.CHECK_INTERVAL_MS,
+    );
   }
 
   private handleError(error: Error): void {
@@ -263,6 +267,15 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     if (this.checkTimeoutId) {
       clearTimeout(this.checkTimeoutId);
       this.checkTimeoutId = null;
+    }
+  }
+
+  @preDestroy()
+  shutdown(): void {
+    this.clearCheckTimeout();
+    if (this.checkIntervalId) {
+      clearInterval(this.checkIntervalId);
+      this.checkIntervalId = null;
     }
   }
 }

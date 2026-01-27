@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
 import ignore, { type Ignore } from "ignore";
-import { injectable } from "inversify";
+import { injectable, preDestroy } from "inversify";
 import { logger } from "../../lib/logger.js";
 import { git, withGitLock } from "./service.js";
 
@@ -149,6 +149,7 @@ export class FocusSyncService {
     }
   }
 
+  @preDestroy()
   async stopSync(): Promise<void> {
     if (this.pending.timer) {
       clearTimeout(this.pending.timer);
