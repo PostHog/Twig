@@ -1,20 +1,19 @@
 import type {
-  ToolKind as SdkToolKind,
+  ToolKind as AcpToolKind,
   SessionNotification,
   ToolCallContent,
   ToolCallLocation,
   ToolCallStatus,
 } from "@agentclientprotocol/sdk";
 
-// Extend SDK ToolKind with custom kinds
-export type ToolKind = SdkToolKind | "ask";
+export type TwigToolKind = AcpToolKind | "question";
 
 export type { ToolCallContent, ToolCallStatus, ToolCallLocation };
 
 export interface ToolCall {
   _meta?: { [key: string]: unknown } | null;
   content?: ToolCallContent[];
-  kind?: ToolKind | null;
+  kind?: TwigToolKind | null;
   locations?: ToolCallLocation[];
   rawInput?: unknown;
   rawOutput?: unknown;

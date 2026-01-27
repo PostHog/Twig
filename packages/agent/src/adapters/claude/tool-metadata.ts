@@ -100,15 +100,15 @@ export function toolInfoFromToolUse(
     case "Bash":
     case toolNames.bash:
       return {
-        title: input?.command
-          ? `\`${String(input.command).replaceAll("`", "\\`")}\``
-          : "Terminal",
+        title: input?.description
+          ? String(input.description)
+          : "Execute command",
         kind: "execute",
-        content: input?.description
+        content: input?.command
           ? [
               {
                 type: "content",
-                content: { type: "text", text: String(input.description) },
+                content: { type: "text", text: String(input.command) },
               },
             ]
           : [],
@@ -353,13 +353,18 @@ export function toolInfoFromToolUse(
 
     case "WebFetch":
       return {
-        title: input?.url ? `Fetch ${String(input.url)}` : "Fetch",
+        title: "Fetch",
         kind: "fetch",
-        content: input?.prompt
+        content: input?.url
           ? [
               {
                 type: "content",
-                content: { type: "text", text: String(input.prompt) },
+                content: {
+                  type: "resource_link",
+                  uri: String(input.url),
+                  name: String(input.url),
+                  description: input?.prompt ? String(input.prompt) : undefined,
+                },
               },
             ]
           : [],
@@ -414,7 +419,7 @@ export function toolInfoFromToolUse(
         | undefined;
       return {
         title: questions?.[0]?.question || "Question",
-        kind: "ask" as ToolKind,
+        kind: "other" as ToolKind,
         content: questions
           ? [
               {

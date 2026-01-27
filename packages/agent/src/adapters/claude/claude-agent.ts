@@ -158,6 +158,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     q: Query,
     input: Pushable<SDKUserMessage>,
     permissionMode: PermissionMode,
+    cwd: string,
     abortController: AbortController,
   ): Session {
     const session: Session = {
@@ -165,6 +166,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       input,
       cancelled: false,
       permissionMode,
+      cwd,
       notificationHistory: [],
       abortController,
     };
@@ -212,6 +214,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       q,
       input,
       config.permissionMode,
+      config.cwd,
       abortController,
     );
 
@@ -369,6 +372,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
       q,
       input,
       ourPermissionMode,
+      params.cwd,
       sessionAbortController,
     );
 

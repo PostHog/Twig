@@ -32,6 +32,10 @@ const config: StorybookConfig = {
           "@stores": path.resolve(__dirname, "../src/renderer/stores"),
           "@hooks": path.resolve(__dirname, "../src/renderer/hooks"),
           "@utils": path.resolve(__dirname, "../src/renderer/utils"),
+          "@posthog/agent/adapters/claude/permission-options": path.resolve(
+            __dirname,
+            "../../../packages/agent/src/adapters/claude/permission-options.ts",
+          ),
         },
       },
     });

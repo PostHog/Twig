@@ -52,6 +52,8 @@ export default defineConfig({
     "src/posthog-api.ts",
     "src/types.ts",
     "src/worktree-manager.ts",
+    "src/adapters/claude/question-utils.ts",
+    "src/adapters/claude/permission-options.ts",
   ],
   format: ["esm"],
   dts: true,

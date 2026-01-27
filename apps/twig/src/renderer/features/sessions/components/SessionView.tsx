@@ -1,3 +1,4 @@
+import { PermissionSelector } from "@components/permissions/PermissionSelector";
 import {
   MessageEditor,
   type MessageEditorHandle,
@@ -25,7 +26,6 @@ import {
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
 import { DropZoneOverlay } from "./DropZoneOverlay";
-import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
@@ -182,7 +182,11 @@ export function SessionView({
   }, [pendingPermissions]);
 
   const handlePermissionSelect = useCallback(
-    async (optionId: string, customInput?: string) => {
+    async (
+      optionId: string,
+      customInput?: string,
+      answers?: Record<string, string>,
+    ) => {
       if (!firstPendingPermission || !taskId) return;
 
       // Check if the selected option is "allow_always" and set mode to acceptEdits
@@ -194,22 +198,21 @@ export function SessionView({
       }
 
       if (customInput) {
-        // Check if this is an "other" option (AskUserQuestion) or plan feedback
         if (optionId === "other") {
-          // For AskUserQuestion "Other" - pass customInput to the permission response
+          await respondToPermission(
+            taskId,
+            firstPendingPermission.toolCallId,
+            optionId,
+            customInput,
+            answers,
+          );
+        } else {
           await respondToPermission(
             taskId,
             firstPendingPermission.toolCallId,
             optionId,
             undefined,
-            customInput,
-          );
-        } else {
-          // For plan mode feedback - respond and send as follow-up prompt
-          await respondToPermission(
-            taskId,
-            firstPendingPermission.toolCallId,
-            optionId,
+            answers,
           );
           onSendPrompt(customInput);
         }
@@ -218,6 +221,8 @@ export function SessionView({
           taskId,
           firstPendingPermission.toolCallId,
           optionId,
+          undefined,
+          answers,
         );
       }
     },
@@ -371,12 +376,11 @@ export function SessionView({
               </Flex>
             </Flex>
           ) : firstPendingPermission ? (
-            <InlinePermissionSelector
-              title={firstPendingPermission.title}
+            <PermissionSelector
+              toolCall={firstPendingPermission.toolCall}
               options={firstPendingPermission.options}
               onSelect={handlePermissionSelect}
               onCancel={handlePermissionCancel}
-              disabled={false}
             />
           ) : (
             <Box

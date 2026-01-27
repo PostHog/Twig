@@ -1,18 +1,33 @@
-export const OPTION_PREFIX = "option_";
-export const OTHER_OPTION_ID = "other";
+import { z } from "zod";
 
-export interface QuestionItem {
-  question: string;
-  header?: string;
-  options: Array<{ label: string; description?: string }>;
-  multiSelect?: boolean;
-}
+export const OPTION_PREFIX = "option_";
+
+export const QuestionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+});
+
+export const QuestionItemSchema = z.object({
+  question: z.string(),
+  header: z.string().optional(),
+  options: z.array(QuestionOptionSchema),
+  multiSelect: z.boolean().optional(),
+  completed: z.boolean().optional(),
+});
+
+export const QuestionMetaSchema = z.object({
+  questions: z.array(QuestionItemSchema),
+});
+
+export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
+export type QuestionItem = z.infer<typeof QuestionItemSchema>;
+export type QuestionMeta = z.infer<typeof QuestionMetaSchema>;
 
 export interface AskUserQuestionInput {
   questions?: QuestionItem[];
   question?: string;
   header?: string;
-  options?: Array<{ label: string; description?: string }>;
+  options?: QuestionOption[];
   multiSelect?: boolean;
 }
 

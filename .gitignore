@@ -45,6 +45,7 @@ AGENTS.md
 # Playwright
 playwright-results/
 playwright-report/
+.playwright-cli
 test-results/
 
 *storybook.log

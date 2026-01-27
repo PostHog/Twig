@@ -104,8 +104,8 @@ interface SessionActions {
     taskId: string,
     toolCallId: string,
     optionId: string,
-    selectedOptionIds?: string[],
     customInput?: string,
+    answers?: Record<string, string>,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
   clearSessionError: (taskId: string) => Promise<void>;
@@ -248,8 +248,8 @@ function subscribeToChannel(taskRunId: string) {
         onData: async (payload) => {
           log.info("Permission request received in renderer", {
             taskRunId,
-            toolCallId: payload.toolCallId,
-            title: payload.title,
+            toolCallId: payload.toolCall.toolCallId,
+            title: payload.toolCall.title,
             optionCount: payload.options?.length,
           });
 
@@ -259,17 +259,14 @@ function subscribeToChannel(taskRunId: string) {
 
           if (session) {
             const newPermissions = new Map(session.pendingPermissions);
-            newPermissions.set(payload.toolCallId, {
-              toolCallId: payload.toolCallId,
-              title: payload.title,
-              options: payload.options,
-              rawInput: payload.rawInput,
+            newPermissions.set(payload.toolCall.toolCallId, {
+              ...payload,
               receivedAt: Date.now(),
             });
 
             log.info("Updating pendingPermissions in store", {
               taskRunId,
-              toolCallId: payload.toolCallId,
+              toolCallId: payload.toolCall.toolCallId,
               newMapSize: newPermissions.size,
             });
 
@@ -280,21 +277,14 @@ function subscribeToChannel(taskRunId: string) {
               }
             });
 
-            // Persist permission request to logs for recovery on reconnect
             const auth = useAuthStore.getState();
             if (auth.client && session.taskId) {
               const storedEntry: StoredLogEntry = {
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
-                  // TODO: Migrate to twig
                   method: "_array/permission_request",
-                  params: {
-                    toolCallId: payload.toolCallId,
-                    title: payload.title,
-                    options: payload.options,
-                    rawInput: payload.rawInput,
-                  },
+                  params: payload,
                 },
               };
               try {
@@ -303,7 +293,7 @@ function subscribeToChannel(taskRunId: string) {
                 ]);
                 log.info("Permission request persisted to logs", {
                   taskRunId,
-                  toolCallId: payload.toolCallId,
+                  toolCallId: payload.toolCall.toolCallId,
                 });
               } catch (error) {
                 log.warn("Failed to persist permission request to logs", {
@@ -1264,8 +1254,8 @@ const useStore = create<SessionStore>()(
           taskId,
           toolCallId,
           optionId,
-          selectedOptionIds,
           customInput,
+          answers,
         ) => {
           const session = getSessionByTaskId(taskId);
           if (!session) {
@@ -1273,8 +1263,6 @@ const useStore = create<SessionStore>()(
             return;
           }
 
-          // Always remove permission from UI state first - the user has taken action
-          // and we should clear the selector regardless of backend success
           const currentState = get();
           const sess = currentState.sessions[session.taskRunId];
           if (sess) {
@@ -1293,15 +1281,14 @@ const useStore = create<SessionStore>()(
               sessionId: session.taskRunId,
               toolCallId,
               optionId,
-              selectedOptionIds,
               customInput,
+              answers,
             });
 
             log.info("Permission response sent", {
               taskId,
               toolCallId,
               optionId,
-              selectedOptionIds,
               hasCustomInput: !!customInput,
             });
 
@@ -1312,12 +1299,10 @@ const useStore = create<SessionStore>()(
                 type: "notification",
                 timestamp: new Date().toISOString(),
                 notification: {
-                  // TODO: Migrate to twig
                   method: "_array/permission_response",
                   params: {
                     toolCallId,
                     optionId,
-                    ...(selectedOptionIds && { selectedOptionIds }),
                     ...(customInput && { customInput }),
                   },
                 },
