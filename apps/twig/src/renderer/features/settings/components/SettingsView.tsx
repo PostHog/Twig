@@ -644,7 +644,7 @@ export function SettingsView() {
                     <Flex align="center" gap="2">
                       <Warning size={16} weight="fill" color="var(--red-9)" />
                       <Text size="1" weight="medium" color="red">
-                        Allow Bypass Permissions mode
+                        Enable Bypass Permissions mode
                       </Text>
                     </Flex>
                     <Text size="1" color="gray">
