@@ -1,4 +1,4 @@
-import { Campfire } from "@phosphor-icons/react";
+import { Campfire, Circle } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
 
@@ -50,12 +50,21 @@ export function GeneratingIndicator({ startedAt }: GeneratingIndicatorProps) {
     >
       <Campfire size={14} weight="fill" className="campfire-pulse" />
       <Text size="1">{ACTIVITIES[activityIndex]}...</Text>
+      <Text size="1" color="gray">
+        (Esc to interrupt
+      </Text>
+      <Circle
+        size={4}
+        weight="fill"
+        className="text-gray-9"
+        style={{ margin: "0 2px" }}
+      />
       <Text
         size="1"
         color="gray"
-        style={{ fontVariantNumeric: "tabular-nums", minWidth: "50px" }}
+        style={{ fontVariantNumeric: "tabular-nums" }}
       >
-        {formatDuration(elapsed)}
+        {formatDuration(elapsed)})
       </Text>
     </Flex>
   );
