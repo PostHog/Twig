@@ -63,7 +63,7 @@ Import directly from source files instead.
 
 ## Architecture
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed patterns (DI, services, tRPC, state management).
+See [ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) for detailed patterns (DI, services, tRPC, state management).
 
 ### Electron App (apps/twig)
 

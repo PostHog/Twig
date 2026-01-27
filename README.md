@@ -9,10 +9,10 @@
 | File | Description |
 |------|-------------|
 | [README.md](./README.md) | This file - monorepo overview, setup, and configuration |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Detailed implementation patterns (DI, tRPC, state management, events) |
 | [CLAUDE.md](./CLAUDE.md) | Development guide for Claude Code / AI assistants - code style, patterns, testing |
 | [UPDATES.md](./UPDATES.md) | Release versioning and git tagging guide |
 | [apps/twig/README.md](./apps/twig/README.md) | Twig desktop app - build, sign, notarize, keyboard shortcuts |
+| [apps/twig/ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) | Implementation patterns - DI, tRPC, state management, events |
 | [apps/mobile/README.md](./apps/mobile/README.md) | PostHog mobile app - Expo, EAS builds, TestFlight |
 | [apps/cli/README.md](./apps/cli/README.md) | `arr` CLI - stacked PR management with Jujutsu |
 
@@ -39,9 +39,6 @@ npm install -g pnpm
 
 # Install dependencies for all packages
 pnpm install
-
-# Build the agent package
-pnpm --filter agent build
 ```
 
 ### Running in Development
@@ -53,40 +50,6 @@ pnpm dev
 # Or run them separately:
 pnpm dev:agent  # Run agent in watch mode
 pnpm dev:twig   # Run twig app
-```
-
-### Mobile App
-
-```bash
-# Install mobile dependencies
-pnpm mobile:install
-
-# Build and run on iOS simulator
-pnpm mobile:run:ios
-
-# Start development server (without rebuilding again)
-pnpm mobile:start
-
-# Submit to TestFlight
-pnpm mobile:testflight
-```
-
-See [apps/mobile/README.md](./apps/mobile/README.md) for more details on developing the mobile app. 
-
-### Other Commands
-
-```bash
-# Build all packages
-pnpm build
-
-# Run type checking across all packages
-pnpm typecheck
-
-# Run linting across all packages
-pnpm lint
-
-# Run tests across all packages
-pnpm test
 ```
 
 ### Utility Scripts
@@ -103,7 +66,7 @@ Scripts in `scripts/` for development and debugging:
 ```
 twig-monorepo/
 ├── apps/
-│   ├── twig/          # Electron desktop app
+│   ├── twig/           # Electron desktop app
 │   └── mobile/         # React Native mobile app (Expo)
 ├── packages/
 │   └── agent/          # Agent framework
@@ -113,17 +76,14 @@ twig-monorepo/
 
 ## Workspace Configuration (twig.json)
 
-Twig supports per-repository configuration through a `twig.json` file (or legacy `array.json`). This lets you define scripts that run automatically when workspaces are created or destroyed.
+Twig supports per-repository configuration through a `twig.json` file. This lets you define scripts that run automatically when workspaces are created or destroyed.
 
 ### File Locations
 
 Twig searches for configuration in this order (first match wins):
 
-1. `.twig/{workspace-name}/twig.json` - Workspace-specific config (new)
-2. `.twig/{workspace-name}/array.json` - Workspace-specific config (legacy)
-3. `.array/{workspace-name}/array.json` - Workspace-specific config (legacy location)
-4. `twig.json` - Repository root config (new)
-5. `array.json` - Repository root config (legacy)
+1. `.twig/{workspace-name}/twig.json` - Workspace-specific config
+4. `twig.json` - Repository root config
 
 ### Schema
 
