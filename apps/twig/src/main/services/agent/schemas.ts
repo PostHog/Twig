@@ -61,7 +61,7 @@ export const contentBlockSchema = z
   .object({
     type: z.string(),
     text: z.string().optional(),
-    _meta: z.record(z.string(), z.unknown()).optional(),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
   })
   .passthrough();
 

@@ -96,7 +96,6 @@ async function getAvailableModels(q: Query): Promise<SessionModelState> {
   const models = await q.supportedModels();
   const currentModel = models[0];
   await q.setModel(currentModel.value);
-
   const availableModels = models.map((model) => ({
     modelId: model.value,
     name: model.displayName,
@@ -378,7 +377,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
       sessionAbortController,
     );
 
-    this.registerPersistence(sessionId, params._meta);
+    this.registerPersistence(sessionId, params._meta ?? undefined);
 
     const availableCommands = await getAvailableSlashCommands(q);
     const models = await getAvailableModels(q);
@@ -617,7 +616,7 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
       session.sdkSessionId = sdkSessionId;
     }
 
-    this.registerPersistence(sessionId, params._meta);
+    this.registerPersistence(sessionId, params._meta ?? undefined);
 
     const availableCommands = await getAvailableSlashCommands(q);
     this.sendAvailableCommandsUpdate(sessionId, availableCommands);
