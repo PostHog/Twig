@@ -77,6 +77,15 @@ pnpm lint
 pnpm test
 ```
 
+### Utility Scripts
+
+Scripts in `scripts/` for development and debugging:
+
+| Script | Description |
+|--------|-------------|
+| `scripts/clean-twig-macos.sh` | Remove all Twig app data from macOS (caches, preferences, logs, saved state). Use `--app` flag to also delete Twig.app from /Applications. |
+| `scripts/test-access-token.js` | Validate a PostHog OAuth access token by testing API endpoints. Usage: `node scripts/test-access-token.js <token> <project_id> [region]` |
+
 ## Project Structure
 
 ```
