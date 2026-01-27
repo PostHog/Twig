@@ -1,13 +1,10 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
 import { getAvailableCommandsForTask } from "@features/sessions/stores/sessionStore";
-import { trpcVanilla } from "@renderer/trpc/client";
-import type { MentionItem } from "@shared/types";
+import { fetchRepoFiles, searchFiles } from "@hooks/useRepoFiles";
 import Fuse, { type IFuseOptions } from "fuse.js";
-import { byLengthAsc, Fzf } from "fzf";
 import { useDraftStore } from "../stores/draftStore";
 import type { CommandSuggestionItem, FileSuggestionItem } from "../types";
 
-const FILE_DISPLAY_LIMIT = 20;
 const COMMAND_LIMIT = 5;
 
 const COMMAND_FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
@@ -18,12 +15,6 @@ const COMMAND_FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
   threshold: 0.3,
   includeScore: true,
 };
-
-interface FileItem {
-  path: string;
-  name: string;
-  dir: string;
-}
 
 function searchCommands(
   commands: AvailableCommand[],
@@ -49,59 +40,6 @@ function searchCommands(
   return results.slice(0, COMMAND_LIMIT).map((result) => result.item);
 }
 
-function searchFiles(
-  fzf: Fzf<FileItem[]>,
-  files: FileItem[],
-  query: string,
-): FileItem[] {
-  if (!query.trim()) {
-    return files.slice(0, FILE_DISPLAY_LIMIT);
-  }
-
-  const results = fzf.find(query);
-  return results.map((result) => result.item);
-}
-
-// Cache for file lists and fzf instances per repo
-const fileCache = new Map<
-  string,
-  { files: FileItem[]; fzf: Fzf<FileItem[]>; timestamp: number }
->();
-const CACHE_TTL = 30000; // 30 seconds
-
-async function getFilesForRepo(repoPath: string): Promise<{
-  files: FileItem[];
-  fzf: Fzf<FileItem[]>;
-}> {
-  const cached = fileCache.get(repoPath);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return { files: cached.files, fzf: cached.fzf };
-  }
-
-  const results = await trpcVanilla.fs.listRepoFiles.query({ repoPath });
-
-  const files: FileItem[] = results
-    .filter(
-      (file: MentionItem): file is MentionItem & { path: string } =>
-        !!file.path,
-    )
-    .map((file) => {
-      const parts = file.path.split("/");
-      const name = parts.pop() ?? file.path;
-      const dir = parts.join("/");
-      return { path: file.path, name, dir };
-    });
-
-  const fzf = new Fzf(files, {
-    selector: (item) => `${item.name} ${item.path}`,
-    limit: FILE_DISPLAY_LIMIT,
-    tiebreakers: [byLengthAsc],
-  });
-
-  fileCache.set(repoPath, { files, fzf, timestamp: Date.now() });
-  return { files, fzf };
-}
-
 export async function getFileSuggestions(
   sessionId: string,
   query: string,
@@ -112,13 +50,14 @@ export async function getFileSuggestions(
     return [];
   }
 
-  const { files, fzf } = await getFilesForRepo(repoPath);
+  const { files, fzf } = await fetchRepoFiles(repoPath);
   const matched = searchFiles(fzf, files, query);
 
   return matched.map((file) => ({
     id: file.path,
     label: file.name,
     description: file.dir || undefined,
+    filename: file.name,
     path: file.path,
   }));
 }

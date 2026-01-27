@@ -1,3 +1,4 @@
+import { FileIcon } from "@components/ui/FileIcon";
 import {
   forwardRef,
   useEffect,
@@ -88,22 +89,29 @@ export const SuggestionList = forwardRef<
               }}
               onClick={() => command(item)}
               onMouseEnter={() => hasMouseMoved && setSelectedIndex(index)}
-              className={`flex w-full flex-col gap-0.5 border-none px-2 text-left ${
+              className={`flex w-full items-start gap-2 border-none px-2 text-left ${
                 item.description ? "py-1.5" : "py-1"
               } ${isSelected ? "bg-[var(--accent-a4)]" : ""}`}
             >
-              <span
-                className={`truncate ${isSelected ? "text-[var(--accent-11)]" : "text-[var(--gray-11)]"}`}
-              >
-                {item.label}
-              </span>
-              {item.description && (
-                <span
-                  className={`text-[11px] ${isSelected ? "text-[var(--accent-10)]" : "text-[var(--gray-10)]"}`}
-                >
-                  {item.description}
+              {item.filename && (
+                <span className="mt-0.5 flex-shrink-0">
+                  <FileIcon filename={item.filename} size={14} />
                 </span>
               )}
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span
+                  className={`truncate ${isSelected ? "text-[var(--accent-11)]" : "text-[var(--gray-11)]"}`}
+                >
+                  {item.label}
+                </span>
+                {item.description && (
+                  <span
+                    className={`truncate text-[11px] ${isSelected ? "text-[var(--accent-10)]" : "text-[var(--gray-10)]"}`}
+                  >
+                    {item.description}
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}
