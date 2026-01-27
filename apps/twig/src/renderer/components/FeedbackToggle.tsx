@@ -1,9 +1,6 @@
 import { ChatCircle } from "@phosphor-icons/react";
 import { DropdownMenu, IconButton, Text, Tooltip } from "@radix-ui/themes";
-import {
-  displaySurvey,
-  getPostHog,
-} from "@renderer/lib/analytics";
+import { displaySurvey, getPostHog } from "@renderer/lib/analytics";
 import { useCallback } from "react";
 
 type FeedbackType = "bug" | "feedback";
