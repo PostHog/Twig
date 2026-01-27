@@ -161,16 +161,6 @@ export function ModeIndicatorInput({
           );
         })}
       </Select.Content>
-      <style>{`
-        .group:hover svg {
-          color: black !important;
-          fill: black !important;
-        }
-        .group:hover svg path {
-          fill: black !important;
-          stroke: black !important;
-        }
-      `}</style>
     </Select.Root>
   );
 }
