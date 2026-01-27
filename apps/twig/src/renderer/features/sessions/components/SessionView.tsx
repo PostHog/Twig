@@ -11,6 +11,7 @@ import {
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { Warning } from "@phosphor-icons/react";
 import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
@@ -18,7 +19,7 @@ import {
   isJsonRpcNotification,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import {
   useSessionViewActions,
@@ -29,17 +30,26 @@ import { DropZoneOverlay } from "./DropZoneOverlay";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
-const EXECUTION_MODES: ExecutionMode[] = [
-  "plan",
-  "default",
-  "acceptEdits",
-  "bypassPermissions",
-];
+function getExecutionModes(allowBypassPermissions: boolean): ExecutionMode[] {
+  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+  if (allowBypassPermissions) {
+    modes.push("bypassPermissions");
+  }
+  return modes;
+}
 
-function cycleMode(current: ExecutionMode): ExecutionMode {
-  const currentIndex = EXECUTION_MODES.indexOf(current);
-  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
-  return EXECUTION_MODES[nextIndex];
+function cycleMode(
+  current: ExecutionMode,
+  allowBypassPermissions: boolean,
+): ExecutionMode {
+  const modes = getExecutionModes(allowBypassPermissions);
+  const currentIndex = modes.indexOf(current);
+  // If current mode is not in the list (e.g., bypass was disabled), reset to default
+  if (currentIndex === -1) {
+    return "default";
+  }
+  const nextIndex = (currentIndex + 1) % modes.length;
+  return modes[nextIndex];
 }
 
 interface SessionViewProps {
@@ -84,14 +94,27 @@ export function SessionView({
   const { respondToPermission, cancelPermission, setSessionMode } =
     useSessionActions();
   const sessionMode = useCurrentModeForTask(taskId);
+  const { allowBypassPermissions } = useSettingsStore();
   // Default to "default" mode if session not yet available
   const currentMode: ExecutionMode = sessionMode ?? "default";
 
+  // Reset to default mode if bypass was disabled while in bypass mode
+  useEffect(() => {
+    if (
+      !allowBypassPermissions &&
+      currentMode === "bypassPermissions" &&
+      taskId &&
+      !isCloud
+    ) {
+      setSessionMode(taskId, "default");
+    }
+  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
-    const nextMode = cycleMode(currentMode);
+    const nextMode = cycleMode(currentMode, allowBypassPermissions);
     setSessionMode(taskId, nextMode);
-  }, [taskId, currentMode, isCloud, setSessionMode]);
+  }, [taskId, currentMode, isCloud, setSessionMode, allowBypassPermissions]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -113,7 +136,7 @@ export function SessionView({
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleMode(currentMode);
+      const nextMode = cycleMode(currentMode, allowBypassPermissions);
       setSessionMode(taskId, nextMode);
     },
     {
@@ -121,7 +144,14 @@ export function SessionView({
       enableOnContentEditable: true,
       enabled: !isCloud && isRunning,
     },
-    [taskId, currentMode, isCloud, isRunning, setSessionMode],
+    [
+      taskId,
+      currentMode,
+      isCloud,
+      isRunning,
+      setSessionMode,
+      allowBypassPermissions,
+    ],
   );
 
   const latestPlan = useMemo((): Plan | null => {
