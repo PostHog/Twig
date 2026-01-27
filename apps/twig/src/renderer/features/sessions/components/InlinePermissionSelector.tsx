@@ -37,8 +37,8 @@ export function InlinePermissionSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const sortPriority: Record<PermissionOptionKind, number> = {
     allow_once: 500,
-    reject_once: 400,
-    allow_always: 300,
+    allow_always: 400,
+    reject_once: 300,
     custom: 100,
   };
 
