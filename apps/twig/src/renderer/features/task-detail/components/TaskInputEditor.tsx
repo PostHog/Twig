@@ -234,7 +234,12 @@ export const TaskInputEditor = forwardRef<
             </Flex>
           </Flex>
         </Flex>
-        {!isCloudMode && <ModeIndicatorInput mode={executionMode} />}
+        {!isCloudMode && (
+          <ModeIndicatorInput
+            mode={executionMode}
+            onModeChange={onModeChange}
+          />
+        )}
       </>
     );
   },

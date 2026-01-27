@@ -1,3 +1,5 @@
+import type { ExecutionMode } from "@/main/services/agent/schemas";
+
 /**
  * Branch naming conventions.
  * - Reading: Accept all prefixes for backwards compatibility
@@ -21,3 +23,10 @@ export function isTwigBranch(branchName: string): boolean {
 export const DATA_DIR = ".twig";
 export const WORKSPACES_DIR = ".twig/workspaces";
 export const LEGACY_DATA_DIRS = [".array"];
+
+export const EXECUTION_MODES: ExecutionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+];

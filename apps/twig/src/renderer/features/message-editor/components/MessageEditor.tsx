@@ -26,7 +26,7 @@ interface MessageEditorProps {
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
   currentMode?: ExecutionMode;
-  onModeChange?: () => void;
+  onModeChange?: (mode: ExecutionMode) => void;
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -206,7 +206,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
           </Flex>
         </Flex>
         {onModeChange && currentMode && (
-          <ModeIndicatorInput mode={currentMode} taskId={taskId} />
+          <ModeIndicatorInput mode={currentMode} onModeChange={onModeChange} taskId={taskId} />
         )}
       </Flex>
     );
