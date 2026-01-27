@@ -11,10 +11,16 @@ import type {
   PromptResponse,
   ReadTextFileRequest,
   ReadTextFileResponse,
+  SessionModelState,
   SessionNotification,
   WriteTextFileRequest,
   WriteTextFileResponse,
 } from "@agentclientprotocol/sdk";
+import {
+  DEFAULT_GATEWAY_MODEL,
+  fetchGatewayModels,
+  formatGatewayModelName,
+} from "@/gateway-models.js";
 import { Logger } from "@/utils/logger.js";
 
 export interface BaseSession {
@@ -100,5 +106,22 @@ export abstract class BaseAcpAgent implements Agent {
 
   async authenticate(_params: AuthenticateRequest): Promise<void> {
     throw new Error("Method not implemented.");
+  }
+
+  async getAvailableModels(
+    currentModelOverride?: string,
+  ): Promise<SessionModelState> {
+    const gatewayModels = await fetchGatewayModels();
+
+    const availableModels = gatewayModels.map((model) => ({
+      modelId: model.id,
+      name: formatGatewayModelName(model),
+      description: `Context: ${model.context_window.toLocaleString()} tokens`,
+    }));
+
+    return {
+      availableModels,
+      currentModelId: currentModelOverride ?? DEFAULT_GATEWAY_MODEL,
+    };
   }
 }

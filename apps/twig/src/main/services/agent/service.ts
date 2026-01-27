@@ -10,7 +10,14 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
-import { Agent, getLlmGatewayUrl, type OnLogCallback } from "@posthog/agent";
+import { Agent } from "@posthog/agent/agent";
+import {
+  fetchGatewayModels,
+  formatGatewayModelName,
+  getProviderName,
+} from "@posthog/agent/gateway-models";
+import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
+import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
 import { injectable, preDestroy } from "inversify";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
@@ -179,6 +186,12 @@ interface ManagedSession {
   needsRecreation: boolean;
   promptPending: boolean;
   pendingContext?: string;
+  availableModels?: Array<{
+    modelId: string;
+    name: string;
+    description?: string | null;
+  }>;
+  currentModelId?: string;
 }
 
 function getClaudeCliPath(): string {
@@ -410,25 +423,43 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
       const mcpServers = this.buildMcpServers(credentials);
 
+      let availableModels:
+        | Array<{ modelId: string; name: string; description?: string | null }>
+        | undefined;
+      let currentModelId: string | undefined;
+
       if (isReconnect) {
-        await connection.extMethod("_posthog/session/resume", {
-          sessionId: taskRunId,
-          cwd: repoPath,
-          mcpServers,
-          _meta: {
-            ...(logUrl && {
-              persistence: { taskId, runId: taskRunId, logUrl },
-            }),
-            ...(sdkSessionId && { sdkSessionId }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
-              },
-            }),
+        const resumeResponse = await connection.extMethod(
+          "_posthog/session/resume",
+          {
+            sessionId: taskRunId,
+            cwd: repoPath,
+            mcpServers,
+            _meta: {
+              ...(logUrl && {
+                persistence: { taskId, runId: taskRunId, logUrl },
+              }),
+              ...(sdkSessionId && { sdkSessionId }),
+              ...(additionalDirectories?.length && {
+                claudeCode: {
+                  options: { additionalDirectories },
+                },
+              }),
+            },
           },
-        });
+        );
+        const resumeMeta = resumeResponse?._meta as
+          | {
+              models?: {
+                availableModels?: typeof availableModels;
+                currentModelId?: string;
+              };
+            }
+          | undefined;
+        availableModels = resumeMeta?.models?.availableModels;
+        currentModelId = resumeMeta?.models?.currentModelId;
       } else {
-        await connection.newSession({
+        const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
           _meta: {
@@ -442,6 +473,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             }),
           },
         });
+        availableModels = newSessionResponse.models?.availableModels;
+        currentModelId = newSessionResponse.models?.currentModelId;
       }
 
       const session: ManagedSession = {
@@ -457,6 +490,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         config,
         needsRecreation: false,
         promptPending: false,
+        availableModels,
+        currentModelId,
       };
 
       this.sessions.set(taskRunId, session);
@@ -1027,7 +1062,12 @@ For git operations while detached:
   }
 
   private toSessionResponse(session: ManagedSession): SessionResponse {
-    return { sessionId: session.taskRunId, channel: session.channel };
+    return {
+      sessionId: session.taskRunId,
+      channel: session.channel,
+      availableModels: session.availableModels,
+      currentModelId: session.currentModelId,
+    };
   }
 
   /**
@@ -1136,5 +1176,31 @@ For git operations while detached:
       // Don't let detection errors break message flow
       log.debug("Error in PR URL detection", { taskRunId, error: err });
     }
+  }
+
+  async getGatewayModels(apiHost: string, _apiKey: string) {
+    const gatewayUrl = getLlmGatewayUrl(apiHost);
+    const models = await fetchGatewayModels({ gatewayUrl });
+
+    const MODEL_TIER_ORDER = ["opus", "sonnet", "haiku"];
+
+    const getModelTier = (modelId: string): number => {
+      const lowerId = modelId.toLowerCase();
+      for (let i = 0; i < MODEL_TIER_ORDER.length; i++) {
+        if (lowerId.includes(MODEL_TIER_ORDER[i])) return i;
+      }
+      return MODEL_TIER_ORDER.length;
+    };
+
+    const mapped = models.map((model) => ({
+      modelId: model.id,
+      name: formatGatewayModelName(model),
+      description: `Context: ${model.context_window.toLocaleString()} tokens`,
+      provider: getProviderName(model.owned_by),
+    }));
+
+    return mapped.sort(
+      (a, b) => getModelTier(a.modelId) - getModelTier(b.modelId),
+    );
   }
 }

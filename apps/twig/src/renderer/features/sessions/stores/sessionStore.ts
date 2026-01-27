@@ -4,7 +4,6 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
@@ -28,6 +27,7 @@ import {
   findPendingPermissions,
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
+import { useModelsStore } from "./modelsStore";
 import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
 const log = logger.scope("session-store");
@@ -39,6 +39,13 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 export type { PermissionRequest };
 
 export type ExecutionMode = "plan" | "default" | "acceptEdits";
+
+export interface AgentModelOption {
+  modelId: string;
+  name: string;
+  description?: string | null;
+  provider?: string;
+}
 
 export interface QueuedMessage {
   id: string;
@@ -60,10 +67,9 @@ export interface AgentSession {
   logUrl?: string;
   processedLineCount?: number;
   model?: string;
+  availableModels?: AgentModelOption[];
   framework?: "claude";
-  // Current execution mode (plan = read-only, default = manual approve, acceptEdits = auto-approve edits)
   currentMode: ExecutionMode;
-  // Permission requests waiting for user response
   pendingPermissions: Map<string, PermissionRequest>;
   // Queue of messages to send when current turn completes
   messageQueue: QueuedMessage[];
@@ -695,7 +701,25 @@ const useStore = create<SessionStore>()(
         });
 
         if (result) {
-          updateSession(taskRunId, { status: "connected" });
+          const selectedModel = useModelsStore.getState().getEffectiveModel();
+          updateSession(taskRunId, {
+            status: "connected",
+            model: selectedModel,
+            availableModels: result.availableModels,
+          });
+
+          try {
+            await trpcVanilla.agent.setModel.mutate({
+              sessionId: taskRunId,
+              modelId: selectedModel,
+            });
+          } catch (error) {
+            log.warn("Failed to restore model after reconnect", {
+              taskId,
+              error,
+            });
+          }
+
           if (persistedMode) {
             try {
               await trpcVanilla.agent.setMode.mutate({
@@ -752,8 +776,8 @@ const useStore = create<SessionStore>()(
 
       const persistedMode = getPersistedTaskMode(taskId);
       const effectiveMode = executionMode ?? persistedMode;
+      const selectedModel = useModelsStore.getState().getEffectiveModel();
 
-      const { defaultModel } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -761,7 +785,7 @@ const useStore = create<SessionStore>()(
         apiKey: auth.apiKey,
         apiHost: auth.apiHost,
         projectId: auth.projectId,
-        model: defaultModel,
+        model: selectedModel,
         executionMode: effectiveMode,
       });
 
@@ -773,7 +797,8 @@ const useStore = create<SessionStore>()(
       );
       session.channel = result.channel;
       session.status = "connected";
-      session.model = defaultModel;
+      session.model = result.currentModelId ?? selectedModel;
+      session.availableModels = result.availableModels;
       if (persistedMode && !executionMode) {
         session.currentMode = persistedMode;
       }
@@ -784,7 +809,7 @@ const useStore = create<SessionStore>()(
       track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
         task_id: taskId,
         execution_type: "local",
-        model: defaultModel,
+        model: selectedModel,
       });
 
       if (initialPrompt?.length) {

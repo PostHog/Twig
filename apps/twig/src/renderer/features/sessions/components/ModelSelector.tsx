@@ -1,11 +1,6 @@
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { Select, Text } from "@radix-ui/themes";
-import {
-  AVAILABLE_MODELS,
-  getModelsByProvider,
-  type ModelProvider,
-} from "@shared/types/models";
 import { Fragment } from "react";
+import { useModelsStore } from "../stores/modelsStore";
 import { useSessionActions, useSessionForTask } from "../stores/sessionStore";
 
 interface ModelSelectorProps {
@@ -19,31 +14,26 @@ export function ModelSelector({
   disabled,
   onModelChange,
 }: ModelSelectorProps) {
-  const defaultModel = useSettingsStore((state) => state.defaultModel);
-  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const { setSessionModel } = useSessionActions();
   const session = useSessionForTask(taskId);
 
-  // Use session model if available, otherwise fall back to default
-  const activeModel = session?.model ?? defaultModel;
+  const groupedModels = useModelsStore((s) => s.groupedModels);
+  const models = useModelsStore((s) => s.models);
+  const selectedModel = useModelsStore((s) => s.selectedModel);
+  const setSelectedModel = useModelsStore((s) => s.setSelectedModel);
+
+  const activeModel = session?.model ?? selectedModel;
 
   const handleChange = (value: string) => {
-    // Always update the default
-    setDefaultModel(value);
+    setSelectedModel(value);
     onModelChange?.(value);
 
-    // If there's an active session, update the model mid-session
     if (taskId && session?.status === "connected" && !session.isCloud) {
       setSessionModel(taskId, value);
     }
   };
 
-  const modelsByProvider = getModelsByProvider();
-  const providers = (Object.keys(modelsByProvider) as ModelProvider[]).filter(
-    (provider) => modelsByProvider[provider].models.length > 0,
-  );
-
-  const currentModel = AVAILABLE_MODELS.find((m) => m.id === activeModel);
+  const currentModel = models.find((m) => m.modelId === activeModel);
   const displayName = currentModel?.name ?? activeModel;
 
   return (
@@ -69,13 +59,13 @@ export function ModelSelector({
         </Text>
       </Select.Trigger>
       <Select.Content position="popper" sideOffset={4}>
-        {providers.map((provider, index) => (
-          <Fragment key={provider}>
+        {groupedModels.map((group, index) => (
+          <Fragment key={group.provider}>
             {index > 0 && <Select.Separator />}
             <Select.Group>
-              <Select.Label>{modelsByProvider[provider].name}</Select.Label>
-              {modelsByProvider[provider].models.map((model) => (
-                <Select.Item key={model.id} value={model.id}>
+              <Select.Label>{group.provider}</Select.Label>
+              {group.models.map((model) => (
+                <Select.Item key={model.modelId} value={model.modelId}>
                   {model.name}
                 </Select.Item>
               ))}

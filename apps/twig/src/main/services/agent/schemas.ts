@@ -49,9 +49,20 @@ export const startSessionInput = z.object({
 
 export type StartSessionInput = z.infer<typeof startSessionInput>;
 
+export const modelOptionSchema = z.object({
+  modelId: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  provider: z.string().optional(),
+});
+
+export type ModelOption = z.infer<typeof modelOptionSchema>;
+
 export const sessionResponseSchema = z.object({
   sessionId: z.string(),
   channel: z.string(),
+  availableModels: z.array(modelOptionSchema).optional(),
+  currentModelId: z.string().optional(),
 });
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
@@ -220,3 +231,10 @@ export const sessionInfoSchema = z.object({
 });
 
 export const listSessionsOutput = z.array(sessionInfoSchema);
+
+export const getGatewayModelsInput = z.object({
+  apiHost: z.string(),
+  apiKey: z.string(),
+});
+
+export const getGatewayModelsOutput = z.array(modelOptionSchema);

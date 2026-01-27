@@ -46,7 +46,13 @@ function copyAssets() {
 }
 
 export default defineConfig({
-  entry: ["index.ts"],
+  entry: [
+    "src/agent.ts",
+    "src/gateway-models.ts",
+    "src/posthog-api.ts",
+    "src/types.ts",
+    "src/worktree-manager.ts",
+  ],
   format: ["esm"],
   dts: true,
   sourcemap: true,

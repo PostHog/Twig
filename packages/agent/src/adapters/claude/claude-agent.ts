@@ -15,7 +15,6 @@ import {
   type PromptRequest,
   type PromptResponse,
   RequestError,
-  type SessionModelState,
   type SetSessionModelRequest,
   type SetSessionModeRequest,
   type SetSessionModeResponse,
@@ -64,6 +63,18 @@ import type {
 } from "./types.js";
 import { IS_ROOT, unreachable } from "./utils.js";
 
+export const DEFAULT_MODEL = "opus";
+
+const GATEWAY_TO_SDK_MODEL: Record<string, string> = {
+  "claude-opus-4-5": "opus",
+  "claude-sonnet-4-5": "sonnet",
+  "claude-haiku-4-5": "haiku",
+};
+
+function toSdkModelId(modelId: string): string {
+  return GATEWAY_TO_SDK_MODEL[modelId] ?? modelId;
+}
+
 const AVAILABLE_MODES = [
   {
     id: "default",
@@ -90,22 +101,6 @@ const BYPASS_MODE = {
 
 function getAvailableModes() {
   return IS_ROOT ? [...AVAILABLE_MODES] : [...AVAILABLE_MODES, BYPASS_MODE];
-}
-
-async function getAvailableModels(q: Query): Promise<SessionModelState> {
-  const models = await q.supportedModels();
-  const currentModel = models[0];
-  await q.setModel(currentModel.value);
-  const availableModels = models.map((model) => ({
-    modelId: model.value,
-    name: model.displayName,
-    description: model.description,
-  }));
-
-  return {
-    availableModels,
-    currentModelId: currentModel.value,
-  };
 }
 
 async function getAvailableSlashCommands(
@@ -380,13 +375,18 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     this.registerPersistence(sessionId, params._meta ?? undefined);
 
     const availableCommands = await getAvailableSlashCommands(q);
-    const models = await getAvailableModels(q);
 
     const requestedModel = (params._meta as NewSessionMeta | undefined)?.model;
+    const initialModel = requestedModel ?? DEFAULT_MODEL;
+
     if (requestedModel) {
       try {
-        await q.setModel(requestedModel);
-        this.logger.info("Set initial model", { model: requestedModel });
+        const sdkModelId = toSdkModelId(requestedModel);
+        await q.setModel(sdkModelId);
+        this.logger.info("Set initial model", {
+          model: requestedModel,
+          sdkModelId,
+        });
       } catch (err) {
         this.logger.warn("Failed to set initial model, using default", {
           requestedModel,
@@ -394,6 +394,8 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
         });
       }
     }
+
+    const models = await this.getAvailableModels(initialModel);
 
     this.sendAvailableCommandsUpdate(sessionId, availableCommands);
 
@@ -501,7 +503,8 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
   }
 
   async setSessionModel(params: SetSessionModelRequest) {
-    await this.session.query.setModel(params.modelId);
+    const sdkModelId = toSdkModelId(params.modelId);
+    await this.session.query.setModel(sdkModelId);
   }
 
   async setSessionMode(
@@ -621,7 +624,13 @@ Before pushing a "workspace-*" branch to origin, rename it to something descript
     const availableCommands = await getAvailableSlashCommands(q);
     this.sendAvailableCommandsUpdate(sessionId, availableCommands);
 
-    return {};
+    const models = await this.getAvailableModels();
+
+    return {
+      _meta: {
+        models,
+      },
+    };
   }
 }
 

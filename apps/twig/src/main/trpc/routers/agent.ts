@@ -6,6 +6,8 @@ import {
   cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
+  getGatewayModelsInput,
+  getGatewayModelsOutput,
   listSessionsInput,
   listSessionsOutput,
   notifySessionContextInput,
@@ -140,4 +142,11 @@ export const agentRouter = router({
   markAllForRecreation: publicProcedure.mutation(() =>
     getService().markAllSessionsForRecreation(),
   ),
+
+  getGatewayModels: publicProcedure
+    .input(getGatewayModelsInput)
+    .output(getGatewayModelsOutput)
+    .query(({ input }) =>
+      getService().getGatewayModels(input.apiHost, input.apiKey),
+    ),
 });

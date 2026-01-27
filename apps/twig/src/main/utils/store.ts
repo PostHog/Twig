@@ -1,4 +1,4 @@
-import { WorktreeManager } from "@posthog/agent";
+import { WorktreeManager } from "@posthog/agent/worktree-manager";
 import { app } from "electron";
 import Store from "electron-store";
 import type {

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { WorktreeManager } from "@posthog/agent";
+import { WorktreeManager } from "@posthog/agent/worktree-manager";
 import { inject, injectable } from "inversify";
 import type {
   TaskFolderAssociation,
