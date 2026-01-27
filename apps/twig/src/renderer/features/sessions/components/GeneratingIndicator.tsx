@@ -53,7 +53,12 @@ export function GeneratingIndicator({ startedAt }: GeneratingIndicatorProps) {
       <Text size="1" color="gray">
         (Esc to interrupt
       </Text>
-      <Circle size={4} weight="fill" className="text-gray-9" style={{ margin: "0 2px" }} />
+      <Circle
+        size={4}
+        weight="fill"
+        className="text-gray-9"
+        style={{ margin: "0 2px" }}
+      />
       <Text
         size="1"
         color="gray"

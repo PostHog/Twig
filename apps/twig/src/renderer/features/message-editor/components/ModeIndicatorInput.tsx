@@ -1,5 +1,5 @@
-import { useCwd } from "@features/sidebar/hooks/useCwd";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Circle, Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
@@ -91,7 +91,8 @@ export function ModeIndicatorInput({ mode, taskId }: ModeIndicatorInputProps) {
           >
             <Circle size={4} weight="fill" style={{ margin: "0 4px" }} />
             <span style={{ color: "var(--gray-11)" }}>
-              {diffStats.filesChanged} {diffStats.filesChanged === 1 ? "file" : "files"}
+              {diffStats.filesChanged}{" "}
+              {diffStats.filesChanged === 1 ? "file" : "files"}
             </span>
             <span style={{ color: "var(--green-9)" }}>
               +{diffStats.linesAdded}
