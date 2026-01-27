@@ -92,7 +92,7 @@ export function createAcpConnection(
       logger.info("Cleaning up ACP connection");
 
       if (agent) {
-        agent.closeAllSessions();
+        await agent.closeAllSessions();
       }
 
       // Then close the streams to properly terminate the ACP connection

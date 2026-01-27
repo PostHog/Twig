@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-  type Agent,
   type AgentSideConnection,
   type AuthenticateRequest,
   type AvailableCommand,
@@ -146,7 +145,7 @@ async function getAvailableSlashCommands(
     );
 }
 
-export class ClaudeAcpAgent extends BaseAcpAgent implements Agent {
+export class ClaudeAcpAgent extends BaseAcpAgent {
   readonly adapterName = "claude";
   declare sessions: { [key: string]: Session };
   toolUseCache: ToolUseCache;
