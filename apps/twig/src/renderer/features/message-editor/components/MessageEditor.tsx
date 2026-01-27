@@ -206,7 +206,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
           </Flex>
         </Flex>
         {onModeChange && currentMode && (
-          <ModeIndicatorInput mode={currentMode} />
+          <ModeIndicatorInput mode={currentMode} taskId={taskId} />
         )}
       </Flex>
     );

@@ -1,9 +1,13 @@
+import { useCwd } from "@features/sidebar/hooks/useCwd";
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
-import { Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
+import { Circle, Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
+import { useQuery } from "@tanstack/react-query";
 
 interface ModeIndicatorInputProps {
   mode: ExecutionMode;
+  taskId?: string;
 }
 
 const modeConfig: Record<
@@ -31,8 +35,23 @@ const modeConfig: Record<
   },
 };
 
-export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
+export function ModeIndicatorInput({ mode, taskId }: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
+  const repoPath = useCwd(taskId ?? "");
+
+  const { data: diffStats } = useQuery({
+    queryKey: ["diff-stats", repoPath],
+    queryFn: () =>
+      trpcVanilla.git.getDiffStats.query({
+        directoryPath: repoPath as string,
+      }),
+    enabled: !!repoPath && !!taskId,
+    staleTime: 5000,
+    refetchInterval: 5000,
+    placeholderData: (prev) => prev,
+  });
+
+  const hasDiffStats = diffStats && diffStats.filesChanged > 0;
 
   return (
     <Flex align="center" justify="between" py="1">
@@ -59,6 +78,29 @@ export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
         >
           (shift+tab to cycle)
         </Text>
+        {hasDiffStats && (
+          <Text
+            size="1"
+            style={{
+              color: "var(--gray-9)",
+              fontFamily: "monospace",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <Circle size={4} weight="fill" style={{ margin: "0 4px" }} />
+            <span style={{ color: "var(--gray-11)" }}>
+              {diffStats.filesChanged} {diffStats.filesChanged === 1 ? "file" : "files"}
+            </span>
+            <span style={{ color: "var(--green-9)" }}>
+              +{diffStats.linesAdded}
+            </span>
+            <span style={{ color: "var(--red-9)" }}>
+              -{diffStats.linesRemoved}
+            </span>
+          </Text>
+        )}
       </Flex>
     </Flex>
   );
