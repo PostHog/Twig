@@ -17,7 +17,6 @@ import {
   Card,
   Flex,
   Heading,
-  Link,
   Select,
   Spinner,
   Switch,
@@ -645,12 +644,12 @@ export function SettingsView() {
                     <Flex align="center" gap="2">
                       <Warning size={16} weight="fill" color="var(--red-9)" />
                       <Text size="1" weight="medium" color="red">
-                        Allow Bypass Permissions mode
+                        Enable Bypass Permissions mode
                       </Text>
                     </Flex>
                     <Text size="1" color="gray">
                       Enables "Bypass Permissions" mode in the execution mode
-                      selector. When active, Claude will not ask for approval
+                      selector. When active, Twig will not ask for approval
                       before running potentially dangerous commands.
                     </Text>
                   </Flex>
@@ -876,15 +875,15 @@ export function SettingsView() {
             <Flex align="center" gap="2">
               <Warning size={20} weight="fill" color="var(--red-9)" />
               <Text color="red" weight="bold">
-                WARNING: Enable Bypass Permissions mode
+                Enable Bypass Permissions mode
               </Text>
             </Flex>
           </AlertDialog.Title>
           <AlertDialog.Description size="2">
             <Flex direction="column" gap="3">
               <Text color="red" weight="medium">
-                In Bypass Permissions mode, Claude will not ask for your
-                approval before running potentially dangerous commands.
+                In Bypass Permissions mode, Twig will not ask for your approval
+                before running potentially dangerous commands.
               </Text>
               <Text>
                 This mode should only be used in a sandboxed container/VM that
@@ -895,13 +894,6 @@ export function SettingsView() {
                 By proceeding, you accept all responsibility for actions taken
                 while running in Bypass Permissions mode.
               </Text>
-              <Link
-                href="https://docs.anthropic.com/en/docs/claude-code/security"
-                target="_blank"
-                size="2"
-              >
-                https://docs.anthropic.com/en/docs/claude-code/security
-              </Link>
             </Flex>
           </AlertDialog.Description>
           <Flex gap="3" mt="4" justify="end">
