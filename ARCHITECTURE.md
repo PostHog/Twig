@@ -1,6 +1,8 @@
-# Contributing to Twig
+# Twig Architecture
 
-## Architecture Overview
+Implementation patterns for the Twig desktop app. For code style and commands, see [CLAUDE.md](./CLAUDE.md).
+
+## Overview
 
 Twig is an Electron app with a React renderer. The main process handles system operations (stateless), while the renderer owns all application state.
 
