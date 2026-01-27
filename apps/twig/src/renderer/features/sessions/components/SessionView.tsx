@@ -29,7 +29,12 @@ import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
 
-const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+const EXECUTION_MODES: ExecutionMode[] = [
+  "plan",
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+];
 
 function cycleMode(current: ExecutionMode): ExecutionMode {
   const currentIndex = EXECUTION_MODES.indexOf(current);
