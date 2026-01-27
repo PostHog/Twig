@@ -7,7 +7,9 @@ import {
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
+import { Warning } from "@phosphor-icons/react";
 import {
+  AlertDialog,
   Badge,
   Box,
   Button,
@@ -15,6 +17,7 @@ import {
   Card,
   Flex,
   Heading,
+  Link,
   Select,
   Spinner,
   Switch,
@@ -77,10 +80,12 @@ export function SettingsView() {
     desktopNotifications,
     autoConvertLongText,
     sendMessagesWith,
+    allowBypassPermissions,
     setCursorGlow,
     setDesktopNotifications,
     setAutoConvertLongText,
     setSendMessagesWith,
+    setAllowBypassPermissions,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalSettingsStore(
     (state) => state.terminalLayoutMode,
@@ -125,6 +130,7 @@ export function SettingsView() {
     type?: "info" | "success" | "error";
   }>({});
   const [customTerminalFont, setCustomTerminalFont] = useState<string>("");
+  const [showBypassWarning, setShowBypassWarning] = useState(false);
   const customFontSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -305,6 +311,34 @@ export function SettingsView() {
     },
     [sendMessagesWith, setSendMessagesWith],
   );
+
+  const handleBypassPermissionsChange = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        // Show warning dialog when enabling
+        setShowBypassWarning(true);
+      } else {
+        // Directly disable without warning
+        track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+          setting_name: "allow_bypass_permissions",
+          new_value: false,
+          old_value: true,
+        });
+        setAllowBypassPermissions(false);
+      }
+    },
+    [setAllowBypassPermissions],
+  );
+
+  const handleConfirmBypassPermissions = useCallback(() => {
+    track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+      setting_name: "allow_bypass_permissions",
+      new_value: true,
+      old_value: false,
+    });
+    setAllowBypassPermissions(true);
+    setShowBypassWarning(false);
+  }, [setAllowBypassPermissions]);
 
   const terminalFontSelection = TERMINAL_FONT_PRESETS.some(
     (preset) => preset.value === terminalFontFamily,
@@ -601,6 +635,49 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
+          {/* Task Execution Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Task Execution</Heading>
+            <Card>
+              <Flex direction="column" gap="4">
+                <Flex align="start" justify="between" gap="4">
+                  <Flex direction="column" gap="1">
+                    <Flex align="center" gap="2">
+                      <Warning size={16} weight="fill" color="var(--red-9)" />
+                      <Text size="1" weight="medium" color="red">
+                        Allow Bypass Permissions mode
+                      </Text>
+                    </Flex>
+                    <Text size="1" color="gray">
+                      Enables "Bypass Permissions" mode in the execution mode
+                      selector. When active, Claude will not ask for approval
+                      before running potentially dangerous commands.
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={allowBypassPermissions}
+                    onCheckedChange={handleBypassPermissionsChange}
+                    size="1"
+                    color="red"
+                  />
+                </Flex>
+                {allowBypassPermissions && (
+                  <Callout.Root size="1" color="red">
+                    <Callout.Icon>
+                      <Warning weight="fill" />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      Bypass Permissions mode is enabled. Use with extreme
+                      caution.
+                    </Callout.Text>
+                  </Callout.Root>
+                )}
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
           {/* Workspace Storage Section */}
           <Flex direction="column" gap="3">
             <Heading size="3">Workspace storage</Heading>
@@ -788,6 +865,63 @@ export function SettingsView() {
           </Flex>
         </Flex>
       </Box>
+
+      {/* Bypass Permissions Warning Dialog */}
+      <AlertDialog.Root
+        open={showBypassWarning}
+        onOpenChange={setShowBypassWarning}
+      >
+        <AlertDialog.Content maxWidth="500px">
+          <AlertDialog.Title color="red">
+            <Flex align="center" gap="2">
+              <Warning size={20} weight="fill" color="var(--red-9)" />
+              <Text color="red" weight="bold">
+                WARNING: Enable Bypass Permissions mode
+              </Text>
+            </Flex>
+          </AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            <Flex direction="column" gap="3">
+              <Text color="red" weight="medium">
+                In Bypass Permissions mode, Claude will not ask for your
+                approval before running potentially dangerous commands.
+              </Text>
+              <Text>
+                This mode should only be used in a sandboxed container/VM that
+                has restricted internet access and can easily be restored if
+                damaged.
+              </Text>
+              <Text weight="medium">
+                By proceeding, you accept all responsibility for actions taken
+                while running in Bypass Permissions mode.
+              </Text>
+              <Link
+                href="https://docs.anthropic.com/en/docs/claude-code/security"
+                target="_blank"
+                size="2"
+              >
+                https://docs.anthropic.com/en/docs/claude-code/security
+              </Link>
+            </Flex>
+          </AlertDialog.Description>
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                No, exit
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                color="red"
+                onClick={handleConfirmBypassPermissions}
+              >
+                Yes, I accept
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   );
 }

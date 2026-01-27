@@ -14,17 +14,26 @@ import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
 
-const EXECUTION_MODES: ExecutionMode[] = [
-  "plan",
-  "default",
-  "acceptEdits",
-  "bypassPermissions",
-];
+function getExecutionModes(allowBypassPermissions: boolean): ExecutionMode[] {
+  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+  if (allowBypassPermissions) {
+    modes.push("bypassPermissions");
+  }
+  return modes;
+}
 
-function cycleMode(current: ExecutionMode): ExecutionMode {
-  const currentIndex = EXECUTION_MODES.indexOf(current);
-  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
-  return EXECUTION_MODES[nextIndex];
+function cycleMode(
+  current: ExecutionMode,
+  allowBypassPermissions: boolean,
+): ExecutionMode {
+  const modes = getExecutionModes(allowBypassPermissions);
+  const currentIndex = modes.indexOf(current);
+  // If current mode is not in the list (e.g., bypass was disabled), reset to default
+  if (currentIndex === -1) {
+    return "default";
+  }
+  const nextIndex = (currentIndex + 1) % modes.length;
+  return modes[nextIndex];
 }
 
 const DOT_FILL = "var(--gray-6)";
@@ -32,7 +41,8 @@ const DOT_FILL = "var(--gray-6)";
 export function TaskInput() {
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { lastUsedLocalWorkspaceMode } = useSettingsStore();
+  const { lastUsedLocalWorkspaceMode, allowBypassPermissions } =
+    useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,9 +58,16 @@ export function TaskInput() {
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
 
+  // Reset to default mode if bypass was disabled while in bypass mode
+  useEffect(() => {
+    if (!allowBypassPermissions && executionMode === "bypassPermissions") {
+      setExecutionMode("default");
+    }
+  }, [allowBypassPermissions, executionMode]);
+
   const handleModeChange = useCallback(() => {
-    setExecutionMode((current) => cycleMode(current));
-  }, []);
+    setExecutionMode((current) => cycleMode(current, allowBypassPermissions));
+  }, [allowBypassPermissions]);
 
   const { githubIntegration } = useRepositoryIntegration();
 
