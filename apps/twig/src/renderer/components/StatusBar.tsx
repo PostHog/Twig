@@ -1,4 +1,5 @@
 import { CampfireToggle } from "@components/CampfireToggle";
+import { FeedbackToggle } from "@components/FeedbackToggle";
 import { SettingsToggle } from "@components/SettingsToggle";
 import { StatusBarMenu } from "@components/StatusBarMenu";
 import { Badge, Box, Code, Flex, Kbd } from "@radix-ui/themes";
@@ -49,6 +50,7 @@ export function StatusBar({ showKeyHints = true }: StatusBarProps) {
 
       <Flex align="center" gap="2">
         <CampfireToggle />
+        <FeedbackToggle />
         <SettingsToggle />
         {IS_DEV && (
           <Badge size="1">
