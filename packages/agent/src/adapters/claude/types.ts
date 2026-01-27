@@ -15,6 +15,7 @@ export type Session = BaseSession & {
   query: Query;
   input: Pushable<SDKUserMessage>;
   permissionMode: PermissionMode;
+  cwd: string;
   sdkSessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;

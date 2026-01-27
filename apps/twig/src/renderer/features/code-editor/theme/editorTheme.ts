@@ -235,10 +235,10 @@ export const mergeViewTheme = EditorView.baseTheme({
     overflowY: "visible !important",
   },
   "&.cm-merge-a .cm-changedLine, .cm-deletedChunk": {
-    backgroundColor: "rgba(160, 128, 100, .08)",
+    backgroundColor: "rgba(220, 80, 80, .15)",
   },
   "&.cm-merge-b .cm-changedLine, .cm-inlineChangedLine": {
-    backgroundColor: "rgba(100, 160, 128, .08)",
+    backgroundColor: "rgba(80, 180, 100, .15)",
   },
   "&light.cm-merge-a .cm-changedText, &light .cm-deletedChunk .cm-deletedText":
     {

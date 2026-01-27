@@ -1,5 +1,5 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import type { ToolCall, ToolKind } from "@features/sessions/types";
+import type { ToolCall, TwigToolKind } from "@features/sessions/types";
 import {
   ArrowsClockwise,
   ArrowsLeftRight,
@@ -16,7 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { Code, Flex, Text } from "@radix-ui/themes";
 
-const kindIcons: Record<ToolKind, Icon> = {
+const kindIcons: Record<TwigToolKind, Icon> = {
   read: FileText,
   edit: PencilSimple,
   delete: Trash,
@@ -26,7 +26,7 @@ const kindIcons: Record<ToolKind, Icon> = {
   think: Brain,
   fetch: Globe,
   switch_mode: ArrowsClockwise,
-  ask: ChatCircle,
+  question: ChatCircle,
   other: Wrench,
 };
 
@@ -41,7 +41,7 @@ export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
   const isLoading = isIncomplete && !turnCancelled;
   const isFailed = status === "failed";
   const wasCancelled = isIncomplete && turnCancelled;
-  const KindIcon = kind ? kindIcons[kind] : Wrench;
+  const KindIcon = (kind && kindIcons[kind]) || Wrench;
 
   // For read tool, show file path from locations if available
   const filePath = kind === "read" && locations?.[0]?.path;

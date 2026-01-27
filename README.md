@@ -228,3 +228,15 @@ Native modules (like node-pty) need to be rebuilt for your Electron version:
 ```bash
 pnpm --filter twig exec electron-rebuild
 ```
+
+## Acknowledgments
+
+Built with love by the PostHog team.
+
+## Roadmap
+
+Stay tuned for upcoming features and improvements.
+
+## FAQ
+
+Check the issues page for common questions and answers.
