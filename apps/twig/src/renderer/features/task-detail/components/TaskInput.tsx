@@ -2,8 +2,8 @@ import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import {
-  type ExecutionMode,
   cycleExecutionMode,
+  type ExecutionMode,
 } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
