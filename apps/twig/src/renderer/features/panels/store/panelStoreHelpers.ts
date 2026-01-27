@@ -315,3 +315,34 @@ export function isFileTabActiveInTree(
   const tabId = createFileTabId(filePath);
   return isTabActiveInTree(tree, tabId);
 }
+
+/**
+ * Find all terminal tabs in the tree.
+ * Returns array of {panelId, tab, isActive} for each terminal tab found.
+ */
+export function findTerminalTabsInTree(
+  tree: PanelNode,
+): Array<{ panelId: string; tab: Tab; isActive: boolean }> {
+  const results: Array<{ panelId: string; tab: Tab; isActive: boolean }> = [];
+
+  function traverse(node: PanelNode): void {
+    if (node.type === "leaf") {
+      for (const tab of node.content.tabs) {
+        if (tab.data.type === "terminal") {
+          results.push({
+            panelId: node.id,
+            tab,
+            isActive: node.content.activeTabId === tab.id,
+          });
+        }
+      }
+    } else if (node.type === "group") {
+      for (const child of node.children) {
+        traverse(child);
+      }
+    }
+  }
+
+  traverse(tree);
+  return results;
+}

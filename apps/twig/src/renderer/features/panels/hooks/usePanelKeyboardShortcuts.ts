@@ -5,6 +5,17 @@ import { getLeafPanel } from "../store/panelStoreHelpers";
 
 export function usePanelKeyboardShortcuts(taskId: string): void {
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
+  const toggleTerminal = usePanelLayoutStore((state) => state.toggleTerminal);
+
+  useHotkeys(
+    SHORTCUTS.TOGGLE_TERMINAL,
+    (event) => {
+      event.preventDefault();
+      toggleTerminal(taskId);
+    },
+    { enabled: !!layout, enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"] },
+    [taskId, toggleTerminal],
+  );
 
   useHotkeys(
     SHORTCUTS.SWITCH_TAB,

@@ -11,6 +11,7 @@ import {
   applyCleanupWithFallback,
   createDiffTabId,
   createFileTabId,
+  findTerminalTabsInTree,
   generatePanelId,
   getDiffTabIdsForFile,
   getLeafPanel,
@@ -110,6 +111,7 @@ export interface PanelLayoutStore {
     command: string,
     scriptType: "init" | "start",
   ) => void;
+  toggleTerminal: (taskId: string) => void;
   clearAllLayouts: () => void;
 }
 
@@ -820,6 +822,32 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             return { panelTree: updatedTree };
           }),
         );
+      },
+
+      toggleTerminal: (taskId) => {
+        const layout = get().taskLayouts[taskId];
+        if (!layout) return;
+
+        const terminalTabs = findTerminalTabsInTree(layout.panelTree);
+        const activeTerminalTab = terminalTabs.find((t) => t.isActive);
+
+        if (activeTerminalTab) {
+          // Terminal is currently active, switch to chat tab
+          const logsTab = findTabInTree(
+            layout.panelTree,
+            DEFAULT_TAB_IDS.LOGS,
+          );
+          if (logsTab) {
+            get().setActiveTab(taskId, logsTab.panelId, DEFAULT_TAB_IDS.LOGS);
+          }
+        } else if (terminalTabs.length > 0) {
+          // Terminal exists but not active, activate it
+          const terminalTab = terminalTabs[0];
+          get().setActiveTab(taskId, terminalTab.panelId, terminalTab.tab.id);
+        } else {
+          // No terminal tab exists, create one in the main panel
+          get().addTerminalTab(taskId, DEFAULT_PANEL_IDS.MAIN_PANEL);
+        }
       },
 
       clearAllLayouts: () => {
