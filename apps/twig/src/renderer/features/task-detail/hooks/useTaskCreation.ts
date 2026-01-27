@@ -25,7 +25,7 @@ interface UseTaskCreationOptions {
   workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
-  executionMode?: "plan" | "acceptEdits";
+  executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
 }
 
 interface UseTaskCreationReturn {
@@ -79,7 +79,7 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    executionMode?: "plan" | "acceptEdits";
+    executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
   },
 ): TaskCreationInput {
   return {

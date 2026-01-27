@@ -166,7 +166,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  executionMode?: "plan" | "acceptEdits" | "default";
+  executionMode?: "plan" | "acceptEdits" | "default" | "bypassPermissions";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
 }
