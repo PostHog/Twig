@@ -1,5 +1,5 @@
 export const SHORTCUTS = {
-  COMMAND_MENU: "mod+shift+p",
+  COMMAND_MENU: "mod+k",
   NEW_TASK: "mod+n",
   SETTINGS: "mod+,",
   SHORTCUTS_SHEET: "mod+/",
