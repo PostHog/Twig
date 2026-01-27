@@ -32,7 +32,12 @@ export function usePanelKeyboardShortcuts(taskId: string): void {
         );
       }
     },
-    { enabled: !!layout, enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"] },
+    {
+      enabled: !!layout,
+      enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"],
+      enableOnContentEditable: true,
+      scopes: ["taskDetail"],
+    },
     [taskId],
   );
 
@@ -59,7 +64,12 @@ export function usePanelKeyboardShortcuts(taskId: string): void {
         state.closeTab(taskId, currentFocusedPanelId, activeTab.id);
       }
     },
-    { enabled: !!layout, enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"] },
+    {
+      enabled: !!layout,
+      enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"],
+      enableOnContentEditable: true,
+      scopes: ["taskDetail"],
+    },
     [taskId],
   );
 }

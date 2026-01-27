@@ -1,12 +1,15 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
+import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { trpcReact } from "@/renderer/trpc";
 
@@ -25,6 +28,7 @@ export function GlobalEventHandlers({
   const navigateToTaskInput = useNavigationStore(
     (state) => state.navigateToTaskInput,
   );
+  const navigateToTask = useNavigationStore((state) => state.navigateToTask);
   const navigateToFolderSettings = useNavigationStore(
     (state) => state.navigateToFolderSettings,
   );
@@ -36,6 +40,40 @@ export function GlobalEventHandlers({
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
+
+  const { data: allTasks = [] } = useTasks();
+  const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
+
+  // Build ordered task list for CMD+0-9 switching (pinned → active → recent)
+  const orderedTasks = useMemo((): Task[] => {
+    if (allTasks.length === 0) return [];
+
+    const sortedByActivity = [...allTasks].sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+
+    const pinned = sortedByActivity.filter((t) => pinnedTaskIds.has(t.id));
+    const unpinned = sortedByActivity.filter((t) => !pinnedTaskIds.has(t.id));
+
+    return [...pinned, ...unpinned];
+  }, [allTasks, pinnedTaskIds]);
+
+  const handleSwitchTask = useCallback(
+    (index: number) => {
+      if (index === 0) {
+        // mod+0 goes to home/task input
+        navigateToTaskInput();
+      } else {
+        // mod+1-9 switches to task at that index (1-based)
+        const task = orderedTasks[index - 1];
+        if (task) {
+          navigateToTask(task);
+        }
+      }
+    },
+    [orderedTasks, navigateToTask, navigateToTaskInput],
+  );
 
   const handleOpenSettings = useCallback(() => {
     toggleSettings();
@@ -90,6 +128,21 @@ export function GlobalEventHandlers({
   );
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
+
+  // Task switching with mod+0-9
+  useHotkeys(
+    SHORTCUTS.SWITCH_TASK,
+    (event, handler) => {
+      if (event.ctrlKey && !event.metaKey) return;
+
+      const keyPressed = handler.keys?.[0];
+      if (!keyPressed) return;
+      const index = parseInt(keyPressed, 10);
+      handleSwitchTask(index);
+    },
+    globalOptions,
+    [handleSwitchTask],
+  );
 
   // Mouse back/forward buttons
   useEffect(() => {
