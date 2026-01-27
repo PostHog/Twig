@@ -1,28 +1,11 @@
 > [!IMPORTANT]
 > Twig is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
 
+**[Download the latest desktop app release](https://github.com/PostHog/twig/releases/latest)**
 
-# PostHog Twig Monorepo
+# Twig
 
 This is the monorepo for PostHog's Twig apps and the agent framework that powers them.
-
-## Projects
-
-- **[apps/twig](./apps/twig)** - Twig desktop application (Electron)
-- **[apps/mobile](./apps/mobile)** - PostHog mobile app (React Native / Expo)
-- **[packages/agent](./packages/agent)** - The TypeScript agent framework
-
-## Documentation
-
-| File | Description |
-|------|-------------|
-| [README.md](./README.md) | Monorepo overview, setup, and troubleshooting |
-| [CLAUDE.md](./CLAUDE.md) | Code style, patterns, and testing guidelines |
-| [UPDATES.md](./UPDATES.md) | Release versioning and git tagging |
-| [apps/twig/README.md](./apps/twig/README.md) | Desktop app: building, signing, distribution and workspace configuration |
-| [apps/twig/ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) | Desktop app: dependency injection, tRPC, state management and events |
-| [apps/mobile/README.md](./apps/mobile/README.md) | Mobile app: Expo setup, EAS builds and TestFlight deployment |
-| [apps/cli/README.md](./apps/cli/README.md) | CLI app: Stacked PR management with Jujutsu |
 
 ## Development
 
@@ -67,15 +50,27 @@ Scripts in `scripts/` for development and debugging:
 ## Project Structure
 
 ```
-twig-monorepo/
+twig/
 ├── apps/
-│   ├── twig/           # Electron desktop app
-│   └── mobile/         # React Native mobile app (Expo)
+│   ├── twig/       # Electron desktop app (React, Vite)
+│   ├── mobile/     # React Native mobile app (Expo)
+│   └── cli/        # arr CLI for stacked PRs
 ├── packages/
-│   └── agent/          # Agent framework
-├── pnpm-workspace.yaml # Workspace configuration
-└── package.json        # Root package.json
+│   ├── agent/      # TypeScript agent framework
+│   ├── core/       # Shared business logic
+│   └── electron-trpc/  # tRPC for Electron IPC
 ```
+
+## Documentation
+
+| File | Description |
+|------|-------------|
+| [CLAUDE.md](./CLAUDE.md) | Code style, patterns, and testing guidelines |
+| [UPDATES.md](./UPDATES.md) | Release versioning and git tagging |
+| [apps/twig/README.md](./apps/twig/README.md) | Desktop app: building, signing, distribution, and workspace configuration |
+| [apps/twig/ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) | Desktop app: dependency injection, tRPC, state management, and events |
+| [apps/mobile/README.md](./apps/mobile/README.md) | Mobile app: Expo setup, EAS builds, and TestFlight deployment |
+| [apps/cli/README.md](./apps/cli/README.md) | CLI: stacked PR management with Jujutsu |
 
 ## Troubleshooting
 
