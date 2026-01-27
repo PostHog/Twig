@@ -1,6 +1,12 @@
 import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
-import { LockOpen, Circle,Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
+import {
+  Circle,
+  LockOpen,
+  Pause,
+  Pencil,
+  ShieldCheck,
+} from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQuery } from "@tanstack/react-query";
