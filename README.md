@@ -77,7 +77,6 @@ twig-monorepo/
 └── package.json        # Root package.json
 ```
 
-  "scripts": {
 ## Troubleshooting
 
 ### Electron failed to install correctly
