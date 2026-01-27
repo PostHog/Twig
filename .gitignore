@@ -46,3 +46,6 @@ AGENTS.md
 playwright-results/
 playwright-report/
 test-results/
+
+*storybook.log
+storybook-static

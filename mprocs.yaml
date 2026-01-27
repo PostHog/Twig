@@ -11,6 +11,12 @@ procs:
     cwd: .
     color: magenta
 
+  storybook:
+    cmd: ["pnpm", "--filter", "twig", "run", "storybook"]
+    cwd: .
+    color: cyan
+    autostart: false
+
   mobile-ios:
     cmd: ["pnpm", "--filter", "@posthog/mobile", "run", "ios"]
     cwd: .
