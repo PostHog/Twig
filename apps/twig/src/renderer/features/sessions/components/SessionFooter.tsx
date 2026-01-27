@@ -1,4 +1,4 @@
-import { Box, Text } from "@radix-ui/themes";
+import { Box, Flex, Text } from "@radix-ui/themes";
 
 import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
 
@@ -7,6 +7,7 @@ interface SessionFooterProps {
   promptStartedAt?: number | null;
   lastGenerationDuration: number | null;
   lastStopReason?: string;
+  queuedCount?: number;
 }
 
 export function SessionFooter({
@@ -14,11 +15,19 @@ export function SessionFooter({
   promptStartedAt,
   lastGenerationDuration,
   lastStopReason,
+  queuedCount = 0,
 }: SessionFooterProps) {
   if (isPromptPending) {
     return (
       <Box className="pt-3 pb-1">
-        <GeneratingIndicator startedAt={promptStartedAt} />
+        <Flex align="center" gap="2">
+          <GeneratingIndicator startedAt={promptStartedAt} />
+          {queuedCount > 0 && (
+            <Text size="1" color="gray">
+              ({queuedCount} queued)
+            </Text>
+          )}
+        </Flex>
       </Box>
     );
   }

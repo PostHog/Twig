@@ -40,6 +40,12 @@ export type { PermissionRequest };
 
 export type ExecutionMode = "plan" | "default" | "acceptEdits";
 
+export interface QueuedMessage {
+  id: string;
+  content: string;
+  queuedAt: number;
+}
+
 export interface AgentSession {
   taskRunId: string;
   taskId: string;
@@ -59,6 +65,8 @@ export interface AgentSession {
   currentMode: ExecutionMode;
   // Permission requests waiting for user response
   pendingPermissions: Map<string, PermissionRequest>;
+  // Queue of messages to send when current turn completes
+  messageQueue: QueuedMessage[];
 }
 
 interface SessionState {
@@ -95,6 +103,8 @@ interface SessionActions {
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
   clearSessionError: (taskId: string) => Promise<void>;
+  removeQueuedMessage: (taskId: string, queueId: string) => void;
+  popAllQueuedMessages: (taskId: string) => QueuedMessage[];
 }
 
 interface AuthCredentials {
@@ -150,6 +160,26 @@ function subscribeToChannel(taskRunId: string) {
               // This is a prompt response
               session.isPromptPending = false;
               session.promptStartedAt = null;
+
+              // Process queued messages after turn completes
+              const taskId = session.taskId;
+              const queue = session.messageQueue;
+              if (queue.length > 0 && session.status === "connected") {
+                // Capture the content before setTimeout (draft won't be valid later)
+                const nextMessageContent = queue[0].content;
+                // Schedule queue processing outside of setState
+                setTimeout(() => {
+                  const actions = useStore.getState().actions;
+                  actions
+                    .sendPrompt(taskId, nextMessageContent)
+                    .catch((err) => {
+                      log.error("Failed to send queued message", {
+                        taskId,
+                        error: err,
+                      });
+                    });
+                }, 0);
+              }
             }
 
             // Handle session/update notifications
@@ -473,6 +503,7 @@ function createBaseSession(
     isCloud,
     currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
+    messageQueue: [],
   };
 }
 
@@ -1030,6 +1061,59 @@ const useStore = create<SessionStore>()(
             throw new Error(`Session is not ready (status: ${session.status})`);
           }
 
+          // If a prompt is already pending, queue this message instead
+          if (session.isPromptPending) {
+            const promptText =
+              typeof prompt === "string"
+                ? prompt
+                : (prompt as ContentBlock[])
+                    .filter((b) => b.type === "text")
+                    .map((b) => (b as { text: string }).text)
+                    .join("");
+
+            const queueId = `queue-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+            set((state) => {
+              const sess = state.sessions[session.taskRunId];
+              if (sess) {
+                sess.messageQueue.push({
+                  id: queueId,
+                  content: promptText,
+                  queuedAt: Date.now(),
+                });
+              }
+            });
+            log.info("Message queued", {
+              taskId,
+              queueId,
+              queueLength: session.messageQueue.length + 1,
+            });
+            return { stopReason: "queued" };
+          }
+
+          // If this prompt came from the queue, remove it first
+          if (session.messageQueue.length > 0) {
+            const promptText =
+              typeof prompt === "string"
+                ? prompt
+                : (prompt as ContentBlock[])
+                    .filter((b) => b.type === "text")
+                    .map((b) => (b as { text: string }).text)
+                    .join("");
+
+            if (session.messageQueue[0].content === promptText) {
+              set((state) => {
+                const sess = state.sessions[session.taskRunId];
+                if (sess) {
+                  sess.messageQueue.shift();
+                }
+              });
+              log.info("Sending queued message", {
+                taskId,
+                remainingQueue: session.messageQueue.length - 1,
+              });
+            }
+          }
+
           let blocks: ContentBlock[] =
             typeof prompt === "string"
               ? [{ type: "text", text: prompt }]
@@ -1328,6 +1412,44 @@ const useStore = create<SessionStore>()(
           }
           connectAttempts.delete(taskId);
         },
+
+        removeQueuedMessage: (taskId: string, queueId: string) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) return;
+
+          set((state) => {
+            const sess = state.sessions[session.taskRunId];
+            if (sess) {
+              sess.messageQueue = sess.messageQueue.filter(
+                (msg) => msg.id !== queueId,
+              );
+            }
+          });
+          log.info("Removed queued message", { taskId, queueId });
+        },
+
+        popAllQueuedMessages: (taskId: string): QueuedMessage[] => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) return [];
+
+          // Copy the messages before clearing
+          const messages = [...session.messageQueue];
+
+          if (messages.length > 0) {
+            set((state) => {
+              const sess = state.sessions[session.taskRunId];
+              if (sess) {
+                sess.messageQueue = [];
+              }
+            });
+            log.info("Popped all queued messages", {
+              taskId,
+              count: messages.length,
+            });
+          }
+
+          return messages;
+        },
       },
     };
   }),
@@ -1472,5 +1594,20 @@ export const useCurrentModeForTask = (
       (sess) => sess.taskId === taskId,
     );
     return session?.currentMode;
+  });
+};
+
+/**
+ * Hook to get queued messages for a task.
+ */
+export const useQueuedMessagesForTask = (
+  taskId: string | undefined,
+): QueuedMessage[] => {
+  return useStore((s) => {
+    if (!taskId) return [];
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.messageQueue ?? [];
   });
 };

@@ -304,7 +304,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const submit = useCallback(() => {
     if (!editor) return;
-    if (disabled || isLoading) return;
+    if (disabled) return;
 
     const text = editor.getText().trim();
     if (!text) return;
@@ -314,9 +314,15 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
         toast.error("Bash mode is not supported in cloud sessions");
         return;
       }
+      // Bash mode requires immediate execution, can't be queued
+      if (isLoading) {
+        toast.error("Cannot run shell commands while agent is generating");
+        return;
+      }
       const command = text.slice(1).trim();
       if (command) callbackRefs.current.onBashCommand?.(command);
     } else {
+      // Normal prompts can be queued when loading
       const content = draft.getContent();
       callbackRefs.current.onSubmit?.(contentToXml(content));
     }
