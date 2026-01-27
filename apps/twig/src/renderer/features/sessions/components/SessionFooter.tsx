@@ -1,3 +1,4 @@
+import { Pause } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 
 import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
@@ -8,6 +9,7 @@ interface SessionFooterProps {
   lastGenerationDuration: number | null;
   lastStopReason?: string;
   queuedCount?: number;
+  hasPendingPermission?: boolean;
 }
 
 export function SessionFooter({
@@ -16,8 +18,26 @@ export function SessionFooter({
   lastGenerationDuration,
   lastStopReason,
   queuedCount = 0,
+  hasPendingPermission = false,
 }: SessionFooterProps) {
   if (isPromptPending) {
+    // Show static "waiting" state when permission is pending
+    if (hasPendingPermission) {
+      return (
+        <Box className="pt-3 pb-1">
+          <Flex
+            align="center"
+            gap="2"
+            className="select-none text-gray-10"
+            style={{ userSelect: "none", WebkitUserSelect: "none" }}
+          >
+            <Pause size={14} weight="fill" />
+            <Text size="1">Awaiting permission...</Text>
+          </Flex>
+        </Box>
+      );
+    }
+
     return (
       <Box className="pt-3 pb-1">
         <Flex align="center" gap="2">
