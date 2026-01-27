@@ -23,6 +23,7 @@ export interface UseTiptapEditorOptions {
     commands?: boolean;
     bashMode?: boolean;
   };
+  clearOnSubmit?: boolean;
   onSubmit?: (text: string) => void;
   onBashCommand?: (command: string) => void;
   onBashModeChange?: (isBashMode: boolean) => void;
@@ -43,6 +44,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     autoFocus = false,
     context,
     capabilities = {},
+    clearOnSubmit = true,
     onSubmit,
     onBashCommand,
     onBashModeChange,
@@ -327,10 +329,12 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       callbackRefs.current.onSubmit?.(contentToXml(content));
     }
 
-    editor.commands.clearContent();
-    prevBashModeRef.current = false;
-    draft.clearDraft();
-  }, [editor, disabled, isLoading, isCloud, draft]);
+    if (clearOnSubmit) {
+      editor.commands.clearContent();
+      prevBashModeRef.current = false;
+      draft.clearDraft();
+    }
+  }, [editor, disabled, isLoading, isCloud, draft, clearOnSubmit]);
 
   submitRef.current = submit;
 
