@@ -2,7 +2,11 @@ import type {
   ContentBlock,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
-import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
+import {
+  usePendingPermissionsForTask,
+  useQueuedMessagesForTask,
+  useSessionActions,
+} from "@features/sessions/stores/sessionStore";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { ArrowDown, XCircle } from "@phosphor-icons/react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
@@ -24,6 +28,7 @@ import {
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
+import { QueuedMessageView } from "./session-update/QueuedMessageView";
 import {
   type RenderItem,
   SessionUpdateView,
@@ -76,6 +81,10 @@ export function ConversationView({
   // Track pending permissions for scroll triggering
   const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
   const pendingPermissionsCount = pendingPermissions.size;
+
+  // Get queued messages and actions
+  const queuedMessages = useQueuedMessagesForTask(taskId);
+  const { removeQueuedMessage } = useSessionActions();
 
   const isNearBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(0);
@@ -140,6 +149,13 @@ export function ConversationView({
               <UserShellExecuteView key={item.id} item={item} />
             ),
           )}
+          {queuedMessages.map((msg) => (
+            <QueuedMessageView
+              key={msg.id}
+              message={msg}
+              onRemove={() => taskId && removeQueuedMessage(taskId, msg.id)}
+            />
+          ))}
         </div>
         <SessionFooter
           isPromptPending={isPromptPending}
@@ -148,6 +164,7 @@ export function ConversationView({
             lastTurn?.isComplete ? lastTurn.durationMs : null
           }
           lastStopReason={lastTurn?.stopReason}
+          queuedCount={queuedMessages.length}
         />
       </div>
       {showScrollButton && (

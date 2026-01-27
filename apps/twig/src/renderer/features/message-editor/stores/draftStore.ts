@@ -21,6 +21,7 @@ interface DraftState {
   contexts: Record<SessionId, EditorContext>;
   commands: Record<SessionId, AvailableCommand[]>;
   focusRequested: Record<SessionId, number>;
+  pendingContent: Record<SessionId, EditorContent>;
   _hasHydrated: boolean;
 }
 
@@ -39,6 +40,8 @@ export interface DraftActions {
   clearCommands: (sessionId: SessionId) => void;
   requestFocus: (sessionId: SessionId) => void;
   clearFocusRequest: (sessionId: SessionId) => void;
+  setPendingContent: (sessionId: SessionId, content: EditorContent) => void;
+  clearPendingContent: (sessionId: SessionId) => void;
 }
 
 type DraftStore = DraftState & { actions: DraftActions };
@@ -50,6 +53,7 @@ export const useDraftStore = create<DraftStore>()(
       contexts: {},
       commands: {},
       focusRequested: {},
+      pendingContent: {},
       _hasHydrated: false,
 
       actions: {
@@ -109,6 +113,16 @@ export const useDraftStore = create<DraftStore>()(
         clearFocusRequest: (sessionId) =>
           set((state) => {
             delete state.focusRequested[sessionId];
+          }),
+
+        setPendingContent: (sessionId, content) =>
+          set((state) => {
+            state.pendingContent[sessionId] = content;
+          }),
+
+        clearPendingContent: (sessionId) =>
+          set((state) => {
+            delete state.pendingContent[sessionId];
           }),
       },
     })),

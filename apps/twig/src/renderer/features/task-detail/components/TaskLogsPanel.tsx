@@ -32,12 +32,17 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
 
   const session = useSessionForTask(taskId);
-  const { connectToTask, sendPrompt, cancelPrompt, clearSessionError } =
-    useSessionActions();
+  const {
+    connectToTask,
+    sendPrompt,
+    cancelPrompt,
+    clearSessionError,
+    popAllQueuedMessages,
+  } = useSessionActions();
   const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
-  const requestFocus = useDraftStore((s) => s.actions.requestFocus);
+  const { requestFocus, setPendingContent } = useDraftStore((s) => s.actions);
   const { isOnline } = useConnectivity();
 
   const isRunning =
@@ -130,10 +135,24 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   );
 
   const handleCancelPrompt = useCallback(async () => {
+    // Get and clear any queued messages before cancelling
+    const queuedMessages = popAllQueuedMessages(taskId);
+
     const result = await cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
+
+    // Restore queued messages to the editor
+    if (queuedMessages.length > 0) {
+      const combinedContent = queuedMessages
+        .map((msg) => msg.content)
+        .join("\n\n");
+      setPendingContent(taskId, {
+        segments: [{ type: "text", text: combinedContent }],
+      });
+    }
+
     requestFocus(taskId);
-  }, [taskId, cancelPrompt, requestFocus]);
+  }, [taskId, cancelPrompt, popAllQueuedMessages, setPendingContent, requestFocus]);
 
   const { appendUserShellExecute } = useSessionActions();
 

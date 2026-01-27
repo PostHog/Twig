@@ -110,6 +110,7 @@ export function useDraftSync(
 
   const draftActions = useDraftStore((s) => s.actions);
   const draft = useDraftStore((s) => s.drafts[sessionId] ?? null);
+  const pendingContent = useDraftStore((s) => s.pendingContent[sessionId] ?? null);
   const hasHydrated = useDraftStore((s) => s._hasHydrated);
 
   // Reset restoration flag when sessionId changes (e.g., navigating between tasks)
@@ -148,6 +149,15 @@ export function useDraftSync(
       editor.commands.setContent(editorContentToTiptapJson(draft));
     }
   }, [hasHydrated, draft, editor]);
+
+  // Handle pending content (e.g., restoring queued messages after cancel)
+  useLayoutEffect(() => {
+    if (!editor || !pendingContent) return;
+
+    editor.commands.setContent(editorContentToTiptapJson(pendingContent));
+    editor.commands.focus("end");
+    draftActions.clearPendingContent(sessionId);
+  }, [editor, pendingContent, sessionId, draftActions]);
 
   const saveDraft = useCallback(
     (e: Editor) => {
