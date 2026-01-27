@@ -242,11 +242,35 @@ export const useNavigationStore = create<NavigationStore>()(
 );
 ```
 
-## Testing Patterns
+## Testing
+
+### Commands
+
+- `pnpm test` - Run unit tests across all packages
+- `pnpm --filter twig test` - Run twig unit tests only
+- `pnpm test:e2e` - Run Playwright E2E tests
+
+### When to Write Unit Tests vs E2E Tests
+
+**Unit tests (Vitest)** - Fast, isolated, run frequently:
+- Zustand store logic and state transitions
+- Pure utility functions and helpers
+- Service methods with mocked dependencies
+- Complex business logic in isolation
+- Data transformations and validators
+
+**E2E tests (Playwright)** - Slower, test real user flows:
+- Critical user journeys (auth, task creation, workspace setup)
+- IPC communication between main and renderer
+- Features requiring real Electron APIs (file system, shell)
+- Multi-step workflows spanning multiple components
+- Regression tests for reported bugs
+
+**Rule of thumb**: If it can be tested without Electron running, use a unit test. If it requires the full app context or tests user-facing behavior, use E2E.
 
 ### Test File Location
 
-Tests are colocated with source code using `.test.ts` or `.test.tsx` extension.
+Tests are colocated with source code using `.test.ts` or `.test.tsx` extension. E2E tests live in `tests/e2e/`.
 
 ### Store Testing
 
@@ -329,9 +353,3 @@ apps/twig/src/
 ## Environment Variables
 
 - Copy `.env.example` to `.env`
-
-## Testing
-
-- `pnpm test` - Run tests across all packages
-- Twig app: Vitest with jsdom, helpers in `apps/twig/src/test/`
-- E2E: Playwright in `tests/e2e/`
