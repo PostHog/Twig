@@ -58,6 +58,8 @@ export function ModeIndicatorInput({
 }: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
   const repoPath = useCwd(taskId ?? "");
+  const { allowBypassPermissions } = useSettingsStore();
+  const availableModes = getExecutionModes(allowBypassPermissions);
 
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", repoPath],
@@ -128,7 +130,7 @@ export function ModeIndicatorInput({
         </Flex>
       </Select.Trigger>
       <Select.Content>
-        {EXECUTION_MODES.map((modeOption) => {
+        {availableModes.map((modeOption) => {
           const optionConfig = modeConfig[modeOption];
           const hoverBgClass =
             modeOption === "plan"
