@@ -47,7 +47,7 @@ export type ExecutionMode =
 export function getExecutionModes(
   allowBypassPermissions: boolean,
 ): ExecutionMode[] {
-  const modes: ExecutionMode[] = ["plan", "default", "acceptEdits"];
+  const modes: ExecutionMode[] = ["default", "acceptEdits", "plan"];
   if (allowBypassPermissions) {
     modes.push("bypassPermissions");
   }
