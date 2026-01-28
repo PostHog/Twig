@@ -207,7 +207,7 @@ async function applyPlanApproval(
         {
           type: "setMode",
           mode: response.outcome.optionId,
-          destination: "session",
+          destination: "localSettings",
         },
       ],
     };
@@ -373,7 +373,7 @@ async function handleDefaultPermissionFlow(
             type: "addRules",
             rules: [{ toolName }],
             behavior: "allow",
-            destination: "session",
+            destination: "localSettings",
           },
         ],
       };
