@@ -74,10 +74,9 @@ export function SessionView({
     useSessionActions();
   const sessionMode = useCurrentModeForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
-  // Default to "default" mode if session not yet available
+
   const currentMode: ExecutionMode = sessionMode ?? "default";
 
-  // Reset to default mode if bypass was disabled while in bypass mode
   useEffect(() => {
     if (
       !allowBypassPermissions &&
