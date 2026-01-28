@@ -4,6 +4,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import type { PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "@/utils/logger.js";
+import { isToolAllowedForMode } from "./permission-mode-config.js";
 import { buildPermissionOptions, isWriteTool } from "./permission-options.js";
 import {
   getClaudePlansDir,
@@ -421,7 +422,14 @@ function handlePlanFileException(
 export async function evaluateToolPermission(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
-  const { toolName } = context;
+  const { toolName, toolInput, session } = context;
+
+  if (isToolAllowedForMode(toolName, session.permissionMode)) {
+    return {
+      behavior: "allow",
+      updatedInput: toolInput as Record<string, unknown>,
+    };
+  }
 
   if (toolName === "ExitPlanMode") {
     return handleExitPlanModeTool(context);

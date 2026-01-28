@@ -35,8 +35,8 @@ export abstract class BaseAcpAgent implements Agent {
   protected session!: BaseSession;
   protected sessionId!: string;
   client: AgentSideConnection;
-  protected logger: Logger;
-  protected fileContentCache: { [key: string]: string } = {};
+  logger: Logger;
+  fileContentCache: { [key: string]: string } = {};
 
   constructor(client: AgentSideConnection) {
     this.client = client;
