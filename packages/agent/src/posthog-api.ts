@@ -189,19 +189,23 @@ export class PostHogAPIClient {
   }
 
   /**
-   * Fetch logs from S3 using presigned URL from TaskRun
-   * @param taskRun - The task run containing the log_url
+   * Fetch logs from ClickHouse via the logs API endpoint
+   * @param taskRun - The task run to fetch logs for
    * @returns Array of stored entries, or empty array if no logs available
    */
   async fetchTaskRunLogs(taskRun: TaskRun): Promise<StoredEntry[]> {
-    if (!taskRun.log_url) {
-      return [];
-    }
+    const teamId = this.getTeamId();
 
     try {
-      const response = await fetch(taskRun.log_url);
+      const response = await fetch(
+        `${this.baseUrl}/api/projects/${teamId}/tasks/${taskRun.task}/runs/${taskRun.id}/logs`,
+        { headers: this.headers },
+      );
 
       if (!response.ok) {
+        if (response.status === 404) {
+          return [];
+        }
         throw new Error(
           `Failed to fetch logs: ${response.status} ${response.statusText}`,
         );
