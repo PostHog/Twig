@@ -6,7 +6,7 @@ import type {
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
-import type { Task } from "@shared/types";
+import { EXECUTION_MODES, type ExecutionMode, type Task } from "@shared/types";
 import type {
   AcpMessage,
   JsonRpcMessage,
@@ -36,22 +36,14 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 // --- Types ---
 
 // Re-export for external consumers
-export type { PermissionRequest };
-
-export type ExecutionMode =
-  | "plan"
-  | "default"
-  | "acceptEdits"
-  | "bypassPermissions";
+export type { ExecutionMode, PermissionRequest };
 
 export function getExecutionModes(
   allowBypassPermissions: boolean,
 ): ExecutionMode[] {
-  const modes: ExecutionMode[] = ["default", "acceptEdits", "plan"];
-  if (allowBypassPermissions) {
-    modes.push("bypassPermissions");
-  }
-  return modes;
+  return allowBypassPermissions
+    ? EXECUTION_MODES
+    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
 }
 
 export function cycleExecutionMode(
@@ -111,7 +103,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
+    executionMode?: ExecutionMode;
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -522,7 +514,7 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
-  executionMode?: "plan" | "acceptEdits" | "bypassPermissions",
+  executionMode?: ExecutionMode,
 ): AgentSession {
   return {
     taskRunId,
@@ -788,7 +780,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: "plan" | "acceptEdits" | "bypassPermissions",
+      executionMode?: ExecutionMode,
     ) => {
       if (!auth.client) {
         throw new Error(
@@ -820,7 +812,7 @@ const useStore = create<SessionStore>()(
         taskRun.id,
         taskId,
         false,
-        effectiveMode === "default" ? undefined : effectiveMode,
+        effectiveMode,
       );
       session.channel = result.channel;
       session.status = "connected";

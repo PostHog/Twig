@@ -1,4 +1,4 @@
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import {
   Circle,
@@ -7,10 +7,10 @@ import {
   Pencil,
   ShieldCheck,
 } from "@phosphor-icons/react";
-import { trpcVanilla } from "@renderer/trpc";
-import { useQuery } from "@tanstack/react-query";
 import { Flex, Select, Text } from "@radix-ui/themes";
-import { EXECUTION_MODES } from "@shared/constants";
+import { trpcVanilla } from "@renderer/trpc";
+import { EXECUTION_MODES, type ExecutionMode } from "@shared/types";
+import { useQuery } from "@tanstack/react-query";
 
 interface ModeIndicatorInputProps {
   mode: ExecutionMode;
@@ -55,6 +55,13 @@ export function ModeIndicatorInput({
 }: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
   const repoPath = useCwd(taskId ?? "");
+  const allowBypassPermissions = useSettingsStore(
+    (s) => s.allowBypassPermissions,
+  );
+
+  const availableModes = allowBypassPermissions
+    ? EXECUTION_MODES
+    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
 
   const { data: diffStats } = useQuery({
     queryKey: ["diff-stats", repoPath],
@@ -98,34 +105,34 @@ export function ModeIndicatorInput({
           >
             (shift+tab to cycle)
           </Text>
-        {hasDiffStats && (
-          <Text
-            size="1"
-            style={{
-              color: "var(--gray-9)",
-              fontFamily: "monospace",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-          >
-            <Circle size={4} weight="fill" style={{ margin: "0 4px" }} />
-            <span style={{ color: "var(--gray-11)" }}>
-              {diffStats.filesChanged}{" "}
-              {diffStats.filesChanged === 1 ? "file" : "files"}
-            </span>
-            <span style={{ color: "var(--green-9)" }}>
-              +{diffStats.linesAdded}
-            </span>
-            <span style={{ color: "var(--red-9)" }}>
-              -{diffStats.linesRemoved}
-            </span>
-          </Text>
-        )}
+          {hasDiffStats && (
+            <Text
+              size="1"
+              style={{
+                color: "var(--gray-9)",
+                fontFamily: "monospace",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Circle size={4} weight="fill" style={{ margin: "0 4px" }} />
+              <span style={{ color: "var(--gray-11)" }}>
+                {diffStats.filesChanged}{" "}
+                {diffStats.filesChanged === 1 ? "file" : "files"}
+              </span>
+              <span style={{ color: "var(--green-9)" }}>
+                +{diffStats.linesAdded}
+              </span>
+              <span style={{ color: "var(--red-9)" }}>
+                -{diffStats.linesRemoved}
+              </span>
+            </Text>
+          )}
         </Flex>
       </Select.Trigger>
       <Select.Content>
-        {EXECUTION_MODES.map((modeOption) => {
+        {availableModes.map((modeOption) => {
           const optionConfig = modeConfig[modeOption];
           const hoverBgClass =
             modeOption === "plan"

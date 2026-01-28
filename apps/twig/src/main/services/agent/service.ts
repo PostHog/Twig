@@ -27,6 +27,7 @@ import {
   AgentServiceEvent,
   type AgentServiceEvents,
   type Credentials,
+  type ExecutionMode,
   type InterruptReason,
   type PromptOutput,
   type ReconnectSessionInput,
@@ -166,7 +167,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  executionMode?: "plan" | "acceptEdits" | "default" | "bypassPermissions";
+  executionMode?: ExecutionMode;
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
 }
