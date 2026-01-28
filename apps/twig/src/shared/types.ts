@@ -1,3 +1,21 @@
+import { z } from "zod";
+
+// Execution mode schema and type - shared between main and renderer
+export const executionModeSchema = z.enum([
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+]);
+export type ExecutionMode = z.infer<typeof executionModeSchema>;
+
+export const EXECUTION_MODES: ExecutionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+];
+
 export interface RegisteredFolder {
   id: string;
   path: string;

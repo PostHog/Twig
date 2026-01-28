@@ -7,7 +7,12 @@ import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
 import { Saga, type SagaLogger } from "@shared/lib/saga";
-import type { Task, Workspace, WorkspaceMode } from "@shared/types";
+import type {
+  ExecutionMode,
+  Task,
+  Workspace,
+  WorkspaceMode,
+} from "@shared/types";
 
 const log = logger.scope("task-creation-saga");
 
@@ -30,8 +35,7 @@ export interface TaskCreationInput {
   workspaceMode?: WorkspaceMode;
   branch?: string | null;
   githubIntegrationId?: number;
-  // Execution mode: "plan" starts in plan mode (read-only), "acceptEdits" auto-approves edits, "bypassPermissions" skips all permission prompts, undefined starts in default mode
-  executionMode?: "plan" | "acceptEdits" | "bypassPermissions";
+  executionMode?: ExecutionMode;
 }
 
 export interface TaskCreationOutput {

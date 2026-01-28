@@ -1,3 +1,4 @@
+import { executionModeSchema } from "@shared/types";
 import { z } from "zod";
 
 // Session credentials schema
@@ -8,15 +9,6 @@ export const credentialsSchema = z.object({
 });
 
 export type Credentials = z.infer<typeof credentialsSchema>;
-
-// Execution mode schema
-export const executionModeSchema = z.enum([
-  "plan",
-  "acceptEdits",
-  "default",
-  "bypassPermissions",
-]);
-export type ExecutionMode = z.infer<typeof executionModeSchema>;
 
 // Session config schema
 export const sessionConfigSchema = z.object({
@@ -47,7 +39,7 @@ export const startSessionInput = z.object({
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
   executionMode: z
-    .enum(["plan", "acceptEdits", "default", "bypassPermissions"])
+    .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
     .optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
@@ -149,7 +141,7 @@ export const setModelInput = z.object({
 // Set mode input
 export const setModeInput = z.object({
   sessionId: z.string(),
-  modeId: z.enum(["plan", "default", "acceptEdits", "bypassPermissions"]),
+  modeId: executionModeSchema,
 });
 
 // Subscribe to session events input
