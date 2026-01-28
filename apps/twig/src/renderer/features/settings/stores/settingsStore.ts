@@ -15,6 +15,7 @@ interface SettingsStore {
   cursorGlow: boolean;
   autoConvertLongText: boolean;
   sendMessagesWith: SendMessagesWith;
+  allowBypassPermissions: boolean;
 
   setDefaultRunMode: (mode: DefaultRunMode) => void;
   setLastUsedRunMode: (mode: "local" | "cloud") => void;
@@ -24,6 +25,7 @@ interface SettingsStore {
   setCursorGlow: (enabled: boolean) => void;
   setAutoConvertLongText: (enabled: boolean) => void;
   setSendMessagesWith: (mode: SendMessagesWith) => void;
+  setAllowBypassPermissions: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -37,6 +39,7 @@ export const useSettingsStore = create<SettingsStore>()(
       cursorGlow: false,
       autoConvertLongText: true,
       sendMessagesWith: "enter",
+      allowBypassPermissions: false,
 
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
       setLastUsedRunMode: (mode) => set({ lastUsedRunMode: mode }),
@@ -49,6 +52,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setAutoConvertLongText: (enabled) =>
         set({ autoConvertLongText: enabled }),
       setSendMessagesWith: (mode) => set({ sendMessagesWith: mode }),
+      setAllowBypassPermissions: (enabled) =>
+        set({ allowBypassPermissions: enabled }),
     }),
     {
       name: "settings-storage",

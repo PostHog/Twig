@@ -20,6 +20,7 @@ import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
 import { injectable, preDestroy } from "inversify";
+import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -166,7 +167,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  executionMode?: "plan" | "acceptEdits" | "default";
+  executionMode?: ExecutionMode;
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
 }

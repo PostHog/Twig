@@ -931,3 +931,20 @@ button,
 [role="button"] {
   cursor: pointer;
 }
+
+/* Custom hover states for Select/Menu items - slightly lighter than background */
+.rt-SelectItem[data-highlighted],
+.rt-BaseMenuItem[data-highlighted] {
+  background-color: var(--gray-4) !important;
+}
+
+/* Select/Menu dropdown background matches theme */
+.rt-SelectContent,
+.rt-BaseMenuContent {
+  background-color: var(--gray-2) !important;
+}
+
+/* Select trigger matches theme */
+.rt-SelectTrigger {
+  background-color: var(--gray-2) !important;
+}
