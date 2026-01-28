@@ -165,6 +165,7 @@ export function ConversationView({
           }
           lastStopReason={lastTurn?.stopReason}
           queuedCount={queuedMessages.length}
+          hasPendingPermission={pendingPermissionsCount > 0}
         />
       </div>
       {showScrollButton && (
