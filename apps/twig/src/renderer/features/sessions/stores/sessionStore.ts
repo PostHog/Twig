@@ -276,31 +276,6 @@ function subscribeToChannel(taskRunId: string) {
                 draft.sessions[taskRunId].pendingPermissions = newPermissions;
               }
             });
-
-            const auth = useAuthStore.getState();
-            if (auth.client && session.taskId) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  method: "_array/permission_request",
-                  params: payload,
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(session.taskId, taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission request persisted to logs", {
-                  taskRunId,
-                  toolCallId: payload.toolCall.toolCallId,
-                });
-              } catch (error) {
-                log.warn("Failed to persist permission request to logs", {
-                  error,
-                });
-              }
-            }
           } else {
             log.warn("Session not found for permission request", {
               taskRunId,
@@ -1291,36 +1266,6 @@ const useStore = create<SessionStore>()(
               optionId,
               hasCustomInput: !!customInput,
             });
-
-            // Persist permission response to logs for recovery tracking
-            const auth = useAuthStore.getState();
-            if (auth.client) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  method: "_array/permission_response",
-                  params: {
-                    toolCallId,
-                    optionId,
-                    ...(customInput && { customInput }),
-                  },
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission response persisted to logs", {
-                  taskId,
-                  toolCallId,
-                });
-              } catch (persistError) {
-                log.warn("Failed to persist permission response to logs", {
-                  error: persistError,
-                });
-              }
-            }
           } catch (error) {
             log.error("Failed to respond to permission", {
               taskId,
@@ -1362,36 +1307,6 @@ const useStore = create<SessionStore>()(
             });
 
             log.info("Permission cancelled", { taskId, toolCallId });
-
-            // Persist permission cancellation to logs for recovery tracking
-            const auth = useAuthStore.getState();
-            if (auth.client) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  // TODO: Migrate to twig
-                  method: "_array/permission_response",
-                  params: {
-                    toolCallId,
-                    optionId: "_cancelled",
-                  },
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission cancellation persisted to logs", {
-                  taskId,
-                  toolCallId,
-                });
-              } catch (persistError) {
-                log.warn("Failed to persist permission cancellation to logs", {
-                  error: persistError,
-                });
-              }
-            }
           } catch (error) {
             log.error("Failed to cancel permission", {
               taskId,
