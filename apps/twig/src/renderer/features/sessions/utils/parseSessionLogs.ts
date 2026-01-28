@@ -1,6 +1,9 @@
 /// <reference path="../../../types/electron.d.ts" />
 
-import type { SessionNotification } from "@agentclientprotocol/sdk";
+import type {
+  RequestPermissionRequest,
+  SessionNotification,
+} from "@agentclientprotocol/sdk";
 import { trpcVanilla } from "@/renderer/trpc";
 
 export interface StoredLogEntry {
@@ -101,18 +104,9 @@ export async function fetchSessionLogs(
   }
 }
 
-export interface PermissionRequest {
-  toolCallId: string;
-  title: string;
-  options: Array<{
-    kind: string;
-    name: string;
-    optionId: string;
-    description?: string;
-  }>;
-  rawInput: unknown;
+export type PermissionRequest = RequestPermissionRequest & {
   receivedAt: number;
-}
+};
 
 /**
  * Scan log entries to find pending permission requests.
@@ -141,16 +135,12 @@ export function findPendingPermissions(
     }
   }
 
-  // Return requests without matching response
   const pending = new Map<string, PermissionRequest>();
   for (const [toolCallId, entry] of requests) {
     if (!responses.has(toolCallId)) {
-      const params = entry.notification?.params as Record<string, unknown>;
+      const params = entry.notification?.params as RequestPermissionRequest;
       pending.set(toolCallId, {
-        toolCallId,
-        title: (params.title as string) || "Permission Required",
-        options: (params.options as PermissionRequest["options"]) || [],
-        rawInput: params.rawInput,
+        ...params,
         receivedAt: entry.timestamp
           ? new Date(entry.timestamp).getTime()
           : Date.now(),
