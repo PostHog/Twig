@@ -35,6 +35,7 @@ import { trpcRouter } from "./trpc/index.js";
 import "./services/index.js";
 import type { AgentService } from "./services/agent/service.js";
 import type { AppLifecycleService } from "./services/app-lifecycle/service.js";
+import type { CliInstallerService } from "./services/cli-installer/service.js";
 import type { DeepLinkService } from "./services/deep-link/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
 import type { OAuthService } from "./services/oauth/service.js";
@@ -96,7 +97,9 @@ app.on("open-url", (event, url) => {
 });
 
 // Handle deep link URLs on Windows/Linux (second instance sends URL via command line)
+// Also handles --open-path argument from CLI
 app.on("second-instance", (_event, commandLine) => {
+  // Check for deep link URLs
   const url = commandLine.find(
     (arg) => arg.startsWith("twig://") || arg.startsWith("array://"),
   );
@@ -105,6 +108,16 @@ app.on("second-instance", (_event, commandLine) => {
       MAIN_TOKENS.DeepLinkService,
     );
     deepLinkService.handleUrl(url);
+  }
+
+  // Check for --open-path argument from CLI
+  const openPathIndex = commandLine.indexOf("--open-path");
+  if (openPathIndex !== -1 && commandLine[openPathIndex + 1]) {
+    const targetPath = commandLine[openPathIndex + 1];
+    const cliService = container.get<CliInstallerService>(
+      MAIN_TOKENS.CliInstallerService,
+    );
+    cliService.handleOpenPath(targetPath);
   }
 
   if (mainWindow) {
@@ -383,6 +396,16 @@ app.whenReady().then(() => {
     if (deepLinkUrl) {
       deepLinkService.handleUrl(deepLinkUrl);
     }
+  }
+
+  // Handle case where app was launched via CLI with --open-path
+  const openPathIndex = process.argv.indexOf("--open-path");
+  if (openPathIndex !== -1 && process.argv[openPathIndex + 1]) {
+    const targetPath = process.argv[openPathIndex + 1];
+    const cliService = container.get<CliInstallerService>(
+      MAIN_TOKENS.CliInstallerService,
+    );
+    cliService.handleOpenPath(targetPath);
   }
 });
 

@@ -18,6 +18,7 @@ import { useNavigationStore } from "@stores/navigationStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
+import { useCliPath } from "../hooks/useCliPath";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
@@ -34,6 +35,7 @@ export function MainLayout() {
 
   useIntegrations();
   useTaskDeepLink();
+  useCliPath();
 
   useEffect(() => {
     if (tasks) {

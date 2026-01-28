@@ -627,6 +627,11 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
+          {/* CLI Section */}
+          <CliSection />
+
+          <Box className="border-gray-6 border-t" />
+
           <Flex direction="column" gap="3">
             <Heading size="3">Data management</Heading>
             <Card>
@@ -789,5 +794,143 @@ export function SettingsView() {
         </Flex>
       </Box>
     </Box>
+  );
+}
+
+/**
+ * CLI installation section component
+ */
+function CliSection() {
+  const { data: isInstalled, refetch: refetchInstallStatus } =
+    trpcReact.cli.isInstalled.useQuery();
+  const [status, setStatus] = useState<{
+    message?: string;
+    type?: "info" | "success" | "error";
+  }>({});
+
+  const installMutation = trpcReact.cli.install.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        setStatus({
+          message:
+            "CLI installed successfully. You can now use 'twig' from your terminal.",
+          type: "success",
+        });
+        refetchInstallStatus();
+      } else {
+        setStatus({
+          message: result.error || "Failed to install CLI",
+          type: "error",
+        });
+      }
+    },
+    onError: (error) => {
+      setStatus({
+        message: error.message || "Failed to install CLI",
+        type: "error",
+      });
+    },
+  });
+
+  const uninstallMutation = trpcReact.cli.uninstall.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        setStatus({
+          message: "CLI uninstalled successfully.",
+          type: "success",
+        });
+        refetchInstallStatus();
+      } else {
+        setStatus({
+          message: result.error || "Failed to uninstall CLI",
+          type: "error",
+        });
+      }
+    },
+    onError: (error) => {
+      setStatus({
+        message: error.message || "Failed to uninstall CLI",
+        type: "error",
+      });
+    },
+  });
+
+  const handleInstall = () => {
+    setStatus({});
+    installMutation.mutate();
+  };
+
+  const handleUninstall = () => {
+    setStatus({});
+    uninstallMutation.mutate();
+  };
+
+  const isLoading = installMutation.isPending || uninstallMutation.isPending;
+
+  return (
+    <Flex direction="column" gap="3">
+      <Heading size="3">Command line</Heading>
+      <Card>
+        <Flex direction="column" gap="4">
+          <Flex direction="column" gap="2">
+            <Flex align="center" gap="2">
+              <Text size="1" weight="medium">
+                Shell command
+              </Text>
+              {isInstalled !== undefined && (
+                <Badge size="1" color={isInstalled ? "green" : "gray"}>
+                  {isInstalled ? "Installed" : "Not installed"}
+                </Badge>
+              )}
+            </Flex>
+            <Text size="1" color="gray">
+              Install the 'twig' command to open Twig from your terminal. Use
+              'twig' to open the app, or 'twig /path/to/repo' to open a specific
+              repository.
+            </Text>
+          </Flex>
+          <Flex gap="2">
+            {!isInstalled ? (
+              <Button
+                variant="soft"
+                size="1"
+                onClick={handleInstall}
+                disabled={isLoading}
+                style={{ alignSelf: "flex-start" }}
+              >
+                {installMutation.isPending && <Spinner />}
+                Install twig command
+              </Button>
+            ) : (
+              <Button
+                variant="soft"
+                color="red"
+                size="1"
+                onClick={handleUninstall}
+                disabled={isLoading}
+                style={{ alignSelf: "flex-start" }}
+              >
+                {uninstallMutation.isPending && <Spinner />}
+                Uninstall
+              </Button>
+            )}
+          </Flex>
+          {status.message && (
+            <Callout.Root
+              size="1"
+              color={
+                status.type === "error"
+                  ? "red"
+                  : status.type === "success"
+                    ? "green"
+                    : "blue"
+              }
+            >
+              <Callout.Text>{status.message}</Callout.Text>
+            </Callout.Root>
+          )}
+        </Flex>
+      </Card>
+    </Flex>
   );
 }
