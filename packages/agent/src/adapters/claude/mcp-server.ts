@@ -8,6 +8,10 @@ import * as diff from "diff";
 import { z } from "zod";
 import { Logger } from "@/utils/logger.js";
 import type { ClaudeAcpAgent } from "./claude-agent.js";
+import {
+  evaluateToolPermission,
+  type ToolPermissionResult,
+} from "./permission-handlers.js";
 import { extractLinesWithByteLimit, sleep, unreachable } from "./utils.js";
 
 export const SYSTEM_REMINDER = `
@@ -50,6 +54,44 @@ function toolError(operation: string, error: unknown): McpToolResult {
   return {
     content: [{ type: "text", text: `${operation} failed: ${message}` }],
   };
+}
+
+function permissionDenied(result: ToolPermissionResult): McpToolResult {
+  const message =
+    result.behavior === "deny" ? result.message : "Permission denied";
+  return {
+    content: [{ type: "text", text: message }],
+  };
+}
+
+async function withPermissionCheck(
+  agent: ClaudeAcpAgent,
+  sessionId: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  toolCallId: string,
+  execute: () => Promise<McpToolResult>,
+): Promise<McpToolResult> {
+  if (!agent.session) {
+    return sessionNotFound();
+  }
+
+  const result = await evaluateToolPermission({
+    session: agent.session,
+    toolName,
+    toolInput,
+    toolUseID: toolCallId,
+    client: agent.client,
+    sessionId,
+    fileContentCache: agent.fileContentCache,
+    logger: agent.logger,
+  });
+
+  if (result.behavior === "deny") {
+    return permissionDenied(result);
+  }
+
+  return execute();
 }
 
 export function createMcpServer(
@@ -192,20 +234,36 @@ Usage:
           idempotentHint: false,
         },
       },
-      async (input) => {
-        try {
-          if (!agent.hasSession(sessionId)) {
-            return sessionNotFound();
-          }
-          await agent.writeTextFile({
-            sessionId,
-            path: input.file_path,
-            content: input.content,
-          });
-          return { content: [] };
-        } catch (error) {
-          return toolError("Writing file", error);
+      async (input, extra) => {
+        if (!agent.hasSession(sessionId)) {
+          return sessionNotFound();
         }
+
+        const toolCallId = extra._meta?.["claudecode/toolUseId"];
+
+        if (typeof toolCallId !== "string") {
+          throw new Error("No tool call ID found");
+        }
+
+        return withPermissionCheck(
+          agent,
+          sessionId,
+          toolNames.write,
+          input as Record<string, unknown>,
+          toolCallId,
+          async () => {
+            try {
+              await agent.writeTextFile({
+                sessionId,
+                path: input.file_path,
+                content: input.content,
+              });
+              return { content: [] };
+            } catch (error) {
+              return toolError("Writing file", error);
+            }
+          },
+        );
       },
     );
 
@@ -249,47 +307,62 @@ Usage:
           idempotentHint: false,
         },
       },
-      async (input) => {
-        try {
-          if (!agent.hasSession(sessionId)) {
-            return sessionNotFound();
-          }
-
-          const readResponse = await agent.readTextFile({
-            sessionId,
-            path: input.file_path,
-          });
-
-          if (typeof readResponse?.content !== "string") {
-            throw new Error(`No file contents for ${input.file_path}.`);
-          }
-
-          const { newContent } = replaceAndCalculateLocation(
-            readResponse.content,
-            [
-              {
-                oldText: input.old_string,
-                newText: input.new_string,
-                replaceAll: input.replace_all,
-              },
-            ],
-          );
-
-          const patch = diff.createPatch(
-            input.file_path,
-            readResponse.content,
-            newContent,
-          );
-          await agent.writeTextFile({
-            sessionId,
-            path: input.file_path,
-            content: newContent,
-          });
-
-          return { content: [{ type: "text", text: patch }] };
-        } catch (error) {
-          return toolError("Editing file", error);
+      async (input, extra) => {
+        if (!agent.hasSession(sessionId)) {
+          return sessionNotFound();
         }
+
+        const toolCallId = extra._meta?.["claudecode/toolUseId"];
+
+        if (typeof toolCallId !== "string") {
+          throw new Error("No tool call ID found");
+        }
+
+        return withPermissionCheck(
+          agent,
+          sessionId,
+          toolNames.edit,
+          input as Record<string, unknown>,
+          toolCallId,
+          async () => {
+            try {
+              const readResponse = await agent.readTextFile({
+                sessionId,
+                path: input.file_path,
+              });
+
+              if (typeof readResponse?.content !== "string") {
+                throw new Error(`No file contents for ${input.file_path}.`);
+              }
+
+              const { newContent } = replaceAndCalculateLocation(
+                readResponse.content,
+                [
+                  {
+                    oldText: input.old_string,
+                    newText: input.new_string,
+                    replaceAll: input.replace_all,
+                  },
+                ],
+              );
+
+              const patch = diff.createPatch(
+                input.file_path,
+                readResponse.content,
+                newContent,
+              );
+              await agent.writeTextFile({
+                sessionId,
+                path: input.file_path,
+                content: newContent,
+              });
+
+              return { content: [{ type: "text", text: patch }] };
+            } catch (error) {
+              return toolError("Editing file", error);
+            }
+          },
+        );
       },
     );
   }
@@ -344,113 +417,127 @@ Output: Create directory 'foo'`),
           throw new Error("No tool call ID found");
         }
 
-        if (
-          !agent.clientCapabilities?.terminal ||
-          !agent.client.createTerminal
-        ) {
-          throw new Error("unreachable");
-        }
-
-        const handle = await agent.client.createTerminal({
-          command: input.command,
-          env: [{ name: "CLAUDECODE", value: "1" }],
+        return withPermissionCheck(
+          agent,
           sessionId,
-          outputByteLimit: 32_000,
-        });
+          toolNames.bash,
+          input as Record<string, unknown>,
+          toolCallId,
+          async () => {
+            if (
+              !agent.clientCapabilities?.terminal ||
+              !agent.client.createTerminal
+            ) {
+              throw new Error("unreachable");
+            }
 
-        await agent.client.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "tool_call_update",
-            toolCallId,
-            status: "in_progress",
-            title: input.description,
-            content: [{ type: "terminal", terminalId: handle.id }],
-          },
-        });
-
-        const abortPromise = new Promise((resolve) => {
-          if (extra.signal.aborted) {
-            resolve(null);
-          } else {
-            extra.signal.addEventListener("abort", () => {
-              resolve(null);
+            const handle = await agent.client.createTerminal({
+              command: input.command,
+              env: [{ name: "CLAUDECODE", value: "1" }],
+              sessionId,
+              outputByteLimit: 32_000n,
             });
-          }
-        });
 
-        const statusPromise = Promise.race([
-          handle
-            .waitForExit()
-            .then((exitStatus) => ({ status: "exited" as const, exitStatus })),
-          abortPromise.then(() => ({
-            status: "aborted" as const,
-            exitStatus: null,
-          })),
-          sleep(input.timeout).then(async () => {
-            if (agent.backgroundTerminals[handle.id]?.status === "started") {
-              await handle.kill();
-            }
-            return { status: "timedOut" as const, exitStatus: null };
-          }),
-        ]);
-
-        if (input.run_in_background) {
-          agent.backgroundTerminals[handle.id] = {
-            handle,
-            lastOutput: null,
-            status: "started",
-          };
-
-          statusPromise.then(async ({ status, exitStatus }) => {
-            const bgTerm = agent.backgroundTerminals[handle.id];
-
-            if (bgTerm.status !== "started") {
-              return;
-            }
-
-            const currentOutput = await handle.currentOutput();
-
-            agent.backgroundTerminals[handle.id] = {
-              status,
-              pendingOutput: {
-                ...currentOutput,
-                output: stripCommonPrefix(
-                  bgTerm.lastOutput?.output ?? "",
-                  currentOutput.output,
-                ),
-                exitStatus: exitStatus ?? currentOutput.exitStatus,
+            await agent.client.sessionUpdate({
+              sessionId,
+              update: {
+                sessionUpdate: "tool_call_update",
+                toolCallId,
+                status: "in_progress",
+                title: input.description,
+                content: [{ type: "terminal", terminalId: handle.id }],
               },
+            });
+
+            const abortPromise = new Promise((resolve) => {
+              if (extra.signal.aborted) {
+                resolve(null);
+              } else {
+                extra.signal.addEventListener("abort", () => {
+                  resolve(null);
+                });
+              }
+            });
+
+            const statusPromise = Promise.race([
+              handle.waitForExit().then((exitStatus) => ({
+                status: "exited" as const,
+                exitStatus,
+              })),
+              abortPromise.then(() => ({
+                status: "aborted" as const,
+                exitStatus: null,
+              })),
+              sleep(input.timeout).then(async () => {
+                if (
+                  agent.backgroundTerminals[handle.id]?.status === "started"
+                ) {
+                  await handle.kill();
+                }
+                return { status: "timedOut" as const, exitStatus: null };
+              }),
+            ]);
+
+            if (input.run_in_background) {
+              agent.backgroundTerminals[handle.id] = {
+                handle,
+                lastOutput: null,
+                status: "started",
+              };
+
+              statusPromise.then(async ({ status, exitStatus }) => {
+                const bgTerm = agent.backgroundTerminals[handle.id];
+
+                if (bgTerm.status !== "started") {
+                  return;
+                }
+
+                const currentOutput = await handle.currentOutput();
+
+                agent.backgroundTerminals[handle.id] = {
+                  status,
+                  pendingOutput: {
+                    ...currentOutput,
+                    output: stripCommonPrefix(
+                      bgTerm.lastOutput?.output ?? "",
+                      currentOutput.output,
+                    ),
+                    exitStatus: exitStatus ?? currentOutput.exitStatus,
+                  },
+                };
+
+                return handle.release();
+              });
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Command started in background with id: ${handle.id}`,
+                  },
+                ],
+              };
+            }
+
+            await using terminal = handle;
+
+            const { status } = await statusPromise;
+
+            if (status === "aborted") {
+              return {
+                content: [{ type: "text", text: "Tool cancelled by user" }],
+              };
+            }
+
+            const output = await terminal.currentOutput();
+
+            return {
+              content: [
+                { type: "text", text: toolCommandOutput(status, output) },
+              ],
             };
-
-            return handle.release();
-          });
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Command started in background with id: ${handle.id}`,
-              },
-            ],
-          };
-        }
-
-        await using terminal = handle;
-
-        const { status } = await statusPromise;
-
-        if (status === "aborted") {
-          return {
-            content: [{ type: "text", text: "Tool cancelled by user" }],
-          };
-        }
-
-        const output = await terminal.currentOutput();
-
-        return {
-          content: [{ type: "text", text: toolCommandOutput(status, output) }],
-        };
+          },
+        );
       },
     );
 
