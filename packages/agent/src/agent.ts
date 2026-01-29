@@ -62,6 +62,7 @@ export class Agent {
       logWriter: this.sessionLogWriter,
       sessionId: taskRunId,
       taskId,
+      logger: this.logger,
     });
 
     return this.acpConnection;

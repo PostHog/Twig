@@ -2,6 +2,7 @@ import { app } from "electron";
 import { injectable } from "inversify";
 import { ANALYTICS_EVENTS } from "../../../types/analytics.js";
 import { container } from "../../di/container.js";
+import { withTimeout } from "../../lib/async.js";
 import { logger } from "../../lib/logger.js";
 import { shutdownPostHog, trackAppEvent } from "../posthog-analytics.js";
 
@@ -10,6 +11,7 @@ const log = logger.scope("app-lifecycle");
 @injectable()
 export class AppLifecycleService {
   private _isQuittingForUpdate = false;
+  private static readonly SHUTDOWN_TIMEOUT_MS = 3000;
 
   get isQuittingForUpdate(): boolean {
     return this._isQuittingForUpdate;
@@ -20,12 +22,24 @@ export class AppLifecycleService {
   }
 
   async shutdown(): Promise<void> {
-    log.info("Performing graceful shutdown...");
+    // Race shutdown against timeout to prevent app from hanging forever
+    const result = await withTimeout(
+      this.doShutdown(),
+      AppLifecycleService.SHUTDOWN_TIMEOUT_MS,
+    );
 
+    if (result.result === "timeout") {
+      log.warn("Shutdown timeout reached, proceeding anyway", {
+        timeoutMs: AppLifecycleService.SHUTDOWN_TIMEOUT_MS,
+      });
+    }
+  }
+
+  private async doShutdown(): Promise<void> {
     try {
       await container.unbindAll();
     } catch (error) {
-      log.error("Error during container unbind", error);
+      log.error("Failed to unbind container", error);
     }
 
     trackAppEvent(ANALYTICS_EVENTS.APP_QUIT);
@@ -33,10 +47,8 @@ export class AppLifecycleService {
     try {
       await shutdownPostHog();
     } catch (error) {
-      log.error("Error shutting down PostHog", error);
+      log.error("Failed to shutdown PostHog", error);
     }
-
-    log.info("Graceful shutdown complete");
   }
 
   async shutdownAndExit(): Promise<void> {

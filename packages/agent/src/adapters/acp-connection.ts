@@ -15,6 +15,7 @@ export type AcpConnectionConfig = {
   logWriter?: SessionLogWriter;
   sessionId?: string;
   taskId?: string;
+  logger?: Logger;
 };
 
 export type InProcessAcpConnection = {
@@ -32,7 +33,9 @@ export type InProcessAcpConnection = {
 export function createAcpConnection(
   config: AcpConnectionConfig = {},
 ): InProcessAcpConnection {
-  const logger = new Logger({ debug: true, prefix: "[AcpConnection]" });
+  const logger =
+    config.logger?.child("AcpConnection") ??
+    new Logger({ debug: true, prefix: "[AcpConnection]" });
   const streams = createBidirectionalStreams();
 
   const { logWriter } = config;
