@@ -4,17 +4,28 @@ import type {
 } from "@agentclientprotocol/sdk";
 import type {
   Options,
-  PermissionMode,
   Query,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Pushable } from "@/utils/streams.js";
 import type { BaseSession } from "../base-acp-agent.js";
+import type { TwigExecutionMode } from "./tools.js";
+
+export type BackgroundTerminal =
+  | {
+      handle: TerminalHandle;
+      status: "started";
+      lastOutput: TerminalOutputResponse | null;
+    }
+  | {
+      status: "aborted" | "exited" | "killed" | "timedOut";
+      pendingOutput: TerminalOutputResponse;
+    };
 
 export type Session = BaseSession & {
   query: Query;
   input: Pushable<SDKUserMessage>;
-  permissionMode: PermissionMode;
+  permissionMode: TwigExecutionMode;
   cwd: string;
   sdkSessionId?: string;
   lastPlanFilePath?: string;
@@ -38,19 +49,13 @@ export type ToolUpdateMeta = {
 };
 
 export type NewSessionMeta = {
+  sessionId?: string;
+  initialModeId?: string;
+  disableBuiltInTools?: boolean;
+  systemPrompt?: unknown;
+  sdkSessionId?: string;
+  model?: string;
   claudeCode?: {
     options?: Options;
   };
-  model?: string;
 };
-
-export type BackgroundTerminal =
-  | {
-      handle: TerminalHandle;
-      status: "started";
-      lastOutput: TerminalOutputResponse | null;
-    }
-  | {
-      status: "aborted" | "exited" | "killed" | "timedOut";
-      pendingOutput: TerminalOutputResponse;
-    };

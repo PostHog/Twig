@@ -28,13 +28,21 @@
       "types": "./dist/worktree-manager.d.ts",
       "import": "./dist/worktree-manager.js"
     },
-    "./adapters/claude/question-utils": {
-      "types": "./dist/adapters/claude/question-utils.d.ts",
-      "import": "./dist/adapters/claude/question-utils.js"
+    "./adapters/claude/questions/utils": {
+      "types": "./dist/adapters/claude/questions/utils.d.ts",
+      "import": "./dist/adapters/claude/questions/utils.js"
     },
-    "./adapters/claude/permission-options": {
-      "types": "./dist/adapters/claude/permission-options.d.ts",
-      "import": "./dist/adapters/claude/permission-options.js"
+    "./adapters/claude/permissions/permission-options": {
+      "types": "./dist/adapters/claude/permissions/permission-options.d.ts",
+      "import": "./dist/adapters/claude/permissions/permission-options.js"
+    },
+    "./adapters/claude/tools": {
+      "types": "./dist/adapters/claude/tools.d.ts",
+      "import": "./dist/adapters/claude/tools.js"
+    },
+    "./adapters/claude/conversion/tool-use-to-acp": {
+      "types": "./dist/adapters/claude/conversion/tool-use-to-acp.d.ts",
+      "import": "./dist/adapters/claude/conversion/tool-use-to-acp.js"
     }
   },
   "type": "module",

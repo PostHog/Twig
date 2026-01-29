@@ -3,28 +3,24 @@ import type {
   RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
 import type { PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
+import { text } from "@/utils/acp-content.js";
 import type { Logger } from "@/utils/logger.js";
-import { isToolAllowedForMode } from "./permission-mode-config.js";
-import { buildPermissionOptions, isWriteTool } from "./permission-options.js";
+import { toolInfoFromToolUse } from "../conversion/tool-use-to-acp.js";
 import {
   getClaudePlansDir,
   getLatestAssistantText,
   isClaudePlanFilePath,
   isPlanReady,
-} from "./plan-utils.js";
+} from "../plan/utils.js";
 import {
   type AskUserQuestionInput,
   normalizeAskUserQuestionInput,
   OPTION_PREFIX,
   type QuestionItem,
-} from "./question-utils.js";
-import { toolInfoFromToolUse } from "./tool-metadata.js";
-import type { Session } from "./types.js";
-
-export {
-  buildPermissionOptions,
-  type PermissionOption,
-} from "./permission-options.js";
+} from "../questions/utils.js";
+import { isToolAllowedForMode, WRITE_TOOLS } from "../tools.js";
+import type { Session } from "../types.js";
+import { buildPermissionOptions } from "./permission-options.js";
 
 export type ToolPermissionResult =
   | {
@@ -63,15 +59,7 @@ async function emitToolDenial(
       sessionUpdate: "tool_call_update",
       toolCallId: context.toolUseID,
       status: "failed",
-      content: [
-        {
-          type: "content",
-          content: {
-            type: "text",
-            text: message,
-          },
-        },
-      ],
+      content: [{ type: "content", content: text(message) }],
     },
   });
 }
@@ -398,7 +386,7 @@ function handlePlanFileException(
 ): ToolPermissionResult | null {
   const { session, toolName, toolInput } = context;
 
-  if (session.permissionMode !== "plan" || !isWriteTool(toolName)) {
+  if (session.permissionMode !== "plan" || !WRITE_TOOLS.has(toolName)) {
     return null;
   }
 
@@ -419,7 +407,7 @@ function handlePlanFileException(
   };
 }
 
-export async function evaluateToolPermission(
+export async function canUseTool(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
   const { toolName, toolInput, session } = context;

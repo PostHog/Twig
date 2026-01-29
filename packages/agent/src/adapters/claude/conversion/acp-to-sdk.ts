@@ -4,6 +4,10 @@ import type { ContentBlockParam } from "@anthropic-ai/sdk/resources";
 
 type ImageMimeType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
+function sdkText(value: string): ContentBlockParam {
+  return { type: "text", text: value };
+}
+
 function formatUriAsLink(uri: string): string {
   try {
     if (uri.startsWith("file://")) {
@@ -38,23 +42,21 @@ function processPromptChunk(
 ): void {
   switch (chunk.type) {
     case "text":
-      content.push({ type: "text", text: transformMcpCommand(chunk.text) });
+      content.push(sdkText(transformMcpCommand(chunk.text)));
       break;
 
     case "resource_link":
-      content.push({ type: "text", text: formatUriAsLink(chunk.uri) });
+      content.push(sdkText(formatUriAsLink(chunk.uri)));
       break;
 
     case "resource":
       if ("text" in chunk.resource) {
-        content.push({
-          type: "text",
-          text: formatUriAsLink(chunk.resource.uri),
-        });
-        context.push({
-          type: "text",
-          text: `\n<context ref="${chunk.resource.uri}">\n${chunk.resource.text}\n</context>`,
-        });
+        content.push(sdkText(formatUriAsLink(chunk.resource.uri)));
+        context.push(
+          sdkText(
+            `\n<context ref="${chunk.resource.uri}">\n${chunk.resource.text}\n</context>`,
+          ),
+        );
       }
       break;
 

@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -96,6 +96,10 @@ function copyClaudeExecutable(): Plugin {
           for (const file of files) {
             copyFileSync(join(candidate.path, file), join(destDir, file));
           }
+          const vendorDir = join(candidate.path, "vendor");
+          if (existsSync(vendorDir)) {
+            cpSync(vendorDir, join(destDir, "vendor"), { recursive: true });
+          }
           return;
         }
       }
@@ -112,8 +116,12 @@ function copyClaudeExecutable(): Plugin {
         copyFileSync(
           join(sdkDir, "package.json"),
           join(destDir, "package.json"),
-        ); // Note: This copies the SDK package.json, which might not be ideal but works for type: module
+        );
         copyFileSync(join(yogaDir, "yoga.wasm"), join(destDir, "yoga.wasm"));
+        const vendorDir = join(sdkDir, "vendor");
+        if (existsSync(vendorDir)) {
+          cpSync(vendorDir, join(destDir, "vendor"), { recursive: true });
+        }
         console.log(
           "Assembled Claude CLI from workspace sources in claude-cli/ subdirectory",
         );
