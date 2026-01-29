@@ -421,7 +421,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
       await connection.initialize({
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {},
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
+          },
+          terminal: true,
+        },
       });
 
       const mcpServers = this.buildMcpServers(credentials);
@@ -661,7 +667,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.extMethod("session/setModel", {
+      await session.clientSideConnection.unstable_setSessionModel({
         sessionId,
         modelId,
       });

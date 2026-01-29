@@ -12,7 +12,7 @@ import {
   type QuestionItem,
   type QuestionMeta,
   QuestionMetaSchema,
-} from "@posthog/agent/adapters/claude/question-utils";
+} from "@posthog/agent/adapters/claude/questions/utils";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useCallback, useMemo, useState } from "react";
 import { type BasePermissionProps, toSelectorOptions } from "./types";

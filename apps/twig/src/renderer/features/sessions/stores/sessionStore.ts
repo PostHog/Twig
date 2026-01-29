@@ -23,10 +23,7 @@ import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { getIsOnline } from "@/renderer/stores/connectivityStore";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
-import {
-  findPendingPermissions,
-  type PermissionRequest,
-} from "../utils/parseSessionLogs";
+import type { PermissionRequest } from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
 import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
@@ -650,21 +647,10 @@ const useStore = create<SessionStore>()(
       const { rawEntries, sdkSessionId } = await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries);
 
-      // Restore pending permissions from logs
-      const pendingPermissions = findPendingPermissions(rawEntries);
-      if (pendingPermissions.size > 0) {
-        log.info("Restoring pending permissions from logs", {
-          taskRunId,
-          count: pendingPermissions.size,
-          toolCallIds: Array.from(pendingPermissions.keys()),
-        });
-      }
-
       const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, false);
       session.events = events;
       session.logUrl = logUrl;
-      session.pendingPermissions = pendingPermissions;
       if (persistedMode) {
         session.currentMode = persistedMode;
       }

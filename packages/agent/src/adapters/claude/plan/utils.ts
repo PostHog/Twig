@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SessionNotification } from "@agentclientprotocol/sdk";
@@ -16,17 +15,6 @@ export function isClaudePlanFilePath(filePath: string | undefined): boolean {
   const resolved = path.resolve(filePath);
   const plansDir = path.resolve(getClaudePlansDir());
   return resolved === plansDir || resolved.startsWith(plansDir + path.sep);
-}
-
-export function clearStatsigCache(): void {
-  const statsigPath = path.join(getClaudeConfigDir(), "statsig");
-  try {
-    if (fs.existsSync(statsigPath)) {
-      fs.rmSync(statsigPath, { recursive: true, force: true });
-    }
-  } catch {
-    // Ignore errors - cache clearing is best-effort
-  }
 }
 
 export function isPlanReady(plan: string | undefined): boolean {

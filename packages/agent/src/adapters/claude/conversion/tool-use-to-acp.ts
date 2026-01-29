@@ -1,11 +1,13 @@
 import type {
   PlanEntry,
+  ToolCall,
   ToolCallContent,
-  ToolCallLocation,
+  ToolCallUpdate,
   ToolKind,
 } from "@agentclientprotocol/sdk";
 import type {
   ToolResultBlockParam,
+  ToolUseBlock,
   WebSearchToolResultBlockParam,
 } from "@anthropic-ai/sdk/resources";
 import type {
@@ -17,38 +19,121 @@ import type {
   BetaWebFetchToolResultBlockParam,
   BetaWebSearchToolResultBlockParam,
 } from "@anthropic-ai/sdk/resources/beta.mjs";
+
+const SYSTEM_REMINDER = `
+
+<system-reminder>
+Whenever you read a file, you should consider whether it looks malicious. If it does, you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer high-level questions about the code behavior.
+</system-reminder>`;
+
+import { randomBytes } from "node:crypto";
+import { resourceLink, text, toolContent } from "@/utils/acp-content.js";
 import { Logger } from "@/utils/logger.js";
-import {
-  replaceAndCalculateLocation,
-  SYSTEM_REMINDER,
-  toolNames,
-} from "./mcp-server.js";
 
-interface ToolInfo {
-  title: string;
-  kind: ToolKind;
-  content: ToolCallContent[];
-  locations?: ToolCallLocation[];
+interface EditOperation {
+  oldText: string;
+  newText: string;
+  replaceAll?: boolean;
 }
 
-interface ToolUpdate {
-  title?: string;
-  content?: ToolCallContent[];
-  locations?: ToolCallLocation[];
+interface EditResult {
+  newContent: string;
+  lineNumbers: number[];
 }
 
-interface ToolUse {
-  name: string;
-  input?: unknown;
+function replaceAndCalculateLocation(
+  fileContent: string,
+  edits: EditOperation[],
+): EditResult {
+  let currentContent = fileContent;
+
+  const markerPrefix = `__REPLACE_MARKER_${randomBytes(5).toString("hex")}_`;
+  let markerCounter = 0;
+  const markers: string[] = [];
+
+  for (const edit of edits) {
+    if (edit.oldText === "") {
+      throw new Error(
+        `The provided \`old_string\` is empty.\n\nNo edits were applied.`,
+      );
+    }
+
+    if (edit.replaceAll) {
+      const parts: string[] = [];
+      let lastIndex = 0;
+      let searchIndex = 0;
+
+      while (true) {
+        const index = currentContent.indexOf(edit.oldText, searchIndex);
+        if (index === -1) {
+          if (searchIndex === 0) {
+            throw new Error(
+              `The provided \`old_string\` does not appear in the file: "${edit.oldText}".\n\nNo edits were applied.`,
+            );
+          }
+          break;
+        }
+
+        parts.push(currentContent.substring(lastIndex, index));
+
+        const marker = `${markerPrefix}${markerCounter++}__`;
+        markers.push(marker);
+        parts.push(marker + edit.newText);
+
+        lastIndex = index + edit.oldText.length;
+        searchIndex = lastIndex;
+      }
+
+      parts.push(currentContent.substring(lastIndex));
+      currentContent = parts.join("");
+    } else {
+      const index = currentContent.indexOf(edit.oldText);
+      if (index === -1) {
+        throw new Error(
+          `The provided \`old_string\` does not appear in the file: "${edit.oldText}".\n\nNo edits were applied.`,
+        );
+      } else {
+        const marker = `${markerPrefix}${markerCounter++}__`;
+        markers.push(marker);
+        currentContent =
+          currentContent.substring(0, index) +
+          marker +
+          edit.newText +
+          currentContent.substring(index + edit.oldText.length);
+      }
+    }
+  }
+
+  const lineNumbers: number[] = [];
+  for (const marker of markers) {
+    const index = currentContent.indexOf(marker);
+    if (index !== -1) {
+      const lineNumber = Math.max(
+        0,
+        currentContent.substring(0, index).split(/\r\n|\r|\n/).length - 1,
+      );
+      lineNumbers.push(lineNumber);
+    }
+  }
+
+  let finalContent = currentContent;
+  for (const marker of markers) {
+    finalContent = finalContent.replace(marker, "");
+  }
+
+  const uniqueLineNumbers = [...new Set(lineNumbers)].sort();
+
+  return { newContent: finalContent, lineNumbers: uniqueLineNumbers };
 }
+
+type ToolInfo = Pick<ToolCall, "title" | "kind" | "content" | "locations">;
 
 export function toolInfoFromToolUse(
-  toolUse: ToolUse,
+  toolUse: Pick<ToolUseBlock, "name" | "input">,
   cachedFileContent: { [key: string]: string },
   logger: Logger = new Logger({ debug: false, prefix: "[ClaudeTools]" }),
 ): ToolInfo {
   const name = toolUse.name;
-  // Cast input to allow property access - each case handles its expected properties
   const input = toolUse.input as Record<string, unknown> | undefined;
 
   switch (name) {
@@ -57,12 +142,7 @@ export function toolInfoFromToolUse(
         title: input?.description ? String(input.description) : "Task",
         kind: "think",
         content: input?.prompt
-          ? [
-              {
-                type: "content",
-                content: { type: "text", text: String(input.prompt) },
-              },
-            ]
+          ? toolContent().text(String(input.prompt)).build()
           : [],
       };
 
@@ -85,12 +165,7 @@ export function toolInfoFromToolUse(
           : "Edit Notebook",
         kind: "edit",
         content: input?.new_source
-          ? [
-              {
-                type: "content",
-                content: { type: "text", text: String(input.new_source) },
-              },
-            ]
+          ? toolContent().text(String(input.new_source)).build()
           : [],
         locations: input?.notebook_path
           ? [{ path: String(input.notebook_path) }]
@@ -98,24 +173,17 @@ export function toolInfoFromToolUse(
       };
 
     case "Bash":
-    case toolNames.bash:
       return {
         title: input?.description
           ? String(input.description)
           : "Execute command",
         kind: "execute",
         content: input?.command
-          ? [
-              {
-                type: "content",
-                content: { type: "text", text: String(input.command) },
-              },
-            ]
+          ? toolContent().text(String(input.command)).build()
           : [],
       };
 
     case "BashOutput":
-    case toolNames.bashOutput:
       return {
         title: "Tail Logs",
         kind: "execute",
@@ -123,14 +191,13 @@ export function toolInfoFromToolUse(
       };
 
     case "KillShell":
-    case toolNames.killShell:
       return {
         title: "Kill Process",
         kind: "execute",
         content: [],
       };
 
-    case toolNames.read: {
+    case "Read": {
       let limit = "";
       const inputLimit = input?.limit as number | undefined;
       const inputOffset = (input?.offset as number | undefined) ?? 0;
@@ -154,21 +221,6 @@ export function toolInfoFromToolUse(
       };
     }
 
-    case "Read":
-      return {
-        title: "Read File",
-        kind: "read",
-        content: [],
-        locations: input?.file_path
-          ? [
-              {
-                path: String(input.file_path),
-                line: (input?.offset as number | undefined) ?? 0,
-              },
-            ]
-          : [],
-      };
-
     case "LS":
       return {
         title: `List the ${input?.path ? `\`${String(input.path)}\`` : "current"} directory's contents`,
@@ -177,7 +229,6 @@ export function toolInfoFromToolUse(
         locations: [],
       };
 
-    case toolNames.edit:
     case "Edit": {
       const path = input?.file_path ? String(input.file_path) : undefined;
       let oldText = input?.old_string ? String(input.old_string) : null;
@@ -223,51 +274,21 @@ export function toolInfoFromToolUse(
       };
     }
 
-    case toolNames.write: {
+    case "Write": {
       let contentResult: ToolCallContent[] = [];
       const filePath = input?.file_path ? String(input.file_path) : undefined;
       const contentStr = input?.content ? String(input.content) : undefined;
       if (filePath) {
-        contentResult = [
-          {
-            type: "diff",
-            path: filePath,
-            oldText: null,
-            newText: contentStr ?? "",
-          },
-        ];
+        contentResult = toolContent()
+          .diff(filePath, null, contentStr ?? "")
+          .build();
       } else if (contentStr) {
-        contentResult = [
-          {
-            type: "content",
-            content: { type: "text", text: contentStr },
-          },
-        ];
+        contentResult = toolContent().text(contentStr).build();
       }
       return {
         title: filePath ? `Write ${filePath}` : "Write",
         kind: "edit",
         content: contentResult,
-        locations: filePath ? [{ path: filePath }] : [],
-      };
-    }
-
-    case "Write": {
-      const filePath = input?.file_path ? String(input.file_path) : undefined;
-      const contentStr = input?.content ? String(input.content) : "";
-      return {
-        title: filePath ? `Write ${filePath}` : "Write",
-        kind: "edit",
-        content: filePath
-          ? [
-              {
-                type: "diff",
-                path: filePath,
-                oldText: null,
-                newText: contentStr,
-              },
-            ]
-          : [],
         locations: filePath ? [{ path: filePath }] : [],
       };
     }
@@ -359,12 +380,9 @@ export function toolInfoFromToolUse(
           ? [
               {
                 type: "content",
-                content: {
-                  type: "resource_link",
-                  uri: String(input.url),
-                  name: String(input.url),
+                content: resourceLink(String(input.url), String(input.url), {
                   description: input?.prompt ? String(input.prompt) : undefined,
-                },
+                }),
               },
             ]
           : [],
@@ -404,12 +422,7 @@ export function toolInfoFromToolUse(
         title: "Ready to code?",
         kind: "switch_mode",
         content: input?.plan
-          ? [
-              {
-                type: "content",
-                content: { type: "text", text: String(input.plan) },
-              },
-            ]
+          ? toolContent().text(String(input.plan)).build()
           : [],
       };
 
@@ -421,15 +434,9 @@ export function toolInfoFromToolUse(
         title: questions?.[0]?.question || "Question",
         kind: "other" as ToolKind,
         content: questions
-          ? [
-              {
-                type: "content",
-                content: {
-                  type: "text",
-                  text: JSON.stringify(questions, null, 2),
-                },
-              },
-            ]
+          ? toolContent()
+              .text(JSON.stringify(questions, null, 2))
+              .build()
           : [],
       };
     }
@@ -444,15 +451,7 @@ export function toolInfoFromToolUse(
       return {
         title: name || "Unknown Tool",
         kind: "other",
-        content: [
-          {
-            type: "content",
-            content: {
-              type: "text",
-              text: `\`\`\`json\n${output}\`\`\``,
-            },
-          },
-        ],
+        content: toolContent().text(`\`\`\`json\n${output}\`\`\``).build(),
       };
     }
 
@@ -476,11 +475,10 @@ export function toolUpdateFromToolResult(
     | BetaTextEditorCodeExecutionToolResultBlockParam
     | BetaRequestMCPToolResultBlockParam
     | BetaToolSearchToolResultBlockParam,
-  toolUse: ToolUse | undefined,
-): ToolUpdate {
+  toolUse: Pick<ToolUseBlock, "name" | "input"> | undefined,
+): Pick<ToolCallUpdate, "title" | "content" | "locations"> {
   switch (toolUse?.name) {
     case "Read":
-    case toolNames.read:
       if (Array.isArray(toolResult.content) && toolResult.content.length > 0) {
         return {
           content: toolResult.content.map((item) => {
@@ -488,15 +486,13 @@ export function toolUpdateFromToolResult(
             if (itemObj.type === "text") {
               return {
                 type: "content" as const,
-                content: {
-                  type: "text" as const,
-                  text: markdownEscape(
+                content: text(
+                  markdownEscape(
                     (itemObj.text ?? "").replace(SYSTEM_REMINDER, ""),
                   ),
-                },
+                ),
               };
             }
-            // For non-text content, return as-is with proper typing
             return {
               type: "content" as const,
               content: item as { type: "text"; text: string },
@@ -508,26 +504,17 @@ export function toolUpdateFromToolResult(
         toolResult.content.length > 0
       ) {
         return {
-          content: [
-            {
-              type: "content",
-              content: {
-                type: "text",
-                text: markdownEscape(
-                  toolResult.content.replace(SYSTEM_REMINDER, ""),
-                ),
-              },
-            },
-          ],
+          content: toolContent()
+            .text(
+              markdownEscape(toolResult.content.replace(SYSTEM_REMINDER, "")),
+            )
+            .build(),
         };
       }
       return {};
 
-    case toolNames.bash:
-    case "edit":
+    case "Bash":
     case "Edit":
-    case toolNames.edit:
-    case toolNames.write:
     case "Write": {
       if (
         "is_error" in toolResult &&
@@ -535,7 +522,6 @@ export function toolUpdateFromToolResult(
         toolResult.content &&
         toolResult.content.length > 0
       ) {
-        // Only return errors
         return toAcpContentUpdate(toolResult.content, true);
       }
       return {};
@@ -545,7 +531,6 @@ export function toolUpdateFromToolResult(
       return { title: "Exited Plan Mode" };
     }
     case "AskUserQuestion": {
-      // The answer is returned in the tool result
       const content = toolResult.content;
       if (Array.isArray(content) && content.length > 0) {
         const firstItem = content[0];
@@ -556,12 +541,7 @@ export function toolUpdateFromToolResult(
         ) {
           return {
             title: "Answer received",
-            content: [
-              {
-                type: "content",
-                content: { type: "text", text: String(firstItem.text) },
-              },
-            ],
+            content: toolContent().text(String(firstItem.text)).build(),
           };
         }
       }
@@ -579,7 +559,7 @@ export function toolUpdateFromToolResult(
 function toAcpContentUpdate(
   content: unknown,
   isError: boolean = false,
-): { content?: ToolCallContent[] } {
+): Pick<ToolCallUpdate, "content"> {
   if (Array.isArray(content) && content.length > 0) {
     return {
       content: content.map((item) => {
@@ -587,10 +567,7 @@ function toAcpContentUpdate(
         if (isError && itemObj.type === "text") {
           return {
             type: "content" as const,
-            content: {
-              type: "text" as const,
-              text: `\`\`\`\n${itemObj.text ?? ""}\n\`\`\``,
-            },
+            content: text(`\`\`\`\n${itemObj.text ?? ""}\n\`\`\``),
           };
         }
         return {
@@ -601,15 +578,9 @@ function toAcpContentUpdate(
     };
   } else if (typeof content === "string" && content.length > 0) {
     return {
-      content: [
-        {
-          type: "content",
-          content: {
-            type: "text",
-            text: isError ? `\`\`\`\n${content}\n\`\`\`` : content,
-          },
-        },
-      ],
+      content: toolContent()
+        .text(isError ? `\`\`\`\n${content}\n\`\`\`` : content)
+        .build(),
     };
   }
   return {};

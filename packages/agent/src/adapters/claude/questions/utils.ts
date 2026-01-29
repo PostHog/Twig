@@ -1,4 +1,6 @@
+import type { ToolCallContent, ToolKind } from "@agentclientprotocol/sdk";
 import { z } from "zod";
+import type { PermissionOption } from "../permissions/permission-options.js";
 
 export const OPTION_PREFIX = "option_";
 
@@ -50,4 +52,41 @@ export function normalizeAskUserQuestionInput(
   }
 
   return null;
+}
+
+interface QuestionToolCallData {
+  toolCallId: string;
+  title: string;
+  kind: ToolKind;
+  content: ToolCallContent[];
+  _meta: {
+    twigToolKind: "question";
+    questions: QuestionItem[];
+  };
+}
+
+export function buildQuestionToolCallData(
+  questions: QuestionItem[],
+): QuestionToolCallData {
+  return {
+    toolCallId: `question-${Date.now()}`,
+    title: questions[0]?.question ?? "Question",
+    kind: "other",
+    content: [],
+    _meta: {
+      twigToolKind: "question",
+      questions,
+    },
+  };
+}
+
+export function buildQuestionOptions(
+  question: QuestionItem,
+): PermissionOption[] {
+  return question.options.map((opt, idx) => ({
+    kind: "allow_once" as const,
+    name: opt.label,
+    optionId: `${OPTION_PREFIX}${idx}`,
+    _meta: opt.description ? { description: opt.description } : undefined,
+  }));
 }

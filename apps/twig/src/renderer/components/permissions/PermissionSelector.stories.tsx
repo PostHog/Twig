@@ -1,12 +1,22 @@
+import { toolInfoFromToolUse } from "@posthog/agent/adapters/claude/conversion/tool-use-to-acp";
+import { buildPermissionOptions } from "@posthog/agent/adapters/claude/permissions/permission-options";
 import {
-  buildPermissionOptions,
   buildQuestionOptions,
   buildQuestionToolCallData,
-  buildToolCallData,
   type QuestionItem,
-} from "@posthog/agent/adapters/claude/permission-options";
+} from "@posthog/agent/adapters/claude/questions/utils";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PermissionSelector } from "./PermissionSelector";
+
+function buildToolCallData(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+) {
+  return {
+    toolCallId: `story-${Date.now()}`,
+    ...toolInfoFromToolUse({ name: toolName, input: toolInput }, {}),
+  };
+}
 
 const meta: Meta<typeof PermissionSelector> = {
   title: "Components/Permissions/PermissionSelector",

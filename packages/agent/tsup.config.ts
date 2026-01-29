@@ -43,6 +43,11 @@ function copyAssets() {
   if (existsSync(yogaWasmPath)) {
     copyFileSync(yogaWasmPath, resolve(claudeCliDir, "yoga.wasm"));
   }
+
+  const vendorDir = resolve(claudeSdkPath, "vendor");
+  if (existsSync(vendorDir)) {
+    cpSync(vendorDir, resolve(claudeCliDir, "vendor"), { recursive: true });
+  }
 }
 
 export default defineConfig({
@@ -52,8 +57,10 @@ export default defineConfig({
     "src/posthog-api.ts",
     "src/types.ts",
     "src/worktree-manager.ts",
-    "src/adapters/claude/question-utils.ts",
-    "src/adapters/claude/permission-options.ts",
+    "src/adapters/claude/questions/utils.ts",
+    "src/adapters/claude/permissions/permission-options.ts",
+    "src/adapters/claude/tools.ts",
+    "src/adapters/claude/conversion/tool-use-to-acp.ts",
   ],
   format: ["esm"],
   dts: true,
