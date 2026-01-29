@@ -1,8 +1,8 @@
 import { app } from "electron";
 import { injectable } from "inversify";
 import { ANALYTICS_EVENTS } from "../../../types/analytics.js";
-import { withTimeout } from "../../lib/async.js";
 import { container } from "../../di/container.js";
+import { withTimeout } from "../../lib/async.js";
 import { logger } from "../../lib/logger.js";
 import { shutdownPostHog, trackAppEvent } from "../posthog-analytics.js";
 
