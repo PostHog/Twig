@@ -56,7 +56,7 @@ twig/
 ├── apps/
 │   ├── twig/       # Electron desktop app (React, Vite)
 │   ├── mobile/     # React Native mobile app (Expo)
-│   └── cli/        # arr CLI for stacked PRs
+│   └── cli/        # CLI for stacked PRs
 ├── packages/
 │   ├── agent/      # TypeScript agent framework
 │   ├── core/       # Shared business logic
