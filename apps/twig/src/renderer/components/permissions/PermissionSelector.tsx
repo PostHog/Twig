@@ -30,8 +30,7 @@ export function PermissionSelector({
   onCancel,
 }: PermissionSelectorProps) {
   const props = { toolCall, options, onSelect, onCancel };
-  const twigToolKind = (toolCall._meta as { twigToolKind?: string } | undefined)
-    ?.twigToolKind;
+  const twigToolKind = toolCall._meta?.twigToolKind;
   const kind = twigToolKind ?? (toolCall.kind as string);
 
   switch (kind) {

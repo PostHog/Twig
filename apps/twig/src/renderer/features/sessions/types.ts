@@ -5,13 +5,15 @@ import type {
   ToolCallLocation,
   ToolCallStatus,
 } from "@agentclientprotocol/sdk";
+import type { TwigToolMeta } from "@posthog/agent/adapters/claude/tool-meta";
 
 export type TwigToolKind = AcpToolKind | "question";
 
 export type { ToolCallContent, ToolCallStatus, ToolCallLocation };
+export type { TwigToolMeta };
 
 export interface ToolCall {
-  _meta?: { [key: string]: unknown } | null;
+  _meta?: TwigToolMeta | null;
   content?: ToolCallContent[];
   kind?: TwigToolKind | null;
   locations?: ToolCallLocation[];

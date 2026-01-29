@@ -1,29 +1,16 @@
 import type { ToolCallContent, ToolKind } from "@agentclientprotocol/sdk";
-import { z } from "zod";
 import type { PermissionOption } from "../permissions/permission-options.js";
+import {
+  type QuestionItem,
+  type QuestionMeta,
+  QuestionMetaSchema,
+  type QuestionOption,
+} from "../tool-meta.js";
+
+export { QuestionMetaSchema };
+export type { QuestionItem, QuestionMeta, QuestionOption };
 
 export const OPTION_PREFIX = "option_";
-
-export const QuestionOptionSchema = z.object({
-  label: z.string(),
-  description: z.string().optional(),
-});
-
-export const QuestionItemSchema = z.object({
-  question: z.string(),
-  header: z.string().optional(),
-  options: z.array(QuestionOptionSchema),
-  multiSelect: z.boolean().optional(),
-  completed: z.boolean().optional(),
-});
-
-export const QuestionMetaSchema = z.object({
-  questions: z.array(QuestionItemSchema),
-});
-
-export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
-export type QuestionItem = z.infer<typeof QuestionItemSchema>;
-export type QuestionMeta = z.infer<typeof QuestionMetaSchema>;
 
 export interface AskUserQuestionInput {
   questions?: QuestionItem[];

@@ -43,6 +43,10 @@
     "./adapters/claude/conversion/tool-use-to-acp": {
       "types": "./dist/adapters/claude/conversion/tool-use-to-acp.d.ts",
       "import": "./dist/adapters/claude/conversion/tool-use-to-acp.js"
+    },
+    "./adapters/claude/tool-meta": {
+      "types": "./dist/adapters/claude/tool-meta.d.ts",
+      "import": "./dist/adapters/claude/tool-meta.js"
     }
   },
   "type": "module",
