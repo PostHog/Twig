@@ -6,31 +6,29 @@
  * instantiation (which calls app.getPath('userData') in their constructors).
  *
  */
-import { existsSync, renameSync } from "node:fs";
+
+import dns from "node:dns";
 import path from "node:path";
 import { app } from "electron";
+import { fixPath } from "./lib/fixPath.js";
 
 const isDev = !app.isPackaged;
 
-// Set different app names for separate single-instance locks
-const legacyAppName = isDev ? "array-dev" : "Array";
+// Set app name for single-instance lock, crashReporter, etc
 const appName = isDev ? "twig-dev" : "Twig";
 app.setName(isDev ? "Twig (Development)" : "Twig");
 
-// Migrate userData from legacy location if needed
+// Set userData path for @posthog/twig
 const appDataPath = app.getPath("appData");
-const legacyUserDataPath = path.join(appDataPath, "@posthog", legacyAppName);
 const userDataPath = path.join(appDataPath, "@posthog", appName);
-
-if (existsSync(legacyUserDataPath) && !existsSync(userDataPath)) {
-  try {
-    renameSync(legacyUserDataPath, userDataPath);
-  } catch {
-    // If migration fails, continue with new path
-  }
-}
-
 app.setPath("userData", userDataPath);
+
+// Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
+// instead of ::1. This matches how the renderer already reaches the PostHog API.
+dns.setDefaultResultOrder("ipv4first");
+
+// Call fixPath early to ensure PATH is correct for any child processes
+fixPath();
 
 // Now dynamically import the rest of the application
 // Dynamic import ensures the path is set BEFORE index.js is evaluated
