@@ -1,15 +1,18 @@
+import { PermissionSelector } from "@components/permissions/PermissionSelector";
 import {
   MessageEditor,
   type MessageEditorHandle,
 } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
+  cycleExecutionMode,
   type ExecutionMode,
   useCurrentModeForTask,
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { Warning } from "@phosphor-icons/react";
 import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
@@ -17,7 +20,7 @@ import {
   isJsonRpcNotification,
   isJsonRpcResponse,
 } from "@shared/types/session-events";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import {
   useSessionViewActions,
@@ -25,17 +28,8 @@ import {
 } from "../stores/sessionViewStore";
 import { ConversationView } from "./ConversationView";
 import { DropZoneOverlay } from "./DropZoneOverlay";
-import { InlinePermissionSelector } from "./InlinePermissionSelector";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
-
-const EXECUTION_MODES: ExecutionMode[] = ["plan", "default", "acceptEdits"];
-
-function cycleMode(current: ExecutionMode): ExecutionMode {
-  const currentIndex = EXECUTION_MODES.indexOf(current);
-  const nextIndex = (currentIndex + 1) % EXECUTION_MODES.length;
-  return EXECUTION_MODES[nextIndex];
-}
 
 interface SessionViewProps {
   events: AcpMessage[];
@@ -79,14 +73,28 @@ export function SessionView({
   const { respondToPermission, cancelPermission, setSessionMode } =
     useSessionActions();
   const sessionMode = useCurrentModeForTask(taskId);
-  // Default to "default" mode if session not yet available
+  const { allowBypassPermissions } = useSettingsStore();
+
   const currentMode: ExecutionMode = sessionMode ?? "default";
 
-  const handleModeChange = useCallback(() => {
-    if (!taskId || isCloud) return;
-    const nextMode = cycleMode(currentMode);
-    setSessionMode(taskId, nextMode);
-  }, [taskId, currentMode, isCloud, setSessionMode]);
+  useEffect(() => {
+    if (
+      !allowBypassPermissions &&
+      currentMode === "bypassPermissions" &&
+      taskId &&
+      !isCloud
+    ) {
+      setSessionMode(taskId, "default");
+    }
+  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+
+  const handleModeChange = useCallback(
+    (mode: ExecutionMode) => {
+      if (!taskId || isCloud) return;
+      setSessionMode(taskId, mode);
+    },
+    [taskId, isCloud, setSessionMode],
+  );
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -108,7 +116,7 @@ export function SessionView({
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleMode(currentMode);
+      const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
       setSessionMode(taskId, nextMode);
     },
     {
@@ -116,7 +124,14 @@ export function SessionView({
       enableOnContentEditable: true,
       enabled: !isCloud && isRunning,
     },
-    [taskId, currentMode, isCloud, isRunning, setSessionMode],
+    [
+      taskId,
+      currentMode,
+      isCloud,
+      isRunning,
+      setSessionMode,
+      allowBypassPermissions,
+    ],
   );
 
   const latestPlan = useMemo((): Plan | null => {
@@ -182,7 +197,11 @@ export function SessionView({
   }, [pendingPermissions]);
 
   const handlePermissionSelect = useCallback(
-    async (optionId: string, customInput?: string) => {
+    async (
+      optionId: string,
+      customInput?: string,
+      answers?: Record<string, string>,
+    ) => {
       if (!firstPendingPermission || !taskId) return;
 
       // Check if the selected option is "allow_always" and set mode to acceptEdits
@@ -194,22 +213,21 @@ export function SessionView({
       }
 
       if (customInput) {
-        // Check if this is an "other" option (AskUserQuestion) or plan feedback
         if (optionId === "other") {
-          // For AskUserQuestion "Other" - pass customInput to the permission response
+          await respondToPermission(
+            taskId,
+            firstPendingPermission.toolCallId,
+            optionId,
+            customInput,
+            answers,
+          );
+        } else {
           await respondToPermission(
             taskId,
             firstPendingPermission.toolCallId,
             optionId,
             undefined,
-            customInput,
-          );
-        } else {
-          // For plan mode feedback - respond and send as follow-up prompt
-          await respondToPermission(
-            taskId,
-            firstPendingPermission.toolCallId,
-            optionId,
+            answers,
           );
           onSendPrompt(customInput);
         }
@@ -218,6 +236,8 @@ export function SessionView({
           taskId,
           firstPendingPermission.toolCallId,
           optionId,
+          undefined,
+          answers,
         );
       }
     },
@@ -371,12 +391,11 @@ export function SessionView({
               </Flex>
             </Flex>
           ) : firstPendingPermission ? (
-            <InlinePermissionSelector
-              title={firstPendingPermission.title}
+            <PermissionSelector
+              toolCall={firstPendingPermission.toolCall}
               options={firstPendingPermission.options}
               onSelect={handlePermissionSelect}
               onCancel={handlePermissionCancel}
-              disabled={false}
             />
           ) : (
             <Box

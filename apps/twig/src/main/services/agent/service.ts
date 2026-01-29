@@ -20,6 +20,7 @@ import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
 import { injectable, preDestroy } from "inversify";
+import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
@@ -166,7 +167,7 @@ interface SessionConfig {
   logUrl?: string;
   sdkSessionId?: string;
   model?: string;
-  executionMode?: "plan" | "acceptEdits" | "default";
+  executionMode?: ExecutionMode;
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
 }
@@ -253,8 +254,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     sessionId: string,
     toolCallId: string,
     optionId: string,
-    selectedOptionIds?: string[],
     customInput?: string,
+    answers?: Record<string, string>,
   ): void {
     const key = `${sessionId}:${toolCallId}`;
     const pending = this.pendingPermissions.get(key);
@@ -268,18 +269,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sessionId,
       toolCallId,
       optionId,
-      selectedOptionIds,
       hasCustomInput: !!customInput,
+      hasAnswers: !!answers,
     });
+
+    const meta: Record<string, unknown> = {};
+    if (customInput) meta.customInput = customInput;
+    if (answers) meta.answers = answers;
 
     pending.resolve({
       outcome: {
         outcome: "selected",
         optionId,
-        // Include multi-select and custom input in the response
-        ...(selectedOptionIds && { selectedOptionIds }),
-        ...(customInput && { customInput }),
       },
+      ...(Object.keys(meta).length > 0 && { _meta: meta }),
     });
 
     this.pendingPermissions.delete(key);
@@ -924,13 +927,6 @@ For git operations while detached:
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
         if (toolCallId) {
-          log.info("Permission request requires user input", {
-            sessionId: taskRunId,
-            toolCallId,
-            toolName,
-            title: params.toolCall?.title,
-          });
-
           return new Promise((resolve, reject) => {
             const key = `${taskRunId}:${toolCallId}`;
             service.pendingPermissions.set(key, {
@@ -944,18 +940,7 @@ For git operations while detached:
               sessionId: taskRunId,
               toolCallId,
             });
-            service.emit(AgentServiceEvent.PermissionRequest, {
-              sessionId: taskRunId,
-              toolCallId,
-              title: params.toolCall?.title || "Permission Required",
-              options: params.options.map((o) => ({
-                kind: o.kind,
-                name: o.name,
-                optionId: o.optionId,
-                description: (o as { description?: string }).description,
-              })),
-              rawInput: params.toolCall?.rawInput,
-            });
+            service.emit(AgentServiceEvent.PermissionRequest, params);
           });
         }
 

@@ -1,3 +1,8 @@
+import type {
+  RequestPermissionRequest,
+  PermissionOption as SdkPermissionOption,
+} from "@agentclientprotocol/sdk";
+import { executionModeSchema } from "@shared/types";
 import { z } from "zod";
 
 // Session credentials schema
@@ -8,10 +13,6 @@ export const credentialsSchema = z.object({
 });
 
 export type Credentials = z.infer<typeof credentialsSchema>;
-
-// Execution mode schema
-export const executionModeSchema = z.enum(["plan", "acceptEdits", "default"]);
-export type ExecutionMode = z.infer<typeof executionModeSchema>;
 
 // Session config schema
 export const sessionConfigSchema = z.object({
@@ -41,7 +42,9 @@ export const startSessionInput = z.object({
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
-  executionMode: z.enum(["plan", "acceptEdits", "default"]).optional(),
+  executionMode: z
+    .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
+    .optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
@@ -142,7 +145,7 @@ export const setModelInput = z.object({
 // Set mode input
 export const setModeInput = z.object({
   sessionId: z.string(),
-  modeId: z.enum(["plan", "default", "acceptEdits"]),
+  modeId: executionModeSchema,
 });
 
 // Subscribe to session events input
@@ -161,20 +164,8 @@ export interface AgentSessionEventPayload {
   payload: unknown;
 }
 
-export interface PermissionOption {
-  kind: "allow_once" | "allow_always" | "reject_once" | "reject_always";
-  name: string;
-  optionId: string;
-  description?: string;
-}
-
-export interface PermissionRequestPayload {
-  sessionId: string;
-  toolCallId: string;
-  title: string;
-  options: PermissionOption[];
-  rawInput: unknown;
-}
+export type PermissionOption = SdkPermissionOption;
+export type PermissionRequestPayload = RequestPermissionRequest;
 
 export interface AgentServiceEvents {
   [AgentServiceEvent.SessionEvent]: AgentSessionEventPayload;
@@ -186,10 +177,10 @@ export const respondToPermissionInput = z.object({
   sessionId: z.string(),
   toolCallId: z.string(),
   optionId: z.string(),
-  // For multi-select mode: array of selected option IDs
-  selectedOptionIds: z.array(z.string()).optional(),
-  // For "Other" option: custom text input from user
+  // For "Other" option: custom text input from user (ACP extension via _meta)
   customInput: z.string().optional(),
+  // For multi-question flows: all answers keyed by question text
+  answers: z.record(z.string(), z.string()).optional(),
 });
 
 export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;

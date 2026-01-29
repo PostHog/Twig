@@ -4,6 +4,10 @@
   "repository": "https://github.com/PostHog/twig",
   "description": "TypeScript agent framework wrapping Claude Agent SDK with Git-based task execution for PostHog",
   "exports": {
+    ".": {
+      "types": "./dist/worktree-manager.d.ts",
+      "import": "./dist/worktree-manager.js"
+    },
     "./agent": {
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"
@@ -23,6 +27,14 @@
     "./worktree-manager": {
       "types": "./dist/worktree-manager.d.ts",
       "import": "./dist/worktree-manager.js"
+    },
+    "./adapters/claude/question-utils": {
+      "types": "./dist/adapters/claude/question-utils.d.ts",
+      "import": "./dist/adapters/claude/question-utils.js"
+    },
+    "./adapters/claude/permission-options": {
+      "types": "./dist/adapters/claude/permission-options.d.ts",
+      "import": "./dist/adapters/claude/permission-options.js"
     }
   },
   "type": "module",

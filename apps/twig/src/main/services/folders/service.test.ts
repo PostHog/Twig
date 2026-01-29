@@ -43,7 +43,7 @@ vi.mock("electron", () => ({
   dialog: mockDialog,
 }));
 
-vi.mock("@posthog/agent", () => ({
+vi.mock("@posthog/agent/worktree-manager", () => ({
   WorktreeManager: class MockWorktreeManager {
     deleteWorktree = mockWorktreeManager.deleteWorktree;
     cleanupOrphanedWorktrees = mockWorktreeManager.cleanupOrphanedWorktrees;

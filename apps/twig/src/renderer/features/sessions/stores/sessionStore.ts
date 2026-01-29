@@ -6,7 +6,7 @@ import type {
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
-import type { Task } from "@shared/types";
+import { EXECUTION_MODES, type ExecutionMode, type Task } from "@shared/types";
 import type {
   AcpMessage,
   JsonRpcMessage,
@@ -36,9 +36,28 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 // --- Types ---
 
 // Re-export for external consumers
-export type { PermissionRequest };
+export type { ExecutionMode, PermissionRequest };
 
-export type ExecutionMode = "plan" | "default" | "acceptEdits";
+export function getExecutionModes(
+  allowBypassPermissions: boolean,
+): ExecutionMode[] {
+  return allowBypassPermissions
+    ? EXECUTION_MODES
+    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
+}
+
+export function cycleExecutionMode(
+  current: ExecutionMode,
+  allowBypassPermissions: boolean,
+): ExecutionMode {
+  const modes = getExecutionModes(allowBypassPermissions);
+  const currentIndex = modes.indexOf(current);
+  if (currentIndex === -1) {
+    return "default";
+  }
+  const nextIndex = (currentIndex + 1) % modes.length;
+  return modes[nextIndex];
+}
 
 export interface AgentModelOption {
   modelId: string;
@@ -84,7 +103,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: "plan" | "acceptEdits";
+    executionMode?: ExecutionMode;
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -104,8 +123,8 @@ interface SessionActions {
     taskId: string,
     toolCallId: string,
     optionId: string,
-    selectedOptionIds?: string[],
     customInput?: string,
+    answers?: Record<string, string>,
   ) => Promise<void>;
   cancelPermission: (taskId: string, toolCallId: string) => Promise<void>;
   clearSessionError: (taskId: string) => Promise<void>;
@@ -248,8 +267,8 @@ function subscribeToChannel(taskRunId: string) {
         onData: async (payload) => {
           log.info("Permission request received in renderer", {
             taskRunId,
-            toolCallId: payload.toolCallId,
-            title: payload.title,
+            toolCallId: payload.toolCall.toolCallId,
+            title: payload.toolCall.title,
             optionCount: payload.options?.length,
           });
 
@@ -259,17 +278,14 @@ function subscribeToChannel(taskRunId: string) {
 
           if (session) {
             const newPermissions = new Map(session.pendingPermissions);
-            newPermissions.set(payload.toolCallId, {
-              toolCallId: payload.toolCallId,
-              title: payload.title,
-              options: payload.options,
-              rawInput: payload.rawInput,
+            newPermissions.set(payload.toolCall.toolCallId, {
+              ...payload,
               receivedAt: Date.now(),
             });
 
             log.info("Updating pendingPermissions in store", {
               taskRunId,
-              toolCallId: payload.toolCallId,
+              toolCallId: payload.toolCall.toolCallId,
               newMapSize: newPermissions.size,
             });
 
@@ -279,38 +295,6 @@ function subscribeToChannel(taskRunId: string) {
                 draft.sessions[taskRunId].pendingPermissions = newPermissions;
               }
             });
-
-            // Persist permission request to logs for recovery on reconnect
-            const auth = useAuthStore.getState();
-            if (auth.client && session.taskId) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  // TODO: Migrate to twig
-                  method: "_array/permission_request",
-                  params: {
-                    toolCallId: payload.toolCallId,
-                    title: payload.title,
-                    options: payload.options,
-                    rawInput: payload.rawInput,
-                  },
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(session.taskId, taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission request persisted to logs", {
-                  taskRunId,
-                  toolCallId: payload.toolCallId,
-                });
-              } catch (error) {
-                log.warn("Failed to persist permission request to logs", {
-                  error,
-                });
-              }
-            }
           } else {
             log.warn("Session not found for permission request", {
               taskRunId,
@@ -495,7 +479,7 @@ function createBaseSession(
   taskRunId: string,
   taskId: string,
   isCloud: boolean,
-  executionMode?: "plan" | "acceptEdits",
+  executionMode?: ExecutionMode,
 ): AgentSession {
   return {
     taskRunId,
@@ -761,7 +745,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: "plan" | "acceptEdits",
+      executionMode?: ExecutionMode,
     ) => {
       if (!auth.client) {
         throw new Error(
@@ -793,7 +777,7 @@ const useStore = create<SessionStore>()(
         taskRun.id,
         taskId,
         false,
-        effectiveMode === "default" ? undefined : effectiveMode,
+        effectiveMode,
       );
       session.channel = result.channel;
       session.status = "connected";
@@ -1264,8 +1248,8 @@ const useStore = create<SessionStore>()(
           taskId,
           toolCallId,
           optionId,
-          selectedOptionIds,
           customInput,
+          answers,
         ) => {
           const session = getSessionByTaskId(taskId);
           if (!session) {
@@ -1273,8 +1257,6 @@ const useStore = create<SessionStore>()(
             return;
           }
 
-          // Always remove permission from UI state first - the user has taken action
-          // and we should clear the selector regardless of backend success
           const currentState = get();
           const sess = currentState.sessions[session.taskRunId];
           if (sess) {
@@ -1293,49 +1275,16 @@ const useStore = create<SessionStore>()(
               sessionId: session.taskRunId,
               toolCallId,
               optionId,
-              selectedOptionIds,
               customInput,
+              answers,
             });
 
             log.info("Permission response sent", {
               taskId,
               toolCallId,
               optionId,
-              selectedOptionIds,
               hasCustomInput: !!customInput,
             });
-
-            // Persist permission response to logs for recovery tracking
-            const auth = useAuthStore.getState();
-            if (auth.client) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  // TODO: Migrate to twig
-                  method: "_array/permission_response",
-                  params: {
-                    toolCallId,
-                    optionId,
-                    ...(selectedOptionIds && { selectedOptionIds }),
-                    ...(customInput && { customInput }),
-                  },
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission response persisted to logs", {
-                  taskId,
-                  toolCallId,
-                });
-              } catch (persistError) {
-                log.warn("Failed to persist permission response to logs", {
-                  error: persistError,
-                });
-              }
-            }
           } catch (error) {
             log.error("Failed to respond to permission", {
               taskId,
@@ -1377,36 +1326,6 @@ const useStore = create<SessionStore>()(
             });
 
             log.info("Permission cancelled", { taskId, toolCallId });
-
-            // Persist permission cancellation to logs for recovery tracking
-            const auth = useAuthStore.getState();
-            if (auth.client) {
-              const storedEntry: StoredLogEntry = {
-                type: "notification",
-                timestamp: new Date().toISOString(),
-                notification: {
-                  // TODO: Migrate to twig
-                  method: "_array/permission_response",
-                  params: {
-                    toolCallId,
-                    optionId: "_cancelled",
-                  },
-                },
-              };
-              try {
-                await auth.client.appendTaskRunLog(taskId, session.taskRunId, [
-                  storedEntry,
-                ]);
-                log.info("Permission cancellation persisted to logs", {
-                  taskId,
-                  toolCallId,
-                });
-              } catch (persistError) {
-                log.warn("Failed to persist permission cancellation to logs", {
-                  error: persistError,
-                });
-              }
-            }
           } catch (error) {
             log.error("Failed to cancel permission", {
               taskId,

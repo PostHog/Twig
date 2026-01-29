@@ -37,7 +37,7 @@ export async function split(
     process.exit(1);
   }
 
-  const { matchingFiles, availableFiles } = previewResult.value;
+  const { matchingFiles } = previewResult.value;
 
   // Show preview
   message(

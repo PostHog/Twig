@@ -1,6 +1,10 @@
 /// <reference path="../../../types/electron.d.ts" />
 
-import type { SessionNotification } from "@agentclientprotocol/sdk";
+import {
+  CLIENT_METHODS,
+  type RequestPermissionRequest,
+  type SessionNotification,
+} from "@agentclientprotocol/sdk";
 import { trpcVanilla } from "@/renderer/trpc";
 
 export interface StoredLogEntry {
@@ -101,61 +105,89 @@ export async function fetchSessionLogs(
   }
 }
 
-export interface PermissionRequest {
-  toolCallId: string;
-  title: string;
-  options: Array<{
-    kind: string;
-    name: string;
-    optionId: string;
-    description?: string;
-  }>;
-  rawInput: unknown;
+export type PermissionRequest = RequestPermissionRequest & {
   receivedAt: number;
+};
+
+type SessionUpdate = {
+  sessionUpdate?: string;
+  toolCallId?: string;
+  status?: string;
+};
+
+type NotificationMsg = StoredLogEntry["notification"];
+
+function getSessionUpdate(msg: NotificationMsg): SessionUpdate | null {
+  if (msg?.method !== "session/update") return null;
+  return (msg.params as { update?: SessionUpdate })?.update ?? null;
+}
+
+function getPermissionToolCallId(msg: NotificationMsg): string | null {
+  if (msg?.method !== CLIENT_METHODS.session_request_permission) return null;
+  return (msg.params as RequestPermissionRequest)?.toolCall?.toolCallId ?? null;
+}
+
+function isTerminalStatus(status?: string): boolean {
+  return (
+    status === "in_progress" || status === "completed" || status === "failed"
+  );
 }
 
 /**
  * Scan log entries to find pending permission requests.
- * Returns permission requests that don't have a matching response.
+ * A permission is pending if:
+ * 1. We have a session/request_permission for a toolCallId
+ * 2. No subsequent tool_call_update
+ * 3. No assistant messages after the permission request (conversation hasn't moved on)
  */
 export function findPendingPermissions(
   entries: StoredLogEntry[],
 ): Map<string, PermissionRequest> {
-  const requests = new Map<string, StoredLogEntry>();
-  const responses = new Set<string>();
+  const permissionRequests = new Map<
+    string,
+    { entry: StoredLogEntry; index: number }
+  >();
+  const resolvedToolCalls = new Set<string>();
+  let lastAssistantMessageIndex = -1;
 
-  for (const entry of entries) {
-    const method = entry.notification?.method;
-    const params = entry.notification?.params as
-      | Record<string, unknown>
-      | undefined;
+  entries.forEach((entry, i) => {
+    const msg = entry.notification;
 
-    // TODO: Migrate to twig
-    if (method === "_array/permission_request" && params?.toolCallId) {
-      requests.set(params.toolCallId as string, entry);
+    const permissionToolCallId = getPermissionToolCallId(msg);
+    if (permissionToolCallId) {
+      permissionRequests.set(permissionToolCallId, { entry, index: i });
     }
 
-    // TODO: Migrate to twig
-    if (method === "_array/permission_response" && params?.toolCallId) {
-      responses.add(params.toolCallId as string);
-    }
-  }
+    const update = getSessionUpdate(msg);
+    if (!update) return;
 
-  // Return requests without matching response
+    const isResolvedToolCall =
+      update.sessionUpdate === "tool_call_update" &&
+      update.toolCallId &&
+      isTerminalStatus(update.status);
+
+    if (isResolvedToolCall) {
+      resolvedToolCalls.add(update.toolCallId!);
+    }
+
+    if (update.sessionUpdate === "assistant_message") {
+      lastAssistantMessageIndex = i;
+    }
+  });
+
   const pending = new Map<string, PermissionRequest>();
-  for (const [toolCallId, entry] of requests) {
-    if (!responses.has(toolCallId)) {
-      const params = entry.notification?.params as Record<string, unknown>;
-      pending.set(toolCallId, {
-        toolCallId,
-        title: (params.title as string) || "Permission Required",
-        options: (params.options as PermissionRequest["options"]) || [],
-        rawInput: params.rawInput,
-        receivedAt: entry.timestamp
-          ? new Date(entry.timestamp).getTime()
-          : Date.now(),
-      });
-    }
+  for (const [toolCallId, { entry, index }] of permissionRequests) {
+    const isResolved = resolvedToolCalls.has(toolCallId);
+    const isStale = lastAssistantMessageIndex > index;
+    if (isResolved || isStale) continue;
+
+    const params = entry.notification?.params as RequestPermissionRequest;
+    pending.set(toolCallId, {
+      ...params,
+      receivedAt: entry.timestamp
+        ? new Date(entry.timestamp).getTime()
+        : Date.now(),
+    });
   }
 
   return pending;

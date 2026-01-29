@@ -1,7 +1,6 @@
 // Analytics event types and properties
 
 export type ExecutionType = "cloud" | "local";
-export type ExecutionMode = "plan" | "execute";
 export type RepositoryProvider = "github" | "gitlab" | "local" | "none";
 export type TaskCreatedFrom = "cli" | "command-menu";
 export type RepositorySelectSource = "task-creation" | "task-detail";

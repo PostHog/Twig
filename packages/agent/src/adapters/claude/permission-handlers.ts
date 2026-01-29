@@ -1,6 +1,11 @@
-import type { AgentSideConnection } from "@agentclientprotocol/sdk";
+import type {
+  AgentSideConnection,
+  RequestPermissionResponse,
+} from "@agentclientprotocol/sdk";
 import type { PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "@/utils/logger.js";
+import { isToolAllowedForMode } from "./permission-mode-config.js";
+import { buildPermissionOptions, isWriteTool } from "./permission-options.js";
 import {
   getClaudePlansDir,
   getLatestAssistantText,
@@ -11,23 +16,15 @@ import {
   type AskUserQuestionInput,
   normalizeAskUserQuestionInput,
   OPTION_PREFIX,
-  OTHER_OPTION_ID,
   type QuestionItem,
 } from "./question-utils.js";
 import { toolInfoFromToolUse } from "./tool-metadata.js";
 import type { Session } from "./types.js";
 
-const WRITE_TOOL_NAMES = [
-  "mcp__acp__Edit",
-  "mcp__acp__Write",
-  "Edit",
-  "Write",
-  "NotebookEdit",
-];
-
-function isWriteTool(toolName: string): boolean {
-  return WRITE_TOOL_NAMES.includes(toolName);
-}
+export {
+  buildPermissionOptions,
+  type PermissionOption,
+} from "./permission-options.js";
 
 export type ToolPermissionResult =
   | {
@@ -52,21 +49,6 @@ interface ToolHandlerContext {
   fileContentCache: { [key: string]: string };
   logger: Logger;
 }
-
-interface PermissionResponse {
-  outcome?:
-    | {
-        outcome: "selected";
-        optionId: string;
-        selectedOptionIds?: string[];
-        customInput?: string;
-      }
-    | {
-        outcome: "cancelled";
-      };
-}
-
-const DECIMAL_RADIX = 10;
 
 async function emitToolDenial(
   context: ToolHandlerContext,
@@ -157,8 +139,14 @@ async function validatePlanContent(
 async function requestPlanApproval(
   context: ToolHandlerContext,
   updatedInput: Record<string, unknown>,
-): Promise<PermissionResponse> {
+): Promise<RequestPermissionResponse> {
   const { client, sessionId, toolUseID, fileContentCache } = context;
+
+  const toolInfo = toolInfoFromToolUse(
+    { name: context.toolName, input: updatedInput },
+    fileContentCache,
+    context.logger,
+  );
 
   return await client.requestPermission({
     options: [
@@ -181,18 +169,17 @@ async function requestPlanApproval(
     sessionId,
     toolCall: {
       toolCallId: toolUseID,
+      title: toolInfo.title,
+      kind: toolInfo.kind,
+      content: toolInfo.content,
+      locations: toolInfo.locations,
       rawInput: { ...updatedInput, toolName: context.toolName },
-      title: toolInfoFromToolUse(
-        { name: context.toolName, input: updatedInput },
-        fileContentCache,
-        context.logger,
-      ).title,
     },
   });
 }
 
 async function applyPlanApproval(
-  response: PermissionResponse,
+  response: RequestPermissionResponse,
   context: ToolHandlerContext,
   updatedInput: Record<string, unknown>,
 ): Promise<ToolPermissionResult> {
@@ -220,7 +207,7 @@ async function applyPlanApproval(
         {
           type: "setMode",
           mode: response.outcome.optionId,
-          destination: "session",
+          destination: "localSettings",
         },
       ],
     };
@@ -257,91 +244,24 @@ async function handleExitPlanModeTool(
 }
 
 function buildQuestionOptions(question: QuestionItem) {
-  const options = (question.options || []).map((opt, idx) => ({
+  return (question.options || []).map((opt, idx) => ({
     kind: "allow_once" as const,
     name: opt.label,
     optionId: `${OPTION_PREFIX}${idx}`,
-    description: opt.description,
+    _meta: opt.description ? { description: opt.description } : undefined,
   }));
-
-  options.push({
-    kind: "allow_once" as const,
-    name: "Other",
-    optionId: OTHER_OPTION_ID,
-    description: "Provide a custom response",
-  });
-
-  return options;
-}
-
-async function askSingleQuestion(
-  question: QuestionItem,
-  questionIndex: number,
-  totalQuestions: number,
-  context: ToolHandlerContext,
-) {
-  const { client, sessionId, toolUseID, toolInput } = context;
-  const options = buildQuestionOptions(question);
-
-  return await client.requestPermission({
-    options,
-    sessionId,
-    toolCall: {
-      toolCallId: toolUseID,
-      rawInput: {
-        ...(toolInput as Record<string, unknown>),
-        toolName: context.toolName,
-        currentQuestion: question,
-        questionIndex,
-        totalQuestions,
-      },
-      title: question.question,
-    },
-  });
-}
-
-function processQuestionResponse(
-  response: PermissionResponse,
-  question: QuestionItem,
-): string | string[] | null {
-  if (response.outcome?.outcome !== "selected") {
-    return null;
-  }
-
-  const selectedOptionId = response.outcome.optionId;
-
-  if (selectedOptionId === OTHER_OPTION_ID && response.outcome.customInput) {
-    return response.outcome.customInput;
-  }
-
-  if (selectedOptionId === OTHER_OPTION_ID) {
-    return OTHER_OPTION_ID;
-  }
-
-  if (question.multiSelect && response.outcome.selectedOptionIds) {
-    return response.outcome.selectedOptionIds
-      .map((id: string) => {
-        const idx = parseInt(id.replace(OPTION_PREFIX, ""), DECIMAL_RADIX);
-        return question.options?.[idx]?.label;
-      })
-      .filter(Boolean) as string[];
-  }
-
-  const selectedIdx = parseInt(
-    selectedOptionId.replace(OPTION_PREFIX, ""),
-    DECIMAL_RADIX,
-  );
-  const selectedOption = question.options?.[selectedIdx];
-  return selectedOption?.label || selectedOptionId;
 }
 
 async function handleAskUserQuestionTool(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
   const input = context.toolInput as AskUserQuestionInput;
+  context.logger.info("[AskUserQuestion] Received input", { input });
   const questions = normalizeAskUserQuestionInput(input);
+  context.logger.info("[AskUserQuestion] Normalized questions", { questions });
 
-  if (!questions) {
+  if (!questions || questions.length === 0) {
+    context.logger.warn("[AskUserQuestion] No questions found in input");
     return {
       behavior: "deny",
       message: "No questions provided",
@@ -349,34 +269,53 @@ async function handleAskUserQuestionTool(
     };
   }
 
-  const allAnswers: Record<string, string | string[]> = {};
+  const { client, sessionId, toolUseID, toolInput, fileContentCache } = context;
+  const firstQuestion = questions[0];
+  const options = buildQuestionOptions(firstQuestion);
 
-  for (let i = 0; i < questions.length; i++) {
-    const question = questions[i];
-    const response = await askSingleQuestion(
-      question,
-      i,
-      questions.length,
-      context,
-    );
-    const answer = processQuestionResponse(response, question);
+  const toolInfo = toolInfoFromToolUse(
+    { name: context.toolName, input: toolInput },
+    fileContentCache,
+    context.logger,
+  );
 
-    if (answer === null) {
-      return {
-        behavior: "deny",
-        message: "User did not complete all questions",
-        interrupt: true,
-      };
-    }
+  const response = await client.requestPermission({
+    options,
+    sessionId,
+    toolCall: {
+      toolCallId: toolUseID,
+      title: firstQuestion.question,
+      kind: "other",
+      content: toolInfo.content,
+      _meta: {
+        twigToolKind: "question",
+        questions,
+      },
+    },
+  });
 
-    allAnswers[question.question] = answer;
+  if (response.outcome?.outcome !== "selected") {
+    return {
+      behavior: "deny",
+      message: "User cancelled the questions",
+      interrupt: true,
+    };
+  }
+
+  const answers = response._meta?.answers as Record<string, string> | undefined;
+  if (!answers || Object.keys(answers).length === 0) {
+    return {
+      behavior: "deny",
+      message: "User did not provide answers",
+      interrupt: true,
+    };
   }
 
   return {
     behavior: "allow",
     updatedInput: {
       ...(context.toolInput as Record<string, unknown>),
-      answers: allAnswers,
+      answers,
     },
   };
 }
@@ -385,6 +324,7 @@ async function handleDefaultPermissionFlow(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
   const {
+    session,
     toolName,
     toolInput,
     toolUseID,
@@ -394,25 +334,28 @@ async function handleDefaultPermissionFlow(
     suggestions,
   } = context;
 
+  const toolInfo = toolInfoFromToolUse(
+    { name: toolName, input: toolInput },
+    fileContentCache,
+    context.logger,
+  );
+
+  const options = buildPermissionOptions(
+    toolName,
+    toolInput as Record<string, unknown>,
+    session?.cwd,
+  );
+
   const response = await client.requestPermission({
-    options: [
-      {
-        kind: "allow_always",
-        name: "Always Allow",
-        optionId: "allow_always",
-      },
-      { kind: "allow_once", name: "Allow", optionId: "allow" },
-      { kind: "reject_once", name: "Reject", optionId: "reject" },
-    ],
+    options,
     sessionId,
     toolCall: {
       toolCallId: toolUseID,
+      title: toolInfo.title,
+      kind: toolInfo.kind,
+      content: toolInfo.content,
+      locations: toolInfo.locations,
       rawInput: toolInput as Record<string, unknown>,
-      title: toolInfoFromToolUse(
-        { name: toolName, input: toolInput },
-        fileContentCache,
-        context.logger,
-      ).title,
     },
   });
 
@@ -430,7 +373,7 @@ async function handleDefaultPermissionFlow(
             type: "addRules",
             rules: [{ toolName }],
             behavior: "allow",
-            destination: "session",
+            destination: "localSettings",
           },
         ],
       };
@@ -479,7 +422,14 @@ function handlePlanFileException(
 export async function evaluateToolPermission(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
-  const { toolName } = context;
+  const { toolName, toolInput, session } = context;
+
+  if (isToolAllowedForMode(toolName, session.permissionMode)) {
+    return {
+      behavior: "allow",
+      updatedInput: toolInput as Record<string, unknown>,
+    };
+  }
 
   if (toolName === "ExitPlanMode") {
     return handleExitPlanModeTool(context);
