@@ -55,6 +55,20 @@
 - TypeScript strict mode enabled
 - Tailwind CSS classes should be sorted (biome `useSortedClasses` rule)
 
+### Async Cleanup Ordering
+
+When tearing down async operations that use an AbortController, always abort the controller **before** awaiting any cleanup that depends on it. Otherwise you get a deadlock: the cleanup waits for the operation to stop, but the operation won't stop until the abort signal fires.
+
+```typescript
+// WRONG - deadlocks if interrupt() waits for the operation to finish
+await this.interrupt();          // hangs: waits for query to stop
+this.abortController.abort();    // never reached
+
+// RIGHT - abort first so the operation can actually stop
+this.abortController.abort();    // cancels in-flight HTTP requests
+await this.interrupt();          // resolves because the query was aborted
+```
+
 ### Avoid Barrel Files
 
 - Do not make use of index.ts
