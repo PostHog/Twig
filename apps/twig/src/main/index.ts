@@ -54,6 +54,7 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
+let ipcHandler: { attachWindow: (win: BrowserWindow) => void } | null = null;
 
 // Force IPv4 resolution when "localhost" is used so the agent hits 127.0.0.1
 // instead of ::1. This matches how the renderer already reaches the PostHog API.
@@ -167,7 +168,15 @@ function createWindow(): void {
   });
 
   setMainWindowGetter(() => mainWindow);
-  createIPCHandler({ router: trpcRouter, windows: [mainWindow] });
+
+  if (!ipcHandler) {
+    ipcHandler = createIPCHandler({
+      router: trpcRouter,
+      windows: [mainWindow],
+    });
+  } else {
+    ipcHandler.attachWindow(mainWindow);
+  }
 
   setupExternalLinkHandlers(mainWindow);
 
@@ -386,14 +395,8 @@ app.whenReady().then(() => {
   }
 });
 
-app.on("window-all-closed", async () => {
-  if (process.platform !== "darwin") {
-    const lifecycleService = container.get<AppLifecycleService>(
-      MAIN_TOKENS.AppLifecycleService,
-    );
-    await lifecycleService.shutdown();
-    app.quit();
-  }
+app.on("window-all-closed", () => {
+  app.quit();
 });
 
 app.on("before-quit", async (event) => {
