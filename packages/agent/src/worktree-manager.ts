@@ -178,7 +178,12 @@ export class WorktreeManager {
     let attempts = 0;
     const maxAttempts = 100;
 
-    while ((await this.worktreeExists(name)) && attempts < maxAttempts) {
+    // Check both worktree directory AND branch existence to avoid collisions
+    while (
+      ((await this.worktreeExists(name)) ||
+        (await this.gitManager.branchExists(name))) &&
+      attempts < maxAttempts
+    ) {
       name = this.generateWorktreeName();
       attempts++;
     }
