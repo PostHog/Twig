@@ -206,8 +206,13 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
 
   private handleUpdateDownloaded(releaseName?: string): void {
     this.clearCheckTimeout();
+    const wasChecking = this.checkingForUpdates;
     this.checkingForUpdates = false;
     this.downloadedVersion = releaseName ?? null;
+
+    if (wasChecking) {
+      this.emitStatus({ checking: false });
+    }
 
     log.info("Update downloaded, awaiting user confirmation", {
       currentVersion: app.getVersion(),

@@ -25,6 +25,8 @@ export function UpdatePrompt() {
     enabled: isEnabled,
     onData: () => {
       setErrorMessage(null);
+      setCheckDialogOpen(false);
+      setCheckingForUpdates(false);
       setOpen(true);
     },
   });
