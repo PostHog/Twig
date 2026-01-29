@@ -202,11 +202,13 @@ export const oneLight: Extension = [
 
 export const mergeViewTheme = EditorView.baseTheme({
   ".cm-mergeView": {
+    height: "100%",
     overflowY: "auto",
   },
   ".cm-mergeViewEditors": {
     display: "flex",
     alignItems: "stretch",
+    minHeight: "100%",
   },
   ".cm-mergeViewEditor": {
     flexGrow: "1",
@@ -230,15 +232,19 @@ export const mergeViewTheme = EditorView.baseTheme({
     font: "inherit",
     cursor: "pointer",
   },
-  ".cm-mergeView & .cm-scroller, .cm-mergeView &": {
-    height: "auto !important",
-    overflowY: "visible !important",
-  },
-  "&.cm-merge-a .cm-changedLine, .cm-deletedChunk": {
+  // Light mode - subtle backgrounds
+  "&light.cm-merge-a .cm-changedLine, &light .cm-deletedChunk": {
     backgroundColor: "rgba(220, 80, 80, .15)",
   },
-  "&.cm-merge-b .cm-changedLine, .cm-inlineChangedLine": {
+  "&light.cm-merge-b .cm-changedLine, &light .cm-inlineChangedLine": {
     backgroundColor: "rgba(80, 180, 100, .15)",
+  },
+  // Dark mode - more visible backgrounds
+  "&dark.cm-merge-a .cm-changedLine, &dark .cm-deletedChunk": {
+    backgroundColor: "rgba(255, 100, 100, .25)",
+  },
+  "&dark.cm-merge-b .cm-changedLine, &dark .cm-inlineChangedLine": {
+    backgroundColor: "rgba(100, 220, 120, .25)",
   },
   "&light.cm-merge-a .cm-changedText, &light .cm-deletedChunk .cm-deletedText":
     {
