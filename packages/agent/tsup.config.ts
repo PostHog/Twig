@@ -47,10 +47,15 @@ function copyAssets() {
 
 export default defineConfig({
   entry: [
+    "src/index.ts",
     "src/agent.ts",
+    "src/acp-extensions.ts",
     "src/gateway-models.ts",
     "src/posthog-api.ts",
+    "src/resume.ts",
+    "src/tree-tracker.ts",
     "src/types.ts",
+    "src/utils/gateway.ts",
     "src/worktree-manager.ts",
     "src/adapters/claude/question-utils.ts",
     "src/adapters/claude/permission-options.ts",
@@ -65,9 +70,11 @@ export default defineConfig({
   external: [
     ...builtinModules,
     ...builtinModules.map((m) => `node:${m}`),
+    "@agentclientprotocol/sdk",
     "@anthropic-ai/claude-agent-sdk",
     "dotenv",
     "openai",
+    "tar",
     "zod",
   ],
   onSuccess: async () => {
@@ -76,10 +83,14 @@ export default defineConfig({
 
     // Touch a trigger file to signal electron-forge to restart
     // This file is watched by Vite, triggering main process rebuild
+    // Skip in Docker/CI environments where the twig app doesn't exist
     const triggerFile = resolve(
       import.meta.dirname,
       "../../apps/twig/src/main/.agent-trigger",
     );
-    writeFileSync(triggerFile, `${Date.now()}`);
+    const triggerDir = resolve(import.meta.dirname, "../../apps/twig/src/main");
+    if (existsSync(triggerDir)) {
+      writeFileSync(triggerFile, `${Date.now()}`);
+    }
   },
 });
