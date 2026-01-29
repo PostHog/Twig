@@ -39,6 +39,7 @@ import type { DeepLinkService } from "./services/deep-link/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
 import type { OAuthService } from "./services/oauth/service.js";
 import {
+  captureException,
   initializePostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
@@ -431,10 +432,11 @@ process.on("SIGTERM", () => handleShutdownSignal("SIGTERM"));
 process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
-process.on("uncaughtException", (_error) => {
-  // TODO: Report to error tracking service
+process.on("uncaughtException", (error) => {
+  captureException(error, { source: "main", type: "uncaughtException" });
 });
 
-process.on("unhandledRejection", (_reason, _promise) => {
-  // TODO: Report to error tracking service
+process.on("unhandledRejection", (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  captureException(error, { source: "main", type: "unhandledRejection" });
 });

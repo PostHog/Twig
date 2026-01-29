@@ -1,5 +1,6 @@
 import { Warning } from "@phosphor-icons/react";
 import { Box, Button, Callout, Flex, Text } from "@radix-ui/themes";
+import { captureException } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
@@ -33,6 +34,12 @@ export class ErrorBoundary extends Component<Props, State> {
       error: error.message,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
+    });
+
+    captureException(error, {
+      $exception_component_stack: errorInfo.componentStack,
+      boundary_name: this.props.name,
+      source: "error-boundary",
     });
   }
 
