@@ -9,6 +9,7 @@
 - `packages/agent` - TypeScript agent framework wrapping Claude Agent SDK
 - `packages/core` - Shared business logic for jj/GitHub operations
 - `packages/electron-trpc` - Custom tRPC package for Electron IPC
+- `packages/shared` - Shared utilities (Saga pattern, etc.) used across packages
 
 ## Commands
 
@@ -34,6 +35,12 @@
 - `pnpm --filter agent build` - Build agent with tsup
 - `pnpm --filter agent dev` - Watch mode build
 - `pnpm --filter agent typecheck` - Type check agent
+
+### Shared Package Specific
+
+- `pnpm --filter @posthog/shared build` - Build shared with tsup
+- `pnpm --filter @posthog/shared dev` - Watch mode build
+- `pnpm --filter @posthog/shared typecheck` - Type check shared
 
 ## Code Style
 
@@ -91,6 +98,12 @@ See [ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) for detailed patterns (DI, se
 ### Core Package (packages/core)
 
 - Shared business logic for jj/GitHub operations
+
+### Shared Package (packages/shared)
+
+- Zero-dependency shared utilities used across packages
+- Saga pattern for atomic multi-step operations with automatic rollback
+- Built with tsup, outputs ESM
 
 ## Agent Integration Guidelines
 

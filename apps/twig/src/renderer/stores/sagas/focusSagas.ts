@@ -1,7 +1,7 @@
 import type { FocusResult, FocusSession } from "@main/services/focus/schemas";
+import { Saga, type SagaLogger } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
-import { Saga, type SagaLogger } from "@shared/lib/saga";
 
 const log = logger.scope("focus-saga");
 

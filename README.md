@@ -58,7 +58,8 @@ twig/
 ├── packages/
 │   ├── agent/      # TypeScript agent framework
 │   ├── core/       # Shared business logic
-│   └── electron-trpc/  # tRPC for Electron IPC
+│   ├── electron-trpc/  # tRPC for Electron IPC
+│   └── shared/     # Shared utilities (Saga pattern, etc.)
 ```
 
 ## Documentation

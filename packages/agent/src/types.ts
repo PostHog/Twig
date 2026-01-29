@@ -55,7 +55,8 @@ export type ArtifactType =
   | "context"
   | "reference"
   | "output"
-  | "artifact";
+  | "artifact"
+  | "tree_snapshot";
 
 export interface TaskRunArtifact {
   name: string;
@@ -127,4 +128,36 @@ export interface WorktreeInfo {
   branchName: string;
   baseBranch: string;
   createdAt: string;
+}
+
+// Device info for tracking where work happens
+export interface DeviceInfo {
+  type: "local" | "cloud";
+  name?: string;
+}
+
+// Agent execution mode - for tracking interactive vs background runs, when backgrounded an agent will continue working without asking questions
+export type AgentMode = "interactive" | "background";
+
+// Git file status codes
+export type FileStatus = "A" | "M" | "D";
+
+export interface FileChange {
+  path: string;
+  status: FileStatus;
+}
+
+// Tree snapshot - what TreeTracker captures
+export interface TreeSnapshot {
+  treeHash: string;
+  baseCommit: string | null;
+  archiveUrl?: string;
+  changes: FileChange[];
+  timestamp: string;
+  interrupted?: boolean;
+}
+
+// Tree snapshot event - includes device info when sent as notification
+export interface TreeSnapshotEvent extends TreeSnapshot {
+  device?: DeviceInfo;
 }
