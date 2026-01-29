@@ -96,7 +96,20 @@ async function main(): Promise<void> {
     }
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}`
-if (isMainModule) {
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+function isMainModule(): boolean {
+    try {
+        const thisFile = fileURLToPath(import.meta.url)
+        const entryFile = realpathSync(process.argv[1])
+        const thisFileReal = realpathSync(thisFile)
+        return thisFileReal === entryFile
+    } catch {
+        return false
+    }
+}
+
+if (isMainModule()) {
     main()
 }

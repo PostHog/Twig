@@ -282,7 +282,7 @@ Cloud Sandbox                  Backend                         Local Twig
     │                            │                                  │
     │                            │◄── pullToLocal(task_id) ─────────│
     │                            │                                  │── resumeFromLog()
-    │                            │                                  │── restore from S3 logs
+    │                            │                                  │── restore from ClickHouse logs + S3 trees
     │                            │                                  │── continue locally
 ```
 
@@ -446,7 +446,7 @@ private async resumeFromPreviousState(): Promise<void> {
 ```
 
 The `resumeFromLog` function:
-1. Fetches task run logs from the backend API (which reads from S3)
+1. Fetches task run logs from the backend API (which reads from ClickHouse)
 2. Parses NDJSON entries to find latest `_posthog/tree_snapshot`
 3. Returns the resume state including latest snapshot and interrupted flag
 
@@ -506,7 +506,7 @@ class CloudSessionWorkflow:
 
 - Temporal provisions sandbox and handles cleanup
 - Messages/commands go directly via SSE (not through Temporal)
-- Agent handles resume internally (reads state from backend API → S3 logs)
+- Agent handles resume internally (reads state from backend API → ClickHouse logs + S3 trees)
 - 10-min inactivity triggers stop
 - Agent always writes tree on stop → always resumable
 
