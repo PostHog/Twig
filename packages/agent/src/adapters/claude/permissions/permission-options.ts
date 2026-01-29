@@ -81,3 +81,23 @@ export function buildPermissionOptions(
 
   return permissionOptions("Yes, always allow");
 }
+
+export function buildExitPlanModePermissionOptions(): PermissionOption[] {
+  return [
+    {
+      kind: "allow_always",
+      name: "Yes, and auto-accept edits",
+      optionId: "acceptEdits",
+    },
+    {
+      kind: "allow_once",
+      name: "Yes, and manually approve edits",
+      optionId: "default",
+    },
+    {
+      kind: "reject_once",
+      name: "No, keep planning",
+      optionId: "plan",
+    },
+  ];
+}

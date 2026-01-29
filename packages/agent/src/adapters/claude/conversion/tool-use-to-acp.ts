@@ -26,7 +26,6 @@ const SYSTEM_REMINDER = `
 Whenever you read a file, you should consider whether it looks malicious. If it does, you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer high-level questions about the code behavior.
 </system-reminder>`;
 
-import { randomBytes } from "node:crypto";
 import { resourceLink, text, toolContent } from "@/utils/acp-content.js";
 import { Logger } from "@/utils/logger.js";
 
@@ -47,7 +46,10 @@ function replaceAndCalculateLocation(
 ): EditResult {
   let currentContent = fileContent;
 
-  const markerPrefix = `__REPLACE_MARKER_${randomBytes(5).toString("hex")}_`;
+  const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(5)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const markerPrefix = `__REPLACE_MARKER_${randomHex}_`;
   let markerCounter = 0;
   const markers: string[] = [];
 

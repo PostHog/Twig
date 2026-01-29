@@ -5,23 +5,23 @@ import { ToolCallView } from "./ToolCallView";
 
 interface ToolCallBlockProps {
   toolCall: ToolCall;
-  taskId?: string;
   turnCancelled?: boolean;
 }
 
-export function ToolCallBlock({
-  toolCall,
-  taskId,
-  turnCancelled,
-}: ToolCallBlockProps) {
-  if (toolCall.kind === "switch_mode" && taskId) {
+export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
+  const meta = toolCall._meta as
+    | { claudeCode?: { toolName?: string } }
+    | undefined;
+  const toolName = meta?.claudeCode?.toolName;
+
+  if (toolCall.kind === "switch_mode") {
     return (
-      <PlanApprovalView
-        toolCall={toolCall}
-        taskId={taskId}
-        turnCancelled={turnCancelled}
-      />
+      <PlanApprovalView toolCall={toolCall} turnCancelled={turnCancelled} />
     );
+  }
+
+  if (toolName === "EnterPlanMode" || toolName === "ExitPlanMode") {
+    return null;
   }
 
   if (toolCall.kind === "execute") {

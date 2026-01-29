@@ -4,7 +4,7 @@ import * as path from "node:path";
 import type { McpServerConfig, Options } from "@anthropic-ai/claude-agent-sdk";
 import { IS_ROOT } from "@/utils/common.js";
 import type { Logger } from "@/utils/logger.js";
-import { createPostToolUseHook } from "../hooks.js";
+import { createPostToolUseHook, type OnModeChange } from "../hooks.js";
 import type { TwigExecutionMode } from "../tools.js";
 
 export interface BuildOptionsParams {
@@ -18,6 +18,7 @@ export interface BuildOptionsParams {
   userProvidedOptions?: Options;
   sdkSessionId?: string;
   additionalDirectories?: string[];
+  onModeChange?: OnModeChange;
 }
 
 const BRANCH_NAMING_INSTRUCTIONS = `
@@ -78,14 +79,14 @@ function buildEnvironment(): Record<string, string> {
 
 function buildHooks(
   userHooks: Options["hooks"],
-  logger: Logger,
+  onModeChange?: OnModeChange,
 ): Options["hooks"] {
   return {
     ...userHooks,
     PostToolUse: [
       ...(userHooks?.PostToolUse || []),
       {
-        hooks: [createPostToolUseHook(logger)],
+        hooks: [createPostToolUseHook({ onModeChange })],
       },
     ],
   };
@@ -118,7 +119,7 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
       params.mcpServers,
     ),
     env: buildEnvironment(),
-    hooks: buildHooks(params.userProvidedOptions?.hooks, params.logger),
+    hooks: buildHooks(params.userProvidedOptions?.hooks, params.onModeChange),
     abortController: getAbortController(
       params.userProvidedOptions?.abortController,
     ),

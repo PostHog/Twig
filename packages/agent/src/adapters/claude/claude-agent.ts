@@ -135,6 +135,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       logger: this.logger,
       systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,
+      onModeChange: this.createOnModeChange(sessionId),
     });
 
     const input = new Pushable<SDKUserMessage>();
@@ -301,6 +302,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       userProvidedOptions: config.userProvidedOptions,
       sdkSessionId: config.sdkSessionId,
       additionalDirectories: config.additionalDirectories,
+      onModeChange: this.createOnModeChange(config.sessionId),
     });
 
     const q = query({ prompt: input, options });
@@ -331,6 +333,15 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         fileContentCache: this.fileContentCache,
         logger: this.logger,
       });
+  }
+
+  private createOnModeChange(sessionId: string) {
+    return async (newMode: TwigExecutionMode) => {
+      if (this.session) {
+        this.session.permissionMode = newMode;
+      }
+      await this.sendModeUpdate(sessionId, newMode);
+    };
   }
 
   private checkAuthStatus() {

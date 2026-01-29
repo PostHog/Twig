@@ -1,5 +1,8 @@
 import { toolInfoFromToolUse } from "@posthog/agent/adapters/claude/conversion/tool-use-to-acp";
-import { buildPermissionOptions } from "@posthog/agent/adapters/claude/permissions/permission-options";
+import {
+  buildExitPlanModePermissionOptions,
+  buildPermissionOptions,
+} from "@posthog/agent/adapters/claude/permissions/permission-options";
 import {
   buildQuestionOptions,
   buildQuestionToolCallData,
@@ -471,6 +474,46 @@ export const Default: Story = {
   args: {
     toolCall: buildToolCallData("Unknown", {}),
     options: buildPermissionOptions("Unknown", {}),
+  },
+};
+
+const exitPlanModeInput = {
+  plan: `# Add Dark Mode Support
+
+## Overview
+Add dark mode toggle to Twig app with theme persistence.
+
+## Implementation Steps
+- Create \`useThemeStore\` Zustand store with theme state (\`light\` | \`dark\` | \`system\`)
+- Add theme toggle button to settings panel that cycles through theme options
+- Update Radix UI Theme component to accept \`appearance\` prop from store
+- Add CSS variables for dark mode colors in global styles
+- Test theme switching persists across app restarts
+
+## Critical Files
+- \`apps/twig/src/renderer/stores/theme-store.ts\` (new)
+- \`apps/twig/src/renderer/App.tsx\` (modify Theme provider)
+- \`apps/twig/src/renderer/features/settings/SettingsPanel.tsx\` (add toggle)
+
+## Verification
+- Launch app, toggle dark mode, verify colors change
+- Restart app, verify theme persists
+- Test system theme option follows OS preference`,
+};
+export const ExitPlanMode: Story = {
+  args: {
+    toolCall: {
+      toolCallId: `story-${Date.now()}`,
+      title: "Approve this plan to proceed?",
+      kind: "switch_mode",
+      content: [
+        {
+          type: "content",
+          content: { type: "text", text: exitPlanModeInput.plan },
+        },
+      ],
+    },
+    options: buildExitPlanModePermissionOptions(),
   },
 };
 

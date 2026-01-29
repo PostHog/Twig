@@ -1517,16 +1517,24 @@ export function getPendingPermissionsForTask(
 
 /**
  * Hook to get the current execution mode for a task.
+ * Uses taskRunId lookup via a separate selector to ensure proper updates.
  */
 export const useCurrentModeForTask = (
   taskId: string | undefined,
 ): ExecutionMode | undefined => {
-  return useStore((s) => {
+  const taskRunId = useStore((s) => {
     if (!taskId) return undefined;
-    const session = Object.values(s.sessions).find(
-      (sess) => sess.taskId === taskId,
-    );
-    return session?.currentMode;
+    for (const session of Object.values(s.sessions)) {
+      if (session.taskId === taskId) {
+        return session.taskRunId;
+      }
+    }
+    return undefined;
+  });
+
+  return useStore((s) => {
+    if (!taskRunId) return undefined;
+    return s.sessions[taskRunId]?.currentMode;
   });
 };
 

@@ -143,7 +143,6 @@ export function ConversationView({
                 turn={item}
                 repoPath={repoPath}
                 isCloud={isCloud}
-                taskId={taskId}
               />
             ) : (
               <UserShellExecuteView key={item.id} item={item} />
@@ -184,7 +183,6 @@ interface TurnViewProps {
   turn: Turn;
   repoPath?: string | null;
   isCloud?: boolean;
-  taskId?: string;
 }
 
 function getInterruptMessage(reason?: string): string {
@@ -200,7 +198,6 @@ const TurnView = memo(function TurnView({
   turn,
   repoPath,
   isCloud = false,
-  taskId,
 }: TurnViewProps) {
   const wasCancelled = turn.stopReason === "cancelled";
   const gitAction = parseGitActionMessage(turn.userContent);
@@ -241,7 +238,6 @@ const TurnView = memo(function TurnView({
             key={`${item.sessionUpdate}-${i}`}
             item={renderItem}
             toolCalls={turn.toolCalls}
-            taskId={taskId}
             turnCancelled={wasCancelled}
           />
         );

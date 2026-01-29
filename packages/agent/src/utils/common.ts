@@ -1,6 +1,8 @@
 import type { Logger } from "./logger.js";
 
-export const IS_ROOT = (process.geteuid?.() ?? process.getuid?.()) === 0;
+export const IS_ROOT =
+  typeof process !== "undefined" &&
+  (process.geteuid?.() ?? process.getuid?.()) === 0;
 
 export function unreachable(value: never, logger: Logger): void {
   let valueAsString: string;

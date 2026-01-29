@@ -1,5 +1,5 @@
 import type { HookCallback, HookInput } from "@anthropic-ai/claude-agent-sdk";
-import type { Logger } from "@/utils/logger.js";
+import type { TwigExecutionMode } from "./tools.js";
 
 const toolUseCallbacks: {
   [toolUseId: string]: {
@@ -28,26 +28,36 @@ export const registerHookCallback = (
   };
 };
 
+export type OnModeChange = (mode: TwigExecutionMode) => Promise<void>;
+
+interface CreatePostToolUseHookParams {
+  onModeChange?: OnModeChange;
+}
+
 export const createPostToolUseHook =
-  (logger: Logger): HookCallback =>
+  ({ onModeChange }: CreatePostToolUseHookParams): HookCallback =>
   async (
     input: HookInput,
     toolUseID: string | undefined,
   ): Promise<{ continue: boolean }> => {
-    if (input.hook_event_name === "PostToolUse" && toolUseID) {
-      const onPostToolUseHook = toolUseCallbacks[toolUseID]?.onPostToolUseHook;
-      if (onPostToolUseHook) {
-        await onPostToolUseHook(
-          toolUseID,
-          input.tool_input,
-          input.tool_response,
-        );
-        delete toolUseCallbacks[toolUseID];
-      } else {
-        logger.error(
-          `No onPostToolUseHook found for tool use ID: ${toolUseID}`,
-        );
-        delete toolUseCallbacks[toolUseID];
+    if (input.hook_event_name === "PostToolUse") {
+      const toolName = input.tool_name;
+
+      if (onModeChange && toolName === "EnterPlanMode") {
+        await onModeChange("plan");
+      }
+
+      if (toolUseID) {
+        const onPostToolUseHook =
+          toolUseCallbacks[toolUseID]?.onPostToolUseHook;
+        if (onPostToolUseHook) {
+          await onPostToolUseHook(
+            toolUseID,
+            input.tool_input,
+            input.tool_response,
+          );
+          delete toolUseCallbacks[toolUseID];
+        }
       }
     }
     return { continue: true };

@@ -111,6 +111,16 @@ export abstract class BaseAcpAgent implements Agent {
     throw new Error("Method not implemented.");
   }
 
+  async sendModeUpdate(sessionId: string, modeId: string): Promise<void> {
+    await this.client.sessionUpdate({
+      sessionId,
+      update: {
+        sessionUpdate: "current_mode_update",
+        currentModeId: modeId,
+      },
+    });
+  }
+
   async getAvailableModels(
     currentModelOverride?: string,
   ): Promise<SessionModelState> {
