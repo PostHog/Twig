@@ -393,6 +393,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       if (existing) {
         return existing;
       }
+
+      // Clean up any prior session for this taskRunId before creating a new one
+      await this.cleanupSession(taskRunId);
     }
 
     const channel = `agent-event:${taskRunId}`;
