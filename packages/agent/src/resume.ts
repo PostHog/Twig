@@ -91,7 +91,9 @@ export async function resumeFromLog(
       error: result.error,
       failedStep: result.failedStep,
     });
-    throw new Error(`Failed to resume at step '${result.failedStep}': ${result.error}`);
+    throw new Error(
+      `Failed to resume at step '${result.failedStep}': ${result.error}`,
+    );
   }
 
   return {

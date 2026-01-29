@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SagaLogger } from "@posthog/shared";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplySnapshotSaga } from "./apply-snapshot-saga.js";
 import {
   createArchiveBuffer,
@@ -46,12 +46,17 @@ describe("ApplySnapshotSaga", () => {
 
       expect(result.success).toBe(true);
       expect(repo.exists("new-file.ts")).toBe(true);
-      expect(await repo.readFile("new-file.ts")).toBe("console.log('restored')");
+      expect(await repo.readFile("new-file.ts")).toBe(
+        "console.log('restored')",
+      );
     });
 
     it("extracts files in nested directories", async () => {
       const archive = await createArchiveBuffer([
-        { path: "src/components/Button.tsx", content: "export const Button = () => {}" },
+        {
+          path: "src/components/Button.tsx",
+          content: "export const Button = () => {}",
+        },
       ]);
       const mockApiClient = createMockApiClient({
         downloadArtifact: vi.fn().mockResolvedValue(archive),
@@ -93,7 +98,9 @@ describe("ApplySnapshotSaga", () => {
         runId: "run-1",
       });
 
-      expect(await repo.readFile("existing.ts")).toBe("new content from archive");
+      expect(await repo.readFile("existing.ts")).toBe(
+        "new content from archive",
+      );
     });
 
     it("deletes files marked as deleted", async () => {
@@ -483,7 +490,9 @@ describe("ApplySnapshotSaga", () => {
       const branchOutput = await repo.git(["branch", "--show-current"]);
       expect(branchOutput).toBe("");
 
-      const headRef = await repo.git(["symbolic-ref", "HEAD"]).catch(() => "detached");
+      const headRef = await repo
+        .git(["symbolic-ref", "HEAD"])
+        .catch(() => "detached");
       expect(headRef).toBe("detached");
     });
 

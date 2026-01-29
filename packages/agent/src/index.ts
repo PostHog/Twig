@@ -21,7 +21,21 @@ export type {
   InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
 export { createAcpConnection } from "./adapters/acp-connection.js";
-
+export { Agent } from "./agent.js";
+export { PostHogAPIClient } from "./posthog-api.js";
+export type {
+  ConversationTurn,
+  ResumeConfig,
+  ResumeState,
+  ToolCallInfo,
+} from "./resume.js";
+export { conversationToPromptHistory, resumeFromLog } from "./resume.js";
+export type { TreeSnapshot, TreeTrackerConfig } from "./tree-tracker.js";
+export {
+  isCommitOnRemote,
+  TreeTracker,
+  validateForCloudHandoff,
+} from "./tree-tracker.js";
 export type {
   AgentConfig,
   AgentMode,
@@ -37,29 +51,9 @@ export type {
   TreeSnapshotEvent,
   WorktreeInfo,
 } from "./types.js";
-
-export type { TreeSnapshot, TreeTrackerConfig } from "./tree-tracker.js";
-export {
-  isCommitOnRemote,
-  TreeTracker,
-  validateForCloudHandoff,
-} from "./tree-tracker.js";
-
-export type {
-  ConversationTurn,
-  ResumeConfig,
-  ResumeState,
-  ToolCallInfo,
-} from "./resume.js";
-export { conversationToPromptHistory, resumeFromLog } from "./resume.js";
-
 export { getLlmGatewayUrl } from "./utils/gateway.js";
 export type { LoggerConfig } from "./utils/logger.js";
 export { Logger } from "./utils/logger.js";
-
-export { Agent } from "./agent.js";
-
-export { PostHogAPIClient } from "./posthog-api.js";
 
 export type { WorktreeConfig } from "./worktree-manager.js";
 export { WorktreeManager } from "./worktree-manager.js";

@@ -1,14 +1,11 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SagaLogger } from "@posthog/shared";
+import { afterEach, beforeEach, describe, expect, it, type vi } from "vitest";
 import type { PostHogAPIClient } from "../posthog-api.js";
-import { CaptureTreeSaga } from "./capture-tree-saga.js";
-import {
-  isCommitOnRemote,
-  validateForCloudHandoff,
-} from "../tree-tracker.js";
+import { isCommitOnRemote, validateForCloudHandoff } from "../tree-tracker.js";
 import type { TreeSnapshot } from "../types.js";
+import { CaptureTreeSaga } from "./capture-tree-saga.js";
 import {
   createMockApiClient,
   createMockLogger,
@@ -55,7 +52,9 @@ describe("CaptureTreeSaga", () => {
       expect(secondResult.success).toBe(true);
       if (secondResult.success) {
         expect(secondResult.data.snapshot).toBeNull();
-        expect(secondResult.data.newTreeHash).toBe(firstResult.data.newTreeHash);
+        expect(secondResult.data.newTreeHash).toBe(
+          firstResult.data.newTreeHash,
+        );
       }
     });
   });
@@ -258,7 +257,9 @@ describe("CaptureTreeSaga", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.snapshot?.archiveUrl).toBe("gs://bucket/trees/test.tar.gz");
+        expect(result.data.snapshot?.archiveUrl).toBe(
+          "gs://bucket/trees/test.tar.gz",
+        );
       }
       expect(mockApiClient.uploadTaskArtifacts).toHaveBeenCalled();
     });
@@ -296,9 +297,9 @@ describe("CaptureTreeSaga", () => {
 
     it("handles upload failure", async () => {
       const mockApiClient = createMockApiClient();
-      (mockApiClient.uploadTaskArtifacts as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error("Network error"),
-      );
+      (
+        mockApiClient.uploadTaskArtifacts as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(new Error("Network error"));
 
       await repo.writeFile("new.ts", "content");
 
@@ -321,9 +322,9 @@ describe("CaptureTreeSaga", () => {
       const { readdir } = await import("node:fs/promises");
 
       const mockApiClient = createMockApiClient();
-      (mockApiClient.uploadTaskArtifacts as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error("Network error"),
-      );
+      (
+        mockApiClient.uploadTaskArtifacts as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(new Error("Network error"));
 
       await repo.writeFile("new.ts", "content");
 
@@ -509,7 +510,12 @@ describe("CaptureTreeSaga", () => {
 
       const changes = secondResult.data.snapshot?.changes ?? [];
       expect(changes).toContainEqual({ path: "original.ts", status: "D" });
-      expect(changes.some((c) => c.path === "renamed.ts" && (c.status === "A" || c.status === "M"))).toBe(true);
+      expect(
+        changes.some(
+          (c) =>
+            c.path === "renamed.ts" && (c.status === "A" || c.status === "M"),
+        ),
+      ).toBe(true);
     });
   });
 
@@ -523,10 +529,22 @@ describe("CaptureTreeSaga", () => {
       await mkdir(tmpDir, { recursive: true });
 
       const saga = new CaptureTreeSaga(mockLogger);
-      const originalExecute = (saga as unknown as { gitWithTempIndex: typeof saga["gitWithTempIndex"] }).gitWithTempIndex.bind(saga);
+      const originalExecute = (
+        saga as unknown as {
+          gitWithTempIndex: (typeof saga)["gitWithTempIndex"];
+        }
+      ).gitWithTempIndex.bind(saga);
 
       let callCount = 0;
-      (saga as unknown as { gitWithTempIndex: (args: string[], tempIndexPath: string, cwd: string) => Promise<string> }).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
+      (
+        saga as unknown as {
+          gitWithTempIndex: (
+            args: string[],
+            tempIndexPath: string,
+            cwd: string,
+          ) => Promise<string>;
+        }
+      ).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
         callCount++;
         if (callCount === 2) {
           throw new Error("Simulated add -A failure");
@@ -560,10 +578,22 @@ describe("CaptureTreeSaga", () => {
       await mkdir(tmpDir, { recursive: true });
 
       const saga = new CaptureTreeSaga(mockLogger);
-      const originalExecute = (saga as unknown as { gitWithTempIndex: typeof saga["gitWithTempIndex"] }).gitWithTempIndex.bind(saga);
+      const originalExecute = (
+        saga as unknown as {
+          gitWithTempIndex: (typeof saga)["gitWithTempIndex"];
+        }
+      ).gitWithTempIndex.bind(saga);
 
       let callCount = 0;
-      (saga as unknown as { gitWithTempIndex: (args: string[], tempIndexPath: string, cwd: string) => Promise<string> }).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
+      (
+        saga as unknown as {
+          gitWithTempIndex: (
+            args: string[],
+            tempIndexPath: string,
+            cwd: string,
+          ) => Promise<string>;
+        }
+      ).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
         callCount++;
         if (callCount === 3) {
           throw new Error("Simulated write-tree failure");
@@ -611,7 +641,10 @@ describe("CaptureTreeSaga", () => {
     });
 
     it("handles nested directories", async () => {
-      await repo.writeFile("src/components/Button.tsx", "export const Button = () => {}");
+      await repo.writeFile(
+        "src/components/Button.tsx",
+        "export const Button = () => {}",
+      );
 
       const saga = new CaptureTreeSaga(mockLogger);
       const result = await saga.run({
@@ -791,7 +824,10 @@ describe("CaptureTreeSaga", () => {
 
   describe("submodule detection", () => {
     it("warns when repository has .gitmodules file", async () => {
-      await repo.writeFile(".gitmodules", "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git");
+      await repo.writeFile(
+        ".gitmodules",
+        '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git',
+      );
       await repo.writeFile("file.ts", "content");
 
       const saga = new CaptureTreeSaga(mockLogger);
@@ -841,18 +877,18 @@ describe("validateForCloudHandoff", () => {
   it("throws error when snapshot has no base commit", async () => {
     const snapshot = createSnapshot({ baseCommit: null });
 
-    await expect(
-      validateForCloudHandoff(snapshot, repo.path),
-    ).rejects.toThrow("Cannot hand off to cloud: no base commit");
+    await expect(validateForCloudHandoff(snapshot, repo.path)).rejects.toThrow(
+      "Cannot hand off to cloud: no base commit",
+    );
   });
 
   it("throws error when base commit is not on any remote", async () => {
     const headCommit = await repo.git(["rev-parse", "HEAD"]);
     const snapshot = createSnapshot({ baseCommit: headCommit });
 
-    await expect(
-      validateForCloudHandoff(snapshot, repo.path),
-    ).rejects.toThrow(/is not pushed.*Run 'git push'/);
+    await expect(validateForCloudHandoff(snapshot, repo.path)).rejects.toThrow(
+      /is not pushed.*Run 'git push'/,
+    );
   });
 
   it("succeeds when base commit is on remote", async () => {

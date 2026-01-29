@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SagaLogger } from "@posthog/shared";
+import { afterEach, beforeEach, describe, expect, it, type vi } from "vitest";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import { ResumeSaga } from "./resume-saga.js";
@@ -61,7 +61,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([]);
 
       const saga = new ResumeSaga(mockLogger);
       const result = await saga.run({
@@ -84,7 +86,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createUserMessage("Hello"),
         createAgentChunk("Hi there!"),
         createUserMessage("Help me"),
@@ -114,7 +118,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createAgentChunk("Hello "),
         createAgentChunk("world"),
         createAgentChunk("!"),
@@ -140,7 +146,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createToolCall("call-1", "ReadFile", { path: "/test.ts" }),
         createToolResult("call-1", "file contents here"),
       ]);
@@ -171,10 +179,15 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createToolCall("call-1", "ReadFile", { path: "/a.ts" }),
         createToolResult("call-1", "content a"),
-        createToolCall("call-2", "WriteFile", { path: "/b.ts", content: "new" }),
+        createToolCall("call-2", "WriteFile", {
+          path: "/b.ts",
+          content: "new",
+        }),
         createToolResult("call-2", "written"),
       ]);
 
@@ -196,7 +209,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createAgentChunk("Let me read the file"),
         createToolCall("call-1", "ReadFile", { path: "/test.ts" }),
       ]);
@@ -227,10 +242,15 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createToolCall("call-1", "ReadFile", { path: "/a.ts" }),
         createToolResult("call-1", "content a"),
-        createToolCall("call-2", "WriteFile", { path: "/b.ts", content: "new" }),
+        createToolCall("call-2", "WriteFile", {
+          path: "/b.ts",
+          content: "new",
+        }),
       ]);
 
       const saga = new ResumeSaga(mockLogger);
@@ -256,7 +276,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createTreeSnapshotNotification("hash-1"),
         createUserMessage("continue"),
         createTreeSnapshotNotification("hash-2", "gs://bucket/hash-2.tar.gz"),
@@ -280,7 +302,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createNotification(`_${POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT}`, {
           treeHash: "sdk-prefixed-hash",
           baseCommit: "abc",
@@ -307,8 +331,12 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
-        createTreeSnapshotNotification("hash-1", "gs://bucket/file.tar.gz", { interrupted: true }),
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
+        createTreeSnapshotNotification("hash-1", "gs://bucket/file.tar.gz", {
+          interrupted: true,
+        }),
       ]);
 
       const saga = new ResumeSaga(mockLogger);
@@ -337,7 +365,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createNotification(POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT, {
           treeHash: "hash-1",
           baseCommit,
@@ -346,9 +376,9 @@ describe("ResumeSaga", () => {
           timestamp: new Date().toISOString(),
         }),
       ]);
-      (mockApiClient.downloadArtifact as ReturnType<typeof vi.fn>).mockResolvedValue(
-        archive,
-      );
+      (
+        mockApiClient.downloadArtifact as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(archive);
 
       const saga = new ResumeSaga(mockLogger);
       const result = await saga.run({
@@ -371,7 +401,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createTreeSnapshotNotification("hash-1"),
         createUserMessage("hello"),
       ]);
@@ -396,13 +428,15 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createTreeSnapshotNotification("hash-1", "gs://bucket/hash-1.tar.gz"),
         createUserMessage("hello"),
       ]);
-      (mockApiClient.downloadArtifact as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error("Download failed"),
-      );
+      (
+        mockApiClient.downloadArtifact as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(new Error("Download failed"));
 
       const saga = new ResumeSaga(mockLogger);
       const result = await saga.run({
@@ -426,9 +460,15 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
-        createTreeSnapshotNotification("hash-1", undefined, { device: { type: "local" } }),
-        createTreeSnapshotNotification("hash-2", undefined, { device: { type: "cloud" } }),
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
+        createTreeSnapshotNotification("hash-1", undefined, {
+          device: { type: "local" },
+        }),
+        createTreeSnapshotNotification("hash-2", undefined, {
+          device: { type: "cloud" },
+        }),
       ]);
 
       const saga = new ResumeSaga(mockLogger);
@@ -470,9 +510,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error("Log fetch failed"),
-      );
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(new Error("Log fetch failed"));
 
       const saga = new ResumeSaga(mockLogger);
       const result = await saga.run({
@@ -494,7 +534,9 @@ describe("ResumeSaga", () => {
       (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
         createTaskRun(),
       );
-      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
         createUserMessage("one"),
         createAgentChunk("two"),
         createUserMessage("three"),

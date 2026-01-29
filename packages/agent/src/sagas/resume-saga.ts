@@ -47,7 +47,8 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
 
   protected async execute(input: ResumeInput): Promise<ResumeOutput> {
     const { taskId, runId, repositoryPath, apiClient } = input;
-    const logger = input.logger || new Logger({ debug: false, prefix: "[Resume]" });
+    const logger =
+      input.logger || new Logger({ debug: false, prefix: "[Resume]" });
 
     // Step 1: Fetch task run (read-only)
     const taskRun = await this.readOnlyStep("fetch_task_run", () =>
@@ -108,10 +109,13 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
           } catch (error) {
             // Log but don't fail - continue with conversation rebuild
             // ApplySnapshotSaga handles its own rollback internally
-            this.log.warn("Failed to apply tree snapshot, continuing without it", {
-              error: error instanceof Error ? error.message : String(error),
-              treeHash: latestSnapshot.treeHash,
-            });
+            this.log.warn(
+              "Failed to apply tree snapshot, continuing without it",
+              {
+                error: error instanceof Error ? error.message : String(error),
+                treeHash: latestSnapshot.treeHash,
+              },
+            );
           }
         },
         rollback: async () => {
@@ -177,7 +181,9 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
         method === sdkPrefixedMethod ||
         method === POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT
       ) {
-        const params = entry.notification.params as TreeSnapshotEvent | undefined;
+        const params = entry.notification.params as
+          | TreeSnapshotEvent
+          | undefined;
         if (params?.treeHash) {
           return params;
         }
@@ -201,7 +207,9 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
     return undefined;
   }
 
-  private rebuildConversation(entries: StoredNotification[]): ConversationTurn[] {
+  private rebuildConversation(
+    entries: StoredNotification[],
+  ): ConversationTurn[] {
     const turns: ConversationTurn[] = [];
     let currentAssistantContent: ContentBlock[] = [];
     let currentToolCalls: ToolCallInfo[] = [];
@@ -264,9 +272,8 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
 
           case "tool_call":
           case "tool_call_update": {
-            const meta = (update._meta as Record<string, unknown>)?.claudeCode as
-              | Record<string, unknown>
-              | undefined;
+            const meta = (update._meta as Record<string, unknown>)
+              ?.claudeCode as Record<string, unknown> | undefined;
             if (meta) {
               const toolCallId = meta.toolCallId as string | undefined;
               const toolName = meta.toolName as string | undefined;
@@ -295,9 +302,8 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
           }
 
           case "tool_result": {
-            const meta = (update._meta as Record<string, unknown>)?.claudeCode as
-              | Record<string, unknown>
-              | undefined;
+            const meta = (update._meta as Record<string, unknown>)
+              ?.claudeCode as Record<string, unknown> | undefined;
             if (meta) {
               const toolCallId = meta.toolCallId as string | undefined;
               const toolResponse = meta.toolResponse;

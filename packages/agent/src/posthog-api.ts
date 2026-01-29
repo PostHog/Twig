@@ -1,4 +1,10 @@
-import type { ArtifactType, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
+import type {
+  ArtifactType,
+  PostHogAPIConfig,
+  StoredEntry,
+  TaskRun,
+  TaskRunArtifact,
+} from "./types.js";
 import { getLlmGatewayUrl } from "./utils/gateway.js";
 
 export { getLlmGatewayUrl };
@@ -230,5 +236,4 @@ export class PostHogAPIClient {
       );
     }
   }
-
 }

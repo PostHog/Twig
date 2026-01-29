@@ -71,7 +71,9 @@ export class TreeTracker {
         error: result.error,
         failedStep: result.failedStep,
       });
-      throw new Error(`Failed to capture tree at step '${result.failedStep}': ${result.error}`);
+      throw new Error(
+        `Failed to capture tree at step '${result.failedStep}': ${result.error}`,
+      );
     }
 
     // Only update lastTreeHash on success
@@ -115,7 +117,9 @@ export class TreeTracker {
         failedStep: result.failedStep,
         treeHash: snapshot.treeHash,
       });
-      throw new Error(`Failed to apply snapshot at step '${result.failedStep}': ${result.error}`);
+      throw new Error(
+        `Failed to apply snapshot at step '${result.failedStep}': ${result.error}`,
+      );
     }
 
     // Only update lastTreeHash on success

@@ -33,7 +33,9 @@ export class ApplySnapshotSaga extends Saga<
     super(logger);
   }
 
-  protected async execute(input: ApplySnapshotInput): Promise<ApplySnapshotOutput> {
+  protected async execute(
+    input: ApplySnapshotInput,
+  ): Promise<ApplySnapshotOutput> {
     const { snapshot, repositoryPath, apiClient, taskId, runId } = input;
     const tmpDir = join(repositoryPath, ".posthog", "tmp");
 
@@ -156,7 +158,9 @@ export class ApplySnapshotSaga extends Saga<
       },
       rollback: async () => {
         // Can't easily undo file extraction - would need to track original files
-        this.log.warn("Cannot rollback file extraction - files may be inconsistent");
+        this.log.warn(
+          "Cannot rollback file extraction - files may be inconsistent",
+        );
       },
     });
 
@@ -179,7 +183,9 @@ export class ApplySnapshotSaga extends Saga<
     // Clean up archive on success
     await rm(this.archivePath, { force: true }).catch(() => {});
 
-    const deletedCount = snapshot.changes.filter((c) => c.status === "D").length;
+    const deletedCount = snapshot.changes.filter(
+      (c) => c.status === "D",
+    ).length;
     this.log.info("Tree snapshot applied", {
       treeHash: snapshot.treeHash,
       totalChanges: snapshot.changes.length,

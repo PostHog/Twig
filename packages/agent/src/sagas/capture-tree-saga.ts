@@ -69,11 +69,7 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
 
     // Step 2b: Stage all files (operates on existing temp index)
     await this.readOnlyStep("stage_files", () =>
-      this.gitWithTempIndex(
-        ["add", "-A"],
-        this.tempIndexPath!,
-        repositoryPath,
-      ),
+      this.gitWithTempIndex(["add", "-A"], this.tempIndexPath!, repositoryPath),
     );
 
     // Step 2c: Write tree (read-only - creates git object but doesn't need cleanup)

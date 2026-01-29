@@ -1,12 +1,12 @@
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { vi } from "vitest";
-import * as tar from "tar";
 import type { SagaLogger } from "@posthog/shared";
+import * as tar from "tar";
+import { vi } from "vitest";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import type { StoredNotification, TaskRun, TreeSnapshot } from "../types.js";
@@ -24,7 +24,10 @@ export interface TestRepo {
 }
 
 export async function createTestRepo(prefix = "test-repo"): Promise<TestRepo> {
-  const repoPath = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const repoPath = join(
+    tmpdir(),
+    `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   await mkdir(repoPath, { recursive: true });
 
   const git = async (args: string[]): Promise<string> => {
@@ -72,11 +75,13 @@ export function createMockLogger(): SagaLogger {
   };
 }
 
-export function createMockApiClient(overrides: Partial<PostHogAPIClient> = {}): PostHogAPIClient {
+export function createMockApiClient(
+  overrides: Partial<PostHogAPIClient> = {},
+): PostHogAPIClient {
   return {
-    uploadTaskArtifacts: vi.fn().mockResolvedValue([
-      { storage_path: "gs://bucket/trees/test.tar.gz" },
-    ]),
+    uploadTaskArtifacts: vi
+      .fn()
+      .mockResolvedValue([{ storage_path: "gs://bucket/trees/test.tar.gz" }]),
     downloadArtifact: vi.fn(),
     getTaskRun: vi.fn(),
     fetchTaskRunLogs: vi.fn(),
@@ -99,10 +104,14 @@ export async function createArchiveBuffer(
   symlinks: Array<ArchiveSymlink> = [],
 ): Promise<Buffer> {
   const { symlink } = await import("node:fs/promises");
-  const tmpDir = join(tmpdir(), `archive-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmpDir = join(
+    tmpdir(),
+    `archive-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   await mkdir(tmpDir, { recursive: true });
 
-  const filesToArchive = files.length > 0 ? files : [{ path: ".empty", content: "" }];
+  const filesToArchive =
+    files.length > 0 ? files : [{ path: ".empty", content: "" }];
 
   for (const file of filesToArchive) {
     const fullPath = join(tmpDir, file.path);
@@ -119,10 +128,10 @@ export async function createArchiveBuffer(
   }
 
   const archivePath = join(tmpDir, "archive.tar.gz");
-  await tar.create(
-    { gzip: true, file: archivePath, cwd: tmpDir },
-    [...filesToArchive.map((f) => f.path), ...symlinkPaths],
-  );
+  await tar.create({ gzip: true, file: archivePath, cwd: tmpDir }, [
+    ...filesToArchive.map((f) => f.path),
+    ...symlinkPaths,
+  ]);
 
   const content = await readFile(archivePath);
   await rm(tmpDir, { recursive: true, force: true });
@@ -130,7 +139,9 @@ export async function createArchiveBuffer(
   return Buffer.from(content.toString("base64"));
 }
 
-export function createSnapshot(overrides: Partial<TreeSnapshot> = {}): TreeSnapshot {
+export function createSnapshot(
+  overrides: Partial<TreeSnapshot> = {},
+): TreeSnapshot {
   return {
     treeHash: "test-tree-hash",
     baseCommit: null,
