@@ -115,6 +115,13 @@ process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
 process.on("uncaughtException", (error) => {
+  if (error.message === "write EIO") {
+    // stdout/stderr pipe is broken (shutdown). Disable the console transport
+    // so it stops hitting the broken pipe, then log to file.
+    log.transports.console.level = false;
+    log.error("Stdout pipe broken during shutdown (write EIO)");
+    return;
+  }
   log.error("Uncaught exception", error);
 });
 
