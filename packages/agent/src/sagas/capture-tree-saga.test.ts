@@ -2,9 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { SagaLogger } from "@posthog/shared";
 import { afterEach, beforeEach, describe, expect, it, type vi } from "vitest";
-import type { PostHogAPIClient } from "../posthog-api.js";
 import { isCommitOnRemote, validateForCloudHandoff } from "../tree-tracker.js";
-import type { TreeSnapshot } from "../types.js";
 import { CaptureTreeSaga } from "./capture-tree-saga.js";
 import {
   createMockApiClient,

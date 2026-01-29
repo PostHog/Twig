@@ -1,5 +1,5 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import { Saga, type SagaLogger } from "@posthog/shared";
+import { Saga } from "@posthog/shared";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import { TreeTracker } from "../tree-tracker.js";
@@ -41,10 +41,6 @@ export interface ResumeOutput {
 }
 
 export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
-  constructor(logger?: SagaLogger) {
-    super(logger);
-  }
-
   protected async execute(input: ResumeInput): Promise<ResumeOutput> {
     const { taskId, runId, repositoryPath, apiClient } = input;
     const logger =

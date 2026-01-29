@@ -17,11 +17,7 @@
 
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type { PostHogAPIClient } from "./posthog-api.js";
-import {
-  ResumeSaga,
-  type ConversationTurn as SagaConversationTurn,
-  type ToolCallInfo as SagaToolCallInfo,
-} from "./sagas/resume-saga.js";
+import { ResumeSaga } from "./sagas/resume-saga.js";
 import type { DeviceInfo, TreeSnapshotEvent } from "./types.js";
 import { Logger } from "./utils/logger.js";
 

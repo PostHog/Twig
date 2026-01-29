@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type { SagaLogger } from "@posthog/shared";
 import { afterEach, beforeEach, describe, expect, it, type vi } from "vitest";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";

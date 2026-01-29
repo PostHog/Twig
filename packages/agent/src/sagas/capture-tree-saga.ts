@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { Saga, type SagaLogger } from "@posthog/shared";
+import { Saga } from "@posthog/shared";
 import * as tar from "tar";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import type { FileChange, FileStatus, TreeSnapshot } from "../types.js";
@@ -27,10 +27,6 @@ export interface CaptureTreeOutput {
 export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
   private tempIndexPath: string | null = null;
   private archivePath: string | null = null;
-
-  constructor(logger?: SagaLogger) {
-    super(logger);
-  }
 
   protected async execute(input: CaptureTreeInput): Promise<CaptureTreeOutput> {
     const { repositoryPath, runId, lastTreeHash, interrupted, apiClient } =

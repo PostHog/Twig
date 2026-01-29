@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { Saga, type SagaLogger } from "@posthog/shared";
+import { Saga } from "@posthog/shared";
 import * as tar from "tar";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import type { TreeSnapshot } from "../types.js";
@@ -28,10 +28,6 @@ export class ApplySnapshotSaga extends Saga<
   private archivePath: string | null = null;
   private originalHead: string | null = null;
   private originalBranch: string | null = null;
-
-  constructor(logger?: SagaLogger) {
-    super(logger);
-  }
 
   protected async execute(
     input: ApplySnapshotInput,
