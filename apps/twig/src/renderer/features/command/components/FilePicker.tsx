@@ -80,6 +80,7 @@ export function FilePicker({
         align="center"
         sideOffset={0}
         onInteractOutside={() => handleOpenChange(false)}
+        onEscapeKeyDown={(e) => e.stopPropagation()}
       >
         <Command.Root shouldFilter={false} label="File picker" key={resultsKey}>
           <Command.Input
