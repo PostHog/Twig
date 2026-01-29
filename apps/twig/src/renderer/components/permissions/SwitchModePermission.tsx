@@ -1,4 +1,5 @@
 import { ActionSelector } from "@components/ActionSelector";
+import { isSwitchModeToolMeta } from "@posthog/agent/adapters/claude/tool-meta";
 import { useMemo } from "react";
 import { PlanContent } from "./PlanContent";
 import { type BasePermissionProps, toSelectorOptions } from "./types";
@@ -10,8 +11,10 @@ export function SwitchModePermission({
   onCancel,
 }: BasePermissionProps) {
   const planText = useMemo(() => {
-    const rawPlan = (toolCall.rawInput as { plan?: string } | undefined)?.plan;
-    if (rawPlan) return rawPlan;
+    const meta = toolCall._meta;
+    if (meta && isSwitchModeToolMeta(meta)) {
+      return meta.switch_mode.plan ?? null;
+    }
 
     const content = toolCall.content;
     if (!content || content.length === 0) return null;
@@ -25,7 +28,7 @@ export function SwitchModePermission({
       }
     }
     return null;
-  }, [toolCall.rawInput, toolCall.content]);
+  }, [toolCall._meta, toolCall.content]);
 
   return (
     <ActionSelector

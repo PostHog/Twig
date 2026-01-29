@@ -9,10 +9,7 @@ interface ToolCallBlockProps {
 }
 
 export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
-  const meta = toolCall._meta as
-    | { claudeCode?: { toolName?: string } }
-    | undefined;
-  const toolName = meta?.claudeCode?.toolName;
+  const toolName = toolCall._meta?.claudeCode?.toolName;
 
   if (toolCall.kind === "switch_mode") {
     return (

@@ -17,7 +17,8 @@ import { image, text } from "@/utils/acp-content.js";
 import { unreachable } from "@/utils/common.js";
 import type { Logger } from "@/utils/logger.js";
 import { registerHookCallback } from "../hooks.js";
-import type { Session, ToolUpdateMeta, ToolUseCache } from "../types.js";
+import { buildToolMeta, type TwigToolMeta } from "../tool-meta.js";
+import type { Session, ToolUseCache } from "../types.js";
 import {
   type ClaudePlanEntry,
   planEntries,
@@ -62,10 +63,18 @@ function messageUpdateType(role: Role) {
   return role === "assistant" ? "agent_message_chunk" : "user_message_chunk";
 }
 
-function toolMeta(toolName: string, toolResponse?: unknown): ToolUpdateMeta {
-  return toolResponse
-    ? { claudeCode: { toolName, toolResponse } }
+function toolMeta(
+  toolName: string,
+  input?: Record<string, unknown>,
+  toolResponse?: unknown,
+): TwigToolMeta {
+  const meta = input
+    ? buildToolMeta(toolName, input)
     : { claudeCode: { toolName } };
+  if (toolResponse && meta.claudeCode) {
+    meta.claudeCode.toolResponse = toolResponse;
+  }
+  return meta;
 }
 
 function handleTextChunk(
@@ -120,14 +129,22 @@ function handleToolUseChunk(
     return null;
   }
 
+  let rawInput: Record<string, unknown> | undefined;
+  try {
+    rawInput = JSON.parse(JSON.stringify(chunk.input));
+  } catch {
+    // ignore
+  }
+
   registerHookCallback(chunk.id, {
     onPostToolUseHook: async (toolUseId, _toolInput, toolResponse) => {
       const toolUse = ctx.toolUseCache[toolUseId];
       if (toolUse) {
+        const input = toolUse.input as Record<string, unknown> | undefined;
         await ctx.client.sessionUpdate({
           sessionId: ctx.sessionId,
           update: {
-            _meta: toolMeta(toolUse.name, toolResponse),
+            _meta: toolMeta(toolUse.name, input, toolResponse),
             toolCallId: toolUseId,
             sessionUpdate: "tool_call_update",
           },
@@ -140,15 +157,8 @@ function handleToolUseChunk(
     },
   });
 
-  let rawInput: Record<string, unknown> | undefined;
-  try {
-    rawInput = JSON.parse(JSON.stringify(chunk.input));
-  } catch {
-    // ignore
-  }
-
   return {
-    _meta: toolMeta(chunk.name),
+    _meta: toolMeta(chunk.name, rawInput),
     toolCallId: chunk.id,
     sessionUpdate: "tool_call",
     rawInput,
@@ -173,8 +183,9 @@ function handleToolResultChunk(
     return null;
   }
 
+  const input = toolUse.input as Record<string, unknown> | undefined;
   return {
-    _meta: toolMeta(toolUse.name),
+    _meta: toolMeta(toolUse.name, input),
     toolCallId: chunk.tool_use_id,
     sessionUpdate: "tool_call_update",
     status: chunk.is_error ? "failed" : "completed",

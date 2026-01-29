@@ -1,6 +1,7 @@
 import { PlanContent } from "@components/permissions/PlanContent";
 import type { ToolCall } from "@features/sessions/types";
 import { CheckCircle } from "@phosphor-icons/react";
+import { isSwitchModeToolMeta } from "@posthog/agent/adapters/claude/tool-meta";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useMemo } from "react";
 
@@ -19,8 +20,10 @@ export function PlanApprovalView({
     (status === "pending" || status === "in_progress") && turnCancelled;
 
   const planText = useMemo(() => {
-    const rawPlan = (toolCall.rawInput as { plan?: string } | undefined)?.plan;
-    if (rawPlan) return rawPlan;
+    const meta = toolCall._meta;
+    if (meta && isSwitchModeToolMeta(meta)) {
+      return meta.switch_mode.plan ?? null;
+    }
 
     if (!content || content.length === 0) return null;
     const textContent = content.find((c) => c.type === "content");
@@ -33,7 +36,7 @@ export function PlanApprovalView({
       }
     }
     return null;
-  }, [content, toolCall.rawInput]);
+  }, [content, toolCall._meta]);
 
   if (!isComplete && !wasCancelled) return null;
 

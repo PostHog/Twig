@@ -41,13 +41,6 @@ export type ToolUseCache = {
   };
 };
 
-export type ToolUpdateMeta = {
-  claudeCode?: {
-    toolName: string;
-    toolResponse?: unknown;
-  };
-};
-
 export type NewSessionMeta = {
   sessionId?: string;
   initialModeId?: string;
