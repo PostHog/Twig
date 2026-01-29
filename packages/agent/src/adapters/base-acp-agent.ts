@@ -62,9 +62,11 @@ export abstract class BaseAcpAgent implements Agent {
 
   async closeSession(): Promise<void> {
     try {
-      await this.cancel({ sessionId: this.sessionId });
+      // Abort first so in-flight HTTP requests are cancelled,
+      // otherwise interrupt() deadlocks waiting for the query to stop
+      // while the query waits on an API call that will never abort.
       this.session.abortController.abort();
-      this.logger.info("Closed session", { sessionId: this.sessionId });
+      await this.cancel({ sessionId: this.sessionId });
     } catch (err) {
       this.logger.warn("Failed to close session", {
         sessionId: this.sessionId,
