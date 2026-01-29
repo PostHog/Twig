@@ -104,8 +104,7 @@ export interface TreeSnapshotPayload {
   treeHash: string;
   baseCommit: string | null;
   archiveUrl?: string;
-  filesChanged: string[];
-  filesDeleted?: string[];
+  changes: Array<{ path: string; status: "A" | "M" | "D" }>;
   timestamp: string;
   interrupted?: boolean;
   device?: {

@@ -26,6 +26,8 @@ export type {
   AgentConfig,
   AgentMode,
   DeviceInfo,
+  FileChange,
+  FileStatus,
   LogLevel,
   OnLogCallback,
   StoredEntry,

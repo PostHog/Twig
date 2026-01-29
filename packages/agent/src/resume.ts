@@ -68,295 +68,32 @@ export async function resumeFromLog(
     runId: config.runId,
   });
 
-  // 1. Fetch task run to get log URL
-  const taskRun = await config.apiClient.getTaskRun(
-    config.taskId,
-    config.runId,
-  );
+  const saga = new ResumeSaga(logger);
 
-  if (!taskRun.log_url) {
-    logger.info("No log URL found, starting fresh");
-    return {
-      conversation: [],
-      latestSnapshot: null,
-      interrupted: false,
-      logEntryCount: 0,
-    };
-  }
-
-  // 2. Fetch log entries
-  const entries = await config.apiClient.fetchTaskRunLogs(taskRun);
-
-  if (entries.length === 0) {
-    logger.info("No log entries found, starting fresh");
-    return {
-      conversation: [],
-      latestSnapshot: null,
-      interrupted: false,
-      logEntryCount: 0,
-    };
-  }
-
-  logger.info("Fetched log entries", { count: entries.length });
-
-  // 3. Find latest tree snapshot
-  const latestSnapshot = findLatestTreeSnapshot(entries);
-
-  // 4. Apply tree snapshot if present
-  if (latestSnapshot) {
-    logger.info("Found tree snapshot", {
-      treeHash: latestSnapshot.treeHash,
-      hasArchiveUrl: !!latestSnapshot.archiveUrl,
-      filesChanged: latestSnapshot.filesChanged?.length ?? 0,
-      filesDeleted: latestSnapshot.filesDeleted?.length ?? 0,
-      interrupted: latestSnapshot.interrupted,
-    });
-
-    // Warn if snapshot has no archive URL (can't restore files)
-    if (!latestSnapshot.archiveUrl) {
-      logger.warn(
-        "Snapshot found but has no archive URL - files cannot be restored",
-        {
-          treeHash: latestSnapshot.treeHash,
-          filesChanged: latestSnapshot.filesChanged?.length ?? 0,
-        },
-      );
-    } else {
-      const treeTracker = new TreeTracker({
-        repositoryPath: config.repositoryPath,
-        taskId: config.taskId,
-        runId: config.runId,
-        apiClient: config.apiClient,
-        logger: logger.child("TreeTracker"),
-      });
-
-      try {
-        await treeTracker.applyTreeSnapshot(latestSnapshot);
-        treeTracker.setLastTreeHash(latestSnapshot.treeHash);
-        logger.info("Tree snapshot applied successfully", {
-          treeHash: latestSnapshot.treeHash,
-        });
-      } catch (error) {
-        logger.warn("Failed to apply tree snapshot, continuing without it", {
-          error,
-          treeHash: latestSnapshot.treeHash,
-        });
-      }
-    }
-  }
-
-  // 5. Rebuild conversation from log
-  const conversation = rebuildConversation(entries, logger);
-
-  // 6. Find last device info
-  const lastDevice = findLastDeviceInfo(entries);
-
-  logger.info("Resume state rebuilt", {
-    turns: conversation.length,
-    hasSnapshot: !!latestSnapshot,
-    interrupted: latestSnapshot?.interrupted ?? false,
+  const result = await saga.run({
+    taskId: config.taskId,
+    runId: config.runId,
+    repositoryPath: config.repositoryPath,
+    apiClient: config.apiClient,
+    logger,
   });
+
+  if (!result.success) {
+    logger.error("Failed to resume from log", {
+      error: result.error,
+      failedStep: result.failedStep,
+    });
+    throw new Error(`Failed to resume at step '${result.failedStep}': ${result.error}`);
+  }
 
   return {
-    conversation,
-    latestSnapshot,
-    interrupted: latestSnapshot?.interrupted ?? false,
-    lastDevice,
-    logEntryCount: entries.length,
+    conversation: result.data.conversation as ConversationTurn[],
+    latestSnapshot: result.data.latestSnapshot,
+    snapshotApplied: result.data.snapshotApplied,
+    interrupted: result.data.interrupted,
+    lastDevice: result.data.lastDevice,
+    logEntryCount: result.data.logEntryCount,
   };
-}
-
-/**
- * Find the latest tree_snapshot event in the log.
- */
-function findLatestTreeSnapshot(
-  entries: StoredNotification[],
-): TreeSnapshotEvent | null {
-  // ACP SDK's extNotification adds an extra underscore prefix
-  const sdkPrefixedMethod = `_${POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT}`;
-
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    // Note: snapshots can be written two ways:
-    // 1. Via extNotification (ACP SDK adds underscore prefix) → __posthog/tree_snapshot
-    // 2. Via direct API call → _posthog/tree_snapshot
-    const method = entry.notification?.method;
-    if (
-      method === sdkPrefixedMethod ||
-      method === POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT
-    ) {
-      const params = entry.notification.params as TreeSnapshotEvent | undefined;
-      if (params?.treeHash) {
-        return params;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Find the last device info from log entries.
- */
-function findLastDeviceInfo(
-  entries: StoredNotification[],
-): DeviceInfo | undefined {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    const params = entry.notification?.params as
-      | { device?: DeviceInfo }
-      | undefined;
-    if (params?.device) {
-      return params.device;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Rebuild conversation turns from log entries.
- * Parses session/update events to extract user messages, assistant messages, and tool calls.
- */
-function rebuildConversation(
-  entries: StoredNotification[],
-  logger: Logger,
-): ConversationTurn[] {
-  const turns: ConversationTurn[] = [];
-  let currentAssistantContent: ContentBlock[] = [];
-  let currentToolCalls: ToolCallInfo[] = [];
-
-  for (const entry of entries) {
-    const method = entry.notification?.method;
-    const params = entry.notification?.params as Record<string, unknown>;
-
-    if (method === "session/update" && params?.update) {
-      const update = params.update as Record<string, unknown>;
-      const sessionUpdate = update.sessionUpdate as string;
-
-      switch (sessionUpdate) {
-        case "user_message":
-        case "user_message_chunk": {
-          // Flush any pending assistant content
-          if (
-            currentAssistantContent.length > 0 ||
-            currentToolCalls.length > 0
-          ) {
-            turns.push({
-              role: "assistant",
-              content: currentAssistantContent,
-              toolCalls:
-                currentToolCalls.length > 0 ? currentToolCalls : undefined,
-            });
-            currentAssistantContent = [];
-            currentToolCalls = [];
-          }
-
-          // Add user turn
-          const content = update.content as ContentBlock | ContentBlock[];
-          const contentArray = Array.isArray(content) ? content : [content];
-          turns.push({
-            role: "user",
-            content: contentArray,
-          });
-          break;
-        }
-
-        case "agent_message_chunk": {
-          // Accumulate assistant content
-          const content = update.content as ContentBlock | undefined;
-          if (content) {
-            // Merge text blocks if possible
-            if (
-              content.type === "text" &&
-              currentAssistantContent.length > 0 &&
-              currentAssistantContent[currentAssistantContent.length - 1]
-                .type === "text"
-            ) {
-              const lastBlock = currentAssistantContent[
-                currentAssistantContent.length - 1
-              ] as { type: "text"; text: string };
-              lastBlock.text += (
-                content as { type: "text"; text: string }
-              ).text;
-            } else {
-              currentAssistantContent.push(content);
-            }
-          }
-          break;
-        }
-
-        case "tool_call":
-        case "tool_call_update": {
-          const meta = (update._meta as Record<string, unknown>)?.claudeCode as
-            | Record<string, unknown>
-            | undefined;
-          if (meta) {
-            const toolCallId = meta.toolCallId as string | undefined;
-            const toolName = meta.toolName as string | undefined;
-            const toolInput = meta.toolInput;
-            const toolResponse = meta.toolResponse;
-
-            if (toolCallId && toolName) {
-              // Find or create tool call entry
-              let toolCall = currentToolCalls.find(
-                (tc) => tc.toolCallId === toolCallId,
-              );
-              if (!toolCall) {
-                toolCall = {
-                  toolCallId,
-                  toolName,
-                  input: toolInput,
-                };
-                currentToolCalls.push(toolCall);
-              }
-
-              // Update with result if present
-              if (toolResponse !== undefined) {
-                toolCall.result = toolResponse;
-              }
-            }
-          }
-          break;
-        }
-
-        case "tool_result": {
-          const meta = (update._meta as Record<string, unknown>)?.claudeCode as
-            | Record<string, unknown>
-            | undefined;
-          if (meta) {
-            const toolCallId = meta.toolCallId as string | undefined;
-            const toolResponse = meta.toolResponse;
-
-            if (toolCallId) {
-              const toolCall = currentToolCalls.find(
-                (tc) => tc.toolCallId === toolCallId,
-              );
-              if (toolCall && toolResponse !== undefined) {
-                toolCall.result = toolResponse;
-              }
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // Flush any remaining assistant content
-  if (currentAssistantContent.length > 0 || currentToolCalls.length > 0) {
-    turns.push({
-      role: "assistant",
-      content: currentAssistantContent,
-      toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
-    });
-  }
-
-  logger.debug("Rebuilt conversation", {
-    turns: turns.length,
-    userTurns: turns.filter((t) => t.role === "user").length,
-    assistantTurns: turns.filter((t) => t.role === "assistant").length,
-  });
-
-  return turns;
 }
 
 /**

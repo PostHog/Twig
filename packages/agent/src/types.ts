@@ -136,16 +136,23 @@ export interface DeviceInfo {
   name?: string;
 }
 
-// Agent execution mode
+// Agent execution mode - for tracking interactive vs background runs, when backgrounded an agent will continue working without asking questions
 export type AgentMode = "interactive" | "background";
+
+// Git file status codes
+export type FileStatus = "A" | "M" | "D";
+
+export interface FileChange {
+  path: string;
+  status: FileStatus;
+}
 
 // Tree snapshot - what TreeTracker captures
 export interface TreeSnapshot {
   treeHash: string;
   baseCommit: string | null;
   archiveUrl?: string;
-  filesChanged: string[];
-  filesDeleted?: string[];
+  changes: FileChange[];
   timestamp: string;
   interrupted?: boolean;
 }

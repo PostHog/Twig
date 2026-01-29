@@ -1,25 +1,20 @@
 /**
  * TreeTracker - Git tree-based state capture for cloud/local sync
  *
- * Instead of tracking individual file changes, TreeTracker captures the entire
- * working state as a git tree hash + archive. This provides:
+ * Captures the entire working state as a git tree hash + archive:
  * - Atomic state snapshots (no partial syncs)
  * - Efficient delta detection using git's diffing
  * - Simpler resume logic (restore tree, continue)
  *
- * Tree snapshots are emitted as `_posthog/tree_snapshot` events in the log.
+ * Uses Saga pattern for atomic operations with automatic rollback on failure.
+ * Uses a temporary git index to avoid modifying the user's staging area.
  */
 
-import { exec } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { promisify } from "node:util";
-import * as tar from "tar";
 import type { PostHogAPIClient } from "./posthog-api.js";
+import { ApplySnapshotSaga } from "./sagas/apply-snapshot-saga.js";
+import { CaptureTreeSaga } from "./sagas/capture-tree-saga.js";
 import type { TreeSnapshot } from "./types.js";
 import { Logger } from "./utils/logger.js";
-
-const execAsync = promisify(exec);
 
 export type { TreeSnapshot };
 
@@ -38,8 +33,6 @@ export class TreeTracker {
   private apiClient?: PostHogAPIClient;
   private logger: Logger;
   private lastTreeHash: string | null = null;
-  private lastCaptureTime: number = 0;
-  private captureIntervalMs: number = 5 * 60 * 1000; // 5 minutes default
 
   constructor(config: TreeTrackerConfig) {
     this.repositoryPath = config.repositoryPath;
@@ -51,319 +44,43 @@ export class TreeTracker {
   }
 
   /**
-   * Check if working tree has changes since last snapshot.
-   * Uses git diff-index to compare working tree against last captured tree.
-   */
-  async hasChanges(): Promise<boolean> {
-    if (!this.lastTreeHash) {
-      // No previous snapshot - check for any uncommitted changes
-      const hasUncommitted = await this.hasUncommittedChanges();
-      return hasUncommitted;
-    }
-
-    try {
-      // Compare current working tree against last captured tree
-      const { stdout } = await execAsync(
-        `git diff-tree --no-commit-id --name-only -r ${this.lastTreeHash} HEAD`,
-        { cwd: this.repositoryPath },
-      );
-
-      if (stdout.trim()) {
-        return true;
-      }
-
-      // Also check for uncommitted changes
-      return await this.hasUncommittedChanges();
-    } catch (error) {
-      this.logger.warn("Failed to check for changes", { error });
-      return true; // Assume changes on error
-    }
-  }
-
-  /**
-   * Check for uncommitted changes in working directory.
-   */
-  private async hasUncommittedChanges(): Promise<boolean> {
-    try {
-      // Check for staged and unstaged changes, plus untracked files
-      const { stdout: statusOutput } = await execAsync(
-        "git status --porcelain",
-        { cwd: this.repositoryPath },
-      );
-
-      const changes = statusOutput
-        .split("\n")
-        .filter((line) => line.trim() && !line.includes(".posthog/"));
-
-      return changes.length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
    * Capture current working tree state as a snapshot.
-   * Creates a git tree object and optionally uploads an archive.
+   * Uses a temporary index to avoid modifying user's staging area.
+   * Uses Saga pattern for atomic operation with automatic cleanup on failure.
    */
   async captureTree(options?: {
     interrupted?: boolean;
   }): Promise<TreeSnapshot | null> {
-    try {
-      // Stage all changes to create a proper tree
-      await execAsync("git add -A", { cwd: this.repositoryPath });
+    const saga = new CaptureTreeSaga(this.logger);
 
-      // Get the tree hash from the index
-      const { stdout: treeHashOutput } = await execAsync("git write-tree", {
-        cwd: this.repositoryPath,
+    const result = await saga.run({
+      repositoryPath: this.repositoryPath,
+      taskId: this.taskId,
+      runId: this.runId,
+      apiClient: this.apiClient,
+      lastTreeHash: this.lastTreeHash,
+      interrupted: options?.interrupted,
+    });
+
+    if (!result.success) {
+      this.logger.error("Failed to capture tree", {
+        error: result.error,
+        failedStep: result.failedStep,
       });
-      const treeHash = treeHashOutput.trim();
-
-      // Skip if no changes since last capture
-      if (treeHash === this.lastTreeHash) {
-        this.logger.debug("No changes since last capture", { treeHash });
-        return null;
-      }
-
-      // Get the current HEAD commit as base
-      let baseCommit: string | null = null;
-      try {
-        const { stdout: commitOutput } = await execAsync("git rev-parse HEAD", {
-          cwd: this.repositoryPath,
-        });
-        baseCommit = commitOutput.trim();
-      } catch {
-        // No commits yet
-      }
-
-      // Get list of changed and deleted files
-      const filesChanged = await this.getChangedFiles(this.lastTreeHash);
-      const filesDeleted = await this.getDeletedFiles(this.lastTreeHash);
-
-      // Create snapshot object
-      const snapshot: TreeSnapshot = {
-        treeHash,
-        baseCommit,
-        filesChanged,
-        filesDeleted: filesDeleted.length > 0 ? filesDeleted : undefined,
-        timestamp: new Date().toISOString(),
-        interrupted: options?.interrupted,
-      };
-
-      // Upload archive if API client configured
-      if (this.apiClient && filesChanged.length > 0) {
-        const archiveUrl = await this.uploadTreeArchive(treeHash, filesChanged);
-        if (archiveUrl) {
-          snapshot.archiveUrl = archiveUrl;
-        }
-      }
-
-      this.lastTreeHash = treeHash;
-      this.lastCaptureTime = Date.now();
-
-      this.logger.info("Tree captured", {
-        treeHash,
-        filesChanged: filesChanged.length,
-        filesDeleted: filesDeleted.length,
-        interrupted: options?.interrupted,
-        archiveUrl: snapshot.archiveUrl,
-      });
-
-      return snapshot;
-    } catch (error) {
-      this.logger.error("Failed to capture tree", { error });
-      throw error;
+      throw new Error(`Failed to capture tree at step '${result.failedStep}': ${result.error}`);
     }
+
+    // Only update lastTreeHash on success
+    if (result.data.newTreeHash !== null) {
+      this.lastTreeHash = result.data.newTreeHash;
+    }
+
+    return result.data.snapshot;
   }
 
   /**
-   * Get list of files changed since last snapshot.
-   */
-  private async getChangedFiles(
-    previousTreeHash: string | null,
-  ): Promise<string[]> {
-    const files: string[] = [];
-
-    try {
-      if (previousTreeHash) {
-        // Diff against previous tree
-        const { stdout } = await execAsync(
-          `git diff-tree --no-commit-id --name-only -r ${previousTreeHash} HEAD`,
-          { cwd: this.repositoryPath },
-        );
-        files.push(
-          ...stdout
-            .split("\n")
-            .filter((f) => f.trim() && !f.includes(".posthog/")),
-        );
-      } else {
-        // No previous tree - get all staged files
-        const { stdout } = await execAsync(
-          "git diff --cached --name-only HEAD",
-          { cwd: this.repositoryPath },
-        );
-        files.push(
-          ...stdout
-            .split("\n")
-            .filter((f) => f.trim() && !f.includes(".posthog/")),
-        );
-      }
-
-      // Also get unstaged and untracked files
-      const { stdout: statusOutput } = await execAsync(
-        "git status --porcelain",
-        { cwd: this.repositoryPath },
-      );
-
-      for (const line of statusOutput.split("\n")) {
-        if (!line.trim() || line.includes(".posthog/")) continue;
-        const filePath = line.slice(3).trim();
-        if (filePath && !files.includes(filePath)) {
-          files.push(filePath);
-        }
-      }
-    } catch (error) {
-      this.logger.warn("Failed to get changed files", { error });
-    }
-
-    return files;
-  }
-
-  /**
-   * Get list of files deleted since last snapshot.
-   * Uses git status to detect deleted files (marked with 'D').
-   */
-  private async getDeletedFiles(
-    previousTreeHash: string | null,
-  ): Promise<string[]> {
-    const deleted: string[] = [];
-
-    try {
-      // Get deleted files from git status
-      const { stdout: statusOutput } = await execAsync(
-        "git status --porcelain",
-        { cwd: this.repositoryPath },
-      );
-
-      for (const line of statusOutput.split("\n")) {
-        if (!line.trim() || line.includes(".posthog/")) continue;
-        const status = line.slice(0, 2);
-        const filePath = line.slice(3).trim();
-
-        // 'D ' = deleted in index, ' D' = deleted in working tree
-        if (status.includes("D") && filePath) {
-          deleted.push(filePath);
-        }
-      }
-
-      // If we have a previous tree hash, also check for files that were removed between snapshots
-      if (previousTreeHash) {
-        try {
-          const { stdout } = await execAsync(
-            `git diff-tree --no-commit-id --name-status -r ${previousTreeHash} HEAD`,
-            { cwd: this.repositoryPath },
-          );
-          for (const line of stdout.split("\n")) {
-            if (!line.trim()) continue;
-            const [status, ...pathParts] = line.split("\t");
-            const filePath = pathParts.join("\t");
-            if (status === "D" && filePath && !filePath.includes(".posthog/")) {
-              if (!deleted.includes(filePath)) {
-                deleted.push(filePath);
-              }
-            }
-          }
-        } catch {
-          // Ignore diff errors
-        }
-      }
-    } catch (error) {
-      this.logger.warn("Failed to get deleted files", { error });
-    }
-
-    return deleted;
-  }
-
-  /**
-   * Create and upload a tar.gz archive of changed files.
-   */
-  private async uploadTreeArchive(
-    treeHash: string,
-    filesChanged: string[],
-  ): Promise<string | null> {
-    if (!this.apiClient || filesChanged.length === 0) {
-      return null;
-    }
-
-    const tmpDir = join(this.repositoryPath, ".posthog", "tmp");
-    const archivePath = join(tmpDir, `${treeHash}.tar.gz`);
-
-    try {
-      await mkdir(tmpDir, { recursive: true });
-
-      // Create tar.gz archive of changed files
-      await tar.create(
-        {
-          gzip: true,
-          file: archivePath,
-          cwd: this.repositoryPath,
-        },
-        filesChanged.filter((f) => {
-          // Only include files that exist
-          try {
-            const filePath = join(this.repositoryPath, f);
-            return require("node:fs").existsSync(filePath);
-          } catch {
-            return false;
-          }
-        }),
-      );
-
-      // Read archive and upload
-      const archiveContent = await readFile(archivePath);
-      const base64Content = archiveContent.toString("base64");
-
-      const artifacts = await this.apiClient.uploadTaskArtifacts(
-        this.taskId,
-        this.runId,
-        [
-          {
-            name: `trees/${treeHash}.tar.gz`,
-            type: "tree_snapshot",
-            content: base64Content,
-            content_type: "application/gzip",
-          },
-        ],
-      );
-
-      // Clean up temp file
-      await rm(archivePath, { force: true });
-
-      if (artifacts.length > 0) {
-        const storagePath = artifacts[0].storage_path ?? null;
-        if (storagePath) {
-          this.logger.info("Tree archive uploaded", {
-            storagePath,
-            treeHash,
-            filesCount: filesChanged.length,
-          });
-        }
-        return storagePath;
-      }
-    } catch (error) {
-      this.logger.warn("Failed to upload tree archive", { error });
-      // Clean up on error
-      try {
-        await rm(archivePath, { force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Download and apply a tree archive from a snapshot.
+   * Download and apply a tree snapshot.
+   * Uses Saga pattern for atomic operation with rollback on failure.
    */
   async applyTreeSnapshot(snapshot: TreeSnapshot): Promise<void> {
     if (!this.apiClient) {

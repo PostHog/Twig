@@ -5,8 +5,8 @@
   "description": "TypeScript agent framework wrapping Claude Agent SDK with Git-based task execution for PostHog",
   "exports": {
     ".": {
-      "types": "./dist/worktree-manager.d.ts",
-      "import": "./dist/worktree-manager.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./agent": {
       "types": "./dist/agent.d.ts",
