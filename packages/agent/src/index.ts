@@ -39,7 +39,11 @@ export type {
 } from "./types.js";
 
 export type { TreeSnapshot, TreeTrackerConfig } from "./tree-tracker.js";
-export { TreeTracker } from "./tree-tracker.js";
+export {
+  isCommitOnRemote,
+  TreeTracker,
+  validateForCloudHandoff,
+} from "./tree-tracker.js";
 
 export type {
   ConversationTurn,

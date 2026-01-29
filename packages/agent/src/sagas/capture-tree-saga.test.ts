@@ -5,8 +5,14 @@ import type { SagaLogger } from "@posthog/shared";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import { CaptureTreeSaga } from "./capture-tree-saga.js";
 import {
+  isCommitOnRemote,
+  validateForCloudHandoff,
+} from "../tree-tracker.js";
+import type { TreeSnapshot } from "../types.js";
+import {
   createMockApiClient,
   createMockLogger,
+  createSnapshot,
   createTestRepo,
   type TestRepo,
 } from "./test-fixtures.js";
@@ -670,6 +676,119 @@ describe("CaptureTreeSaga", () => {
     });
   });
 
+  describe("delta calculation", () => {
+    it("always calculates delta against HEAD, not lastTreeHash", async () => {
+      await repo.writeFile("file1.ts", "content1");
+      await repo.git(["add", "."]);
+      await repo.git(["commit", "-m", "Add file1"]);
+
+      await repo.writeFile("file2.ts", "content2");
+
+      const saga1 = new CaptureTreeSaga(mockLogger);
+      const firstResult = await saga1.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+      expect(firstResult.success).toBe(true);
+      if (!firstResult.success) return;
+
+      expect(firstResult.data.snapshot?.changes).toContainEqual({
+        path: "file2.ts",
+        status: "A",
+      });
+
+      await repo.writeFile("file3.ts", "content3");
+
+      const saga2 = new CaptureTreeSaga(mockLogger);
+      const secondResult = await saga2.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-2",
+        lastTreeHash: firstResult.data.newTreeHash,
+      });
+
+      expect(secondResult.success).toBe(true);
+      if (!secondResult.success) return;
+
+      const changes = secondResult.data.snapshot?.changes ?? [];
+      expect(changes).toContainEqual({ path: "file2.ts", status: "A" });
+      expect(changes).toContainEqual({ path: "file3.ts", status: "A" });
+    });
+
+    it("second capture shows full delta from HEAD (not incremental)", async () => {
+      await repo.writeFile("existing.ts", "original");
+      await repo.git(["add", "."]);
+      await repo.git(["commit", "-m", "Add existing"]);
+
+      await repo.writeFile("existing.ts", "modified");
+
+      const saga1 = new CaptureTreeSaga(mockLogger);
+      const firstResult = await saga1.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+      expect(firstResult.success).toBe(true);
+      if (!firstResult.success) return;
+
+      expect(firstResult.data.snapshot?.changes).toContainEqual({
+        path: "existing.ts",
+        status: "M",
+      });
+
+      // Make another change to trigger a new capture (otherwise skip-unchanged kicks in)
+      await repo.writeFile("existing.ts", "modified again");
+
+      const saga2 = new CaptureTreeSaga(mockLogger);
+      const secondResult = await saga2.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-2",
+        lastTreeHash: firstResult.data.newTreeHash,
+      });
+
+      expect(secondResult.success).toBe(true);
+      if (!secondResult.success) return;
+
+      // Even though only the content of existing.ts changed since last capture,
+      // the delta should still show M (modified from HEAD), not just incremental changes
+      expect(secondResult.data.snapshot?.changes).toContainEqual({
+        path: "existing.ts",
+        status: "M",
+      });
+    });
+
+    it("uses lastTreeHash only for skip-unchanged optimization", async () => {
+      await repo.writeFile("file.ts", "content");
+
+      const saga1 = new CaptureTreeSaga(mockLogger);
+      const firstResult = await saga1.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+      expect(firstResult.success).toBe(true);
+      if (!firstResult.success) return;
+
+      const saga2 = new CaptureTreeSaga(mockLogger);
+      const secondResult = await saga2.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-2",
+        lastTreeHash: firstResult.data.newTreeHash,
+      });
+
+      expect(secondResult.success).toBe(true);
+      if (!secondResult.success) return;
+      expect(secondResult.data.snapshot).toBeNull();
+      expect(secondResult.data.newTreeHash).toBe(firstResult.data.newTreeHash);
+    });
+  });
+
   describe("submodule detection", () => {
     it("warns when repository has .gitmodules file", async () => {
       await repo.writeFile(".gitmodules", "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git");
@@ -705,5 +824,136 @@ describe("CaptureTreeSaga", () => {
         expect.stringContaining("submodules"),
       );
     });
+  });
+});
+
+describe("validateForCloudHandoff", () => {
+  let repo: TestRepo;
+
+  beforeEach(async () => {
+    repo = await createTestRepo("cloud-handoff");
+  });
+
+  afterEach(async () => {
+    await repo.cleanup();
+  });
+
+  it("throws error when snapshot has no base commit", async () => {
+    const snapshot = createSnapshot({ baseCommit: null });
+
+    await expect(
+      validateForCloudHandoff(snapshot, repo.path),
+    ).rejects.toThrow("Cannot hand off to cloud: no base commit");
+  });
+
+  it("throws error when base commit is not on any remote", async () => {
+    const headCommit = await repo.git(["rev-parse", "HEAD"]);
+    const snapshot = createSnapshot({ baseCommit: headCommit });
+
+    await expect(
+      validateForCloudHandoff(snapshot, repo.path),
+    ).rejects.toThrow(/is not pushed.*Run 'git push'/);
+  });
+
+  it("succeeds when base commit is on remote", async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { tmpdir } = await import("node:os");
+    const { mkdir, rm } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const execFileAsync = promisify(execFile);
+
+    const remoteDir = join(tmpdir(), `remote-${Date.now()}`);
+    await mkdir(remoteDir, { recursive: true });
+    await execFileAsync("git", ["init", "--bare"], { cwd: remoteDir });
+
+    const branchName = await repo.git(["rev-parse", "--abbrev-ref", "HEAD"]);
+    await repo.git(["remote", "add", "origin", remoteDir]);
+    await repo.git(["push", "-u", "origin", branchName]);
+
+    const headCommit = await repo.git(["rev-parse", "HEAD"]);
+    const snapshot = createSnapshot({ baseCommit: headCommit });
+
+    await expect(
+      validateForCloudHandoff(snapshot, repo.path),
+    ).resolves.toBeUndefined();
+
+    await rm(remoteDir, { recursive: true, force: true });
+  });
+});
+
+describe("isCommitOnRemote", () => {
+  let repo: TestRepo;
+
+  beforeEach(async () => {
+    repo = await createTestRepo("commit-remote");
+  });
+
+  afterEach(async () => {
+    await repo.cleanup();
+  });
+
+  it("returns false when no remote configured", async () => {
+    const headCommit = await repo.git(["rev-parse", "HEAD"]);
+    const result = await isCommitOnRemote(headCommit, repo.path);
+    expect(result).toBe(false);
+  });
+
+  it("returns false for invalid commit", async () => {
+    const result = await isCommitOnRemote("invalid-commit-hash", repo.path);
+    expect(result).toBe(false);
+  });
+
+  it("returns false for local-only commit", async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { tmpdir } = await import("node:os");
+    const { mkdir, rm } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const execFileAsync = promisify(execFile);
+
+    const remoteDir = join(tmpdir(), `remote-${Date.now()}`);
+    await mkdir(remoteDir, { recursive: true });
+    await execFileAsync("git", ["init", "--bare"], { cwd: remoteDir });
+
+    const branchName = await repo.git(["rev-parse", "--abbrev-ref", "HEAD"]);
+    await repo.git(["remote", "add", "origin", remoteDir]);
+    await repo.git(["push", "-u", "origin", branchName]);
+
+    await repo.writeFile("new.ts", "content");
+    await repo.git(["add", "."]);
+    await repo.git(["commit", "-m", "Local only"]);
+
+    const localCommit = await repo.git(["rev-parse", "HEAD"]);
+    const result = await isCommitOnRemote(localCommit, repo.path);
+    expect(result).toBe(false);
+
+    await rm(remoteDir, { recursive: true, force: true });
+  });
+
+  it("returns true for pushed commit", async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { tmpdir } = await import("node:os");
+    const { mkdir, rm } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const execFileAsync = promisify(execFile);
+
+    const remoteDir = join(tmpdir(), `remote-${Date.now()}`);
+    await mkdir(remoteDir, { recursive: true });
+    await execFileAsync("git", ["init", "--bare"], { cwd: remoteDir });
+
+    const branchName = await repo.git(["rev-parse", "--abbrev-ref", "HEAD"]);
+    await repo.git(["remote", "add", "origin", remoteDir]);
+    await repo.git(["push", "-u", "origin", branchName]);
+
+    const headCommit = await repo.git(["rev-parse", "HEAD"]);
+    const result = await isCommitOnRemote(headCommit, repo.path);
+    expect(result).toBe(true);
+
+    await rm(remoteDir, { recursive: true, force: true });
   });
 });

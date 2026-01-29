@@ -101,9 +101,11 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
       }
     });
 
-    // Step 4: Get changes between last snapshot and new tree (read-only)
+    // Step 4: Get changes between HEAD and new tree (read-only)
+    // Always use baseCommit for delta - makes each snapshot self-contained and
+    // restorable without depending on previous snapshot state
     const changes = await this.readOnlyStep("get_changes", () =>
-      this.getChanges(lastTreeHash ?? baseCommit, treeHash, repositoryPath),
+      this.getChanges(baseCommit, treeHash, repositoryPath),
     );
 
     // Step 5: Upload archive if API client configured and there are non-delete changes
