@@ -67,6 +67,7 @@ export abstract class BaseAcpAgent implements Agent {
       // while the query waits on an API call that will never abort.
       this.session.abortController.abort();
       await this.cancel({ sessionId: this.sessionId });
+      this.logger.info("Closed session", { sessionId: this.sessionId });
     } catch (err) {
       this.logger.warn("Failed to close session", {
         sessionId: this.sessionId,
