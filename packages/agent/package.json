@@ -24,6 +24,10 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
+    "./utils/gateway": {
+      "types": "./dist/utils/gateway.d.ts",
+      "import": "./dist/utils/gateway.js"
+    },
     "./worktree-manager": {
       "types": "./dist/worktree-manager.d.ts",
       "import": "./dist/worktree-manager.js"
@@ -60,18 +64,21 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.8",
     "@types/bun": "latest",
+    "@types/tar": "^6.1.13",
     "minimatch": "^10.0.3",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5.5.0"
   },
   "dependencies": {
+    "@posthog/shared": "workspace:*",
     "@agentclientprotocol/sdk": "^0.13.1",
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@anthropic-ai/sdk": "^0.71.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "diff": "^8.0.2",
     "dotenv": "^17.2.3",
+    "tar": "^7.5.0",
     "uuid": "13.0.0",
     "yoga-wasm-web": "^0.3.3",
     "zod": "^3.24.1"

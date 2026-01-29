@@ -1,6 +1,8 @@
 import type { ArtifactType, PostHogAPIConfig, StoredEntry, TaskRun, TaskRunArtifact } from "./types.js";
 import { getLlmGatewayUrl } from "./utils/gateway.js";
 
+export { getLlmGatewayUrl };
+
 export interface TaskArtifactUploadPayload {
   name: string;
   type: ArtifactType;

@@ -7,6 +7,8 @@
  * - Rebuilds conversation from log events
  * - Restores working tree from snapshot
  *
+ * Uses Saga pattern for atomic operations with clear success/failure tracking.
+ *
  * The log is the single source of truth for:
  * - Conversation history (user_message, agent_message_chunk, tool_call, tool_result)
  * - Working tree state (tree_snapshot events)
@@ -14,19 +16,20 @@
  */
 
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 import type { PostHogAPIClient } from "./posthog-api.js";
-import { TreeTracker } from "./tree-tracker.js";
-import type {
-  DeviceInfo,
-  StoredNotification,
-  TreeSnapshotEvent,
-} from "./types.js";
+import {
+  ResumeSaga,
+  type ConversationTurn as SagaConversationTurn,
+  type ToolCallInfo as SagaToolCallInfo,
+} from "./sagas/resume-saga.js";
+import type { DeviceInfo, TreeSnapshotEvent } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export interface ResumeState {
   conversation: ConversationTurn[];
   latestSnapshot: TreeSnapshotEvent | null;
+  /** Whether the tree snapshot was successfully applied (files restored) */
+  snapshotApplied: boolean;
   interrupted: boolean;
   lastDevice?: DeviceInfo;
   logEntryCount: number;
@@ -56,6 +59,11 @@ export interface ResumeConfig {
 /**
  * Resume a task from its persisted log.
  * Returns the rebuilt state for the agent to continue from.
+ *
+ * Uses Saga pattern internally for atomic operations.
+ * Note: snapshotApplied field indicates if files were actually restored -
+ * even if latestSnapshot is non-null, files may not have been restored if
+ * the snapshot had no archive URL or download/extraction failed.
  */
 export async function resumeFromLog(
   config: ResumeConfig,

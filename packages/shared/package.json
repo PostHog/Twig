@@ -1,0 +1,25 @@
+{
+  "name": "@posthog/shared",
+  "version": "1.0.0",
+  "description": "Shared utilities for Twig",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.5.0"
+  },
+  "files": [
+    "dist/**/*",
+    "src/**/*"
+  ]
+}

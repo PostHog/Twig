@@ -90,104 +90,32 @@ export class TreeTracker {
     if (!snapshot.archiveUrl) {
       this.logger.warn("Cannot apply snapshot: no archive URL", {
         treeHash: snapshot.treeHash,
-        filesChanged: snapshot.filesChanged?.length ?? 0,
-        filesDeleted: snapshot.filesDeleted?.length ?? 0,
+        changes: snapshot.changes.length,
       });
       throw new Error("Cannot apply snapshot: no archive URL");
     }
 
-    const tmpDir = join(this.repositoryPath, ".posthog", "tmp");
-    const archivePath = join(tmpDir, `${snapshot.treeHash}.tar.gz`);
+    const saga = new ApplySnapshotSaga(this.logger);
 
-    try {
-      await mkdir(tmpDir, { recursive: true });
+    const result = await saga.run({
+      snapshot,
+      repositoryPath: this.repositoryPath,
+      apiClient: this.apiClient,
+      taskId: this.taskId,
+      runId: this.runId,
+    });
 
-      // Download archive
-      const arrayBuffer = await this.apiClient.downloadArtifact(
-        this.taskId,
-        this.runId,
-        snapshot.archiveUrl,
-      );
-
-      if (!arrayBuffer) {
-        throw new Error("Failed to download tree archive");
-      }
-
-      // Artifact content is stored as base64, decode it
-      const base64Content = Buffer.from(arrayBuffer).toString("utf-8");
-      const binaryContent = Buffer.from(base64Content, "base64");
-      await writeFile(archivePath, binaryContent);
-
-      // If there's a base commit, checkout to it first
-      if (snapshot.baseCommit) {
-        try {
-          await execAsync(`git checkout ${snapshot.baseCommit}`, {
-            cwd: this.repositoryPath,
-          });
-        } catch (error) {
-          this.logger.warn("Failed to checkout base commit", {
-            baseCommit: snapshot.baseCommit,
-            error,
-          });
-        }
-      }
-
-      // Extract archive
-      await tar.extract({
-        file: archivePath,
-        cwd: this.repositoryPath,
-      });
-
-      // Delete files that were removed during the snapshot period
-      if (snapshot.filesDeleted?.length) {
-        for (const filePath of snapshot.filesDeleted) {
-          const fullPath = join(this.repositoryPath, filePath);
-          try {
-            await rm(fullPath, { force: true });
-            this.logger.debug(`Deleted file: ${filePath}`);
-          } catch {
-            // File may not exist, which is fine
-          }
-        }
-        this.logger.info(
-          `Deleted ${snapshot.filesDeleted.length} files from snapshot`,
-        );
-      }
-
-      this.lastTreeHash = snapshot.treeHash;
-
-      this.logger.info("Tree snapshot applied", {
+    if (!result.success) {
+      this.logger.error("Failed to apply tree snapshot", {
+        error: result.error,
+        failedStep: result.failedStep,
         treeHash: snapshot.treeHash,
-        filesChanged: snapshot.filesChanged.length,
-        filesDeleted: snapshot.filesDeleted?.length ?? 0,
       });
-
-      // Clean up
-      await rm(archivePath, { force: true });
-    } catch (error) {
-      this.logger.error("Failed to apply tree snapshot", { error });
-      // Clean up on error
-      try {
-        await rm(archivePath, { force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-      throw error;
+      throw new Error(`Failed to apply snapshot at step '${result.failedStep}': ${result.error}`);
     }
-  }
 
-  /**
-   * Check if enough time has passed for a periodic capture.
-   */
-  shouldCapturePerodically(): boolean {
-    return Date.now() - this.lastCaptureTime >= this.captureIntervalMs;
-  }
-
-  /**
-   * Set the interval for periodic captures.
-   */
-  setCaptureInterval(intervalMs: number): void {
-    this.captureIntervalMs = intervalMs;
+    // Only update lastTreeHash on success
+    this.lastTreeHash = result.data.treeHash;
   }
 
   /**
