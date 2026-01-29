@@ -3,7 +3,6 @@ import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { AgentMessage } from "./AgentMessage";
 import { CompactBoundaryView } from "./CompactBoundaryView";
 import { ConsoleMessage } from "./ConsoleMessage";
-import { CurrentModeView } from "./CurrentModeView";
 import { ErrorNotificationView } from "./ErrorNotificationView";
 import { StatusNotificationView } from "./StatusNotificationView";
 import { TaskNotificationView } from "./TaskNotificationView";
@@ -44,14 +43,12 @@ export type RenderItem =
 interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
-  taskId?: string;
   turnCancelled?: boolean;
 }
 
 export function SessionUpdateView({
   item,
   toolCalls,
-  taskId,
   turnCancelled,
 }: SessionUpdateViewProps) {
   switch (item.sessionUpdate) {
@@ -69,7 +66,6 @@ export function SessionUpdateView({
       return (
         <ToolCallBlock
           toolCall={toolCalls?.get(item.toolCallId) ?? item}
-          taskId={taskId}
           turnCancelled={turnCancelled}
         />
       );
@@ -80,7 +76,7 @@ export function SessionUpdateView({
     case "available_commands_update":
       return null;
     case "current_mode_update":
-      return <CurrentModeView update={item} />;
+      return null;
     case "console":
       return (
         <ConsoleMessage

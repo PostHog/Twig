@@ -20,7 +20,10 @@ import {
 } from "../questions/utils.js";
 import { isToolAllowedForMode, WRITE_TOOLS } from "../tools.js";
 import type { Session } from "../types.js";
-import { buildPermissionOptions } from "./permission-options.js";
+import {
+  buildExitPlanModePermissionOptions,
+  buildPermissionOptions,
+} from "./permission-options.js";
 
 export type ToolPermissionResult =
   | {
@@ -137,23 +140,7 @@ async function requestPlanApproval(
   );
 
   return await client.requestPermission({
-    options: [
-      {
-        kind: "allow_always",
-        name: "Yes, and auto-accept edits",
-        optionId: "acceptEdits",
-      },
-      {
-        kind: "allow_once",
-        name: "Yes, and manually approve edits",
-        optionId: "default",
-      },
-      {
-        kind: "reject_once",
-        name: "No, keep planning",
-        optionId: "plan",
-      },
-    ],
+    options: buildExitPlanModePermissionOptions(),
     sessionId,
     toolCall: {
       toolCallId: toolUseID,
@@ -207,14 +194,31 @@ async function applyPlanApproval(
   return { behavior: "deny", message, interrupt: false };
 }
 
+async function handleEnterPlanModeTool(
+  context: ToolHandlerContext,
+): Promise<ToolPermissionResult> {
+  const { session, client, sessionId, toolInput, logger } = context;
+
+  session.permissionMode = "plan";
+  await session.query.setPermissionMode("plan");
+  await client.sessionUpdate({
+    sessionId,
+    update: {
+      sessionUpdate: "current_mode_update",
+      currentModeId: "plan",
+    },
+  });
+
+  return {
+    behavior: "allow",
+    updatedInput: toolInput as Record<string, unknown>,
+  };
+}
+
 async function handleExitPlanModeTool(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
   const { session, toolInput, fileContentCache } = context;
-
-  if (session.permissionMode !== "plan") {
-    return { behavior: "allow", updatedInput: toolInput };
-  }
 
   const planFromFile = getPlanFromFile(session, fileContentCache);
   const latestText = getLatestAssistantText(session.notificationHistory);
@@ -417,6 +421,10 @@ export async function canUseTool(
       behavior: "allow",
       updatedInput: toolInput as Record<string, unknown>,
     };
+  }
+
+  if (toolName === "EnterPlanMode") {
+    return handleEnterPlanModeTool(context);
   }
 
   if (toolName === "ExitPlanMode") {
