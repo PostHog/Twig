@@ -55,6 +55,20 @@
 - TypeScript strict mode enabled
 - Tailwind CSS classes should be sorted (biome `useSortedClasses` rule)
 
+### Async Cleanup Ordering
+
+When tearing down async operations that use an AbortController, always abort the controller **before** awaiting any cleanup that depends on it. Otherwise you get a deadlock: the cleanup waits for the operation to stop, but the operation won't stop until the abort signal fires.
+
+```typescript
+// WRONG - deadlocks if interrupt() waits for the operation to finish
+await this.interrupt();          // hangs: waits for query to stop
+this.abortController.abort();    // never reached
+
+// RIGHT - abort first so the operation can actually stop
+this.abortController.abort();    // cancels in-flight HTTP requests
+await this.interrupt();          // resolves because the query was aborted
+```
+
 ### Avoid Barrel Files
 
 - Do not make use of index.ts
@@ -74,11 +88,10 @@ See [ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) for detailed patterns (DI, se
 
 ### Electron App (apps/twig)
 
-- **Main process** (`src/main/`) - Stateless services, tRPC routers, system I/O
-- **Renderer process** (`src/renderer/`) - React app, all application state
+- **Main process** (`src/main/`) - Services own all business logic, orchestration, polling, data fetching, and system I/O
+- **Renderer process** (`src/renderer/`) - React app with Zustand stores holding pure UI state and thin action wrappers over tRPC
 - **IPC**: tRPC over Electron IPC (type-safe via @posthog/electron-trpc)
 - **DI**: InversifyJS in both processes (`src/main/di/`, `src/renderer/di/`)
-- **State**: Zustand stores in renderer only - main is stateless
 - **Testing**: Vitest with React Testing Library
 
 ### Agent Package (packages/agent)
@@ -158,9 +171,53 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 }
 ```
 
+### Store / Service Boundary
+
+Stores and services have a strict separation of concerns:
+
+```
+Renderer                              Main Process
++------------------+                  +------------------+
+|  Zustand Store   |  -- tRPC -->     |  tRPC Router     |
+|                  |  <-- subs --     +------------------+
+|  - Pure state    |                         |
+|  - Event cache   |                  +------------------+
+|  - UI concerns   |                  |  Service         |
+|  - Thin actions  |                  |                  |
++------------------+                  | - Orchestration  |
+        |                             | - Polling        |
++------------------+                  | - Data fetching  |
+|  Service         |                  | - Business logic |
+|                  |                  +------------------+
+| - Cross-store    |
+|   coordination   |
+| - Client-side    |
+|   state machines |
++------------------+
+```
+
+**Renderer stores own:**
+- Pure UI state (open/closed, selected item, scroll position)
+- Cached data from subscriptions
+- Message queues and event buffers
+- Permission display state
+- Thin action wrappers that call tRPC mutations
+
+**Renderer services own:**
+- Coordination between multiple stores
+- Client-side-only state machines and logic
+
+**Main process services own:**
+- Business logic and orchestration
+- Polling loops and background work
+- Data fetching, parsing, and transformation
+- Connection management and coordination between services
+
+Stores should never contain business logic, orchestration, or data fetching. If a store action does more than update local state or call a single tRPC method, that logic belongs in a service. Services typically live in the main process, but renderer-side services are fine when the logic is purely client-side (e.g., coordinating between stores, managing local-only state machines).
+
 ### Zustand Stores
 
-Stores separate state and actions with persistence middleware:
+Stores hold pure state with thin actions. Separate state and action interfaces, use persistence middleware where needed:
 
 ```typescript
 interface SidebarStoreState {
@@ -215,7 +272,7 @@ export const gitRouter = router({
 
 ### Services (Main Process)
 
-Services are injectable, stateless, and can emit events:
+Services are injectable, own all business logic, and emit events to the renderer via tRPC subscriptions. Orchestration, polling, data fetching, and coordination between services all belong here - not in stores:
 
 ```typescript
 @injectable()

@@ -1,7 +1,9 @@
 > [!IMPORTANT]
 > Twig is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
 
-**[Download the latest desktop app release](https://github.com/PostHog/twig/releases/latest)**
+**[Download the latest version](https://github.com/PostHog/twig/releases/latest)**
+
+Found a bug or have feedback? [Open an issue](https://github.com/PostHog/twig/issues/new) on GitHub.
 
 # Twig
 
@@ -54,7 +56,7 @@ twig/
 ├── apps/
 │   ├── twig/       # Electron desktop app (React, Vite)
 │   ├── mobile/     # React Native mobile app (Expo)
-│   └── cli/        # arr CLI for stacked PRs
+│   └── cli/        # CLI for stacked PRs
 ├── packages/
 │   ├── agent/      # TypeScript agent framework
 │   ├── core/       # Shared business logic
@@ -108,15 +110,3 @@ Native modules (like node-pty) need to be rebuilt for your Electron version:
 ```bash
 pnpm --filter twig exec electron-rebuild
 ```
-
-## Acknowledgments
-
-Built with love by the PostHog team.
-
-## Roadmap
-
-Stay tuned for upcoming features and improvements.
-
-## FAQ
-
-Check the issues page for common questions and answers.
