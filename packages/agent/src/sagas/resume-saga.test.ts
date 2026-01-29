@@ -191,6 +191,64 @@ describe("ResumeSaga", () => {
 
       expect(result.data.conversation[0].toolCalls).toHaveLength(2);
     });
+
+    it("handles orphaned tool calls (no result due to interruption)", async () => {
+      (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createTaskRun(),
+      );
+      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+        createAgentChunk("Let me read the file"),
+        createToolCall("call-1", "ReadFile", { path: "/test.ts" }),
+      ]);
+
+      const saga = new ResumeSaga(mockLogger);
+      const result = await saga.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.data.conversation).toHaveLength(1);
+      const turn = result.data.conversation[0];
+      expect(turn.toolCalls).toHaveLength(1);
+      expect(turn.toolCalls?.[0]).toMatchObject({
+        toolCallId: "call-1",
+        toolName: "ReadFile",
+        input: { path: "/test.ts" },
+      });
+      expect(turn.toolCalls?.[0].result).toBeUndefined();
+    });
+
+    it("handles multiple orphaned tool calls", async () => {
+      (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createTaskRun(),
+      );
+      (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mockResolvedValue([
+        createToolCall("call-1", "ReadFile", { path: "/a.ts" }),
+        createToolResult("call-1", "content a"),
+        createToolCall("call-2", "WriteFile", { path: "/b.ts", content: "new" }),
+      ]);
+
+      const saga = new ResumeSaga(mockLogger);
+      const result = await saga.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const toolCalls = result.data.conversation[0].toolCalls ?? [];
+      expect(toolCalls).toHaveLength(2);
+      expect(toolCalls[0].result).toBe("content a");
+      expect(toolCalls[1].result).toBeUndefined();
+    });
   });
 
   describe("snapshot finding", () => {

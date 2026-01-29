@@ -27,6 +27,7 @@ export class ApplySnapshotSaga extends Saga<
 > {
   private archivePath: string | null = null;
   private originalHead: string | null = null;
+  private originalBranch: string | null = null;
 
   constructor(logger?: SagaLogger) {
     super(logger);
@@ -40,23 +41,56 @@ export class ApplySnapshotSaga extends Saga<
       throw new Error("Cannot apply snapshot: no archive URL");
     }
 
-    // Step 1: Record current HEAD for rollback (read-only)
-    this.originalHead = await this.readOnlyStep("get_current_head", async () => {
-      try {
-        return await this.git(["rev-parse", "HEAD"], repositoryPath);
-      } catch {
-        return null;
-      }
-    });
+    // Step 1: Record current HEAD and branch for rollback (read-only)
+    const headInfo = await this.readOnlyStep("get_current_head", async () => {
+      let head: string | null = null;
+      let branch: string | null = null;
 
-    // Step 2: Create temp directory (idempotent - mkdir with recursive does nothing if exists)
+      try {
+        head = await this.git(["rev-parse", "HEAD"], repositoryPath);
+      } catch {
+        head = null;
+      }
+
+      try {
+        branch = await this.git(
+          ["symbolic-ref", "--short", "HEAD"],
+          repositoryPath,
+        );
+      } catch {
+        branch = null;
+      }
+
+      return { head, branch };
+    });
+    this.originalHead = headInfo.head;
+    this.originalBranch = headInfo.branch;
+
+    // Step 2: Check for uncommitted changes if we need to checkout a different commit
+    if (snapshot.baseCommit && snapshot.baseCommit !== this.originalHead) {
+      await this.readOnlyStep("check_working_tree", async () => {
+        const status = await this.git(
+          ["status", "--porcelain"],
+          repositoryPath,
+        );
+        if (status.trim()) {
+          const changedFiles = status.trim().split("\n").length;
+          throw new Error(
+            `Cannot apply snapshot: ${changedFiles} uncommitted change(s) exist. ` +
+              `Commit or stash your changes first.`,
+          );
+        }
+      });
+    }
+
+    // Step 3: Create temp directory (idempotent - mkdir with recursive does nothing if exists)
     await this.step({
       name: "create_tmp_dir",
       execute: () => mkdir(tmpDir, { recursive: true }),
       rollback: async () => {},
     });
 
-    // Step 3: Download archive
+    // Step 4: Download archive
     this.archivePath = join(tmpDir, `${snapshot.treeHash}.tar.gz`);
     await this.step({
       name: "download_archive",
@@ -81,26 +115,37 @@ export class ApplySnapshotSaga extends Saga<
       },
     });
 
-    // Step 4: Checkout base commit if present and different from current
+    // Step 5: Checkout base commit if present and different from current
     if (snapshot.baseCommit && snapshot.baseCommit !== this.originalHead) {
       await this.step({
         name: "checkout_base",
         execute: async () => {
           await this.git(["checkout", snapshot.baseCommit!], repositoryPath);
+          this.log.warn(
+            "Applied snapshot from different commit - now in detached HEAD state",
+            {
+              originalHead: this.originalHead,
+              originalBranch: this.originalBranch,
+              baseCommit: snapshot.baseCommit,
+              tip: "Run 'git checkout <branch>' to return to a branch",
+            },
+          );
         },
         rollback: async () => {
-          if (this.originalHead) {
-            await this.git(["checkout", this.originalHead], repositoryPath).catch(
-              (error) => {
-                this.log.warn("Failed to rollback checkout", { error });
-              },
-            );
+          try {
+            if (this.originalBranch) {
+              await this.git(["checkout", this.originalBranch], repositoryPath);
+            } else if (this.originalHead) {
+              await this.git(["checkout", this.originalHead], repositoryPath);
+            }
+          } catch (error) {
+            this.log.warn("Failed to rollback checkout", { error });
           }
         },
       });
     }
 
-    // Step 5: Extract archive (adds/modifies files)
+    // Step 6: Extract archive (adds/modifies files)
     await this.step({
       name: "extract_archive",
       execute: async () => {
@@ -115,7 +160,7 @@ export class ApplySnapshotSaga extends Saga<
       },
     });
 
-    // Step 6: Delete files marked as deleted
+    // Step 7: Delete files marked as deleted
     for (const change of snapshot.changes.filter((c) => c.status === "D")) {
       await this.step({
         name: `delete_${change.path}`,

@@ -37,6 +37,12 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
       input;
     const tmpDir = join(repositoryPath, ".posthog", "tmp");
 
+    if (existsSync(join(repositoryPath, ".gitmodules"))) {
+      this.log.warn(
+        "Repository has submodules - snapshot may not capture submodule state",
+      );
+    }
+
     // Step 1: Create temp directory (idempotent - mkdir with recursive does nothing if exists)
     await this.step({
       name: "create_tmp_dir",
@@ -44,33 +50,40 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
       rollback: async () => {},
     });
 
-    // Step 2: Create temp index and write tree
+    // Step 2a: Initialize temp index (creates the temp index file)
     this.tempIndexPath = join(tmpDir, `index-${runId}-${Date.now()}`);
-    const treeHash = await this.step({
-      name: "create_tree",
-      execute: async () => {
-        await this.gitWithTempIndex(
+    await this.step({
+      name: "init_temp_index",
+      execute: () =>
+        this.gitWithTempIndex(
           ["read-tree", "HEAD"],
           this.tempIndexPath!,
           repositoryPath,
-        );
-        await this.gitWithTempIndex(
-          ["add", "-A"],
-          this.tempIndexPath!,
-          repositoryPath,
-        );
-        return this.gitWithTempIndex(
-          ["write-tree"],
-          this.tempIndexPath!,
-          repositoryPath,
-        );
-      },
+        ),
       rollback: async () => {
         if (this.tempIndexPath) {
           await rm(this.tempIndexPath, { force: true }).catch(() => {});
         }
       },
     });
+
+    // Step 2b: Stage all files (operates on existing temp index)
+    await this.readOnlyStep("stage_files", () =>
+      this.gitWithTempIndex(
+        ["add", "-A"],
+        this.tempIndexPath!,
+        repositoryPath,
+      ),
+    );
+
+    // Step 2c: Write tree (read-only - creates git object but doesn't need cleanup)
+    const treeHash = await this.readOnlyStep("write_tree", () =>
+      this.gitWithTempIndex(
+        ["write-tree"],
+        this.tempIndexPath!,
+        repositoryPath,
+      ),
+    );
 
     // Early return if no changes since last capture
     if (treeHash === lastTreeHash) {
@@ -100,65 +113,68 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
 
     let archiveUrl: string | undefined;
     if (apiClient && filesToArchive.length > 0) {
-      archiveUrl = await this.step({
-        name: "upload_archive",
-        execute: async () => {
-          this.archivePath = join(tmpDir, `${treeHash}.tar.gz`);
-
-          // Filter to only files that exist
-          const existingFiles = filesToArchive.filter((f) => {
-            const filePath = join(repositoryPath, f);
-            return existsSync(filePath);
-          });
-
-          if (existingFiles.length === 0) {
-            return undefined;
-          }
-
-          // Create tar.gz archive
-          await tar.create(
-            {
-              gzip: true,
-              file: this.archivePath,
-              cwd: repositoryPath,
-            },
-            existingFiles,
-          );
-
-          // Read and upload
-          const archiveContent = await readFile(this.archivePath);
-          const base64Content = archiveContent.toString("base64");
-
-          const artifacts = await apiClient.uploadTaskArtifacts(
-            input.taskId,
-            input.runId,
-            [
-              {
-                name: `trees/${treeHash}.tar.gz`,
-                type: "tree_snapshot",
-                content: base64Content,
-                content_type: "application/gzip",
-              },
-            ],
-          );
-
-          if (artifacts.length > 0 && artifacts[0].storage_path) {
-            this.log.info("Tree archive uploaded", {
-              storagePath: artifacts[0].storage_path,
-              treeHash,
-              filesCount: existingFiles.length,
-            });
-            return artifacts[0].storage_path;
-          }
-
-          return undefined;
-        },
-        rollback: async () => {
-          if (this.archivePath) {
-            await rm(this.archivePath, { force: true }).catch(() => {});
-          }
-        },
+      // Step 5a: Create archive
+      const existingFiles = filesToArchive.filter((f) => {
+        const filePath = join(repositoryPath, f);
+        return existsSync(filePath);
       });
+
+      if (existingFiles.length > 0) {
+        this.archivePath = join(tmpDir, `${treeHash}.tar.gz`);
+
+        await this.step({
+          name: "create_archive",
+          execute: async () => {
+            await tar.create(
+              {
+                gzip: true,
+                file: this.archivePath!,
+                cwd: repositoryPath,
+              },
+              existingFiles,
+            );
+          },
+          rollback: async () => {
+            if (this.archivePath) {
+              await rm(this.archivePath, { force: true }).catch(() => {});
+            }
+          },
+        });
+
+        // Step 5b: Upload archive
+        archiveUrl = await this.step({
+          name: "upload_archive",
+          execute: async () => {
+            const archiveContent = await readFile(this.archivePath!);
+            const base64Content = archiveContent.toString("base64");
+
+            const artifacts = await apiClient.uploadTaskArtifacts(
+              input.taskId,
+              input.runId,
+              [
+                {
+                  name: `trees/${treeHash}.tar.gz`,
+                  type: "tree_snapshot",
+                  content: base64Content,
+                  content_type: "application/gzip",
+                },
+              ],
+            );
+
+            if (artifacts.length > 0 && artifacts[0].storage_path) {
+              this.log.info("Tree archive uploaded", {
+                storagePath: artifacts[0].storage_path,
+                treeHash,
+                filesCount: existingFiles.length,
+              });
+              return artifacts[0].storage_path;
+            }
+
+            return undefined;
+          },
+          rollback: async () => {},
+        });
+      }
     }
 
     // Clean up temp files on success

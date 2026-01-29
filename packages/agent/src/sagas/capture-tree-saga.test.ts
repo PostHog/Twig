@@ -1,3 +1,4 @@
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SagaLogger } from "@posthog/shared";
@@ -309,6 +310,58 @@ describe("CaptureTreeSaga", () => {
         expect(result.failedStep).toBe("upload_archive");
       }
     });
+
+    it("cleans up temp index and archive on upload failure (rollback verification)", async () => {
+      const { readdir } = await import("node:fs/promises");
+
+      const mockApiClient = createMockApiClient();
+      (mockApiClient.uploadTaskArtifacts as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error("Network error"),
+      );
+
+      await repo.writeFile("new.ts", "content");
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+        apiClient: mockApiClient,
+      });
+
+      expect(result.success).toBe(false);
+
+      const tmpDir = join(repo.path, ".posthog", "tmp");
+      const files = await readdir(tmpDir).catch(() => []);
+
+      const indexFiles = files.filter((f: string) => f.startsWith("index-"));
+      expect(indexFiles).toHaveLength(0);
+
+      const archiveFiles = files.filter((f: string) => f.endsWith(".tar.gz"));
+      expect(archiveFiles).toHaveLength(0);
+    });
+
+    it("cleans up temp index on success", async () => {
+      const { readdir } = await import("node:fs/promises");
+
+      await repo.writeFile("new.ts", "content");
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(true);
+
+      const tmpDir = join(repo.path, ".posthog", "tmp");
+      const files = await readdir(tmpDir).catch(() => []);
+      const indexFiles = files.filter((f: string) => f.startsWith("index-"));
+      expect(indexFiles).toHaveLength(0);
+    });
   });
 
   describe("git state isolation", () => {
@@ -385,6 +438,151 @@ describe("CaptureTreeSaga", () => {
     });
   });
 
+  describe("renamed files", () => {
+    it("captures renamed files as delete + add (without -M flag)", async () => {
+      await repo.writeFile("old-name.ts", "content");
+      await repo.git(["add", "."]);
+      await repo.git(["commit", "-m", "Add original file"]);
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const firstResult = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+      expect(firstResult.success).toBe(true);
+      if (!firstResult.success) return;
+
+      await repo.git(["mv", "old-name.ts", "new-name.ts"]);
+
+      const saga2 = new CaptureTreeSaga(mockLogger);
+      const secondResult = await saga2.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-2",
+        lastTreeHash: firstResult.data.newTreeHash,
+      });
+
+      expect(secondResult.success).toBe(true);
+      if (!secondResult.success) return;
+
+      const changes = secondResult.data.snapshot?.changes ?? [];
+      expect(changes).toContainEqual({ path: "old-name.ts", status: "D" });
+      expect(changes).toContainEqual({ path: "new-name.ts", status: "A" });
+    });
+
+    it("captures renamed files with modifications", async () => {
+      await repo.writeFile("original.ts", "original content");
+      await repo.git(["add", "."]);
+      await repo.git(["commit", "-m", "Add original file"]);
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const firstResult = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+      expect(firstResult.success).toBe(true);
+      if (!firstResult.success) return;
+
+      await repo.git(["mv", "original.ts", "renamed.ts"]);
+      await repo.writeFile("renamed.ts", "modified content");
+
+      const saga2 = new CaptureTreeSaga(mockLogger);
+      const secondResult = await saga2.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-2",
+        lastTreeHash: firstResult.data.newTreeHash,
+      });
+
+      expect(secondResult.success).toBe(true);
+      if (!secondResult.success) return;
+
+      const changes = secondResult.data.snapshot?.changes ?? [];
+      expect(changes).toContainEqual({ path: "original.ts", status: "D" });
+      expect(changes.some((c) => c.path === "renamed.ts" && (c.status === "A" || c.status === "M"))).toBe(true);
+    });
+  });
+
+  describe("rollback on mid-step failures", () => {
+    it("cleans up temp index when stage_files step fails", async () => {
+      const { readdir, chmod } = await import("node:fs/promises");
+
+      await repo.writeFile("file.ts", "content");
+
+      const tmpDir = join(repo.path, ".posthog", "tmp");
+      await mkdir(tmpDir, { recursive: true });
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const originalExecute = (saga as unknown as { gitWithTempIndex: typeof saga["gitWithTempIndex"] }).gitWithTempIndex.bind(saga);
+
+      let callCount = 0;
+      (saga as unknown as { gitWithTempIndex: (args: string[], tempIndexPath: string, cwd: string) => Promise<string> }).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
+        callCount++;
+        if (callCount === 2) {
+          throw new Error("Simulated add -A failure");
+        }
+        return originalExecute(args, tempIndexPath, cwd);
+      };
+
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.failedStep).toBe("stage_files");
+      }
+
+      const files = await readdir(tmpDir).catch(() => []);
+      const indexFiles = files.filter((f: string) => f.startsWith("index-"));
+      expect(indexFiles).toHaveLength(0);
+    });
+
+    it("cleans up temp index when write_tree step fails", async () => {
+      const { readdir } = await import("node:fs/promises");
+
+      await repo.writeFile("file.ts", "content");
+
+      const tmpDir = join(repo.path, ".posthog", "tmp");
+      await mkdir(tmpDir, { recursive: true });
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const originalExecute = (saga as unknown as { gitWithTempIndex: typeof saga["gitWithTempIndex"] }).gitWithTempIndex.bind(saga);
+
+      let callCount = 0;
+      (saga as unknown as { gitWithTempIndex: (args: string[], tempIndexPath: string, cwd: string) => Promise<string> }).gitWithTempIndex = async (args, tempIndexPath, cwd) => {
+        callCount++;
+        if (callCount === 3) {
+          throw new Error("Simulated write-tree failure");
+        }
+        return originalExecute(args, tempIndexPath, cwd);
+      };
+
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.failedStep).toBe("write_tree");
+      }
+
+      const files = await readdir(tmpDir).catch(() => []);
+      const indexFiles = files.filter((f: string) => f.startsWith("index-"));
+      expect(indexFiles).toHaveLength(0);
+    });
+  });
+
   describe("edge cases", () => {
     it("handles files with spaces in names", async () => {
       await repo.writeFile("file with spaces.ts", "content");
@@ -446,6 +644,66 @@ describe("CaptureTreeSaga", () => {
           status: "A",
         });
       }
+    });
+
+    it("handles symlinks", async () => {
+      const { symlink, lstat } = await import("node:fs/promises");
+
+      await repo.writeFile("target.txt", "symlink target content");
+      await symlink("target.txt", join(repo.path, "link.txt"));
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.snapshot?.changes).toContainEqual({
+          path: "link.txt",
+          status: "A",
+        });
+      }
+    });
+  });
+
+  describe("submodule detection", () => {
+    it("warns when repository has .gitmodules file", async () => {
+      await repo.writeFile(".gitmodules", "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git");
+      await repo.writeFile("file.ts", "content");
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Repository has submodules - snapshot may not capture submodule state",
+      );
+    });
+
+    it("does not warn when repository has no submodules", async () => {
+      await repo.writeFile("file.ts", "content");
+
+      const saga = new CaptureTreeSaga(mockLogger);
+      const result = await saga.run({
+        repositoryPath: repo.path,
+        taskId: "task-1",
+        runId: "run-1",
+        lastTreeHash: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockLogger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("submodules"),
+      );
     });
   });
 });

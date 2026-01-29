@@ -84,9 +84,21 @@ export function createMockApiClient(overrides: Partial<PostHogAPIClient> = {}): 
   } as unknown as PostHogAPIClient;
 }
 
+export interface ArchiveFile {
+  path: string;
+  content: string;
+}
+
+export interface ArchiveSymlink {
+  path: string;
+  target: string;
+}
+
 export async function createArchiveBuffer(
-  files: Array<{ path: string; content: string }>,
+  files: Array<ArchiveFile>,
+  symlinks: Array<ArchiveSymlink> = [],
 ): Promise<Buffer> {
+  const { symlink } = await import("node:fs/promises");
   const tmpDir = join(tmpdir(), `archive-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tmpDir, { recursive: true });
 
@@ -98,10 +110,18 @@ export async function createArchiveBuffer(
     await writeFile(fullPath, file.content);
   }
 
+  const symlinkPaths: string[] = [];
+  for (const link of symlinks) {
+    const fullPath = join(tmpDir, link.path);
+    await mkdir(join(fullPath, ".."), { recursive: true });
+    await symlink(link.target, fullPath);
+    symlinkPaths.push(link.path);
+  }
+
   const archivePath = join(tmpDir, "archive.tar.gz");
   await tar.create(
     { gzip: true, file: archivePath, cwd: tmpDir },
-    filesToArchive.map((f) => f.path),
+    [...filesToArchive.map((f) => f.path), ...symlinkPaths],
   );
 
   const content = await readFile(archivePath);
