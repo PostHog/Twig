@@ -42,13 +42,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          # Find the latest minor version tag (vX.Y format - exactly 2 parts)
-          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1)
-
-          # Fall back to vX.Y.0 format if no vX.Y tags exist (backward compat)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.0' --sort=-v:refname | head -1)
-          fi
+          # Find the latest base version tag (vX.Y or vX.Y.0 format)
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+(\.0)?$' | head -1)
 
           if [ -z "$LATEST_TAG" ]; then
             echo "No version tag found. Create one with: git tag v0.15 && git push origin v0.15"
