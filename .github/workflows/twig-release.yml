@@ -67,6 +67,9 @@ jobs:
       - name: Build electron-trpc package
         run: pnpm --filter @posthog/electron-trpc run build
 
+      - name: Build shared package
+        run: pnpm --filter @posthog/shared run build
+
       - name: Build agent package
         run: pnpm --filter @posthog/agent run build
 

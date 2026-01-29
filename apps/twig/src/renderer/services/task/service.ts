@@ -3,8 +3,8 @@ import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
+import type { SagaResult } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
-import type { SagaResult } from "@shared/lib/saga";
 import { injectable } from "inversify";
 import {
   type TaskCreationInput,

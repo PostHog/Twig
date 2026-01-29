@@ -936,6 +936,7 @@ button,
 .rt-SelectItem[data-highlighted],
 .rt-BaseMenuItem[data-highlighted] {
   background-color: var(--gray-4) !important;
+  color: var(--gray-12) !important;
 }
 
 /* Select/Menu dropdown background matches theme */
