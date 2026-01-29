@@ -24,10 +24,6 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
-    "./utils/gateway": {
-      "types": "./dist/utils/gateway.d.ts",
-      "import": "./dist/utils/gateway.js"
-    },
     "./worktree-manager": {
       "types": "./dist/worktree-manager.d.ts",
       "import": "./dist/worktree-manager.js"
@@ -55,6 +51,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "pnpm exec tsc --noEmit",
     "prepublishOnly": "pnpm run build"
   },
@@ -68,7 +66,8 @@
     "minimatch": "^10.0.3",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.8"
   },
   "dependencies": {
     "@posthog/shared": "workspace:*",

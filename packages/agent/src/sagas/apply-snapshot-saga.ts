@@ -49,12 +49,18 @@ export class ApplySnapshotSaga extends Saga<
       }
     });
 
-    // Step 2: Download archive
+    // Step 2: Create temp directory (idempotent - mkdir with recursive does nothing if exists)
+    await this.step({
+      name: "create_tmp_dir",
+      execute: () => mkdir(tmpDir, { recursive: true }),
+      rollback: async () => {},
+    });
+
+    // Step 3: Download archive
     this.archivePath = join(tmpDir, `${snapshot.treeHash}.tar.gz`);
     await this.step({
       name: "download_archive",
       execute: async () => {
-        await mkdir(tmpDir, { recursive: true });
         const arrayBuffer = await apiClient.downloadArtifact(
           taskId,
           runId,
@@ -75,7 +81,7 @@ export class ApplySnapshotSaga extends Saga<
       },
     });
 
-    // Step 3: Checkout base commit if present and different from current
+    // Step 4: Checkout base commit if present and different from current
     if (snapshot.baseCommit && snapshot.baseCommit !== this.originalHead) {
       await this.step({
         name: "checkout_base",
@@ -94,7 +100,7 @@ export class ApplySnapshotSaga extends Saga<
       });
     }
 
-    // Step 4: Extract archive (adds/modifies files)
+    // Step 5: Extract archive (adds/modifies files)
     await this.step({
       name: "extract_archive",
       execute: async () => {
@@ -109,7 +115,7 @@ export class ApplySnapshotSaga extends Saga<
       },
     });
 
-    // Step 5: Delete files marked as deleted
+    // Step 6: Delete files marked as deleted
     for (const change of snapshot.changes.filter((c) => c.status === "D")) {
       await this.step({
         name: `delete_${change.path}`,

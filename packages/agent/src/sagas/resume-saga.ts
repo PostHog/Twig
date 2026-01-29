@@ -76,7 +76,8 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
       Promise.resolve(this.findLatestTreeSnapshot(entries)),
     );
 
-    // Step 4: Apply snapshot if present (can fail, but doesn't fail the whole resume)
+    // Step 4: Apply snapshot if present (wrapped in step for consistent logging)
+    // Note: We use a try/catch inside the step because snapshot failure should NOT fail the saga
     let snapshotApplied = false;
     if (latestSnapshot?.archiveUrl) {
       this.log.info("Found tree snapshot", {
@@ -86,28 +87,37 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
         interrupted: latestSnapshot.interrupted,
       });
 
-      const treeTracker = new TreeTracker({
-        repositoryPath,
-        taskId,
-        runId,
-        apiClient,
-        logger: logger.child("TreeTracker"),
-      });
+      await this.step({
+        name: "apply_snapshot",
+        execute: async () => {
+          const treeTracker = new TreeTracker({
+            repositoryPath,
+            taskId,
+            runId,
+            apiClient,
+            logger: logger.child("TreeTracker"),
+          });
 
-      try {
-        await treeTracker.applyTreeSnapshot(latestSnapshot);
-        treeTracker.setLastTreeHash(latestSnapshot.treeHash);
-        snapshotApplied = true;
-        this.log.info("Tree snapshot applied successfully", {
-          treeHash: latestSnapshot.treeHash,
-        });
-      } catch (error) {
-        // Log but don't fail - continue with conversation rebuild
-        this.log.warn("Failed to apply tree snapshot, continuing without it", {
-          error: error instanceof Error ? error.message : String(error),
-          treeHash: latestSnapshot.treeHash,
-        });
-      }
+          try {
+            await treeTracker.applyTreeSnapshot(latestSnapshot);
+            treeTracker.setLastTreeHash(latestSnapshot.treeHash);
+            snapshotApplied = true;
+            this.log.info("Tree snapshot applied successfully", {
+              treeHash: latestSnapshot.treeHash,
+            });
+          } catch (error) {
+            // Log but don't fail - continue with conversation rebuild
+            // ApplySnapshotSaga handles its own rollback internally
+            this.log.warn("Failed to apply tree snapshot, continuing without it", {
+              error: error instanceof Error ? error.message : String(error),
+              treeHash: latestSnapshot.treeHash,
+            });
+          }
+        },
+        rollback: async () => {
+          // Inner ApplySnapshotSaga handles its own rollback
+        },
+      });
     } else if (latestSnapshot) {
       this.log.warn(
         "Snapshot found but has no archive URL - files cannot be restored",

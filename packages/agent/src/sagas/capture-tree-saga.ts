@@ -37,10 +37,12 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
       input;
     const tmpDir = join(repositoryPath, ".posthog", "tmp");
 
-    // Step 1: Create temp directory (idempotent, no rollback needed)
-    await this.readOnlyStep("create_tmp_dir", () =>
-      mkdir(tmpDir, { recursive: true }),
-    );
+    // Step 1: Create temp directory (idempotent - mkdir with recursive does nothing if exists)
+    await this.step({
+      name: "create_tmp_dir",
+      execute: () => mkdir(tmpDir, { recursive: true }),
+      rollback: async () => {},
+    });
 
     // Step 2: Create temp index and write tree
     this.tempIndexPath = join(tmpDir, `index-${runId}-${Date.now()}`);
