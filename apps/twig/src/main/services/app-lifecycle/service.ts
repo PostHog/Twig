@@ -11,7 +11,7 @@ const log = logger.scope("app-lifecycle");
 @injectable()
 export class AppLifecycleService {
   private _isQuittingForUpdate = false;
-  private static readonly SHUTDOWN_TIMEOUT_MS = 5000;
+  private static readonly SHUTDOWN_TIMEOUT_MS = 3000;
 
   get isQuittingForUpdate(): boolean {
     return this._isQuittingForUpdate;
