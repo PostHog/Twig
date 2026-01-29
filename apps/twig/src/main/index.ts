@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import log from "electron-log/main";
 import "./lib/logger";
 import "./services/index.js";
 import { ANALYTICS_EVENTS } from "../types/analytics.js";
@@ -105,6 +106,18 @@ const handleShutdownSignal = async (_signal: string) => {
   process.exit(0);
 };
 
+// ========================================================
+// Process signal handlers
+// ========================================================
+
 process.on("SIGTERM", () => handleShutdownSignal("SIGTERM"));
 process.on("SIGINT", () => handleShutdownSignal("SIGINT"));
 process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
+
+process.on("uncaughtException", (error) => {
+  log.error("Uncaught exception", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  log.error("Unhandled rejection", reason);
+});
