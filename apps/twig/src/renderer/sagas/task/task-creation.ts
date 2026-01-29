@@ -2,11 +2,11 @@ import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
 import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
+import { Saga, type SagaLogger } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
-import { Saga, type SagaLogger } from "@shared/lib/saga";
 import type {
   ExecutionMode,
   Task,
