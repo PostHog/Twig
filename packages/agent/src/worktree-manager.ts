@@ -269,6 +269,8 @@ export class WorktreeManager {
     }
     const gitTime = Date.now() - gitStart;
 
+    await this.symlinkClaudeConfig(worktreePath);
+
     const createdAt = new Date().toISOString();
 
     this.logger.info("Worktree created successfully", {
@@ -356,6 +358,8 @@ export class WorktreeManager {
       ]);
     }
     const gitTime = Date.now() - gitStart;
+
+    await this.symlinkClaudeConfig(worktreePath);
 
     const createdAt = new Date().toISOString();
 
@@ -489,6 +493,32 @@ export class WorktreeManager {
     } catch (error) {
       this.logger.debug("Failed to list worktrees", { error });
       return [];
+    }
+  }
+
+  private async symlinkClaudeConfig(worktreePath: string): Promise<void> {
+    const sourceClaudeDir = path.join(this.mainRepoPath, ".claude");
+    const targetClaudeDir = path.join(worktreePath, ".claude");
+
+    try {
+      await fs.access(sourceClaudeDir);
+    } catch {
+      this.logger.debug("No .claude directory in main repo to symlink");
+      return;
+    }
+
+    try {
+      await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+      this.logger.info("Symlinked .claude config to worktree", {
+        source: sourceClaudeDir,
+        target: targetClaudeDir,
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        this.logger.debug(".claude symlink already exists in worktree");
+      } else {
+        this.logger.warn("Failed to symlink .claude config", { error });
+      }
     }
   }
 
