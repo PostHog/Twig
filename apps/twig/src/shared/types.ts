@@ -207,3 +207,20 @@ export interface DetectedApplication {
 export interface ExternalAppsPreferences {
   lastUsedApp?: string;
 }
+
+// Task references from session summaries
+export interface TaskReference {
+  id: string;
+  session_id: string;
+  start_time: string;
+  end_time: string;
+  distinct_id: string;
+  content: string;
+  distance_to_centroid: number | null;
+  created_at: string;
+}
+
+export interface TaskReferencesResponse {
+  results: TaskReference[];
+  count: number;
+}

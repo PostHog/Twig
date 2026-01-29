@@ -12,7 +12,14 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "settings" | "folder-settings";
+type ViewType =
+  | "task-detail"
+  | "task-input"
+  | "task-preview"
+  | "settings"
+  | "folder-settings"
+  | "autonomy-tasks"
+  | "autonomy-onboarding";
 
 interface ViewState {
   type: ViewType;
@@ -26,9 +33,12 @@ interface NavigationStore {
   history: ViewState[];
   historyIndex: number;
   navigateToTask: (task: Task) => void;
+  navigateToTaskPreview: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
+  navigateToAutonomyTasks: () => void;
+  navigateToAutonomyOnboarding: () => void;
   toggleSettings: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -40,6 +50,9 @@ interface NavigationStore {
 const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   if (view1.type !== view2.type) return false;
   if (view1.type === "task-detail" && view2.type === "task-detail") {
+    return view1.data?.id === view2.data?.id;
+  }
+  if (view1.type === "task-preview" && view2.type === "task-preview") {
     return view1.data?.id === view2.data?.id;
   }
   if (view1.type === "task-input" && view2.type === "task-input") {
@@ -136,6 +149,13 @@ export const useNavigationStore = create<NavigationStore>()(
           navigate({ type: "task-input", folderId });
         },
 
+        navigateToTaskPreview: (task: Task) => {
+          navigate({ type: "task-preview", data: task, taskId: task.id });
+          track(ANALYTICS_EVENTS.TASK_VIEWED, {
+            task_id: task.id,
+          });
+        },
+
         navigateToSettings: () => {
           navigate({ type: "settings" });
           track(ANALYTICS_EVENTS.SETTINGS_VIEWED);
@@ -143,6 +163,17 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
+        },
+
+        navigateToAutonomyTasks: () => {
+          navigate({ type: "autonomy-tasks" });
+          track(ANALYTICS_EVENTS.TASK_VIEWED, {
+            task_id: "autonomy-tasks",
+          });
+        },
+
+        navigateToAutonomyOnboarding: () => {
+          navigate({ type: "autonomy-onboarding" });
         },
 
         toggleSettings: () => {
