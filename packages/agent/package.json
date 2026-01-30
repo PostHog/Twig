@@ -43,7 +43,14 @@
     "./adapters/claude/conversion/tool-use-to-acp": {
       "types": "./dist/adapters/claude/conversion/tool-use-to-acp.d.ts",
       "import": "./dist/adapters/claude/conversion/tool-use-to-acp.js"
+    },
+    "./server": {
+      "types": "./dist/server/agent-server.d.ts",
+      "import": "./dist/server/agent-server.js"
     }
+  },
+  "bin": {
+    "agent-server": "./dist/server/bin.js"
   },
   "type": "module",
   "keywords": [
@@ -72,17 +79,19 @@
     "@types/bun": "latest",
     "@types/tar": "^6.1.13",
     "minimatch": "^10.0.3",
+    "msw": "^2.12.7",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@posthog/shared": "workspace:*",
     "@agentclientprotocol/sdk": "^0.13.1",
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@anthropic-ai/sdk": "^0.71.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
+    "@posthog/shared": "workspace:*",
+    "commander": "^14.0.2",
     "diff": "^8.0.2",
     "dotenv": "^17.2.3",
     "tar": "^7.5.0",
