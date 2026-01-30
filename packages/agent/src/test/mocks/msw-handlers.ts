@@ -13,8 +13,15 @@ export interface PostHogHandlersOptions {
   getTaskRun?: () => unknown;
   sseController?: SseController;
   getSseController?: () => SseController | undefined;
+  /** @deprecated Use syncPostResponse instead */
   appendLogResponse?: () => AnyHttpResponse;
-  heartbeatResponse?: () => AnyHttpResponse;
+  syncPostResponse?: () => AnyHttpResponse;
+}
+
+function isHeartbeatEvent(entries: unknown[]): boolean {
+  return entries.some(
+    (entry) => typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).type === "heartbeat",
+  );
 }
 
 export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
@@ -27,7 +34,7 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
     sseController,
     getSseController,
     appendLogResponse,
-    heartbeatResponse,
+    syncPostResponse,
   } = options;
 
   return [
@@ -50,24 +57,18 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
     }),
 
     http.post(
-      `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/append_log`,
+      `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`,
       async ({ request }) => {
-        if (appendLogResponse) {
-          return appendLogResponse();
+        const responseOverride = syncPostResponse ?? appendLogResponse;
+        if (responseOverride) {
+          return responseOverride();
         }
         const body = (await request.json()) as { entries: unknown[] };
-        onAppendLog?.(body.entries);
-        return HttpResponse.json({});
-      },
-    ),
-
-    http.post(
-      `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/heartbeat`,
-      () => {
-        if (heartbeatResponse) {
-          return heartbeatResponse();
+        if (isHeartbeatEvent(body.entries)) {
+          onHeartbeat?.();
+        } else {
+          onAppendLog?.(body.entries);
         }
-        onHeartbeat?.();
         return HttpResponse.json({});
       },
     ),

@@ -65,6 +65,7 @@ describe("AgentServer", () => {
   });
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     mockQueryRef.current = null;
     repo = await createTestRepo("agent-server");
     appendLogCalls = [];
@@ -475,17 +476,16 @@ describe("AgentServer", () => {
   });
 
   describe("error recovery", () => {
-    it("retries append_log on 429 with backoff", async () => {
-      let appendLogAttempts = 0;
+    it("retries sync POST on 429 with backoff", async () => {
+      let syncPostAttempts = 0;
 
       server.resetHandlers(
         ...createPostHogHandlers({
           baseUrl: "http://localhost:8000",
           getSseController: () => sseController,
-          onHeartbeat: () => heartbeatCount++,
-          appendLogResponse: () => {
-            appendLogAttempts++;
-            if (appendLogAttempts < 3) {
+          syncPostResponse: () => {
+            syncPostAttempts++;
+            if (syncPostAttempts < 3) {
               return new HttpResponse(null, { status: 429 });
             }
             return HttpResponse.json({});
@@ -496,7 +496,7 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await waitForCondition(() => appendLogAttempts >= 3, { timeout: 5000 }).catch(() => {});
+      await waitForCondition(() => syncPostAttempts >= 3, { timeout: 5000 }).catch(() => {});
 
       getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
@@ -508,8 +508,7 @@ describe("AgentServer", () => {
         ...createPostHogHandlers({
           baseUrl: "http://localhost:8000",
           getSseController: () => sseController,
-          onHeartbeat: () => heartbeatCount++,
-          appendLogResponse: () => HttpResponse.json({ error: "invalid" }, { status: 500 }),
+          syncPostResponse: () => HttpResponse.json({ error: "invalid" }, { status: 500 }),
         }),
       );
 
