@@ -1,10 +1,13 @@
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
+import { useAutonomyFeatureFlag } from "@features/autonomy/hooks/useAutonomyFeatureFlag";
+import { useAutonomyStore } from "@features/autonomy/stores/autonomyStore";
+import { useSignals } from "@features/signals/hooks/useSignals";
 import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
-import type { Task } from "@shared/types";
+import type { Signal, Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { memo, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
@@ -13,13 +16,25 @@ import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HistoryView } from "./HistoryView";
 import { NewTaskItem } from "./items/HomeItem";
+import { SignalsSection } from "./SignalsSection";
 
 function SidebarMenuComponent() {
-  const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
+  const {
+    view,
+    navigateToTask,
+    navigateToTaskInput,
+    navigateToSignalPreview,
+    navigateToSignals,
+    navigateToAutonomyOnboarding,
+  } = useNavigationStore();
 
   const activeFilters = useTaskStore((state) => state.activeFilters);
   const { data: currentUser } = useMeQuery();
   const { data: allTasks = [] } = useTasks();
+  const { data: allSignals = [] } = useSignals();
+
+  const isAutonomyFeatureFlagEnabled = useAutonomyFeatureFlag();
+  const isAutonomyEnabled = useAutonomyStore((state) => state.isEnabled);
 
   const workspaces = useWorkspaceStore.use.workspaces();
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
@@ -94,6 +109,23 @@ function SidebarMenuComponent() {
     togglePin(taskId);
   };
 
+  // Create a map of signals for quick lookup
+  const signalMap = new Map<string, Signal>();
+  for (const signal of allSignals) {
+    signalMap.set(signal.id, signal);
+  }
+
+  const handleSignalClick = (signalId: string) => {
+    const signal = signalMap.get(signalId);
+    if (signal) {
+      navigateToSignalPreview(signal);
+    }
+  };
+
+  const handleViewAllSignals = () => {
+    navigateToSignals();
+  };
+
   return (
     <>
       <RenameTaskDialog
@@ -127,6 +159,20 @@ function SidebarMenuComponent() {
               onTaskDelete={handleTaskDelete}
               onTaskTogglePin={handleTaskTogglePin}
             />
+
+            {isAutonomyFeatureFlagEnabled && (
+              <>
+                <div className="mx-2 my-2 border-gray-6 border-t" />
+                <SignalsSection
+                  signals={sidebarData.pendingSignals}
+                  activeSignalId={sidebarData.activeSignalId}
+                  isAutonomyEnabled={isAutonomyEnabled}
+                  onSignalClick={handleSignalClick}
+                  onViewAllClick={handleViewAllSignals}
+                  onEnableAutonomy={navigateToAutonomyOnboarding}
+                />
+              </>
+            )}
           </Flex>
         </Box>
       </Box>

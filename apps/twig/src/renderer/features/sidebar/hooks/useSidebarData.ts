@@ -3,12 +3,13 @@ import {
   type AgentSession,
   useSessions,
 } from "@features/sessions/stores/sessionStore";
+import { useSignals } from "@features/signals/hooks/useSignals";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import type { ActiveFilters } from "@features/tasks/stores/taskStore";
 import { getUserDisplayName } from "@hooks/useUsers";
 import { filtersMatch } from "@lib/filters";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import type { RegisteredFolder, Task, Workspace } from "@shared/types";
+import type { RegisteredFolder, Signal, Task, Workspace } from "@shared/types";
 import { useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
@@ -63,6 +64,13 @@ export interface PinnedData {
   tasks: TaskData[];
 }
 
+export interface SignalData {
+  id: string;
+  title: string;
+  taskPrompt: string;
+  priorityScore: number | null;
+}
+
 export interface SidebarData {
   userName: string;
   isHomeActive: boolean;
@@ -73,13 +81,22 @@ export interface SidebarData {
   isLoading: boolean;
   folders: FolderData[];
   activeTaskId: string | null;
+  activeSignalId: string | null;
   historyData: HistoryData;
   pinnedData: PinnedData;
+  pendingSignals: SignalData[];
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings" | "folder-settings";
-  data?: Task;
+  type:
+    | "task-detail"
+    | "task-input"
+    | "signal-preview"
+    | "settings"
+    | "folder-settings"
+    | "signals"
+    | "autonomy-onboarding";
+  data?: Task | Signal;
 }
 
 interface UseSidebarDataProps {
@@ -312,6 +329,7 @@ export function useSidebarData({
   currentUser,
 }: UseSidebarDataProps): SidebarData {
   const { data: allTasks = [], isLoading } = useTasks();
+  const { data: allSignals = [] } = useSignals();
   const { folders } = useRegisteredFoldersStore();
   const workspaces = useWorkspaceStore.use.workspaces();
   const sessions = useSessions();
@@ -343,6 +361,27 @@ export function useSidebarData({
     activeView.type === "task-detail" && activeView.data
       ? activeView.data.id
       : null;
+
+  const activeSignalId =
+    activeView.type === "signal-preview" && activeView.data
+      ? activeView.data.id
+      : null;
+
+  // Compute pending signals (those without a linked task)
+  const pendingSignals: SignalData[] = useMemo(() => {
+    return allSignals
+      .filter((signal: Signal) => signal.task === null)
+      .sort(
+        (a: Signal, b: Signal) =>
+          (b.priority_score ?? 0) - (a.priority_score ?? 0),
+      )
+      .map((signal: Signal) => ({
+        id: signal.id,
+        title: signal.title,
+        taskPrompt: signal.task_prompt,
+        priorityScore: signal.priority_score,
+      }));
+  }, [allSignals]);
 
   // Memoize sorted folders to maintain stable reference
   const sortedFolders = useMemo(
@@ -486,7 +525,9 @@ export function useSidebarData({
     isLoading,
     folders: folderData,
     activeTaskId,
+    activeSignalId,
     historyData,
     pinnedData,
+    pendingSignals,
   };
 }

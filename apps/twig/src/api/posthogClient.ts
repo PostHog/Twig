@@ -1,5 +1,10 @@
 import { logger } from "@renderer/lib/logger";
-import type { Task, TaskRun } from "@shared/types";
+import type {
+  Signal,
+  SignalReferencesResponse,
+  Task,
+  TaskRun,
+} from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -61,7 +66,11 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(options?: { repository?: string; createdBy?: number }) {
+  async getTasks(options?: {
+    repository?: string;
+    createdBy?: number;
+    originProduct?: string;
+  }) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
@@ -73,6 +82,10 @@ export class PostHogAPIClient {
 
     if (options?.createdBy) {
       params.created_by = options.createdBy;
+    }
+
+    if (options?.originProduct) {
+      params.origin_product = options.originProduct;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {
@@ -372,5 +385,135 @@ export class PostHogAPIClient {
       query: { limit: 1000 },
     });
     return data.results ?? [];
+  }
+
+  // Signal API methods
+
+  async getSignals(): Promise<Signal[]> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/signals/`);
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signals/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signals: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.results ?? data ?? [];
+  }
+
+  async getSignal(signalId: string): Promise<Signal> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signals/${signalId}/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signal: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async deleteSignal(signalId: string): Promise<void> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "delete",
+      url,
+      path: `/api/projects/${teamId}/signals/${signalId}/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete signal: ${response.statusText}`);
+    }
+  }
+
+  async getSignalReferences(
+    signalId: string,
+  ): Promise<SignalReferencesResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/references/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signals/${signalId}/references/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch signal references: ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    return {
+      results: data.results ?? data ?? [],
+      count: data.count ?? data.results?.length ?? data?.length ?? 0,
+    };
+  }
+
+  /**
+   * Run a HogQL query against the PostHog query API
+   */
+  async runQuery<T = unknown>(query: {
+    kind: string;
+    query: string;
+  }): Promise<T> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/query/`);
+    const response = await this.api.fetcher.fetch({
+      method: "post",
+      url,
+      path: `/api/projects/${teamId}/query/`,
+      overrides: {
+        body: JSON.stringify(query),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to run query: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Update the current team/project settings
+   */
+  async updateTeam(updates: {
+    proactive_tasks_enabled?: boolean;
+    session_recording_opt_in?: boolean;
+    autocapture_exceptions_opt_in?: boolean;
+  }): Promise<Schemas.Team> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/`);
+    const response = await this.api.fetcher.fetch({
+      method: "patch",
+      url,
+      path: `/api/projects/${teamId}/`,
+      overrides: {
+        body: JSON.stringify(updates),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update team: ${response.statusText}`);
+    }
+
+    return await response.json();
   }
 }
