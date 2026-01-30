@@ -212,6 +212,7 @@ function openTab(
   taskId: string,
   tabId: string,
   asPreview = true,
+  targetPanelId?: string,
 ): { taskLayouts: Record<string, TaskLayout> } {
   return updateTaskLayout(state, taskId, (layout) => {
     // Check if tab already exists in tree
@@ -242,9 +243,10 @@ function openTab(
       return { panelTree: updatedTree };
     }
 
-    // Tab doesn't exist, add it to the focused panel (or main panel as fallback)
-    const targetPanelId = layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
-    let targetPanel = getLeafPanel(layout.panelTree, targetPanelId);
+    // Tab doesn't exist, add it to the specified panel, focused panel, or main panel as fallback
+    const resolvedPanelId =
+      targetPanelId ?? layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
+    let targetPanel = getLeafPanel(layout.panelTree, resolvedPanelId);
 
     // Fall back to main panel if the focused panel doesn't exist or isn't a leaf
     if (!targetPanel) {
@@ -298,7 +300,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
         set((state) => {
-          const afterOpenTab = openTab(state, taskId, tabId, asPreview);
+          const afterOpenTab = openTab(state, taskId, tabId, asPreview, DEFAULT_PANEL_IDS.MAIN_PANEL);
           const layout = afterOpenTab.taskLayouts[taskId];
           if (!layout) return afterOpenTab;
 
@@ -325,7 +327,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
       openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
-        set((state) => openTab(state, taskId, tabId, asPreview));
+        set((state) => openTab(state, taskId, tabId, asPreview, DEFAULT_PANEL_IDS.MAIN_PANEL));
 
         // Track diff viewed
         const changeType =
