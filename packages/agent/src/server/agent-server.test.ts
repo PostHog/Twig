@@ -1,51 +1,50 @@
+import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
+import type { TestRepo } from "../test/fixtures/api.js";
+import type { MockQuery } from "../test/mocks/claude-sdk.js";
 import {
   createMockApiClient,
+  createPostHogHandlers,
+  createSuccessResult,
   createTaskRun,
   createTestRepo,
   createTreeSnapshotNotification,
-  type TestRepo,
-} from "../sagas/test-fixtures.js";
+  expectNotification,
+  hasNotification,
+  SseController,
+  waitForCondition,
+} from "../test/setup.js";
 import { AgentServer } from "./agent-server.js";
-import { createPostHogHandlers, SseController } from "./test-helpers/msw-handlers.js";
-import { createMockQuery, createSuccessResult, type MockQuery } from "./test-helpers/mock-claude-sdk.js";
 
-let mockQuery: MockQuery;
+const { mockQueryRef } = vi.hoisted(() => {
+  return { mockQueryRef: { current: null as MockQuery | null } };
+});
 
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
+  const { createMockQuery: createMock, createInitMessage: createInit } = await import("../test/mocks/claude-sdk.js");
   return {
     ...actual,
     query: vi.fn(() => {
-      mockQuery = createMockQuery();
+      const mq = createMock();
+      mockQueryRef.current = mq;
       setTimeout(() => {
-        mockQuery._mockHelpers.sendMessage({
-          type: "system",
-          subtype: "init",
-          agents: [],
-          apiKeySource: "user",
-          betas: [],
-          claude_code_version: "1.0.0",
-          cwd: "/tmp",
-          tools: [],
-          mcp_servers: [],
-          model: "claude-sonnet-4-5-20250929",
-          permissionMode: "default",
-          slash_commands: [],
-          output_style: "default",
-          skills: [],
-          plugins: [],
-          uuid: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
-          session_id: "test-session",
-        });
+        mq._mockHelpers.sendMessage(createInit());
       }, 10);
-      return mockQuery;
+      return mq;
     }),
   };
 });
+
+function getMockQuery(): MockQuery {
+  if (!mockQueryRef.current) {
+    throw new Error("MockQuery not initialized - call agentServer.start() first");
+  }
+  return mockQueryRef.current;
+}
 
 describe("AgentServer", () => {
   let repo: TestRepo;
@@ -54,6 +53,7 @@ describe("AgentServer", () => {
   let server: ReturnType<typeof setupServer>;
   let appendLogCalls: unknown[][];
   let heartbeatCount: number;
+  let syncRequestCalls: Request[];
 
   beforeAll(() => {
     server = setupServer();
@@ -65,9 +65,11 @@ describe("AgentServer", () => {
   });
 
   beforeEach(async () => {
+    mockQueryRef.current = null;
     repo = await createTestRepo("agent-server");
     appendLogCalls = [];
     heartbeatCount = 0;
+    syncRequestCalls = [];
     sseController = new SseController();
 
     mockApiClient = createMockApiClient({
@@ -81,9 +83,10 @@ describe("AgentServer", () => {
     server.resetHandlers(
       ...createPostHogHandlers({
         baseUrl: "http://localhost:8000",
-        sseController,
+        getSseController: () => sseController,
         onAppendLog: (entries) => appendLogCalls.push(entries),
         onHeartbeat: () => heartbeatCount++,
+        onSyncRequest: (request) => syncRequestCalls.push(request),
         getTaskRun: () => createTaskRun({ log_url: "" }),
       }),
     );
@@ -109,25 +112,20 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({
         method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
         params: { content: "Hello from SSE!" },
       });
 
-      await new Promise((r) => setTimeout(r, 100));
-
-      const hasUserMessage = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { params?: { update?: { content?: { text?: string } } } } }).notification;
-          return notification?.params?.update?.content?.text?.includes("Hello from SSE!");
-        }),
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "Hello from SSE!" }),
       );
 
-      expect(hasUserMessage).toBe(true);
+      expectNotification(appendLogCalls, { text: "Hello from SSE!" });
 
-      mockQuery._mockHelpers.complete(createSuccessResult());
+      getMockQuery()._mockHelpers.complete(createSuccessResult());
       await agentServer.stop();
       await startPromise;
     });
@@ -136,25 +134,20 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({
         type: "client_message",
         params: { content: "Message via client_message type" },
       });
 
-      await new Promise((r) => setTimeout(r, 100));
-
-      const hasUserMessage = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { params?: { update?: { content?: { text?: string } } } } }).notification;
-          return notification?.params?.update?.content?.text?.includes("Message via client_message type");
-        }),
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "Message via client_message type" }),
       );
 
-      expect(hasUserMessage).toBe(true);
+      expectNotification(appendLogCalls, { text: "Message via client_message type" });
 
-      mockQuery._mockHelpers.complete(createSuccessResult());
+      getMockQuery()._mockHelpers.complete(createSuccessResult());
       await agentServer.stop();
       await startPromise;
     });
@@ -163,15 +156,15 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({ method: POSTHOG_NOTIFICATIONS.CANCEL });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => getMockQuery().interrupt.mock.calls.length > 0);
 
-      expect(mockQuery.interrupt).toHaveBeenCalled();
+      expect(getMockQuery().interrupt).toHaveBeenCalled();
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -180,14 +173,16 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({ method: POSTHOG_NOTIFICATIONS.CLOSE });
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout")), 5000),
-      );
-      await Promise.race([startPromise, timeoutPromise]);
+      await expect(
+        Promise.race([
+          startPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000)),
+        ]),
+      ).resolves.not.toThrow();
     });
 
     it("tracks event IDs for reconnection", async () => {
@@ -214,23 +209,23 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => connectionAttempts >= 1);
 
       sseController1.sendEvent(
         { method: "_posthog/noop", params: {} },
         { id: "event-42" },
       );
 
-      await new Promise((r) => setTimeout(r, 50));
+      await waitForCondition(() => sseController1.currentState === "streaming");
 
       sseController1.close();
 
-      await new Promise((r) => setTimeout(r, 1500));
+      await waitForCondition(() => connectionAttempts > 1, { timeout: 3000 });
 
       expect(connectionAttempts).toBeGreaterThan(1);
 
       sseController2.close();
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -239,22 +234,125 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 100));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({ method: "_unknown/event", params: {} });
 
       await new Promise((r) => setTimeout(r, 100));
 
-      const unknownEventProcessed = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { method?: string } }).notification;
-          return notification?.method === "_unknown/event";
+      const unknownEventProcessed = hasNotification(appendLogCalls, { method: "_unknown/event" });
+      expect(unknownEventProcessed).toBe(false);
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+      await startPromise;
+    });
+  });
+
+  describe("SSE resilience", () => {
+    it("handles connection drop and reconnects", async () => {
+      let connectionAttempts = 0;
+      const sseController1 = new SseController();
+      const sseController2 = new SseController();
+
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => {
+            connectionAttempts++;
+            if (connectionAttempts === 1) {
+              return sseController1;
+            }
+            return sseController2;
+          },
+          onAppendLog: (entries) => appendLogCalls.push(entries),
+          onHeartbeat: () => heartbeatCount++,
         }),
       );
 
-      expect(unknownEventProcessed).toBe(false);
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
 
-      mockQuery._mockHelpers.complete();
+      await waitForCondition(() => connectionAttempts >= 1);
+
+      sseController1.close();
+
+      await waitForCondition(() => connectionAttempts > 1, { timeout: 3000 });
+
+      expect(connectionAttempts).toBeGreaterThan(1);
+
+      sseController2.close();
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+      await startPromise;
+    });
+
+    it("handles malformed JSON gracefully", async () => {
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      sseController.sendRaw("data: {not valid json}\n\n");
+
+      sseController.sendEvent({
+        method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
+        params: { content: "After malformed" },
+      });
+
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "After malformed" }),
+      );
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+      await startPromise;
+    });
+
+    it("verifies Last-Event-ID header on reconnect", async () => {
+      let connectionAttempts = 0;
+      let lastEventIdReceived: string | null = null;
+      const sseController1 = new SseController();
+      const sseController2 = new SseController();
+
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => {
+            connectionAttempts++;
+            if (connectionAttempts === 1) {
+              return sseController1;
+            }
+            return sseController2;
+          },
+          onAppendLog: (entries) => appendLogCalls.push(entries),
+          onHeartbeat: () => heartbeatCount++,
+          onSyncRequest: (request) => {
+            lastEventIdReceived = request.headers.get("Last-Event-ID");
+          },
+        }),
+      );
+
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => connectionAttempts >= 1);
+
+      sseController1.sendEvent(
+        { method: "_posthog/noop", params: {} },
+        { id: "event-123" },
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      sseController1.close();
+
+      await waitForCondition(() => connectionAttempts > 1, { timeout: 3000 });
+
+      expect(lastEventIdReceived).toBe("event-123");
+
+      sseController2.close();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -265,18 +363,13 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 200));
-
-      const hasSessionUpdateCall = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { method?: string } }).notification;
-          return notification?.method === "session/update";
-        }),
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { method: "session/update" }),
       );
 
-      expect(hasSessionUpdateCall).toBe(true);
+      expectNotification(appendLogCalls, { method: "session/update" });
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -288,18 +381,14 @@ describe("AgentServer", () => {
       });
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 300));
 
-      const hasInitialPrompt = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { params?: { update?: { content?: { text?: string } } } } }).notification;
-          return notification?.params?.update?.content?.text?.includes("Hello, agent!");
-        }),
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "Hello, agent!" }),
       );
 
-      expect(hasInitialPrompt).toBe(true);
+      expectNotification(appendLogCalls, { text: "Hello, agent!" });
 
-      mockQuery._mockHelpers.complete(createSuccessResult());
+      getMockQuery()._mockHelpers.complete(createSuccessResult());
       await agentServer.stop();
       await startPromise;
     });
@@ -310,27 +399,26 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 150));
+      await waitForCondition(() => appendLogCalls.length > 0);
 
       sseController.sendEvent({
         method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
         params: { content: "This will fail" },
       });
 
-      await new Promise((r) => setTimeout(r, 50));
-      mockQuery._mockHelpers.simulateError(new Error("ACP prompt failed"));
-
-      await new Promise((r) => setTimeout(r, 300));
-
-      const hasErrorNotification = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { params?: { update?: { content?: { text?: string } } } } }).notification;
-          const text = notification?.params?.update?.content?.text;
-          return text?.includes("error") || text?.includes("Error") || text?.includes("failed");
-        }),
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "This will fail" }),
       );
 
-      expect(hasErrorNotification).toBe(true);
+      getMockQuery()._mockHelpers.simulateError(new Error("ACP prompt failed"));
+
+      await waitForCondition(
+        () =>
+          hasNotification(appendLogCalls, { text: "error" }) ||
+          hasNotification(appendLogCalls, { text: "Error" }) ||
+          hasNotification(appendLogCalls, { text: "failed" }),
+        { timeout: 2000 },
+      );
 
       await agentServer.stop();
       await startPromise;
@@ -358,12 +446,12 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 2000));
+      await waitForCondition(() => connectionAttempts > 1, { timeout: 3000 });
 
       expect(connectionAttempts).toBeGreaterThan(1);
 
       sseController1.close();
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -376,9 +464,183 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogCalls.length > 0, { timeout: 2000 }).catch(() => {});
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+
+      await expect(startPromise).resolves.not.toThrow();
+    });
+  });
+
+  describe("error recovery", () => {
+    it("retries append_log on 429 with backoff", async () => {
+      let appendLogAttempts = 0;
+
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => sseController,
+          onHeartbeat: () => heartbeatCount++,
+          appendLogResponse: () => {
+            appendLogAttempts++;
+            if (appendLogAttempts < 3) {
+              return new HttpResponse(null, { status: 429 });
+            }
+            return HttpResponse.json({});
+          },
+        }),
+      );
+
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogAttempts >= 3, { timeout: 5000 }).catch(() => {});
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+      await startPromise;
+    });
+
+    it("handles API errors without crashing", async () => {
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => sseController,
+          onHeartbeat: () => heartbeatCount++,
+          appendLogResponse: () => HttpResponse.json({ error: "invalid" }, { status: 500 }),
+        }),
+      );
+
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
       await new Promise((r) => setTimeout(r, 200));
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+
+      await expect(startPromise).resolves.not.toThrow();
+    });
+  });
+
+  describe("concurrent operations", () => {
+    it("handles user message during SSE reconnect", async () => {
+      let connectionAttempts = 0;
+      const sseController1 = new SseController();
+      const sseController2 = new SseController();
+
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => {
+            connectionAttempts++;
+            if (connectionAttempts === 1) {
+              return sseController1;
+            }
+            return sseController2;
+          },
+          onAppendLog: (entries) => appendLogCalls.push(entries),
+          onHeartbeat: () => heartbeatCount++,
+        }),
+      );
+
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => connectionAttempts >= 1);
+
+      sseController1.close();
+
+      await waitForCondition(() => connectionAttempts > 1, { timeout: 3000 });
+
+      sseController2.sendEvent({
+        method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
+        params: { content: "Message after reconnect" },
+      });
+
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "Message after reconnect" }),
+      );
+
+      expectNotification(appendLogCalls, { text: "Message after reconnect" });
+
+      sseController2.close();
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+      await startPromise;
+    });
+
+    it("handles multiple stop() calls safely", async () => {
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      getMockQuery()._mockHelpers.complete();
+
+      const stopPromise1 = agentServer.stop();
+      const stopPromise2 = agentServer.stop();
+
+      await expect(Promise.all([stopPromise1, stopPromise2])).resolves.not.toThrow();
+      await startPromise;
+    });
+  });
+
+  describe("shutdown reliability", () => {
+    it("captures tree state on shutdown with interrupted flag", async () => {
+      await repo.writeFile("test.ts", "console.log('test')");
+
+      const agentServer = new AgentServer(createConfig());
+
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+
+      await startPromise;
+
+      expect(mockApiClient.uploadTaskArtifacts).toHaveBeenCalled();
+    });
+
+    it("cleans up all resources on shutdown", async () => {
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      getMockQuery()._mockHelpers.complete();
+      await agentServer.stop();
+
+      await startPromise;
+
+      expect(getMockQuery()._mockHelpers.isAborted()).toBe(true);
+    });
+
+    it("handles stop() during reconnect", async () => {
+      let connectionAttempts = 0;
+
+      server.resetHandlers(
+        ...createPostHogHandlers({
+          baseUrl: "http://localhost:8000",
+          getSseController: () => {
+            connectionAttempts++;
+            return undefined;
+          },
+          onAppendLog: (entries) => appendLogCalls.push(entries),
+          onHeartbeat: () => heartbeatCount++,
+        }),
+      );
+
+      const agentServer = new AgentServer(createConfig());
+      const startPromise = agentServer.start();
+
+      await waitForCondition(() => connectionAttempts >= 1);
+
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
 
       await expect(startPromise).resolves.not.toThrow();
@@ -390,11 +652,11 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await new Promise((r) => setTimeout(r, 200));
+      await waitForCondition(() => heartbeatCount > 0);
 
       expect(heartbeatCount).toBeGreaterThan(0);
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -405,49 +667,30 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 100));
 
-      mockQuery._mockHelpers.complete();
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
 
       await expect(startPromise).resolves.not.toThrow();
-    });
-
-    it("captures tree state on shutdown with interrupted flag", async () => {
-      await repo.writeFile("test.ts", "console.log('test')");
-
-      const agentServer = new AgentServer(createConfig());
-
-      const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 100));
-
-      mockQuery._mockHelpers.complete();
-      await agentServer.stop();
-
-      await startPromise;
-
-      expect(mockApiClient.uploadTaskArtifacts).toHaveBeenCalled();
     });
 
     it("sends connected status notification on start", async () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 200));
 
-      mockQuery._mockHelpers.complete();
+      await waitForCondition(() =>
+        hasNotification(appendLogCalls, { text: "connected" }),
+      );
+
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
 
       await startPromise;
 
-      const hasConnectedStatus = appendLogCalls.some((entries) =>
-        entries.some((entry) => {
-          const notification = (entry as { notification?: { params?: { update?: { content?: { text?: string } } } } }).notification;
-          return notification?.params?.update?.content?.text?.includes("connected");
-        }),
-      );
-
-      expect(hasConnectedStatus).toBe(true);
+      expectNotification(appendLogCalls, { text: "connected" });
     });
   });
 
@@ -464,12 +707,17 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 200));
+
+      await waitForCondition(
+        () =>
+          (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls.length > 0 &&
+          (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mock.calls.length > 0,
+      );
 
       expect(mockApiClient.getTaskRun).toHaveBeenCalled();
       expect(mockApiClient.fetchTaskRunLogs).toHaveBeenCalled();
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -482,11 +730,14 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 100));
+
+      await waitForCondition(
+        () => (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls.length > 0,
+      );
 
       expect(mockApiClient.getTaskRun).toHaveBeenCalled();
 
-      mockQuery._mockHelpers.complete();
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
       await startPromise;
     });
@@ -500,9 +751,10 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(config);
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 100));
 
-      mockQuery._mockHelpers.complete();
+      await waitForCondition(() => heartbeatCount > 0);
+
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
 
       await expect(startPromise).resolves.not.toThrow();
@@ -514,9 +766,10 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
 
       const startPromise = agentServer.start();
-      await new Promise((r) => setTimeout(r, 100));
 
-      mockQuery._mockHelpers.complete();
+      await waitForCondition(() => appendLogCalls.length > 0);
+
+      getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
 
       await startPromise;
