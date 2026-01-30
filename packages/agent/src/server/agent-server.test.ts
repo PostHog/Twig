@@ -113,15 +113,16 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await waitForCondition(() => appendLogCalls.length > 0);
+      await waitForCondition(() => appendLogCalls.length > 0, { timeout: 2000 });
 
       sseController.sendEvent({
         method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
         params: { content: "Hello from SSE!" },
       });
 
-      await waitForCondition(() =>
-        hasNotification(appendLogCalls, { text: "Hello from SSE!" }),
+      await waitForCondition(
+        () => hasNotification(appendLogCalls, { text: "Hello from SSE!" }),
+        { timeout: 2000 },
       );
 
       expectNotification(appendLogCalls, { text: "Hello from SSE!" });

@@ -18,9 +18,15 @@ export interface PostHogHandlersOptions {
   syncPostResponse?: () => AnyHttpResponse;
 }
 
-function isHeartbeatEvent(entries: unknown[]): boolean {
+function hasHeartbeatEvent(entries: unknown[]): boolean {
   return entries.some(
     (entry) => typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).type === "heartbeat",
+  );
+}
+
+function filterNonHeartbeatEvents(entries: unknown[]): unknown[] {
+  return entries.filter(
+    (entry) => !(typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).type === "heartbeat"),
   );
 }
 
@@ -64,10 +70,12 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
           return responseOverride();
         }
         const body = (await request.json()) as { entries: unknown[] };
-        if (isHeartbeatEvent(body.entries)) {
+        if (hasHeartbeatEvent(body.entries)) {
           onHeartbeat?.();
-        } else {
-          onAppendLog?.(body.entries);
+        }
+        const nonHeartbeatEntries = filterNonHeartbeatEvents(body.entries);
+        if (nonHeartbeatEntries.length > 0) {
+          onAppendLog?.(nonHeartbeatEntries);
         }
         return HttpResponse.json({});
       },
