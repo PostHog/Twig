@@ -3,7 +3,6 @@ import { PanelMessage } from "@components/ui/PanelMessage";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
-import { GitActionsBar } from "@features/task-detail/components/GitActionsBar";
 import {
   ArrowCounterClockwiseIcon,
   CaretDownIcon,
@@ -440,46 +439,33 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const hasChanges = changedFiles.length > 0;
 
   if (!hasChanges) {
-    return (
-      <Box height="100%" position="relative">
-        <PanelMessage>No file changes yet</PanelMessage>
-        <GitActionsBar taskId={taskId} repoPath={repoPath} hasChanges={false} />
-      </Box>
-    );
+    return <PanelMessage>No file changes yet</PanelMessage>;
   }
 
   return (
-    <Box height="100%" position="relative">
-      <Box
-        height="100%"
-        overflowY="auto"
-        py="2"
-        style={{ paddingBottom: "52px" }}
-      >
-        <Flex direction="column">
-          {changedFiles.map((file) => (
-            <ChangedFileItem
-              key={file.path}
-              file={file}
-              taskId={taskId}
-              repoPath={repoPath}
-              isActive={isFileActive(file)}
-              mainRepoPath={workspace?.folderPath}
-            />
-          ))}
-          <Flex align="center" justify="center" gap="1" py="2">
-            <CaretUpIcon size={12} color="var(--gray-10)" />
-            <Text size="1" className="text-gray-10">
-              /
-            </Text>
-            <CaretDownIcon size={12} color="var(--gray-10)" />
-            <Text size="1" className="text-gray-10" ml="1">
-              to switch files
-            </Text>
-          </Flex>
+    <Box height="100%" overflowY="auto" py="2">
+      <Flex direction="column">
+        {changedFiles.map((file) => (
+          <ChangedFileItem
+            key={file.path}
+            file={file}
+            taskId={taskId}
+            repoPath={repoPath}
+            isActive={isFileActive(file)}
+            mainRepoPath={workspace?.folderPath}
+          />
+        ))}
+        <Flex align="center" justify="center" gap="1" py="2">
+          <CaretUpIcon size={12} color="var(--gray-10)" />
+          <Text size="1" className="text-gray-10">
+            /
+          </Text>
+          <CaretDownIcon size={12} color="var(--gray-10)" />
+          <Text size="1" className="text-gray-10" ml="1">
+            to switch files
+          </Text>
         </Flex>
-      </Box>
-      <GitActionsBar taskId={taskId} repoPath={repoPath} hasChanges={true} />
+      </Flex>
     </Box>
   );
 }
