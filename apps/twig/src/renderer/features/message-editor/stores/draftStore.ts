@@ -73,18 +73,30 @@ export const useDraftStore = create<DraftStore>()(
 
         getDraft: (sessionId) => get().drafts[sessionId] ?? null,
 
-        setContext: (sessionId, context) =>
+        setContext: (sessionId, context) => {
+          const existing = get().contexts[sessionId];
+          const newContext: EditorContext = {
+            sessionId,
+            taskId: context.taskId ?? existing?.taskId,
+            repoPath: context.repoPath ?? existing?.repoPath,
+            disabled: context.disabled ?? existing?.disabled ?? false,
+            isLoading: context.isLoading ?? existing?.isLoading ?? false,
+            isCloud: context.isCloud ?? existing?.isCloud ?? false,
+          };
+          if (
+            existing?.sessionId === newContext.sessionId &&
+            existing?.taskId === newContext.taskId &&
+            existing?.repoPath === newContext.repoPath &&
+            existing?.disabled === newContext.disabled &&
+            existing?.isLoading === newContext.isLoading &&
+            existing?.isCloud === newContext.isCloud
+          ) {
+            return;
+          }
           set((state) => {
-            const existing = state.contexts[sessionId];
-            state.contexts[sessionId] = {
-              sessionId,
-              taskId: context.taskId ?? existing?.taskId,
-              repoPath: context.repoPath ?? existing?.repoPath,
-              disabled: context.disabled ?? existing?.disabled ?? false,
-              isLoading: context.isLoading ?? existing?.isLoading ?? false,
-              isCloud: context.isCloud ?? existing?.isCloud ?? false,
-            };
-          }),
+            state.contexts[sessionId] = newContext;
+          });
+        },
 
         getContext: (sessionId) => get().contexts[sessionId] ?? null,
 
