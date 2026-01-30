@@ -33,12 +33,17 @@ const kindIcons: Record<TwigToolKind, Icon> = {
 interface ToolCallViewProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
-export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
+export function ToolCallView({
+  toolCall,
+  turnCancelled,
+  turnComplete,
+}: ToolCallViewProps) {
   const { title, kind, status, locations } = toolCall;
   const isIncomplete = status === "pending" || status === "in_progress";
-  const isLoading = isIncomplete && !turnCancelled;
+  const isLoading = isIncomplete && !turnCancelled && !turnComplete;
   const isFailed = status === "failed";
   const wasCancelled = isIncomplete && turnCancelled;
   const KindIcon = (kind && kindIcons[kind]) || Wrench;

@@ -239,6 +239,7 @@ const TurnView = memo(function TurnView({
             item={renderItem}
             toolCalls={turn.toolCalls}
             turnCancelled={wasCancelled}
+            turnComplete={turn.isComplete}
           />
         );
       })}

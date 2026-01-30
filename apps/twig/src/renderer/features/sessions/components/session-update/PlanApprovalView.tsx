@@ -7,16 +7,19 @@ import { useMemo } from "react";
 interface PlanApprovalViewProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
 export function PlanApprovalView({
   toolCall,
   turnCancelled,
+  turnComplete,
 }: PlanApprovalViewProps) {
   const { status, content } = toolCall;
   const isComplete = status === "completed";
   const wasCancelled =
-    (status === "pending" || status === "in_progress") && turnCancelled;
+    (status === "pending" || status === "in_progress") &&
+    (turnCancelled || turnComplete);
 
   const planText = useMemo(() => {
     const rawPlan = (toolCall.rawInput as { plan?: string } | undefined)?.plan;
