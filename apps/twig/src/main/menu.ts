@@ -1,7 +1,9 @@
 declare const __BUILD_COMMIT__: string | undefined;
 declare const __BUILD_DATE__: string | undefined;
 
+import { access, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
 import {
   app,
   clipboard,
@@ -9,11 +11,27 @@ import {
   Menu,
   type MenuItemConstructorOptions,
 } from "electron";
+import log from "electron-log/main";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
 import type { AgentService } from "./services/agent/service.js";
 import type { UIService } from "./services/ui/service.js";
 import type { UpdatesService } from "./services/updates/service.js";
+
+function getSystemInfo(): string {
+  const commit = __BUILD_COMMIT__ ?? "dev";
+  const buildDate = __BUILD_DATE__ ?? "dev";
+  return [
+    `Version: ${app.getVersion()}`,
+    `Commit: ${commit}`,
+    `Date: ${buildDate}`,
+    `Electron: ${process.versions.electron}`,
+    `Chromium: ${process.versions.chrome}`,
+    `Node.js: ${process.versions.node}`,
+    `V8: ${process.versions.v8}`,
+    `OS: ${process.platform} ${process.arch} ${os.release()}`,
+  ].join("\n");
+}
 
 export function buildApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [
@@ -34,18 +52,7 @@ function buildAppMenu(): MenuItemConstructorOptions {
       {
         label: "About Twig",
         click: () => {
-          const commit = __BUILD_COMMIT__ ?? "dev";
-          const buildDate = __BUILD_DATE__ ?? "dev";
-          const info = [
-            `Version: ${app.getVersion()}`,
-            `Commit: ${commit}`,
-            `Date: ${buildDate}`,
-            `Electron: ${process.versions.electron}`,
-            `Chromium: ${process.versions.chrome}`,
-            `Node.js: ${process.versions.node}`,
-            `V8: ${process.versions.v8}`,
-            `OS: ${process.platform} ${process.arch} ${os.release()}`,
-          ].join("\n");
+          const info = getSystemInfo();
 
           dialog
             .showMessageBox({
@@ -109,6 +116,49 @@ function buildFileMenu(): MenuItemConstructorOptions {
       {
         label: "Developer",
         submenu: [
+          {
+            label: "Export application logs",
+            click: async () => {
+              const logPath = log.transports.file.getFile().path;
+
+              try {
+                await access(logPath);
+              } catch {
+                dialog.showMessageBox({
+                  type: "warning",
+                  title: "No Logs Found",
+                  message: "No log file exists yet.",
+                  detail: `Expected location: ${logPath}`,
+                });
+                return;
+              }
+
+              const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+              const defaultName = `twig-logs-${timestamp}.log`;
+              const { filePath, canceled } = await dialog.showSaveDialog({
+                title: "Export Logs",
+                defaultPath: path.join(app.getPath("desktop"), defaultName),
+                filters: [{ name: "Log Files", extensions: ["log"] }],
+              });
+              if (canceled || !filePath) return;
+
+              const logContent = await readFile(logPath, "utf-8");
+              const header = [
+                "=".repeat(60),
+                "  Twig Log Export",
+                "=".repeat(60),
+                "",
+                getSystemInfo(),
+                "",
+                `Exported: ${new Date().toISOString()}`,
+                "",
+                "=".repeat(60),
+                "",
+              ].join("\n");
+
+              await writeFile(filePath, header + logContent, "utf-8");
+            },
+          },
           {
             label: "Clear application storage",
             click: () => {
