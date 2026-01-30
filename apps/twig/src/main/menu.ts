@@ -133,7 +133,10 @@ function buildFileMenu(): MenuItemConstructorOptions {
                 return;
               }
 
-              const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+              const timestamp = new Date()
+                .toISOString()
+                .replace(/[:.]/g, "-")
+                .slice(0, 19);
               const defaultName = `twig-logs-${timestamp}.log`;
               const { filePath, canceled } = await dialog.showSaveDialog({
                 title: "Export Logs",
