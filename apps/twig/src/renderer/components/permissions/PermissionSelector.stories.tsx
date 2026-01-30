@@ -500,6 +500,135 @@ Add dark mode toggle to Twig app with theme persistence.
 - Restart app, verify theme persists
 - Test system theme option follows OS preference`,
 };
+
+const largePlanInput = {
+  plan: `# Complete Application Refactoring Plan
+
+## Executive Summary
+This plan outlines a comprehensive refactoring of the application architecture to improve maintainability, performance, and developer experience. The changes will be implemented in phases to minimize disruption.
+
+## Phase 1: State Management Overhaul
+
+### 1.1 Migrate to New Store Architecture
+- Audit all existing Zustand stores for redundant state
+- Implement store slicing pattern for better code splitting
+- Add middleware for persistence, logging, and devtools
+- Create store factory functions for consistent patterns
+
+### 1.2 Normalize Data Structures
+- Design normalized schema for entities (users, tasks, sessions)
+- Implement selectors with memoization using reselect
+- Add entity adapters for CRUD operations
+- Create relationship mappings between entities
+
+### 1.3 Implement Optimistic Updates
+- Add rollback mechanisms for failed mutations
+- Create pending state tracking for UI feedback
+- Implement conflict resolution strategies
+- Add retry logic with exponential backoff
+
+## Phase 2: API Layer Improvements
+
+### 2.1 Implement Request Caching
+- Add SWR-style caching with stale-while-revalidate
+- Implement cache invalidation strategies
+- Add prefetching for anticipated requests
+- Create cache persistence layer
+
+### 2.2 Error Handling Standardization
+- Create unified error types and codes
+- Implement error boundary components
+- Add structured logging for errors
+- Create error recovery workflows
+
+### 2.3 Request Batching
+- Implement DataLoader pattern for batching
+- Add request deduplication
+- Create priority queue for requests
+- Implement cancellation tokens
+
+## Phase 3: Component Architecture
+
+### 3.1 Component Library Extraction
+- Identify reusable components
+- Create component documentation with Storybook
+- Implement visual regression testing
+- Add accessibility testing
+
+### 3.2 Performance Optimization
+- Implement code splitting at route level
+- Add lazy loading for heavy components
+- Optimize bundle size with tree shaking
+- Implement virtual scrolling for lists
+
+### 3.3 Testing Infrastructure
+- Set up unit testing with Vitest
+- Add integration tests with Testing Library
+- Implement E2E tests with Playwright
+- Create test data factories
+
+## Phase 4: Developer Experience
+
+### 4.1 Tooling Improvements
+- Configure ESLint with strict rules
+- Add Prettier for formatting
+- Implement husky for git hooks
+- Add commitlint for commit messages
+
+### 4.2 Documentation
+- Create architecture decision records
+- Write API documentation
+- Add inline code documentation
+- Create onboarding guides
+
+### 4.3 CI/CD Pipeline
+- Set up automated testing
+- Implement deployment previews
+- Add performance budgets
+- Create release automation
+
+## Critical Files to Modify
+
+### Store Files
+- \`src/stores/index.ts\` - Store exports
+- \`src/stores/user-store.ts\` - User state
+- \`src/stores/task-store.ts\` - Task state
+- \`src/stores/session-store.ts\` - Session state
+- \`src/stores/middleware/\` - Custom middleware
+
+### API Files
+- \`src/api/client.ts\` - API client
+- \`src/api/cache.ts\` - Caching layer
+- \`src/api/errors.ts\` - Error handling
+- \`src/api/hooks/\` - React Query hooks
+
+### Component Files
+- \`src/components/ui/\` - Base components
+- \`src/components/forms/\` - Form components
+- \`src/components/layout/\` - Layout components
+- \`src/features/\` - Feature modules
+
+## Risk Assessment
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Breaking changes | High | Feature flags, gradual rollout |
+| Performance regression | Medium | Benchmarking, monitoring |
+| Developer friction | Low | Documentation, training |
+| Data migration | High | Backup, rollback plan |
+
+## Timeline Estimate
+- Phase 1: 2-3 weeks
+- Phase 2: 2 weeks
+- Phase 3: 3-4 weeks
+- Phase 4: 1-2 weeks
+
+## Success Metrics
+- 50% reduction in bundle size
+- 30% improvement in Time to Interactive
+- 90% test coverage
+- Zero critical bugs in production`,
+};
 export const ExitPlanMode: Story = {
   args: {
     toolCall: {
@@ -510,6 +639,23 @@ export const ExitPlanMode: Story = {
         {
           type: "content",
           content: { type: "text", text: exitPlanModeInput.plan },
+        },
+      ],
+    },
+    options: buildExitPlanModePermissionOptions(),
+  },
+};
+
+export const ExitPlanModeLarge: Story = {
+  args: {
+    toolCall: {
+      toolCallId: `story-${Date.now()}`,
+      title: "Approve this plan to proceed?",
+      kind: "switch_mode",
+      content: [
+        {
+          type: "content",
+          content: { type: "text", text: largePlanInput.plan },
         },
       ],
     },
