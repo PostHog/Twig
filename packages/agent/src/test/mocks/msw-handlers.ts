@@ -1,64 +1,20 @@
 import { http, HttpResponse } from "msw";
+import { SseController } from "../controllers/sse-controller.js";
+
+export { SseController };
+
+type AnyHttpResponse = Response | ReturnType<typeof HttpResponse.json>;
 
 export interface PostHogHandlersOptions {
   baseUrl?: string;
   onAppendLog?: (entries: unknown[]) => void;
   onHeartbeat?: () => void;
-  onSyncRequest?: () => void;
+  onSyncRequest?: (request: Request) => void;
   getTaskRun?: () => unknown;
   sseController?: SseController;
   getSseController?: () => SseController | undefined;
-}
-
-export class SseController {
-  private encoder = new TextEncoder();
-  private controller: ReadableStreamDefaultController<Uint8Array> | null = null;
-  private isClosed = false;
-
-  createStream(): ReadableStream<Uint8Array> {
-    return new ReadableStream({
-      start: (controller) => {
-        this.controller = controller;
-      },
-      cancel: () => {
-        this.isClosed = true;
-      },
-    });
-  }
-
-  sendEvent(data: unknown, options: { id?: string; event?: string } = {}): void {
-    if (this.isClosed || !this.controller) {
-      return;
-    }
-
-    const lines: string[] = [];
-    if (options.id) {
-      lines.push(`id: ${options.id}`);
-    }
-    if (options.event) {
-      lines.push(`event: ${options.event}`);
-    }
-    lines.push(`data: ${JSON.stringify(data)}`);
-    lines.push("");
-    lines.push("");
-
-    this.controller.enqueue(this.encoder.encode(lines.join("\n")));
-  }
-
-  close(): void {
-    if (!this.isClosed && this.controller) {
-      this.isClosed = true;
-      try {
-        this.controller.close();
-      } catch {
-        // Stream may already be closed
-      }
-    }
-  }
-
-  get closed(): boolean {
-    return this.isClosed;
-  }
+  appendLogResponse?: () => AnyHttpResponse;
+  heartbeatResponse?: () => AnyHttpResponse;
 }
 
 export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {

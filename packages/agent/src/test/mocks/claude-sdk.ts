@@ -1,20 +1,39 @@
-import type { Query, SDKMessage, SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  Query,
+  SDKMessage,
+  SDKResultError,
+  SDKResultSuccess,
+} from "@anthropic-ai/claude-agent-sdk";
+import type { Mock } from "vitest";
 import { vi } from "vitest";
 
-export interface MockQuery extends Query {
-  _mockHelpers: {
-    sendMessage: (message: SDKMessage) => void;
-    complete: (result?: SDKResultSuccess) => void;
-    simulateError: (error: Error) => void;
-    queueError: (error: Error) => void;
-  };
+export interface MockQueryHelpers {
+  sendMessage: (message: SDKMessage) => void;
+  complete: (result?: SDKResultSuccess) => void;
+  sendError: (result: SDKResultError) => void;
+  simulateError: (error: Error) => void;
+  queueError: (error: Error) => void;
+  simulateTimeout: () => void;
+  isAborted: () => boolean;
 }
 
-export function createMockQuery(): MockQuery {
+export interface MockQuery extends Omit<Query, "interrupt"> {
+  _mockHelpers: MockQueryHelpers;
+  _abortController: AbortController;
+  interrupt: Mock<() => Promise<void>>;
+}
+
+export interface CreateMockQueryOptions {
+  abortController?: AbortController;
+}
+
+export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery {
+  const abortController = options.abortController ?? new AbortController();
   let resolveNext: ((value: IteratorResult<SDKMessage, void>) => void) | null = null;
   let rejectNext: ((error: Error) => void) | null = null;
   let isDone = false;
   let queuedError: Error | null = null;
+  let isTimedOut = false;
 
   const createNextPromise = (): Promise<IteratorResult<SDKMessage, void>> => {
     if (isDone) {
