@@ -1,11 +1,11 @@
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { Badge, Box, Flex, Skeleton, Text } from "@radix-ui/themes";
-import type { TaskReference } from "@shared/types";
+import type { SignalReference } from "@shared/types";
 import { useState } from "react";
-import { TaskReferenceItem } from "./TaskReferenceItem";
+import { SignalReferenceItem } from "./SignalReferenceItem";
 
-interface TaskReferenceListProps {
-  references: TaskReference[];
+interface SignalReferenceListProps {
+  references: SignalReference[];
   count: number;
   isLoading: boolean;
   error?: Error | null;
@@ -29,19 +29,19 @@ function EmptyState() {
   return (
     <Box className="rounded border border-gray-6 border-dashed bg-gray-1 p-4">
       <Text size="1" color="gray" align="center" as="p">
-        No session references found for this task.
+        No session references found for this signal.
       </Text>
     </Box>
   );
 }
 
-export function TaskReferenceList({
+export function SignalReferenceList({
   references,
   count,
   isLoading,
   error,
   replayBaseUrl,
-}: TaskReferenceListProps) {
+}: SignalReferenceListProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   if (error) {
@@ -85,7 +85,7 @@ export function TaskReferenceList({
           {!isLoading && references.length > 0 && (
             <Flex direction="column" gap="2">
               {references.map((reference) => (
-                <TaskReferenceItem
+                <SignalReferenceItem
                   key={reference.id}
                   reference={reference}
                   replayBaseUrl={replayBaseUrl}

@@ -1,5 +1,10 @@
 import { logger } from "@renderer/lib/logger";
-import type { Task, TaskReferencesResponse, TaskRun } from "@shared/types";
+import type {
+  Signal,
+  SignalReferencesResponse,
+  Task,
+  TaskRun,
+} from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -382,20 +387,75 @@ export class PostHogAPIClient {
     return data.results ?? [];
   }
 
-  async getTaskReferences(taskId: string): Promise<TaskReferencesResponse> {
+  // Signal API methods
+
+  async getSignals(): Promise<Signal[]> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/signals/`);
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signals/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signals: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.results ?? data ?? [];
+  }
+
+  async getSignal(signalId: string): Promise<Signal> {
     const teamId = await this.getTeamId();
     const url = new URL(
-      `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/references/`,
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/`,
     );
     const response = await this.api.fetcher.fetch({
       method: "get",
       url,
-      path: `/api/projects/${teamId}/tasks/${taskId}/references/`,
+      path: `/api/projects/${teamId}/signals/${signalId}/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signal: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async deleteSignal(signalId: string): Promise<void> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "delete",
+      url,
+      path: `/api/projects/${teamId}/signals/${signalId}/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete signal: ${response.statusText}`);
+    }
+  }
+
+  async getSignalReferences(
+    signalId: string,
+  ): Promise<SignalReferencesResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signals/${signalId}/references/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signals/${signalId}/references/`,
     });
 
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch task references: ${response.statusText}`,
+        `Failed to fetch signal references: ${response.statusText}`,
       );
     }
 

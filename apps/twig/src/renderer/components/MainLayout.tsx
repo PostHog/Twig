@@ -4,19 +4,20 @@ import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { AutonomyOnboarding } from "@features/autonomy/components/AutonomyOnboarding";
-import { AutonomyTasksView } from "@features/autonomy/components/AutonomyTasksView";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
+import { SignalPreviewView } from "@features/signal-preview/components/SignalPreviewView";
+import { SignalsView } from "@features/signals/components/SignalsView";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
-import { TaskPreviewView } from "@features/task-preview/components/TaskPreviewView";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
+import type { Signal, Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useCallback, useEffect, useState } from "react";
@@ -58,25 +59,28 @@ export function MainLayout() {
           {view.type === "task-input" && <TaskInput />}
 
           {view.type === "task-detail" && view.data && (
-            <TaskDetail key={view.data.id} task={view.data} />
+            <TaskDetail key={view.data.id} task={view.data as Task} />
           )}
 
-          {view.type === "task-preview" && view.data && (
-            <TaskPreviewView task={view.data} />
+          {view.type === "signal-preview" && view.data && (
+            <SignalPreviewView signal={view.data as Signal} />
           )}
 
           {view.type === "settings" && <SettingsView />}
 
           {view.type === "folder-settings" && <FolderSettingsView />}
 
-          {view.type === "autonomy-tasks" && <AutonomyTasksView />}
+          {view.type === "signals" && <SignalsView />}
 
           {view.type === "autonomy-onboarding" && <AutonomyOnboarding />}
         </Box>
 
         {view.type === "task-detail" && view.data && (
           <RightSidebar>
-            <RightSidebarContent taskId={view.data.id} task={view.data} />
+            <RightSidebarContent
+              taskId={view.data.id}
+              task={view.data as Task}
+            />
           </RightSidebar>
         )}
       </Flex>

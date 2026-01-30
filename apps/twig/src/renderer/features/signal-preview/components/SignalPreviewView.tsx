@@ -1,37 +1,59 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useSignalReferences } from "@features/signals/hooks/useSignalReferences";
+import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { ArrowLeftIcon, PlayIcon } from "@phosphor-icons/react";
 import { Box, Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
-import type { Task } from "@shared/types";
+import type { Signal } from "@shared/types";
+import { useState } from "react";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { useTaskReferences } from "../hooks/useTaskReferences";
-import { TaskReferenceList } from "./TaskReferenceList";
+import { SignalReferenceList } from "./SignalReferenceList";
 
-interface TaskPreviewViewProps {
-  task: Task;
+interface SignalPreviewViewProps {
+  signal: Signal;
 }
 
-export function TaskPreviewView({ task }: TaskPreviewViewProps) {
+export function SignalPreviewView({ signal }: SignalPreviewViewProps) {
   useSetHeaderContent(null);
 
   const { navigateToTask, navigateToTaskInput } = useNavigationStore();
   const projectId = useAuthStore((state) => state.projectId);
   const cloudRegion = useAuthStore((state) => state.cloudRegion);
 
-  const showReferences = task.origin_product === "session_summaries";
+  const { mutateAsync: createTask, invalidateTasks } = useCreateTask();
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+
   const {
     data: referencesData,
     isLoading: isLoadingReferences,
     error: referencesError,
-  } = useTaskReferences(showReferences ? task.id : "");
+  } = useSignalReferences(signal.id);
 
   const replayBaseUrl = cloudRegion
     ? `${getCloudUrlFromRegion(cloudRegion)}/project/${projectId}/replay`
     : "";
 
-  const handleStartTask = () => {
-    navigateToTask(task);
+  const handleStartTask = async () => {
+    // If signal already has a linked task, navigate to it
+    if (signal.task) {
+      navigateToTask(signal.task);
+      return;
+    }
+
+    // Otherwise, create a new task from the signal
+    setIsCreatingTask(true);
+    try {
+      const newTask = await createTask({
+        description: signal.task_prompt,
+        createdFrom: "command-menu",
+      });
+      invalidateTasks(newTask);
+      navigateToTask(newTask);
+    } catch (_error) {
+    } finally {
+      setIsCreatingTask(false);
+    }
   };
 
   const handleGoBack = () => {
@@ -47,7 +69,7 @@ export function TaskPreviewView({ task }: TaskPreviewViewProps) {
             <Flex align="center" gap="3">
               <Button variant="ghost" size="1" onClick={handleGoBack}>
                 <ArrowLeftIcon size={14} />
-                Back to tasks
+                Back
               </Button>
               <Box className="h-4 w-px bg-gray-6" />
               <Text
@@ -57,7 +79,7 @@ export function TaskPreviewView({ task }: TaskPreviewViewProps) {
                 AUTO-DETECTED
               </Text>
             </Flex>
-            <Heading size="5">{task.title}</Heading>
+            <Heading size="5">{signal.title}</Heading>
           </Flex>
 
           {/* Description */}
@@ -67,28 +89,35 @@ export function TaskPreviewView({ task }: TaskPreviewViewProps) {
             </Text>
             <Box className="rounded border border-gray-6 bg-gray-2 p-3">
               <Text size="2" className="whitespace-pre-wrap text-gray-12">
-                {task.description}
+                {signal.task_prompt}
               </Text>
             </Box>
           </Flex>
 
-          {/* References section - only for session_summaries tasks */}
-          {showReferences && (
-            <Box>
-              <TaskReferenceList
-                references={referencesData?.results ?? []}
-                count={referencesData?.count ?? 0}
-                isLoading={isLoadingReferences}
-                error={referencesError}
-                replayBaseUrl={replayBaseUrl}
-              />
-            </Box>
-          )}
+          {/* References section */}
+          <Box>
+            <SignalReferenceList
+              references={referencesData?.results ?? []}
+              count={referencesData?.count ?? 0}
+              isLoading={isLoadingReferences}
+              error={referencesError}
+              replayBaseUrl={replayBaseUrl}
+            />
+          </Box>
 
           {/* Action button */}
-          <Button variant="solid" size="2" onClick={handleStartTask}>
+          <Button
+            variant="solid"
+            size="2"
+            onClick={handleStartTask}
+            disabled={isCreatingTask}
+          >
             <PlayIcon size={16} />
-            Start task
+            {signal.task
+              ? "View task"
+              : isCreatingTask
+                ? "Creating task..."
+                : "Start task"}
           </Button>
         </Flex>
       </Box>

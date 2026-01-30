@@ -122,9 +122,16 @@ export function HistoryView({
   const hasPinnedTasks = pinnedData.tasks.length > 0;
   const hasActiveTasks = activeTasks.length > 0;
   const hasRecentTasks = recentTasks.length > 0;
+  const hasAnyTasks = hasPinnedTasks || hasActiveTasks || hasRecentTasks;
 
   return (
     <Flex direction="column">
+      <HistorySectionLabel label="Tasks" />
+      {!hasAnyTasks && (
+        <div className="mx-2 px-2 py-1.5 text-gray-10 text-xs">
+          No tasks yet
+        </div>
+      )}
       {hasPinnedTasks && (
         <>
           <HistorySectionLabel label="Pinned" />

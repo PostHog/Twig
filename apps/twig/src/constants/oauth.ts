@@ -8,6 +8,7 @@ export const OAUTH_SCOPES = [
   // Twig app needs
   "user:read",
   "project:read",
+  "project:write",
   "task:write",
   "llm_gateway:read",
   "integration:read",
@@ -22,11 +23,13 @@ export const OAUTH_SCOPES = [
   "property_definition:read",
   "query:read",
   "survey:read",
+  "signal:read",
   "warehouse_table:read",
   "dashboard:write",
   "experiment:write",
   "feature_flag:write",
   "insight:write",
+  "signal:write",
   "survey:write",
 ];
 

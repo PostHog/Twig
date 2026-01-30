@@ -5,11 +5,11 @@ import {
   UserIcon,
 } from "@phosphor-icons/react";
 import { Box, Flex, Link, Text } from "@radix-ui/themes";
-import type { TaskReference } from "@shared/types";
+import type { SignalReference } from "@shared/types";
 import { useState } from "react";
 
-interface TaskReferenceItemProps {
-  reference: TaskReference;
+interface SignalReferenceItemProps {
+  reference: SignalReference;
   replayBaseUrl: string;
 }
 
@@ -63,10 +63,10 @@ function formatTimestamp(timestamp: string): string {
   });
 }
 
-export function TaskReferenceItem({
+export function SignalReferenceItem({
   reference,
   replayBaseUrl,
-}: TaskReferenceItemProps) {
+}: SignalReferenceItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const duration = formatDuration(reference.start_time, reference.end_time);

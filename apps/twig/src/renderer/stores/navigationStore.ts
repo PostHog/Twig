@@ -2,7 +2,7 @@ import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutio
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
-import type { Task, WorkspaceMode } from "@shared/types";
+import type { Signal, Task, WorkspaceMode } from "@shared/types";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { getTaskRepository } from "@utils/repository";
@@ -15,16 +15,17 @@ const log = logger.scope("navigation-store");
 type ViewType =
   | "task-detail"
   | "task-input"
-  | "task-preview"
+  | "signal-preview"
   | "settings"
   | "folder-settings"
-  | "autonomy-tasks"
+  | "signals"
   | "autonomy-onboarding";
 
 interface ViewState {
   type: ViewType;
-  data?: Task;
+  data?: Task | Signal;
   taskId?: string;
+  signalId?: string;
   folderId?: string;
 }
 
@@ -33,11 +34,11 @@ interface NavigationStore {
   history: ViewState[];
   historyIndex: number;
   navigateToTask: (task: Task) => void;
-  navigateToTaskPreview: (task: Task) => void;
+  navigateToSignalPreview: (signal: Signal) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
-  navigateToAutonomyTasks: () => void;
+  navigateToSignals: () => void;
   navigateToAutonomyOnboarding: () => void;
   toggleSettings: () => void;
   goBack: () => void;
@@ -52,7 +53,7 @@ const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   if (view1.type === "task-detail" && view2.type === "task-detail") {
     return view1.data?.id === view2.data?.id;
   }
-  if (view1.type === "task-preview" && view2.type === "task-preview") {
+  if (view1.type === "signal-preview" && view2.type === "signal-preview") {
     return view1.data?.id === view2.data?.id;
   }
   if (view1.type === "task-input" && view2.type === "task-input") {
@@ -149,10 +150,14 @@ export const useNavigationStore = create<NavigationStore>()(
           navigate({ type: "task-input", folderId });
         },
 
-        navigateToTaskPreview: (task: Task) => {
-          navigate({ type: "task-preview", data: task, taskId: task.id });
+        navigateToSignalPreview: (signal: Signal) => {
+          navigate({
+            type: "signal-preview",
+            data: signal,
+            signalId: signal.id,
+          });
           track(ANALYTICS_EVENTS.TASK_VIEWED, {
-            task_id: task.id,
+            task_id: signal.id,
           });
         },
 
@@ -165,10 +170,10 @@ export const useNavigationStore = create<NavigationStore>()(
           navigate({ type: "folder-settings", folderId });
         },
 
-        navigateToAutonomyTasks: () => {
-          navigate({ type: "autonomy-tasks" });
+        navigateToSignals: () => {
+          navigate({ type: "signals" });
           track(ANALYTICS_EVENTS.TASK_VIEWED, {
-            task_id: "autonomy-tasks",
+            task_id: "signals",
           });
         },
 
@@ -236,6 +241,7 @@ export const useNavigationStore = create<NavigationStore>()(
         view: {
           type: state.view.type,
           taskId: state.view.taskId,
+          signalId: state.view.signalId,
           folderId: state.view.folderId,
         },
       }),

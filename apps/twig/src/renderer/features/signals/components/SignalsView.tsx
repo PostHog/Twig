@@ -1,5 +1,5 @@
 import { useAutonomyFeatureFlag } from "@features/autonomy/hooks/useAutonomyFeatureFlag";
-import { useAutoDetectedTasks } from "@features/tasks/hooks/useTasks";
+import { useSignals } from "@features/signals/hooks/useSignals";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -15,9 +15,15 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
-import type { Task } from "@shared/types";
+import type { Signal } from "@shared/types";
 
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+function SignalCard({
+  signal,
+  onClick,
+}: {
+  signal: Signal;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -28,7 +34,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
       <Flex direction="column" gap="2" style={{ flex: 1 }}>
         <Flex align="start" justify="between" gap="2">
           <Text size="3" weight="medium" className="text-accent-12">
-            {task.title || "Untitled task"}
+            {signal.title || "Untitled signal"}
           </Text>
           <Text
             size="1"
@@ -37,18 +43,30 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
             AUTO-DETECTED
           </Text>
         </Flex>
-        {task.description && (
+        {signal.task_prompt && (
           <Text
             size="2"
             className="line-clamp-3 text-accent-11 leading-relaxed"
           >
-            {task.description}
+            {signal.task_prompt}
           </Text>
         )}
         <Flex align="center" gap="2" mt="1">
-          <Text size="1" color="gray">
-            Created {new Date(task.created_at).toLocaleDateString()}
-          </Text>
+          {signal.relevant_user_count != null && (
+            <Text size="1" color="gray">
+              {signal.relevant_user_count} users affected
+            </Text>
+          )}
+          {signal.occurrence_count != null && (
+            <>
+              <Text size="1" color="gray">
+                -
+              </Text>
+              <Text size="1" color="gray">
+                {signal.occurrence_count} occurrences
+              </Text>
+            </>
+          )}
         </Flex>
       </Flex>
       <ArrowRightIcon
@@ -91,28 +109,31 @@ function EmptyState() {
     >
       <SparkleIcon size={48} className="text-gray-6" />
       <Heading size="4" color="gray">
-        No auto-detected tasks yet
+        No signals detected yet
       </Heading>
       <Text size="2" color="gray" style={{ maxWidth: 400 }}>
         Autonomy is analyzing your user sessions. Check back soon for
-        auto-detected issues and suggested tasks.
+        auto-detected issues and suggested improvements.
       </Text>
     </Flex>
   );
 }
 
-export function AutonomyTasksView() {
+export function SignalsView() {
   const isAutonomyEnabled = useAutonomyFeatureFlag();
-  const { navigateToTaskInput, navigateToTaskPreview } = useNavigationStore();
-  const { data: tasks = [], isLoading } = useAutoDetectedTasks();
+  const { navigateToTaskInput, navigateToSignalPreview } = useNavigationStore();
+  const { data: allSignals = [], isLoading } = useSignals();
+
+  // Filter to only pending signals (those without a linked task)
+  const pendingSignals = allSignals.filter((signal) => signal.task === null);
 
   // Feature flag gating
   if (!isAutonomyEnabled) {
     return null;
   }
 
-  const handleTaskClick = (task: Task) => {
-    navigateToTaskPreview(task);
+  const handleSignalClick = (signal: Signal) => {
+    navigateToSignalPreview(signal);
   };
 
   return (
@@ -129,7 +150,7 @@ export function AutonomyTasksView() {
           </IconButton>
           <Flex align="center" gap="2">
             <SparkleIcon size={20} className="text-accent-9" />
-            <Heading size="4">Autonomy Tasks</Heading>
+            <Heading size="4">Signals</Heading>
           </Flex>
         </Flex>
       </Box>
@@ -137,21 +158,21 @@ export function AutonomyTasksView() {
       <ScrollArea style={{ flex: 1 }}>
         <Box p="4">
           <Text size="2" color="gray" mb="4" className="block">
-            Tasks automatically detected from user session analysis. These
-            represent potential issues or improvements identified by Autonomy.
+            Auto-detected issues from user session analysis. Review and start a
+            task to address them.
           </Text>
 
           {isLoading && <LoadingSkeleton />}
 
-          {!isLoading && tasks.length === 0 && <EmptyState />}
+          {!isLoading && pendingSignals.length === 0 && <EmptyState />}
 
-          {!isLoading && tasks.length > 0 && (
+          {!isLoading && pendingSignals.length > 0 && (
             <Flex direction="column" gap="3">
-              {tasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onClick={() => handleTaskClick(task)}
+              {pendingSignals.map((signal) => (
+                <SignalCard
+                  key={signal.id}
+                  signal={signal}
+                  onClick={() => handleSignalClick(signal)}
                 />
               ))}
             </Flex>

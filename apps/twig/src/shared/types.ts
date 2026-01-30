@@ -190,8 +190,21 @@ export interface ExternalAppsPreferences {
   lastUsedApp?: string;
 }
 
-// Task references from session summaries
-export interface TaskReference {
+// Signals from session analysis (auto-detected issues)
+export interface Signal {
+  id: string;
+  title: string;
+  task_prompt: string;
+  task?: Task | null;
+  priority_score: number | null;
+  relevant_user_count: number | null;
+  occurrence_count: number | null;
+  last_occurrence_at: string | null;
+  reference_count: number;
+  created_at: string;
+}
+
+export interface SignalReference {
   id: string;
   session_id: string;
   start_time: string;
@@ -202,7 +215,7 @@ export interface TaskReference {
   created_at: string;
 }
 
-export interface TaskReferencesResponse {
-  results: TaskReference[];
+export interface SignalReferencesResponse {
+  results: SignalReference[];
   count: number;
 }
