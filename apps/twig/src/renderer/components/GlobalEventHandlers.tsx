@@ -24,7 +24,7 @@ export function GlobalEventHandlers({
   onToggleShortcutsSheet,
   commandMenuOpen,
 }: GlobalEventHandlersProps) {
-  const toggleSettings = useNavigationStore((state) => state.toggleSettings);
+  const openSettings = useNavigationStore((state) => state.openSettings);
   const navigateToTaskInput = useNavigationStore(
     (state) => state.navigateToTaskInput,
   );
@@ -76,8 +76,8 @@ export function GlobalEventHandlers({
   );
 
   const handleOpenSettings = useCallback(() => {
-    toggleSettings();
-  }, [toggleSettings]);
+    openSettings();
+  }, [openSettings]);
 
   const handleFocusTaskMode = useCallback(
     (data?: unknown) => {

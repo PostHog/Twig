@@ -4,7 +4,7 @@ import { useNavigationStore } from "@stores/navigationStore";
 
 export function SettingsToggle() {
   const view = useNavigationStore((s) => s.view);
-  const toggleSettings = useNavigationStore((s) => s.toggleSettings);
+  const openSettings = useNavigationStore((s) => s.openSettings);
   const isSettingsOpen = view.type === "settings";
 
   return (
@@ -12,7 +12,7 @@ export function SettingsToggle() {
       <IconButton
         size="1"
         variant="ghost"
-        onClick={toggleSettings}
+        onClick={openSettings}
         style={{
           color: isSettingsOpen ? "var(--blue-9)" : "var(--gray-9)",
         }}

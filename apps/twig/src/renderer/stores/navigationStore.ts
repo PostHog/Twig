@@ -29,7 +29,7 @@ interface NavigationStore {
   navigateToTaskInput: (folderId?: string) => void;
   navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
-  toggleSettings: () => void;
+  openSettings: () => void;
   goBack: () => void;
   goForward: () => void;
   canGoBack: () => boolean;
@@ -145,13 +145,8 @@ export const useNavigationStore = create<NavigationStore>()(
           navigate({ type: "folder-settings", folderId });
         },
 
-        toggleSettings: () => {
-          const current = get().view;
-          if (current.type === "settings") {
-            get().navigateToTaskInput();
-          } else {
-            get().navigateToSettings();
-          }
+        openSettings: () => {
+          get().navigateToSettings();
         },
 
         goBack: () => {
