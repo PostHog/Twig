@@ -142,6 +142,24 @@ export class WorktreeManager {
     }
   }
 
+  async isNameAvailable(
+    name: string,
+  ): Promise<{ available: boolean; reason?: string }> {
+    if (await this.worktreeExists(name)) {
+      return {
+        available: false,
+        reason: `A workspace with the name "${name}" already exists`,
+      };
+    }
+    if (await this.gitManager.branchExists(name)) {
+      return {
+        available: false,
+        reason: `A branch with the name "${name}" already exists`,
+      };
+    }
+    return { available: true };
+  }
+
   async ensureArrayDirIgnored(): Promise<void> {
     // Use .git/info/exclude instead of .gitignore to avoid modifying tracked files
     const excludePath = path.join(this.mainRepoPath, ".git", "info", "exclude");
@@ -198,6 +216,7 @@ export class WorktreeManager {
 
   async createWorktree(options?: {
     baseBranch?: string;
+    customName?: string;
   }): Promise<WorktreeInfo> {
     const totalStart = Date.now();
 
@@ -213,8 +232,10 @@ export class WorktreeManager {
       setupPromises.push(fs.mkdir(folderPath, { recursive: true }));
     }
 
-    // Generate unique worktree name (in parallel with above)
-    const worktreeNamePromise = this.generateUniqueWorktreeName();
+    // Use custom name if provided, otherwise generate unique worktree name (in parallel with above)
+    const worktreeNamePromise = options?.customName
+      ? Promise.resolve(options.customName)
+      : this.generateUniqueWorktreeName();
     setupPromises.push(worktreeNamePromise);
 
     // Get default branch in parallel if not provided
@@ -229,6 +250,21 @@ export class WorktreeManager {
 
     const worktreeName = await worktreeNamePromise;
     const baseBranch = await baseBranchPromise;
+
+    // Validate uniqueness for custom names
+    if (options?.customName) {
+      if (await this.worktreeExists(worktreeName)) {
+        throw new Error(
+          `A workspace with the name "${worktreeName}" already exists`,
+        );
+      }
+      if (await this.gitManager.branchExists(worktreeName)) {
+        throw new Error(
+          `A branch with the name "${worktreeName}" already exists`,
+        );
+      }
+    }
+
     const worktreePath = this.getWorktreePath(worktreeName);
     const branchName = worktreeName;
 

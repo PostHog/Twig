@@ -13,14 +13,18 @@ import { useTaskCreation } from "../hooks/useTaskCreation";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
+import { WorkspaceNameInput } from "./WorkspaceNameInput";
 
 const DOT_FILL = "var(--gray-6)";
 
 export function TaskInput() {
   const { view } = useNavigationStore();
   const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { lastUsedLocalWorkspaceMode, allowBypassPermissions } =
-    useSettingsStore();
+  const {
+    lastUsedLocalWorkspaceMode,
+    allowBypassPermissions,
+    customWorkspaceNames,
+  } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,6 +39,11 @@ export function TaskInput() {
   );
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [isWorkspaceNameValid, setIsWorkspaceNameValid] = useState(false);
+
+  const showWorkspaceNameInput =
+    customWorkspaceNames && workspaceMode === "worktree";
 
   // Reset to default mode if bypass was disabled while in bypass mode
   useEffect(() => {
@@ -74,6 +83,8 @@ export function TaskInput() {
     branch: null,
     editorIsEmpty,
     executionMode: executionMode === "default" ? undefined : executionMode,
+    workspaceName: showWorkspaceNameInput ? workspaceName : undefined,
+    isWorkspaceNameValid: showWorkspaceNameInput ? isWorkspaceNameValid : true,
   });
 
   return (
@@ -147,6 +158,16 @@ export function TaskInput() {
               onChange={setWorkspaceMode}
               size="1"
             />
+            {showWorkspaceNameInput && (
+              <WorkspaceNameInput
+                value={workspaceName}
+                onChange={setWorkspaceName}
+                onValidChange={setIsWorkspaceNameValid}
+                directoryPath={selectedDirectory}
+                size="1"
+                placeholder="workspace-name"
+              />
+            )}
           </Flex>
 
           <TaskInputEditor
