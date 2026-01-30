@@ -112,6 +112,10 @@ export class PostHogAPIClient {
     );
   }
 
+  /**
+   * @deprecated Use POST /sync endpoint directly instead. This method uses the legacy
+   * /append_log endpoint which is being replaced by the unified /sync endpoint.
+   */
   async appendTaskRunLog(
     taskId: string,
     runId: string,

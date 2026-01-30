@@ -345,33 +345,24 @@ export class AgentServer {
   }
 
   private async sendHeartbeat(): Promise<void> {
-    const { apiUrl, apiKey, projectId, taskId, runId } = this.config;
-    const url = `${apiUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/heartbeat`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Heartbeat failed: ${response.status}`);
-    }
-
+    const heartbeatEvent = {
+      type: "heartbeat",
+      timestamp: new Date().toISOString(),
+    };
+    await this.persistEvent(heartbeatEvent);
     this.logger.info("Heartbeat sent successfully");
   }
 
   private async persistEvent(event: Record<string, unknown>): Promise<void> {
     const { apiUrl, apiKey, projectId, taskId, runId } = this.config;
-    const url = `${apiUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/append_log`;
+    const url = `${apiUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/sync`;
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "Session-Id": runId,
       },
       body: JSON.stringify({
         entries: [event],
