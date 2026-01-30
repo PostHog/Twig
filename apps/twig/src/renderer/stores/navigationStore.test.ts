@@ -65,12 +65,9 @@ describe("navigationStore", () => {
       });
     });
 
-    it("navigates to settings and back via toggle", () => {
-      getStore().toggleSettings();
+    it("navigates to settings", () => {
+      getStore().openSettings();
       expect(getView().type).toBe("settings");
-
-      getStore().toggleSettings();
-      expect(getView().type).toBe("task-input");
     });
 
     it("navigates to task input with folderId", () => {
