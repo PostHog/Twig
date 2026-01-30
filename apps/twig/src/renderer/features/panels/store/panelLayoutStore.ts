@@ -300,7 +300,13 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
         set((state) => {
-          const afterOpenTab = openTab(state, taskId, tabId, asPreview, DEFAULT_PANEL_IDS.MAIN_PANEL);
+          const afterOpenTab = openTab(
+            state,
+            taskId,
+            tabId,
+            asPreview,
+            DEFAULT_PANEL_IDS.MAIN_PANEL,
+          );
           const layout = afterOpenTab.taskLayouts[taskId];
           if (!layout) return afterOpenTab;
 
@@ -327,7 +333,15 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
       openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
-        set((state) => openTab(state, taskId, tabId, asPreview, DEFAULT_PANEL_IDS.MAIN_PANEL));
+        set((state) =>
+          openTab(
+            state,
+            taskId,
+            tabId,
+            asPreview,
+            DEFAULT_PANEL_IDS.MAIN_PANEL,
+          ),
+        );
 
         // Track diff viewed
         const changeType =
