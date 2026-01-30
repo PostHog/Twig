@@ -44,9 +44,17 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
       queuedError = null;
       return Promise.reject(error);
     }
+    if (isTimedOut) {
+      return new Promise(() => {});
+    }
     return new Promise((resolve, reject) => {
       resolveNext = resolve;
       rejectNext = reject;
+
+      abortController.signal.addEventListener("abort", () => {
+        isDone = true;
+        resolve({ value: undefined, done: true as const });
+      });
     });
   };
 
@@ -63,7 +71,15 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
     [Symbol.asyncIterator]() {
       return this;
     },
-    interrupt: vi.fn().mockResolvedValue(undefined),
+    interrupt: vi.fn(async () => {
+      abortController.abort();
+      isDone = true;
+      if (resolveNext) {
+        resolveNext({ value: undefined, done: true as const });
+        resolveNext = null;
+        rejectNext = null;
+      }
+    }),
     setPermissionMode: vi.fn().mockResolvedValue(undefined),
     setModel: vi.fn().mockResolvedValue(undefined),
     setMaxThinkingTokens: vi.fn().mockResolvedValue(undefined),
@@ -75,9 +91,10 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
     setMcpServers: vi.fn().mockResolvedValue({ added: [], removed: [], errors: {} }),
     streamInput: vi.fn().mockResolvedValue(undefined),
     [Symbol.asyncDispose]: vi.fn().mockResolvedValue(undefined),
+    _abortController: abortController,
     _mockHelpers: {
       sendMessage(message: SDKMessage) {
-        if (resolveNext) {
+        if (resolveNext && !isDone) {
           resolveNext({ value: message, done: false });
           resolveNext = null;
           rejectNext = null;
@@ -95,6 +112,14 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
           rejectNext = null;
         }
       },
+      sendError(result: SDKResultError) {
+        isDone = true;
+        if (resolveNext) {
+          resolveNext({ value: result, done: false });
+          resolveNext = null;
+          rejectNext = null;
+        }
+      },
       simulateError(error: Error) {
         if (rejectNext) {
           rejectNext(error);
@@ -104,6 +129,12 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
       },
       queueError(error: Error) {
         queuedError = error;
+      },
+      simulateTimeout() {
+        isTimedOut = true;
+      },
+      isAborted() {
+        return abortController.signal.aborted;
       },
     },
   };
@@ -137,5 +168,56 @@ export function createSuccessResult(
     uuid: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
     session_id: "test-session",
     ...overrides,
+  };
+}
+
+export function createErrorResult(
+  overrides: Partial<SDKResultError> = {},
+): SDKResultError {
+  return {
+    type: "result",
+    subtype: "error_during_execution",
+    is_error: true,
+    errors: ["Test error"],
+    duration_ms: 100,
+    duration_api_ms: 50,
+    num_turns: 1,
+    total_cost_usd: 0.01,
+    usage: {
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+      service_tier: "standard",
+    },
+    modelUsage: {},
+    permission_denials: [],
+    uuid: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
+    session_id: "test-session",
+    ...overrides,
+  };
+}
+
+export function createInitMessage(sessionId = "test-session"): SDKMessage {
+  return {
+    type: "system",
+    subtype: "init",
+    agents: [],
+    apiKeySource: "user",
+    betas: [],
+    claude_code_version: "1.0.0",
+    cwd: "/tmp",
+    tools: [],
+    mcp_servers: [],
+    model: "claude-sonnet-4-5-20250929",
+    permissionMode: "default",
+    slash_commands: [],
+    output_style: "default",
+    skills: [],
+    plugins: [],
+    uuid: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
+    session_id: sessionId,
   };
 }

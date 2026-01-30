@@ -26,11 +26,13 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
     getTaskRun,
     sseController,
     getSseController,
+    appendLogResponse,
+    heartbeatResponse,
   } = options;
 
   return [
-    http.get(`${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`, () => {
-      onSyncRequest?.();
+    http.get(`${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`, ({ request }) => {
+      onSyncRequest?.(request);
       const controller = getSseController?.() ?? sseController;
       if (!controller) {
         return new HttpResponse(null, { status: 503 });
@@ -50,6 +52,9 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
     http.post(
       `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/append_log`,
       async ({ request }) => {
+        if (appendLogResponse) {
+          return appendLogResponse();
+        }
         const body = (await request.json()) as { entries: unknown[] };
         onAppendLog?.(body.entries);
         return HttpResponse.json({});
@@ -59,6 +64,9 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
     http.post(
       `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/heartbeat`,
       () => {
+        if (heartbeatResponse) {
+          return heartbeatResponse();
+        }
         onHeartbeat?.();
         return HttpResponse.json({});
       },
