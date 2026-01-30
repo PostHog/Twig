@@ -1,22 +1,20 @@
-import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
-import { WorktreeManager } from "@posthog/agent/worktree-manager";
+import { isGitRepository } from "@twig/git/queries";
+import { InitRepositorySaga } from "@twig/git/sagas/init";
+import { WorktreeManager } from "@twig/git/worktree";
 import { dialog } from "electron";
 import { injectable } from "inversify";
 import { generateId } from "../../../shared/utils/id.js";
 import { logger } from "../../lib/logger.js";
 import { getMainWindow } from "../../trpc/context.js";
 import { clearAllStoreData, foldersStore } from "../../utils/store.js";
-import { isGitRepository } from "../git.js";
 import { getWorktreeLocation } from "../settingsStore.js";
 import type {
   CleanupOrphanedWorktreesOutput,
   RegisteredFolder,
 } from "./schemas.js";
 
-const execAsync = promisify(exec);
 const log = logger.scope("folders-service");
 
 @injectable()
@@ -66,10 +64,17 @@ export class FoldersService {
         throw new Error("Folder must be a git repository");
       }
 
-      await execAsync("git init", { cwd: folderPath });
-      await execAsync('git commit --allow-empty -m "Initial commit"', {
-        cwd: folderPath,
+      const saga = new InitRepositorySaga();
+      const initResult = await saga.run({
+        baseDir: folderPath,
+        initialCommit: true,
+        commitMessage: "Initial commit",
       });
+      if (!initResult.success) {
+        throw new Error(
+          `Failed to initialize git repository: ${initResult.error}`,
+        );
+      }
     }
 
     const folders = foldersStore.get("folders", []);

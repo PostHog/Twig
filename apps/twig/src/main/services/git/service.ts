@@ -1,8 +1,26 @@
-import { exec, execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
 import { isTwigBranch } from "@shared/constants";
+import {
+  getAllBranches,
+  getChangedFilesDetailed,
+  getCommitConventions,
+  getCurrentBranch,
+  getDefaultBranch,
+  getDiffStats,
+  getFileAtHead,
+  getLatestCommit,
+  getRemoteUrl,
+  getSyncStatus,
+  fetch as gitFetch,
+  isGitRepository,
+} from "@twig/git/queries";
+import { CreateBranchSaga } from "@twig/git/sagas/branch";
+import { CloneSaga } from "@twig/git/sagas/clone";
+import { DiscardFileChangesSaga } from "@twig/git/sagas/discard";
+import { PullSaga } from "@twig/git/sagas/pull";
+import { PushSaga } from "@twig/git/sagas/push";
+import { parseGitHubUrl } from "@twig/git/utils";
 import { injectable } from "inversify";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type {
@@ -21,10 +39,7 @@ import type {
   PushOutput,
   SyncOutput,
 } from "./schemas.js";
-import { parseGitHubUrl } from "./utils.js";
 
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 const fsPromises = fs.promises;
 
 export const GitServiceEvent = {
@@ -35,7 +50,7 @@ export interface GitServiceEvents {
   [GitServiceEvent.CloneProgress]: CloneProgressPayload;
 }
 
-const FETCH_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
+const FETCH_THROTTLE_MS = 5 * 60 * 1000;
 
 @injectable()
 export class GitService extends TypedEventEmitter<GitServiceEvents> {
@@ -46,13 +61,13 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
   ): Promise<DetectRepoResult | null> {
     if (!directoryPath) return null;
 
-    const remoteUrl = await this.getRemoteUrl(directoryPath);
+    const remoteUrl = await getRemoteUrl(directoryPath);
     if (!remoteUrl) return null;
 
     const repo = await parseGitHubUrl(remoteUrl);
     if (!repo) return null;
 
-    const branch = await this.getCurrentBranch(directoryPath);
+    const branch = await getCurrentBranch(directoryPath);
     if (!branch) return null;
 
     return {
@@ -65,15 +80,7 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
   public async validateRepo(directoryPath: string): Promise<boolean> {
     if (!directoryPath) return false;
-
-    try {
-      await execAsync("git rev-parse --is-inside-work-tree", {
-        cwd: directoryPath,
-      });
-      return true;
-    } catch {
-      return false;
-    }
+    return isGitRepository(directoryPath);
   }
 
   public async cloneRepository(
@@ -90,329 +97,77 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
     emitProgress("cloning", `Starting clone of ${repoUrl}...`);
 
-    const gitProcess = spawn(
-      "git",
-      ["clone", "--progress", repoUrl, targetPath],
-      {
-        stdio: ["ignore", "pipe", "pipe"],
+    const saga = new CloneSaga();
+    const result = await saga.run({
+      repoUrl,
+      targetPath,
+      onProgress: (stage, progress, processed, total) => {
+        const pct = progress ? ` ${Math.round(progress)}%` : "";
+        const count = total ? ` (${processed}/${total})` : "";
+        emitProgress("cloning", `${stage}${pct}${count}`);
       },
-    );
-
-    gitProcess.stderr.on("data", (data: Buffer) => {
-      const output = data.toString();
-      emitProgress("cloning", output.trim());
     });
-
-    gitProcess.stdout.on("data", (data: Buffer) => {
-      const output = data.toString();
-      emitProgress("cloning", output.trim());
-    });
-
-    return new Promise((resolve, reject) => {
-      gitProcess.on("close", (code) => {
-        if (code === 0) {
-          emitProgress("complete", "Clone completed successfully");
-          resolve({ cloneId });
-        } else {
-          const errorMsg = `Clone failed with exit code ${code}`;
-          emitProgress("error", errorMsg);
-          reject(new Error(errorMsg));
-        }
-      });
-
-      gitProcess.on("error", (err) => {
-        const errorMsg = `Clone failed: ${err.message}`;
-        emitProgress("error", errorMsg);
-        reject(err);
-      });
-    });
+    if (!result.success) {
+      emitProgress("error", result.error);
+      throw new Error(result.error);
+    }
+    emitProgress("complete", "Clone completed successfully");
+    return { cloneId };
   }
 
   public async getRemoteUrl(directoryPath: string): Promise<string | null> {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["remote", "get-url", "origin"],
-        {
-          cwd: directoryPath,
-        },
-      );
-      return stdout.trim();
-    } catch {
-      return null;
-    }
+    return getRemoteUrl(directoryPath);
   }
 
   public async getCurrentBranch(directoryPath: string): Promise<string | null> {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["branch", "--show-current"],
-        {
-          cwd: directoryPath,
-        },
-      );
-      return stdout.trim();
-    } catch {
-      return null;
-    }
+    return getCurrentBranch(directoryPath);
   }
 
   public async getDefaultBranch(directoryPath: string): Promise<string> {
-    try {
-      const { stdout } = await execAsync(
-        "git symbolic-ref refs/remotes/origin/HEAD",
-        { cwd: directoryPath },
-      );
-      const branch = stdout.trim().replace("refs/remotes/origin/", "");
-      return branch;
-    } catch {
-      try {
-        await execAsync("git rev-parse --verify main", {
-          cwd: directoryPath,
-        });
-        return "main";
-      } catch {
-        return "master";
-      }
-    }
+    return getDefaultBranch(directoryPath);
   }
 
   public async getAllBranches(directoryPath: string): Promise<string[]> {
-    try {
-      const { stdout } = await execAsync(
-        'git branch --list --format="%(refname:short)"',
-        {
-          cwd: directoryPath,
-        },
-      );
-      return stdout
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((branch) => branch.trim())
-        .filter((branch) => !isTwigBranch(branch));
-    } catch {
-      return [];
-    }
+    const branches = await getAllBranches(directoryPath);
+    return branches.filter((branch) => !isTwigBranch(branch));
   }
 
   public async createBranch(
     directoryPath: string,
     branchName: string,
   ): Promise<void> {
-    await execAsync(`git checkout -b "${branchName}"`, {
-      cwd: directoryPath,
-    });
+    const saga = new CreateBranchSaga();
+    const result = await saga.run({ baseDir: directoryPath, branchName });
+    if (!result.success) throw new Error(result.error);
   }
 
   public async getChangedFilesHead(
     directoryPath: string,
   ): Promise<ChangedFile[]> {
-    try {
-      const files: ChangedFile[] = [];
-      const seenPaths = new Set<string>();
-
-      const [nameStatusResult, numstatResult, statusResult] = await Promise.all(
-        [
-          execAsync("git diff -M --name-status HEAD", { cwd: directoryPath }),
-          execAsync("git diff -M --numstat HEAD", { cwd: directoryPath }),
-          execAsync("git status --porcelain", { cwd: directoryPath }),
-        ],
-      );
-
-      const lineStats = new Map<string, { added: number; removed: number }>();
-      for (const line of numstatResult.stdout
-        .trim()
-        .split("\n")
-        .filter(Boolean)) {
-        const parts = line.split("\t");
-        if (parts.length >= 3) {
-          const added = parts[0] === "-" ? 0 : parseInt(parts[0], 10) || 0;
-          const removed = parts[1] === "-" ? 0 : parseInt(parts[1], 10) || 0;
-          const filePath = parts.slice(2).join("\t");
-          if (filePath.includes(" => ")) {
-            const renameParts = filePath.split(" => ");
-            lineStats.set(renameParts[0], { added, removed });
-            lineStats.set(renameParts[1], { added, removed });
-          } else {
-            lineStats.set(filePath, { added, removed });
-          }
-        }
-      }
-
-      for (const line of nameStatusResult.stdout
-        .trim()
-        .split("\n")
-        .filter(Boolean)) {
-        const parts = line.split("\t");
-        const statusChar = parts[0][0];
-
-        if (statusChar === "R" && parts.length >= 3) {
-          const originalPath = parts[1];
-          const newPath = parts[2];
-          const stats = lineStats.get(newPath) || lineStats.get(originalPath);
-          files.push({
-            path: newPath,
-            status: "renamed",
-            originalPath,
-            linesAdded: stats?.added,
-            linesRemoved: stats?.removed,
-          });
-          seenPaths.add(newPath);
-          seenPaths.add(originalPath);
-        } else if (parts.length >= 2) {
-          const filePath = parts[1];
-          const stats = lineStats.get(filePath);
-          let status: GitFileStatus;
-          switch (statusChar) {
-            case "D":
-              status = "deleted";
-              break;
-            case "A":
-              status = "added";
-              break;
-            default:
-              status = "modified";
-          }
-          files.push({
-            path: filePath,
-            status,
-            linesAdded: stats?.added,
-            linesRemoved: stats?.removed,
-          });
-          seenPaths.add(filePath);
-        }
-      }
-
-      for (const line of statusResult.stdout
-        .trim()
-        .split("\n")
-        .filter(Boolean)) {
-        const statusCode = line.substring(0, 2);
-        const filePath = line.substring(3);
-
-        if (statusCode === "??" && !seenPaths.has(filePath)) {
-          if (filePath.endsWith("/")) {
-            const dirPath = filePath.slice(0, -1);
-            try {
-              const dirFiles = await this.getAllFilesInDirectory(
-                directoryPath,
-                dirPath,
-              );
-              for (const file of dirFiles) {
-                if (!seenPaths.has(file)) {
-                  const lineCount = await this.countFileLines(
-                    path.join(directoryPath, file),
-                  );
-                  files.push({
-                    path: file,
-                    status: "untracked",
-                    linesAdded: lineCount || undefined,
-                  });
-                }
-              }
-            } catch {
-              // Directory might not exist or be inaccessible
-            }
-          } else {
-            const lineCount = await this.countFileLines(
-              path.join(directoryPath, filePath),
-            );
-            files.push({
-              path: filePath,
-              status: "untracked",
-              linesAdded: lineCount || undefined,
-            });
-          }
-        }
-      }
-
-      return files;
-    } catch {
-      return [];
-    }
+    const files = await getChangedFilesDetailed(directoryPath);
+    return files.map((f) => ({
+      path: f.path,
+      status: f.status,
+      originalPath: f.originalPath,
+      linesAdded: f.linesAdded,
+      linesRemoved: f.linesRemoved,
+    }));
   }
 
   public async getFileAtHead(
     directoryPath: string,
     filePath: string,
   ): Promise<string | null> {
-    try {
-      const { stdout } = await execAsync(`git show HEAD:"${filePath}"`, {
-        cwd: directoryPath,
-        maxBuffer: 10 * 1024 * 1024,
-      });
-      return stdout;
-    } catch {
-      return null;
-    }
+    return getFileAtHead(directoryPath, filePath);
   }
 
   public async getDiffStats(directoryPath: string): Promise<DiffStats> {
-    try {
-      const { stdout } = await execAsync("git diff --numstat HEAD", {
-        cwd: directoryPath,
-      });
-
-      let linesAdded = 0;
-      let linesRemoved = 0;
-      let filesChanged = 0;
-
-      for (const line of stdout.trim().split("\n").filter(Boolean)) {
-        const parts = line.split("\t");
-        if (parts.length >= 2) {
-          const added = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
-          const removed = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
-          linesAdded += added;
-          linesRemoved += removed;
-          filesChanged++;
-        }
-      }
-
-      const { stdout: statusOutput } = await execAsync(
-        "git status --porcelain",
-        {
-          cwd: directoryPath,
-        },
-      );
-
-      for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
-        const statusCode = line.substring(0, 2);
-        if (statusCode === "??") {
-          const filePath = line.substring(3);
-
-          if (filePath.endsWith("/")) {
-            const dirPath = filePath.slice(0, -1);
-            try {
-              const dirFiles = await this.getAllFilesInDirectory(
-                directoryPath,
-                dirPath,
-              );
-              for (const file of dirFiles) {
-                filesChanged++;
-                linesAdded += await this.countFileLinesWithWc(
-                  directoryPath,
-                  file,
-                );
-              }
-            } catch {
-              // Directory might not exist or be inaccessible
-            }
-          } else {
-            filesChanged++;
-            linesAdded += await this.countFileLinesWithWc(
-              directoryPath,
-              filePath,
-            );
-          }
-        }
-      }
-
-      return { filesChanged, linesAdded, linesRemoved };
-    } catch {
-      return { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
-    }
+    const stats = await getDiffStats(directoryPath);
+    return {
+      filesChanged: stats.filesChanged,
+      linesAdded: stats.linesAdded,
+      linesRemoved: stats.linesRemoved,
+    };
   }
 
   public async discardFileChanges(
@@ -420,144 +175,61 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     filePath: string,
     fileStatus: GitFileStatus,
   ): Promise<void> {
-    switch (fileStatus) {
-      case "modified":
-      case "deleted":
-        await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
-          cwd: directoryPath,
-        });
-        break;
-      case "added":
-        await execFileAsync("git", ["rm", "-f", filePath], {
-          cwd: directoryPath,
-        });
-        break;
-      case "untracked":
-        await execFileAsync("git", ["clean", "-f", "--", filePath], {
-          cwd: directoryPath,
-        });
-        break;
-      case "renamed":
-        await execFileAsync("git", ["checkout", "HEAD", "--", filePath], {
-          cwd: directoryPath,
-        });
-        break;
-      default:
-        throw new Error(`Unknown file status: ${fileStatus}`);
-    }
+    const saga = new DiscardFileChangesSaga();
+    const result = await saga.run({
+      baseDir: directoryPath,
+      filePath,
+      fileStatus,
+    });
+    if (!result.success) throw new Error(result.error);
   }
 
   public async getGitSyncStatus(directoryPath: string): Promise<GitSyncStatus> {
-    try {
-      const currentBranch = await this.getCurrentBranch(directoryPath);
-      if (!currentBranch) {
-        return {
-          ahead: 0,
-          behind: 0,
-          hasRemote: false,
-          currentBranch: null,
-          isFeatureBranch: false,
-        };
-      }
-
-      const defaultBranch = await this.getDefaultBranch(directoryPath);
-      const isFeatureBranch = currentBranch !== defaultBranch;
-
+    const now = Date.now();
+    const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
+    if (now - lastFetch > FETCH_THROTTLE_MS) {
       try {
-        const { stdout: upstream } = await execAsync(
-          `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
-          { cwd: directoryPath },
-        );
-
-        const upstreamBranch = upstream.trim();
-        if (!upstreamBranch) {
-          return {
-            ahead: 0,
-            behind: 0,
-            hasRemote: false,
-            currentBranch,
-            isFeatureBranch,
-          };
-        }
-
-        const now = Date.now();
-        const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
-        if (now - lastFetch > FETCH_THROTTLE_MS) {
-          try {
-            await execAsync("git fetch --quiet", {
-              cwd: directoryPath,
-              timeout: 10000,
-            });
-            this.lastFetchTime.set(directoryPath, now);
-          } catch {
-            // Fetch failed (likely offline), continue with stale data
-          }
-        }
-
-        const { stdout: revList } = await execAsync(
-          `git rev-list --left-right --count ${currentBranch}...${upstreamBranch}`,
-          { cwd: directoryPath },
-        );
-
-        const [ahead, behind] = revList.trim().split("\t").map(Number);
-
-        return {
-          ahead: ahead || 0,
-          behind: behind || 0,
-          hasRemote: true,
-          currentBranch,
-          isFeatureBranch,
-        };
-      } catch {
-        return {
-          ahead: 0,
-          behind: 0,
-          hasRemote: false,
-          currentBranch,
-          isFeatureBranch,
-        };
-      }
-    } catch {
-      return {
-        ahead: 0,
-        behind: 0,
-        hasRemote: false,
-        currentBranch: null,
-        isFeatureBranch: false,
-      };
+        await gitFetch(directoryPath);
+        this.lastFetchTime.set(directoryPath, now);
+      } catch {}
     }
+
+    const status = await getSyncStatus(directoryPath);
+    return {
+      ahead: status.ahead,
+      behind: status.behind,
+      hasRemote: status.hasRemote,
+      currentBranch: status.currentBranch,
+      isFeatureBranch: status.isFeatureBranch,
+    };
   }
 
   public async getLatestCommit(
     directoryPath: string,
   ): Promise<GitCommitInfo | null> {
-    try {
-      const { stdout } = await execAsync(
-        'git log -1 --format="%H|%h|%s|%an|%aI"',
-        { cwd: directoryPath },
-      );
-
-      const [sha, shortSha, message, author, date] = stdout.trim().split("|");
-      if (!sha) return null;
-
-      return { sha, shortSha, message, author, date };
-    } catch {
-      return null;
-    }
+    const commit = await getLatestCommit(directoryPath);
+    if (!commit) return null;
+    return {
+      sha: commit.sha,
+      shortSha: commit.shortSha,
+      message: commit.message,
+      author: commit.author,
+      date: commit.date,
+    };
   }
 
   public async getGitRepoInfo(
     directoryPath: string,
   ): Promise<GitRepoInfo | null> {
     try {
-      const remoteUrl = await this.getRemoteUrl(directoryPath);
+      const remoteUrl = await getRemoteUrl(directoryPath);
       if (!remoteUrl) return null;
 
       const parsed = parseGitHubUrl(remoteUrl);
       if (!parsed) return null;
 
-      const currentBranch = await this.getCurrentBranch(directoryPath);
-      const defaultBranch = await this.getDefaultBranch(directoryPath);
+      const currentBranch = await getCurrentBranch(directoryPath);
+      const defaultBranch = await getDefaultBranch(directoryPath);
 
       let compareUrl: string | null = null;
       if (currentBranch && currentBranch !== defaultBranch) {
@@ -582,31 +254,20 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     branch?: string,
     setUpstream = false,
   ): Promise<PushOutput> {
-    try {
-      const targetBranch =
-        branch || (await this.getCurrentBranch(directoryPath));
-      if (!targetBranch) {
-        return { success: false, message: "No branch to push" };
-      }
-
-      const args = ["push"];
-      if (setUpstream) {
-        args.push("-u");
-      }
-      args.push(remote, targetBranch);
-
-      const { stdout, stderr } = await execFileAsync("git", args, {
-        cwd: directoryPath,
-      });
-
-      return {
-        success: true,
-        message: stdout || stderr || "Push successful",
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { success: false, message };
+    const saga = new PushSaga();
+    const result = await saga.run({
+      baseDir: directoryPath,
+      remote,
+      branch: branch || undefined,
+      setUpstream,
+    });
+    if (!result.success) {
+      return { success: false, message: result.error };
     }
+    return {
+      success: true,
+      message: `Pushed ${result.data.branch} to ${result.data.remote}`,
+    };
   }
 
   public async pull(
@@ -614,39 +275,27 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     remote = "origin",
     branch?: string,
   ): Promise<PullOutput> {
-    try {
-      const targetBranch =
-        branch || (await this.getCurrentBranch(directoryPath));
-      const args = ["pull", remote];
-      if (targetBranch) {
-        args.push(targetBranch);
-      }
-
-      const { stdout, stderr } = await execFileAsync("git", args, {
-        cwd: directoryPath,
-      });
-
-      // Parse number of files changed from output
-      const output = stdout || stderr || "";
-      const filesMatch = output.match(/(\d+) files? changed/);
-      const updatedFiles = filesMatch ? parseInt(filesMatch[1], 10) : undefined;
-
-      return {
-        success: true,
-        message: output || "Pull successful",
-        updatedFiles,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { success: false, message };
+    const saga = new PullSaga();
+    const result = await saga.run({
+      baseDir: directoryPath,
+      remote,
+      branch: branch || undefined,
+    });
+    if (!result.success) {
+      return { success: false, message: result.error };
     }
+    return {
+      success: true,
+      message: `${result.data.changes} files changed`,
+      updatedFiles: result.data.changes,
+    };
   }
 
   public async publish(
     directoryPath: string,
     remote = "origin",
   ): Promise<PublishOutput> {
-    const currentBranch = await this.getCurrentBranch(directoryPath);
+    const currentBranch = await getCurrentBranch(directoryPath);
     if (!currentBranch) {
       return { success: false, message: "No branch to publish", branch: "" };
     }
@@ -692,9 +341,7 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       try {
         const content = await fsPromises.readFile(fullPath, "utf-8");
         return { template: content, templatePath: relativePath };
-      } catch {
-        // Template not found at this path, continue
-      }
+      } catch {}
     }
 
     return { template: null, templatePath: null };
@@ -704,105 +351,6 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     directoryPath: string,
     sampleSize = 20,
   ): Promise<GetCommitConventionsOutput> {
-    try {
-      const { stdout } = await execAsync(
-        `git log --oneline -n ${sampleSize} --format="%s"`,
-        { cwd: directoryPath },
-      );
-
-      const messages = stdout.trim().split("\n").filter(Boolean);
-
-      // Check for conventional commit pattern: type(scope): message or type: message
-      const conventionalPattern =
-        /^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\(.+\))?:/;
-      const conventionalCount = messages.filter((m) =>
-        conventionalPattern.test(m),
-      ).length;
-      const conventionalCommits = conventionalCount > messages.length * 0.5;
-
-      // Extract common prefixes
-      const prefixes = messages
-        .map((m) => m.match(/^([a-z]+)(\(.+\))?:/)?.[1])
-        .filter((p): p is string => Boolean(p));
-      const prefixCounts = prefixes.reduce(
-        (acc, p) => {
-          acc[p] = (acc[p] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-      const commonPrefixes = Object.entries(prefixCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([prefix]) => prefix);
-
-      return {
-        conventionalCommits,
-        commonPrefixes,
-        sampleMessages: messages.slice(0, 5),
-      };
-    } catch {
-      return {
-        conventionalCommits: false,
-        commonPrefixes: [],
-        sampleMessages: [],
-      };
-    }
-  }
-
-  // Private helper methods
-
-  private async countFileLines(filePath: string): Promise<number> {
-    try {
-      const content = await fsPromises.readFile(filePath, "utf-8");
-      if (!content) return 0;
-
-      const lines = content.split("\n");
-      return lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
-    } catch {
-      return 0;
-    }
-  }
-
-  private async countFileLinesWithWc(
-    directoryPath: string,
-    filePath: string,
-  ): Promise<number> {
-    try {
-      const { stdout } = await execAsync(`wc -l < "${filePath}"`, {
-        cwd: directoryPath,
-      });
-      return parseInt(stdout.trim(), 10) || 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  private async getAllFilesInDirectory(
-    directoryPath: string,
-    basePath: string,
-  ): Promise<string[]> {
-    const files: string[] = [];
-    const entries = await fsPromises.readdir(
-      path.join(directoryPath, basePath),
-      {
-        withFileTypes: true,
-      },
-    );
-
-    for (const entry of entries) {
-      const relativePath = path.join(basePath, entry.name);
-      if (entry.isDirectory()) {
-        const subFiles = await this.getAllFilesInDirectory(
-          directoryPath,
-          relativePath,
-        );
-        files.push(...subFiles);
-      } else {
-        files.push(relativePath);
-      }
-    }
-
-    return files;
+    return getCommitConventions(directoryPath, sampleSize);
   }
 }

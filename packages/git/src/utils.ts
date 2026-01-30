@@ -1,4 +1,7 @@
-import type { GitHubRepo } from "./types";
+export interface GitHubRepo {
+  organization: string;
+  repository: string;
+}
 
 export function parseGitHubUrl(url: string): GitHubRepo | null {
   const match =

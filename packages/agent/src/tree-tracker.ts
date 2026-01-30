@@ -10,15 +10,12 @@
  * Uses a temporary git index to avoid modifying the user's staging area.
  */
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { isCommitOnRemote as gitIsCommitOnRemote } from "@twig/git/queries";
 import type { PostHogAPIClient } from "./posthog-api.js";
 import { ApplySnapshotSaga } from "./sagas/apply-snapshot-saga.js";
 import { CaptureTreeSaga } from "./sagas/capture-tree-saga.js";
 import type { TreeSnapshot } from "./types.js";
 import { Logger } from "./utils/logger.js";
-
-const execFileAsync = promisify(execFile);
 
 export type { TreeSnapshot };
 
@@ -149,16 +146,7 @@ export async function isCommitOnRemote(
   commit: string,
   cwd: string,
 ): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["branch", "-r", "--contains", commit],
-      { cwd },
-    );
-    return stdout.trim().length > 0;
-  } catch {
-    return false;
-  }
+  return gitIsCommitOnRemote(cwd, commit);
 }
 
 /**

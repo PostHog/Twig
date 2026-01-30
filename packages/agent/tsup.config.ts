@@ -57,7 +57,6 @@ export default defineConfig({
     "src/gateway-models.ts",
     "src/posthog-api.ts",
     "src/types.ts",
-    "src/worktree-manager.ts",
     "src/adapters/claude/questions/utils.ts",
     "src/adapters/claude/permissions/permission-options.ts",
     "src/adapters/claude/tools.ts",
