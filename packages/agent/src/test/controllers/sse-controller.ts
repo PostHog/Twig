@@ -23,7 +23,11 @@ export class SseController {
   }
 
   sendEvent(data: unknown, options: EventOptions = {}): boolean {
-    if (this.state === "closed" || this.state === "closing" || !this.controller) {
+    if (
+      this.state === "closed" ||
+      this.state === "closing" ||
+      !this.controller
+    ) {
       return false;
     }
 
@@ -48,7 +52,11 @@ export class SseController {
   }
 
   sendRaw(rawData: string): boolean {
-    if (this.state === "closed" || this.state === "closing" || !this.controller) {
+    if (
+      this.state === "closed" ||
+      this.state === "closing" ||
+      !this.controller
+    ) {
       return false;
     }
     try {
