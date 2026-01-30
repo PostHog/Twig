@@ -27,9 +27,12 @@ export interface CreateMockQueryOptions {
   abortController?: AbortController;
 }
 
-export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery {
+export function createMockQuery(
+  options: CreateMockQueryOptions = {},
+): MockQuery {
   const abortController = options.abortController ?? new AbortController();
-  let resolveNext: ((value: IteratorResult<SDKMessage, void>) => void) | null = null;
+  let resolveNext: ((value: IteratorResult<SDKMessage, void>) => void) | null =
+    null;
   let rejectNext: ((error: Error) => void) | null = null;
   let isDone = false;
   let queuedError: Error | null = null;
@@ -88,7 +91,9 @@ export function createMockQuery(options: CreateMockQueryOptions = {}): MockQuery
     mcpServerStatus: vi.fn().mockResolvedValue([]),
     accountInfo: vi.fn().mockResolvedValue({}),
     rewindFiles: vi.fn().mockResolvedValue({ canRewind: false }),
-    setMcpServers: vi.fn().mockResolvedValue({ added: [], removed: [], errors: {} }),
+    setMcpServers: vi
+      .fn()
+      .mockResolvedValue({ added: [], removed: [], errors: {} }),
     streamInput: vi.fn().mockResolvedValue(undefined),
     [Symbol.asyncDispose]: vi.fn().mockResolvedValue(undefined),
     _abortController: abortController,
@@ -159,7 +164,10 @@ export function createSuccessResult(
       output_tokens: 50,
       cache_read_input_tokens: 0,
       cache_creation_input_tokens: 0,
-      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      cache_creation: {
+        ephemeral_1h_input_tokens: 0,
+        ephemeral_5m_input_tokens: 0,
+      },
       server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
       service_tier: "standard",
     },
@@ -188,7 +196,10 @@ export function createErrorResult(
       output_tokens: 50,
       cache_read_input_tokens: 0,
       cache_creation_input_tokens: 0,
-      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      cache_creation: {
+        ephemeral_1h_input_tokens: 0,
+        ephemeral_5m_input_tokens: 0,
+      },
       server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
       service_tier: "standard",
     },

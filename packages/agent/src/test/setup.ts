@@ -1,10 +1,18 @@
-import { setupServer, type SetupServerApi } from "msw/node";
+import { type SetupServerApi, setupServer } from "msw/node";
 import { vi } from "vitest";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import { AgentServer } from "../server/agent-server.js";
 import { SseController } from "./controllers/sse-controller.js";
-import { createMockApiClient, createTaskRun, createTestRepo, type TestRepo } from "./fixtures/api.js";
-import { createAgentServerConfig, type AgentServerConfig } from "./fixtures/config.js";
+import {
+  createMockApiClient,
+  createTaskRun,
+  createTestRepo,
+  type TestRepo,
+} from "./fixtures/api.js";
+import {
+  type AgentServerConfig,
+  createAgentServerConfig,
+} from "./fixtures/config.js";
 import { createPostHogHandlers } from "./mocks/msw-handlers.js";
 
 export interface TestContext {
@@ -99,7 +107,18 @@ export async function createTestContext(
   };
 }
 
-export { createMockApiClient, createTaskRun, createTestRepo, type TestRepo } from "./fixtures/api.js";
+export {
+  expectNoNotification,
+  expectNotification,
+  findNotification,
+  hasNotification,
+} from "./assertions.js";
+export {
+  createMockApiClient,
+  createTaskRun,
+  createTestRepo,
+  type TestRepo,
+} from "./fixtures/api.js";
 export { createAgentServerConfig } from "./fixtures/config.js";
 export {
   createAgentChunk,
@@ -110,7 +129,16 @@ export {
   createTreeSnapshotNotification,
   createUserMessage,
 } from "./fixtures/notifications.js";
-export { createErrorResult, createInitMessage, createMockQuery, createSuccessResult, type MockQuery } from "./mocks/claude-sdk.js";
+export {
+  createErrorResult,
+  createInitMessage,
+  createMockQuery,
+  createSuccessResult,
+  type MockQuery,
+} from "./mocks/claude-sdk.js";
 export { createPostHogHandlers, SseController } from "./mocks/msw-handlers.js";
-export { expectNoNotification, expectNotification, findNotification, hasNotification } from "./assertions.js";
-export { waitForArrayLength, waitForCallCount, waitForCondition } from "./wait.js";
+export {
+  waitForArrayLength,
+  waitForCallCount,
+  waitForCondition,
+} from "./wait.js";

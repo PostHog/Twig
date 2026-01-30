@@ -1,6 +1,15 @@
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
 import type { PostHogAPIClient } from "../posthog-api.js";
 import type { TestRepo } from "../test/fixtures/api.js";
@@ -24,8 +33,10 @@ const { mockQueryRef } = vi.hoisted(() => {
 });
 
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
-  const { createMockQuery: createMock, createInitMessage: createInit } = await import("../test/mocks/claude-sdk.js");
+  const actual =
+    await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
+  const { createMockQuery: createMock, createInitMessage: createInit } =
+    await import("../test/mocks/claude-sdk.js");
   return {
     ...actual,
     query: vi.fn(() => {
@@ -41,7 +52,9 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
 
 function getMockQuery(): MockQuery {
   if (!mockQueryRef.current) {
-    throw new Error("MockQuery not initialized - call agentServer.start() first");
+    throw new Error(
+      "MockQuery not initialized - call agentServer.start() first",
+    );
   }
   return mockQueryRef.current;
 }
@@ -113,7 +126,9 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await waitForCondition(() => appendLogCalls.length > 0, { timeout: 2000 });
+      await waitForCondition(() => appendLogCalls.length > 0, {
+        timeout: 2000,
+      });
 
       sseController.sendEvent({
         method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
@@ -144,10 +159,14 @@ describe("AgentServer", () => {
       });
 
       await waitForCondition(() =>
-        hasNotification(appendLogCalls, { text: "Message via client_message type" }),
+        hasNotification(appendLogCalls, {
+          text: "Message via client_message type",
+        }),
       );
 
-      expectNotification(appendLogCalls, { text: "Message via client_message type" });
+      expectNotification(appendLogCalls, {
+        text: "Message via client_message type",
+      });
 
       getMockQuery()._mockHelpers.complete(createSuccessResult());
       await agentServer.stop();
@@ -162,7 +181,9 @@ describe("AgentServer", () => {
 
       sseController.sendEvent({ method: POSTHOG_NOTIFICATIONS.CANCEL });
 
-      await waitForCondition(() => getMockQuery().interrupt.mock.calls.length > 0);
+      await waitForCondition(
+        () => getMockQuery().interrupt.mock.calls.length > 0,
+      );
 
       expect(getMockQuery().interrupt).toHaveBeenCalled();
 
@@ -182,7 +203,9 @@ describe("AgentServer", () => {
       await expect(
         Promise.race([
           startPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000)),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 5000),
+          ),
         ]),
       ).resolves.not.toThrow();
     });
@@ -242,7 +265,9 @@ describe("AgentServer", () => {
 
       await new Promise((r) => setTimeout(r, 100));
 
-      const unknownEventProcessed = hasNotification(appendLogCalls, { method: "_unknown/event" });
+      const unknownEventProcessed = hasNotification(appendLogCalls, {
+        method: "_unknown/event",
+      });
       expect(unknownEventProcessed).toBe(false);
 
       getMockQuery()._mockHelpers.complete();
@@ -467,7 +492,9 @@ describe("AgentServer", () => {
 
       const startPromise = agentServer.start();
 
-      await waitForCondition(() => appendLogCalls.length > 0, { timeout: 2000 }).catch(() => {});
+      await waitForCondition(() => appendLogCalls.length > 0, {
+        timeout: 2000,
+      }).catch(() => {});
 
       getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
@@ -497,7 +524,9 @@ describe("AgentServer", () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 
-      await waitForCondition(() => syncPostAttempts >= 3, { timeout: 5000 }).catch(() => {});
+      await waitForCondition(() => syncPostAttempts >= 3, {
+        timeout: 5000,
+      }).catch(() => {});
 
       getMockQuery()._mockHelpers.complete();
       await agentServer.stop();
@@ -509,7 +538,8 @@ describe("AgentServer", () => {
         ...createPostHogHandlers({
           baseUrl: "http://localhost:8000",
           getSseController: () => sseController,
-          syncPostResponse: () => HttpResponse.json({ error: "invalid" }, { status: 500 }),
+          syncPostResponse: () =>
+            HttpResponse.json({ error: "invalid" }, { status: 500 }),
         }),
       );
 
@@ -583,7 +613,9 @@ describe("AgentServer", () => {
       const stopPromise1 = agentServer.stop();
       const stopPromise2 = agentServer.stop();
 
-      await expect(Promise.all([stopPromise1, stopPromise2])).resolves.not.toThrow();
+      await expect(
+        Promise.all([stopPromise1, stopPromise2]),
+      ).resolves.not.toThrow();
       await startPromise;
     });
   });
@@ -710,8 +742,10 @@ describe("AgentServer", () => {
 
       await waitForCondition(
         () =>
-          (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls.length > 0 &&
-          (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mock.calls.length > 0,
+          (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls
+            .length > 0 &&
+          (mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>).mock
+            .calls.length > 0,
       );
 
       expect(mockApiClient.getTaskRun).toHaveBeenCalled();
@@ -732,7 +766,9 @@ describe("AgentServer", () => {
       const startPromise = agentServer.start();
 
       await waitForCondition(
-        () => (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls.length > 0,
+        () =>
+          (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mock.calls
+            .length > 0,
       );
 
       expect(mockApiClient.getTaskRun).toHaveBeenCalled();

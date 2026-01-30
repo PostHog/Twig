@@ -33,10 +33,16 @@ function entryMatchesNotification(
   if (matcher.method && notification.method !== matcher.method) {
     return false;
   }
-  if (matcher.sessionId && notification.params?.sessionId !== matcher.sessionId) {
+  if (
+    matcher.sessionId &&
+    notification.params?.sessionId !== matcher.sessionId
+  ) {
     return false;
   }
-  if (matcher.sessionUpdate && notification.params?.update?.sessionUpdate !== matcher.sessionUpdate) {
+  if (
+    matcher.sessionUpdate &&
+    notification.params?.update?.sessionUpdate !== matcher.sessionUpdate
+  ) {
     return false;
   }
   if (matcher.text) {
@@ -74,7 +80,10 @@ export function expectNotification(
   matcher: NotificationMatcher,
 ): NotificationEntry {
   const found = findNotification(appendLogCalls, matcher);
-  expect(found, `Expected notification matching ${JSON.stringify(matcher)}`).toBeDefined();
+  expect(
+    found,
+    `Expected notification matching ${JSON.stringify(matcher)}`,
+  ).toBeDefined();
   return found!;
 }
 
@@ -83,7 +92,10 @@ export function expectNoNotification(
   matcher: NotificationMatcher,
 ): void {
   const found = findNotification(appendLogCalls, matcher);
-  expect(found, `Expected no notification matching ${JSON.stringify(matcher)}`).toBeUndefined();
+  expect(
+    found,
+    `Expected no notification matching ${JSON.stringify(matcher)}`,
+  ).toBeUndefined();
 }
 
 export function countNotifications(

@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { SseController } from "../controllers/sse-controller.js";
 
 export { SseController };
@@ -20,13 +20,21 @@ export interface PostHogHandlersOptions {
 
 function hasHeartbeatEvent(entries: unknown[]): boolean {
   return entries.some(
-    (entry) => typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).type === "heartbeat",
+    (entry) =>
+      typeof entry === "object" &&
+      entry !== null &&
+      (entry as Record<string, unknown>).type === "heartbeat",
   );
 }
 
 function filterNonHeartbeatEvents(entries: unknown[]): unknown[] {
   return entries.filter(
-    (entry) => !(typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).type === "heartbeat"),
+    (entry) =>
+      !(
+        typeof entry === "object" &&
+        entry !== null &&
+        (entry as Record<string, unknown>).type === "heartbeat"
+      ),
   );
 }
 
@@ -44,23 +52,26 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
   } = options;
 
   return [
-    http.get(`${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`, ({ request }) => {
-      onSyncRequest?.(request);
-      const controller = getSseController?.() ?? sseController;
-      if (!controller) {
-        return new HttpResponse(null, { status: 503 });
-      }
+    http.get(
+      `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`,
+      ({ request }) => {
+        onSyncRequest?.(request);
+        const controller = getSseController?.() ?? sseController;
+        if (!controller) {
+          return new HttpResponse(null, { status: 503 });
+        }
 
-      const stream = controller.createStream();
-      return new HttpResponse(stream, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        },
-      });
-    }),
+        const stream = controller.createStream();
+        return new HttpResponse(stream, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          },
+        });
+      },
+    ),
 
     http.post(
       `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId/sync`,
@@ -81,9 +92,12 @@ export function createPostHogHandlers(options: PostHogHandlersOptions = {}) {
       },
     ),
 
-    http.get(`${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId`, () => {
-      const taskRun = getTaskRun?.() ?? { log_url: "" };
-      return HttpResponse.json(taskRun);
-    }),
+    http.get(
+      `${baseUrl}/api/projects/:projectId/tasks/:taskId/runs/:runId`,
+      () => {
+        const taskRun = getTaskRun?.() ?? { log_url: "" };
+        return HttpResponse.json(taskRun);
+      },
+    ),
   ];
 }
