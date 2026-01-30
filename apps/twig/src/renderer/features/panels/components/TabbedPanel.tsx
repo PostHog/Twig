@@ -202,7 +202,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                 background: "var(--color-background)",
               }}
             >
-              {onSplitPanel && (
+              {onSplitPanel && content.tabs.length > 1 && (
                 <TabBarButton
                   ariaLabel="Split panel"
                   onClick={handleSplitClick}
