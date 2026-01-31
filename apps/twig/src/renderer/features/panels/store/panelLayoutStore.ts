@@ -212,6 +212,7 @@ function openTab(
   taskId: string,
   tabId: string,
   asPreview = true,
+  targetPanelId?: string,
 ): { taskLayouts: Record<string, TaskLayout> } {
   return updateTaskLayout(state, taskId, (layout) => {
     // Check if tab already exists in tree
@@ -242,9 +243,10 @@ function openTab(
       return { panelTree: updatedTree };
     }
 
-    // Tab doesn't exist, add it to the focused panel (or main panel as fallback)
-    const targetPanelId = layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
-    let targetPanel = getLeafPanel(layout.panelTree, targetPanelId);
+    // Tab doesn't exist, add it to the specified panel, focused panel, or main panel as fallback
+    const resolvedPanelId =
+      targetPanelId ?? layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
+    let targetPanel = getLeafPanel(layout.panelTree, resolvedPanelId);
 
     // Fall back to main panel if the focused panel doesn't exist or isn't a leaf
     if (!targetPanel) {
@@ -610,12 +612,41 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             const tab = findTabInPanel(sourcePanel, tabId);
             if (!tab) return {};
 
-            // For same-panel splits, need > 1 tab in the panel
+            // For same-panel splits with only 1 tab, create an empty split
+            // (keep the tab in source, add an empty droppable panel)
             if (
               sourcePanelId === targetPanelId &&
               targetPanel.content.tabs.length <= 1
             ) {
-              return {};
+              const singleTabConfig = getSplitConfig(direction);
+              const emptyPanelId = generatePanelId();
+              const emptyPanel: PanelNode = {
+                type: "leaf",
+                id: emptyPanelId,
+                content: {
+                  id: emptyPanelId,
+                  tabs: [],
+                  activeTabId: "",
+                  showTabs: true,
+                  droppable: true,
+                },
+              };
+
+              const updatedTree = updateTreeNode(
+                layout.panelTree,
+                targetPanelId,
+                (panel) => ({
+                  type: "group" as const,
+                  id: generatePanelId(),
+                  direction: singleTabConfig.splitDirection,
+                  sizes: [50, 50],
+                  children: singleTabConfig.isAfter
+                    ? [panel, emptyPanel]
+                    : [emptyPanel, panel],
+                }),
+              );
+
+              return { panelTree: updatedTree, focusedPanelId: emptyPanelId };
             }
 
             const config = getSplitConfig(direction);
