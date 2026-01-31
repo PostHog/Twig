@@ -55,6 +55,10 @@ export interface UserIdentifyProperties {
   uuid?: string;
   project_id?: string;
   region?: string;
+  needs_project_selection?: boolean;
+  available_projects_count?: number;
+  project_selected?: boolean;
+  login_method?: string;
 }
 export interface TaskRunStartedProperties {
   task_id: string;
