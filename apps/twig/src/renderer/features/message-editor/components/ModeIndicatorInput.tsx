@@ -1,21 +1,9 @@
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { useCwd } from "@features/sidebar/hooks/useCwd";
-import {
-  Circle,
-  LockOpen,
-  Pause,
-  Pencil,
-  ShieldCheck,
-} from "@phosphor-icons/react";
-import { Flex, Select, Text } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc";
-import { EXECUTION_MODES, type ExecutionMode } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
+import { LockOpen, Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
+import { Flex, Text } from "@radix-ui/themes";
+import type { ExecutionMode } from "@shared/types";
 
 interface ModeIndicatorInputProps {
   mode: ExecutionMode;
-  taskId?: string;
-  onModeChange: (mode: ExecutionMode) => void;
 }
 
 const modeConfig: Record<
@@ -28,146 +16,55 @@ const modeConfig: Record<
 > = {
   plan: {
     label: "plan mode on",
-    icon: <Pause size={12} weight="bold" color="var(--amber-11)" />,
+    icon: <Pause size={12} weight="bold" />,
     colorVar: "var(--amber-11)",
   },
   default: {
     label: "default mode",
-    icon: <Pencil size={12} color="var(--gray-11)" />,
+    icon: <Pencil size={12} />,
     colorVar: "var(--gray-11)",
   },
   acceptEdits: {
     label: "auto-accept edits",
-    icon: <ShieldCheck size={12} weight="fill" color="var(--green-11)" />,
+    icon: <ShieldCheck size={12} weight="fill" />,
     colorVar: "var(--green-11)",
   },
   bypassPermissions: {
     label: "bypass permissions",
-    icon: <LockOpen size={12} weight="bold" color="var(--red-11)" />,
+    icon: <LockOpen size={12} weight="bold" />,
     colorVar: "var(--red-11)",
   },
 };
 
-export function ModeIndicatorInput({
-  mode,
-  onModeChange,
-  taskId,
-}: ModeIndicatorInputProps) {
+export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
   const config = modeConfig[mode];
-  const repoPath = useCwd(taskId ?? "");
-  const allowBypassPermissions = useSettingsStore(
-    (s) => s.allowBypassPermissions,
-  );
-
-  const availableModes = allowBypassPermissions
-    ? EXECUTION_MODES
-    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
-
-  const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath && !!taskId,
-    staleTime: 5000,
-    refetchInterval: 5000,
-    placeholderData: (prev) => prev,
-  });
-
-  const hasDiffStats = diffStats && diffStats.filesChanged > 0;
 
   return (
-    <Select.Root value={mode} onValueChange={onModeChange} size="1">
-      <Select.Trigger
-        className="w-fit"
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <Flex align="center" gap="1">
+    <Flex align="center" justify="between" py="1">
+      <Flex align="center" gap="1">
+        <Text
+          size="1"
+          style={{
+            color: config.colorVar,
+            fontFamily: "monospace",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+        >
           {config.icon}
-          <Text
-            size="1"
-            style={{
-              color: config.colorVar,
-              fontFamily: "monospace",
-            }}
-          >
-            {config.label}
-          </Text>
-          <Text
-            size="1"
-            style={{
-              color: "var(--gray-9)",
-              fontFamily: "monospace",
-            }}
-          >
-            (shift+tab to cycle)
-          </Text>
-          {hasDiffStats && (
-            <Text
-              size="1"
-              style={{
-                color: "var(--gray-9)",
-                fontFamily: "monospace",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <Circle size={4} weight="fill" style={{ margin: "0 4px" }} />
-              <span style={{ color: "var(--gray-11)" }}>
-                {diffStats.filesChanged}{" "}
-                {diffStats.filesChanged === 1 ? "file" : "files"}
-              </span>
-              <span style={{ color: "var(--green-9)" }}>
-                +{diffStats.linesAdded}
-              </span>
-              <span style={{ color: "var(--red-9)" }}>
-                -{diffStats.linesRemoved}
-              </span>
-            </Text>
-          )}
-        </Flex>
-      </Select.Trigger>
-      <Select.Content>
-        {availableModes.map((modeOption) => {
-          const optionConfig = modeConfig[modeOption];
-          const hoverBgClass =
-            modeOption === "plan"
-              ? "hover:!bg-[var(--amber-11)]"
-              : modeOption === "default"
-                ? "hover:!bg-[var(--gray-11)]"
-                : modeOption === "acceptEdits"
-                  ? "hover:!bg-[var(--green-11)]"
-                  : "hover:!bg-[var(--red-11)]";
-          return (
-            <Select.Item
-              key={modeOption}
-              value={modeOption}
-              className={`group transition-colors ${hoverBgClass}`}
-            >
-              <Flex
-                align="center"
-                gap="1"
-                className="group-hover:!text-[black] [&_svg]:group-hover:!text-[black] [&_svg]:group-hover:!fill-[black] [&_svg_path]:group-hover:!fill-[black] [&_svg_path]:group-hover:!stroke-[black]"
-                style={{
-                  color: optionConfig.colorVar,
-                  fontFamily: "monospace",
-                }}
-              >
-                <span className="group-hover:[&_svg]:!text-[black] group-hover:[&_svg]:!fill-[black] group-hover:[&_svg_path]:!fill-[black] group-hover:[&_svg_path]:!stroke-[black]">
-                  {optionConfig.icon}
-                </span>
-                <Text size="1" className="group-hover:!text-[black]">
-                  {optionConfig.label}
-                </Text>
-              </Flex>
-            </Select.Item>
-          );
-        })}
-      </Select.Content>
-    </Select.Root>
+          {config.label}
+        </Text>
+        <Text
+          size="1"
+          style={{
+            color: "var(--gray-9)",
+            fontFamily: "monospace",
+          }}
+        >
+          (shift+tab to cycle)
+        </Text>
+      </Flex>
+    </Flex>
   );
 }
