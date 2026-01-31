@@ -154,7 +154,9 @@ const subscriptions = new Map<
  * Called synchronously after session is created, before any prompts are sent.
  */
 function subscribeToChannel(taskRunId: string) {
-  if (subscriptions.has(taskRunId)) return;
+  if (subscriptions.has(taskRunId)) {
+    return;
+  }
 
   const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
     { sessionId: taskRunId },
@@ -895,66 +897,78 @@ const useStore = create<SessionStore>()(
           } = task;
           const isCloud = latestRun?.environment === "cloud";
 
-          // Prevent duplicate connections
-          if (connectAttempts.has(taskId)) return;
-          if (getSessionByTaskId(taskId)?.status === "connected") return;
-
-          // Check auth first
-          const auth = getAuthCredentials();
-          if (!auth) {
-            log.error("Missing auth credentials");
-            const taskRunId = latestRun?.id ?? `error-${taskId}`;
-            const session = createBaseSession(taskRunId, taskId, isCloud);
-            session.status = "error";
-            session.errorMessage =
-              "Authentication required. Please sign in to continue.";
-            addSession(session);
+          // Prevent duplicate connections - CHECK AND ADD ATOMICALLY
+          if (connectAttempts.has(taskId)) {
+            return;
+          }
+          const existingSession = getSessionByTaskId(taskId);
+          if (existingSession?.status === "connected") {
+            return;
+          }
+          if (existingSession?.status === "connecting") {
             return;
           }
 
-          // For non-cloud sessions, check workspace existence (local filesystem check)
-          // This should happen before the offline check so users see workspace errors
-          if (!isCloud && latestRun?.id && latestRun?.log_url) {
-            const workspaceResult = await trpcVanilla.workspace.verify.query({
-              taskId,
-            });
-
-            if (!workspaceResult.exists) {
-              log.warn("Workspace no longer exists, showing error state", {
-                taskId,
-                missingPath: workspaceResult.missingPath,
-              });
-              const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
-              const events = convertStoredEntriesToEvents(rawEntries);
-
-              const session = createBaseSession(latestRun.id, taskId, false);
-              session.events = events;
-              session.logUrl = latestRun.log_url;
-              session.status = "error";
-              session.errorMessage = workspaceResult.missingPath
-                ? `Working directory no longer exists: ${workspaceResult.missingPath}`
-                : "The working directory for this task no longer exists. Please start a new task.";
-
-              addSession(session);
-              return;
-            }
-          }
-
-          // Don't try to connect if offline (agent connection requires internet)
-          if (!getIsOnline()) {
-            log.info("Skipping connection attempt - offline", { taskId });
-            const taskRunId = latestRun?.id ?? `offline-${taskId}`;
-            const session = createBaseSession(taskRunId, taskId, isCloud);
-            session.status = "disconnected";
-            session.errorMessage =
-              "No internet connection. Connect when you're back online.";
-            addSession(session);
-            return;
-          }
-
+          // ADD TO SET IMMEDIATELY after checks - before any async work
+          // This prevents the race condition where two calls both pass the check
           connectAttempts.add(taskId);
 
           try {
+            // Check auth first
+            const auth = getAuthCredentials();
+            if (!auth) {
+              log.error("Missing auth credentials");
+              const taskRunId = latestRun?.id ?? `error-${taskId}`;
+              const session = createBaseSession(taskRunId, taskId, isCloud);
+              session.status = "error";
+              session.errorMessage =
+                "Authentication required. Please sign in to continue.";
+              addSession(session);
+              return;
+            }
+
+            // For non-cloud sessions, check workspace existence (local filesystem check)
+            // This should happen before the offline check so users see workspace errors
+            if (!isCloud && latestRun?.id && latestRun?.log_url) {
+              const workspaceResult = await trpcVanilla.workspace.verify.query({
+                taskId,
+              });
+
+              if (!workspaceResult.exists) {
+                log.warn("Workspace no longer exists, showing error state", {
+                  taskId,
+                  missingPath: workspaceResult.missingPath,
+                });
+                const { rawEntries } = await fetchSessionLogs(
+                  latestRun.log_url,
+                );
+                const events = convertStoredEntriesToEvents(rawEntries);
+
+                const session = createBaseSession(latestRun.id, taskId, false);
+                session.events = events;
+                session.logUrl = latestRun.log_url;
+                session.status = "error";
+                session.errorMessage = workspaceResult.missingPath
+                  ? `Working directory no longer exists: ${workspaceResult.missingPath}`
+                  : "The working directory for this task no longer exists. Please start a new task.";
+
+                addSession(session);
+                return;
+              }
+            }
+
+            // Don't try to connect if offline (agent connection requires internet)
+            if (!getIsOnline()) {
+              log.info("Skipping connection attempt - offline", { taskId });
+              const taskRunId = latestRun?.id ?? `offline-${taskId}`;
+              const session = createBaseSession(taskRunId, taskId, isCloud);
+              session.status = "disconnected";
+              session.errorMessage =
+                "No internet connection. Connect when you're back online.";
+              addSession(session);
+              return;
+            }
+
             if (isCloud && latestRun?.id && latestRun?.log_url) {
               await connectToCloudSession(
                 taskId,
@@ -1011,7 +1025,9 @@ const useStore = create<SessionStore>()(
 
         disconnectFromTask: async (taskId) => {
           const session = getSessionByTaskId(taskId);
-          if (!session) return;
+          if (!session) {
+            return;
+          }
 
           if (session.isCloud) {
             stopCloudPolling(session.taskRunId);
@@ -1021,7 +1037,10 @@ const useStore = create<SessionStore>()(
                 sessionId: session.taskRunId,
               });
             } catch (error) {
-              log.error("Failed to cancel session", error);
+              log.error("Failed to cancel agent session", {
+                taskRunId: session.taskRunId,
+                error,
+              });
             }
             unsubscribeFromChannel(session.taskRunId);
           }
