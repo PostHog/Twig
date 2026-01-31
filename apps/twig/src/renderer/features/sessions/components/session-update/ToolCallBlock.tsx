@@ -6,9 +6,14 @@ import { ToolCallView } from "./ToolCallView";
 interface ToolCallBlockProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
-export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
+export function ToolCallBlock({
+  toolCall,
+  turnCancelled,
+  turnComplete,
+}: ToolCallBlockProps) {
   const meta = toolCall._meta as
     | { claudeCode?: { toolName?: string } }
     | undefined;
@@ -16,7 +21,11 @@ export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
 
   if (toolCall.kind === "switch_mode") {
     return (
-      <PlanApprovalView toolCall={toolCall} turnCancelled={turnCancelled} />
+      <PlanApprovalView
+        toolCall={toolCall}
+        turnCancelled={turnCancelled}
+        turnComplete={turnComplete}
+      />
     );
   }
 
@@ -26,9 +35,19 @@ export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
 
   if (toolCall.kind === "execute") {
     return (
-      <ExecuteToolView toolCall={toolCall} turnCancelled={turnCancelled} />
+      <ExecuteToolView
+        toolCall={toolCall}
+        turnCancelled={turnCancelled}
+        turnComplete={turnComplete}
+      />
     );
   }
 
-  return <ToolCallView toolCall={toolCall} turnCancelled={turnCancelled} />;
+  return (
+    <ToolCallView
+      toolCall={toolCall}
+      turnCancelled={turnCancelled}
+      turnComplete={turnComplete}
+    />
+  );
 }

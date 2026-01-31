@@ -13,6 +13,7 @@ const ANSI_REGEX = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-9;]*m`, "g");
 interface ExecuteToolViewProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
 interface ExecuteRawInput {
@@ -36,6 +37,7 @@ function getOutputFromContent(
 export function ExecuteToolView({
   toolCall,
   turnCancelled,
+  turnComplete,
 }: ExecuteToolViewProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { status, rawInput, content } = toolCall;
@@ -45,7 +47,7 @@ export function ExecuteToolView({
   const description = executeInput?.description;
 
   const isIncomplete = status === "pending" || status === "in_progress";
-  const isLoading = isIncomplete && !turnCancelled;
+  const isLoading = isIncomplete && !turnCancelled && !turnComplete;
 
   const output = (getOutputFromContent(content) ?? "").replace(ANSI_REGEX, "");
   const hasOutput = output.trim().length > 0;

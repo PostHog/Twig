@@ -45,12 +45,14 @@ interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
 export const SessionUpdateView = memo(function SessionUpdateView({
   item,
   toolCalls,
   turnCancelled,
+  turnComplete,
 }: SessionUpdateViewProps) {
   switch (item.sessionUpdate) {
     case "user_message_chunk":
@@ -68,6 +70,7 @@ export const SessionUpdateView = memo(function SessionUpdateView({
         <ToolCallBlock
           toolCall={toolCalls?.get(item.toolCallId) ?? item}
           turnCancelled={turnCancelled}
+          turnComplete={turnComplete}
         />
       );
     case "tool_call_update":
