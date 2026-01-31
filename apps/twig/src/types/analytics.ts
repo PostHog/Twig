@@ -147,6 +147,14 @@ export interface AgentSessionErrorProperties {
   error_type: string;
 }
 
+export interface SessionFeedbackProperties {
+  task_id: string;
+  session_id: string;
+  execution_type: ExecutionType;
+  model?: string;
+  feedback_type: "good" | "bad";
+}
+
 // Activation events
 export interface FirstTaskCreatedProperties {
   task_id: string;
@@ -204,6 +212,9 @@ export const ANALYTICS_EVENTS = {
   // Error events
   TASK_CREATION_FAILED: "Task creation failed",
   AGENT_SESSION_ERROR: "Agent session error",
+
+  // Feedback events
+  SESSION_FEEDBACK: "Session feedback",
 } as const;
 
 export type AnalyticsEvent =
@@ -249,4 +260,7 @@ export type EventPropertyMap = {
   // Error events
   [ANALYTICS_EVENTS.TASK_CREATION_FAILED]: TaskCreationFailedProperties;
   [ANALYTICS_EVENTS.AGENT_SESSION_ERROR]: AgentSessionErrorProperties;
+
+  // Feedback events
+  [ANALYTICS_EVENTS.SESSION_FEEDBACK]: SessionFeedbackProperties;
 };

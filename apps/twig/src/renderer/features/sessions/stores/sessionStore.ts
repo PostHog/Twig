@@ -1417,6 +1417,12 @@ export const useSessionForTask = (taskId: string | undefined) =>
   );
 export const getSessionActions = () => useStore.getState().actions;
 
+export function getSessionForTask(taskId: string | undefined) {
+  if (!taskId) return undefined;
+  const sessions = useStore.getState().sessions;
+  return Object.values(sessions).find((s) => s.taskId === taskId);
+}
+
 function extractAvailableCommandsFromEvents(
   events: AcpMessage[],
 ): AvailableCommand[] {
