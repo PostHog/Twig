@@ -173,7 +173,7 @@ export function ActionSelector({
           h.handleCancel();
           break;
         default:
-          if (/^[1-9]$/.test(e.key)) {
+          if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             e.stopPropagation();
             h.selectByIndex(Number.parseInt(e.key, 10) - 1);
