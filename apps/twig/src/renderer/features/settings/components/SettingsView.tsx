@@ -561,7 +561,7 @@ export function SettingsView() {
                       Push notifications
                     </Text>
                     <Text size="1" color="gray">
-                      Show system notifications when the agent finishes a task
+                      Recieve a desktop notification when the agent finishes a task
                       or needs your input
                     </Text>
                   </Flex>
@@ -578,8 +578,8 @@ export function SettingsView() {
                       Dock badge
                     </Text>
                     <Text size="1" color="gray">
-                      Show a badge on the dock icon when the agent needs
-                      attention
+                      Display a badge on the dock icon when the agent finishes a task
+                      or needs your input
                     </Text>
                   </Flex>
                   <Switch
