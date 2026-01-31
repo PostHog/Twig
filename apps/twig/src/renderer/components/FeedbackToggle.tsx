@@ -5,6 +5,9 @@ import { useCallback } from "react";
 
 type FeedbackType = "bug" | "feedback";
 
+const hasBugSurvey = !!import.meta.env.VITE_POSTHOG_BUG_SURVEY_ID;
+const hasFeedbackSurvey = !!import.meta.env.VITE_POSTHOG_FEEDBACK_SURVEY_ID;
+
 export function FeedbackToggle() {
   const handleFeedback = useCallback((type: FeedbackType) => {
     const surveyId =
@@ -20,6 +23,8 @@ export function FeedbackToggle() {
       feedback_type: type,
     });
   }, []);
+
+  if (!hasBugSurvey && !hasFeedbackSurvey) return null;
 
   return (
     <DropdownMenu.Root>
