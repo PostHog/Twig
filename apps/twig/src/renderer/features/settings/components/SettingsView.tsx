@@ -616,7 +616,7 @@ export function SettingsView() {
                     )}
                   </Flex>
                   <Text size="1" color="gray">
-                    Play a sound when the agent finishes its turn.
+                    Play a sound when the agent finishes a task or needs your input.
                   </Text>
                 </Flex>
 
