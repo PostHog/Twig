@@ -2,10 +2,12 @@ import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   cancelFlowOutput,
+  openExternalUrlInput,
   refreshTokenInput,
   refreshTokenOutput,
   startFlowInput,
   startFlowOutput,
+  startSignupFlowInput,
 } from "../../services/oauth/schemas.js";
 import type { OAuthService } from "../../services/oauth/service.js";
 import { publicProcedure, router } from "../trpc.js";
@@ -18,6 +20,11 @@ export const oauthRouter = router({
     .output(startFlowOutput)
     .mutation(({ input }) => getService().startFlow(input.region)),
 
+  startSignupFlow: publicProcedure
+    .input(startSignupFlowInput)
+    .output(startFlowOutput)
+    .mutation(({ input }) => getService().startSignupFlow(input.region)),
+
   refreshToken: publicProcedure
     .input(refreshTokenInput)
     .output(refreshTokenOutput)
@@ -28,4 +35,8 @@ export const oauthRouter = router({
   cancelFlow: publicProcedure
     .output(cancelFlowOutput)
     .mutation(() => getService().cancelFlow()),
+
+  openExternalUrl: publicProcedure
+    .input(openExternalUrlInput)
+    .mutation(({ input }) => getService().openExternalUrl(input.url)),
 });
