@@ -561,8 +561,8 @@ export function SettingsView() {
                       Push notifications
                     </Text>
                     <Text size="1" color="gray">
-                      Recieve a desktop notification when the agent finishes a task
-                      or needs your input
+                      Recieve a desktop notification when the agent finishes a
+                      task or needs your input
                     </Text>
                   </Flex>
                   <Switch
@@ -578,8 +578,8 @@ export function SettingsView() {
                       Dock badge
                     </Text>
                     <Text size="1" color="gray">
-                      Display a badge on the dock icon when the agent finishes a task
-                      or needs your input
+                      Display a badge on the dock icon when the agent finishes a
+                      task or needs your input
                     </Text>
                   </Flex>
                   <Switch
@@ -616,7 +616,8 @@ export function SettingsView() {
                     )}
                   </Flex>
                   <Text size="1" color="gray">
-                    Play a sound when the agent finishes a task or needs your input.
+                    Play a sound when the agent finishes a task or needs your
+                    input.
                   </Text>
                 </Flex>
 
