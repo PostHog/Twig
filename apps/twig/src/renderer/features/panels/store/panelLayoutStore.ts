@@ -300,13 +300,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
       openFile: (taskId, filePath, asPreview = true) => {
         const tabId = createFileTabId(filePath);
         set((state) => {
-          const afterOpenTab = openTab(
-            state,
-            taskId,
-            tabId,
-            asPreview,
-            DEFAULT_PANEL_IDS.MAIN_PANEL,
-          );
+          const afterOpenTab = openTab(state, taskId, tabId, asPreview);
           const layout = afterOpenTab.taskLayouts[taskId];
           if (!layout) return afterOpenTab;
 
@@ -333,15 +327,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
 
       openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
-        set((state) =>
-          openTab(
-            state,
-            taskId,
-            tabId,
-            asPreview,
-            DEFAULT_PANEL_IDS.MAIN_PANEL,
-          ),
-        );
+        set((state) => openTab(state, taskId, tabId, asPreview));
 
         // Track diff viewed
         const changeType =
@@ -626,12 +612,41 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             const tab = findTabInPanel(sourcePanel, tabId);
             if (!tab) return {};
 
-            // For same-panel splits, need > 1 tab in the panel
+            // For same-panel splits with only 1 tab, create an empty split
+            // (keep the tab in source, add an empty droppable panel)
             if (
               sourcePanelId === targetPanelId &&
               targetPanel.content.tabs.length <= 1
             ) {
-              return {};
+              const singleTabConfig = getSplitConfig(direction);
+              const emptyPanelId = generatePanelId();
+              const emptyPanel: PanelNode = {
+                type: "leaf",
+                id: emptyPanelId,
+                content: {
+                  id: emptyPanelId,
+                  tabs: [],
+                  activeTabId: "",
+                  showTabs: true,
+                  droppable: true,
+                },
+              };
+
+              const updatedTree = updateTreeNode(
+                layout.panelTree,
+                targetPanelId,
+                (panel) => ({
+                  type: "group" as const,
+                  id: generatePanelId(),
+                  direction: singleTabConfig.splitDirection,
+                  sizes: [50, 50],
+                  children: singleTabConfig.isAfter
+                    ? [panel, emptyPanel]
+                    : [emptyPanel, panel],
+                }),
+              );
+
+              return { panelTree: updatedTree, focusedPanelId: emptyPanelId };
             }
 
             const config = getSplitConfig(direction);
