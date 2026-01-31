@@ -24,10 +24,6 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
-    "./worktree-manager": {
-      "types": "./dist/worktree-manager.d.ts",
-      "import": "./dist/worktree-manager.js"
-    },
     "./adapters/claude/questions/utils": {
       "types": "./dist/adapters/claude/questions/utils.d.ts",
       "import": "./dist/adapters/claude/questions/utils.js"

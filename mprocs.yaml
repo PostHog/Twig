@@ -5,11 +5,17 @@ procs:
     color: blue
     depends_on:
       - agent
+      - git
 
   agent:
     cmd: ["pnpm", "--filter", "agent", "run", "dev"]
     cwd: .
     color: magenta
+
+  git:
+    cmd: ["pnpm", "--filter", "@twig/git", "run", "dev"]
+    cwd: .
+    color: yellow
 
   storybook:
     cmd: ["pnpm", "--filter", "twig", "run", "storybook"]

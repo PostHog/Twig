@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { WorkspaceMode } from "@shared/types";
-import { getCurrentBranch, getDefaultBranch } from "../git";
+import { getCurrentBranch, getDefaultBranch } from "@twig/git/queries";
 
 export interface WorkspaceEnvContext {
   taskId: string;

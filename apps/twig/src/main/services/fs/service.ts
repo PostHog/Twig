@@ -1,17 +1,14 @@
-import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
+import { getChangedFiles, listAllFiles } from "@twig/git/queries";
 import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
-import { getChangedFilesForRepo } from "../git.js";
 import type { FileEntry } from "./schemas.js";
 
 const log = logger.scope("fs");
-const execAsync = promisify(exec);
 
 @injectable()
 export class FsService {
@@ -47,11 +44,16 @@ export class FsService {
     if (!repoPath) return [];
 
     try {
-      const changedFiles = await getChangedFilesForRepo(repoPath);
+      const changedFiles = await getChangedFiles(repoPath);
 
       if (query?.trim()) {
-        const files = await this.gitLsFiles(repoPath, query.trim(), limit);
-        return this.toFileEntries(files, changedFiles);
+        const allFiles = await listAllFiles(repoPath);
+        const lowerQuery = query.toLowerCase();
+        const filtered = allFiles.filter((f) =>
+          f.toLowerCase().includes(lowerQuery),
+        );
+        const limited = limit ? filtered.slice(0, limit) : filtered;
+        return this.toFileEntries(limited, changedFiles);
       }
 
       const cached = this.cache.get(repoPath);
@@ -59,7 +61,7 @@ export class FsService {
         return limit ? cached.files.slice(0, limit) : cached.files;
       }
 
-      const files = await this.gitLsFiles(repoPath);
+      const files = await listAllFiles(repoPath);
       const entries = this.toFileEntries(files, changedFiles);
       this.cache.set(repoPath, { files: entries, timestamp: Date.now() });
 
@@ -126,32 +128,5 @@ export class FsService {
       name: path.basename(p),
       changed: changedFiles.has(p),
     }));
-  }
-
-  private async gitLsFiles(
-    repoPath: string,
-    query?: string,
-    limit?: number,
-  ): Promise<string[]> {
-    const filter = query
-      ? ` | grep -i "${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"${limit ? ` | head -n ${limit}` : ""}`
-      : "";
-    const suffix = query ? " || true" : "";
-    const maxBuffer = query ? 1024 * 1024 : 50 * 1024 * 1024;
-
-    const [tracked, untracked] = await Promise.all([
-      execAsync(`git ls-files${filter}${suffix}`, { cwd: repoPath, maxBuffer }),
-      execAsync(`git ls-files --others --exclude-standard${filter}${suffix}`, {
-        cwd: repoPath,
-        maxBuffer,
-      }),
-    ]);
-
-    const files = [
-      ...tracked.stdout.split("\n").filter(Boolean),
-      ...untracked.stdout.split("\n").filter(Boolean),
-    ];
-
-    return limit ? files.slice(0, limit) : files;
   }
 }
