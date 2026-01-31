@@ -138,29 +138,36 @@ function App() {
     );
   }
 
+  // Determine which screen to show
+  const renderContent = () => {
+    if (!isAuthenticated) {
+      return (
+        <motion.div
+          key="auth"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <AuthScreen />
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        key="main"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: showTransition ? 1.5 : 0 }}
+      >
+        <MainLayout />
+      </motion.div>
+    );
+  };
+
   return (
     <ErrorBoundary name="App">
-      <AnimatePresence mode="wait">
-        {!isAuthenticated ? (
-          <motion.div
-            key="auth"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <AuthScreen />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: showTransition ? 1.5 : 0 }}
-          >
-            <MainLayout />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence mode="wait">{renderContent()}</AnimatePresence>
       <LoginTransition
         isAnimating={showTransition}
         onComplete={handleTransitionComplete}

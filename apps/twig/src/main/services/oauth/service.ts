@@ -14,8 +14,11 @@ import type { DeepLinkService } from "../deep-link/service.js";
 import type {
   CancelFlowOutput,
   CloudRegion,
+  Complete2FAOutput,
+  LoginWithPasswordOutput,
   OAuthTokenResponse,
   RefreshTokenOutput,
+  SignupWithOAuthOutput,
   StartFlowOutput,
 } from "./schemas.js";
 
@@ -449,5 +452,312 @@ export class OAuthService {
 
   private generateCodeChallenge(verifier: string): string {
     return crypto.createHash("sha256").update(verifier).digest("base64url");
+  }
+
+  /**
+   * Open an external URL in the default browser.
+   */
+  public async openExternalUrl(url: string): Promise<void> {
+    await shell.openExternal(url);
+  }
+
+  /**
+   * Login with email and password directly (first-party flow).
+   * This uses the first-party token endpoint which skips the OAuth redirect flow.
+   */
+  public async loginWithPassword(params: {
+    email: string;
+    password: string;
+    region: CloudRegion;
+  }): Promise<LoginWithPasswordOutput> {
+    try {
+      const cloudUrl = getCloudUrlFromRegion(params.region);
+      const codeVerifier = this.generateCodeVerifier();
+
+      // Store code verifier for potential 2FA completion
+      this.pendingCodeVerifier = codeVerifier;
+
+      const response = await fetch(`${cloudUrl}/oauth/first-party-token/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: getOauthClientIdFromRegion(params.region),
+          email: params.email,
+          password: params.password,
+          code_verifier: codeVerifier,
+          scope: OAUTH_SCOPES.join(" "),
+        }),
+      });
+
+      const data = await response.json();
+      log.info("First-party token response", {
+        status: response.status,
+        requires2FA: !!data.requires_2fa,
+        hasAccessToken: !!data.access_token,
+        error: data.error,
+      });
+
+      // Handle 2FA required
+      if (data.requires_2fa) {
+        return {
+          success: false,
+          requires2FA: true,
+          sessionToken: data.session_token,
+          twoFactorMethods: data["2fa_methods"] || [],
+        };
+      }
+
+      // Handle SSO required
+      if (data.error === "sso_required") {
+        this.pendingCodeVerifier = undefined;
+        return {
+          success: false,
+          error: data.error_description || "SSO login is required",
+          errorCode: "sso_required",
+          ssoProvider: data.sso_provider,
+        };
+      }
+
+      // Handle other errors
+      if (!response.ok) {
+        this.pendingCodeVerifier = undefined;
+        return {
+          success: false,
+          error: data.error_description || data.detail || "Login failed",
+          errorCode: data.error,
+        };
+      }
+
+      // Success - clear pending state and return tokens
+      this.pendingCodeVerifier = undefined;
+      return {
+        success: true as const,
+        data: {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_in: data.expires_in,
+          token_type: data.token_type,
+          scope: data.scope ?? "",
+          scoped_teams: data.scoped_teams,
+          scoped_organizations: data.scoped_organizations,
+        },
+      };
+    } catch (error) {
+      this.pendingCodeVerifier = undefined;
+      log.error("Password login error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Network error",
+        errorCode: "network_error",
+      };
+    }
+  }
+
+  /**
+   * Complete 2FA verification for password login.
+   */
+  public async complete2FA(params: {
+    code: string;
+    sessionToken: string;
+    region: CloudRegion;
+  }): Promise<Complete2FAOutput> {
+    try {
+      const cloudUrl = getCloudUrlFromRegion(params.region);
+
+      if (!this.pendingCodeVerifier) {
+        return {
+          success: false,
+          error: "No pending login session",
+        };
+      }
+
+      const response = await fetch(`${cloudUrl}/oauth/first-party-token/2fa/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: getOauthClientIdFromRegion(params.region),
+          session_token: params.sessionToken,
+          code: params.code,
+          code_verifier: this.pendingCodeVerifier,
+        }),
+      });
+
+      const data = await response.json();
+
+      // Clean up pending state
+      this.pendingCodeVerifier = undefined;
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error:
+            data.error_description || data.detail || "2FA verification failed",
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_in: data.expires_in,
+          token_type: data.token_type,
+          scope: data.scope,
+          scoped_teams: data.scoped_teams,
+          scoped_organizations: data.scoped_organizations,
+        },
+      };
+    } catch (error) {
+      log.error("2FA completion error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Network error",
+      };
+    }
+  }
+
+  /**
+   * Sign up with email/password and get OAuth tokens directly.
+   * This uses the signup endpoint with first-party OAuth integration.
+   */
+  public async signupWithOAuth(params: {
+    email: string;
+    password: string;
+    firstName: string;
+    region: CloudRegion;
+  }): Promise<SignupWithOAuthOutput> {
+    try {
+      const cloudUrl = getCloudUrlFromRegion(params.region);
+      const codeVerifier = this.generateCodeVerifier();
+
+      const response = await fetch(`${cloudUrl}/api/signup/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: params.email,
+          password: params.password,
+          first_name: params.firstName,
+          oauth_client_id: getOauthClientIdFromRegion(params.region),
+          oauth_code_verifier: codeVerifier,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage =
+          data.detail ||
+          data.email?.[0] ||
+          data.password?.[0] ||
+          `Signup failed: ${response.statusText}`;
+        return { success: false, error: errorMessage };
+      }
+
+      // Check if OAuth tokens were returned
+      if (data.oauth_tokens) {
+        return {
+          success: true,
+          data: {
+            access_token: data.oauth_tokens.access_token,
+            refresh_token: data.oauth_tokens.refresh_token,
+            expires_in: data.oauth_tokens.expires_in,
+            token_type: data.oauth_tokens.token_type,
+            scope: data.oauth_tokens.scope,
+            scoped_teams: data.oauth_tokens.scoped_teams,
+            scoped_organizations: data.oauth_tokens.scoped_organizations,
+          },
+        };
+      }
+
+      // Fallback - signup succeeded but no tokens (email verification required)
+      return {
+        success: false,
+        error: "Please check your email to verify your account",
+      };
+    } catch (error) {
+      log.error("Signup error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Network error",
+      };
+    }
+  }
+
+  /**
+   * Get the URL for social authentication with first-party OAuth params.
+   * This redirects through PostHog's social auth and returns to Twig with an OAuth code.
+   */
+  public getFirstPartySocialAuthUrl(
+    provider: "google-oauth2" | "github" | "gitlab",
+    region: CloudRegion,
+  ): { url: string; codeVerifier: string } {
+    const cloudUrl = getCloudUrlFromRegion(region);
+    const redirectUri = this.getRedirectUri();
+    const codeVerifier = this.generateCodeVerifier();
+    const codeChallenge = this.generateCodeChallenge(codeVerifier);
+    const state = crypto.randomUUID();
+
+    // Build URL with OAuth params that will be stored in session
+    const socialUrl = new URL(`${cloudUrl}/login/${provider}/`);
+    socialUrl.searchParams.set(
+      "oauth_client_id",
+      getOauthClientIdFromRegion(region),
+    );
+    socialUrl.searchParams.set("oauth_redirect_uri", redirectUri);
+    socialUrl.searchParams.set("oauth_code_challenge", codeChallenge);
+    socialUrl.searchParams.set("oauth_scope", OAUTH_SCOPES.join(" "));
+    socialUrl.searchParams.set("oauth_state", state);
+
+    return { url: socialUrl.toString(), codeVerifier };
+  }
+
+  // Private state for password login flow
+  private pendingCodeVerifier: string | undefined;
+
+  /**
+   * Start first-party social authentication flow.
+   * This opens the browser to the social provider (Google/GitHub/GitLab) with OAuth params
+   * that will redirect back to Twig with an OAuth code after authentication.
+   */
+  public async startFirstPartySocialAuth(
+    provider: "google-oauth2" | "github" | "gitlab",
+    region: CloudRegion,
+  ): Promise<StartFlowOutput> {
+    try {
+      // Cancel any existing flow
+      this.cancelFlow();
+
+      const config: OAuthConfig = {
+        scopes: OAUTH_SCOPES,
+        cloudRegion: region,
+      };
+
+      const { url, codeVerifier } = this.getFirstPartySocialAuthUrl(
+        provider,
+        region,
+      );
+
+      // Wait for callback (uses HTTP server in dev, deep links in prod)
+      const code = IS_DEV
+        ? await this.waitForHttpCallback(codeVerifier, config, url)
+        : await this.waitForDeepLinkCallback(codeVerifier, config, url);
+
+      // Exchange the code for tokens
+      const tokenResponse = await this.exchangeCodeForToken(
+        code,
+        codeVerifier,
+        config,
+      );
+
+      return {
+        success: true,
+        data: tokenResponse,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 }

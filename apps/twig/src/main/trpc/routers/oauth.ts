@@ -2,6 +2,7 @@ import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   cancelFlowOutput,
+  openExternalUrlInput,
   refreshTokenInput,
   refreshTokenOutput,
   startFlowInput,
@@ -28,4 +29,8 @@ export const oauthRouter = router({
   cancelFlow: publicProcedure
     .output(cancelFlowOutput)
     .mutation(() => getService().cancelFlow()),
+
+  openExternalUrl: publicProcedure
+    .input(openExternalUrlInput)
+    .mutation(({ input }) => getService().openExternalUrl(input.url)),
 });
