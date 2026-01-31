@@ -313,9 +313,10 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       mode,
       branch,
       useExistingBranch,
+      customName,
     } = options;
     log.info(
-      `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode}, useExistingBranch: ${useExistingBranch})`,
+      `Creating workspace for task ${taskId} in ${mainRepoPath} (mode: ${mode}, useExistingBranch: ${useExistingBranch}${customName ? `, customName: ${customName}` : ""})`,
     );
 
     if (mode === "cloud") {
@@ -510,6 +511,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         // Standard mode: create new twig/ branch
         worktree = await worktreeManager.createWorktree({
           baseBranch: branch ?? undefined,
+          customName,
         });
         log.info(
           `Created worktree: ${worktree.worktreeName} at ${worktree.worktreePath}`,
@@ -1105,6 +1107,18 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
 
     return result;
+  }
+
+  async checkNameAvailable(
+    name: string,
+    mainRepoPath: string,
+  ): Promise<{ available: boolean; reason?: string }> {
+    const worktreeBasePath = getWorktreeLocation();
+    const worktreeManager = new WorktreeManager({
+      mainRepoPath,
+      worktreeBasePath,
+    });
+    return worktreeManager.isNameAvailable(name);
   }
 
   private async cleanupWorktree(

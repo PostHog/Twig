@@ -16,6 +16,7 @@ interface SettingsStore {
   autoConvertLongText: boolean;
   sendMessagesWith: SendMessagesWith;
   allowBypassPermissions: boolean;
+  customWorkspaceNames: boolean;
 
   setDefaultRunMode: (mode: DefaultRunMode) => void;
   setLastUsedRunMode: (mode: "local" | "cloud") => void;
@@ -26,6 +27,7 @@ interface SettingsStore {
   setAutoConvertLongText: (enabled: boolean) => void;
   setSendMessagesWith: (mode: SendMessagesWith) => void;
   setAllowBypassPermissions: (enabled: boolean) => void;
+  setCustomWorkspaceNames: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -40,6 +42,7 @@ export const useSettingsStore = create<SettingsStore>()(
       autoConvertLongText: true,
       sendMessagesWith: "enter",
       allowBypassPermissions: false,
+      customWorkspaceNames: false,
 
       setDefaultRunMode: (mode) => set({ defaultRunMode: mode }),
       setLastUsedRunMode: (mode) => set({ lastUsedRunMode: mode }),
@@ -54,6 +57,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setSendMessagesWith: (mode) => set({ sendMessagesWith: mode }),
       setAllowBypassPermissions: (enabled) =>
         set({ allowBypassPermissions: enabled }),
+      setCustomWorkspaceNames: (enabled) =>
+        set({ customWorkspaceNames: enabled }),
     }),
     {
       name: "settings-storage",

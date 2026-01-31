@@ -80,11 +80,13 @@ export function SettingsView() {
     autoConvertLongText,
     sendMessagesWith,
     allowBypassPermissions,
+    customWorkspaceNames,
     setCursorGlow,
     setDesktopNotifications,
     setAutoConvertLongText,
     setSendMessagesWith,
     setAllowBypassPermissions,
+    setCustomWorkspaceNames,
   } = useSettingsStore();
   const terminalLayoutMode = useTerminalSettingsStore(
     (state) => state.terminalLayoutMode,
@@ -338,6 +340,18 @@ export function SettingsView() {
     setAllowBypassPermissions(true);
     setShowBypassWarning(false);
   }, [setAllowBypassPermissions]);
+
+  const handleCustomWorkspaceNamesChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "custom_workspace_names",
+        new_value: checked,
+        old_value: customWorkspaceNames,
+      });
+      setCustomWorkspaceNames(checked);
+    },
+    [customWorkspaceNames, setCustomWorkspaceNames],
+  );
 
   const terminalFontSelection = TERMINAL_FONT_PRESETS.some(
     (preset) => preset.value === terminalFontFamily,
@@ -681,7 +695,7 @@ export function SettingsView() {
           <Flex direction="column" gap="3">
             <Heading size="3">Workspace storage</Heading>
             <Card>
-              <Flex direction="column" gap="3">
+              <Flex direction="column" gap="4">
                 <Flex direction="column" gap="2">
                   <Text size="1" weight="medium">
                     Workspace location
@@ -696,6 +710,23 @@ export function SettingsView() {
                     Directory where isolated workspaces are created for each
                     task. Workspaces are organized by repository name.
                   </Text>
+                </Flex>
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Custom workspace names
+                    </Text>
+                    <Text size="1" color="gray">
+                      Name workspaces manually instead of using auto-generated
+                      names
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={customWorkspaceNames}
+                    onCheckedChange={handleCustomWorkspaceNamesChange}
+                    size="1"
+                  />
                 </Flex>
               </Flex>
             </Card>

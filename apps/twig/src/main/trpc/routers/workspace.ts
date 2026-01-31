@@ -1,6 +1,8 @@
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
+  checkNameAvailableInput,
+  checkNameAvailableOutput,
   createWorkspaceInput,
   createWorkspaceOutput,
   deleteWorkspaceInput,
@@ -98,6 +100,13 @@ export const workspaceRouter = router({
     .input(getWorktreeTasksInput)
     .output(getWorktreeTasksOutput)
     .query(({ input }) => getService().getWorktreeTasks(input.worktreePath)),
+
+  checkNameAvailable: publicProcedure
+    .input(checkNameAvailableInput)
+    .output(checkNameAvailableOutput)
+    .query(({ input }) =>
+      getService().checkNameAvailable(input.name, input.mainRepoPath),
+    ),
 
   onTerminalCreated: subscribe(WorkspaceServiceEvent.TerminalCreated),
   onError: subscribe(WorkspaceServiceEvent.Error),

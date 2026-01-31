@@ -36,6 +36,7 @@ export interface TaskCreationInput {
   branch?: string | null;
   githubIntegrationId?: number;
   executionMode?: ExecutionMode;
+  workspaceName?: string;
 }
 
 export interface TaskCreationOutput {
@@ -131,6 +132,7 @@ export class TaskCreationSaga extends Saga<
             folderPath: repoPath,
             mode: workspaceMode,
             branch: branch ?? undefined,
+            customName: input.workspaceName,
           });
         },
         rollback: async () => {

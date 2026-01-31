@@ -26,6 +26,8 @@ interface UseTaskCreationOptions {
   branch?: string | null;
   editorIsEmpty: boolean;
   executionMode?: ExecutionMode;
+  workspaceName?: string;
+  isWorkspaceNameValid?: boolean;
 }
 
 interface UseTaskCreationReturn {
@@ -80,6 +82,7 @@ function prepareTaskInput(
     workspaceMode: WorkspaceMode;
     branch?: string | null;
     executionMode?: ExecutionMode;
+    workspaceName?: string;
   },
 ): TaskCreationInput {
   return {
@@ -91,6 +94,7 @@ function prepareTaskInput(
     workspaceMode: options.workspaceMode,
     branch: options.branch,
     executionMode: options.executionMode,
+    workspaceName: options.workspaceName,
   };
 }
 
@@ -115,6 +119,8 @@ export function useTaskCreation({
   branch,
   editorIsEmpty,
   executionMode,
+  workspaceName,
+  isWorkspaceNameValid = true,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -129,7 +135,8 @@ export function useTaskCreation({
     isOnline &&
     (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
     !isCreatingTask &&
-    !editorIsEmpty;
+    !editorIsEmpty &&
+    isWorkspaceNameValid;
 
   const handleSubmit = useCallback(async () => {
     const editor = editorRef.current;
@@ -149,6 +156,7 @@ export function useTaskCreation({
         workspaceMode,
         branch,
         executionMode,
+        workspaceName,
       });
 
       const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
@@ -191,6 +199,7 @@ export function useTaskCreation({
     workspaceMode,
     branch,
     executionMode,
+    workspaceName,
     invalidateTasks,
     navigateToTask,
   ]);
