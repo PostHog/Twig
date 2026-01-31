@@ -35,19 +35,8 @@ const { mockQueryRef } = vi.hoisted(() => {
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
-  const { createMockQuery: createMock, createInitMessage: createInit } =
-    await import("../test/mocks/claude-sdk.js");
-  return {
-    ...actual,
-    query: vi.fn(() => {
-      const mq = createMock();
-      mockQueryRef.current = mq;
-      setTimeout(() => {
-        mq._mockHelpers.sendMessage(createInit());
-      }, 10);
-      return mq;
-    }),
-  };
+  const { createClaudeSdkMock } = await import("../test/mocks/claude-sdk.js");
+  return { ...actual, ...createClaudeSdkMock(mockQueryRef) };
 });
 
 function getMockQuery(): MockQuery {
@@ -122,8 +111,7 @@ describe("AgentServer", () => {
   });
 
   describe("SSE event handling", () => {
-    // TODO: Fix test isolation issue - passes alone, fails after other test files run
-    it.skip("handles user_message via SSE and sends prompt to ACP", async () => {
+    it("handles user_message via SSE and sends prompt to ACP", async () => {
       const agentServer = new AgentServer(createConfig());
       const startPromise = agentServer.start();
 

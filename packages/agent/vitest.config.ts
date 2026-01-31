@@ -12,6 +12,8 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     exclude: ["**/node_modules/**", "**/dist/**"],
+    isolate: true,
+    fileParallelism: false,
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
