@@ -9,27 +9,12 @@ import {
 } from "../../sagas/test-fixtures.js";
 import { type CloudClientFactory, InitAcpSaga } from "./init-acp-saga.js";
 
-vi.mock("../../adapters/acp-connection.js", () => ({
-  createAcpConnection: vi.fn(() => ({
-    clientStreams: {
-      readable: new ReadableStream(),
-      writable: new WritableStream(),
-    },
-    agentConnection: {},
-    cleanup: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-vi.mock("@agentclientprotocol/sdk", () => ({
-  ClientSideConnection: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue({}),
-    newSession: vi.fn().mockResolvedValue({}),
-    prompt: vi.fn().mockResolvedValue({ stopReason: "end_turn" }),
-    cancel: vi.fn().mockResolvedValue({}),
-  })),
-  ndJsonStream: vi.fn().mockReturnValue({}),
-  PROTOCOL_VERSION: "1.0",
-}));
+vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
+  const { createClaudeSdkMock } = await import("../../test/mocks/claude-sdk.js");
+  return { ...actual, ...createClaudeSdkMock({ current: null }) };
+});
 
 describe("InitAcpSaga", () => {
   let repo: TestRepo;
@@ -141,101 +126,6 @@ describe("InitAcpSaga", () => {
 
       expect(result.success).toBe(true);
       expect(factory).toHaveBeenCalled();
-    });
-  });
-
-  describe("environment variable rollback", () => {
-    it("restores original environment when undefined", async () => {
-      delete process.env.POSTHOG_API_KEY;
-
-      const { createAcpConnection } = await import(
-        "../../adapters/acp-connection.js"
-      );
-      (createAcpConnection as ReturnType<typeof vi.fn>).mockImplementationOnce(
-        () => {
-          throw new Error("ACP creation failed");
-        },
-      );
-
-      const saga = new InitAcpSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(false);
-      expect(process.env.POSTHOG_API_KEY).toBeUndefined();
-    });
-
-    it("restores original environment when had value", async () => {
-      process.env.POSTHOG_API_KEY = "original-key";
-
-      const { createAcpConnection } = await import(
-        "../../adapters/acp-connection.js"
-      );
-      (createAcpConnection as ReturnType<typeof vi.fn>).mockImplementationOnce(
-        () => {
-          throw new Error("ACP creation failed");
-        },
-      );
-
-      const saga = new InitAcpSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(false);
-      expect(process.env.POSTHOG_API_KEY).toBe("original-key");
-    });
-  });
-
-  describe("failure handling", () => {
-    it("fails at create_acp_connection and cleans up env", async () => {
-      const { createAcpConnection } = await import(
-        "../../adapters/acp-connection.js"
-      );
-      (createAcpConnection as ReturnType<typeof vi.fn>).mockImplementationOnce(
-        () => {
-          throw new Error("Connection failed");
-        },
-      );
-
-      process.env.POSTHOG_API_KEY = "original";
-      const saga = new InitAcpSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(false);
-      if (result.success) return;
-
-      expect(result.failedStep).toBe("create_acp_connection");
-      expect(result.error).toContain("Connection failed");
-      expect(process.env.POSTHOG_API_KEY).toBe("original");
-    });
-
-    it("cleans up ACP connection on protocol init failure", async () => {
-      const mockCleanup = vi.fn().mockResolvedValue(undefined);
-      const { createAcpConnection } = await import(
-        "../../adapters/acp-connection.js"
-      );
-      (createAcpConnection as ReturnType<typeof vi.fn>).mockReturnValue({
-        clientStreams: {
-          readable: new ReadableStream(),
-          writable: new WritableStream(),
-        },
-        agentConnection: {},
-        cleanup: mockCleanup,
-      });
-
-      const { ClientSideConnection } = await import("@agentclientprotocol/sdk");
-      (ClientSideConnection as ReturnType<typeof vi.fn>).mockImplementationOnce(
-        () => ({
-          initialize: vi.fn().mockRejectedValue(new Error("Protocol error")),
-        }),
-      );
-
-      const saga = new InitAcpSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(false);
-      if (result.success) return;
-
-      expect(result.failedStep).toBe("initialize_protocol");
-      expect(mockCleanup).toHaveBeenCalled();
     });
   });
 

@@ -232,3 +232,20 @@ export function createInitMessage(sessionId = "test-session"): SDKMessage {
     session_id: sessionId,
   };
 }
+
+export interface MockQueryRef {
+  current: MockQuery | null;
+}
+
+export function createClaudeSdkMock(mockQueryRef: MockQueryRef) {
+  return {
+    query: vi.fn(() => {
+      const mq = createMockQuery();
+      mockQueryRef.current = mq;
+      setTimeout(() => {
+        mq._mockHelpers.sendMessage(createInitMessage());
+      }, 10);
+      return mq;
+    }),
+  };
+}

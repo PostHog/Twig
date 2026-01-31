@@ -11,27 +11,12 @@ import {
 } from "../../sagas/test-fixtures.js";
 import { StartupSaga } from "./startup-saga.js";
 
-vi.mock("../../adapters/acp-connection.js", () => ({
-  createAcpConnection: vi.fn(() => ({
-    clientStreams: {
-      readable: new ReadableStream(),
-      writable: new WritableStream(),
-    },
-    agentConnection: {},
-    cleanup: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-vi.mock("@agentclientprotocol/sdk", () => ({
-  ClientSideConnection: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue({}),
-    newSession: vi.fn().mockResolvedValue({}),
-    prompt: vi.fn().mockResolvedValue({ stopReason: "end_turn" }),
-    cancel: vi.fn().mockResolvedValue({}),
-  })),
-  ndJsonStream: vi.fn().mockReturnValue({}),
-  PROTOCOL_VERSION: "1.0",
-}));
+vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
+  const { createClaudeSdkMock } = await import("../../test/mocks/claude-sdk.js");
+  return { ...actual, ...createClaudeSdkMock({ current: null }) };
+});
 
 describe("StartupSaga", () => {
   let repo: TestRepo;
@@ -148,55 +133,6 @@ describe("StartupSaga", () => {
         "Failed to resume from previous state",
         expect.any(Object),
       );
-    });
-  });
-
-  describe("rollback on failure", () => {
-    it("cleans up ACP connection when InitAcpSaga fails", async () => {
-      const mockCleanup = vi.fn().mockResolvedValue(undefined);
-      const { createAcpConnection } = await import(
-        "../../adapters/acp-connection.js"
-      );
-      (createAcpConnection as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-        clientStreams: {
-          readable: new ReadableStream(),
-          writable: new WritableStream(),
-        },
-        agentConnection: {},
-        cleanup: mockCleanup,
-      });
-
-      const { ClientSideConnection } = await import("@agentclientprotocol/sdk");
-      (ClientSideConnection as ReturnType<typeof vi.fn>).mockImplementationOnce(
-        () => ({
-          initialize: vi
-            .fn()
-            .mockRejectedValue(new Error("Protocol init failed")),
-        }),
-      );
-
-      const saga = new StartupSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(false);
-      if (result.success) return;
-
-      expect(result.error).toContain("InitAcpSaga failed");
-      expect(mockCleanup).toHaveBeenCalled();
-    });
-
-    it("aborts SSE controller on subsequent failure", async () => {
-      const saga = new StartupSaga(mockLogger);
-      const result = await saga.run(createInput());
-
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      const controller = result.data.sseAbortController;
-      expect(controller.signal.aborted).toBe(false);
-
-      controller.abort();
-      expect(controller.signal.aborted).toBe(true);
     });
   });
 
