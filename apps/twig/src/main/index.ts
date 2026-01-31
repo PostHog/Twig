@@ -83,9 +83,15 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async (event) => {
-  const lifecycleService = container.get<AppLifecycleService>(
-    MAIN_TOKENS.AppLifecycleService,
-  );
+  let lifecycleService: AppLifecycleService;
+  try {
+    lifecycleService = container.get<AppLifecycleService>(
+      MAIN_TOKENS.AppLifecycleService,
+    );
+  } catch {
+    // Container already torn down (e.g. second quit during shutdown), let Electron quit
+    return;
+  }
 
   // If quitting to install an update, don't block and let the updater handle it
   // we already gracefully shutdown the app in the updates service when the update is ready
@@ -93,17 +99,29 @@ app.on("before-quit", async (event) => {
     return;
   }
 
+  // If shutdown is already in progress, force-kill immediately
+  if (lifecycleService.isShuttingDown) {
+    lifecycleService.forceExit();
+  }
+
   event.preventDefault();
   await lifecycleService.shutdownAndExit();
 });
 
-const handleShutdownSignal = async (_signal: string) => {
+const handleShutdownSignal = async (signal: string) => {
+  log.info(`Received ${signal}, starting shutdown`);
   try {
     const lifecycleService = container.get<AppLifecycleService>(
       MAIN_TOKENS.AppLifecycleService,
     );
+    if (lifecycleService.isShuttingDown) {
+      log.warn(`${signal} received during shutdown, forcing exit`);
+      process.exit(1);
+    }
     await lifecycleService.shutdown();
-  } catch (_err) {}
+  } catch (_err) {
+    // Container torn down or shutdown failed
+  }
   process.exit(0);
 };
 

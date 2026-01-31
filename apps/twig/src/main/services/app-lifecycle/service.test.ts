@@ -1,17 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppLifecycleService } from "./service.js";
 
-const { mockApp, mockContainer, mockTrackAppEvent, mockShutdownPostHog } =
-  vi.hoisted(() => ({
-    mockApp: {
-      exit: vi.fn(),
-    },
-    mockContainer: {
-      unbindAll: vi.fn(() => Promise.resolve()),
-    },
-    mockTrackAppEvent: vi.fn(),
-    mockShutdownPostHog: vi.fn(() => Promise.resolve()),
-  }));
+const {
+  mockApp,
+  mockContainer,
+  mockTrackAppEvent,
+  mockShutdownPostHog,
+  mockProcessExit,
+} = vi.hoisted(() => ({
+  mockApp: {
+    exit: vi.fn(),
+  },
+  mockContainer: {
+    unbindAll: vi.fn(() => Promise.resolve()),
+  },
+  mockTrackAppEvent: vi.fn(),
+  mockShutdownPostHog: vi.fn(() => Promise.resolve()),
+  mockProcessExit: vi.fn() as unknown as (code?: number) => never,
+}));
 
 vi.mock("electron", () => ({
   app: mockApp,
@@ -45,10 +51,18 @@ vi.mock("../../../types/analytics.js", () => ({
 
 describe("AppLifecycleService", () => {
   let service: AppLifecycleService;
+  const originalProcessExit = process.exit;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    process.exit = mockProcessExit;
     service = new AppLifecycleService();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    process.exit = originalProcessExit;
   });
 
   describe("isQuittingForUpdate", () => {
@@ -62,19 +76,38 @@ describe("AppLifecycleService", () => {
     });
   });
 
+  describe("isShuttingDown", () => {
+    it("returns false by default", () => {
+      expect(service.isShuttingDown).toBe(false);
+    });
+
+    it("returns true after shutdown is called", async () => {
+      const shutdownPromise = service.shutdown();
+      expect(service.isShuttingDown).toBe(true);
+      await vi.runAllTimersAsync();
+      await shutdownPromise;
+    });
+  });
+
   describe("shutdown", () => {
     it("unbinds all container services", async () => {
-      await service.shutdown();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await promise;
       expect(mockContainer.unbindAll).toHaveBeenCalled();
     });
 
     it("tracks app quit event", async () => {
-      await service.shutdown();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await promise;
       expect(mockTrackAppEvent).toHaveBeenCalledWith("app_quit");
     });
 
     it("shuts down PostHog", async () => {
-      await service.shutdown();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await promise;
       expect(mockShutdownPostHog).toHaveBeenCalled();
     });
 
@@ -91,7 +124,9 @@ describe("AppLifecycleService", () => {
         callOrder.push("shutdownPostHog");
       });
 
-      await service.shutdown();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await promise;
 
       expect(callOrder).toEqual([
         "unbindAll",
@@ -103,7 +138,9 @@ describe("AppLifecycleService", () => {
     it("continues shutdown if container unbind fails", async () => {
       mockContainer.unbindAll.mockRejectedValue(new Error("unbind failed"));
 
-      await service.shutdown();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await promise;
 
       expect(mockTrackAppEvent).toHaveBeenCalled();
       expect(mockShutdownPostHog).toHaveBeenCalled();
@@ -112,7 +149,28 @@ describe("AppLifecycleService", () => {
     it("continues shutdown if PostHog shutdown fails", async () => {
       mockShutdownPostHog.mockRejectedValue(new Error("posthog failed"));
 
-      await expect(service.shutdown()).resolves.toBeUndefined();
+      const promise = service.shutdown();
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it("force-exits on re-entrant shutdown call", async () => {
+      const promise = service.shutdown();
+      service.shutdown();
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+      await vi.runAllTimersAsync();
+      await promise;
+    });
+
+    it("force-exits when shutdown times out", async () => {
+      mockContainer.unbindAll.mockReturnValue(new Promise(() => {}));
+
+      const promise = service.shutdown();
+
+      await vi.advanceTimersByTimeAsync(3000);
+      await promise;
+
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
     });
   });
 
@@ -127,14 +185,18 @@ describe("AppLifecycleService", () => {
         callOrder.push("exit");
       });
 
-      await service.shutdownAndExit();
+      const promise = service.shutdownAndExit();
+      await vi.runAllTimersAsync();
+      await promise;
 
       expect(callOrder[0]).toBe("unbindAll");
       expect(callOrder[callOrder.length - 1]).toBe("exit");
     });
 
     it("exits with code 0", async () => {
-      await service.shutdownAndExit();
+      const promise = service.shutdownAndExit();
+      await vi.runAllTimersAsync();
+      await promise;
       expect(mockApp.exit).toHaveBeenCalledWith(0);
     });
   });
