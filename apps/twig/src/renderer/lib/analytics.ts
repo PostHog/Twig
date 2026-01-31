@@ -135,60 +135,11 @@ export function getPostHog() {
 // Surveys
 // ============================================================================
 
-export type { Survey };
-
-/**
- * Get all active surveys that match the current user.
- * These are surveys the user is eligible to see based on targeting rules.
- */
-export function getActiveMatchingSurveys(
-  callback: (surveys: Survey[]) => void,
-  forceReload = false,
-) {
-  if (!isInitialized) {
-    callback([]);
-    return;
-  }
-
-  posthog.getActiveMatchingSurveys(callback, forceReload);
-}
-
-/**
- * Display a survey programmatically as a popover.
- * @param surveyId - The survey ID from PostHog dashboard
- */
-export async function displaySurvey(surveyId: string) {
+export function displaySurvey(surveyId: string) {
   if (!isInitialized) {
     log.warn("PostHog not initialized, cannot display survey");
     return;
   }
 
-  // Check if the survey can be rendered
-  const canRender = await posthog.canRenderSurveyAsync(surveyId, true);
-  log.info("Survey render check", {
-    surveyId,
-    visible: canRender.visible,
-    disabledReason: canRender.disabledReason,
-  });
-
-  if (!canRender.visible) {
-    log.warn("Survey cannot be rendered", {
-      surveyId,
-      reason: canRender.disabledReason,
-    });
-  }
-
-  // Try to display anyway - PostHog will handle the eligibility check
-  log.info("Calling posthog.displaySurvey", { surveyId });
   posthog.displaySurvey(surveyId);
-}
-
-/**
- * Check if a survey can be rendered (e.g., hasn't been dismissed, feature flags match)
- */
-export async function canRenderSurvey(surveyId: string): Promise<boolean> {
-  if (!isInitialized) return false;
-
-  const result = await posthog.canRenderSurveyAsync(surveyId);
-  return result.visible;
 }
