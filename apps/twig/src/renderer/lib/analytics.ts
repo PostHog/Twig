@@ -1,4 +1,4 @@
-import posthog, { type Survey } from "posthog-js/dist/module.full.no-external";
+import posthog from "posthog-js/dist/module.full.no-external";
 // Import the recorder to set up __PosthogExtensions__.initSessionRecording
 // The module.full.no-external bundle includes rrweb but not the initSessionRecording function
 // posthog-recorder (vs lazy-recorder) ensures recording is ready immediately
