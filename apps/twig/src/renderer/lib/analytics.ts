@@ -89,13 +89,19 @@ export function identifyUser(
   userId: string,
   properties?: UserIdentifyProperties,
 ) {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot identify user");
+    return;
+  }
 
   posthog.identify(userId, properties);
 }
 
 export function resetUser() {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot reset user");
+    return;
+  }
 
   posthog.reset();
 }
@@ -108,7 +114,11 @@ export function track<K extends keyof EventPropertyMap>(
       ? [properties?: EventPropertyMap[K]]
       : [properties: EventPropertyMap[K]]
 ) {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot track event");
+    return;
+  }
+
   posthog.capture(eventName, args[0]);
 }
 
@@ -119,7 +129,10 @@ export function captureException(
   error: Error,
   additionalProperties?: Record<string, unknown>,
 ) {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot capture exception");
+    return;
+  }
 
   posthog.captureException(error, additionalProperties);
 }
