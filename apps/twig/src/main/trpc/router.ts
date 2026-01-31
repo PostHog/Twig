@@ -3,7 +3,7 @@ import { analyticsRouter } from "./routers/analytics.js";
 import { connectivityRouter } from "./routers/connectivity.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
-import { dockBadgeRouter } from "./routers/dock-badge.js";
+
 import { encryptionRouter } from "./routers/encryption.js";
 import { externalAppsRouter } from "./routers/external-apps.js";
 import { fileWatcherRouter } from "./routers/file-watcher.js";
@@ -12,6 +12,7 @@ import { foldersRouter } from "./routers/folders.js";
 import { fsRouter } from "./routers/fs.js";
 import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
+import { notificationRouter } from "./routers/notification.js";
 import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
@@ -26,7 +27,7 @@ export const trpcRouter = router({
   analytics: analyticsRouter,
   connectivity: connectivityRouter,
   contextMenu: contextMenuRouter,
-  dockBadge: dockBadgeRouter,
+
   encryption: encryptionRouter,
   externalApps: externalAppsRouter,
   fileWatcher: fileWatcherRouter,
@@ -34,6 +35,7 @@ export const trpcRouter = router({
   folders: foldersRouter,
   fs: fsRouter,
   git: gitRouter,
+  notification: notificationRouter,
   oauth: oauthRouter,
   logs: logsRouter,
   os: osRouter,

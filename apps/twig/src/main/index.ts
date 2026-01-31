@@ -10,8 +10,8 @@ import { initializeDeepLinks, registerDeepLinkHandlers } from "./deep-links.js";
 import { container } from "./di/container.js";
 import { MAIN_TOKENS } from "./di/tokens.js";
 import type { AppLifecycleService } from "./services/app-lifecycle/service.js";
-import type { DockBadgeService } from "./services/dock-badge/service.js";
 import type { ExternalAppsService } from "./services/external-apps/service.js";
+import type { NotificationService } from "./services/notification/service.js";
 import type { OAuthService } from "./services/oauth/service.js";
 import {
   captureException,
@@ -50,7 +50,7 @@ function ensureClaudeConfigDir(): void {
 function initializeServices(): void {
   // Initialize services that need early startup
   container.get<OAuthService>(MAIN_TOKENS.OAuthService);
-  container.get<DockBadgeService>(MAIN_TOKENS.DockBadgeService);
+  container.get<NotificationService>(MAIN_TOKENS.NotificationService);
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
   container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
   container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
