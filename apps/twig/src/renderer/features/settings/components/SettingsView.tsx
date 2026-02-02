@@ -375,7 +375,7 @@ export function SettingsView() {
         });
       } else {
         setUpdateStatus({
-          message: result.error || "Failed to check for updates",
+          message: result.errorMessage || "Failed to check for updates",
           type: "error",
         });
       }
