@@ -1,3 +1,7 @@
+import {
+  useSessionActions,
+  useSessions,
+} from "@features/sessions/stores/sessionStore";
 import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
@@ -123,6 +127,8 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   const { view, navigateToTaskInput } = useNavigationStore();
   const unpinTask = usePinnedTasksStore((state) => state.unpin);
+  const sessions = useSessions();
+  const sessionActions = useSessionActions();
 
   const mutation = useAuthenticatedMutation(
     async (client, taskId: string) => {
@@ -151,6 +157,20 @@ export function useDeleteTask() {
     },
     {
       onMutate: async (taskId) => {
+        // Clean up session resources when task is deleted
+        // Find and cleanup any active sessions for this task
+        const activeSession = Object.values(sessions).find(
+          (s) => s.taskId === taskId,
+        );
+        if (activeSession) {
+          log.info("Cleaning up session during task deletion", {
+            taskRunId: activeSession.taskRunId,
+            taskId,
+          });
+
+          // Use disconnectFromTask to properly clean up both cloud and local sessions
+          await sessionActions.disconnectFromTask(taskId);
+        }
         // Cancel outgoing refetches to avoid overwriting optimistic update
         await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
 
