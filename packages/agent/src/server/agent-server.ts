@@ -9,6 +9,8 @@ import {
   createAcpConnection,
   type InProcessAcpConnection,
 } from "../adapters/acp-connection.js";
+import { PostHogAPIClient } from "../posthog-api.js";
+import { SessionLogWriter } from "../session-log-writer.js";
 import { TreeTracker } from "../tree-tracker.js";
 import type { DeviceInfo, TreeSnapshotEvent } from "../types.js";
 import { getLlmGatewayUrl } from "../utils/gateway.js";
@@ -117,6 +119,7 @@ interface ActiveSession {
   treeTracker: TreeTracker;
   sseResponse: ServerResponse | null;
   deviceInfo: DeviceInfo;
+  logWriter: SessionLogWriter;
 }
 
 export class AgentServer {
@@ -405,9 +408,21 @@ export class AgentServer {
       logger: new Logger({ debug: true, prefix: "[TreeTracker]" }),
     });
 
+    const posthogAPI = new PostHogAPIClient({
+      apiUrl: this.config.apiUrl,
+      projectId: this.config.projectId,
+      getApiKey: () => this.config.apiKey,
+    });
+
+    const logWriter = new SessionLogWriter(
+      posthogAPI,
+      new Logger({ debug: true, prefix: "[SessionLogWriter]" }),
+    );
+
     const acpConnection = createAcpConnection({
       sessionId: payload.run_id,
       taskId: payload.task_id,
+      logWriter,
     });
 
     // Tap both streams to broadcast all ACP messages via SSE (mimics local transport)
@@ -457,6 +472,7 @@ export class AgentServer {
       treeTracker,
       sseResponse,
       deviceInfo,
+      logWriter,
     };
 
     this.logger.info("Session initialized successfully");
@@ -520,6 +536,12 @@ export class AgentServer {
       await this.captureTreeState();
     } catch (error) {
       this.logger.error("Failed to capture final tree state", error);
+    }
+
+    try {
+      await this.session.logWriter.flush(this.session.payload.run_id);
+    } catch (error) {
+      this.logger.error("Failed to flush session logs", error);
     }
 
     try {

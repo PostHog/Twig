@@ -670,6 +670,8 @@ const useStore = create<SessionStore>()(
       taskDescription?: string,
       auth?: AuthCredentials,
       repoPath?: string,
+      initialPrompt?: ContentBlock[],
+      executionMode?: ExecutionMode,
     ) => {
       const { rawEntries } = await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries, taskDescription);
