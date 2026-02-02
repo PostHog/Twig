@@ -52,10 +52,7 @@ export interface PanelLayoutStore {
   taskLayouts: Record<string, TaskLayout>;
 
   getLayout: (taskId: string) => TaskLayout | null;
-  initializeTask: (
-    taskId: string,
-    terminalLayoutMode?: "split" | "tabbed",
-  ) => void;
+  initializeTask: (taskId: string) => void;
   openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
   openDiff: (
     taskId: string,
@@ -113,10 +110,8 @@ export interface PanelLayoutStore {
   clearAllLayouts: () => void;
 }
 
-function createDefaultPanelTree(
-  terminalLayoutMode: "split" | "tabbed" = "split",
-): PanelNode {
-  const logsPanel: PanelNode = {
+function createDefaultPanelTree(): PanelNode {
+  return {
     type: "leaf",
     id: DEFAULT_PANEL_IDS.MAIN_PANEL,
     content: {
@@ -136,75 +131,6 @@ function createDefaultPanelTree(
       droppable: true,
     },
   };
-
-  const terminalPanel: PanelNode = {
-    type: "leaf",
-    id: "terminal-panel",
-    content: {
-      id: "terminal-panel",
-      tabs: [
-        {
-          id: DEFAULT_TAB_IDS.SHELL,
-          label: "Terminal",
-          data: {
-            type: "terminal",
-            terminalId: DEFAULT_TAB_IDS.SHELL,
-            cwd: "",
-          },
-          component: null,
-          closeable: true,
-          draggable: true,
-        },
-      ],
-      activeTabId: DEFAULT_TAB_IDS.SHELL,
-      showTabs: true,
-      droppable: true,
-    },
-  };
-
-  const centerPanel: PanelNode =
-    terminalLayoutMode === "split"
-      ? {
-          type: "group",
-          id: "left-group",
-          direction: "vertical",
-          sizes: [70, 30],
-          children: [logsPanel, terminalPanel],
-        }
-      : {
-          type: "leaf",
-          id: DEFAULT_PANEL_IDS.MAIN_PANEL,
-          content: {
-            id: DEFAULT_PANEL_IDS.MAIN_PANEL,
-            tabs: [
-              {
-                id: DEFAULT_TAB_IDS.LOGS,
-                label: "Chat",
-                data: { type: "logs" },
-                component: null,
-                closeable: false,
-                draggable: true,
-              },
-              {
-                id: DEFAULT_TAB_IDS.SHELL,
-                label: "Terminal",
-                data: {
-                  type: "terminal",
-                  terminalId: DEFAULT_TAB_IDS.SHELL,
-                  cwd: "",
-                },
-                component: null,
-                closeable: true,
-                draggable: true,
-              },
-            ],
-            activeTabId: DEFAULT_TAB_IDS.LOGS,
-            showTabs: true,
-            droppable: true,
-          },
-        };
-
-  return centerPanel;
 }
 
 function openTab(
@@ -280,12 +206,12 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         return get().taskLayouts[taskId] || null;
       },
 
-      initializeTask: (taskId, terminalLayoutMode = "split") => {
+      initializeTask: (taskId) => {
         set((state) => ({
           taskLayouts: {
             ...state.taskLayouts,
             [taskId]: {
-              panelTree: createDefaultPanelTree(terminalLayoutMode),
+              panelTree: createDefaultPanelTree(),
               openFiles: [],
               recentFiles: [],
               openArtifacts: [],
@@ -860,7 +786,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 8,
+      version: 9,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),

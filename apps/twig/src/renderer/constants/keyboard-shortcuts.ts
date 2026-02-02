@@ -43,8 +43,9 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   {
     id: "task-refresh",
     keys: SHORTCUTS.TASK_REFRESH,
-    description: "Refresh app",
+    description: "Toggle focus mode",
     category: "general",
+    context: "Worktree task",
   },
   {
     id: "settings",

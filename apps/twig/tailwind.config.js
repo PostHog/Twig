@@ -6,6 +6,17 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      animation: {
+        "sync-rotate": "sync-rotate 3s ease-in-out infinite",
+      },
+      keyframes: {
+        "sync-rotate": {
+          "0%": { transform: "rotate(0deg)" },
+          "33%": { transform: "rotate(0deg)" },
+          "66%": { transform: "rotate(360deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+      },
       colors: {
         cave: {
           cream: "#f7eddf",

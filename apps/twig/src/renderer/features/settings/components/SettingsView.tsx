@@ -86,12 +86,6 @@ export function SettingsView() {
     setSendMessagesWith,
     setAllowBypassPermissions,
   } = useSettingsStore();
-  const terminalLayoutMode = useTerminalSettingsStore(
-    (state) => state.terminalLayoutMode,
-  );
-  const setTerminalLayout = useTerminalSettingsStore(
-    (state) => state.setTerminalLayout,
-  );
   const terminalFontFamily = useTerminalSettingsStore(
     (state) => state.terminalFontFamily,
   );
@@ -188,18 +182,6 @@ export function SettingsView() {
       setCursorGlow(checked);
     },
     [cursorGlow, setCursorGlow],
-  );
-
-  const handleTerminalLayoutChange = useCallback(
-    (value: "split" | "tabbed") => {
-      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-        setting_name: "terminal_layout",
-        new_value: value,
-        old_value: terminalLayoutMode,
-      });
-      setTerminalLayout(value);
-    },
-    [terminalLayoutMode, setTerminalLayout],
   );
 
   const clearCustomFontSaveTimeout = useCallback(() => {
@@ -472,29 +454,6 @@ export function SettingsView() {
                     />
                   </Flex>
                 )}
-
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="medium">
-                    Terminal layout
-                  </Text>
-                  <Select.Root
-                    value={terminalLayoutMode}
-                    onValueChange={(value) =>
-                      handleTerminalLayoutChange(value as "split" | "tabbed")
-                    }
-                    size="1"
-                  >
-                    <Select.Trigger />
-                    <Select.Content>
-                      <Select.Item value="split">Split pane</Select.Item>
-                      <Select.Item value="tabbed">Tabbed</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                  <Text size="1" color="gray">
-                    Split pane shows the terminal in a separate pane beneath the
-                    logs. Tabbed shows the terminal as a tab alongside logs.
-                  </Text>
-                </Flex>
 
                 <Flex direction="column" gap="2">
                   <Text size="1" weight="medium">

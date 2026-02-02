@@ -5,6 +5,7 @@ import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
@@ -42,6 +43,12 @@ export function GlobalEventHandlers({
   const clearAllLayouts = usePanelLayoutStore((state) => state.clearAllLayouts);
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
+
+  const currentTaskId = view.type === "task-detail" ? view.data?.id : undefined;
+  const { workspace: currentWorkspace, handleToggleFocus } = useFocusWorkspace(
+    currentTaskId ?? "",
+  );
+  const isWorktreeTask = currentWorkspace?.mode === "worktree";
 
   const { data: allTasks = [] } = useTasks();
   const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
@@ -164,6 +171,16 @@ export function GlobalEventHandlers({
   );
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
+
+  useHotkeys(
+    SHORTCUTS.TASK_REFRESH,
+    handleToggleFocus,
+    {
+      ...globalOptions,
+      enabled: !!currentTaskId && isWorktreeTask,
+    },
+    [handleToggleFocus],
+  );
 
   // Task switching with mod+0-9
   useHotkeys(

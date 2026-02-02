@@ -1,0 +1,74 @@
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import type React from "react";
+import { KeyHint } from "./KeyHint";
+
+interface TooltipProps {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  shortcut?: string;
+  side?: "top" | "right" | "bottom" | "left";
+  align?: "start" | "center" | "end";
+  sideOffset?: number;
+  delayDuration?: number;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function Tooltip({
+  children,
+  content,
+  shortcut,
+  side = "top",
+  align = "center",
+  sideOffset = 6,
+  delayDuration = 200,
+  open,
+  defaultOpen,
+  onOpenChange,
+}: TooltipProps) {
+  return (
+    <TooltipPrimitive.Provider delayDuration={delayDuration}>
+      <TooltipPrimitive.Root
+        open={open}
+        defaultOpen={defaultOpen}
+        onOpenChange={onOpenChange}
+      >
+        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            side={side}
+            align={align}
+            sideOffset={sideOffset}
+            className="dark"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "var(--gray-2)",
+              color: "var(--gray-12)",
+              padding: "6px 10px",
+              borderRadius: "6px",
+              fontSize: "12px",
+              lineHeight: "1.4",
+              whiteSpace: "nowrap",
+              border: "1px solid var(--gray-4)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+              zIndex: 9999,
+              animationDuration: "150ms",
+              animationTimingFunction: "ease-out",
+              willChange: "transform, opacity",
+            }}
+          >
+            <span>{content}</span>
+            {shortcut && (
+              <KeyHint style={{ fontSize: "12px" }}>{shortcut}</KeyHint>
+            )}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
+  );
+}
+
+export { TooltipPrimitive };

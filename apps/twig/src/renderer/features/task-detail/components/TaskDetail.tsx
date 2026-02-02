@@ -3,7 +3,6 @@ import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FocusWorkspaceButton } from "@features/workspace/components/FocusWorkspaceButton";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
 import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
@@ -94,7 +93,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             {initialTask.title}
           </Text>
           <StartWorkspaceButton taskId={taskId} />
-          <FocusWorkspaceButton taskId={taskId} />
           {workspace?.branchName && (
             <Tooltip content={workspace.branchName}>
               <Code

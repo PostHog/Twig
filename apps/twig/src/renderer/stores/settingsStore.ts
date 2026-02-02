@@ -1,17 +1,12 @@
 import { create } from "zustand";
 import { trpcVanilla } from "../trpc";
 
-export type TerminalLayoutMode = "split" | "tabbed";
 export type SendMessagesWith = "enter" | "cmd+enter";
 
 interface SettingsState {
-  terminalLayoutMode: TerminalLayoutMode;
   sendMessagesWith: SendMessagesWith;
   terminalFontFamily: string;
   terminalFontFamilyLoaded: boolean;
-  isLoading: boolean;
-  loadTerminalLayout: () => Promise<void>;
-  setTerminalLayout: (mode: TerminalLayoutMode) => Promise<void>;
   loadSendMessagesWith: () => Promise<void>;
   setSendMessagesWith: (mode: SendMessagesWith) => Promise<void>;
   loadTerminalFontFamily: () => Promise<void>;
@@ -19,35 +14,9 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>()((set) => ({
-  terminalLayoutMode: "split",
   sendMessagesWith: "enter",
   terminalFontFamily: "monospace",
   terminalFontFamilyLoaded: false,
-  isLoading: true,
-
-  loadTerminalLayout: async () => {
-    try {
-      const mode = await trpcVanilla.secureStore.getItem.query({
-        key: "terminalLayoutMode",
-      });
-      set({
-        terminalLayoutMode: (mode as TerminalLayoutMode) || "split",
-        isLoading: false,
-      });
-    } catch (_error) {
-      set({ terminalLayoutMode: "split", isLoading: false });
-    }
-  },
-
-  setTerminalLayout: async (mode: TerminalLayoutMode) => {
-    try {
-      await trpcVanilla.secureStore.setItem.query({
-        key: "terminalLayoutMode",
-        value: mode,
-      });
-      set({ terminalLayoutMode: mode });
-    } catch (_error) {}
-  },
 
   loadSendMessagesWith: async () => {
     try {
@@ -57,9 +26,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
       if (mode === "enter" || mode === "cmd+enter") {
         set({ sendMessagesWith: mode });
       }
-    } catch (_error) {
-      // Keep default value
-    }
+    } catch (_error) {}
   },
 
   setSendMessagesWith: async (mode: SendMessagesWith) => {
