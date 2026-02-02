@@ -194,7 +194,31 @@ export class PostHogAPIClient {
     return await response.json();
   }
 
-  async createTaskRun(taskId: string): Promise<TaskRun> {
+  async getTaskRunConnectionToken(
+    taskId: string,
+    runId: string,
+  ): Promise<{ token: string }> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/connection_token/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/connection_token/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch connection token: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async createTaskRun(
+    taskId: string,
+    environment: "local" | "cloud" = "local",
+  ): Promise<TaskRun> {
     const teamId = await this.getTeamId();
     const data = await this.api.post(
       `/api/projects/{project_id}/tasks/{task_id}/runs/`,
@@ -202,7 +226,7 @@ export class PostHogAPIClient {
         path: { project_id: teamId.toString(), task_id: taskId },
         //@ts-expect-error the generated client does not infer the request type unless explicitly specified on the viewset
         body: {
-          environment: "local" as const,
+          environment,
         },
       },
     );

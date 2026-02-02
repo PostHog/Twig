@@ -29,6 +29,8 @@ import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
+const SANDBOX_URL_POLL_INTERVAL_MS = 1000;
+const SANDBOX_URL_POLL_MAX_ATTEMPTS = 60; // 60 seconds max wait
 
 // --- Types ---
 
@@ -75,7 +77,7 @@ export interface AgentSession {
   channel: string;
   events: AcpMessage[];
   startedAt: number;
-  status: "connecting" | "connected" | "disconnected" | "error";
+  status: "connecting" | "connected" | "disconnected" | "error" | "provisioning";
   errorMessage?: string;
   isPromptPending: boolean;
   promptStartedAt: number | null;
@@ -101,6 +103,7 @@ interface SessionActions {
     repoPath: string;
     initialPrompt?: ContentBlock[];
     executionMode?: ExecutionMode;
+    isCloud?: boolean;
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -331,6 +334,51 @@ function getAuthCredentials(): AuthCredentials | null {
 
   if (!apiKey || !apiHost || !projectId) return null;
   return { apiKey, apiHost, projectId, client };
+}
+
+async function waitForSandboxUrl(
+  client: AuthCredentials["client"],
+  taskId: string,
+  taskRunId: string,
+): Promise<string | null> {
+  if (!client) return null;
+
+  for (let attempt = 0; attempt < SANDBOX_URL_POLL_MAX_ATTEMPTS; attempt++) {
+    try {
+      const taskRun = await client.getTaskRun(taskId, taskRunId);
+      const sandboxUrl = (taskRun?.state as { sandbox_url?: string })
+        ?.sandbox_url;
+      if (sandboxUrl) {
+        log.info("Sandbox URL available", { taskId, taskRunId, sandboxUrl });
+        return sandboxUrl;
+      }
+    } catch (error) {
+      log.warn("Error polling for sandbox URL", { taskId, error });
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, SANDBOX_URL_POLL_INTERVAL_MS),
+    );
+  }
+
+  log.error("Timeout waiting for sandbox URL", { taskId, taskRunId });
+  return null;
+}
+
+async function fetchConnectionToken(
+  client: AuthCredentials["client"],
+  taskId: string,
+  taskRunId: string,
+): Promise<string | null> {
+  if (!client) return null;
+
+  try {
+    const response = await client.getTaskRunConnectionToken(taskId, taskRunId);
+    return response?.token ?? null;
+  } catch (error) {
+    log.error("Failed to fetch connection token", { taskId, taskRunId, error });
+    return null;
+  }
 }
 
 function storedEntryToAcpMessage(entry: StoredLogEntry): AcpMessage {
@@ -620,18 +668,99 @@ const useStore = create<SessionStore>()(
       taskRunId: string,
       logUrl: string,
       taskDescription?: string,
+      auth?: AuthCredentials,
+      repoPath?: string,
     ) => {
       const { rawEntries } = await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries, taskDescription);
 
       const session = createBaseSession(taskRunId, taskId, true);
       session.events = events;
-      session.status = "connected";
       session.logUrl = logUrl;
       session.processedLineCount = rawEntries.length;
 
       addSession(session);
-      startCloudPolling(taskRunId, logUrl);
+
+      // Try to establish direct connection if auth and repoPath are available
+      if (auth?.client && repoPath) {
+        log.info("Attempting direct cloud connection", { taskId, taskRunId });
+
+        // Poll for sandbox URL
+        const sandboxUrl = await waitForSandboxUrl(
+          auth.client,
+          taskId,
+          taskRunId,
+        );
+        if (!sandboxUrl) {
+          // Sandbox not ready - fall back to log polling for historical sessions
+          log.info("Sandbox URL not available, falling back to log polling", {
+            taskId,
+          });
+          updateSession(taskRunId, { status: "connected" });
+          startCloudPolling(taskRunId, logUrl);
+          return;
+        }
+
+        // Fetch connection token
+        const connectionToken = await fetchConnectionToken(
+          auth.client,
+          taskId,
+          taskRunId,
+        );
+        if (!connectionToken) {
+          log.error("Failed to get connection token", { taskId });
+          updateSession(taskRunId, {
+            status: "error",
+            errorMessage: "Failed to authenticate with sandbox",
+          });
+          return;
+        }
+
+        // Subscribe to tRPC events before starting
+        subscribeToChannel(taskRunId);
+
+        try {
+          const selectedModel = useModelsStore.getState().getEffectiveModel();
+          const result = await trpcVanilla.agent.start.mutate({
+            taskId,
+            taskRunId,
+            repoPath,
+            apiKey: auth.apiKey,
+            apiHost: auth.apiHost,
+            projectId: auth.projectId,
+            model: selectedModel,
+            sandboxUrl,
+            connectionToken,
+            runMode: "cloud",
+          });
+
+          updateSession(taskRunId, {
+            status: "connected",
+            model: result.currentModelId ?? selectedModel,
+            availableModels: result.availableModels,
+          });
+
+          log.info("Direct cloud connection established", {
+            taskId,
+            sandboxUrl,
+          });
+        } catch (error) {
+          log.error("Failed to connect to cloud sandbox", { taskId, error });
+          unsubscribeFromChannel(taskRunId);
+          updateSession(taskRunId, {
+            status: "error",
+            errorMessage:
+              error instanceof Error
+                ? error.message
+                : "Failed to connect to cloud sandbox",
+          });
+          return;
+        }
+      } else {
+        // No auth or repoPath - view-only mode with log polling
+        updateSession(taskRunId, { status: "connected" });
+        startCloudPolling(taskRunId, logUrl);
+      }
 
       track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
         task_id: taskId,
@@ -789,6 +918,132 @@ const useStore = create<SessionStore>()(
       }
     };
 
+    const createNewCloudSession = async (
+      taskId: string,
+      repoPath: string,
+      auth: AuthCredentials,
+      initialPrompt?: ContentBlock[],
+      executionMode?: ExecutionMode,
+    ) => {
+      if (!auth.client) {
+        throw new Error(
+          "Unable to reach server. Please check your connection.",
+        );
+      }
+
+      // Create TaskRun with cloud environment
+      const taskRun = await auth.client.createTaskRun(taskId, "cloud");
+      if (!taskRun?.id) {
+        throw new Error("Failed to create cloud task run. Please try again.");
+      }
+
+      const persistedMode = getPersistedTaskMode(taskId);
+      const effectiveMode = executionMode ?? persistedMode;
+
+      // Create session in provisioning state immediately
+      const session = createBaseSession(taskRun.id, taskId, true, effectiveMode);
+      session.status = "provisioning";
+      addSession(session);
+
+      // Add a provisioning message to the events
+      const provisioningEvent: AcpMessage = {
+        type: "acp_message",
+        ts: Date.now(),
+        message: {
+          method: "session/update",
+          params: {
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: {
+                type: "text",
+                text: "Setting up cloud development environment...",
+              },
+            },
+          },
+        },
+      };
+      appendEvents(taskRun.id, [provisioningEvent]);
+
+      track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
+        task_id: taskId,
+        execution_type: "cloud",
+      });
+
+      // Wait for sandbox URL
+      log.info("Waiting for sandbox URL", { taskId, taskRunId: taskRun.id });
+      const sandboxUrl = await waitForSandboxUrl(
+        auth.client,
+        taskId,
+        taskRun.id,
+      );
+
+      if (!sandboxUrl) {
+        updateSession(taskRun.id, {
+          status: "error",
+          errorMessage:
+            "Timed out waiting for cloud environment. Please try again.",
+        });
+        return;
+      }
+
+      // Fetch connection token
+      const connectionToken = await fetchConnectionToken(
+        auth.client,
+        taskId,
+        taskRun.id,
+      );
+
+      if (!connectionToken) {
+        updateSession(taskRun.id, {
+          status: "error",
+          errorMessage: "Failed to authenticate with cloud environment.",
+        });
+        return;
+      }
+
+      // Subscribe to tRPC events
+      subscribeToChannel(taskRun.id);
+
+      try {
+        const selectedModel = useModelsStore.getState().getEffectiveModel();
+        const result = await trpcVanilla.agent.start.mutate({
+          taskId,
+          taskRunId: taskRun.id,
+          repoPath,
+          apiKey: auth.apiKey,
+          apiHost: auth.apiHost,
+          projectId: auth.projectId,
+          model: selectedModel,
+          executionMode: effectiveMode,
+          sandboxUrl,
+          connectionToken,
+          runMode: "cloud",
+        });
+
+        updateSession(taskRun.id, {
+          status: "connected",
+          model: result.currentModelId ?? selectedModel,
+          availableModels: result.availableModels,
+        });
+
+        log.info("Cloud session connected", { taskId, sandboxUrl });
+
+        if (initialPrompt?.length) {
+          await get().actions.sendPrompt(taskId, initialPrompt);
+        }
+      } catch (error) {
+        log.error("Failed to connect to cloud sandbox", { taskId, error });
+        unsubscribeFromChannel(taskRun.id);
+        updateSession(taskRun.id, {
+          status: "error",
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Failed to connect to cloud environment.",
+        });
+      }
+    };
+
     // --- Prompt Handlers ---
 
     const sendCloudPrompt = async (
@@ -889,13 +1144,16 @@ const useStore = create<SessionStore>()(
           repoPath,
           initialPrompt,
           executionMode,
+          isCloud: isCloudOverride,
         }) => {
           const {
             id: taskId,
             latest_run: latestRun,
             description: taskDescription,
           } = task;
-          const isCloud = latestRun?.environment === "cloud";
+          // Use override if provided, otherwise derive from latest run
+          const isCloud =
+            isCloudOverride ?? latestRun?.environment === "cloud";
 
           // Prevent duplicate connections - CHECK AND ADD ATOMICALLY
           if (connectAttempts.has(taskId)) {
@@ -906,6 +1164,9 @@ const useStore = create<SessionStore>()(
             return;
           }
           if (existingSession?.status === "connecting") {
+            return;
+          }
+          if (existingSession?.status === "provisioning") {
             return;
           }
 
@@ -975,6 +1236,8 @@ const useStore = create<SessionStore>()(
                 latestRun.id,
                 latestRun.log_url,
                 taskDescription,
+                auth,
+                repoPath,
               );
             } else if (latestRun?.id && latestRun?.log_url) {
               await reconnectToLocalSession(
@@ -983,6 +1246,14 @@ const useStore = create<SessionStore>()(
                 latestRun.log_url,
                 repoPath,
                 auth,
+              );
+            } else if (isCloud) {
+              await createNewCloudSession(
+                taskId,
+                repoPath,
+                auth,
+                initialPrompt,
+                executionMode,
               );
             } else {
               await createNewLocalSession(
@@ -1029,9 +1300,15 @@ const useStore = create<SessionStore>()(
             return;
           }
 
-          if (session.isCloud) {
+          // Check if this is a polling-based cloud session
+          const isPollingBasedCloud =
+            session.isCloud && cloudPollers.has(session.taskRunId);
+
+          if (isPollingBasedCloud) {
+            // Polling-based cloud session (view-only)
             stopCloudPolling(session.taskRunId);
           } else {
+            // Local session OR cloud session with direct connection
             try {
               await trpcVanilla.agent.cancel.mutate({
                 sessionId: session.taskRunId,
@@ -1155,7 +1432,12 @@ const useStore = create<SessionStore>()(
             prompt_length_chars: promptText.length,
           });
 
-          return session.isCloud
+          // For cloud sessions using polling (view-only), use the old persistence method
+          // For cloud sessions with direct connection (no poller), use the transport
+          const isPollingBasedCloud =
+            session.isCloud && cloudPollers.has(session.taskRunId);
+
+          return isPollingBasedCloud
             ? sendCloudPrompt(session, taskId, blocks)
             : sendLocalPrompt(session, blocks);
         },

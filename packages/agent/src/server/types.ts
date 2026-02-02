@@ -1,12 +1,8 @@
-import type { PostHogAPIClient } from "../posthog-api.js";
-
 export interface AgentServerConfig {
+  port: number;
+  repositoryPath: string;
   apiUrl: string;
   apiKey: string;
   projectId: number;
-  taskId: string;
-  runId: string;
-  repositoryPath: string;
-  initialPrompt?: string;
-  apiClient?: PostHogAPIClient;
+  jwtSecret?: string; // Only needed for Docker (Modal uses X-Verified-User-Data)
 }

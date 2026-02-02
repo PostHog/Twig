@@ -46,7 +46,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { isOnline } = useConnectivity();
 
   const isRunning =
-    session?.status === "connected" || session?.status === "connecting";
+    session?.status === "connected" ||
+    session?.status === "connecting" ||
+    session?.status === "provisioning";
   const hasError = session?.status === "error";
   const errorMessage = session?.errorMessage;
 
@@ -66,10 +68,11 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Don't reconnect if already connected, connecting, or in error state
+    // Don't reconnect if already connected, connecting, provisioning, or in error state
     if (
       session?.status === "connected" ||
       session?.status === "connecting" ||
+      session?.status === "provisioning" ||
       session?.status === "error"
     ) {
       return;

@@ -1,123 +1,486 @@
-import type { ClientSideConnection } from "@agentclientprotocol/sdk";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  ClientSideConnection,
+  ndJsonStream,
+  PROTOCOL_VERSION,
+} from "@agentclientprotocol/sdk";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
-import type { InProcessAcpConnection } from "../adapters/acp-connection.js";
-import { PostHogAPIClient } from "../posthog-api.js";
-import type { TreeTracker } from "../tree-tracker.js";
+import {
+  createAcpConnection,
+  type InProcessAcpConnection,
+} from "../adapters/acp-connection.js";
+import { TreeTracker } from "../tree-tracker.js";
 import type { DeviceInfo, TreeSnapshotEvent } from "../types.js";
+import { getLlmGatewayUrl } from "../utils/gateway.js";
 import { Logger } from "../utils/logger.js";
-import type { CloudClientFactory } from "./sagas/init-acp-saga.js";
-import { ShutdownSaga } from "./sagas/shutdown-saga.js";
-import { StartupSaga } from "./sagas/startup-saga.js";
+import {
+  validateJwt,
+  JwtValidationError,
+  type JwtPayload,
+  userDataSchema,
+} from "./jwt.js";
 import type { AgentServerConfig } from "./types.js";
-import { retry } from "./utils/retry.js";
-import { SseEventParser } from "./utils/sse-parser.js";
 
-const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+type MessageCallback = (message: unknown) => void;
+
+class NdJsonTap {
+  private decoder = new TextDecoder();
+  private buffer = "";
+
+  constructor(private onMessage: MessageCallback) {}
+
+  process(chunk: Uint8Array): void {
+    this.buffer += this.decoder.decode(chunk, { stream: true });
+    const lines = this.buffer.split("\n");
+    this.buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        this.onMessage(JSON.parse(line));
+      } catch {
+        // Not valid JSON, skip
+      }
+    }
+  }
+}
+
+function createTappedReadableStream(
+  underlying: ReadableStream<Uint8Array>,
+  onMessage: MessageCallback,
+): ReadableStream<Uint8Array> {
+  const reader = underlying.getReader();
+  const tap = new NdJsonTap(onMessage);
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        tap.process(value);
+        controller.enqueue(value);
+      } catch {
+        controller.close();
+      }
+    },
+    cancel() {
+      reader.releaseLock();
+    },
+  });
+}
+
+function createTappedWritableStream(
+  underlying: WritableStream<Uint8Array>,
+  onMessage: MessageCallback,
+): WritableStream<Uint8Array> {
+  const tap = new NdJsonTap(onMessage);
+
+  return new WritableStream<Uint8Array>({
+    async write(chunk) {
+      tap.process(chunk);
+      try {
+        const writer = underlying.getWriter();
+        await writer.write(chunk);
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
+    },
+    async close() {
+      try {
+        const writer = underlying.getWriter();
+        await writer.close();
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
+    },
+    async abort(reason) {
+      try {
+        const writer = underlying.getWriter();
+        await writer.abort(reason);
+        writer.releaseLock();
+      } catch {
+        // Stream may already be closed
+      }
+    },
+  });
+}
+
+interface ActiveSession {
+  payload: JwtPayload;
+  acpConnection: InProcessAcpConnection;
+  clientConnection: ClientSideConnection;
+  treeTracker: TreeTracker;
+  sseResponse: ServerResponse | null;
+  deviceInfo: DeviceInfo;
+}
 
 export class AgentServer {
   private config: AgentServerConfig;
-  private isRunning = false;
-  private sseAbortController: AbortController | null = null;
   private logger: Logger;
-  private acpConnection: InProcessAcpConnection | null = null;
-  private clientConnection: ClientSideConnection | null = null;
-  private treeTracker: TreeTracker | null = null;
-  private apiClient: PostHogAPIClient;
-  private lastHeartbeatTime = 0;
-  private lastEventId: string | null = null;
-  private deviceInfo: DeviceInfo;
+  private server: ReturnType<typeof createServer> | null = null;
+  private session: ActiveSession | null = null;
 
   constructor(config: AgentServerConfig) {
     this.config = config;
     this.logger = new Logger({ debug: true, prefix: "[AgentServer]" });
-    this.deviceInfo = {
-      type: "cloud",
-      name: process.env.HOSTNAME || "cloud-sandbox",
-    };
-    this.apiClient =
-      config.apiClient ||
-      new PostHogAPIClient({
-        apiUrl: config.apiUrl,
-        getApiKey: () => config.apiKey,
-        projectId: config.projectId,
-      });
   }
 
   async start(): Promise<void> {
-    this.isRunning = true;
+    this.server = createServer((req, res) => this.handleRequest(req, res));
 
-    const startupSaga = new StartupSaga(this.logger);
-    const result = await startupSaga.run({
-      config: this.config,
-      apiClient: this.apiClient,
-      deviceInfo: this.deviceInfo,
-      cloudClientFactory: this.createCloudClientFactory(),
-    });
-
-    if (!result.success) {
-      this.isRunning = false;
-      throw new Error(
-        `Startup failed at ${result.failedStep}: ${result.error}`,
-      );
-    }
-
-    this.acpConnection = result.data.acpConnection;
-    this.clientConnection = result.data.clientConnection;
-    this.treeTracker = result.data.treeTracker;
-    this.sseAbortController = result.data.sseAbortController;
-
-    await this.connect();
-
-    if (this.config.initialPrompt) {
-      this.logger.info("Processing initial prompt");
-      await this.handleUserMessage({ content: this.config.initialPrompt });
-    }
-
-    await new Promise<void>((resolve) => {
-      const checkRunning = () => {
-        if (!this.isRunning) {
-          resolve();
-        } else {
-          setTimeout(checkRunning, 1000);
-        }
-      };
-      checkRunning();
+    return new Promise((resolve) => {
+      this.server!.listen(this.config.port, () => {
+        this.logger.info(`HTTP server listening on port ${this.config.port}`);
+        resolve();
+      });
     });
   }
 
   async stop(): Promise<void> {
-    this.isRunning = false;
     this.logger.info("Stopping agent server...");
 
-    const shutdownSaga = new ShutdownSaga(this.logger, {
-      treeTracker: this.treeTracker,
-      acpConnection: this.acpConnection,
-      sseAbortController: this.sseAbortController,
-      deviceInfo: this.deviceInfo,
-      onTreeSnapshot: async (snapshot) => {
-        await this.sendTreeSnapshotEvent(snapshot);
-      },
-    });
-
-    const result = await shutdownSaga.run({ interrupted: true });
-
-    if (result.success && result.data.treeCaptured) {
-      this.logger.info("Final tree state captured", {
-        treeHash: result.data.finalTreeHash,
-      });
+    if (this.session) {
+      await this.cleanupSession();
     }
 
-    this.acpConnection = null;
-    this.clientConnection = null;
-    this.treeTracker = null;
-    this.sseAbortController = null;
+    if (this.server) {
+      await new Promise<void>((resolve) => {
+        this.server!.close(() => resolve());
+      });
+      this.server = null;
+    }
 
     this.logger.info("Agent server stopped");
   }
 
-  private createCloudClientFactory(): CloudClientFactory {
-    return ({ config }) => ({
-      requestPermission: async (params) => {
+  private async handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const url = new URL(req.url || "/", `http://localhost:${this.config.port}`);
+
+    if (url.pathname === "/health" && req.method === "GET") {
+      return this.handleHealth(res);
+    }
+
+    if (url.pathname === "/events" && req.method === "GET") {
+      return this.handleEvents(req, res);
+    }
+
+    if (url.pathname === "/command" && req.method === "POST") {
+      return this.handleCommand(req, res);
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Not found" }));
+  }
+
+  private handleHealth(res: ServerResponse): void {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", hasSession: !!this.session }));
+  }
+
+  private authenticateRequest(req: IncomingMessage): JwtPayload {
+    // Modal path: X-Verified-User-Data header (Modal validates the token)
+    const modalUserData = req.headers["x-verified-user-data"];
+    if (modalUserData) {
+      const userData =
+        typeof modalUserData === "string" ? modalUserData : modalUserData[0];
+      try {
+        const parsed = JSON.parse(userData);
+        const result = userDataSchema.safeParse(parsed);
+        if (!result.success) {
+          throw new JwtValidationError(
+            `Invalid user data: ${result.error.message}`,
+            "invalid_token",
+          );
+        }
+        return result.data;
+      } catch (error) {
+        if (error instanceof JwtValidationError) throw error;
+        throw new JwtValidationError("Invalid user data JSON", "invalid_token");
+      }
+    }
+
+    // Docker path: JWT in Authorization header
+    if (!this.config.jwtSecret) {
+      throw new JwtValidationError(
+        "No authentication provided (expected X-Verified-User-Data header)",
+        "invalid_token",
+      );
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new JwtValidationError(
+        "Missing authorization header",
+        "invalid_token",
+      );
+    }
+
+    const token = authHeader.slice(7);
+    return validateJwt(token, this.config.jwtSecret);
+  }
+
+  private async handleEvents(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    let payload: JwtPayload;
+
+    try {
+      payload = this.authenticateRequest(req);
+    } catch (error) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error:
+            error instanceof JwtValidationError
+              ? error.message
+              : "Invalid token",
+          code:
+            error instanceof JwtValidationError ? error.code : "invalid_token",
+        }),
+      );
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    if (!this.session || this.session.payload.run_id !== payload.run_id) {
+      await this.initializeSession(payload, res);
+    } else {
+      this.session.sseResponse = res;
+    }
+
+    this.sendSseEvent(res, { type: "connected", run_id: payload.run_id });
+
+    req.on("close", () => {
+      this.logger.info("SSE connection closed");
+      if (this.session?.sseResponse === res) {
+        this.session.sseResponse = null;
+      }
+    });
+  }
+
+  private async handleCommand(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    let payload: JwtPayload;
+
+    try {
+      payload = this.authenticateRequest(req);
+    } catch (error) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error:
+            error instanceof JwtValidationError
+              ? error.message
+              : "Invalid token",
+        }),
+      );
+      return;
+    }
+
+    if (!this.session || this.session.payload.run_id !== payload.run_id) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "No active session for this run" }));
+      return;
+    }
+
+    const body = await this.readBody(req);
+    let command: { jsonrpc: string; method: string; params?: Record<string, unknown>; id?: string | number };
+
+    try {
+      command = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON" }));
+      return;
+    }
+
+    try {
+      const result = await this.executeCommand(command.method, command.params || {});
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: command.id,
+        result,
+      }));
+    } catch (error) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: command.id,
+        error: {
+          code: -32000,
+          message: error instanceof Error ? error.message : "Unknown error",
+        },
+      }));
+    }
+  }
+
+  private async executeCommand(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<unknown> {
+    if (!this.session) {
+      throw new Error("No active session");
+    }
+
+    switch (method) {
+      case POSTHOG_NOTIFICATIONS.USER_MESSAGE:
+      case "user_message": {
+        const content = params.content as string;
+        if (!content) {
+          throw new Error("Missing content parameter");
+        }
+
+        this.logger.info(`Processing user message: ${content.substring(0, 100)}...`);
+
+        const result = await this.session.clientConnection.prompt({
+          sessionId: this.session.payload.run_id,
+          prompt: [{ type: "text", text: content }],
+        });
+
+        return { stopReason: result.stopReason };
+      }
+
+      case POSTHOG_NOTIFICATIONS.CANCEL:
+      case "cancel": {
+        this.logger.info("Cancel requested");
+        await this.session.clientConnection.cancel({
+          sessionId: this.session.payload.run_id,
+        });
+        return { cancelled: true };
+      }
+
+      case POSTHOG_NOTIFICATIONS.CLOSE:
+      case "close": {
+        this.logger.info("Close requested");
+        await this.cleanupSession();
+        return { closed: true };
+      }
+
+      default:
+        throw new Error(`Unknown method: ${method}`);
+    }
+  }
+
+  private async initializeSession(
+    payload: JwtPayload,
+    sseResponse: ServerResponse,
+  ): Promise<void> {
+    if (this.session) {
+      await this.cleanupSession();
+    }
+
+    this.logger.info("Initializing session", {
+      runId: payload.run_id,
+      taskId: payload.task_id,
+    });
+
+    const deviceInfo: DeviceInfo = {
+      type: "cloud",
+      name: process.env.HOSTNAME || "cloud-sandbox",
+    };
+
+    this.configureEnvironment();
+
+    const treeTracker = new TreeTracker({
+      repositoryPath: this.config.repositoryPath,
+      taskId: payload.task_id,
+      runId: payload.run_id,
+      logger: new Logger({ debug: true, prefix: "[TreeTracker]" }),
+    });
+
+    const acpConnection = createAcpConnection({
+      sessionId: payload.run_id,
+      taskId: payload.task_id,
+    });
+
+    // Tap both streams to broadcast all ACP messages via SSE (mimics local transport)
+    const onAcpMessage = (message: unknown) => {
+      this.broadcastEvent({
+        type: "notification",
+        timestamp: new Date().toISOString(),
+        notification: message,
+      });
+    };
+
+    const tappedReadable = createTappedReadableStream(
+      acpConnection.clientStreams.readable as ReadableStream<Uint8Array>,
+      onAcpMessage,
+    );
+
+    const tappedWritable = createTappedWritableStream(
+      acpConnection.clientStreams.writable as WritableStream<Uint8Array>,
+      onAcpMessage,
+    );
+
+    const clientStream = ndJsonStream(
+      tappedWritable,
+      tappedReadable,
+    );
+
+    const clientConnection = new ClientSideConnection(
+      () => this.createCloudClient(payload),
+      clientStream,
+    );
+
+    await clientConnection.initialize({
+      protocolVersion: PROTOCOL_VERSION,
+      clientCapabilities: {},
+    });
+
+    await clientConnection.newSession({
+      cwd: this.config.repositoryPath,
+      mcpServers: [],
+      _meta: { sessionId: payload.run_id },
+    });
+
+    this.session = {
+      payload,
+      acpConnection,
+      clientConnection,
+      treeTracker,
+      sseResponse,
+      deviceInfo,
+    };
+
+    this.logger.info("Session initialized successfully");
+  }
+
+  private configureEnvironment(): void {
+    const { apiKey, apiUrl, projectId } = this.config;
+    const gatewayUrl = process.env.LLM_GATEWAY_URL || getLlmGatewayUrl(apiUrl);
+
+    Object.assign(process.env, {
+      POSTHOG_API_KEY: apiKey,
+      POSTHOG_API_HOST: apiUrl,
+      POSTHOG_AUTH_HEADER: `Bearer ${apiKey}`,
+      ANTHROPIC_API_KEY: apiKey,
+      ANTHROPIC_AUTH_TOKEN: apiKey,
+      ANTHROPIC_BASE_URL: gatewayUrl,
+    });
+  }
+
+  private createCloudClient(payload: JwtPayload) {
+    return {
+      requestPermission: async (params: {
+        options: Array<{ kind: string; optionId: string }>;
+      }) => {
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );
@@ -128,364 +491,91 @@ export class AgentServer {
           },
         };
       },
-      sessionUpdate: async (params) => {
-        this.logger.info(
-          `[SESSION_UPDATE] Received: ${(params.update?.sessionUpdate as string) || "unknown"}`,
-        );
-
-        const normalizedParams = {
-          ...params,
-          sessionId: config.runId,
-        };
-
-        const notification = {
-          type: "notification",
-          timestamp: new Date().toISOString(),
-          notification: {
-            jsonrpc: "2.0",
-            method: "session/update",
-            params: normalizedParams,
-          },
-        };
-        await this.sendEvent(notification);
-
+      sessionUpdate: async (params: {
+        sessionId: string;
+        update?: Record<string, unknown>;
+      }) => {
+        // session/update notifications flow through the tapped stream (like local transport)
+        // Only handle tree state capture for file changes here
         if (params.update?.sessionUpdate === "tool_call_update") {
           const meta = (params.update?._meta as Record<string, unknown>)
             ?.claudeCode as Record<string, unknown> | undefined;
           const toolName = meta?.toolName as string | undefined;
-          const toolResponse = meta?.toolResponse as
-            | Record<string, unknown>
-            | undefined;
-          if (
-            (toolName === "Write" || toolName === "Edit") &&
-            toolResponse?.filePath
-          ) {
-            this.logger.info(
-              `[TREE_CAPTURE] Detected ${toolName} for file: ${toolResponse.filePath}`,
-            );
-            await this.captureTreeState({});
+          const toolResponse = meta?.toolResponse as Record<string, unknown> | undefined;
+
+          if ((toolName === "Write" || toolName === "Edit") && toolResponse?.filePath) {
+            await this.captureTreeState();
           }
         }
       },
-    });
-  }
-
-  private async connect(): Promise<void> {
-    const { apiUrl, projectId, taskId, runId } = this.config;
-    const syncUrl = `${apiUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/sync`;
-
-    this.logger.info(`Connecting to SSE stream: ${syncUrl}`);
-
-    this.startSseStream(syncUrl).catch((error) => {
-      this.logger.error("SSE stream error:", (error as Error).message);
-    });
-
-    this.isRunning = true;
-    await this.sendStatusNotification("connected", "Agent server connected");
-  }
-
-  private async startSseStream(url: string): Promise<void> {
-    const { apiKey } = this.config;
-    const parser = new SseEventParser();
-
-    while (this.isRunning) {
-      try {
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "text/event-stream",
-        };
-
-        if (this.lastEventId) {
-          headers["Last-Event-ID"] = this.lastEventId;
-        }
-
-        const response = await fetch(url, {
-          headers,
-          signal: this.sseAbortController?.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`SSE connection failed: ${response.status}`);
-        }
-
-        this.logger.info("SSE connection established");
-
-        if (!response.body) {
-          throw new Error("SSE response has no body");
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        parser.reset();
-
-        while (this.isRunning) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            this.logger.info("SSE stream ended");
-            break;
-          }
-
-          const chunk = decoder.decode(value, { stream: true });
-          const events = parser.parse(chunk);
-
-          for (const event of events) {
-            if (event.id) {
-              this.lastEventId = event.id;
-            }
-            await this.handleSseEvent(event.data as Record<string, unknown>);
-          }
-        }
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          this.logger.info("SSE connection aborted");
-          break;
-        }
-        this.logger.error(
-          "SSE error, reconnecting in 1s:",
-          (error as Error).message,
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
-  }
-
-  private async handleSseEvent(event: Record<string, unknown>): Promise<void> {
-    const notification = event.notification as
-      | Record<string, unknown>
-      | undefined;
-    const method = (event.method as string) || (notification?.method as string);
-
-    if (
-      method === POSTHOG_NOTIFICATIONS.USER_MESSAGE ||
-      event.type === "client_message"
-    ) {
-      this.logger.info(`[SSE] Received client message: ${method}`);
-      const message = event.message as Record<string, unknown> | undefined;
-      const params =
-        (event.params as Record<string, unknown>) ||
-        (notification?.params as Record<string, unknown>) ||
-        (message?.params as Record<string, unknown>);
-      if (params) {
-        await this.handleMessage({
-          method: POSTHOG_NOTIFICATIONS.USER_MESSAGE,
-          params,
-        });
-      }
-    } else if (method === POSTHOG_NOTIFICATIONS.CANCEL) {
-      await this.handleCancel();
-    } else if (method === POSTHOG_NOTIFICATIONS.CLOSE) {
-      await this.handleClose();
-    }
-  }
-
-  private async sendStatusNotification(
-    status: string,
-    message: string,
-  ): Promise<void> {
-    const statusEmoji: Record<string, string> = {
-      connected: "☁️",
-      error: "❌",
-      warning: "⚠️",
     };
-    const notification = {
-      type: "notification",
-      timestamp: new Date().toISOString(),
-      notification: {
-        jsonrpc: "2.0",
-        method: "session/update",
-        params: {
-          sessionId: this.config.runId,
-          update: {
-            sessionUpdate: "system_message",
-            content: {
-              type: "text",
-              text: `${statusEmoji[status] || "ℹ️"} ${message}`,
-            },
-          },
-        },
-      },
-    };
-    await this.sendEvent(notification);
   }
 
-  private async sendEvent(event: Record<string, unknown>): Promise<void> {
-    const notification = event.notification as
-      | Record<string, unknown>
-      | undefined;
-    this.logger.info(
-      `[SEND_EVENT] Sending event: method=${notification?.method || (event.method as string) || "unknown"}`,
-    );
+  private async cleanupSession(): Promise<void> {
+    if (!this.session) return;
 
-    this.maybeHeartbeat();
+    this.logger.info("Cleaning up session");
 
     try {
-      await retry(() => this.persistEvent(event), {
-        maxAttempts: 3,
-        baseDelayMs: 1000,
-      });
-      this.logger.info("[SEND_EVENT] Persisted to log successfully");
+      await this.captureTreeState();
     } catch (error) {
-      this.logger.error(
-        "[SEND_EVENT] Failed to persist event:",
-        (error as Error).message,
-      );
-    }
-  }
-
-  private maybeHeartbeat(): void {
-    const now = Date.now();
-
-    if (now - this.lastHeartbeatTime > HEARTBEAT_INTERVAL_MS) {
-      this.lastHeartbeatTime = now;
-      this.sendHeartbeat().catch((err) => {
-        this.logger.warn("Failed to send heartbeat:", (err as Error).message);
-      });
-    }
-  }
-
-  private async sendHeartbeat(): Promise<void> {
-    const heartbeatEvent = {
-      type: "heartbeat",
-      timestamp: new Date().toISOString(),
-    };
-    await this.persistEvent(heartbeatEvent);
-    this.logger.info("Heartbeat sent successfully");
-  }
-
-  private async persistEvent(event: Record<string, unknown>): Promise<void> {
-    const { apiUrl, apiKey, projectId, taskId, runId } = this.config;
-    const url = `${apiUrl}/api/projects/${projectId}/tasks/${taskId}/runs/${runId}/sync`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Session-Id": runId,
-      },
-      body: JSON.stringify({
-        entries: [event],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to persist: ${response.status}`);
-    }
-  }
-
-  private async handleMessage(message: {
-    method: string;
-    params?: Record<string, unknown>;
-  }): Promise<void> {
-    const method = message.method;
-    this.logger.info(`Received message: ${method}`);
-
-    switch (method) {
-      case POSTHOG_NOTIFICATIONS.USER_MESSAGE:
-        await this.handleUserMessage(message.params as { content: string });
-        break;
-      case POSTHOG_NOTIFICATIONS.CANCEL:
-        await this.handleCancel();
-        break;
-      case POSTHOG_NOTIFICATIONS.CLOSE:
-        await this.handleClose();
-        break;
-      default:
-        this.logger.info(`Unknown method: ${method}`);
-    }
-  }
-
-  private async handleUserMessage(params: { content: string }): Promise<void> {
-    const content = params.content;
-    this.logger.info(
-      `[USER_MSG] Processing user message: ${content.substring(0, 100)}...`,
-    );
-
-    if (!this.clientConnection) {
-      throw new Error("ACP connection not initialized");
+      this.logger.error("Failed to capture final tree state", error);
     }
 
     try {
-      this.logger.info("[USER_MSG] Sending prompt via ACP protocol");
-      const result = await this.clientConnection.prompt({
-        sessionId: this.config.runId,
-        prompt: [{ type: "text", text: content }],
-      });
-
-      this.logger.info(
-        `[USER_MSG] Prompt completed with stopReason: ${result.stopReason}`,
-      );
+      await this.session.acpConnection.cleanup();
     } catch (error) {
-      this.logger.error("[USER_MSG] Agent error:", error);
-      await this.sendStatusNotification("error", (error as Error).message);
+      this.logger.error("Failed to cleanup ACP connection", error);
     }
+
+    if (this.session.sseResponse) {
+      this.session.sseResponse.end();
+    }
+
+    this.session = null;
   }
 
-  private async captureTreeState(options: {
-    interrupted?: boolean;
-    force?: boolean;
-  }): Promise<void> {
-    if (!this.treeTracker) {
-      this.logger.warn("TreeTracker not initialized");
-      return;
-    }
+  private async captureTreeState(): Promise<void> {
+    if (!this.session?.treeTracker) return;
 
     try {
-      const snapshot = await this.treeTracker.captureTree({
-        interrupted: options.interrupted,
-      });
-
+      const snapshot = await this.session.treeTracker.captureTree({});
       if (snapshot) {
         const snapshotWithDevice: TreeSnapshotEvent = {
           ...snapshot,
-          device: this.deviceInfo,
+          device: this.session.deviceInfo,
         };
-
-        this.logger.info("Tree state captured", {
-          treeHash: snapshot.treeHash,
-          changesCount: snapshot.changes.length,
-          interrupted: options.interrupted,
+        this.broadcastEvent({
+          type: "notification",
+          timestamp: new Date().toISOString(),
+          notification: {
+            jsonrpc: "2.0",
+            method: POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT,
+            params: snapshotWithDevice,
+          },
         });
-
-        await this.sendTreeSnapshotEvent(snapshotWithDevice);
       }
     } catch (error) {
-      this.logger.error(
-        "Failed to capture tree state:",
-        (error as Error).message,
-      );
+      this.logger.error("Failed to capture tree state", error);
     }
   }
 
-  private async sendTreeSnapshotEvent(
-    snapshot: TreeSnapshotEvent,
-  ): Promise<void> {
-    const notification = {
-      type: "notification",
-      timestamp: new Date().toISOString(),
-      notification: {
-        jsonrpc: "2.0",
-        method: POSTHOG_NOTIFICATIONS.TREE_SNAPSHOT,
-        params: snapshot,
-      },
-    };
-    await this.sendEvent(notification);
-  }
-
-  private async handleCancel(): Promise<void> {
-    this.logger.info("Cancel requested");
-    if (this.clientConnection) {
-      try {
-        await this.clientConnection.cancel({ sessionId: this.config.runId });
-      } catch (error) {
-        this.logger.error("Failed to cancel:", error);
-      }
+  private broadcastEvent(event: Record<string, unknown>): void {
+    if (this.session?.sseResponse) {
+      this.sendSseEvent(this.session.sseResponse, event);
     }
   }
 
-  private async handleClose(): Promise<void> {
-    this.logger.info("Close requested");
-    await this.stop();
+  private sendSseEvent(res: ServerResponse, data: unknown): void {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  private readBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => resolve(Buffer.concat(chunks).toString()));
+      req.on("error", reject);
+    });
   }
 }

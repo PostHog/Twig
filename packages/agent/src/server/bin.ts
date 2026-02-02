@@ -1,64 +1,53 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { z } from "zod";
 import { AgentServer } from "./agent-server.js";
-import type { AgentServerConfig } from "./types.js";
+
+const envSchema = z.object({
+  JWT_SECRET: z
+    .string()
+    .min(1, "JWT_SECRET cannot be empty")
+    .optional(), // Only needed for Docker (Modal uses X-Verified-User-Data)
+  POSTHOG_API_URL: z
+    .string({ required_error: "POSTHOG_API_URL is required for LLM gateway communication" })
+    .url("POSTHOG_API_URL must be a valid URL"),
+  POSTHOG_PERSONAL_API_KEY: z
+    .string({ required_error: "POSTHOG_PERSONAL_API_KEY is required for authenticating with PostHog services" })
+    .min(1, "POSTHOG_PERSONAL_API_KEY cannot be empty"),
+  POSTHOG_PROJECT_ID: z
+    .string({ required_error: "POSTHOG_PROJECT_ID is required for routing requests to the correct project" })
+    .regex(/^\d+$/, "POSTHOG_PROJECT_ID must be a numeric string")
+    .transform((val) => parseInt(val, 10)),
+});
 
 const program = new Command();
 
 program
   .name("agent-server")
   .description("PostHog cloud agent server - runs in sandbox environments")
-  .requiredOption("--taskId <id>", "Task ID")
-  .requiredOption("--runId <id>", "Run ID")
+  .option("--port <port>", "HTTP server port", "3001")
   .requiredOption("--repositoryPath <path>", "Path to the repository")
-  .option("--initialPrompt <text>", "Base64-encoded initial prompt")
   .action(async (options) => {
-    const apiUrl = process.env.POSTHOG_API_URL;
-    const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
-    const projectId = process.env.POSTHOG_PROJECT_ID;
+    const envResult = envSchema.safeParse(process.env);
 
-    if (!apiUrl) {
-      program.error("Missing required environment variable: POSTHOG_API_URL");
+    if (!envResult.success) {
+      const errors = envResult.error.issues
+        .map((issue) => `  - ${issue.message}`)
+        .join("\n");
+      program.error(`Environment validation failed:\n${errors}`);
       return;
     }
 
-    if (!apiKey) {
-      program.error(
-        "Missing required environment variable: POSTHOG_PERSONAL_API_KEY",
-      );
-      return;
-    }
+    const env = envResult.data;
 
-    if (!projectId) {
-      program.error(
-        "Missing required environment variable: POSTHOG_PROJECT_ID",
-      );
-      return;
-    }
-
-    let decodedPrompt: string | undefined;
-    if (options.initialPrompt) {
-      try {
-        decodedPrompt = Buffer.from(options.initialPrompt, "base64").toString(
-          "utf-8",
-        );
-      } catch {
-        program.error("Failed to decode initialPrompt (expected base64)");
-        return;
-      }
-    }
-
-    const config: AgentServerConfig = {
-      apiUrl,
-      apiKey,
-      projectId: parseInt(projectId, 10),
-      taskId: options.taskId,
-      runId: options.runId,
+    const server = new AgentServer({
+      port: parseInt(options.port, 10),
+      jwtSecret: env.JWT_SECRET,
       repositoryPath: options.repositoryPath,
-      initialPrompt: decodedPrompt,
-    };
-
-    const server = new AgentServer(config);
+      apiUrl: env.POSTHOG_API_URL,
+      apiKey: env.POSTHOG_PERSONAL_API_KEY,
+      projectId: env.POSTHOG_PROJECT_ID,
+    });
 
     process.on("SIGINT", async () => {
       await server.stop();

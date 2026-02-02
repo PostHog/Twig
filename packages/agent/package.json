@@ -87,6 +87,8 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.13.1",
+    "@types/jsonwebtoken": "^9.0.10",
+    "jsonwebtoken": "^9.0.2",
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@anthropic-ai/sdk": "^0.71.0",
     "@modelcontextprotocol/sdk": "^1.25.3",

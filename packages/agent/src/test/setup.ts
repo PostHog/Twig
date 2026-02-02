@@ -1,14 +1,7 @@
 import { type SetupServerApi, setupServer } from "msw/node";
-import { vi } from "vitest";
-import type { PostHogAPIClient } from "../posthog-api.js";
 import { AgentServer } from "../server/agent-server.js";
 import { SseController } from "./controllers/sse-controller.js";
-import {
-  createMockApiClient,
-  createTaskRun,
-  createTestRepo,
-  type TestRepo,
-} from "./fixtures/api.js";
+import { createTestRepo, type TestRepo } from "./fixtures/api.js";
 import {
   type AgentServerConfig,
   createAgentServerConfig,
@@ -22,7 +15,6 @@ export interface TestContext {
   heartbeatCalls: number[];
   syncRequestCalls: Request[];
   server: SetupServerApi;
-  mockApiClient: PostHogAPIClient;
   agentServer: AgentServer;
   config: AgentServerConfig;
   createAgentServer: (overrides?: Partial<AgentServerConfig>) => AgentServer;
@@ -44,14 +36,6 @@ export async function createTestContext(
   const heartbeatCalls: number[] = [];
   const syncRequestCalls: Request[] = [];
 
-  const mockApiClient = createMockApiClient({
-    getTaskRun: vi.fn().mockResolvedValue(createTaskRun({ log_url: "" })),
-    fetchTaskRunLogs: vi.fn().mockResolvedValue([]),
-    uploadTaskArtifacts: vi
-      .fn()
-      .mockResolvedValue([{ storage_path: "gs://bucket/test.tar.gz" }]),
-  });
-
   const server = setupServer(
     ...createPostHogHandlers({
       baseUrl: "http://localhost:8000",
@@ -59,16 +43,12 @@ export async function createTestContext(
       onAppendLog: (entries) => appendLogCalls.push(entries),
       onHeartbeat: () => heartbeatCalls.push(Date.now()),
       onSyncRequest: (request) => syncRequestCalls.push(request),
-      getTaskRun: () => createTaskRun({ log_url: "" }),
     }),
   );
 
   server.listen({ onUnhandledRequest: "bypass" });
 
-  const config = createAgentServerConfig(repo, {
-    apiClient: mockApiClient,
-    ...options.configOverrides,
-  });
+  const config = createAgentServerConfig(repo, options.configOverrides);
 
   const agentServer = new AgentServer(config);
 
@@ -98,7 +78,6 @@ export async function createTestContext(
     heartbeatCalls,
     syncRequestCalls,
     server,
-    mockApiClient,
     agentServer,
     config,
     createAgentServer,

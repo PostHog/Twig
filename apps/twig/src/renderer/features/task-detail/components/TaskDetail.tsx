@@ -49,7 +49,9 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   const session = useSessionForTask(taskId);
   const isRunning =
-    session?.status === "connected" || session?.status === "connecting";
+    session?.status === "connected" ||
+    session?.status === "connecting" ||
+    session?.status === "provisioning";
 
   useStatusBar(
     isRunning ? "Agent running..." : "Task details",
