@@ -1,5 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import {
+  ArrowsClockwise,
   BellRinging,
   Cloud,
   GitBranch as GitBranchIcon,
@@ -211,9 +212,21 @@ export function TaskItem({
       <Cloud size={16} />
     </Tooltip>
   ) : isWorktreeTask ? (
-    <Tooltip content={modeTooltip}>
-      <GitBranchIcon size={16} className={isFocused ? "text-blue-11" : ""} />
-    </Tooltip>
+    isFocused ? (
+      <Tooltip content="Syncing changes">
+        <span className="flex h-4 w-4 items-center justify-center">
+          <ArrowsClockwise
+            size={16}
+            weight="duotone"
+            className="animate-sync-rotate text-blue-11"
+          />
+        </span>
+      </Tooltip>
+    ) : (
+      <Tooltip content={modeTooltip}>
+        <GitBranchIcon size={16} />
+      </Tooltip>
+    )
   ) : (
     <Tooltip content={modeTooltip}>
       <LaptopIcon size={16} />
