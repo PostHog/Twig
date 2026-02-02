@@ -62,8 +62,10 @@ function createEditorTheme(colors: typeof dark, isDark: boolean) {
         fontFamily: "var(--code-font-family)",
       },
       ".cm-content": {
-        padding: "16px 0",
         caretColor: colors.cursor,
+      },
+      "&:not(.cm-merge-a):not(.cm-merge-b) .cm-content": {
+        padding: "16px 0",
       },
       ".cm-line": {
         padding: "0 16px",
@@ -204,6 +206,9 @@ export const mergeViewTheme = EditorView.baseTheme({
   ".cm-mergeView": {
     height: "100%",
     overflowY: "auto",
+  },
+  ".cm-mergeView .cm-content": {
+    padding: "0",
   },
   ".cm-mergeViewEditors": {
     display: "flex",
