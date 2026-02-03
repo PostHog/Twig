@@ -10,13 +10,13 @@ import {
   Code,
   Folder,
   Gear,
-  GitBranch,
   Keyboard,
   Palette,
   User,
 } from "@phosphor-icons/react";
 import { Box, Flex, ScrollArea, Text } from "@radix-ui/themes";
-import { type ReactNode, useCallback, useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { AccountSettings } from "./sections/AccountSettings";
 import { AdvancedSettings } from "./sections/AdvancedSettings";
 import { AppearanceSettings } from "./sections/AppearanceSettings";
@@ -70,14 +70,12 @@ export function SettingsDialog() {
   const { isOpen, activeCategory, close, setCategory } =
     useSettingsDialogStore();
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
-      }
-    },
-    [close],
-  );
+  useHotkeys("escape", close, {
+    enabled: isOpen,
+    enableOnContentEditable: true,
+    enableOnFormTags: true,
+    preventDefault: true,
+  });
 
   useEffect(() => {
     const handlePopState = () => {
@@ -97,11 +95,9 @@ export function SettingsDialog() {
   const ActiveComponent = CATEGORY_COMPONENTS[activeCategory];
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: Settings dialog needs keyboard handling
     <div
       className="fixed inset-0 z-[100] flex"
       style={{ backgroundColor: "var(--color-background)" }}
-      onKeyDown={handleKeyDown}
     >
       <div className="flex h-full w-[256px] shrink-0 flex-col border-gray-6 border-r pt-8">
         <button
@@ -125,22 +121,6 @@ export function SettingsDialog() {
             ))}
           </div>
         </ScrollArea>
-
-        <div className="border-gray-6 border-t">
-          <div className="px-3 pt-3 pb-1 font-mono text-[11px] text-gray-9">
-            Repositories
-          </div>
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent px-3 py-2 text-left font-mono text-[12px] text-gray-11 transition-colors hover:bg-gray-3"
-          >
-            <span className="flex items-center gap-2">
-              <GitBranch size={14} />
-              <span>twig</span>
-            </span>
-            <CaretRight size={12} className="text-gray-9" />
-          </button>
-        </div>
       </div>
 
       <div className="relative flex flex-1 justify-center overflow-hidden pt-8">
