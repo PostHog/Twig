@@ -25,6 +25,7 @@ import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
