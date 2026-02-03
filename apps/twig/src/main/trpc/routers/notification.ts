@@ -9,7 +9,15 @@ const getService = () =>
 
 export const notificationRouter = router({
   send: publicProcedure
-    .input(z.object({ title: z.string(), body: z.string() }))
-    .mutation(({ input }) => getService().send(input.title, input.body)),
+    .input(
+      z.object({
+        title: z.string(),
+        body: z.string(),
+        silent: z.boolean().optional().default(false),
+      }),
+    )
+    .mutation(({ input }) =>
+      getService().send(input.title, input.body, input.silent),
+    ),
   showDockBadge: publicProcedure.mutation(() => getService().showDockBadge()),
 });

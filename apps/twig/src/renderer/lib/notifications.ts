@@ -12,8 +12,12 @@ function truncateTitle(title: string): string {
   return `${title.slice(0, MAX_TITLE_LENGTH)}...`;
 }
 
-function sendDesktopNotification(title: string, body: string): void {
-  trpcVanilla.notification.send.mutate({ title, body }).catch((err) => {
+function sendDesktopNotification(
+  title: string,
+  body: string,
+  silent = false,
+): void {
+  trpcVanilla.notification.send.mutate({ title, body, silent }).catch((err) => {
     log.error("Failed to send notification", err);
   });
 }
@@ -40,10 +44,15 @@ export function notifyPromptComplete(
   const isWindowFocused = document.hasFocus();
   if (isWindowFocused) return;
 
+  const hasCustomSound = completionSound !== "none";
   playCompletionSound(completionSound, completionVolume);
 
   if (desktopNotifications) {
-    sendDesktopNotification("Twig", `"${truncateTitle(taskTitle)}" finished`);
+    sendDesktopNotification(
+      "Twig",
+      `"${truncateTitle(taskTitle)}" finished`,
+      hasCustomSound,
+    );
   }
   if (dockBadgeNotifications) {
     showDockBadge();
