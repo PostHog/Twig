@@ -6,7 +6,6 @@ import {
   useSessionActions,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
@@ -117,12 +116,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
           view?.type === "task-detail" && view?.data?.id === taskId;
         if (isViewingTask) {
           markAsViewed(taskId);
-        }
-
-        const isWindowFocused = document.hasFocus();
-        const { desktopNotifications } = useSettingsStore.getState();
-        if (!isWindowFocused && desktopNotifications) {
-          trpcVanilla.dockBadge.show.mutate();
         }
       } catch (error) {
         const message =

@@ -1,6 +1,7 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import {
+  type CompletionSound,
   type SendMessagesWith,
   useSettingsStore,
 } from "@features/settings/stores/settingsStore";
@@ -18,6 +19,7 @@ import {
   Flex,
   Heading,
   Select,
+  Slider,
   Spinner,
   Switch,
   Text,
@@ -27,6 +29,7 @@ import { formatHotkey } from "@renderer/constants/keyboard-shortcuts";
 import { track } from "@renderer/lib/analytics";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { logger } from "@renderer/lib/logger";
+import { playCompletionSound } from "@renderer/lib/sounds";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
@@ -77,11 +80,17 @@ export function SettingsView() {
   const {
     cursorGlow,
     desktopNotifications,
+    dockBadgeNotifications,
+    completionSound,
+    completionVolume,
     autoConvertLongText,
     sendMessagesWith,
     allowBypassPermissions,
     setCursorGlow,
     setDesktopNotifications,
+    setDockBadgeNotifications,
+    setCompletionSound,
+    setCompletionVolume,
     setAutoConvertLongText,
     setSendMessagesWith,
     setAllowBypassPermissions,
@@ -281,6 +290,22 @@ export function SettingsView() {
     [autoConvertLongText, setAutoConvertLongText],
   );
 
+  const handleCompletionSoundChange = useCallback(
+    (value: CompletionSound) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "completion_sound",
+        new_value: value,
+        old_value: completionSound,
+      });
+      setCompletionSound(value);
+    },
+    [completionSound, setCompletionSound],
+  );
+
+  const handleTestSound = useCallback(() => {
+    playCompletionSound(completionSound, completionVolume);
+  }, [completionSound, completionVolume]);
+
   const handleSendMessagesWithChange = useCallback(
     (value: SendMessagesWith) => {
       track(ANALYTICS_EVENTS.SETTING_CHANGED, {
@@ -416,6 +441,28 @@ export function SettingsView() {
             </Text>
           </Flex>
 
+          {/* Keyboard Shortcuts Section */}
+          <Flex direction="column" gap="3">
+            <Heading size="3">Keyboard shortcuts</Heading>
+            <Card>
+              <Flex align="center" justify="between">
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="medium">
+                    View all shortcuts
+                  </Text>
+                  <Text size="1" color="gray">
+                    See all available keyboard shortcuts
+                  </Text>
+                </Flex>
+                <Button variant="soft" size="1" onClick={openShortcutsSheet}>
+                  {formatHotkey("mod+/")}
+                </Button>
+              </Flex>
+            </Card>
+          </Flex>
+
+          <Box className="border-gray-6 border-t" />
+
           {/* Appearance Section */}
           <Flex direction="column" gap="3">
             <Heading size="3">Appearance</Heading>
@@ -503,21 +550,97 @@ export function SettingsView() {
 
           <Box className="border-gray-6 border-t" />
 
+          {/* Notifications Section */}
           <Flex direction="column" gap="3">
-            <Heading size="3">Keyboard shortcuts</Heading>
+            <Heading size="3">Notifications</Heading>
             <Card>
-              <Flex align="center" justify="between">
-                <Flex direction="column" gap="1">
+              <Flex direction="column" gap="4">
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Push notifications
+                    </Text>
+                    <Text size="1" color="gray">
+                      Recieve a desktop notification when the agent finishes a
+                      task or needs your input
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={desktopNotifications}
+                    onCheckedChange={setDesktopNotifications}
+                    size="1"
+                  />
+                </Flex>
+
+                <Flex align="center" justify="between">
+                  <Flex direction="column" gap="1">
+                    <Text size="1" weight="medium">
+                      Dock badge
+                    </Text>
+                    <Text size="1" color="gray">
+                      Display a badge on the dock icon when the agent finishes a
+                      task or needs your input
+                    </Text>
+                  </Flex>
+                  <Switch
+                    checked={dockBadgeNotifications}
+                    onCheckedChange={setDockBadgeNotifications}
+                    size="1"
+                  />
+                </Flex>
+
+                <Flex direction="column" gap="2">
                   <Text size="1" weight="medium">
-                    View all shortcuts
+                    Completion sound
                   </Text>
+                  <Flex align="center" gap="2">
+                    <Select.Root
+                      value={completionSound}
+                      onValueChange={(value) =>
+                        handleCompletionSoundChange(value as CompletionSound)
+                      }
+                      size="1"
+                    >
+                      <Select.Trigger />
+                      <Select.Content>
+                        <Select.Item value="none">None</Select.Item>
+                        <Select.Item value="guitar">Guitar solo</Select.Item>
+                        <Select.Item value="danilo">I'm ready</Select.Item>
+                        <Select.Item value="revi">Cute noise</Select.Item>
+                        <Select.Item value="meep">Meep</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+                    {completionSound !== "none" && (
+                      <Button variant="soft" size="1" onClick={handleTestSound}>
+                        Test
+                      </Button>
+                    )}
+                  </Flex>
                   <Text size="1" color="gray">
-                    See all available keyboard shortcuts
+                    Play a sound when the agent finishes a task or needs your
+                    input.
                   </Text>
                 </Flex>
-                <Button variant="soft" size="1" onClick={openShortcutsSheet}>
-                  {formatHotkey("mod+/")}
-                </Button>
+
+                {completionSound !== "none" && (
+                  <Flex direction="column" gap="2">
+                    <Text size="1" weight="medium">
+                      Volume
+                    </Text>
+                    <Slider
+                      value={[completionVolume]}
+                      onValueChange={([value]) => setCompletionVolume(value)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      size="1"
+                      style={{ maxWidth: "50%" }}
+                    />
+                    <Text size="1" color="gray">
+                      Adjust the volume of the completion sound
+                    </Text>
+                  </Flex>
+                )}
               </Flex>
             </Card>
           </Flex>
@@ -529,23 +652,6 @@ export function SettingsView() {
             <Heading size="3">Chat</Heading>
             <Card>
               <Flex direction="column" gap="4">
-                <Flex align="center" justify="between">
-                  <Flex direction="column" gap="1">
-                    <Text size="1" weight="medium">
-                      Desktop notifications
-                    </Text>
-                    <Text size="1" color="gray">
-                      Show notifications when the agent finishes working on a
-                      task
-                    </Text>
-                  </Flex>
-                  <Switch
-                    checked={desktopNotifications}
-                    onCheckedChange={setDesktopNotifications}
-                    size="1"
-                  />
-                </Flex>
-
                 <Flex align="center" justify="between">
                   <Flex direction="column" gap="1">
                     <Text size="1" weight="medium">
