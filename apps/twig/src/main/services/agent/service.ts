@@ -189,6 +189,7 @@ interface ManagedSession {
   config: SessionConfig;
   interruptReason?: InterruptReason;
   needsRecreation: boolean;
+  recreationPromise?: Promise<ManagedSession>;
   promptPending: boolean;
   pendingContext?: string;
   availableModels?: Array<{
@@ -613,10 +614,18 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     // Recreate session if marked (token was refreshed while session was active)
     if (session.needsRecreation) {
-      log.info("Recreating session before prompt (token refreshed)", {
-        sessionId,
-      });
-      session = await this.recreateSession(sessionId);
+      if (!session.recreationPromise) {
+        log.info("Recreating session before prompt (token refreshed)", {
+          sessionId,
+        });
+        session.recreationPromise = this.recreateSession(sessionId).finally(
+          () => {
+            const s = this.sessions.get(sessionId);
+            if (s) s.recreationPromise = undefined;
+          },
+        );
+      }
+      session = await session.recreationPromise;
     }
 
     // Prepend pending context if present
