@@ -413,6 +413,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         return existing;
       }
 
+      // Kill any lingering processes from previous runs of this task
+      this.processTracking.killByTaskId(taskId);
+
       // Clean up any prior session for this taskRunId before creating a new one
       await this.cleanupSession(taskRunId);
     }
