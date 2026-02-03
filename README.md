@@ -1,7 +1,11 @@
 > [!IMPORTANT]
 > Twig is pre-alpha and not production-ready. Interested? Email jonathan@posthog.com
 
-**[Download the latest version](https://github.com/PostHog/twig/releases/latest)**
+## Download
+
+> [!TIP]
+> Grab the newest build from GitHub Releases.
+> **[Download the latest version](https://github.com/PostHog/twig/releases/latest)**
 
 Found a bug or have feedback? [Open an issue](https://github.com/PostHog/twig/issues/new) on GitHub.
 
