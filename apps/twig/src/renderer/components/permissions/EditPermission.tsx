@@ -1,16 +1,12 @@
 import { ActionSelector } from "@components/ActionSelector";
-import { InlineDiffPreview } from "@features/sessions/components/session-update/InlineDiffPreview";
-import { NewFilePreview } from "@features/sessions/components/session-update/NewFilePreview";
+import { CodePreview } from "@features/sessions/components/session-update/CodePreview";
+import { getFilename } from "@features/sessions/components/session-update/toolCallUtils";
 import { Code } from "@radix-ui/themes";
 import {
   type BasePermissionProps,
   findDiffContent,
   toSelectorOptions,
 } from "./types";
-
-function getFileName(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
-}
 
 export function EditPermission({
   toolCall,
@@ -28,15 +24,13 @@ export function EditPermission({
     <ActionSelector
       title={isNewFile ? "Create new file" : (toolCall.title ?? "Edit file")}
       pendingAction={
-        diff && !isNewFile && oldText && newText ? (
-          <InlineDiffPreview
-            oldText={oldText}
-            newText={newText}
+        newText ? (
+          <CodePreview
+            content={newText}
             filePath={filePath}
+            oldContent={isNewFile ? null : oldText}
             showPath
           />
-        ) : isNewFile && newText ? (
-          <NewFilePreview content={newText} filePath={filePath} showPath />
         ) : null
       }
       question={
@@ -44,7 +38,7 @@ export function EditPermission({
           <>
             Do you want to create{" "}
             <Code variant="ghost" weight="bold">
-              {getFileName(filePath)}
+              {getFilename(filePath)}
             </Code>
             ?
           </>

@@ -1,0 +1,33 @@
+import { ArrowsLeftRight } from "@phosphor-icons/react";
+import { ToolRow } from "./ToolRow";
+import { type ToolViewProps, useToolCallStatus } from "./toolCallUtils";
+
+export function MoveToolView({
+  toolCall,
+  turnCancelled,
+  turnComplete,
+}: ToolViewProps) {
+  const { status, locations, title } = toolCall;
+  const { isLoading, isFailed, wasCancelled } = useToolCallStatus(
+    status,
+    turnCancelled,
+    turnComplete,
+  );
+
+  const sourcePath = locations?.[0]?.path ?? "";
+  const destPath = locations?.[1]?.path ?? "";
+
+  return (
+    <ToolRow
+      icon={ArrowsLeftRight}
+      isLoading={isLoading}
+      isFailed={isFailed}
+      wasCancelled={wasCancelled}
+    >
+      {title ||
+        (sourcePath && destPath
+          ? `Move ${sourcePath} → ${destPath}`
+          : "Move file")}
+    </ToolRow>
+  );
+}

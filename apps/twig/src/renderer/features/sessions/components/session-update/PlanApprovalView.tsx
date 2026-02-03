@@ -1,25 +1,20 @@
 import { PlanContent } from "@components/permissions/PlanContent";
-import type { ToolCall } from "@features/sessions/types";
 import { CheckCircle } from "@phosphor-icons/react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { useMemo } from "react";
-
-interface PlanApprovalViewProps {
-  toolCall: ToolCall;
-  turnCancelled?: boolean;
-  turnComplete?: boolean;
-}
+import { type ToolViewProps, useToolCallStatus } from "./toolCallUtils";
 
 export function PlanApprovalView({
   toolCall,
   turnCancelled,
   turnComplete,
-}: PlanApprovalViewProps) {
-  const { status, content } = toolCall;
-  const isComplete = status === "completed";
-  const wasCancelled =
-    (status === "pending" || status === "in_progress") &&
-    (turnCancelled || turnComplete);
+}: ToolViewProps) {
+  const { content } = toolCall;
+  const { isComplete, wasCancelled } = useToolCallStatus(
+    toolCall.status,
+    turnCancelled,
+    turnComplete,
+  );
 
   const planText = useMemo(() => {
     const rawPlan = (toolCall.rawInput as { plan?: string } | undefined)?.plan;
