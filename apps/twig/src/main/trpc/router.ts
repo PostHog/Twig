@@ -14,6 +14,7 @@ import { gitRouter } from "./routers/git.js";
 import { logsRouter } from "./routers/logs.js";
 import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
+import { powerSaveBlockerRouter } from "./routers/power-save-blocker.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
 import { uiRouter } from "./routers/ui.js";
@@ -37,6 +38,7 @@ export const trpcRouter = router({
   oauth: oauthRouter,
   logs: logsRouter,
   os: osRouter,
+  powerSaveBlocker: powerSaveBlockerRouter,
   secureStore: secureStoreRouter,
   shell: shellRouter,
   ui: uiRouter,

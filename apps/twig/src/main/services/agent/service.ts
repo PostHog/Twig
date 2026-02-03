@@ -22,8 +22,11 @@ import { app } from "electron";
 import { injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
+import { container } from "../../di/container.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { PowerSaveBlockerService } from "../power-save-blocker/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -214,6 +217,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
+
+  private get powerSaveBlocker() {
+    return container.get<PowerSaveBlockerService>(
+      MAIN_TOKENS.PowerSaveBlockerService,
+    );
+  }
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
@@ -595,6 +604,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     session.lastActivityAt = Date.now();
     session.promptPending = true;
+    this.powerSaveBlocker.acquire(sessionId);
 
     try {
       const result = await session.clientSideConnection.prompt({
@@ -621,6 +631,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw err;
     } finally {
       session.promptPending = false;
+      this.powerSaveBlocker.release(sessionId);
     }
   }
 
@@ -867,6 +878,7 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      this.powerSaveBlocker.release(taskRunId);
       try {
         await session.agent.cleanup();
       } catch {
