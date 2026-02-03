@@ -328,7 +328,9 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
         }
       }
 
-      return files;
+      return files.filter(
+        (f) => f.path !== ".claude" && !f.path.startsWith(".claude/"),
+      );
     } catch {
       return [];
     }

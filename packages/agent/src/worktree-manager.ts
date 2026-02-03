@@ -143,9 +143,9 @@ export class WorktreeManager {
   }
 
   async ensureArrayDirIgnored(): Promise<void> {
-    // Use .git/info/exclude instead of .gitignore to avoid modifying tracked files
     const excludePath = path.join(this.mainRepoPath, ".git", "info", "exclude");
-    const ignorePattern = `/${WORKTREE_FOLDER_NAME}/`;
+    const twigPattern = `/${WORKTREE_FOLDER_NAME}/`;
+    const claudePattern = "/.claude";
 
     let content = "";
     try {
@@ -154,23 +154,30 @@ export class WorktreeManager {
       // File doesn't exist or .git/info doesn't exist
     }
 
-    // Check if pattern is already present
-    if (
+    const hasTwigPattern =
       content.includes(`/${WORKTREE_FOLDER_NAME}/`) ||
-      content.includes(`/${WORKTREE_FOLDER_NAME}`)
-    ) {
-      this.logger.debug("Exclude file already contains .twig folder pattern");
+      content.includes(`/${WORKTREE_FOLDER_NAME}`);
+    const hasClaudePattern = content.includes("/.claude");
+
+    if (hasTwigPattern && hasClaudePattern) {
+      this.logger.debug(
+        "Exclude file already contains .twig and .claude patterns",
+      );
       return;
     }
 
-    // Ensure .git/info directory exists
     const infoDir = path.join(this.mainRepoPath, ".git", "info");
     await fs.mkdir(infoDir, { recursive: true });
 
-    // Append the pattern
-    const newContent = `${content.trimEnd()}\n\n# Twig worktrees\n${ignorePattern}\n`;
+    const patternsToAdd: string[] = [];
+    if (!hasTwigPattern) patternsToAdd.push(twigPattern);
+    if (!hasClaudePattern) patternsToAdd.push(claudePattern);
+
+    const newContent = `${content.trimEnd()}\n\n# Twig worktrees\n${patternsToAdd.join("\n")}\n`;
     await fs.writeFile(excludePath, newContent);
-    this.logger.info("Added .twig folder to .git/info/exclude");
+    this.logger.info("Added patterns to .git/info/exclude", {
+      patterns: patternsToAdd,
+    });
   }
 
   private async generateUniqueWorktreeName(): Promise<string> {
