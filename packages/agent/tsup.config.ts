@@ -61,6 +61,8 @@ export default defineConfig({
     "src/adapters/claude/permissions/permission-options.ts",
     "src/adapters/claude/tools.ts",
     "src/adapters/claude/conversion/tool-use-to-acp.ts",
+    "src/server/agent-server.ts",
+    "src/server/bin.ts",
   ],
   format: ["esm"],
   dts: true,
