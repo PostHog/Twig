@@ -1,8 +1,8 @@
 import type { CompletionSound } from "@features/settings/stores/settingsStore";
 import daniloUrl from "@renderer/assets/sounds/danilo.mp3";
 import guitarUrl from "@renderer/assets/sounds/guitar.mp3";
-import reviUrl from "@renderer/assets/sounds/revi.mp3";
 import meepUrl from "@renderer/assets/sounds/meep.mp3";
+import reviUrl from "@renderer/assets/sounds/revi.mp3";
 
 const SOUND_URLS: Record<Exclude<CompletionSound, "none">, string> = {
   guitar: guitarUrl,
