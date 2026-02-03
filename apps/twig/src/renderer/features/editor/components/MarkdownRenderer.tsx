@@ -51,7 +51,7 @@ const components: Components = {
     const isInline = !className?.includes("language-");
     if (isInline) {
       return (
-        <Code size="1" variant="soft">
+        <Code size="1" variant="outline">
           {children}
         </Code>
       );
@@ -83,9 +83,29 @@ const components: Components = {
       target="_blank"
       rel="noopener noreferrer"
       className="markdown-link"
-      style={{ fontSize: "var(--font-size-1)" }}
+      style={{
+        fontSize: "var(--font-size-1)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "2px",
+      }}
     >
       {children}
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="var(--accent-11)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ marginLeft: "var(--space-1)", flexShrink: 0 }}
+      >
+        <path d="M4.5 1.5H2.25C1.836 1.5 1.5 1.836 1.5 2.25V9.75C1.5 10.164 1.836 10.5 2.25 10.5H9.75C10.164 10.5 10.5 10.164 10.5 9.75V7.5" />
+        <path d="M7.5 1.5H10.5V4.5" />
+        <path d="M5.25 6.75L10.5 1.5" />
+      </svg>
     </a>
   ),
   kbd: ({ children }) => <Kbd size="1">{children}</Kbd>,
