@@ -1,3 +1,4 @@
+import { CHANGED_FILES_QUERY_KEY } from "@hooks/useChangedFiles";
 import type { FocusResult, FocusSession } from "@main/services/focus/schemas";
 import { queryClient } from "@renderer/lib/queryClient";
 import { create } from "zustand";
@@ -29,8 +30,7 @@ interface FocusState {
 function invalidateQueries() {
   queryClient.invalidateQueries({ queryKey: ["current-branch"] });
   setTimeout(() => {
-    queryClient.invalidateQueries({ queryKey: ["diff-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["changed-files-head"] });
+    queryClient.invalidateQueries({ queryKey: [CHANGED_FILES_QUERY_KEY] });
     queryClient.invalidateQueries({ queryKey: ["git-sync-status"] });
   }, 1000);
 }

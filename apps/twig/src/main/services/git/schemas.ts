@@ -119,10 +119,6 @@ export const getFileAtHeadInput = z.object({
 });
 export const getFileAtHeadOutput = z.string().nullable();
 
-// getDiffStats schemas
-export const getDiffStatsInput = directoryPathInput;
-export const getDiffStatsOutput = diffStatsSchema;
-
 // getCurrentBranch schemas
 export const getCurrentBranchInput = directoryPathInput;
 export const getCurrentBranchOutput = z.string().nullable();

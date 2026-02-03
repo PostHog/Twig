@@ -1,4 +1,5 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
+import { useDiffStats } from "@hooks/useChangedFiles";
 import {
   ArrowsClockwise,
   BellRinging,
@@ -10,11 +11,9 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { Tooltip } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc";
 import { formatRelativeTime } from "@renderer/utils/time";
 import type { WorkspaceMode } from "@shared/types";
 import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useCwd } from "../../hooks/useCwd";
 import { SidebarItem } from "../SidebarItem";
@@ -98,18 +97,7 @@ interface DiffStatsDisplayProps {
 
 function DiffStatsDisplay({ taskId }: DiffStatsDisplayProps) {
   const effectivePath = useCwd(taskId);
-
-  const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", effectivePath],
-    queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({
-        directoryPath: effectivePath as string,
-      }),
-    enabled: !!effectivePath,
-    staleTime: 5000,
-    refetchInterval: 5000,
-    placeholderData: (prev) => prev,
-  });
+  const { diffStats } = useDiffStats(effectivePath, { refetchInterval: 5000 });
 
   if (!diffStats || diffStats.filesChanged === 0) {
     return null;

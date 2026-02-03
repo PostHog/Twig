@@ -9,7 +9,6 @@ import type {
   ChangedFile,
   CloneProgressPayload,
   DetectRepoResult,
-  DiffStats,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
   GitCommitInfo,
@@ -348,72 +347,6 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       return stdout;
     } catch {
       return null;
-    }
-  }
-
-  public async getDiffStats(directoryPath: string): Promise<DiffStats> {
-    try {
-      const { stdout } = await execAsync("git diff --numstat HEAD", {
-        cwd: directoryPath,
-      });
-
-      let linesAdded = 0;
-      let linesRemoved = 0;
-      let filesChanged = 0;
-
-      for (const line of stdout.trim().split("\n").filter(Boolean)) {
-        const parts = line.split("\t");
-        if (parts.length >= 2) {
-          const added = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
-          const removed = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
-          linesAdded += added;
-          linesRemoved += removed;
-          filesChanged++;
-        }
-      }
-
-      const { stdout: statusOutput } = await execAsync(
-        "git status --porcelain",
-        {
-          cwd: directoryPath,
-        },
-      );
-
-      for (const line of statusOutput.trim().split("\n").filter(Boolean)) {
-        const statusCode = line.substring(0, 2);
-        if (statusCode === "??") {
-          const filePath = line.substring(3);
-
-          if (filePath.endsWith("/")) {
-            const dirPath = filePath.slice(0, -1);
-            try {
-              const dirFiles = await this.getAllFilesInDirectory(
-                directoryPath,
-                dirPath,
-              );
-              for (const file of dirFiles) {
-                filesChanged++;
-                linesAdded += await this.countFileLinesWithWc(
-                  directoryPath,
-                  file,
-                );
-              }
-            } catch {
-              // Directory might not exist or be inaccessible
-            }
-          } else {
-            filesChanged++;
-            linesAdded += await this.countFileLinesWithWc(
-              directoryPath,
-              filePath,
-            );
-          }
-        }
-      }
-
-      return { filesChanged, linesAdded, linesRemoved };
-    } catch {
-      return { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
     }
   }
 
@@ -761,20 +694,6 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
       const lines = content.split("\n");
       return lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
-    } catch {
-      return 0;
-    }
-  }
-
-  private async countFileLinesWithWc(
-    directoryPath: string,
-    filePath: string,
-  ): Promise<number> {
-    try {
-      const { stdout } = await execAsync(`wc -l < "${filePath}"`, {
-        cwd: directoryPath,
-      });
-      return parseInt(stdout.trim(), 10) || 0;
     } catch {
       return 0;
     }

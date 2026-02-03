@@ -17,8 +17,6 @@ import {
   getCurrentBranchOutput,
   getDefaultBranchInput,
   getDefaultBranchOutput,
-  getDiffStatsInput,
-  getDiffStatsOutput,
   getFileAtHeadInput,
   getFileAtHeadOutput,
   getGitRepoInfoInput,
@@ -116,11 +114,6 @@ export const gitRouter = router({
     .query(({ input }) =>
       getService().getFileAtHead(input.directoryPath, input.filePath),
     ),
-
-  getDiffStats: publicProcedure
-    .input(getDiffStatsInput)
-    .output(getDiffStatsOutput)
-    .query(({ input }) => getService().getDiffStats(input.directoryPath)),
 
   discardFileChanges: publicProcedure
     .input(discardFileChangesInput)

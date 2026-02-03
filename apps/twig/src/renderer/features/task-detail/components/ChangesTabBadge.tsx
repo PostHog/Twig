@@ -1,27 +1,14 @@
 import { useCwd } from "@features/sidebar/hooks/useCwd";
+import { useDiffStats } from "@hooks/useChangedFiles";
 import { Flex, Text } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc";
-import type { Task } from "@shared/types";
-import { useQuery } from "@tanstack/react-query";
 
 interface ChangesTabBadgeProps {
   taskId: string;
-  task: Task;
 }
 
-export function ChangesTabBadge({ taskId, task: _task }: ChangesTabBadgeProps) {
+export function ChangesTabBadge({ taskId }: ChangesTabBadgeProps) {
   const repoPath = useCwd(taskId);
-
-  const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
+  const { diffStats } = useDiffStats(repoPath);
 
   if (!diffStats || diffStats.filesChanged === 0) {
     return null;

@@ -1,24 +1,13 @@
+import { useDiffStats } from "@hooks/useChangedFiles";
 import { Circle } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc";
-import { useQuery } from "@tanstack/react-query";
 
 interface DiffStatsIndicatorProps {
   repoPath: string | null | undefined;
 }
 
 export function DiffStatsIndicator({ repoPath }: DiffStatsIndicatorProps) {
-  const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath,
-    staleTime: 5000,
-    refetchInterval: 5000,
-    placeholderData: (prev) => prev,
-  });
+  const { diffStats } = useDiffStats(repoPath, { refetchInterval: 5000 });
 
   if (!diffStats || diffStats.filesChanged === 0) {
     return null;

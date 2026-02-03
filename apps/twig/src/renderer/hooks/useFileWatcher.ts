@@ -1,4 +1,5 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
+import { CHANGED_FILES_QUERY_KEY } from "@hooks/useChangedFiles";
 import { logger } from "@renderer/lib/logger";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,10 +32,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         queryKey: ["repo-file", repoPath, relativePath],
       });
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-head", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats", repoPath],
+        queryKey: [CHANGED_FILES_QUERY_KEY, repoPath],
       });
     },
   });
@@ -44,10 +42,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
     onData: ({ repoPath: rp, filePath }) => {
       if (rp !== repoPath) return;
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-head", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats", repoPath],
+        queryKey: [CHANGED_FILES_QUERY_KEY, repoPath],
       });
       if (!taskId) return;
       const relativePath = filePath.replace(`${repoPath}/`, "");
@@ -61,10 +56,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
       if (rp !== repoPath) return;
       queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-head", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats", repoPath],
+        queryKey: [CHANGED_FILES_QUERY_KEY, repoPath],
       });
       queryClient.invalidateQueries({
         queryKey: ["git-sync-status", repoPath],
