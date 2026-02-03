@@ -688,6 +688,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
+  async cancelSessionsByTaskId(taskId: string): Promise<void> {
+    for (const [taskRunId, session] of this.sessions) {
+      if (session.taskId === taskId) {
+        await this.cleanupSession(taskRunId);
+      }
+    }
+  }
+
   async cancelPrompt(
     sessionId: string,
     reason?: InterruptReason,
