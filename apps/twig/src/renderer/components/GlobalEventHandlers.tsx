@@ -173,7 +173,7 @@ export function GlobalEventHandlers({
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
 
   useHotkeys(
-    SHORTCUTS.TASK_REFRESH,
+    SHORTCUTS.TOGGLE_FOCUS,
     handleToggleFocus,
     {
       ...globalOptions,

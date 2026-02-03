@@ -58,10 +58,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
         description: "Command",
       },
-      {
-        keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "R"],
-        description: "Refresh",
-      },
     ],
     "replace",
   );
