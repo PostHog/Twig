@@ -1,3 +1,4 @@
+import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -28,7 +29,6 @@ export interface UseTiptapEditorOptions {
   onBashCommand?: (command: string) => void;
   onBashModeChange?: (isBashMode: boolean) => void;
   onEmptyChange?: (isEmpty: boolean) => void;
-  onEditQueuedMessages?: () => string | null;
 }
 
 const EDITOR_CLASS =
@@ -50,7 +50,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
-    onEditQueuedMessages,
   } = options;
 
   const {
@@ -64,14 +63,12 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
-    onEditQueuedMessages,
   });
   callbackRefs.current = {
     onSubmit,
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
-    onEditQueuedMessages,
   };
 
   const prevBashModeRef = useRef(false);
@@ -148,7 +145,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
               const queuedContent =
-                callbackRefs.current.onEditQueuedMessages?.();
+                getSessionActions().popQueuedMessagesAsText(taskId);
               if (queuedContent !== null && queuedContent !== undefined) {
                 event.preventDefault();
                 view.dispatch(

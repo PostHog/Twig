@@ -160,12 +160,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     requestFocus,
   ]);
 
-  const handleEditQueuedMessages = useCallback((): string | null => {
-    const queuedMessages = popAllQueuedMessages(taskId);
-    if (queuedMessages.length === 0) return null;
-    return queuedMessages.map((msg) => msg.content).join("\n\n");
-  }, [taskId, popAllQueuedMessages]);
-
   const { appendUserShellExecute } = useSessionActions();
 
   const handleRetry = useCallback(async () => {
@@ -219,7 +213,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             errorMessage={errorMessage}
             onRetry={handleRetry}
             onDelete={handleDelete}
-            onEditQueuedMessages={handleEditQueuedMessages}
           />
         </ErrorBoundary>
       </Box>

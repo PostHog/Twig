@@ -46,7 +46,6 @@ interface SessionViewProps {
   errorMessage?: string;
   onRetry?: () => void;
   onDelete?: () => void;
-  onEditQueuedMessages?: () => string | null;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -67,7 +66,6 @@ export function SessionView({
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
   onDelete,
-  onEditQueuedMessages,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -415,7 +413,6 @@ export function SessionView({
                 onCancel={onCancelPrompt}
                 currentMode={currentMode}
                 onModeChange={!isCloud ? handleModeChange : undefined}
-                onEditQueuedMessages={onEditQueuedMessages}
               />
             </Box>
           )}
