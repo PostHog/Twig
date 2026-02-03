@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@posthog/shared": "workspace:*",
+    "@twig/git": "workspace:*",
     "@agentclientprotocol/sdk": "^0.13.1",
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@anthropic-ai/sdk": "^0.71.0",

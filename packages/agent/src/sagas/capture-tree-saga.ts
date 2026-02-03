@@ -43,7 +43,7 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
       ? join(tmpDir, `tree-${Date.now()}.tar.gz`)
       : undefined;
 
-    const gitCaptureSaga = new GitCaptureTreeSaga();
+    const gitCaptureSaga = new GitCaptureTreeSaga(this.log);
     const captureResult = await gitCaptureSaga.run({
       baseDir: repositoryPath,
       lastTreeHash,
@@ -67,14 +67,17 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
 
     let archiveUrl: string | undefined;
     if (apiClient && createdArchivePath) {
-      archiveUrl = await this.uploadArchive(
-        createdArchivePath,
-        gitSnapshot.treeHash,
-        apiClient,
-        taskId,
-        runId,
-      );
-      await rm(createdArchivePath, { force: true }).catch(() => {});
+      try {
+        archiveUrl = await this.uploadArchive(
+          createdArchivePath,
+          gitSnapshot.treeHash,
+          apiClient,
+          taskId,
+          runId,
+        );
+      } finally {
+        await rm(createdArchivePath, { force: true }).catch(() => {});
+      }
     }
 
     const snapshot: TreeSnapshot = {
@@ -128,7 +131,9 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
 
         return undefined;
       },
-      rollback: async () => {},
+      rollback: async () => {
+        await rm(archivePath, { force: true }).catch(() => {});
+      },
     });
 
     return archiveUrl;

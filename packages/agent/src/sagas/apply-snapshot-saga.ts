@@ -62,7 +62,7 @@ export class ApplySnapshotSaga extends Saga<
       },
     });
 
-    const gitApplySaga = new GitApplyTreeSaga();
+    const gitApplySaga = new GitApplyTreeSaga(this.log);
     const applyResult = await gitApplySaga.run({
       baseDir: repositoryPath,
       treeHash: snapshot.treeHash,

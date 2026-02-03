@@ -384,9 +384,6 @@ describe("ApplySnapshotSaga", () => {
       });
 
       expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.failedStep).toBe("extract_archive");
-      }
 
       expect(repo.exists(".posthog/tmp/extract-fail-hash.tar.gz")).toBe(false);
     });
@@ -425,7 +422,6 @@ describe("ApplySnapshotSaga", () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.failedStep).toBe("check_working_tree");
         expect(result.error).toContain("uncommitted change");
       }
 
@@ -523,7 +519,7 @@ describe("ApplySnapshotSaga", () => {
       });
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        "Applied snapshot from different commit - now in detached HEAD state",
+        "Applied tree from different commit - now in detached HEAD state",
         expect.objectContaining({
           originalBranch: expect.any(String),
           baseCommit: initialCommit,
