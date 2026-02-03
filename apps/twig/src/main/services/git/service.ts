@@ -144,7 +144,9 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
   public async getChangedFilesHead(
     directoryPath: string,
   ): Promise<ChangedFile[]> {
-    const files = await getChangedFilesDetailed(directoryPath);
+    const files = await getChangedFilesDetailed(directoryPath, {
+      excludePatterns: [".claude", "CLAUDE.local.md"],
+    });
     return files.map((f) => ({
       path: f.path,
       status: f.status,
@@ -162,7 +164,9 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
   }
 
   public async getDiffStats(directoryPath: string): Promise<DiffStats> {
-    const stats = await getDiffStats(directoryPath);
+    const stats = await getDiffStats(directoryPath, {
+      excludePatterns: [".claude", "CLAUDE.local.md"],
+    });
     return {
       filesChanged: stats.filesChanged,
       linesAdded: stats.linesAdded,
