@@ -2,7 +2,11 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Saga } from "@posthog/shared";
 import { createGitClient } from "../client.js";
-import { branchExists, getDefaultBranch } from "../queries.js";
+import {
+  addToLocalExclude,
+  branchExists,
+  getDefaultBranch,
+} from "../queries.js";
 
 export interface CreateWorktreeInput {
   baseDir: string;
@@ -70,11 +74,26 @@ export class CreateWorktreeSaga extends Saga<
         try {
           await fs.access(sourceClaudeDir);
           await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+          await addToLocalExclude(worktreePath, ".claude", {
+            abortSignal: signal,
+          });
+        } catch {}
+
+        const sourceClaudeLocalMd = path.join(baseDir, "CLAUDE.local.md");
+        const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
+        try {
+          await fs.access(sourceClaudeLocalMd);
+          await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
+          await addToLocalExclude(worktreePath, "CLAUDE.local.md", {
+            abortSignal: signal,
+          });
         } catch {}
       },
       rollback: async () => {
         const targetClaudeDir = path.join(worktreePath, ".claude");
+        const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
         await fs.rm(targetClaudeDir, { force: true }).catch(() => {});
+        await fs.rm(targetClaudeLocalMd, { force: true }).catch(() => {});
       },
     });
 
@@ -137,11 +156,26 @@ export class CreateWorktreeForBranchSaga extends Saga<
         try {
           await fs.access(sourceClaudeDir);
           await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+          await addToLocalExclude(worktreePath, ".claude", {
+            abortSignal: signal,
+          });
+        } catch {}
+
+        const sourceClaudeLocalMd = path.join(baseDir, "CLAUDE.local.md");
+        const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
+        try {
+          await fs.access(sourceClaudeLocalMd);
+          await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
+          await addToLocalExclude(worktreePath, "CLAUDE.local.md", {
+            abortSignal: signal,
+          });
         } catch {}
       },
       rollback: async () => {
         const targetClaudeDir = path.join(worktreePath, ".claude");
+        const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
         await fs.rm(targetClaudeDir, { force: true }).catch(() => {});
+        await fs.rm(targetClaudeLocalMd, { force: true }).catch(() => {});
       },
     });
 

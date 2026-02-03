@@ -18,6 +18,7 @@ const getInternalId = (event: IpcMainEvent, request: ETRPCRequest) => {
 class IPCHandler<TRouter extends AnyTRPCRouter> {
   #windows: BrowserWindow[] = [];
   #subscriptions: Map<string, AbortController> = new Map();
+  #listener: (event: IpcMainEvent, request: ETRPCRequest) => void;
 
   constructor({
     createContext,
@@ -34,19 +35,25 @@ class IPCHandler<TRouter extends AnyTRPCRouter> {
       this.attachWindow(win);
     }
 
-    ipcMain.on(
-      ELECTRON_TRPC_CHANNEL,
-      (event: IpcMainEvent, request: ETRPCRequest) => {
-        handleIPCMessage({
-          router,
-          createContext,
-          internalId: getInternalId(event, request),
-          event,
-          message: request,
-          subscriptions: this.#subscriptions,
-        });
-      },
-    );
+    this.#listener = (event: IpcMainEvent, request: ETRPCRequest) => {
+      handleIPCMessage({
+        router,
+        createContext,
+        internalId: getInternalId(event, request),
+        event,
+        message: request,
+        subscriptions: this.#subscriptions,
+      });
+    };
+    ipcMain.on(ELECTRON_TRPC_CHANNEL, this.#listener);
+  }
+
+  destroy() {
+    ipcMain.removeListener(ELECTRON_TRPC_CHANNEL, this.#listener);
+    for (const sub of this.#subscriptions.values()) {
+      sub.abort();
+    }
+    this.#subscriptions.clear();
   }
 
   attachWindow(win: BrowserWindow) {
@@ -103,6 +110,8 @@ class IPCHandler<TRouter extends AnyTRPCRouter> {
   }
 }
 
+let currentHandler: IPCHandler<AnyTRPCRouter> | null = null;
+
 export const createIPCHandler = <TRouter extends AnyTRPCRouter>({
   createContext,
   router,
@@ -114,5 +123,9 @@ export const createIPCHandler = <TRouter extends AnyTRPCRouter>({
   router: TRouter;
   windows?: Electron.BrowserWindow[];
 }) => {
-  return new IPCHandler({ createContext, router, windows });
+  if (currentHandler) {
+    currentHandler.destroy();
+  }
+  currentHandler = new IPCHandler({ createContext, router, windows });
+  return currentHandler;
 };

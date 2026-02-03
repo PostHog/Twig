@@ -1,34 +1,59 @@
-import type { ToolCall } from "@features/sessions/types";
+import { Box } from "@radix-ui/themes";
+import { DeleteToolView } from "./DeleteToolView";
+import { EditToolView } from "./EditToolView";
 import { ExecuteToolView } from "./ExecuteToolView";
+import { FetchToolView } from "./FetchToolView";
+import { MoveToolView } from "./MoveToolView";
 import { PlanApprovalView } from "./PlanApprovalView";
+import { QuestionToolView } from "./QuestionToolView";
+import { ReadToolView } from "./ReadToolView";
+import { SearchToolView } from "./SearchToolView";
+import { ThinkToolView } from "./ThinkToolView";
 import { ToolCallView } from "./ToolCallView";
+import type { ToolViewProps } from "./toolCallUtils";
 
-interface ToolCallBlockProps {
-  toolCall: ToolCall;
-  turnCancelled?: boolean;
-}
-
-export function ToolCallBlock({ toolCall, turnCancelled }: ToolCallBlockProps) {
+export function ToolCallBlock({
+  toolCall,
+  turnCancelled,
+  turnComplete,
+}: ToolViewProps) {
   const meta = toolCall._meta as
     | { claudeCode?: { toolName?: string } }
     | undefined;
   const toolName = meta?.claudeCode?.toolName;
 
-  if (toolCall.kind === "switch_mode") {
-    return (
-      <PlanApprovalView toolCall={toolCall} turnCancelled={turnCancelled} />
-    );
-  }
-
   if (toolName === "EnterPlanMode" || toolName === "ExitPlanMode") {
     return null;
   }
 
-  if (toolCall.kind === "execute") {
-    return (
-      <ExecuteToolView toolCall={toolCall} turnCancelled={turnCancelled} />
-    );
-  }
+  const props = { toolCall, turnCancelled, turnComplete };
 
-  return <ToolCallView toolCall={toolCall} turnCancelled={turnCancelled} />;
+  const content = (() => {
+    switch (toolCall.kind) {
+      case "switch_mode":
+        return <PlanApprovalView {...props} />;
+      case "execute":
+        return <ExecuteToolView {...props} />;
+      case "read":
+        return <ReadToolView {...props} />;
+      case "edit":
+        return <EditToolView {...props} />;
+      case "delete":
+        return <DeleteToolView {...props} />;
+      case "move":
+        return <MoveToolView {...props} />;
+      case "search":
+        return <SearchToolView {...props} />;
+      case "think":
+        return <ThinkToolView {...props} />;
+      case "fetch":
+        return <FetchToolView {...props} />;
+      case "question":
+        return <QuestionToolView {...props} />;
+      default:
+        return <ToolCallView {...props} />;
+    }
+  })();
+
+  return <Box className="pl-3">{content}</Box>;
 }

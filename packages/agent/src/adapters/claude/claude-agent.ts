@@ -48,7 +48,11 @@ import { canUseTool } from "./permissions/permission-handlers.js";
 import { getAvailableSlashCommands } from "./session/commands.js";
 import { parseMcpServers } from "./session/mcp-config.js";
 import { DEFAULT_MODEL, toSdkModelId } from "./session/models.js";
-import { buildSessionOptions, buildSystemPrompt } from "./session/options.js";
+import {
+  buildSessionOptions,
+  buildSystemPrompt,
+  type ProcessSpawnedInfo,
+} from "./session/options.js";
 import {
   getAvailableModes,
   TWIG_EXECUTION_MODES,
@@ -61,6 +65,11 @@ import type {
   ToolUseCache,
 } from "./types.js";
 
+export interface ClaudeAcpAgentOptions {
+  onProcessSpawned?: (info: ProcessSpawnedInfo) => void;
+  onProcessExited?: (pid: number) => void;
+}
+
 export class ClaudeAcpAgent extends BaseAcpAgent {
   readonly adapterName = "claude";
   declare session: Session;
@@ -68,10 +77,16 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
   private logWriter?: SessionLogWriter;
+  private processCallbacks?: ClaudeAcpAgentOptions;
 
-  constructor(client: AgentSideConnection, logWriter?: SessionLogWriter) {
+  constructor(
+    client: AgentSideConnection,
+    logWriter?: SessionLogWriter,
+    processCallbacks?: ClaudeAcpAgentOptions,
+  ) {
     super(client);
     this.logWriter = logWriter;
+    this.processCallbacks = processCallbacks;
     this.toolUseCache = {};
     this.logger = new Logger({ debug: true, prefix: "[ClaudeAcpAgent]" });
   }
@@ -136,6 +151,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,
       onModeChange: this.createOnModeChange(sessionId),
+      onProcessSpawned: this.processCallbacks?.onProcessSpawned,
+      onProcessExited: this.processCallbacks?.onProcessExited,
     });
 
     const input = new Pushable<SDKUserMessage>();
@@ -303,6 +320,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       sdkSessionId: config.sdkSessionId,
       additionalDirectories: config.additionalDirectories,
       onModeChange: this.createOnModeChange(config.sessionId),
+      onProcessSpawned: this.processCallbacks?.onProcessSpawned,
+      onProcessExited: this.processCallbacks?.onProcessExited,
     });
 
     const q = query({ prompt: input, options });

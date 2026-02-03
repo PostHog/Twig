@@ -1,7 +1,6 @@
 import type { TabData } from "@features/panels/store/panelTypes";
 import type React from "react";
 import { DraggableTab } from "./DraggableTab";
-import { StaticTab } from "./StaticTab";
 
 interface PanelTabProps {
   tabId: string;
@@ -42,19 +41,6 @@ export const PanelTab: React.FC<PanelTabProps> = ({
   badge,
   hasUnsavedChanges,
 }) => {
-  if (!draggable) {
-    return (
-      <StaticTab
-        label={label}
-        isActive={isActive}
-        onSelect={onSelect}
-        icon={icon}
-        badge={badge}
-        hasUnsavedChanges={hasUnsavedChanges}
-      />
-    );
-  }
-
   return (
     <DraggableTab
       tabId={tabId}
@@ -63,6 +49,7 @@ export const PanelTab: React.FC<PanelTabProps> = ({
       tabData={tabData}
       isActive={isActive}
       index={index}
+      draggable={draggable}
       closeable={closeable}
       isPreview={isPreview}
       onSelect={onSelect}

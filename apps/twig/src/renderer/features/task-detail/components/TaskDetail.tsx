@@ -3,7 +3,7 @@ import { PanelLayout } from "@features/panels";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
-import { FocusWorkspaceButton } from "@features/workspace/components/FocusWorkspaceButton";
+import { useTaskStore } from "@features/tasks/stores/taskStore";
 import { StartWorkspaceButton } from "@features/workspace/components/StartWorkspaceButton";
 import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
@@ -24,6 +24,13 @@ interface TaskDetailProps {
 
 export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   const taskId = initialTask.id;
+  const selectTask = useTaskStore((s) => s.selectTask);
+
+  useEffect(() => {
+    selectTask(taskId);
+    return () => selectTask(null);
+  }, [taskId, selectTask]);
+
   useTaskData({ taskId, initialTask });
 
   const workspace = useWorkspaceStore((state) => state.workspaces[taskId]);
@@ -59,10 +66,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
         keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
         description: "Command",
       },
-      {
-        keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "R"],
-        description: "Refresh",
-      },
     ],
     "replace",
   );
@@ -94,7 +97,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             {initialTask.title}
           </Text>
           <StartWorkspaceButton taskId={taskId} />
-          <FocusWorkspaceButton taskId={taskId} />
           {workspace?.branchName && (
             <Tooltip content={workspace.branchName}>
               <Code

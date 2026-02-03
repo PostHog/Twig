@@ -78,11 +78,9 @@ export function ConversationView({
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
 
-  // Track pending permissions for scroll triggering
   const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
   const pendingPermissionsCount = pendingPermissions.size;
 
-  // Get queued messages and actions
   const queuedMessages = useQueuedMessagesForTask(taskId);
   const { removeQueuedMessage } = useSessionActions();
 
@@ -91,7 +89,6 @@ export function ConversationView({
   const prevPendingCountRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Update isNearBottom on scroll
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -107,7 +104,6 @@ export function ConversationView({
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll to bottom on first render, new content, or new pending permissions
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -239,6 +235,7 @@ const TurnView = memo(function TurnView({
             item={renderItem}
             toolCalls={turn.toolCalls}
             turnCancelled={wasCancelled}
+            turnComplete={turn.isComplete}
           />
         );
       })}

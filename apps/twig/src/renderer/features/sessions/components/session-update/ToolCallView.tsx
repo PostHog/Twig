@@ -1,5 +1,4 @@
-import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import type { ToolCall, TwigToolKind } from "@features/sessions/types";
+import type { TwigToolKind } from "@features/sessions/types";
 import {
   ArrowsClockwise,
   ArrowsLeftRight,
@@ -14,7 +13,8 @@ import {
   Trash,
   Wrench,
 } from "@phosphor-icons/react";
-import { Code, Flex, Text } from "@radix-ui/themes";
+import { ToolRow } from "./ToolRow";
+import { type ToolViewProps, useToolCallStatus } from "./toolCallUtils";
 
 const kindIcons: Record<TwigToolKind, Icon> = {
   read: FileText,
@@ -30,43 +30,30 @@ const kindIcons: Record<TwigToolKind, Icon> = {
   other: Wrench,
 };
 
-interface ToolCallViewProps {
-  toolCall: ToolCall;
-  turnCancelled?: boolean;
-}
-
-export function ToolCallView({ toolCall, turnCancelled }: ToolCallViewProps) {
+export function ToolCallView({
+  toolCall,
+  turnCancelled,
+  turnComplete,
+}: ToolViewProps) {
   const { title, kind, status, locations } = toolCall;
-  const isIncomplete = status === "pending" || status === "in_progress";
-  const isLoading = isIncomplete && !turnCancelled;
-  const isFailed = status === "failed";
-  const wasCancelled = isIncomplete && turnCancelled;
+  const { isLoading, isFailed, wasCancelled } = useToolCallStatus(
+    status,
+    turnCancelled,
+    turnComplete,
+  );
   const KindIcon = (kind && kindIcons[kind]) || Wrench;
 
-  // For read tool, show file path from locations if available
   const filePath = kind === "read" && locations?.[0]?.path;
   const displayText = filePath ? `Read ${filePath}` : title;
 
   return (
-    <Flex align="center" gap="2" className="py-0.5 pl-3">
-      {isLoading ? (
-        <DotsCircleSpinner size={12} className="text-gray-9" />
-      ) : (
-        <KindIcon size={12} className="text-gray-9" />
-      )}
-      <Code size="1" color="gray">
-        {displayText}
-      </Code>
-      {isFailed && (
-        <Text size="1" color="gray">
-          (Failed)
-        </Text>
-      )}
-      {wasCancelled && (
-        <Text size="1" color="gray">
-          (Cancelled)
-        </Text>
-      )}
-    </Flex>
+    <ToolRow
+      icon={KindIcon}
+      isLoading={isLoading}
+      isFailed={isFailed}
+      wasCancelled={wasCancelled}
+    >
+      {displayText}
+    </ToolRow>
   );
 }

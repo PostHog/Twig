@@ -4,9 +4,13 @@ export const isEnabledOutput = z.object({
   enabled: z.boolean(),
 });
 
+export const checkErrorCode = z.enum(["already_checking", "disabled"]);
+export type CheckErrorCode = z.infer<typeof checkErrorCode>;
+
 export const checkForUpdatesOutput = z.object({
   success: z.boolean(),
-  error: z.string().optional(),
+  errorMessage: z.string().optional(),
+  errorCode: checkErrorCode.optional(),
 });
 
 export const installUpdateOutput = z.object({

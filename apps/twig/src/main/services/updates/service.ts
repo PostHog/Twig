@@ -75,11 +75,15 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       const reason = !app.isPackaged
         ? "Updates only available in packaged builds"
         : "Auto updates only supported on macOS and Windows";
-      return { success: false, error: reason };
+      return { success: false, errorMessage: reason, errorCode: "disabled" };
     }
 
     if (this.checkingForUpdates) {
-      return { success: false, error: "Already checking for updates" };
+      return {
+        success: false,
+        errorMessage: "Already checking for updates",
+        errorCode: "already_checking",
+      };
     }
 
     // If an update is already downloaded and ready, show the prompt again
@@ -153,11 +157,11 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     );
 
     // Perform initial check
-    this.performCheck();
+    this.checkForUpdates();
 
     // Set up periodic checks
     this.checkIntervalId = setInterval(
-      () => this.performCheck(),
+      () => this.checkForUpdates(),
       UpdatesService.CHECK_INTERVAL_MS,
     );
   }
@@ -265,6 +269,10 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       this.clearCheckTimeout();
       log.error("Failed to check for updates", error);
       this.checkingForUpdates = false;
+      this.emitStatus({
+        checking: false,
+        error: "Failed to check for updates. Please try again.",
+      });
     }
   }
 

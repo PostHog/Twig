@@ -6,6 +6,10 @@ import type {
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
+import {
+  notifyPermissionRequest,
+  notifyPromptComplete,
+} from "@renderer/lib/notifications";
 import { EXECUTION_MODES, type ExecutionMode, type Task } from "@shared/types";
 import type {
   AcpMessage,
@@ -72,6 +76,7 @@ export interface QueuedMessage {
 export interface AgentSession {
   taskRunId: string;
   taskId: string;
+  taskTitle: string;
   channel: string;
   events: AcpMessage[];
   startedAt: number;
@@ -127,6 +132,7 @@ interface SessionActions {
   clearSessionError: (taskId: string) => Promise<void>;
   removeQueuedMessage: (taskId: string, queueId: string) => void;
   popAllQueuedMessages: (taskId: string) => QueuedMessage[];
+  popQueuedMessagesAsText: (taskId: string) => string | null;
 }
 
 interface AuthCredentials {
@@ -154,7 +160,9 @@ const subscriptions = new Map<
  * Called synchronously after session is created, before any prompts are sent.
  */
 function subscribeToChannel(taskRunId: string) {
-  if (subscriptions.has(taskRunId)) return;
+  if (subscriptions.has(taskRunId)) {
+    return;
+  }
 
   const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
     { sessionId: taskRunId },
@@ -241,6 +249,25 @@ function subscribeToChannel(taskRunId: string) {
             }
           }
         });
+
+        // Notify outside of setState - check the payload directly
+        const acpMsg = payload as AcpMessage;
+        const msg = acpMsg.message;
+        if (
+          "id" in msg &&
+          "result" in msg &&
+          typeof msg.result === "object" &&
+          msg.result !== null &&
+          "stopReason" in msg.result
+        ) {
+          const stopReason = (msg.result as { stopReason?: string }).stopReason;
+          if (stopReason) {
+            const session = useStore.getState().sessions[taskRunId];
+            if (session) {
+              notifyPromptComplete(session.taskTitle, stopReason);
+            }
+          }
+        }
       },
       onError: (err) => {
         log.error("Session subscription error", { taskRunId, error: err });
@@ -292,6 +319,8 @@ function subscribeToChannel(taskRunId: string) {
                 draft.sessions[taskRunId].pendingPermissions = newPermissions;
               }
             });
+
+            notifyPermissionRequest(session.taskTitle);
           } else {
             log.warn("Session not found for permission request", {
               taskRunId,
@@ -475,12 +504,14 @@ function convertStoredEntriesToEvents(
 function createBaseSession(
   taskRunId: string,
   taskId: string,
+  taskTitle: string,
   isCloud: boolean,
   executionMode?: ExecutionMode,
 ): AgentSession {
   return {
     taskRunId,
     taskId,
+    taskTitle,
     channel: `agent-event:${taskRunId}`,
     events: [],
     startedAt: Date.now(),
@@ -616,13 +647,14 @@ const useStore = create<SessionStore>()(
     const connectToCloudSession = async (
       taskId: string,
       taskRunId: string,
+      taskTitle: string,
       logUrl: string,
       taskDescription?: string,
     ) => {
       const { rawEntries } = await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries, taskDescription);
 
-      const session = createBaseSession(taskRunId, taskId, true);
+      const session = createBaseSession(taskRunId, taskId, taskTitle, true);
       session.events = events;
       session.status = "connected";
       session.logUrl = logUrl;
@@ -640,6 +672,7 @@ const useStore = create<SessionStore>()(
     const reconnectToLocalSession = async (
       taskId: string,
       taskRunId: string,
+      taskTitle: string,
       logUrl: string,
       repoPath: string,
       auth: AuthCredentials,
@@ -648,7 +681,7 @@ const useStore = create<SessionStore>()(
       const events = convertStoredEntriesToEvents(rawEntries);
 
       const persistedMode = getPersistedTaskMode(taskId);
-      const session = createBaseSession(taskRunId, taskId, false);
+      const session = createBaseSession(taskRunId, taskId, taskTitle, false);
       session.events = events;
       session.logUrl = logUrl;
       if (persistedMode) {
@@ -728,6 +761,7 @@ const useStore = create<SessionStore>()(
 
     const createNewLocalSession = async (
       taskId: string,
+      taskTitle: string,
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
@@ -762,6 +796,7 @@ const useStore = create<SessionStore>()(
       const session = createBaseSession(
         taskRun.id,
         taskId,
+        taskTitle,
         false,
         effectiveMode,
       );
@@ -888,77 +923,108 @@ const useStore = create<SessionStore>()(
           initialPrompt,
           executionMode,
         }) => {
+          log.info("Connecting to task", { taskId: task.id });
+
           const {
             id: taskId,
             latest_run: latestRun,
             description: taskDescription,
           } = task;
+          const taskTitle = task.title || task.description || "Task";
           const isCloud = latestRun?.environment === "cloud";
 
-          // Prevent duplicate connections
-          if (connectAttempts.has(taskId)) return;
-          if (getSessionByTaskId(taskId)?.status === "connected") return;
-
-          // Check auth first
-          const auth = getAuthCredentials();
-          if (!auth) {
-            log.error("Missing auth credentials");
-            const taskRunId = latestRun?.id ?? `error-${taskId}`;
-            const session = createBaseSession(taskRunId, taskId, isCloud);
-            session.status = "error";
-            session.errorMessage =
-              "Authentication required. Please sign in to continue.";
-            addSession(session);
+          // Prevent duplicate connections - CHECK AND ADD ATOMICALLY
+          if (connectAttempts.has(taskId)) {
+            return;
+          }
+          const existingSession = getSessionByTaskId(taskId);
+          if (existingSession?.status === "connected") {
+            return;
+          }
+          if (existingSession?.status === "connecting") {
             return;
           }
 
-          // For non-cloud sessions, check workspace existence (local filesystem check)
-          // This should happen before the offline check so users see workspace errors
-          if (!isCloud && latestRun?.id && latestRun?.log_url) {
-            const workspaceResult = await trpcVanilla.workspace.verify.query({
-              taskId,
-            });
-
-            if (!workspaceResult.exists) {
-              log.warn("Workspace no longer exists, showing error state", {
-                taskId,
-                missingPath: workspaceResult.missingPath,
-              });
-              const { rawEntries } = await fetchSessionLogs(latestRun.log_url);
-              const events = convertStoredEntriesToEvents(rawEntries);
-
-              const session = createBaseSession(latestRun.id, taskId, false);
-              session.events = events;
-              session.logUrl = latestRun.log_url;
-              session.status = "error";
-              session.errorMessage = workspaceResult.missingPath
-                ? `Working directory no longer exists: ${workspaceResult.missingPath}`
-                : "The working directory for this task no longer exists. Please start a new task.";
-
-              addSession(session);
-              return;
-            }
-          }
-
-          // Don't try to connect if offline (agent connection requires internet)
-          if (!getIsOnline()) {
-            log.info("Skipping connection attempt - offline", { taskId });
-            const taskRunId = latestRun?.id ?? `offline-${taskId}`;
-            const session = createBaseSession(taskRunId, taskId, isCloud);
-            session.status = "disconnected";
-            session.errorMessage =
-              "No internet connection. Connect when you're back online.";
-            addSession(session);
-            return;
-          }
-
+          // ADD TO SET IMMEDIATELY after checks - before any async work
+          // This prevents the race condition where two calls both pass the check
           connectAttempts.add(taskId);
 
           try {
+            // Check auth first
+            const auth = getAuthCredentials();
+            if (!auth) {
+              log.error("Missing auth credentials");
+              const taskRunId = latestRun?.id ?? `error-${taskId}`;
+              const session = createBaseSession(
+                taskRunId,
+                taskId,
+                taskTitle,
+                isCloud,
+              );
+              session.status = "error";
+              session.errorMessage =
+                "Authentication required. Please sign in to continue.";
+              addSession(session);
+              return;
+            }
+
+            // For non-cloud sessions, check workspace existence (local filesystem check)
+            // This should happen before the offline check so users see workspace errors
+            if (!isCloud && latestRun?.id && latestRun?.log_url) {
+              const workspaceResult = await trpcVanilla.workspace.verify.query({
+                taskId,
+              });
+
+              if (!workspaceResult.exists) {
+                log.warn("Workspace no longer exists, showing error state", {
+                  taskId,
+                  missingPath: workspaceResult.missingPath,
+                });
+                const { rawEntries } = await fetchSessionLogs(
+                  latestRun.log_url,
+                );
+                const events = convertStoredEntriesToEvents(rawEntries);
+
+                const session = createBaseSession(
+                  latestRun.id,
+                  taskId,
+                  taskTitle,
+                  false,
+                );
+                session.events = events;
+                session.logUrl = latestRun.log_url;
+                session.status = "error";
+                session.errorMessage = workspaceResult.missingPath
+                  ? `Working directory no longer exists: ${workspaceResult.missingPath}`
+                  : "The working directory for this task no longer exists. Please start a new task.";
+
+                addSession(session);
+                return;
+              }
+            }
+
+            // Don't try to connect if offline (agent connection requires internet)
+            if (!getIsOnline()) {
+              log.info("Skipping connection attempt - offline", { taskId });
+              const taskRunId = latestRun?.id ?? `offline-${taskId}`;
+              const session = createBaseSession(
+                taskRunId,
+                taskId,
+                taskTitle,
+                isCloud,
+              );
+              session.status = "disconnected";
+              session.errorMessage =
+                "No internet connection. Connect when you're back online.";
+              addSession(session);
+              return;
+            }
+
             if (isCloud && latestRun?.id && latestRun?.log_url) {
               await connectToCloudSession(
                 taskId,
                 latestRun.id,
+                taskTitle,
                 latestRun.log_url,
                 taskDescription,
               );
@@ -966,6 +1032,7 @@ const useStore = create<SessionStore>()(
               await reconnectToLocalSession(
                 taskId,
                 latestRun.id,
+                taskTitle,
                 latestRun.log_url,
                 repoPath,
                 auth,
@@ -973,6 +1040,7 @@ const useStore = create<SessionStore>()(
             } else {
               await createNewLocalSession(
                 taskId,
+                taskTitle,
                 repoPath,
                 auth,
                 initialPrompt,
@@ -986,7 +1054,12 @@ const useStore = create<SessionStore>()(
 
             // Create session in error state so user sees what happened
             const taskRunId = latestRun?.id ?? `error-${taskId}`;
-            const session = createBaseSession(taskRunId, taskId, isCloud);
+            const session = createBaseSession(
+              taskRunId,
+              taskId,
+              taskTitle,
+              isCloud,
+            );
             session.status = "error";
             session.errorMessage = `Failed to connect to the agent: ${message}`;
 
@@ -1011,7 +1084,9 @@ const useStore = create<SessionStore>()(
 
         disconnectFromTask: async (taskId) => {
           const session = getSessionByTaskId(taskId);
-          if (!session) return;
+          if (!session) {
+            return;
+          }
 
           if (session.isCloud) {
             stopCloudPolling(session.taskRunId);
@@ -1021,7 +1096,10 @@ const useStore = create<SessionStore>()(
                 sessionId: session.taskRunId,
               });
             } catch (error) {
-              log.error("Failed to cancel session", error);
+              log.error("Failed to cancel agent session", {
+                taskRunId: session.taskRunId,
+                error,
+              });
             }
             unsubscribeFromChannel(session.taskRunId);
           }
@@ -1382,6 +1460,14 @@ const useStore = create<SessionStore>()(
           }
 
           return messages;
+        },
+
+        popQueuedMessagesAsText: (taskId: string): string | null => {
+          const messages = useStore
+            .getState()
+            .actions.popAllQueuedMessages(taskId);
+          if (messages.length === 0) return null;
+          return messages.map((msg) => msg.content).join("\n\n");
         },
       },
     };

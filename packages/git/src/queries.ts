@@ -1,3 +1,5 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { type CreateGitClientOptions, createGitClient } from "./client.js";
 
 export interface WorktreeListEntry {
@@ -266,11 +268,28 @@ export interface ChangedFileInfo {
   linesRemoved?: number;
 }
 
+export interface GetChangedFilesDetailedOptions extends CreateGitClientOptions {
+  excludePatterns?: string[];
+}
+
+function matchesExcludePattern(filePath: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => {
+    if (pattern.startsWith("/")) {
+      return (
+        filePath === pattern.slice(1) ||
+        filePath.startsWith(`${pattern.slice(1)}/`)
+      );
+    }
+    return filePath === pattern || filePath.startsWith(`${pattern}/`);
+  });
+}
+
 export async function getChangedFilesDetailed(
   baseDir: string,
-  options?: CreateGitClientOptions,
+  options?: GetChangedFilesDetailedOptions,
 ): Promise<ChangedFileInfo[]> {
-  const git = createGitClient(baseDir, options);
+  const { excludePatterns, ...gitOptions } = options ?? {};
+  const git = createGitClient(baseDir, gitOptions);
 
   try {
     const [diffSummary, status] = await Promise.all([
@@ -282,6 +301,14 @@ export async function getChangedFilesDetailed(
     const files: ChangedFileInfo[] = [];
 
     for (const file of diffSummary.files) {
+      if (
+        excludePatterns &&
+        matchesExcludePattern(file.file, excludePatterns)
+      ) {
+        seenPaths.add(file.file);
+        continue;
+      }
+
       const hasFrom = "from" in file && file.from;
       const isBinary = file.binary;
       files.push({
@@ -307,6 +334,9 @@ export async function getChangedFilesDetailed(
 
     for (const file of status.not_added) {
       if (!seenPaths.has(file)) {
+        if (excludePatterns && matchesExcludePattern(file, excludePatterns)) {
+          continue;
+        }
         files.push({ path: file, status: "untracked" });
       }
     }
@@ -323,23 +353,32 @@ export interface DiffStats {
   linesRemoved: number;
 }
 
+export interface GetDiffStatsOptions extends CreateGitClientOptions {
+  excludePatterns?: string[];
+}
+
+export function computeDiffStatsFromFiles(files: ChangedFileInfo[]): DiffStats {
+  let linesAdded = 0;
+  let linesRemoved = 0;
+
+  for (const file of files) {
+    linesAdded += file.linesAdded ?? 0;
+    linesRemoved += file.linesRemoved ?? 0;
+  }
+
+  return {
+    filesChanged: files.length,
+    linesAdded,
+    linesRemoved,
+  };
+}
+
 export async function getDiffStats(
   baseDir: string,
-  options?: CreateGitClientOptions,
+  options?: GetDiffStatsOptions,
 ): Promise<DiffStats> {
-  const git = createGitClient(baseDir, options);
-  try {
-    const diffSummary = await git.diffSummary(["HEAD"]);
-    const status = await git.status();
-
-    return {
-      filesChanged: diffSummary.files.length + status.not_added.length,
-      linesAdded: diffSummary.insertions,
-      linesRemoved: diffSummary.deletions,
-    };
-  } catch {
-    return { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
-  }
+  const files = await getChangedFilesDetailed(baseDir, options);
+  return computeDiffStatsFromFiles(files);
 }
 
 export interface SyncStatus {
@@ -547,4 +586,44 @@ export async function isCommitOnRemote(
   } catch {
     return false;
   }
+}
+
+export async function resolveGitDir(
+  baseDir: string,
+  options?: CreateGitClientOptions,
+): Promise<string> {
+  const git = createGitClient(baseDir, options);
+  const gitDir = await git.revparse(["--git-dir"]);
+  return path.resolve(baseDir, gitDir);
+}
+
+export async function addToLocalExclude(
+  baseDir: string,
+  pattern: string,
+  options?: CreateGitClientOptions,
+): Promise<void> {
+  const gitDir = await resolveGitDir(baseDir, options);
+  const excludePath = path.join(gitDir, "info", "exclude");
+
+  let content = "";
+  try {
+    content = await fs.readFile(excludePath, "utf-8");
+  } catch {}
+
+  const normalizedPattern = pattern.startsWith("/") ? pattern : `/${pattern}`;
+  const patternWithoutSlash = pattern.replace(/^\//, "");
+  if (
+    content.includes(normalizedPattern) ||
+    content.includes(patternWithoutSlash)
+  ) {
+    return;
+  }
+
+  const infoDir = path.join(gitDir, "info");
+  await fs.mkdir(infoDir, { recursive: true });
+
+  const newContent = content.trimEnd()
+    ? `${content.trimEnd()}\n${pattern}\n`
+    : `${pattern}\n`;
+  await fs.writeFile(excludePath, newContent);
 }

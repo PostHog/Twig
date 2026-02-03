@@ -1,6 +1,5 @@
 import { DragDropProvider } from "@dnd-kit/react";
 import type { Task } from "@shared/types";
-import { useSettingsStore } from "@stores/settingsStore";
 import type React from "react";
 import { useCallback, useEffect } from "react";
 import { useDragDropHandlers } from "../hooks/useDragDropHandlers";
@@ -170,25 +169,14 @@ export const PanelLayout: React.FC<PanelLayoutProps> = ({ taskId, task }) => {
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const initializeTask = usePanelLayoutStore((state) => state.initializeTask);
   const dragDropHandlers = useDragDropHandlers(taskId);
-  const terminalLayoutMode = useSettingsStore(
-    (state) => state.terminalLayoutMode,
-  );
-  const loadTerminalLayout = useSettingsStore(
-    (state) => state.loadTerminalLayout,
-  );
-  const isLoading = useSettingsStore((state) => state.isLoading);
 
   usePanelKeyboardShortcuts(taskId);
 
   useEffect(() => {
-    loadTerminalLayout();
-  }, [loadTerminalLayout]);
-
-  useEffect(() => {
-    if (!layout && !isLoading) {
-      initializeTask(taskId, terminalLayoutMode);
+    if (!layout) {
+      initializeTask(taskId);
     }
-  }, [taskId, layout, initializeTask, terminalLayoutMode, isLoading]);
+  }, [taskId, layout, initializeTask]);
 
   if (!layout) {
     return null;

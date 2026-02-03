@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createGitClient } from "./client.js";
 import {
+  addToLocalExclude,
   branchExists,
   getDefaultBranch,
   listWorktrees as listWorktreesRaw,
@@ -366,17 +367,30 @@ export class WorktreeManager {
 
     try {
       await fs.access(sourceClaudeDir);
-    } catch {
-      return;
-    }
+      try {
+        await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+        await addToLocalExclude(worktreePath, ".claude");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          throw error;
+        }
+      }
+    } catch {}
+
+    const sourceClaudeLocalMd = path.join(this.mainRepoPath, "CLAUDE.local.md");
+    const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
 
     try {
-      await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw error;
+      await fs.access(sourceClaudeLocalMd);
+      try {
+        await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
+        await addToLocalExclude(worktreePath, "CLAUDE.local.md");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          throw error;
+        }
       }
-    }
+    } catch {}
   }
 
   async cleanupOrphanedWorktrees(associatedWorktreePaths: string[]): Promise<{

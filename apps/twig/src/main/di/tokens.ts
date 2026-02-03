@@ -10,7 +10,7 @@ export const MAIN_TOKENS = Object.freeze({
   AppLifecycleService: Symbol.for("Main.AppLifecycleService"),
   ConnectivityService: Symbol.for("Main.ConnectivityService"),
   ContextMenuService: Symbol.for("Main.ContextMenuService"),
-  DockBadgeService: Symbol.for("Main.DockBadgeService"),
+
   ExternalAppsService: Symbol.for("Main.ExternalAppsService"),
   FileWatcherService: Symbol.for("Main.FileWatcherService"),
   FocusService: Symbol.for("Main.FocusService"),
@@ -19,7 +19,9 @@ export const MAIN_TOKENS = Object.freeze({
   FsService: Symbol.for("Main.FsService"),
   GitService: Symbol.for("Main.GitService"),
   DeepLinkService: Symbol.for("Main.DeepLinkService"),
+  NotificationService: Symbol.for("Main.NotificationService"),
   OAuthService: Symbol.for("Main.OAuthService"),
+  ProcessTrackingService: Symbol.for("Main.ProcessTrackingService"),
   ShellService: Symbol.for("Main.ShellService"),
   UIService: Symbol.for("Main.UIService"),
   UpdatesService: Symbol.for("Main.UpdatesService"),

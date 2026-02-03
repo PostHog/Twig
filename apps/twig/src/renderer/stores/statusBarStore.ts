@@ -27,10 +27,6 @@ const defaultKeyHints: KeyHint[] = [
     keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
     description: "Command",
   },
-  {
-    keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "R"],
-    description: "Refresh",
-  },
 ];
 
 export const useStatusBarStore = create<StatusBarStore>((set, _get) => ({

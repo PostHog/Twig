@@ -124,6 +124,10 @@ function attachKeyHandlers(term: XTerm) {
       return false;
     }
 
+    if (event.key === "r" && cmdOrCtrl && !event.shiftKey) {
+      return false;
+    }
+
     if (cmdOrCtrl && event.key >= "1" && event.key <= "9") {
       return false;
     }
@@ -294,6 +298,7 @@ class TerminalManagerImpl {
       instance.terminalElement = element.querySelector(".xterm") as HTMLElement;
     } else if (instance.terminalElement) {
       element.appendChild(instance.terminalElement);
+      instance.term.refresh(0, instance.term.rows - 1);
     }
 
     const handleResize = () => {

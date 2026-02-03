@@ -15,6 +15,7 @@ interface DraggableTabProps {
   tabData: TabData;
   isActive: boolean;
   index: number;
+  draggable?: boolean;
   closeable?: boolean;
   isPreview?: boolean;
   onSelect: () => void;
@@ -34,6 +35,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   tabData,
   isActive,
   index,
+  draggable = true,
   closeable = true,
   isPreview,
   onSelect,
@@ -49,6 +51,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
     id: tabId,
     index,
     group: panelId,
+    disabled: !draggable,
     transition: {
       duration: 200,
       easing: "ease",
@@ -131,7 +134,7 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
       gap="1"
       pl="3"
       pr={onClose ? "1" : "3"}
-      className="group relative flex-shrink-0 cursor-grab select-none border-r border-b-2 transition-colors"
+      className={`group relative flex-shrink-0 select-none border-r border-b-2 transition-colors ${draggable ? "cursor-grab" : "cursor-pointer"}`}
       style={{
         borderRightColor: "var(--gray-6)",
         borderBottomColor: isActive ? "var(--accent-10)" : "transparent",

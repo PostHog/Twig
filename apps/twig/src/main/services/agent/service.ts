@@ -19,11 +19,13 @@ import {
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -185,6 +187,7 @@ interface ManagedSession {
   config: SessionConfig;
   interruptReason?: InterruptReason;
   needsRecreation: boolean;
+  recreationPromise?: Promise<ManagedSession>;
   promptPending: boolean;
   pendingContext?: string;
   availableModels?: Array<{
@@ -214,6 +217,15 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
+  private processTracking: ProcessTrackingService;
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    processTracking: ProcessTrackingService,
+  ) {
+    super();
+    this.processTracking = processTracking;
+  }
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
@@ -393,6 +405,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       if (existing) {
         return existing;
       }
+
+      // Kill any lingering processes from previous runs of this task
+      this.processTracking.killByTaskId(taskId);
+
+      // Clean up any prior session for this taskRunId before creating a new one
+      await this.cleanupSession(taskRunId);
     }
 
     const channel = `agent-event:${taskRunId}`;
@@ -410,7 +428,26 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
 
     try {
-      const acpConnection = await agent.run(taskId, taskRunId);
+      const acpConnection = await agent.run(taskId, taskRunId, {
+        processCallbacks: {
+          onProcessSpawned: (info) => {
+            this.processTracking.register(
+              info.pid,
+              "agent",
+              `agent:${taskRunId}`,
+              {
+                taskRunId,
+                taskId,
+                command: info.command,
+              },
+              taskId,
+            );
+          },
+          onProcessExited: (pid) => {
+            this.processTracking.unregister(pid, "agent-exited");
+          },
+        },
+      });
       const { clientStreams } = acpConnection;
 
       const connection = this.createClientConnection(
@@ -569,10 +606,18 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     // Recreate session if marked (token was refreshed while session was active)
     if (session.needsRecreation) {
-      log.info("Recreating session before prompt (token refreshed)", {
-        sessionId,
-      });
-      session = await this.recreateSession(sessionId);
+      if (!session.recreationPromise) {
+        log.info("Recreating session before prompt (token refreshed)", {
+          sessionId,
+        });
+        session.recreationPromise = this.recreateSession(sessionId).finally(
+          () => {
+            const s = this.sessions.get(sessionId);
+            if (s) s.recreationPromise = undefined;
+          },
+        );
+      }
+      session = await session.recreationPromise;
     }
 
     // Prepend pending context if present
@@ -630,6 +675,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       return true;
     } catch (_err) {
       return false;
+    }
+  }
+
+  async cancelSessionsByTaskId(taskId: string): Promise<void> {
+    for (const [taskRunId, session] of this.sessions) {
+      if (session.taskId === taskId) {
+        await this.cleanupSession(taskRunId);
+      }
     }
   }
 

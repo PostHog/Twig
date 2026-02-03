@@ -1,3 +1,4 @@
+import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -143,6 +144,18 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
             const isAtEnd = from === view.state.doc.content.size - 1;
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
+              const queuedContent =
+                getSessionActions().popQueuedMessagesAsText(taskId);
+              if (queuedContent !== null && queuedContent !== undefined) {
+                event.preventDefault();
+                view.dispatch(
+                  view.state.tr
+                    .delete(1, view.state.doc.content.size - 1)
+                    .insertText(queuedContent, 1),
+                );
+                return true;
+              }
+
               const newText = historyActions.navigateUp(taskId, currentText);
               if (newText !== null) {
                 event.preventDefault();

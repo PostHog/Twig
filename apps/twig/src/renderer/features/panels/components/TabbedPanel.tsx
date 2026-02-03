@@ -55,6 +55,7 @@ interface TabbedPanelProps {
   draggingTabPanelId?: string | null;
   onAddTerminal?: () => void;
   onSplitPanel?: (direction: SplitDirection) => void;
+  rightContent?: React.ReactNode;
 }
 
 export const TabbedPanel: React.FC<TabbedPanelProps> = ({
@@ -69,6 +70,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   draggingTabPanelId = null,
   onAddTerminal,
   onSplitPanel,
+  rightContent,
 }) => {
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
 
@@ -191,18 +193,22 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
               />
             )}
           </Flex>
-          {content.droppable && (onSplitPanel || onAddTerminal) && (
+          {(rightContent ||
+            (content.droppable && (onSplitPanel || onAddTerminal))) && (
             <Flex
+              align="center"
               style={{
                 position: "absolute",
                 right: 0,
                 top: 0,
                 height: "32px",
                 borderLeft: "1px solid var(--gray-6)",
+                borderBottom: "1px solid var(--gray-6)",
                 background: "var(--color-background)",
               }}
             >
-              {onSplitPanel && (
+              {rightContent}
+              {content.droppable && onSplitPanel && (
                 <TabBarButton
                   ariaLabel="Split panel"
                   onClick={handleSplitClick}
@@ -210,7 +216,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
                   <SquareSplitHorizontalIcon width={12} height={12} />
                 </TabBarButton>
               )}
-              {onAddTerminal && (
+              {content.droppable && onAddTerminal && (
                 <TabBarButton ariaLabel="Add terminal" onClick={onAddTerminal}>
                   <Terminal size={14} />
                 </TabBarButton>
