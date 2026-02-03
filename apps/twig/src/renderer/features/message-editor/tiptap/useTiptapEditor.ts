@@ -28,6 +28,7 @@ export interface UseTiptapEditorOptions {
   onBashCommand?: (command: string) => void;
   onBashModeChange?: (isBashMode: boolean) => void;
   onEmptyChange?: (isEmpty: boolean) => void;
+  onEditQueuedMessages?: () => string | null;
 }
 
 const EDITOR_CLASS =
@@ -49,6 +50,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
+    onEditQueuedMessages,
   } = options;
 
   const {
@@ -62,12 +64,14 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
+    onEditQueuedMessages,
   });
   callbackRefs.current = {
     onSubmit,
     onBashCommand,
     onBashModeChange,
     onEmptyChange,
+    onEditQueuedMessages,
   };
 
   const prevBashModeRef = useRef(false);
@@ -143,6 +147,18 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
             const isAtEnd = from === view.state.doc.content.size - 1;
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
+              const queuedContent =
+                callbackRefs.current.onEditQueuedMessages?.();
+              if (queuedContent !== null && queuedContent !== undefined) {
+                event.preventDefault();
+                view.dispatch(
+                  view.state.tr
+                    .delete(1, view.state.doc.content.size - 1)
+                    .insertText(queuedContent, 1),
+                );
+                return true;
+              }
+
               const newText = historyActions.navigateUp(taskId, currentText);
               if (newText !== null) {
                 event.preventDefault();
