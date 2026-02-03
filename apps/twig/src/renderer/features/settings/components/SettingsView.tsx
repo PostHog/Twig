@@ -80,13 +80,11 @@ export function SettingsView() {
     autoConvertLongText,
     sendMessagesWith,
     allowBypassPermissions,
-    preventSleepWhileRunning,
     setCursorGlow,
     setDesktopNotifications,
     setAutoConvertLongText,
     setSendMessagesWith,
     setAllowBypassPermissions,
-    setPreventSleepWhileRunning,
   } = useSettingsStore();
   const terminalFontFamily = useTerminalSettingsStore(
     (state) => state.terminalFontFamily,
@@ -116,9 +114,6 @@ export function SettingsView() {
   });
 
   const { data: appVersion } = trpcReact.os.getAppVersion.useQuery();
-
-  const preventSleepMutation =
-    trpcReact.powerSaveBlocker.setEnabled.useMutation();
 
   const [localWorktreeLocation, setLocalWorktreeLocation] =
     useState<string>("");
@@ -296,19 +291,6 @@ export function SettingsView() {
       setSendMessagesWith(value);
     },
     [sendMessagesWith, setSendMessagesWith],
-  );
-
-  const handlePreventSleepChange = useCallback(
-    (checked: boolean) => {
-      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-        setting_name: "prevent_sleep_while_running",
-        new_value: checked,
-        old_value: !checked,
-      });
-      setPreventSleepWhileRunning(checked);
-      preventSleepMutation.mutate({ enabled: checked });
-    },
-    [setPreventSleepWhileRunning, preventSleepMutation],
   );
 
   const handleBypassPermissionsChange = useCallback(
@@ -616,22 +598,6 @@ export function SettingsView() {
             <Heading size="3">Task Execution</Heading>
             <Card>
               <Flex direction="column" gap="4">
-                <Flex align="center" justify="between" gap="4">
-                  <Flex direction="column" gap="1">
-                    <Text size="1" weight="medium">
-                      Prevent sleep while running
-                    </Text>
-                    <Text size="1" color="gray">
-                      Keep your computer awake while the agent is running a
-                      task.
-                    </Text>
-                  </Flex>
-                  <Switch
-                    checked={preventSleepWhileRunning}
-                    onCheckedChange={handlePreventSleepChange}
-                    size="1"
-                  />
-                </Flex>
                 <Flex align="start" justify="between" gap="4">
                   <Flex direction="column" gap="1">
                     <Flex align="center" gap="2">

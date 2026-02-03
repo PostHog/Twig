@@ -7,7 +7,6 @@ import Store from "electron-store";
 
 interface SettingsSchema {
   worktreeLocation: string;
-  preventSleepWhileRunning: boolean;
 }
 
 function getDefaultWorktreeLocation(): string {
@@ -51,10 +50,6 @@ const schema = {
     type: "string" as const,
     default: getDefaultWorktreeLocation(),
   },
-  preventSleepWhileRunning: {
-    type: "boolean" as const,
-    default: false,
-  },
 };
 
 export const settingsStore = new Store<SettingsSchema>({
@@ -63,7 +58,6 @@ export const settingsStore = new Store<SettingsSchema>({
   cwd: app.getPath("userData"),
   defaults: {
     worktreeLocation: getDefaultWorktreeLocation(),
-    preventSleepWhileRunning: false,
   },
 });
 
