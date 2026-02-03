@@ -24,10 +24,6 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
-    "./worktree-manager": {
-      "types": "./dist/worktree-manager.d.ts",
-      "import": "./dist/worktree-manager.js"
-    },
     "./adapters/claude/questions/utils": {
       "types": "./dist/adapters/claude/questions/utils.d.ts",
       "import": "./dist/adapters/claude/questions/utils.js"
@@ -79,6 +75,7 @@
   },
   "dependencies": {
     "@posthog/shared": "workspace:*",
+    "@twig/git": "workspace:*",
     "@agentclientprotocol/sdk": "^0.13.1",
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@anthropic-ai/sdk": "^0.71.0",

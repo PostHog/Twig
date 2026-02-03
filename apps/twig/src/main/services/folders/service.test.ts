@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockExecAsync = vi.hoisted(() => vi.fn());
 const mockExistsSync = vi.hoisted(() => vi.fn(() => true));
 const mockDialog = vi.hoisted(() => ({
   showMessageBox: vi.fn(),
@@ -13,15 +12,8 @@ const mockWorktreeManager = vi.hoisted(() => ({
   deleteWorktree: vi.fn(),
   cleanupOrphanedWorktrees: vi.fn(),
 }));
-
-vi.mock("node:child_process", () => ({
-  exec: vi.fn(),
-  default: { exec: vi.fn() },
-}));
-
-vi.mock("node:util", () => ({
-  promisify: () => mockExecAsync,
-  default: { promisify: () => mockExecAsync },
+const mockInitRepositorySaga = vi.hoisted(() => ({
+  run: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
@@ -43,7 +35,7 @@ vi.mock("electron", () => ({
   dialog: mockDialog,
 }));
 
-vi.mock("@posthog/agent/worktree-manager", () => ({
+vi.mock("@twig/git/worktree", () => ({
   WorktreeManager: class MockWorktreeManager {
     deleteWorktree = mockWorktreeManager.deleteWorktree;
     cleanupOrphanedWorktrees = mockWorktreeManager.cleanupOrphanedWorktrees;
@@ -70,15 +62,21 @@ vi.mock("../../utils/store.js", () => ({
   clearAllStoreData: vi.fn(),
 }));
 
-vi.mock("../git.js", () => ({
+vi.mock("@twig/git/queries", () => ({
   isGitRepository: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@twig/git/sagas/init", () => ({
+  InitRepositorySaga: class {
+    run = mockInitRepositorySaga.run;
+  },
 }));
 
 vi.mock("../settingsStore.js", () => ({
   getWorktreeLocation: vi.fn(() => "/tmp/worktrees"),
 }));
 
-import { isGitRepository } from "../git.js";
+import { isGitRepository } from "@twig/git/queries";
 import { FoldersService } from "./service.js";
 
 describe("FoldersService", () => {
@@ -218,13 +216,18 @@ describe("FoldersService", () => {
     it("prompts to initialize git for non-git folder", async () => {
       vi.mocked(isGitRepository).mockResolvedValue(false);
       mockDialog.showMessageBox.mockResolvedValue({ response: 0 }); // User clicks "Initialize Git"
-      mockExecAsync.mockResolvedValue({ stdout: "" });
+      mockInitRepositorySaga.run.mockResolvedValue({
+        success: true,
+        data: { initialized: true },
+      });
 
       const result = await service.addFolder("/home/user/project");
 
       expect(mockDialog.showMessageBox).toHaveBeenCalled();
-      expect(mockExecAsync).toHaveBeenCalledWith("git init", {
-        cwd: "/home/user/project",
+      expect(mockInitRepositorySaga.run).toHaveBeenCalledWith({
+        baseDir: "/home/user/project",
+        initialCommit: true,
+        commitMessage: "Initial commit",
       });
       expect(result.name).toBe("project");
     });

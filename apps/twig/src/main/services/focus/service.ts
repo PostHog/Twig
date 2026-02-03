@@ -1,16 +1,26 @@
-import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { promisify } from "node:util";
 import * as watcher from "@parcel/watcher";
+import {
+  getHeadSha,
+  branchExists as gitBranchExists,
+  getCurrentBranch as gitGetCurrentBranch,
+  hasChanges,
+} from "@twig/git/queries";
+import { SwitchBranchSaga } from "@twig/git/sagas/branch";
+import { CleanWorkingTreeSaga } from "@twig/git/sagas/clean";
+import { DetachHeadSaga, ReattachBranchSaga } from "@twig/git/sagas/head";
+import {
+  StashApplySaga,
+  StashPopSaga,
+  StashPushSaga,
+} from "@twig/git/sagas/stash";
 import { injectable, preDestroy } from "inversify";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter";
 import { type FocusSession, focusStore } from "../../utils/store.js";
 import { getWorktreeLocation } from "../settingsStore";
 import type { FocusResult, StashResult } from "./schemas.js";
-
-const execFileAsync = promisify(execFile);
 
 const log = logger.scope("focus");
 
@@ -32,47 +42,6 @@ export interface FocusServiceEvents {
     focusedBranch: string;
     foreignBranch: string;
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-let gitMutex: Promise<void> = Promise.resolve();
-
-export async function withGitLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = gitMutex;
-  let resolve: () => void = () => {};
-  gitMutex = new Promise((r) => {
-    resolve = r;
-  });
-
-  try {
-    await prev;
-    return await fn();
-  } finally {
-    resolve();
-  }
-}
-
-export async function git(cwd: string, ...args: string[]): Promise<string> {
-  return withGitLock(async () => {
-    const { stdout } = await execFileAsync("git", args, { cwd });
-    return stdout.trim();
-  });
-}
-
-async function gitOp<T extends FocusResult>(
-  operation: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    const message = getErrorMessage(error);
-    log.error(`${operation}:`, message);
-    return { success: false, error: `${operation}: ${message}` } as T;
-  }
 }
 
 @injectable()
@@ -162,16 +131,11 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
     repoPath: string,
     branch: string,
   ): Promise<boolean> {
-    try {
-      await git(repoPath, "rev-parse", "--verify", `refs/heads/${branch}`);
-      return true;
-    } catch {
-      return false;
-    }
+    return gitBranchExists(repoPath, branch);
   }
 
   async getCommitSha(repoPath: string): Promise<string> {
-    return git(repoPath, "rev-parse", "HEAD");
+    return getHeadSha(repoPath);
   }
 
   /**
@@ -243,58 +207,46 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
   }
 
   async cleanWorkingTree(repoPath: string): Promise<void> {
-    await this.cleanStaleLockFile(repoPath);
-    await git(repoPath, "reset");
-    await git(repoPath, "restore", ".");
-    await git(repoPath, "clean", "-fd");
-    await this.forceRemoveLockFile(repoPath);
-  }
-
-  private async cleanStaleLockFile(repoPath: string): Promise<void> {
-    const lockPath = path.join(repoPath, ".git", "index.lock");
-    try {
-      const stat = await fs.stat(lockPath);
-      const ageMs = Date.now() - stat.mtimeMs;
-      if (ageMs > 2000) {
-        await fs.rm(lockPath);
-        log.info(
-          `Removed stale index.lock (age: ${Math.round(ageMs / 1000)}s)`,
-        );
-      }
-    } catch {}
-  }
-
-  private async forceRemoveLockFile(repoPath: string): Promise<void> {
-    const lockPath = path.join(repoPath, ".git", "index.lock");
-    try {
-      await fs.rm(lockPath);
-      log.info("Removed index.lock after cleaning working tree");
-    } catch {}
+    const saga = new CleanWorkingTreeSaga();
+    const result = await saga.run({ baseDir: repoPath });
+    if (!result.success) {
+      throw new Error(`Failed to clean working tree: ${result.error}`);
+    }
   }
 
   async detachWorktree(worktreePath: string): Promise<FocusResult> {
-    return gitOp("Failed to detach worktree", async () => {
-      await git(worktreePath, "checkout", "--detach");
-      log.info(`Detached worktree at ${worktreePath}`);
-      return { success: true };
-    });
+    const saga = new DetachHeadSaga();
+    const result = await saga.run({ baseDir: worktreePath });
+    if (!result.success) {
+      log.error("Failed to detach worktree:", result.error);
+      return {
+        success: false,
+        error: `Failed to detach worktree: ${result.error}`,
+      };
+    }
+    log.info(`Detached worktree at ${worktreePath}`);
+    return { success: true };
   }
 
   async reattachWorktree(
     worktreePath: string,
     branchName: string,
   ): Promise<FocusResult> {
-    return gitOp("Failed to reattach worktree", async () => {
-      await git(worktreePath, "checkout", "-B", branchName);
-      log.info(
-        `Reattached worktree at ${worktreePath} to branch ${branchName}`,
-      );
-      return { success: true };
-    });
+    const saga = new ReattachBranchSaga();
+    const result = await saga.run({ baseDir: worktreePath, branchName });
+    if (!result.success) {
+      log.error("Failed to reattach worktree:", result.error);
+      return {
+        success: false,
+        error: `Failed to reattach worktree: ${result.error}`,
+      };
+    }
+    log.info(`Reattached worktree at ${worktreePath} to branch ${branchName}`);
+    return { success: true };
   }
 
   async getCurrentBranch(repoPath: string): Promise<string | null> {
-    const branch = await git(repoPath, "branch", "--show-current");
+    const branch = await gitGetCurrentBranch(repoPath);
     if (!branch) {
       log.warn("getCurrentBranch returned empty (detached HEAD?)");
       return null;
@@ -303,80 +255,59 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
   }
 
   async isDirty(repoPath: string): Promise<boolean> {
-    const stdout = await git(repoPath, "status", "--porcelain");
-    return stdout.length > 0;
+    return hasChanges(repoPath);
   }
 
   async stash(repoPath: string, message: string): Promise<StashResult> {
-    return gitOp("Failed to stash", async () => {
-      await this.cleanStaleLockFile(repoPath);
-      const beforeList = await git(repoPath, "stash", "list");
-      const beforeCount = beforeList.split("\n").filter(Boolean).length;
-
-      await git(repoPath, "add", "-A");
-      await git(
-        repoPath,
-        "stash",
-        "push",
-        "--include-untracked",
-        "-m",
-        message,
-      );
-
-      const afterList = await git(repoPath, "stash", "list");
-      const afterCount = afterList.split("\n").filter(Boolean).length;
-
-      if (afterCount > beforeCount) {
-        // Get the SHA of the stash commit (survives other stashes being added)
-        const stashSha = await git(repoPath, "rev-parse", "stash@{0}");
-        return { success: true, stashRef: stashSha };
-      }
-      return { success: true };
-    });
+    const saga = new StashPushSaga();
+    const result = await saga.run({ baseDir: repoPath, message });
+    if (!result.success) {
+      log.error("Failed to stash:", result.error);
+      return { success: false, error: `Failed to stash: ${result.error}` };
+    }
+    if (result.data.stashSha) {
+      return { success: true, stashRef: result.data.stashSha };
+    }
+    return { success: true };
   }
 
   async stashApply(repoPath: string, stashRef: string): Promise<FocusResult> {
-    return gitOp("Failed to apply stash", async () => {
-      await this.cleanStaleLockFile(repoPath);
-      await git(repoPath, "stash", "apply", stashRef);
-
-      // Find the stash reference that matches this SHA
-      // Format: "<sha> stash@{N}"
-      const reflog = await git(
-        repoPath,
-        "reflog",
-        "show",
-        "--format=%H %gd",
-        "refs/stash",
-      );
-      const match = reflog
-        .split("\n")
-        .find((line) => line.startsWith(stashRef));
-
-      if (match) {
-        const stashIndex = match.split(" ")[1]; // e.g., "stash@{0}"
-        await git(repoPath, "stash", "drop", stashIndex);
-      } else {
-        log.warn(`Stash SHA ${stashRef} not found in reflog, skipping drop`);
-      }
-
-      return { success: true };
-    });
+    const saga = new StashApplySaga();
+    const result = await saga.run({ baseDir: repoPath, stashSha: stashRef });
+    if (!result.success) {
+      log.error("Failed to apply stash:", result.error);
+      return {
+        success: false,
+        error: `Failed to apply stash: ${result.error}`,
+      };
+    }
+    if (!result.data.dropped) {
+      log.warn(`Stash SHA ${stashRef} not found in reflog, skipping drop`);
+    }
+    return { success: true };
   }
 
   async stashPop(repoPath: string): Promise<FocusResult> {
-    return gitOp("Failed to pop stash", async () => {
-      await git(repoPath, "stash", "pop");
-      return { success: true };
-    });
+    const saga = new StashPopSaga();
+    const result = await saga.run({ baseDir: repoPath });
+    if (!result.success) {
+      log.error("Failed to pop stash:", result.error);
+      return { success: false, error: `Failed to pop stash: ${result.error}` };
+    }
+    return { success: true };
   }
 
   async checkout(repoPath: string, branch: string): Promise<FocusResult> {
-    return gitOp(`Failed to checkout ${branch}`, async () => {
-      await this.cleanStaleLockFile(repoPath);
-      await git(repoPath, "checkout", branch);
-      return { success: true };
-    });
+    const saga = new SwitchBranchSaga();
+    const result = await saga.run({ baseDir: repoPath, branchName: branch });
+    if (!result.success) {
+      log.error(`Failed to checkout ${branch}:`, result.error);
+      return {
+        success: false,
+        error: `Failed to checkout ${branch}: ${result.error}`,
+      };
+    }
+    return { success: true };
   }
 
   getSession(mainRepoPath: string): FocusSession | null {

@@ -49,11 +49,7 @@ export type {
   Task,
   TaskRun,
   TreeSnapshotEvent,
-  WorktreeInfo,
 } from "./types.js";
 export { getLlmGatewayUrl } from "./utils/gateway.js";
 export type { LoggerConfig } from "./utils/logger.js";
 export { Logger } from "./utils/logger.js";
-
-export type { WorktreeConfig } from "./worktree-manager.js";
-export { WorktreeManager } from "./worktree-manager.js";

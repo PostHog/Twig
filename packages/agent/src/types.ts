@@ -132,14 +132,6 @@ export interface AgentConfig {
   onLog?: OnLogCallback;
 }
 
-export interface WorktreeInfo {
-  worktreePath: string;
-  worktreeName: string;
-  branchName: string;
-  baseBranch: string;
-  createdAt: string;
-}
-
 // Device info for tracking where work happens
 export interface DeviceInfo {
   type: "local" | "cloud";
