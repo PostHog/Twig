@@ -6,7 +6,10 @@ import {
   createTappedWritableStream,
   type StreamPair,
 } from "@/utils/streams.js";
-import { ClaudeAcpAgent } from "./claude/claude-agent.js";
+import {
+  ClaudeAcpAgent,
+  type ClaudeAcpAgentOptions,
+} from "./claude/claude-agent.js";
 
 export type AgentAdapter = "claude";
 
@@ -16,6 +19,7 @@ export type AcpConnectionConfig = {
   sessionId?: string;
   taskId?: string;
   logger?: Logger;
+  processCallbacks?: ClaudeAcpAgentOptions;
 };
 
 export type InProcessAcpConnection = {
@@ -78,7 +82,7 @@ export function createAcpConnection(
   const agentConnection = new AgentSideConnection((client) => {
     switch (adapterType) {
       case "claude":
-        agent = new ClaudeAcpAgent(client);
+        agent = new ClaudeAcpAgent(client, logWriter, config.processCallbacks);
         break;
     }
     logger.info(`Created ${agent.adapterName} agent`);

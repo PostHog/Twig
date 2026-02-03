@@ -891,6 +891,8 @@ const useStore = create<SessionStore>()(
           initialPrompt,
           executionMode,
         }) => {
+          log.info("Connecting to task", { taskId: task.id });
+
           const {
             id: taskId,
             latest_run: latestRun,

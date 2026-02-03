@@ -2,9 +2,11 @@ import { app } from "electron";
 import { injectable } from "inversify";
 import { ANALYTICS_EVENTS } from "../../../types/analytics.js";
 import { container } from "../../di/container.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { withTimeout } from "../../lib/async.js";
 import { logger } from "../../lib/logger.js";
 import { shutdownPostHog, trackAppEvent } from "../posthog-analytics.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 
 const log = logger.scope("app-lifecycle");
 
@@ -53,7 +55,38 @@ export class AppLifecycleService {
   }
 
   private async doShutdown(): Promise<void> {
-    log.info("Shutdown started: unbinding container");
+    log.info("Shutdown started");
+
+    try {
+      const processTracking = container.get<ProcessTrackingService>(
+        MAIN_TOKENS.ProcessTrackingService,
+      );
+      const snapshot = await processTracking.getSnapshot(true);
+      log.info("Process snapshot at shutdown", {
+        tracked: {
+          shell: snapshot.tracked.shell.length,
+          agent: snapshot.tracked.agent.length,
+          child: snapshot.tracked.child.length,
+        },
+        discovered: snapshot.discovered?.length ?? 0,
+        untrackedDiscovered:
+          snapshot.discovered?.filter((p) => !p.tracked).length ?? 0,
+      });
+
+      if (
+        snapshot.tracked.shell.length +
+          snapshot.tracked.agent.length +
+          snapshot.tracked.child.length >
+        0
+      ) {
+        log.info("Killing all tracked processes before container unbind");
+        processTracking.killAll();
+      }
+    } catch (error) {
+      log.warn("Failed to get process snapshot at shutdown", error);
+    }
+
+    log.info("Unbinding container");
     try {
       await container.unbindAll();
       log.info("Container unbound successfully");

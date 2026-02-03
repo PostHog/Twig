@@ -53,7 +53,34 @@ vi.mock("../workspace/workspaceEnv.js", () => ({
   buildWorkspaceEnv: vi.fn(() => ({})),
 }));
 
+vi.mock("../../lib/process-utils.js", () => ({
+  killProcessTree: vi.fn(),
+  isProcessAlive: vi.fn(() => true),
+}));
+
+vi.mock("../../di/tokens.js", () => ({
+  MAIN_TOKENS: {
+    ProcessTrackingService: Symbol.for("Main.ProcessTrackingService"),
+  },
+}));
+
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import { ShellService } from "./service.js";
+
+function createMockProcessTracking(): ProcessTrackingService {
+  return {
+    register: vi.fn(),
+    unregister: vi.fn(),
+    getAll: vi.fn(() => []),
+    getByCategory: vi.fn(() => []),
+    getSnapshot: vi.fn(),
+    discoverChildren: vi.fn(),
+    isAlive: vi.fn(() => true),
+    kill: vi.fn(),
+    killByCategory: vi.fn(),
+    killAll: vi.fn(),
+  } as unknown as ProcessTrackingService;
+}
 
 describe("ShellService", () => {
   let service: ShellService;
@@ -65,6 +92,8 @@ describe("ShellService", () => {
     kill: ReturnType<typeof vi.fn>;
     process: string;
   };
+
+  let mockProcessTracking: ProcessTrackingService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,8 +109,9 @@ describe("ShellService", () => {
 
     mockPty.spawn.mockReturnValue(mockPtyProcess);
     mockExistsSync.mockReturnValue(true);
+    mockProcessTracking = createMockProcessTracking();
 
-    service = new ShellService();
+    service = new ShellService(mockProcessTracking);
   });
 
   afterEach(() => {
@@ -354,7 +384,7 @@ describe("ShellService", () => {
       mockPlatform.mockReturnValue("darwin");
 
       // Create a new service instance to pick up the env change
-      const newService = new ShellService();
+      const newService = new ShellService(mockProcessTracking);
       await newService.create("session-1");
 
       expect(mockPty.spawn).toHaveBeenCalledWith(

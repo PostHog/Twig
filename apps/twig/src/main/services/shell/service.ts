@@ -1,46 +1,19 @@
-import { exec, execSync } from "node:child_process";
+import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import path from "node:path";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
 import * as pty from "node-pty";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import { getWorktreeLocation } from "../settingsStore.js";
 import { buildWorkspaceEnv } from "../workspace/workspaceEnv.js";
 import { type ExecuteOutput, ShellEvent, type ShellEvents } from "./schemas.js";
 
 const log = logger.scope("shell");
-
-/**
- * Kill a process and all its children by killing the process group.
- * On Unix, we use process.kill(-pid) to kill the entire process group.
- * On Windows, we use taskkill with /T flag to kill the process tree.
- */
-function killProcessTree(pid: number): void {
-  try {
-    if (platform() === "win32") {
-      // Windows: use taskkill with /T to kill process tree
-      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
-    } else {
-      // Unix: kill the process group by using negative PID
-      // This sends SIGTERM to all processes in the group
-      try {
-        process.kill(-pid, "SIGTERM");
-      } catch {
-        // If SIGTERM fails (process may have already exited), try SIGKILL
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // Process group may have already exited
-        }
-      }
-    }
-  } catch (err) {
-    log.warn(`Failed to kill process tree for PID ${pid}`, err);
-  }
-}
 
 export interface ShellSession {
   pty: pty.IPty;
@@ -93,6 +66,15 @@ export interface CreateSessionOptions {
 @injectable()
 export class ShellService extends TypedEventEmitter<ShellEvents> {
   private sessions = new Map<string, ShellSession>();
+  private processTracking: ProcessTrackingService;
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    processTracking: ProcessTrackingService,
+  ) {
+    super();
+    this.processTracking = processTracking;
+  }
 
   async create(
     sessionId: string,
@@ -128,6 +110,14 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       encoding: null,
     });
 
+    this.processTracking.register(
+      ptyProcess.pid,
+      "shell",
+      `shell:${sessionId}`,
+      { sessionId, cwd: workingDir },
+      taskId,
+    );
+
     let resolveExit: (result: { exitCode: number }) => void;
     const exitPromise = new Promise<{ exitCode: number }>((resolve) => {
       resolveExit = resolve;
@@ -139,6 +129,7 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
 
     ptyProcess.onExit(({ exitCode }) => {
       log.info(`Shell session ${sessionId} exited with code ${exitCode}`);
+      this.processTracking.unregister(ptyProcess.pid, "exited");
       this.sessions.delete(sessionId);
       this.emit(ShellEvent.Exit, { sessionId, exitCode });
       resolveExit({ exitCode });
@@ -201,11 +192,8 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
   destroy(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
-      // Kill the entire process tree, not just the shell
-      // This ensures child processes like `pnpm dev` are properly cleaned up
       const pid = session.pty.pid;
-      killProcessTree(pid);
-      // Also call pty.kill() to ensure the PTY is properly closed
+      this.processTracking.kill(pid);
       session.pty.kill();
       this.sessions.delete(sessionId);
     }

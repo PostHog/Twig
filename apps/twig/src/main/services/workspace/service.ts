@@ -14,10 +14,12 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store";
+import type { AgentService } from "../agent/service.js";
 import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
 import { FocusServiceEvent } from "../focus/service.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import { getWorktreeLocation } from "../settingsStore";
 import type { ShellService } from "../shell/service.js";
 import { loadConfig, normalizeScripts } from "./configLoader";
@@ -134,6 +136,12 @@ export interface WorkspaceServiceEvents {
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   @inject(MAIN_TOKENS.ShellService)
   private shellService!: ShellService;
+
+  @inject(MAIN_TOKENS.AgentService)
+  private agentService!: AgentService;
+
+  @inject(MAIN_TOKENS.ProcessTrackingService)
+  private processTracking!: ProcessTrackingService;
 
   private scriptRunner!: ScriptRunner;
   private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
@@ -709,6 +717,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       }
     }
 
+    await this.agentService.cancelSessionsByTaskId(taskId);
+    this.processTracking.killByTaskId(taskId);
     this.ensureScriptRunner().cleanupTaskSessions(taskId);
 
     if (association.mode === "worktree" && worktreePath) {

@@ -63,6 +63,7 @@ export class Agent {
       sessionId: taskRunId,
       taskId,
       logger: this.logger,
+      processCallbacks: options.processCallbacks,
     });
 
     return this.acpConnection;

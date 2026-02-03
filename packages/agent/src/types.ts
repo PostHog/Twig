@@ -96,9 +96,19 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
+export interface ProcessSpawnedCallback {
+  onProcessSpawned?: (info: {
+    pid: number;
+    command: string;
+    sessionId: string;
+  }) => void;
+  onProcessExited?: (pid: number) => void;
+}
+
 export interface TaskExecutionOptions {
   repositoryPath?: string;
   adapter?: "claude";
+  processCallbacks?: ProcessSpawnedCallback;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
