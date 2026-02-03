@@ -26,10 +26,18 @@ import {
   useSessionViewActions,
   useShowRawLogs,
 } from "../stores/sessionViewStore";
+import { CloudProvisioningOverlay } from "./CloudProvisioningOverlay";
 import { ConversationView } from "./ConversationView";
 import { DropZoneOverlay } from "./DropZoneOverlay";
 import { PlanStatusBar } from "./PlanStatusBar";
 import { RawLogsView } from "./raw-logs/RawLogsView";
+
+type SessionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error"
+  | "provisioning";
 
 interface SessionViewProps {
   events: AcpMessage[];
@@ -42,6 +50,7 @@ interface SessionViewProps {
   onCancelPrompt: () => void;
   repoPath?: string | null;
   isCloud?: boolean;
+  sessionStatus?: SessionStatus;
   hasError?: boolean;
   errorMessage?: string;
   onRetry?: () => void;
@@ -62,6 +71,7 @@ export function SessionView({
   onCancelPrompt,
   repoPath,
   isCloud = false,
+  sessionStatus,
   hasError = false,
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
@@ -363,7 +373,11 @@ export function SessionView({
 
           <PlanStatusBar plan={latestPlan} />
 
-          {hasError ? (
+          {isCloud &&
+          (sessionStatus === "connecting" ||
+            sessionStatus === "provisioning") ? (
+            <CloudProvisioningOverlay />
+          ) : hasError ? (
             <Flex
               align="center"
               justify="center"

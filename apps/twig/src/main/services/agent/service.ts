@@ -1,26 +1,15 @@
-import { mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  type Client,
-  ClientSideConnection,
-  type ContentBlock,
-  ndJsonStream,
-  PROTOCOL_VERSION,
-  type RequestPermissionRequest,
-  type RequestPermissionResponse,
+import type {
+  ContentBlock,
+  RequestPermissionRequest,
+  RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
-import { Agent } from "@posthog/agent/agent";
 import {
   fetchGatewayModels,
   formatGatewayModelName,
   getProviderName,
 } from "@posthog/agent/gateway-models";
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
-import type { OnLogCallback } from "@posthog/agent/types";
-import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
-import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
@@ -30,161 +19,34 @@ import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
-  type Credentials,
   type InterruptReason,
   type PromptOutput,
   type ReconnectSessionInput,
+  type SessionConfig,
   type SessionResponse,
   type StartSessionInput,
 } from "./schemas.js";
+import { CloudAgentTransport } from "./transports/cloud.js";
+import { LocalAgentTransport } from "./transports/local.js";
+import type {
+  AgentTransport,
+  AnyTransportConfig,
+  CloudTransportConfig,
+  LocalTransportConfig,
+} from "./transports/transport.js";
 
 export type { InterruptReason };
 
 const log = logger.scope("agent-service");
 
-function isAuthError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.startsWith("Authentication required")
-  );
-}
-
-type MessageCallback = (message: unknown) => void;
-
-class NdJsonTap {
-  private decoder = new TextDecoder();
-  private buffer = "";
-
-  constructor(private onMessage: MessageCallback) {}
-
-  process(chunk: Uint8Array): void {
-    this.buffer += this.decoder.decode(chunk, { stream: true });
-    const lines = this.buffer.split("\n");
-    this.buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        this.onMessage(JSON.parse(line));
-      } catch {
-        // Not valid JSON, skip
-      }
-    }
-  }
-}
-
-function createTappedReadableStream(
-  underlying: ReadableStream<Uint8Array>,
-  onMessage: MessageCallback,
-): ReadableStream<Uint8Array> {
-  const reader = underlying.getReader();
-  const tap = new NdJsonTap(onMessage);
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { value, done } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-        tap.process(value);
-        controller.enqueue(value);
-      } catch (err) {
-        // Stream may be closed if subprocess crashed - close gracefully
-        log.warn("Stream read failed (subprocess may have crashed)", {
-          error: err,
-        });
-        controller.close();
-      }
-    },
-    cancel() {
-      // Release the reader when stream is cancelled
-      reader.releaseLock();
-    },
-  });
-}
-
-function createTappedWritableStream(
-  underlying: WritableStream<Uint8Array>,
-  onMessage: MessageCallback,
-): WritableStream<Uint8Array> {
-  const tap = new NdJsonTap(onMessage);
-
-  return new WritableStream<Uint8Array>({
-    async write(chunk) {
-      tap.process(chunk);
-      try {
-        const writer = underlying.getWriter();
-        await writer.write(chunk);
-        writer.releaseLock();
-      } catch (err) {
-        // Stream may be closed if subprocess crashed - log but don't throw
-        log.warn("Stream write failed (subprocess may have crashed)", {
-          error: err,
-        });
-      }
-    },
-    async close() {
-      try {
-        const writer = underlying.getWriter();
-        await writer.close();
-        writer.releaseLock();
-      } catch {
-        // Stream may already be closed
-      }
-    },
-    async abort(reason) {
-      try {
-        const writer = underlying.getWriter();
-        await writer.abort(reason);
-        writer.releaseLock();
-      } catch {
-        // Stream may already be closed
-      }
-    },
-  });
-}
-
-const onAgentLog: OnLogCallback = (level, scope, message, data) => {
-  const scopedLog = logger.scope(scope);
-  if (data !== undefined) {
-    scopedLog[level as keyof typeof scopedLog](message, data);
-  } else {
-    scopedLog[level](message);
-  }
-};
-
-interface AcpMcpServer {
-  name: string;
-  type: "http";
-  url: string;
-  headers: Array<{ name: string; value: string }>;
-}
-
-interface SessionConfig {
-  taskId: string;
-  taskRunId: string;
-  repoPath: string;
-  credentials: Credentials;
-  logUrl?: string;
-  sdkSessionId?: string;
-  model?: string;
-  executionMode?: ExecutionMode;
-  /** Additional directories Claude can access beyond cwd (for worktree support) */
-  additionalDirectories?: string[];
-}
-
 interface ManagedSession {
   taskRunId: string;
   taskId: string;
   repoPath: string;
-  agent: Agent;
-  clientSideConnection: ClientSideConnection;
+  transport: AgentTransport;
   channel: string;
   createdAt: number;
   lastActivityAt: number;
-  mockNodeDir: string;
   config: SessionConfig;
   interruptReason?: InterruptReason;
   needsRecreation: boolean;
@@ -197,13 +59,6 @@ interface ManagedSession {
     description?: string | null;
   }>;
   currentModelId?: string;
-}
-
-function getClaudeCliPath(): string {
-  const appPath = app.getAppPath();
-  return app.isPackaged
-    ? join(`${appPath}.unpacked`, ".vite/build/claude-cli/cli.js")
-    : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
 interface PendingPermission {
@@ -235,9 +90,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
 
-    // Mark all sessions for recreation - they'll be recreated before the next prompt.
-    // We don't recreate immediately because the subprocess may be mid-response or
-    // waiting on a permission prompt. Recreation happens at a safe point.
     for (const session of this.sessions.values()) {
       session.needsRecreation = true;
     }
@@ -247,10 +99,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
   }
 
-  /**
-   * Mark all sessions for recreation (developer tool for testing token refresh).
-   * Sessions will be recreated before their next prompt.
-   */
   public markAllSessionsForRecreation(): number {
     let count = 0;
     for (const session of this.sessions.values()) {
@@ -263,10 +111,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return count;
   }
 
-  /**
-   * Respond to a pending permission request from the UI.
-   * This resolves the promise that the agent is waiting on.
-   */
   public respondToPermission(
     sessionId: string,
     toolCallId: string,
@@ -305,10 +149,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     this.pendingPermissions.delete(key);
   }
 
-  /**
-   * Cancel a pending permission request.
-   * This resolves the promise with a "cancelled" outcome per ACP spec.
-   */
   public cancelPermission(sessionId: string, toolCallId: string): void {
     const key = `${sessionId}:${toolCallId}`;
     const pending = this.pendingPermissions.get(key);
@@ -336,6 +176,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return this.currentToken || fallback;
   }
 
+<<<<<<< ours
   private buildMcpServers(credentials: Credentials): AcpMcpServer[] {
     const servers: AcpMcpServer[] = [];
 
@@ -371,6 +212,36 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return "https://mcp.posthog.com/mcp";
   }
 
+||||||| ancestor
+  private buildMcpServers(credentials: Credentials): AcpMcpServer[] {
+    const servers: AcpMcpServer[] = [];
+
+    const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
+    const token = this.getToken(credentials.apiKey);
+
+    servers.push({
+      name: "posthog",
+      type: "http",
+      url: mcpUrl,
+      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+    });
+
+    return servers;
+  }
+
+  private getPostHogMcpUrl(apiHost: string): string {
+    if (
+      apiHost.includes("localhost") ||
+      apiHost.includes("127.0.0.1") ||
+      !app.isPackaged
+    ) {
+      return "http://localhost:8787/mcp";
+    }
+    return "https://mcp.posthog.com/mcp";
+  }
+
+=======
+>>>>>>> theirs
   async startSession(params: StartSessionInput): Promise<SessionResponse> {
     this.validateSessionParams(params);
     const config = this.toSessionConfig(params);
@@ -401,17 +272,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     isReconnect: boolean,
     isRetry = false,
   ): Promise<ManagedSession | null> {
-    const {
-      taskId,
-      taskRunId,
-      repoPath,
-      credentials,
-      logUrl,
-      sdkSessionId,
-      model,
-      executionMode,
-      additionalDirectories,
-    } = config;
+    const { taskId, taskRunId, repoPath } = config;
 
     if (!isRetry) {
       const existing = this.sessions.get(taskRunId);
@@ -427,59 +288,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     const channel = `agent-event:${taskRunId}`;
-    const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
-    this.setupEnvironment(credentials, mockNodeDir);
-
-    const agent = new Agent({
-      posthog: {
-        apiUrl: credentials.apiHost,
-        getApiKey: () => this.getToken(credentials.apiKey),
-        projectId: credentials.projectId,
-      },
-      debug: !app.isPackaged,
-      onLog: onAgentLog,
-    });
 
     try {
-      const acpConnection = await agent.run(taskId, taskRunId, {
-        processCallbacks: {
-          onProcessSpawned: (info) => {
-            this.processTracking.register(
-              info.pid,
-              "agent",
-              `agent:${taskRunId}`,
-              {
-                taskRunId,
-                taskId,
-                command: info.command,
-              },
-              taskId,
-            );
-          },
-          onProcessExited: (pid) => {
-            this.processTracking.unregister(pid, "agent-exited");
-          },
-        },
-      });
-      const { clientStreams } = acpConnection;
+      const transportConfig = this.buildTransportConfig(config);
+      const transport = this.createTransport(transportConfig);
 
-      const connection = this.createClientConnection(
-        taskRunId,
-        channel,
-        clientStreams,
-      );
+      this.wireTransportEvents(taskRunId, transport);
 
-      await connection.initialize({
-        protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {
-          fs: {
-            readTextFile: true,
-            writeTextFile: true,
-          },
-          terminal: true,
-        },
-      });
-
+<<<<<<< ours
       const mcpServers = this.buildMcpServers(credentials);
 
       let availableModels:
@@ -539,22 +355,79 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         availableModels = newSessionResponse.models?.availableModels;
         currentModelId = newSessionResponse.models?.currentModelId;
       }
+||||||| ancestor
+      const mcpServers = this.buildMcpServers(credentials);
+
+      let availableModels:
+        | Array<{ modelId: string; name: string; description?: string | null }>
+        | undefined;
+      let currentModelId: string | undefined;
+
+      if (isReconnect) {
+        const resumeResponse = await connection.extMethod(
+          "_posthog/session/resume",
+          {
+            sessionId: taskRunId,
+            cwd: repoPath,
+            mcpServers,
+            _meta: {
+              ...(logUrl && {
+                persistence: { taskId, runId: taskRunId, logUrl },
+              }),
+              ...(sdkSessionId && { sdkSessionId }),
+              ...(additionalDirectories?.length && {
+                claudeCode: {
+                  options: { additionalDirectories },
+                },
+              }),
+            },
+          },
+        );
+        const resumeMeta = resumeResponse?._meta as
+          | {
+              models?: {
+                availableModels?: typeof availableModels;
+                currentModelId?: string;
+              };
+            }
+          | undefined;
+        availableModels = resumeMeta?.models?.availableModels;
+        currentModelId = resumeMeta?.models?.currentModelId;
+      } else {
+        const newSessionResponse = await connection.newSession({
+          cwd: repoPath,
+          mcpServers,
+          _meta: {
+            sessionId: taskRunId,
+            model,
+            ...(executionMode && { initialModeId: executionMode }),
+            ...(additionalDirectories?.length && {
+              claudeCode: {
+                options: { additionalDirectories },
+              },
+            }),
+          },
+        });
+        availableModels = newSessionResponse.models?.availableModels;
+        currentModelId = newSessionResponse.models?.currentModelId;
+      }
+=======
+      const connectResult = await transport.connect(isReconnect);
+>>>>>>> theirs
 
       const session: ManagedSession = {
         taskRunId,
         taskId,
         repoPath,
-        agent,
-        clientSideConnection: connection,
+        transport,
         channel,
         createdAt: Date.now(),
         lastActivityAt: Date.now(),
-        mockNodeDir,
         config,
         needsRecreation: false,
         promptPending: false,
-        availableModels,
-        currentModelId,
+        availableModels: connectResult.availableModels,
+        currentModelId: connectResult.currentModelId,
       };
 
       this.sessions.set(taskRunId, session);
@@ -563,13 +436,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       }
       return session;
     } catch (err) {
-      try {
-        await agent.cleanup();
-      } catch {
-        log.debug("Agent cleanup failed during error handling", { taskRunId });
-      }
-      this.cleanupMockNodeEnvironment(mockNodeDir);
-      if (!isRetry && isAuthError(err)) {
+      if (!isRetry && this.isAuthError(err)) {
         log.warn(
           `Auth error during ${isReconnect ? "reconnect" : "create"}, retrying`,
           { taskRunId },
@@ -585,6 +452,123 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
   }
 
+  private buildTransportConfig(config: SessionConfig): AnyTransportConfig {
+    const {
+      taskId,
+      taskRunId,
+      repoPath,
+      credentials,
+      logUrl,
+      sdkSessionId,
+      model,
+      executionMode,
+      additionalDirectories,
+      runMode,
+      sandboxUrl,
+      connectionToken,
+    } = config;
+
+    if (runMode === "cloud") {
+      if (!sandboxUrl || !connectionToken) {
+        throw new Error(
+          "sandboxUrl and connectionToken are required for cloud sessions",
+        );
+      }
+      const cloudConfig: CloudTransportConfig = {
+        type: "cloud",
+        taskId,
+        taskRunId,
+        repoPath,
+        model,
+        executionMode,
+        additionalDirectories,
+        sandboxUrl,
+        connectionToken,
+      };
+      return cloudConfig;
+    }
+
+    const localConfig: LocalTransportConfig = {
+      type: "local",
+      taskId,
+      taskRunId,
+      repoPath,
+      model,
+      executionMode,
+      additionalDirectories,
+      credentials: credentials!,
+      logUrl,
+      sdkSessionId,
+    };
+    return localConfig;
+  }
+
+  private createTransport(config: AnyTransportConfig): AgentTransport {
+    if (config.type === "cloud") {
+      return new CloudAgentTransport(config);
+    }
+    return new LocalAgentTransport(config, () =>
+      this.getToken(config.credentials.apiKey),
+    );
+  }
+
+  private wireTransportEvents(
+    taskRunId: string,
+    transport: AgentTransport,
+  ): void {
+    transport.on("message", (acpMessage: AcpMessage) => {
+      this.emit(AgentServiceEvent.SessionEvent, {
+        sessionId: taskRunId,
+        payload: acpMessage,
+      });
+      this.detectAndAttachPrUrl(taskRunId, acpMessage.message);
+    });
+
+    transport.on("permission", (params: RequestPermissionRequest) => {
+      const toolCallId = params.toolCall?.toolCallId || "";
+
+      if (toolCallId) {
+        const key = `${taskRunId}:${toolCallId}`;
+        this.pendingPermissions.set(key, {
+          resolve: (response) =>
+            transport.respondToPermission(toolCallId, response),
+          reject: () => {},
+          sessionId: taskRunId,
+          toolCallId,
+        });
+        this.emit(AgentServiceEvent.PermissionRequest, params);
+      } else {
+        log.warn("No toolCallId in permission request, auto-approving", {
+          sessionId: taskRunId,
+        });
+        const allowOption = params.options.find(
+          (o) => o.kind === "allow_once" || o.kind === "allow_always",
+        );
+        transport.respondToPermission(toolCallId, {
+          outcome: {
+            outcome: "selected",
+            optionId: allowOption?.optionId ?? params.options[0].optionId,
+          },
+        });
+      }
+    });
+
+    transport.on("error", (err: Error) => {
+      log.error("Transport error", { taskRunId, error: err.message });
+    });
+
+    transport.on("close", () => {
+      log.info("Transport closed", { taskRunId });
+    });
+  }
+
+  private isAuthError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      error.message.startsWith("Authentication required")
+    );
+  }
+
   private async recreateSession(taskRunId: string): Promise<ManagedSession> {
     const existing = this.sessions.get(taskRunId);
     if (!existing) {
@@ -593,7 +577,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     log.info("Recreating session", { taskRunId });
 
-    // Preserve state that should survive recreation
     const config = existing.config;
     const pendingContext = existing.pendingContext;
 
@@ -604,7 +587,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Failed to recreate session: ${taskRunId}`);
     }
 
-    // Restore preserved state
     if (pendingContext) {
       newSession.pendingContext = pendingContext;
     }
@@ -621,7 +603,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    // Recreate session if marked (token was refreshed while session was active)
     if (session.needsRecreation) {
       if (!session.recreationPromise) {
         log.info("Recreating session before prompt (token refreshed)", {
@@ -637,7 +618,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       session = await session.recreationPromise;
     }
 
-    // Prepend pending context if present
     let finalPrompt = prompt;
     if (session.pendingContext) {
       log.info("Prepending context to prompt", { sessionId });
@@ -657,26 +637,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     this.sleepService.acquire(sessionId);
 
     try {
-      const result = await session.clientSideConnection.prompt({
-        sessionId,
-        prompt: finalPrompt,
-      });
-      return {
-        stopReason: result.stopReason,
-        _meta: result._meta as PromptOutput["_meta"],
-      };
+      const result = await session.transport.sendPrompt(finalPrompt);
+      return result;
     } catch (err) {
-      if (isAuthError(err)) {
+      if (this.isAuthError(err)) {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
-        const result = await session.clientSideConnection.prompt({
-          sessionId,
-          prompt: finalPrompt,
-        });
-        return {
-          stopReason: result.stopReason,
-          _meta: result._meta as PromptOutput["_meta"],
-        };
+        return session.transport.sendPrompt(finalPrompt);
       }
       throw err;
     } finally {
@@ -713,10 +680,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     if (!session) return false;
 
     try {
-      await session.clientSideConnection.cancel({
-        sessionId,
-        _meta: reason ? { interruptReason: reason } : undefined,
-      });
+      await session.transport.cancelPrompt();
       if (reason) {
         session.interruptReason = reason;
         log.info("Session interrupted", { sessionId, reason });
@@ -739,10 +703,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.unstable_setSessionModel({
-        sessionId,
-        modelId,
-      });
+      await session.transport.setModel(modelId);
       log.info("Session model updated", { sessionId, modelId });
     } catch (err) {
       log.error("Failed to set session model", { sessionId, modelId, err });
@@ -757,7 +718,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.setSessionMode({ sessionId, modeId });
+      await session.transport.setMode(modeId);
       log.info("Session mode updated", { sessionId, modeId });
     } catch (err) {
       log.error("Failed to set session mode", { sessionId, modeId, err });
@@ -770,10 +731,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return taskId ? all.filter((s) => s.taskId === taskId) : all;
   }
 
-  /**
-   * Get sessions that were interrupted for a specific reason.
-   * Optionally filter by repoPath to get only sessions for a specific repo.
-   */
   getInterruptedSessions(
     reason: InterruptReason,
     repoPath?: string,
@@ -785,10 +742,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     );
   }
 
-  /**
-   * Resume an interrupted session by clearing the interrupt reason
-   * and sending a continue prompt.
-   */
   async resumeInterruptedSession(sessionId: string): Promise<PromptOutput> {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -804,20 +757,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       reason: session.interruptReason,
     });
 
-    // Clear the interrupt reason
     session.interruptReason = undefined;
 
-    // Send a continue prompt
     return this.prompt(sessionId, [
       { type: "text", text: "Continue where you left off." },
     ]);
   }
 
-  /**
-   * Notify a session of a context change (CWD moved, detached HEAD, etc).
-   * Used when focusing/unfocusing worktrees - the agent doesn't need to respawn
-   * because it has additionalDirectories configured, but it should know about the change.
-   */
   async notifySessionContext(
     sessionId: string,
     context: import("./schemas.js").SessionContextChange,
@@ -830,9 +776,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     const contextMessage = this.buildContextMessage(context);
 
-    // Check if session is currently busy
     if (session.promptPending) {
-      // Active session: send immediately with continue instruction
       this.prompt(sessionId, [
         {
           type: "text",
@@ -841,7 +785,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         },
       ]);
     } else {
-      // Idle session: store for prepending to next user message
       session.pendingContext = contextMessage;
     }
 
@@ -888,73 +831,20 @@ For git operations while detached:
     log.info("All agent sessions cleaned up");
   }
 
-  private setupEnvironment(
-    credentials: Credentials,
-    mockNodeDir: string,
-  ): void {
-    const token = this.getToken(credentials.apiKey);
-    const newPath = `${mockNodeDir}:${process.env.PATH || ""}`;
-    process.env.PATH = newPath;
-    process.env.POSTHOG_AUTH_HEADER = `Bearer ${token}`;
-    process.env.ANTHROPIC_API_KEY = token;
-    process.env.ANTHROPIC_AUTH_TOKEN = token;
-
-    const llmGatewayUrl = getLlmGatewayUrl(credentials.apiHost);
-    process.env.ANTHROPIC_BASE_URL = llmGatewayUrl;
-
-    const openaiBaseUrl = llmGatewayUrl.endsWith("/v1")
-      ? llmGatewayUrl
-      : `${llmGatewayUrl}/v1`;
-    process.env.OPENAI_BASE_URL = openaiBaseUrl;
-    process.env.OPENAI_API_KEY = token;
-    process.env.LLM_GATEWAY_URL = llmGatewayUrl;
-
-    process.env.CLAUDE_CODE_EXECUTABLE = getClaudeCliPath();
-
-    process.env.POSTHOG_API_KEY = token;
-    process.env.POSTHOG_API_URL = credentials.apiHost;
-    process.env.POSTHOG_PROJECT_ID = String(credentials.projectId);
-  }
-
-  private setupMockNodeEnvironment(sessionId: string): string {
-    const mockNodeDir = join(tmpdir(), `array-agent-node-${sessionId}`);
-    try {
-      mkdirSync(mockNodeDir, { recursive: true });
-      const nodeSymlinkPath = join(mockNodeDir, "node");
-      try {
-        rmSync(nodeSymlinkPath, { force: true });
-      } catch {
-        /* ignore */
-      }
-      symlinkSync(process.execPath, nodeSymlinkPath);
-    } catch (err) {
-      log.warn("Failed to setup mock node environment", err);
-    }
-    return mockNodeDir;
-  }
-
-  private cleanupMockNodeEnvironment(mockNodeDir: string): void {
-    try {
-      rmSync(mockNodeDir, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
-  }
-
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
       this.sleepService.release(taskRunId);
       try {
-        await session.agent.cleanup();
+        await session.transport.disconnect();
       } catch {
-        log.debug("Agent cleanup failed", { taskRunId });
+        log.debug("Transport disconnect failed", { taskRunId });
       }
-      this.cleanupMockNodeEnvironment(session.mockNodeDir);
       this.sessions.delete(taskRunId);
     }
   }
 
+<<<<<<< ours
   private createClientConnection(
     taskRunId: string,
     _channel: string,
@@ -1108,6 +998,152 @@ For git operations while detached:
     return new ClientSideConnection((_agent) => client, clientStream);
   }
 
+||||||| ancestor
+  private createClientConnection(
+    taskRunId: string,
+    _channel: string,
+    clientStreams: { readable: ReadableStream; writable: WritableStream },
+  ): ClientSideConnection {
+    // Capture service reference for use in client callbacks
+    const service = this;
+
+    const emitToRenderer = (payload: unknown) => {
+      // Emit event via TypedEventEmitter for tRPC subscription
+      this.emit(AgentServiceEvent.SessionEvent, {
+        sessionId: taskRunId,
+        payload,
+      });
+    };
+
+    const onAcpMessage = (message: unknown) => {
+      const acpMessage: AcpMessage = {
+        type: "acp_message",
+        ts: Date.now(),
+        message: message as AcpMessage["message"],
+      };
+      emitToRenderer(acpMessage);
+
+      // Detect PR URLs in bash tool results and attach to task
+      this.detectAndAttachPrUrl(taskRunId, message);
+    };
+
+    const tappedReadable = createTappedReadableStream(
+      clientStreams.readable as ReadableStream<Uint8Array>,
+      onAcpMessage,
+    );
+
+    const tappedWritable = createTappedWritableStream(
+      clientStreams.writable as WritableStream<Uint8Array>,
+      onAcpMessage,
+    );
+
+    const client: Client = {
+      async requestPermission(
+        params: RequestPermissionRequest,
+      ): Promise<RequestPermissionResponse> {
+        const toolName =
+          (params.toolCall?.rawInput as { toolName?: string } | undefined)
+            ?.toolName || "";
+        const toolCallId = params.toolCall?.toolCallId || "";
+
+        log.info("requestPermission called", {
+          sessionId: taskRunId,
+          toolCallId,
+          toolName,
+          title: params.toolCall?.title,
+          optionCount: params.options.length,
+        });
+
+        // If we have a toolCallId, always prompt the user for permission.
+        // The claude.ts adapter only calls requestPermission when user input is needed.
+        // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
+        if (toolCallId) {
+          return new Promise((resolve, reject) => {
+            const key = `${taskRunId}:${toolCallId}`;
+            service.pendingPermissions.set(key, {
+              resolve,
+              reject,
+              sessionId: taskRunId,
+              toolCallId,
+            });
+
+            log.info("Emitting permission request to renderer", {
+              sessionId: taskRunId,
+              toolCallId,
+            });
+            service.emit(AgentServiceEvent.PermissionRequest, params);
+          });
+        }
+
+        // Fallback: no toolCallId means we can't track the response, auto-approve
+        log.warn("No toolCallId in permission request, auto-approving", {
+          sessionId: taskRunId,
+          toolName,
+        });
+        const allowOption = params.options.find(
+          (o) => o.kind === "allow_once" || o.kind === "allow_always",
+        );
+        return {
+          outcome: {
+            outcome: "selected",
+            optionId: allowOption?.optionId ?? params.options[0].optionId,
+          },
+        };
+      },
+
+      async sessionUpdate() {
+        // session/update notifications flow through the tapped stream
+      },
+
+      extNotification: async (
+        method: string,
+        params: Record<string, unknown>,
+      ): Promise<void> => {
+        if (method === "_posthog/sdk_session") {
+          const { sessionId, sdkSessionId } = params as {
+            sessionId: string;
+            sdkSessionId: string;
+          };
+          const session = this.sessions.get(sessionId);
+          if (session) {
+            session.config.sdkSessionId = sdkSessionId;
+            log.info("SDK session ID captured", { sessionId, sdkSessionId });
+          }
+        }
+
+        // Forward extension notifications to the renderer as ACP messages
+        // The extNotification callback doesn't write to the stream, so we need
+        // to manually emit these to the renderer
+        if (
+          method === "_posthog/status" ||
+          method === "_posthog/task_notification" ||
+          method === "_posthog/compact_boundary"
+        ) {
+          log.info("Forwarding extension notification to renderer", {
+            method,
+            taskRunId,
+          });
+          const acpMessage: AcpMessage = {
+            type: "acp_message",
+            ts: Date.now(),
+            message: {
+              jsonrpc: "2.0",
+              method,
+              params,
+            } as AcpMessage["message"],
+          };
+          emitToRenderer(acpMessage);
+        }
+      },
+    };
+
+    const clientStream = ndJsonStream(tappedWritable, tappedReadable);
+
+    return new ClientSideConnection((_agent) => client, clientStream);
+  }
+
+=======
+>>>>>>> theirs
   private validateSessionParams(
     params: StartSessionInput | ReconnectSessionInput,
   ): void {
@@ -1140,6 +1176,10 @@ For git operations while detached:
         "additionalDirectories" in params
           ? params.additionalDirectories
           : undefined,
+      runMode: "runMode" in params ? params.runMode : undefined,
+      sandboxUrl: "sandboxUrl" in params ? params.sandboxUrl : undefined,
+      connectionToken:
+        "connectionToken" in params ? params.connectionToken : undefined,
     };
   }
 
@@ -1152,10 +1192,6 @@ For git operations while detached:
     };
   }
 
-  /**
-   * Detect GitHub PR URLs in bash tool results and attach to task.
-   * This enables webhook tracking by populating the pr_url in TaskRun output.
-   */
   private detectAndAttachPrUrl(taskRunId: string, message: unknown): void {
     try {
       const msg = message as {
@@ -1174,14 +1210,12 @@ For git operations while detached:
         };
       };
 
-      // Only process session/update notifications for tool_call_update
       if (msg.method !== "session/update") return;
       if (msg.params?.update?.sessionUpdate !== "tool_call_update") return;
 
       const toolMeta = msg.params.update._meta?.claudeCode;
       const toolName = toolMeta?.toolName;
 
-      // Only process Bash tool results
       if (
         !toolName ||
         (!toolName.includes("Bash") && !toolName.includes("bash"))
@@ -1189,16 +1223,13 @@ For git operations while detached:
         return;
       }
 
-      // Extract text content from tool response or update content
       let textToSearch = "";
 
-      // Check toolResponse (hook response with raw output)
       const toolResponse = toolMeta?.toolResponse;
       if (toolResponse) {
         if (typeof toolResponse === "string") {
           textToSearch = toolResponse;
         } else if (typeof toolResponse === "object" && toolResponse !== null) {
-          // May be { stdout?: string, stderr?: string } or similar
           const respObj = toolResponse as Record<string, unknown>;
           textToSearch =
             String(respObj.stdout || "") + String(respObj.stderr || "");
@@ -1208,7 +1239,6 @@ For git operations while detached:
         }
       }
 
-      // Also check content array
       const content = msg.params.update.content;
       if (Array.isArray(content)) {
         for (const item of content) {
@@ -1220,7 +1250,6 @@ For git operations while detached:
 
       if (!textToSearch) return;
 
-      // Match GitHub PR URLs
       const prUrlMatch = textToSearch.match(
         /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/,
       );
@@ -1229,33 +1258,36 @@ For git operations while detached:
       const prUrl = prUrlMatch[0];
       log.info("Detected PR URL in bash output", { taskRunId, prUrl });
 
-      // Find session and attach PR URL
       const session = this.sessions.get(taskRunId);
       if (!session) {
         log.warn("Session not found for PR attachment", { taskRunId });
         return;
       }
 
-      // Attach asynchronously without blocking message flow
-      session.agent
-        .attachPullRequestToTask(session.taskId, prUrl)
-        .then(() => {
-          log.info("PR URL attached to task", {
-            taskRunId,
-            taskId: session.taskId,
-            prUrl,
-          });
-        })
-        .catch((err) => {
-          log.error("Failed to attach PR URL to task", {
-            taskRunId,
-            taskId: session.taskId,
-            prUrl,
-            error: err,
-          });
-        });
+      const transport = session.transport;
+      if (transport instanceof LocalAgentTransport) {
+        const agent = transport.getAgent();
+        if (agent) {
+          agent
+            .attachPullRequestToTask(session.taskId, prUrl)
+            .then(() => {
+              log.info("PR URL attached to task", {
+                taskRunId,
+                taskId: session.taskId,
+                prUrl,
+              });
+            })
+            .catch((err) => {
+              log.error("Failed to attach PR URL to task", {
+                taskRunId,
+                taskId: session.taskId,
+                prUrl,
+                error: err,
+              });
+            });
+        }
+      }
     } catch (err) {
-      // Don't let detection errors break message flow
       log.debug("Error in PR URL detection", { taskRunId, error: err });
     }
   }

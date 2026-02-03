@@ -45,7 +45,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { isOnline } = useConnectivity();
 
   const isRunning =
-    session?.status === "connected" || session?.status === "connecting";
+    session?.status === "connected" ||
+    session?.status === "connecting" ||
+    session?.status === "provisioning";
   const hasError = session?.status === "error";
   const errorMessage = session?.errorMessage;
 
@@ -55,20 +57,23 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const isConnecting = useRef(false);
 
-  // Focus the message editor when navigating to this task
+  // Focus the message editor when navigating to this task (only when connected)
   useEffect(() => {
-    requestFocus(taskId);
-  }, [taskId, requestFocus]);
+    if (session?.status === "connected") {
+      requestFocus(taskId);
+    }
+  }, [taskId, requestFocus, session?.status]);
 
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Don't reconnect if already connected, connecting, or in error state
+    // Don't reconnect if already connected, connecting, provisioning, or in error state
     if (
       session?.status === "connected" ||
       session?.status === "connecting" ||
+      session?.status === "provisioning" ||
       session?.status === "error"
     ) {
       return;
@@ -202,6 +207,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             onCancelPrompt={handleCancelPrompt}
             repoPath={repoPath}
             isCloud={session?.isCloud ?? false}
+            sessionStatus={session?.status}
             hasError={hasError}
             errorMessage={errorMessage}
             onRetry={handleRetry}

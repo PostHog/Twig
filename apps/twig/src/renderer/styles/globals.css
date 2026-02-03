@@ -113,6 +113,68 @@
   animation: campfire-pulse 1s ease-in-out infinite;
 }
 
+/* Cloud provisioning overlay animations */
+.cloud-container {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cloud-glow {
+  position: absolute;
+  z-index: 0;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, var(--accent-a4) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: cloud-glow-pulse 2s ease-in-out infinite;
+}
+
+.cloud-icon {
+  position: relative;
+  z-index: 1;
+  color: var(--accent-9);
+}
+
+@keyframes cloud-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.progress-bar {
+  width: 200px;
+  height: 3px;
+  background: var(--gray-4);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, var(--accent-8), var(--accent-10));
+  border-radius: 2px;
+  animation: progress-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
 /* Torch glow pulse animation for cursor flame effect */
 @keyframes torch-pulse {
   0%,

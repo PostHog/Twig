@@ -34,8 +34,6 @@ export function TaskInput() {
   const [selectedDirectory, setSelectedDirectory] = useState(
     lastUsedDirectory || "",
   );
-  // We're temporarily removing the cloud/local toggle, so hardcode to local
-  const runMode = "local";
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(
     lastUsedLocalWorkspaceMode || "worktree",
   );
@@ -166,7 +164,7 @@ export function TaskInput() {
             sessionId="task-input"
             repoPath={selectedDirectory}
             isCreatingTask={isCreatingTask}
-            runMode={runMode}
+            workspaceMode={workspaceMode}
             canSubmit={canSubmit}
             onSubmit={handleSubmit}
             hasDirectory={!!selectedDirectory}

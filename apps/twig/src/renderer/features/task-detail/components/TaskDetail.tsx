@@ -53,6 +53,42 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   useFileWatcher(effectiveRepoPath ?? null, taskId);
 
+<<<<<<< ours
+||||||| ancestor
+  const session = useSessionForTask(taskId);
+  const isRunning =
+    session?.status === "connected" || session?.status === "connecting";
+
+  useStatusBar(
+    isRunning ? "Agent running..." : "Task details",
+    [
+      {
+        keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
+        description: "Command",
+      },
+    ],
+    "replace",
+  );
+
+=======
+  const session = useSessionForTask(taskId);
+  const isRunning =
+    session?.status === "connected" ||
+    session?.status === "connecting" ||
+    session?.status === "provisioning";
+
+  useStatusBar(
+    isRunning ? "Agent running..." : "Task details",
+    [
+      {
+        keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
+        description: "Command",
+      },
+    ],
+    "replace",
+  );
+
+>>>>>>> theirs
   useBlurOnEscape();
   useWorkspaceEvents(taskId);
 
