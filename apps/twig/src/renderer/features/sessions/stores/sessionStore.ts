@@ -127,6 +127,7 @@ interface SessionActions {
   clearSessionError: (taskId: string) => Promise<void>;
   removeQueuedMessage: (taskId: string, queueId: string) => void;
   popAllQueuedMessages: (taskId: string) => QueuedMessage[];
+  popQueuedMessagesAsText: (taskId: string) => string | null;
 }
 
 interface AuthCredentials {
@@ -1401,6 +1402,14 @@ const useStore = create<SessionStore>()(
           }
 
           return messages;
+        },
+
+        popQueuedMessagesAsText: (taskId: string): string | null => {
+          const messages = useStore
+            .getState()
+            .actions.popAllQueuedMessages(taskId);
+          if (messages.length === 0) return null;
+          return messages.map((msg) => msg.content).join("\n\n");
         },
       },
     };
