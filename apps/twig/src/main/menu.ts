@@ -6,7 +6,6 @@ import os from "node:os";
 import path from "node:path";
 import {
   app,
-  BrowserWindow,
   clipboard,
   dialog,
   Menu,
@@ -207,17 +206,6 @@ function buildViewMenu(): MenuItemConstructorOptions {
   return {
     label: "View",
     submenu: [
-      {
-        label: "Reload",
-        accelerator: "CmdOrCtrl+Shift+R",
-        click: () => BrowserWindow.getFocusedWindow()?.webContents.reload(),
-      },
-      {
-        label: "Force Reload",
-        accelerator: "CmdOrCtrl+Shift+Alt+R",
-        click: () =>
-          BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache(),
-      },
       { role: "toggleDevTools" },
       { type: "separator" },
       { role: "resetZoom" },

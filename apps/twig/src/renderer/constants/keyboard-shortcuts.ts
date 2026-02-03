@@ -12,7 +12,7 @@ export const SHORTCUTS = {
   SWITCH_TASK: "mod+0,mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
   OPEN_IN_EDITOR: "mod+o",
   COPY_PATH: "mod+shift+c",
-  TASK_REFRESH: "mod+r",
+  TOGGLE_FOCUS: "mod+r",
   BLUR: "escape",
   SUBMIT_BLUR: "mod+enter",
 } as const;
@@ -41,8 +41,8 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
     category: "general",
   },
   {
-    id: "task-refresh",
-    keys: SHORTCUTS.TASK_REFRESH,
+    id: "toggle-focus",
+    keys: SHORTCUTS.TOGGLE_FOCUS,
     description: "Toggle focus mode",
     category: "general",
     context: "Worktree task",
