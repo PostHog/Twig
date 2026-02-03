@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 export type DefaultRunMode = "local" | "cloud" | "last_used";
 export type LocalWorkspaceMode = "worktree" | "local";
 export type SendMessagesWith = "enter" | "cmd+enter";
-export type CompletionSound = "none" | "guitar" | "danilo" | "revi";
+export type CompletionSound = "none" | "guitar" | "danilo" | "revi" | "meep";
 
 interface SettingsStore {
   defaultRunMode: DefaultRunMode;
