@@ -23,8 +23,8 @@ export function killProcessTree(pid: number): void {
         // If SIGTERM fails (process may have already exited), try SIGKILL
         try {
           process.kill(-pid, "SIGKILL");
-        } catch {
-          // Process group may have already exited
+        } catch (err) {
+          log.warn(`Failed to kill process group for PID ${pid}`, err);
         }
       }
     }
