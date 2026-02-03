@@ -101,6 +101,8 @@ const components: Components = {
         strokeLinecap="round"
         strokeLinejoin="round"
         style={{ marginLeft: "var(--space-1)", flexShrink: 0 }}
+        aria-label="external link icon"
+        role="img"
       >
         <path d="M4.5 1.5H2.25C1.836 1.5 1.5 1.836 1.5 2.25V9.75C1.5 10.164 1.836 10.5 2.25 10.5H9.75C10.164 10.5 10.5 10.164 10.5 9.75V7.5" />
         <path d="M7.5 1.5H10.5V4.5" />
