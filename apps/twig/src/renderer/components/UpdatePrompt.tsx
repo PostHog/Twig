@@ -62,7 +62,9 @@ export function UpdatePrompt() {
 
         if (!result.success && result.errorCode !== "already_checking") {
           setCheckingForUpdates(false);
-          setCheckResultMessage(result.errorMessage || "Failed to check for updates");
+          setCheckResultMessage(
+            result.errorMessage || "Failed to check for updates",
+          );
         }
       } catch (error) {
         log.error("Failed to check for updates:", error);

@@ -79,7 +79,11 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     }
 
     if (this.checkingForUpdates) {
-      return { success: false, errorMessage: "Already checking for updates", errorCode: "already_checking" };
+      return {
+        success: false,
+        errorMessage: "Already checking for updates",
+        errorCode: "already_checking",
+      };
     }
 
     // If an update is already downloaded and ready, show the prompt again
