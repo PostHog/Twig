@@ -18,11 +18,12 @@ import {
   initializePostHog,
   trackAppEvent,
 } from "./services/posthog-analytics.js";
+import type { ProcessTrackingService } from "./services/process-tracking/service";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
 import type { WorkspaceService } from "./services/workspace/service.js";
 import { migrateTaskAssociations } from "./utils/store.js";
-import { createWindow } from "./window.js";
+import { createWindow, getMainWindow } from "./window.js";
 
 // Single instance lock must be acquired FIRST before any other app setup
 const additionalData = process.defaultApp ? { argv: process.argv } : undefined;
@@ -79,7 +80,23 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  app.quit();
+  // On macOS, the app stays alive in the dock when all windows are closed.
+  // On other platforms, quit normally.
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+
+  let processTrackingService: ProcessTrackingService;
+  try {
+    processTrackingService = container.get<ProcessTrackingService>(
+      MAIN_TOKENS.ProcessTrackingService,
+    );
+  } catch {
+    // Container already torn down (e.g. second quit during shutdown), let Electron quit
+    return;
+  }
+
+  processTrackingService.killAll();
 });
 
 app.on("before-quit", async (event) => {
@@ -106,6 +123,16 @@ app.on("before-quit", async (event) => {
 
   event.preventDefault();
   await lifecycleService.shutdownAndExit();
+});
+
+// On macOS, re-show the window when the dock icon is clicked
+app.on("activate", () => {
+  const win = getMainWindow();
+  if (win) {
+    win.show();
+  } else {
+    createWindow();
+  }
 });
 
 const handleShutdownSignal = async (signal: string) => {

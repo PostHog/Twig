@@ -15,6 +15,7 @@ import { logsRouter } from "./routers/logs.js";
 import { oauthRouter } from "./routers/oauth.js";
 import { osRouter } from "./routers/os.js";
 import { powerSaveBlockerRouter } from "./routers/power-save-blocker.js";
+import { processTrackingRouter } from "./routers/process-tracking.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
 import { uiRouter } from "./routers/ui.js";
@@ -39,6 +40,7 @@ export const trpcRouter = router({
   logs: logsRouter,
   os: osRouter,
   powerSaveBlocker: powerSaveBlockerRouter,
+  processTracking: processTrackingRouter,
   secureStore: secureStoreRouter,
   shell: shellRouter,
   ui: uiRouter,

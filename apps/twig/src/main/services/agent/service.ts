@@ -19,7 +19,7 @@ import {
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { container } from "../../di/container.js";
@@ -27,6 +27,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { PowerSaveBlockerService } from "../power-save-blocker/service.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -217,6 +218,15 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
+  private processTracking: ProcessTrackingService;
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    processTracking: ProcessTrackingService,
+  ) {
+    super();
+    this.processTracking = processTracking;
+  }
 
   private get powerSaveBlocker() {
     return container.get<PowerSaveBlockerService>(
@@ -422,7 +432,26 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
 
     try {
-      const acpConnection = await agent.run(taskId, taskRunId);
+      const acpConnection = await agent.run(taskId, taskRunId, {
+        processCallbacks: {
+          onProcessSpawned: (info) => {
+            this.processTracking.register(
+              info.pid,
+              "agent",
+              `agent:${taskRunId}`,
+              {
+                taskRunId,
+                taskId,
+                command: info.command,
+              },
+              taskId,
+            );
+          },
+          onProcessExited: (pid) => {
+            this.processTracking.unregister(pid, "agent-exited");
+          },
+        },
+      });
       const { clientStreams } = acpConnection;
 
       const connection = this.createClientConnection(
