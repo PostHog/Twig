@@ -1,5 +1,6 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
+import { Tooltip } from "@components/ui/Tooltip";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -18,7 +19,6 @@ import {
   Flex,
   IconButton,
   Text,
-  Tooltip,
 } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
@@ -45,20 +45,21 @@ interface ChangedFileItemProps {
 
 function getStatusIndicator(status: GitFileStatus): {
   label: string;
+  fullLabel: string;
   color: "green" | "orange" | "red" | "blue" | "gray";
 } {
   switch (status) {
     case "added":
     case "untracked":
-      return { label: "A", color: "green" };
+      return { label: "A", fullLabel: "Added", color: "green" };
     case "deleted":
-      return { label: "D", color: "red" };
+      return { label: "D", fullLabel: "Deleted", color: "red" };
     case "modified":
-      return { label: "M", color: "orange" };
+      return { label: "M", fullLabel: "Modified", color: "orange" };
     case "renamed":
-      return { label: "R", color: "blue" };
+      return { label: "R", fullLabel: "Renamed", color: "blue" };
     default:
-      return { label: "?", color: "gray" };
+      return { label: "?", fullLabel: "Unknown", color: "gray" };
   }
 }
 
@@ -206,156 +207,170 @@ function ChangedFileItem({
   const hasLineStats =
     file.linesAdded !== undefined || file.linesRemoved !== undefined;
 
+  const tooltipContent = `${file.path} - ${indicator.fullLabel}`;
+
   return (
-    <Flex
-      align="center"
-      gap="1"
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onContextMenu={handleContextMenu}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={
-        isActive
-          ? "border-accent-8 border-y bg-accent-4"
-          : "border-transparent border-y hover:bg-gray-3"
-      }
-      style={{
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        height: "26px",
-        paddingLeft: "8px",
-        paddingRight: "8px",
-      }}
-    >
-      <FileIcon filename={fileName} size={14} />
-      <Text
-        size="1"
+    <Tooltip content={tooltipContent} side="top" delayDuration={500}>
+      <Flex
+        align="center"
+        gap="1"
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={
+          isActive
+            ? "border-accent-8 border-y bg-accent-4"
+            : "border-transparent border-y hover:bg-gray-3"
+        }
         style={{
-          userSelect: "none",
-          flexShrink: 0,
-          marginLeft: "2px",
-        }}
-      >
-        {fileName}
-      </Text>
-      <Text
-        size="1"
-        color="gray"
-        style={{
-          userSelect: "none",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
           overflow: "hidden",
-          textOverflow: "ellipsis",
-          flex: 1,
-          marginLeft: "4px",
+          height: "26px",
+          paddingLeft: "8px",
+          paddingRight: "8px",
         }}
       >
-        {file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}
-      </Text>
-
-      {hasLineStats && !isToolbarVisible && (
-        <Flex
-          align="center"
-          gap="1"
-          style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
+        <FileIcon filename={fileName} size={14} />
+        <Text
+          size="1"
+          style={{
+            userSelect: "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            marginLeft: "2px",
+            flexShrink: 1,
+            minWidth: 0,
+          }}
         >
-          {(file.linesAdded ?? 0) > 0 && (
-            <Text style={{ color: "var(--green-9)" }}>+{file.linesAdded}</Text>
-          )}
-          {(file.linesRemoved ?? 0) > 0 && (
-            <Text style={{ color: "var(--red-9)" }}>-{file.linesRemoved}</Text>
-          )}
-        </Flex>
-      )}
+          {fileName}
+        </Text>
+        <Text
+          size="1"
+          color="gray"
+          style={{
+            userSelect: "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+            marginLeft: "4px",
+            minWidth: 0,
+          }}
+        >
+          {file.originalPath
+            ? `${file.originalPath} → ${file.path}`
+            : file.path}
+        </Text>
 
-      {isToolbarVisible && (
-        <Flex align="center" gap="1" style={{ flexShrink: 0 }}>
-          <Tooltip content="Discard changes">
-            <IconButton
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={handleDiscard}
-              style={{
-                flexShrink: 0,
-                width: "18px",
-                height: "18px",
-                padding: 0,
-                marginLeft: "2px",
-                marginRight: "2px",
-              }}
-            >
-              <ArrowCounterClockwiseIcon size={12} />
-            </IconButton>
-          </Tooltip>
-
-          <DropdownMenu.Root
-            open={isDropdownOpen}
-            onOpenChange={setIsDropdownOpen}
+        {hasLineStats && !isToolbarVisible && (
+          <Flex
+            align="center"
+            gap="1"
+            style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
           >
-            <Tooltip content="Open file">
-              <DropdownMenu.Trigger>
-                <IconButton
-                  size="1"
-                  variant="ghost"
-                  color="gray"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    flexShrink: 0,
-                    width: "18px",
-                    height: "18px",
-                    padding: 0,
-                  }}
-                >
-                  <FilePlus size={12} weight="regular" />
-                </IconButton>
-              </DropdownMenu.Trigger>
-            </Tooltip>
-            <DropdownMenu.Content size="1" align="end">
-              {detectedApps
-                .filter((app) => app.type !== "terminal")
-                .map((app) => (
-                  <DropdownMenu.Item
-                    key={app.id}
-                    onSelect={() => handleOpenWith(app.id)}
-                  >
-                    <Flex align="center" gap="2">
-                      {app.icon ? (
-                        <img
-                          src={app.icon}
-                          width={16}
-                          height={16}
-                          alt=""
-                          style={{ borderRadius: "2px" }}
-                        />
-                      ) : (
-                        <CodeIcon size={16} weight="regular" />
-                      )}
-                      <Text size="1">{app.name}</Text>
-                    </Flex>
-                  </DropdownMenu.Item>
-                ))}
-              <DropdownMenu.Separator />
-              <DropdownMenu.Item onSelect={handleCopyPath}>
-                <Flex align="center" gap="2">
-                  <CopyIcon size={16} weight="regular" />
-                  <Text size="1">Copy Path</Text>
-                </Flex>
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </Flex>
-      )}
+            {(file.linesAdded ?? 0) > 0 && (
+              <Text style={{ color: "var(--green-9)" }}>
+                +{file.linesAdded}
+              </Text>
+            )}
+            {(file.linesRemoved ?? 0) > 0 && (
+              <Text style={{ color: "var(--red-9)" }}>
+                -{file.linesRemoved}
+              </Text>
+            )}
+          </Flex>
+        )}
 
-      <Badge
-        size="1"
-        color={indicator.color}
-        style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
-      >
-        {indicator.label}
-      </Badge>
-    </Flex>
+        {isToolbarVisible && (
+          <Flex align="center" gap="1" style={{ flexShrink: 0 }}>
+            <Tooltip content="Discard changes">
+              <IconButton
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={handleDiscard}
+                style={{
+                  flexShrink: 0,
+                  width: "18px",
+                  height: "18px",
+                  padding: 0,
+                  marginLeft: "2px",
+                  marginRight: "2px",
+                }}
+              >
+                <ArrowCounterClockwiseIcon size={12} />
+              </IconButton>
+            </Tooltip>
+
+            <DropdownMenu.Root
+              open={isDropdownOpen}
+              onOpenChange={setIsDropdownOpen}
+            >
+              <Tooltip content="Open file">
+                <DropdownMenu.Trigger>
+                  <IconButton
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      flexShrink: 0,
+                      width: "18px",
+                      height: "18px",
+                      padding: 0,
+                    }}
+                  >
+                    <FilePlus size={12} weight="regular" />
+                  </IconButton>
+                </DropdownMenu.Trigger>
+              </Tooltip>
+              <DropdownMenu.Content size="1" align="end">
+                {detectedApps
+                  .filter((app) => app.type !== "terminal")
+                  .map((app) => (
+                    <DropdownMenu.Item
+                      key={app.id}
+                      onSelect={() => handleOpenWith(app.id)}
+                    >
+                      <Flex align="center" gap="2">
+                        {app.icon ? (
+                          <img
+                            src={app.icon}
+                            width={16}
+                            height={16}
+                            alt=""
+                            style={{ borderRadius: "2px" }}
+                          />
+                        ) : (
+                          <CodeIcon size={16} weight="regular" />
+                        )}
+                        <Text size="1">{app.name}</Text>
+                      </Flex>
+                    </DropdownMenu.Item>
+                  ))}
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item onSelect={handleCopyPath}>
+                  <Flex align="center" gap="2">
+                    <CopyIcon size={16} weight="regular" />
+                    <Text size="1">Copy Path</Text>
+                  </Flex>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Flex>
+        )}
+
+        <Badge
+          size="1"
+          color={indicator.color}
+          style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
+        >
+          {indicator.label}
+        </Badge>
+      </Flex>
+    </Tooltip>
   );
 }
 
