@@ -22,10 +22,12 @@ import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
+import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -225,6 +227,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   ) {
     super();
     this.processTracking = processTracking;
+  }
+
+  private get sleepService() {
+    return container.get<SleepService>(MAIN_TOKENS.SleepService);
   }
 
   public updateToken(newToken: string): void {
@@ -649,6 +655,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     session.lastActivityAt = Date.now();
     session.promptPending = true;
+    this.sleepService.acquire(sessionId);
 
     try {
       const result = await session.clientSideConnection.prompt({
@@ -675,6 +682,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw err;
     } finally {
       session.promptPending = false;
+      this.sleepService.release(sessionId);
     }
   }
 
@@ -929,6 +937,7 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      this.sleepService.release(taskRunId);
       try {
         await session.agent.cleanup();
       } catch {
@@ -998,21 +1007,28 @@ For git operations while detached:
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
         if (toolCallId) {
-          return new Promise((resolve, reject) => {
-            const key = `${taskRunId}:${toolCallId}`;
-            service.pendingPermissions.set(key, {
-              resolve,
-              reject,
-              sessionId: taskRunId,
-              toolCallId,
-            });
+          service.sleepService.release(taskRunId);
+          try {
+            return await new Promise<RequestPermissionResponse>(
+              (resolve, reject) => {
+                const key = `${taskRunId}:${toolCallId}`;
+                service.pendingPermissions.set(key, {
+                  resolve,
+                  reject,
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
 
-            log.info("Emitting permission request to renderer", {
-              sessionId: taskRunId,
-              toolCallId,
-            });
-            service.emit(AgentServiceEvent.PermissionRequest, params);
-          });
+                log.info("Emitting permission request to renderer", {
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
+                service.emit(AgentServiceEvent.PermissionRequest, params);
+              },
+            );
+          } finally {
+            service.sleepService.acquire(taskRunId);
+          }
         }
 
         // Fallback: no toolCallId means we can't track the response, auto-approve
