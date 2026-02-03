@@ -536,3 +536,409 @@ export const LongConversation: Story = {
     repoPath: "/Users/jonathan/dev/twig",
   },
 };
+
+function buildMarkdownShowcaseConversation(): AcpMessage[] {
+  resetCounters();
+  const events: AcpMessage[] = [];
+
+  events.push(promptRequest("Show me all markdown rendering capabilities"));
+
+  events.push(
+    agentMessage(`# API Reference: Authentication Service v2.4.1
+
+## Quick Start
+
+Import and initialize the client:
+
+\`\`\`typescript
+import { AuthClient } from '@acme/auth-sdk';
+
+const client = new AuthClient({
+  apiKey: process.env.AUTH_API_KEY,
+  timeout: 30000,
+  retries: 3
+});
+
+const session = await client.authenticate({
+  email: 'user@example.com',
+  password: '••••••••'
+});
+\`\`\`
+
+## Rate Limits
+
+| Tier | Requests/min | Burst | Price |
+|------|-------------|-------|-------|
+| Free | 60 | 100 | $0 |
+| Pro | 1,000 | 2,500 | $29/mo |
+| Enterprise | 10,000 | 50k | Custom |
+
+## Error Handling
+
+When authentication fails, you'll receive an error response:
+
+\`\`\`json
+{
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "The provided credentials are invalid.",
+    "requestId": "req_7xKo2nhV03",
+    "timestamp": "2024-01-15T09:23:41.892Z"
+  }
+}
+\`\`\`
+
+Common error codes:
+
+- \`AUTH_INVALID_CREDENTIALS\` — Wrong email or password
+- \`AUTH_RATE_LIMITED\` — Too many requests (wait 60s)
+- \`AUTH_TOKEN_EXPIRED\` — Refresh token or re-authenticate
+- \`AUTH_MFA_REQUIRED\` — 2FA verification needed
+
+## Terminal Output
+
+\`\`\`bash
+$ npm run build
+> @acme/dashboard@3.2.0 build
+> next build
+
+▲ Next.js 14.1.0
+
+Creating an optimized production build...
+✓ Compiled successfully in 12.4s
+✓ Linting and checking validity
+✓ Collecting page data
+✓ Generating static pages (24/24)
+✓ Finalizing page optimization
+
+Route (app)                Size     First Load JS
+┌ ○ /                      5.2 kB   89.1 kB
+├ ○ /dashboard            12.8 kB   96.7 kB
+├ ● /settings/[...slug]    3.1 kB   87.0 kB
+└ ○ /api/health            0 B      0 B
+
+○  (Static)  prerendered as static content
+●  (SSG)     prerendered as static HTML
+\`\`\`
+
+## Configuration
+
+Create a \`config.yaml\` in your project root:
+
+\`\`\`yaml
+auth:
+  provider: oauth2
+  issuer: https://auth.acme.dev
+  client_id: \${CLIENT_ID}
+  scopes:
+    - openid
+    - profile
+    - email
+
+database:
+  host: localhost
+  port: 5432
+  pool_size: 20
+  ssl: true
+
+logging:
+  level: info  # debug | info | warn | error
+  format: json
+\`\`\`
+
+## Metrics & Observability
+
+Average response times (p50 / p95 / p99):
+
+- **POST /auth/token** — 45ms / 120ms / 340ms
+- **GET /auth/userinfo** — 12ms / 28ms / 65ms
+- **POST /auth/refresh** — 38ms / 95ms / 210ms
+
+Memory usage: ~128MB baseline, scales to 512MB under load.
+
+---
+
+## Text Formatting
+
+This section demonstrates various **text formatting** options available:
+
+- **Bold text** for emphasis
+- *Italic text* for subtle emphasis
+- ~~Strikethrough~~ for deleted content
+- \`inline code\` for technical terms
+- Combined ***bold and italic*** together
+
+> **Note:** This is a blockquote with important information. Use blockquotes to highlight key points or warnings in your documentation.
+
+### Task Lists
+
+- [x] Implement authentication flow
+- [x] Add rate limiting
+- [ ] Write integration tests
+- [ ] Update API documentation
+
+### Nested Lists
+
+1. First level item
+   - Second level bullet
+   - Another bullet
+     1. Third level numbered
+     2. Another numbered
+2. Back to first level
+   - With a bullet point
+
+### Links and References
+
+Check out the [official documentation](https://docs.example.com) for more details.
+
+For keyboard shortcuts, use <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> to open the command palette.
+
+---
+
+## Changelog
+
+**v2.4.1** (2024-01-12)
+- Fixed race condition in token refresh logic (#1847)
+- Improved error messages for SAML configurations
+
+**v2.4.0** (2024-01-08)
+- Added support for passkeys/WebAuthn
+- New \`onSessionExpired\` callback hook
+- **Breaking:** Removed deprecated \`legacyMode\` option
+
+*Last updated: January 15, 2024 • Found an issue? [Open a PR](https://github.com/acme/auth-sdk)*`),
+  );
+
+  events.push(promptResponse(1));
+
+  return events;
+}
+
+export const MarkdownShowcase: Story = {
+  args: {
+    events: buildMarkdownShowcaseConversation(),
+    isPromptPending: false,
+    repoPath: "/Users/jonathan/dev/twig",
+  },
+};
+
+function buildMarkdownDebugConversation(): AcpMessage[] {
+  resetCounters();
+  const events: AcpMessage[] = [];
+
+  events.push(promptRequest("Show me all markdown features"));
+
+  events.push(
+    agentMessage(`# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+
+---
+
+## Text Formatting
+
+Regular paragraph text.
+
+**Bold text**
+
+*Italic text*
+
+***Bold and italic***
+
+~~Strikethrough~~
+
+---
+
+## Inline Code
+
+Use \`const x = 1\` for inline code.
+
+Error codes: \`AUTH_INVALID\`, \`RATE_LIMITED\`, \`NOT_FOUND\`
+
+---
+
+## Code Blocks
+
+\`\`\`typescript
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+function getUser(id: string): User {
+  return { id, name: "John", email: "john@example.com" };
+}
+\`\`\`
+
+\`\`\`json
+{
+  "name": "example",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}
+\`\`\`
+
+\`\`\`bash
+$ npm install
+$ npm run build
+$ npm test
+\`\`\`
+
+\`\`\`yaml
+config:
+  enabled: true
+  options:
+    - first
+    - second
+\`\`\`
+
+---
+
+## Blockquotes
+
+> This is a blockquote.
+
+> **Note:** Important information here.
+
+> Multi-line blockquote
+> continues on next line.
+
+---
+
+## Unordered Lists
+
+- Item one
+- Item two
+- Item three
+
+* Also works with asterisks
+* Another item
+
+---
+
+## Ordered Lists
+
+1. First item
+2. Second item
+3. Third item
+
+---
+
+## Nested Lists
+
+- Parent item
+  - Child item
+  - Another child
+    - Grandchild
+- Back to parent
+  1. Numbered child
+  2. Another numbered
+
+1. Numbered parent
+   - Bullet child
+   - Another bullet
+2. Second numbered parent
+
+---
+
+## Task Lists
+
+- [x] Completed task
+- [x] Another completed
+- [ ] Incomplete task
+- [ ] Another incomplete
+
+---
+
+## Links
+
+[Simple link](https://example.com)
+
+[Link with title](https://example.com "Example Site")
+
+Check the [documentation](https://docs.example.com) for more info.
+
+---
+
+## Tables
+
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Cell 1   | Cell 2   | Cell 3   |
+| Cell 4   | Cell 5   | Cell 6   |
+
+| Left | Center | Right |
+|:-----|:------:|------:|
+| L    | C      | R     |
+| L    | C      | R     |
+
+---
+
+## Horizontal Rules
+
+Above the rule
+
+---
+
+Below the rule
+
+***
+
+Another separator
+
+___
+
+Final separator
+
+---
+
+## Mixed Content
+
+Here's a paragraph with **bold**, *italic*, \`code\`, and a [link](https://example.com).
+
+1. List with **bold item**
+2. List with *italic item*
+3. List with \`code item\`
+4. List with [link item](https://example.com)
+
+> Blockquote with **bold**, *italic*, and \`code\`.
+
+---
+
+## Edge Cases
+
+**Bold at start** of paragraph.
+
+Paragraph ending with **bold**
+
+*Italic at start* of paragraph.
+
+Paragraph ending with *italic*
+
+\`Code at start\` of paragraph.
+
+Paragraph ending with \`code\`
+
+Empty paragraph below:
+
+Next paragraph after empty.`),
+  );
+
+  events.push(promptResponse(1));
+
+  return events;
+}
+
+export const MarkdownDebug: Story = {
+  args: {
+    events: buildMarkdownDebugConversation(),
+    isPromptPending: false,
+    repoPath: "/Users/jonathan/dev/twig",
+  },
+};
