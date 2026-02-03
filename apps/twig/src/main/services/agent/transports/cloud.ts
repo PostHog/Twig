@@ -67,6 +67,8 @@ export class CloudAgentTransport implements AgentTransport {
   }
 
   async sendPrompt(prompt: ContentBlock[]): Promise<PromptOutput> {
+    // Note: The user prompt event is added directly in the renderer's sendLocalPrompt
+    // to ensure it displays immediately, avoiding timing issues with tRPC subscription setup.
     const textContent = prompt
       .filter((block): block is { type: "text"; text: string } => block.type === "text")
       .map((block) => block.text)

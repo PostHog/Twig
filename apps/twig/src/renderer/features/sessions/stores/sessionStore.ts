@@ -1079,10 +1079,27 @@ const useStore = create<SessionStore>()(
       session: AgentSession,
       blocks: ContentBlock[],
     ): Promise<{ stopReason: string }> => {
+      const promptTs = Date.now();
       updateSession(session.taskRunId, {
         isPromptPending: true,
-        promptStartedAt: Date.now(),
+        promptStartedAt: promptTs,
       });
+
+      // For cloud sessions, add the user prompt event directly to session events
+      // since the tRPC subscription might not be ready for the first prompt
+      if (session.isCloud) {
+        const promptEvent: AcpMessage = {
+          type: "acp_message",
+          ts: promptTs,
+          message: {
+            jsonrpc: "2.0",
+            id: promptTs,
+            method: "session/prompt",
+            params: { prompt: blocks },
+          } as AcpMessage["message"],
+        };
+        appendEvents(session.taskRunId, [promptEvent]);
+      }
 
       try {
         return await trpcVanilla.agent.prompt.mutate({
