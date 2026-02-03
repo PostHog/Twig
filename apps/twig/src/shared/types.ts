@@ -97,6 +97,7 @@ export interface CreateWorkspaceOptions {
   mode: WorkspaceMode;
   branch?: string;
   useExistingBranch?: boolean;
+  customName?: string;
 }
 
 export interface ScriptExecutionResult {

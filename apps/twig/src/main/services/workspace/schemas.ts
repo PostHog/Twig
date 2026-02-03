@@ -5,6 +5,17 @@ import { z } from "zod";
 export const workspaceModeSchema = z
   .enum(["worktree", "local", "cloud", "root"])
   .transform((val) => (val === "root" ? "local" : val));
+
+export const workspaceNameSchema = z
+  .string()
+  .min(1, "Workspace name is required")
+  .max(50, "Workspace name must be 50 characters or less")
+  .regex(/^[a-zA-Z]/, "Workspace name must begin with a letter")
+  .regex(
+    /^[a-zA-Z0-9-]+$/,
+    "Workspace name can only contain letters, numbers, and dashes",
+  );
+
 export const worktreeInfoSchema = z.object({
   worktreePath: z.string(),
   worktreeName: z.string(),
@@ -62,6 +73,17 @@ export const createWorkspaceInput = z.object({
   mode: workspaceModeSchema,
   branch: z.string().optional(),
   useExistingBranch: z.boolean().optional(),
+  customName: workspaceNameSchema.optional(),
+});
+
+export const checkNameAvailableInput = z.object({
+  name: workspaceNameSchema,
+  mainRepoPath: z.string().min(2, "Repository path is required"),
+});
+
+export const checkNameAvailableOutput = z.object({
+  available: z.boolean(),
+  reason: z.string().optional(),
 });
 
 export const deleteWorkspaceInput = z.object({
@@ -214,3 +236,5 @@ export type IsLocalBackgroundedInput = z.infer<typeof isLocalBackgroundedInput>;
 export type GetLocalWorktreePathInput = z.infer<
   typeof getLocalWorktreePathInput
 >;
+export type CheckNameAvailableInput = z.infer<typeof checkNameAvailableInput>;
+export type CheckNameAvailableOutput = z.infer<typeof checkNameAvailableOutput>;
