@@ -92,8 +92,8 @@ export interface AgentSession {
   framework?: "claude";
   currentMode: ExecutionMode;
   pendingPermissions: Map<string, PermissionRequest>;
-  // Queue of messages to send when current turn completes
   messageQueue: QueuedMessage[];
+  pendingUserMessage: string | null;
 }
 
 interface SessionState {
@@ -173,12 +173,12 @@ function subscribeToChannel(taskRunId: string) {
           if (session) {
             session.events.push(payload as AcpMessage);
 
-            // Track isPromptPending from ACP events (handles backend-initiated prompts)
             const acpMsg = payload as AcpMessage;
             const msg = acpMsg.message;
             if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
               session.isPromptPending = true;
               session.promptStartedAt = acpMsg.ts;
+              session.pendingUserMessage = null;
             }
             if (
               "id" in msg &&
@@ -522,6 +522,7 @@ function createBaseSession(
     currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
     messageQueue: [],
+    pendingUserMessage: null,
   };
 }
 
@@ -854,10 +855,12 @@ const useStore = create<SessionStore>()(
     const sendLocalPrompt = async (
       session: AgentSession,
       blocks: ContentBlock[],
+      promptText: string,
     ): Promise<{ stopReason: string }> => {
       updateSession(session.taskRunId, {
         isPromptPending: true,
         promptStartedAt: Date.now(),
+        pendingUserMessage: promptText,
       });
 
       try {
@@ -866,7 +869,6 @@ const useStore = create<SessionStore>()(
           prompt: blocks,
         });
       } catch (error) {
-        // Check if this is a fatal error that means the session is dead
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         const errorDetails = (error as { data?: { details?: string } }).data
@@ -892,17 +894,18 @@ const useStore = create<SessionStore>()(
               "Session connection lost. Please retry or start a new task.",
             isPromptPending: false,
             promptStartedAt: null,
+            pendingUserMessage: null,
           });
         } else {
           updateSession(session.taskRunId, {
             isPromptPending: false,
             promptStartedAt: null,
+            pendingUserMessage: null,
           });
         }
 
         throw error;
       } finally {
-        // Only clear pending state if not already done in catch
         const currentSession = get().sessions[session.taskRunId];
         if (currentSession?.isPromptPending) {
           updateSession(session.taskRunId, {
@@ -1216,7 +1219,7 @@ const useStore = create<SessionStore>()(
 
           return session.isCloud
             ? sendCloudPrompt(session, taskId, blocks)
-            : sendLocalPrompt(session, blocks);
+            : sendLocalPrompt(session, blocks, promptText);
         },
 
         cancelPrompt: async (taskId) => {

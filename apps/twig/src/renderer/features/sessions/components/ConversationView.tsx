@@ -61,6 +61,7 @@ interface ConversationViewProps {
   repoPath?: string | null;
   isCloud?: boolean;
   taskId?: string;
+  pendingUserMessage?: string | null;
 }
 
 const SCROLL_THRESHOLD = 100;
@@ -73,6 +74,7 @@ export function ConversationView({
   repoPath,
   isCloud = false,
   taskId,
+  pendingUserMessage,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => buildConversationItems(events), [events]);
@@ -113,10 +115,15 @@ export function ConversationView({
     prevItemsLengthRef.current = items.length;
     prevPendingCountRef.current = pendingPermissionsCount;
 
-    if (isNearBottomRef.current || isNewContent || isNewPending) {
+    if (
+      isNearBottomRef.current ||
+      isNewContent ||
+      isNewPending ||
+      pendingUserMessage
+    ) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [items, pendingPermissionsCount]);
+  }, [items, pendingPermissionsCount, pendingUserMessage]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -144,6 +151,7 @@ export function ConversationView({
               <UserShellExecuteView key={item.id} item={item} />
             ),
           )}
+          {pendingUserMessage && <UserMessage content={pendingUserMessage} />}
           {queuedMessages.map((msg) => (
             <QueuedMessageView
               key={msg.id}

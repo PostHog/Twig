@@ -52,6 +52,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
   const promptStartedAt = session?.promptStartedAt;
+  const pendingUserMessage = session?.pendingUserMessage;
 
   const isConnecting = useRef(false);
 
@@ -206,6 +207,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             errorMessage={errorMessage}
             onRetry={handleRetry}
             onDelete={handleDelete}
+            pendingUserMessage={pendingUserMessage}
           />
         </ErrorBoundary>
       </Box>
