@@ -359,9 +359,11 @@ export const useAuthStore = create<AuthState>()(
                 cloudRegion: tokens.cloudRegion,
               });
 
+              let didRefresh = false;
               if (isExpired) {
                 try {
                   await get().refreshAccessToken();
+                  didRefresh = true;
                 } catch (error) {
                   log.error("Failed to refresh expired token:", error);
                   set({ storedTokens: null, isAuthenticated: false });
@@ -407,11 +409,13 @@ export const useAuthStore = create<AuthState>()(
                   projectId,
                 });
 
-                trpcVanilla.agent.updateToken
-                  .mutate({ token: currentTokens.accessToken })
-                  .catch((err) =>
-                    log.warn("Failed to update agent token", err),
-                  );
+                if (!didRefresh) {
+                  trpcVanilla.agent.updateToken
+                    .mutate({ token: currentTokens.accessToken })
+                    .catch((err) =>
+                      log.warn("Failed to update agent token", err),
+                    );
+                }
 
                 get().scheduleTokenRefresh();
 
