@@ -46,6 +46,7 @@ interface SessionViewProps {
   errorMessage?: string;
   onRetry?: () => void;
   onDelete?: () => void;
+  pendingUserMessage?: string | null;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -66,6 +67,7 @@ export function SessionView({
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
   onDelete,
+  pendingUserMessage,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -346,6 +348,7 @@ export function SessionView({
               repoPath={repoPath}
               isCloud={isCloud}
               taskId={taskId}
+              pendingUserMessage={pendingUserMessage}
             />
           )}
 
