@@ -18,8 +18,8 @@ import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
 import { FocusServiceEvent } from "../focus/service.js";
-import { getWorktreeLocation } from "../settingsStore";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import { getWorktreeLocation } from "../settingsStore";
 import type { ShellService } from "../shell/service.js";
 import { loadConfig, normalizeScripts } from "./configLoader";
 import type {
