@@ -16,16 +16,6 @@ export function KeyboardShortcutsSheet({
   open,
   onOpenChange,
 }: KeyboardShortcutsSheetProps) {
-  const shortcutsByCategory = useMemo(() => getShortcutsByCategory(), []);
-
-  // Order categories for display
-  const categoryOrder: ShortcutCategory[] = [
-    "general",
-    "navigation",
-    "panels",
-    "editor",
-  ];
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content
@@ -43,70 +33,7 @@ export function KeyboardShortcutsSheet({
             paddingRight: "8px",
           }}
         >
-          <Flex direction="column" gap="5">
-            {categoryOrder.map((category) => {
-              const shortcuts = shortcutsByCategory[category];
-              if (shortcuts.length === 0) return null;
-
-              // Deduplicate shortcuts with same description (e.g., multiple keys for command menu)
-              const uniqueShortcuts = shortcuts.reduce(
-                (acc, shortcut) => {
-                  const existing = acc.find(
-                    (s) => s.description === shortcut.description,
-                  );
-                  if (existing) {
-                    // Keep the first one (primary shortcut)
-                    return acc;
-                  }
-                  return [...acc, shortcut];
-                },
-                [] as typeof shortcuts,
-              );
-
-              return (
-                <Flex key={category} direction="column" gap="2">
-                  <Text size="2" weight="bold" color="gray">
-                    {CATEGORY_LABELS[category]}
-                  </Text>
-                  <Box
-                    style={{
-                      borderRadius: "var(--radius-2)",
-                      border: "1px solid var(--gray-5)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {uniqueShortcuts.map((shortcut, index) => (
-                      <Flex
-                        key={shortcut.id}
-                        align="center"
-                        justify="between"
-                        px="3"
-                        py="2"
-                        style={{
-                          borderBottom:
-                            index < uniqueShortcuts.length - 1
-                              ? "1px solid var(--gray-4)"
-                              : undefined,
-                          backgroundColor:
-                            index % 2 === 0 ? "var(--gray-2)" : "var(--gray-1)",
-                        }}
-                      >
-                        <Flex direction="column" gap="1">
-                          <Text size="2">{shortcut.description}</Text>
-                          {shortcut.context && (
-                            <Text size="1" color="gray">
-                              {shortcut.context}
-                            </Text>
-                          )}
-                        </Flex>
-                        <ShortcutKeys keys={shortcut.keys} />
-                      </Flex>
-                    ))}
-                  </Box>
-                </Flex>
-              );
-            })}
-          </Flex>
+          <KeyboardShortcutsList />
         </Box>
 
         <Flex justify="end" mt="4">
@@ -123,6 +50,82 @@ export function KeyboardShortcutsSheet({
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
+  );
+}
+
+export function KeyboardShortcutsList() {
+  const shortcutsByCategory = useMemo(() => getShortcutsByCategory(), []);
+
+  const categoryOrder: ShortcutCategory[] = [
+    "general",
+    "navigation",
+    "panels",
+    "editor",
+  ];
+
+  return (
+    <Flex direction="column" gap="5">
+      {categoryOrder.map((category) => {
+        const shortcuts = shortcutsByCategory[category];
+        if (shortcuts.length === 0) return null;
+
+        const uniqueShortcuts = shortcuts.reduce(
+          (acc, shortcut) => {
+            const existing = acc.find(
+              (s) => s.description === shortcut.description,
+            );
+            if (existing) {
+              return acc;
+            }
+            return [...acc, shortcut];
+          },
+          [] as typeof shortcuts,
+        );
+
+        return (
+          <Flex key={category} direction="column" gap="2">
+            <Text size="2" weight="bold" color="gray">
+              {CATEGORY_LABELS[category]}
+            </Text>
+            <Box
+              style={{
+                borderRadius: "var(--radius-2)",
+                border: "1px solid var(--gray-5)",
+                overflow: "hidden",
+              }}
+            >
+              {uniqueShortcuts.map((shortcut, index) => (
+                <Flex
+                  key={shortcut.id}
+                  align="center"
+                  justify="between"
+                  px="3"
+                  py="2"
+                  style={{
+                    borderBottom:
+                      index < uniqueShortcuts.length - 1
+                        ? "1px solid var(--gray-4)"
+                        : undefined,
+                    backgroundColor:
+                      index % 2 === 0 ? "var(--gray-2)" : "var(--gray-1)",
+                  }}
+                >
+                  <Flex direction="column" gap="1">
+                    <Text size="2">{shortcut.description}</Text>
+                    {shortcut.context && (
+                      <Text size="1" color="gray">
+                        {shortcut.context}
+                      </Text>
+                    )}
+                  </Flex>
+                  <ShortcutKeys keys={shortcut.keys} />
+                </Flex>
+              ))}
+            </Box>
+          </Flex>
+        );
+      })}
+    </Flex>
   );
 }
 
