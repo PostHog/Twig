@@ -17,6 +17,7 @@ import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store";
 import type { AgentService } from "../agent/service.js";
+import type { EnvironmentService } from "../environment/service.js";
 import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
@@ -128,6 +129,9 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
 
   @inject(MAIN_TOKENS.ProcessTrackingService)
   private processTracking!: ProcessTrackingService;
+
+  @inject(MAIN_TOKENS.EnvironmentService)
+  private environmentService!: EnvironmentService;
 
   private scriptRunner!: ScriptRunner;
   private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
@@ -328,6 +332,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       }
       foldersStore.set("taskAssociations", associations);
 
+      this.environmentService.create(taskId, "cloud");
+
       return {
         taskId,
         mode,
@@ -378,6 +384,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         associations.push(association);
       }
       foldersStore.set("taskAssociations", associations);
+
+      this.environmentService.create(taskId, "local");
 
       // Load config and run scripts from main repo
       const { config } = await loadConfig(
@@ -533,6 +541,8 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
     foldersStore.set("taskAssociations", associations);
 
+    this.environmentService.create(taskId, "local");
+
     // Load config and build env in parallel
     const [{ config }, workspaceEnv] = await Promise.all([
       loadConfig(worktree.worktreePath, worktree.worktreeName),
@@ -633,6 +643,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
 
     if (association.mode === "cloud") {
       this.removeTaskAssociation(taskId);
+      this.environmentService.remove(taskId);
       log.info(`Cloud workspace deleted for task ${taskId}`);
       return;
     }
@@ -642,6 +653,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     if (!folderPath) {
       log.warn(`No folder found for task ${taskId}, removing association only`);
       this.removeTaskAssociation(taskId);
+      this.environmentService.remove(taskId);
       return;
     }
 
@@ -719,6 +731,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     }
 
     this.removeTaskAssociation(taskId);
+    this.environmentService.remove(taskId);
 
     log.info(`Workspace deleted for task ${taskId}`);
   }

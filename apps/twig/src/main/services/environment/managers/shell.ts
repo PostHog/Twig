@@ -1,9 +1,13 @@
+import path from "node:path";
 import { logger } from "../../../lib/logger.js";
+import { foldersStore } from "../../../utils/store.js";
 import { type ExecuteOutput, ShellEvent } from "../../shell/schemas.js";
 import type { ShellService } from "../../shell/service.js";
+import { getWorktreeLocation } from "../../settingsStore.js";
+import { buildWorkspaceEnv } from "../../workspace/workspaceEnv.js";
 import type { ShellManager, ShellManagerEvents } from "../types.js";
 
-const log = logger.scope("local-shell-manager");
+const log = logger.scope("shell-manager");
 
 export class LocalShellManager implements ShellManager {
   constructor(private shellService: ShellService) {}
@@ -38,6 +42,39 @@ export class LocalShellManager implements ShellManager {
 
   getSessionsByPrefix(prefix: string): string[] {
     return this.shellService.getSessionsByPrefix(prefix);
+  }
+
+  async getTaskEnv(
+    taskId: string,
+    _cwd?: string,
+  ): Promise<Record<string, string> | undefined> {
+    const associations = foldersStore.get("taskAssociations", []);
+    const association = associations.find((a) => a.taskId === taskId);
+
+    if (!association) {
+      return undefined;
+    }
+
+    const folders = foldersStore.get("folders", []);
+    const folder = folders.find((f) => f.id === association.folderId);
+    if (!folder) return undefined;
+
+    let worktreePath: string | null = null;
+    let worktreeName: string | null = null;
+
+    if (association.mode === "worktree") {
+      worktreeName = association.worktree;
+      const worktreeBasePath = getWorktreeLocation();
+      worktreePath = path.join(worktreeBasePath, folder.name, worktreeName);
+    }
+
+    return buildWorkspaceEnv({
+      taskId,
+      folderPath: folder.path,
+      worktreePath,
+      worktreeName,
+      mode: association.mode,
+    });
   }
 
   on<K extends keyof ShellManagerEvents>(
@@ -93,6 +130,13 @@ export class CloudShellManager implements ShellManager {
 
   getSessionsByPrefix(_prefix: string): string[] {
     return [];
+  }
+
+  async getTaskEnv(
+    _taskId: string,
+    _cwd?: string,
+  ): Promise<Record<string, string> | undefined> {
+    return undefined;
   }
 
   on<K extends keyof ShellManagerEvents>(

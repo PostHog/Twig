@@ -206,7 +206,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             onBashCommand={handleBashCommand}
             onCancelPrompt={handleCancelPrompt}
             repoPath={repoPath}
-            isCloud={session?.isCloud ?? false}
             sessionStatus={session?.status}
             hasError={hasError}
             errorMessage={errorMessage}

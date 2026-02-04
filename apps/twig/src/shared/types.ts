@@ -27,6 +27,38 @@ export interface RegisteredFolder {
 
 export type WorkspaceMode = "worktree" | "local" | "cloud";
 
+export type EnvironmentType = "local" | "cloud";
+
+export interface EnvironmentCapabilities {
+  shell: boolean;
+  files: boolean;
+  git: boolean;
+  workspace: boolean;
+  scripts: boolean;
+}
+
+export const LOCAL_CAPABILITIES: EnvironmentCapabilities = {
+  shell: true,
+  files: true,
+  git: true,
+  workspace: true,
+  scripts: true,
+};
+
+export const CLOUD_CAPABILITIES: EnvironmentCapabilities = {
+  shell: false,
+  files: false,
+  git: false,
+  workspace: true,
+  scripts: false,
+};
+
+export function getCapabilitiesForMode(
+  mode: WorkspaceMode | EnvironmentType,
+): EnvironmentCapabilities {
+  return mode === "cloud" ? CLOUD_CAPABILITIES : LOCAL_CAPABILITIES;
+}
+
 interface TaskFolderAssociationBase {
   taskId: string;
   folderId: string;

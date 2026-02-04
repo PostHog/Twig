@@ -13,6 +13,7 @@ import {
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useEnvironmentCapabilities } from "@features/workspace/hooks/useEnvironmentCapabilities";
 import { Warning } from "@phosphor-icons/react";
 import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
@@ -49,7 +50,6 @@ interface SessionViewProps {
   onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
-  isCloud?: boolean;
   sessionStatus?: SessionStatus;
   hasError?: boolean;
   errorMessage?: string;
@@ -70,7 +70,6 @@ export function SessionView({
   onBashCommand,
   onCancelPrompt,
   repoPath,
-  isCloud = false,
   sessionStatus,
   hasError = false,
   errorMessage = DEFAULT_ERROR_MESSAGE,
@@ -84,6 +83,12 @@ export function SessionView({
     useSessionActions();
   const sessionMode = useCurrentModeForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
+  const capabilities = useEnvironmentCapabilities(taskId);
+
+  // Default to local (true) when capabilities haven't loaded yet
+  // This prevents treating loading state as cloud mode
+  const hasShellCapability = capabilities === null ? true : capabilities.shell;
+  const isCloud = !hasShellCapability;
 
   const currentMode: ExecutionMode = sessionMode ?? "default";
 
@@ -92,17 +97,17 @@ export function SessionView({
       !allowBypassPermissions &&
       currentMode === "bypassPermissions" &&
       taskId &&
-      !isCloud
+      hasShellCapability
     ) {
       setSessionMode(taskId, "default");
     }
-  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+  }, [allowBypassPermissions, currentMode, taskId, hasShellCapability, setSessionMode]);
 
   const handleModeChange = useCallback(() => {
-    if (!taskId || isCloud) return;
+    if (!taskId || !hasShellCapability) return;
     const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
     setSessionMode(taskId, nextMode);
-  }, [taskId, isCloud, currentMode, allowBypassPermissions, setSessionMode]);
+  }, [taskId, hasShellCapability, currentMode, allowBypassPermissions, setSessionMode]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -124,19 +129,19 @@ export function SessionView({
     "shift+tab",
     (e) => {
       e.preventDefault();
-      if (!taskId || isCloud) return;
+      if (!taskId || !hasShellCapability) return;
       const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
       setSessionMode(taskId, nextMode);
     },
     {
       enableOnFormTags: true,
       enableOnContentEditable: true,
-      enabled: !isCloud && isRunning,
+      enabled: hasShellCapability && isRunning,
     },
     [
       taskId,
       currentMode,
-      isCloud,
+      hasShellCapability,
       isRunning,
       setSessionMode,
       allowBypassPermissions,
@@ -217,7 +222,7 @@ export function SessionView({
       const selectedOption = firstPendingPermission.options.find(
         (o) => o.optionId === optionId,
       );
-      if (selectedOption?.kind === "allow_always" && !isCloud) {
+      if (selectedOption?.kind === "allow_always" && hasShellCapability) {
         setSessionMode(taskId, "acceptEdits");
       }
 
@@ -257,7 +262,7 @@ export function SessionView({
       taskId,
       respondToPermission,
       onSendPrompt,
-      isCloud,
+      hasShellCapability,
       setSessionMode,
       requestFocus,
       sessionId,
@@ -438,7 +443,7 @@ export function SessionView({
                 onBashModeChange={setIsBashMode}
                 onCancel={onCancelPrompt}
                 currentMode={currentMode}
-                onModeChange={!isCloud ? handleModeChange : undefined}
+                onModeChange={hasShellCapability ? handleModeChange : undefined}
               />
             </Box>
           )}

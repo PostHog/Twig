@@ -1,3 +1,4 @@
+import { useEnvironmentCapabilities } from "@features/workspace/hooks/useEnvironmentCapabilities";
 import { Select, Text } from "@radix-ui/themes";
 import { Fragment } from "react";
 import { useModelsStore } from "../stores/modelsStore";
@@ -16,6 +17,7 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const { setSessionModel } = useSessionActions();
   const session = useSessionForTask(taskId);
+  const capabilities = useEnvironmentCapabilities(taskId);
 
   const groupedModels = useModelsStore((s) => s.groupedModels);
   const models = useModelsStore((s) => s.models);
@@ -28,7 +30,9 @@ export function ModelSelector({
     setSelectedModel(value);
     onModelChange?.(value);
 
-    if (taskId && session?.status === "connected" && !session.isCloud) {
+    // Default to local (true) when capabilities haven't loaded yet
+    const hasShellCapability = capabilities === null ? true : capabilities.shell;
+    if (taskId && session?.status === "connected" && hasShellCapability) {
       setSessionModel(taskId, value);
     }
   };

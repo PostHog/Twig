@@ -1,16 +1,14 @@
 import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import path from "node:path";
 import { inject, injectable, preDestroy } from "inversify";
 import * as pty from "node-pty";
+import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
-import { foldersStore } from "../../utils/store.js";
+import type { EnvironmentService } from "../environment/service.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
-import { getWorktreeLocation } from "../settingsStore.js";
-import { buildWorkspaceEnv } from "../workspace/workspaceEnv.js";
 import { type ExecuteOutput, ShellEvent, type ShellEvents } from "./schemas.js";
 
 const log = logger.scope("shell");
@@ -67,6 +65,7 @@ export interface CreateSessionOptions {
 export class ShellService extends TypedEventEmitter<ShellEvents> {
   private sessions = new Map<string, ShellSession>();
   private processTracking: ProcessTrackingService;
+  private _environmentService: EnvironmentService | null = null;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
@@ -74,6 +73,15 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
   ) {
     super();
     this.processTracking = processTracking;
+  }
+
+  private get environmentService(): EnvironmentService {
+    if (!this._environmentService) {
+      this._environmentService = container.get<EnvironmentService>(
+        MAIN_TOKENS.EnvironmentService,
+      );
+    }
+    return this._environmentService;
   }
 
   async create(
@@ -261,32 +269,9 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
   ): Promise<Record<string, string> | undefined> {
     if (!taskId) return undefined;
 
-    const associations = foldersStore.get("taskAssociations", []);
-    const association = associations.find((a) => a.taskId === taskId);
+    const env = this.environmentService.get(taskId);
+    if (!env) return undefined;
 
-    if (!association || association.mode === "cloud") {
-      return undefined;
-    }
-
-    const folders = foldersStore.get("folders", []);
-    const folder = folders.find((f) => f.id === association.folderId);
-    if (!folder) return undefined;
-
-    let worktreePath: string | null = null;
-    let worktreeName: string | null = null;
-
-    if (association.mode === "worktree") {
-      worktreeName = association.worktree;
-      const worktreeBasePath = getWorktreeLocation();
-      worktreePath = path.join(worktreeBasePath, folder.name, worktreeName);
-    }
-
-    return buildWorkspaceEnv({
-      taskId,
-      folderPath: folder.path,
-      worktreePath,
-      worktreeName,
-      mode: association.mode,
-    });
+    return env.shell.getTaskEnv(taskId);
   }
 }

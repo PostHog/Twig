@@ -61,6 +61,19 @@ vi.mock("../../lib/process-utils.js", () => ({
 vi.mock("../../di/tokens.js", () => ({
   MAIN_TOKENS: {
     ProcessTrackingService: Symbol.for("Main.ProcessTrackingService"),
+    EnvironmentService: Symbol.for("Main.EnvironmentService"),
+  },
+}));
+
+vi.mock("../../di/container.js", () => ({
+  container: {
+    get: vi.fn(() => ({
+      get: vi.fn(() => ({
+        shell: {
+          getTaskEnv: vi.fn(() => Promise.resolve(undefined)),
+        },
+      })),
+    })),
   },
 }));
 

@@ -48,6 +48,10 @@ export interface ShellManager {
   execute(cwd: string, command: string): Promise<ExecuteOutput>;
   hasSession(sessionId: string): boolean;
   getSessionsByPrefix(prefix: string): string[];
+  getTaskEnv(
+    taskId: string,
+    cwd?: string,
+  ): Promise<Record<string, string> | undefined>;
   on<K extends keyof ShellManagerEvents>(
     event: K,
     listener: (payload: ShellManagerEvents[K]) => void,
