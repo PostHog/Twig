@@ -25,7 +25,9 @@ export function StatusBar() {
           transform: "translateX(-50%)",
         }}
       >
-        <Kbd size="1">{navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}K</Kbd>
+        <Kbd size="1">
+          {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}K
+        </Kbd>
         <Code size="1" variant="ghost" color="gray">
           Command
         </Code>
