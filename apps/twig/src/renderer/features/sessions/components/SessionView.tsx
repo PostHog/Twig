@@ -96,6 +96,7 @@ export function SessionView({
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
+  const requestFocus = useDraftStore((s) => s.actions.requestFocus);
   setContext(sessionId, {
     taskId,
     repoPath,
@@ -238,6 +239,8 @@ export function SessionView({
           answers,
         );
       }
+
+      requestFocus(sessionId);
     },
     [
       firstPendingPermission,
@@ -246,13 +249,22 @@ export function SessionView({
       onSendPrompt,
       isCloud,
       setSessionMode,
+      requestFocus,
+      sessionId,
     ],
   );
 
   const handlePermissionCancel = useCallback(async () => {
     if (!firstPendingPermission || !taskId) return;
     await cancelPermission(taskId, firstPendingPermission.toolCallId);
-  }, [firstPendingPermission, taskId, cancelPermission]);
+    requestFocus(sessionId);
+  }, [
+    firstPendingPermission,
+    taskId,
+    cancelPermission,
+    requestFocus,
+    sessionId,
+  ]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
