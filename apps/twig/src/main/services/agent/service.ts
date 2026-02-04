@@ -26,6 +26,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -218,13 +219,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
   private processTracking: ProcessTrackingService;
+  private sleepService: SleepService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
     processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.SleepService)
+    sleepService: SleepService,
   ) {
     super();
     this.processTracking = processTracking;
+    this.sleepService = sleepService;
   }
 
   public updateToken(newToken: string): void {
@@ -649,6 +654,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     session.lastActivityAt = Date.now();
     session.promptPending = true;
+    this.sleepService.acquire(sessionId);
 
     try {
       const result = await session.clientSideConnection.prompt({
@@ -675,6 +681,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw err;
     } finally {
       session.promptPending = false;
+      this.sleepService.release(sessionId);
     }
   }
 
@@ -929,6 +936,7 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      this.sleepService.release(taskRunId);
       try {
         await session.agent.cleanup();
       } catch {
@@ -998,21 +1006,31 @@ For git operations while detached:
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
         if (toolCallId) {
-          return new Promise((resolve, reject) => {
-            const key = `${taskRunId}:${toolCallId}`;
-            service.pendingPermissions.set(key, {
-              resolve,
-              reject,
-              sessionId: taskRunId,
-              toolCallId,
-            });
+          service.sleepService.release(taskRunId);
+          try {
+            return await new Promise<RequestPermissionResponse>(
+              (resolve, reject) => {
+                const key = `${taskRunId}:${toolCallId}`;
+                service.pendingPermissions.set(key, {
+                  resolve,
+                  reject,
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
 
-            log.info("Emitting permission request to renderer", {
-              sessionId: taskRunId,
-              toolCallId,
-            });
-            service.emit(AgentServiceEvent.PermissionRequest, params);
-          });
+                log.info("Emitting permission request to renderer", {
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
+                service.emit(AgentServiceEvent.PermissionRequest, params);
+              },
+            );
+          } finally {
+            // Only re-acquire if session wasn't cleaned up while waiting
+            if (service.sessions.has(taskRunId)) {
+              service.sleepService.acquire(taskRunId);
+            }
+          }
         }
 
         // Fallback: no toolCallId means we can't track the response, auto-approve

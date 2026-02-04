@@ -20,6 +20,7 @@ interface SettingsStore {
   completionVolume: number;
   sendMessagesWith: SendMessagesWith;
   allowBypassPermissions: boolean;
+  preventSleepWhileRunning: boolean;
 
   setCompletionSound: (sound: CompletionSound) => void;
   setCompletionVolume: (volume: number) => void;
@@ -33,6 +34,7 @@ interface SettingsStore {
   setAutoConvertLongText: (enabled: boolean) => void;
   setSendMessagesWith: (mode: SendMessagesWith) => void;
   setAllowBypassPermissions: (enabled: boolean) => void;
+  setPreventSleepWhileRunning: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -50,6 +52,7 @@ export const useSettingsStore = create<SettingsStore>()(
       autoConvertLongText: true,
       sendMessagesWith: "enter",
       allowBypassPermissions: false,
+      preventSleepWhileRunning: false,
 
       setCompletionSound: (sound) => set({ completionSound: sound }),
       setCompletionVolume: (volume) => set({ completionVolume: volume }),
@@ -68,6 +71,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setSendMessagesWith: (mode) => set({ sendMessagesWith: mode }),
       setAllowBypassPermissions: (enabled) =>
         set({ allowBypassPermissions: enabled }),
+      setPreventSleepWhileRunning: (enabled) =>
+        set({ preventSleepWhileRunning: enabled }),
     }),
     {
       name: "settings-storage",
