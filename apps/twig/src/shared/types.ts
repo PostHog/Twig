@@ -208,19 +208,42 @@ export interface ExternalAppsPreferences {
   lastUsedApp?: string;
 }
 
-// Task references from session summaries
-export interface TaskReference {
+// Signal reports from video segment clustering
+export interface SignalReport {
   id: string;
+  title: string | null;
+  summary: string | null;
+  status: "potential" | "candidate" | "in_progress" | "ready" | "failed";
+  total_weight: number;
+  signal_count: number;
+  relevant_user_count: number | null;
+  created_at: string;
+  updated_at: string;
+  artefact_count: number;
+}
+
+export interface SignalReportArtefactContent {
   session_id: string;
   start_time: string;
   end_time: string;
   distinct_id: string;
   content: string;
   distance_to_centroid: number | null;
+}
+
+export interface SignalReportArtefact {
+  id: string;
+  type: string;
+  content: SignalReportArtefactContent;
   created_at: string;
 }
 
-export interface TaskReferencesResponse {
-  results: TaskReference[];
+export interface SignalReportsResponse {
+  results: SignalReport[];
+  count: number;
+}
+
+export interface SignalReportArtefactsResponse {
+  results: SignalReportArtefact[];
   count: number;
 }

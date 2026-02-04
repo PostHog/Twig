@@ -1,6 +1,6 @@
 import { useAutonomyFeatureFlag } from "@features/autonomy/hooks/useAutonomyFeatureFlag";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { useAutoDetectedTasks } from "@features/tasks/hooks/useTasks";
+import { useReports } from "@features/reports/hooks/useReports";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import {
   ArrowRightIcon,
@@ -16,7 +16,7 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
-import type { Task } from "@shared/types";
+import type { SignalReport } from "@shared/types";
 import { useSuggestedTasksStore } from "../stores/suggestedTasksStore";
 
 interface SuggestedTasksProps {
@@ -120,17 +120,19 @@ export function SuggestedTasks({
     (state) => state.incrementUsage,
   );
   const {
-    navigateToTaskPreview,
+    navigateToReportPreview,
     navigateToAutonomyTasks,
     navigateToAutonomyOnboarding,
   } = useNavigationStore();
   const repoName = selectedDirectory?.split("/").pop() || null;
 
-  const { data: autoDetectedTasks = [], isLoading: isFetching } =
-    useAutoDetectedTasks({ enabled: isProactiveTasksEnabled === true });
+  const { data: reportsData, isLoading: isFetching } = useReports({
+    enabled: isProactiveTasksEnabled === true,
+  });
 
-  // Derive hasAutoDetectedTasks from actual data
-  const hasAutoDetectedTasks = autoDetectedTasks.length > 0;
+  // Get reports from the response
+  const reports = reportsData?.results ?? [];
+  const hasReports = reports.length > 0;
 
   const handleStaticSuggestionClick = (
     suggestionTitle: string,
@@ -143,16 +145,16 @@ export function SuggestedTasks({
     editor.setContent(prompt);
   };
 
-  const handleAutoDetectedTaskClick = (task: Task) => {
-    navigateToTaskPreview(task);
+  const handleReportClick = (report: SignalReport) => {
+    navigateToReportPreview(report);
   };
 
   // Only show Autonomy-related UI if the feature flag is enabled
-  if (staticSuggestions.length === 0 && !hasAutoDetectedTasks && !isFetching) {
+  if (staticSuggestions.length === 0 && !hasReports && !isFetching) {
     if (!isAutonomyEnabled) {
       return null;
     }
-    return !hasAutoDetectedTasks && !isProactiveTasksEnabled ? (
+    return !hasReports && !isProactiveTasksEnabled ? (
       <AutonomySetupCTA
         onSetup={navigateToAutonomyOnboarding}
         repoName={repoName}
@@ -166,7 +168,7 @@ export function SuggestedTasks({
         <Text size="1" color="gray" weight="medium">
           Suggested tasks
         </Text>
-        {!hasAutoDetectedTasks && (
+        {!hasReports && (
           <IconButton
             size="1"
             variant="ghost"
@@ -180,13 +182,13 @@ export function SuggestedTasks({
 
       {isFetching ? (
         <LoadingSkeleton />
-      ) : hasAutoDetectedTasks ? (
+      ) : hasReports ? (
         <Flex direction="column" gap="2">
-          {autoDetectedTasks.slice(0, 3).map((task) => (
+          {reports.slice(0, 3).map((report) => (
             <button
               type="button"
-              key={task.id}
-              onClick={() => handleAutoDetectedTaskClick(task)}
+              key={report.id}
+              onClick={() => handleReportClick(report)}
               className="group relative flex cursor-pointer items-start gap-2 rounded border border-accent-6 bg-accent-2 p-2 text-left transition-colors hover:border-accent-8 hover:bg-accent-3"
             >
               <Flex direction="column" gap="1" style={{ flex: 1 }}>
@@ -196,7 +198,7 @@ export function SuggestedTasks({
                     weight="medium"
                     className="grow text-pretty text-accent-12"
                   >
-                    {task.title}
+                    {report.title ?? "Untitled Report"}
                   </Text>
                   <Text
                     size="1"
@@ -209,7 +211,7 @@ export function SuggestedTasks({
                   size="1"
                   className="line-clamp-2 text-accent-11 leading-snug"
                 >
-                  {task.description}
+                  {report.summary}
                 </Text>
               </Flex>
               <ArrowRightIcon
@@ -218,14 +220,14 @@ export function SuggestedTasks({
               />
             </button>
           ))}
-          {autoDetectedTasks.length > 3 && (
+          {reports.length > 3 && (
             <Button
               variant="ghost"
               size="1"
               onClick={() => navigateToAutonomyTasks()}
               className="self-start"
             >
-              View all {autoDetectedTasks.length} tasks
+              View all {reports.length} reports
               <ArrowRightIcon size={12} />
             </Button>
           )}
@@ -264,15 +266,13 @@ export function SuggestedTasks({
         </Flex>
       )}
 
-      {isAutonomyEnabled &&
-        !hasAutoDetectedTasks &&
-        !isProactiveTasksEnabled && (
-          <AutonomySetupCTA
-            onSetup={navigateToAutonomyOnboarding}
-            repoName={repoName}
-          />
-        )}
-      {hasAutoDetectedTasks && <AutoDetectedInfoBanner />}
+      {isAutonomyEnabled && !hasReports && !isProactiveTasksEnabled && (
+        <AutonomySetupCTA
+          onSetup={navigateToAutonomyOnboarding}
+          repoName={repoName}
+        />
+      )}
+      {hasReports && <AutoDetectedInfoBanner />}
     </Box>
   );
 }

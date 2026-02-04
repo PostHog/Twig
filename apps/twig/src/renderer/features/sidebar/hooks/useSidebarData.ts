@@ -82,6 +82,7 @@ interface ViewState {
     | "task-detail"
     | "task-input"
     | "task-preview"
+    | "report-preview"
     | "settings"
     | "folder-settings"
     | "autonomy-tasks"

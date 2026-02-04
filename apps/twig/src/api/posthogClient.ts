@@ -1,5 +1,10 @@
 import { logger } from "@renderer/lib/logger";
-import type { Task, TaskReferencesResponse, TaskRun } from "@shared/types";
+import type {
+  SignalReportArtefactsResponse,
+  SignalReportsResponse,
+  Task,
+  TaskRun,
+} from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -382,20 +387,46 @@ export class PostHogAPIClient {
     return data.results ?? [];
   }
 
-  async getTaskReferences(taskId: string): Promise<TaskReferencesResponse> {
+  async getSignalReports(): Promise<SignalReportsResponse> {
     const teamId = await this.getTeamId();
     const url = new URL(
-      `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/references/`,
+      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/`,
     );
     const response = await this.api.fetcher.fetch({
       method: "get",
       url,
-      path: `/api/projects/${teamId}/tasks/${taskId}/references/`,
+      path: `/api/projects/${teamId}/signal_reports/`,
     });
 
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch task references: ${response.statusText}`,
+        `Failed to fetch signal reports: ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    return {
+      results: data.results ?? data ?? [],
+      count: data.count ?? data.results?.length ?? data?.length ?? 0,
+    };
+  }
+
+  async getSignalReportArtefacts(
+    reportId: string,
+  ): Promise<SignalReportArtefactsResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch signal report artefacts: ${response.statusText}`,
       );
     }
 

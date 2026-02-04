@@ -9,10 +9,10 @@ import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
+import { ReportPreviewView } from "@features/report-preview/components/ReportPreviewView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
-import { TaskPreviewView } from "@features/task-preview/components/TaskPreviewView";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { useIntegrations } from "@hooks/useIntegrations";
@@ -61,8 +61,8 @@ export function MainLayout() {
             <TaskDetail key={view.data.id} task={view.data} />
           )}
 
-          {view.type === "task-preview" && view.data && (
-            <TaskPreviewView task={view.data} />
+          {view.type === "report-preview" && view.report && (
+            <ReportPreviewView report={view.report} />
           )}
 
           {view.type === "settings" && <SettingsView />}
