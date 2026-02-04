@@ -31,7 +31,7 @@ const HeadingText = ({ children }: { children: React.ReactNode }) => (
   </Text>
 );
 
-const components: Components = {
+export const baseComponents: Components = {
   h1: ({ children }) => <HeadingText>{children}</HeadingText>,
   h2: ({ children }) => <HeadingText>{children}</HeadingText>,
   h3: ({ children }) => <HeadingText>{children}</HeadingText>,
@@ -151,7 +151,7 @@ const components: Components = {
   ),
 };
 
-const remarkPlugins = [remarkGfm];
+export const remarkPlugins = [remarkGfm];
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
@@ -161,7 +161,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
     [content],
   );
   return (
-    <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+    <ReactMarkdown remarkPlugins={remarkPlugins} components={baseComponents}>
       {processedContent}
     </ReactMarkdown>
   );
