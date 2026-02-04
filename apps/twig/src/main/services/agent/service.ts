@@ -176,8 +176,6 @@ interface SessionConfig {
   adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
-  /** Permission mode to use for the session */
-  permissionMode?: string;
 }
 
 interface ManagedSession {
@@ -426,7 +424,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       logUrl,
       adapter,
       additionalDirectories,
-      permissionMode,
     } = config;
 
     // Preview sessions don't need a real repo — use a temp directory
@@ -555,7 +552,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               taskRunId,
               sessionId: config.sessionId,
               systemPrompt,
-              ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -579,7 +575,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           _meta: {
             taskRunId,
             systemPrompt,
-            ...(permissionMode && { permissionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
                 options: { additionalDirectories },
@@ -1297,8 +1292,6 @@ For git operations while detached:
         "additionalDirectories" in params
           ? params.additionalDirectories
           : undefined,
-      permissionMode:
-        "permissionMode" in params ? params.permissionMode : undefined,
     };
   }
 

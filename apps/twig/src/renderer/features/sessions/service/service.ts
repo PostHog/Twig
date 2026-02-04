@@ -361,23 +361,29 @@ export class SessionService {
           }
         }
       } else {
-        this.unsubscribeFromChannel(taskRunId);
-        sessionStoreSetters.updateSession(taskRunId, {
-          status: "error",
-          errorMessage:
-            "Failed to reconnect to the agent. Please restart the task.",
+        // Reconnect returned null — agent process likely exited because the
+        // local Claude Code session no longer exists on disk.
+        // Fall back to starting a fresh session.
+        log.warn("Reconnect returned null, falling back to new session", {
+          taskId,
+          taskRunId,
         });
+        this.unsubscribeFromChannel(taskRunId);
+        sessionStoreSetters.removeSession(taskRunId);
+        await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
       }
     } catch (error) {
-      this.unsubscribeFromChannel(taskRunId);
+      // Reconnect failed (e.g. agent process exited unexpectedly).
+      // Fall back to starting a fresh session.
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      log.error("Failed to reconnect to session", { taskId, error });
-      sessionStoreSetters.updateSession(taskRunId, {
-        status: "error",
-        errorMessage:
-          errorMessage || "Failed to reconnect to the agent. Please try again.",
+      log.warn("Reconnect failed, falling back to new session", {
+        taskId,
+        error: errorMessage,
       });
+      this.unsubscribeFromChannel(taskRunId);
+      sessionStoreSetters.removeSession(taskRunId);
+      await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
     }
   }
 
