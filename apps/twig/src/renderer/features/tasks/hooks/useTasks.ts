@@ -19,11 +19,8 @@ const log = logger.scope("tasks");
 const taskKeys = {
   all: ["tasks"] as const,
   lists: () => [...taskKeys.all, "list"] as const,
-  list: (filters?: {
-    repository?: string;
-    createdBy?: number;
-    originProduct?: string;
-  }) => [...taskKeys.lists(), filters] as const,
+  list: (filters?: { repository?: string; createdBy?: number }) =>
+    [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
 };

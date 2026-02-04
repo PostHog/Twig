@@ -4,12 +4,10 @@ import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { AutonomyOnboarding } from "@features/autonomy/components/AutonomyOnboarding";
-import { AutonomyTasksView } from "@features/autonomy/components/AutonomyTasksView";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsView } from "@features/settings/components/SettingsView";
-import { ReportPreviewView } from "@features/report-preview/components/ReportPreviewView";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
@@ -61,15 +59,9 @@ export function MainLayout() {
             <TaskDetail key={view.data.id} task={view.data} />
           )}
 
-          {view.type === "report-preview" && view.report && (
-            <ReportPreviewView report={view.report} />
-          )}
-
           {view.type === "settings" && <SettingsView />}
 
           {view.type === "folder-settings" && <FolderSettingsView />}
-
-          {view.type === "autonomy-tasks" && <AutonomyTasksView />}
 
           {view.type === "autonomy-onboarding" && <AutonomyOnboarding />}
         </Box>

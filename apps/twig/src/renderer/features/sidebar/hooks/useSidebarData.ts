@@ -81,11 +81,8 @@ interface ViewState {
   type:
     | "task-detail"
     | "task-input"
-    | "task-preview"
-    | "report-preview"
     | "settings"
     | "folder-settings"
-    | "autonomy-tasks"
     | "autonomy-onboarding";
   data?: Task;
 }
@@ -348,8 +345,7 @@ export function useSidebarData({
   }, [syncFolderOrder, folderIds]);
 
   const activeTaskId =
-    (activeView.type === "task-detail" || activeView.type === "task-preview") &&
-    activeView.data
+    activeView.type === "task-detail" && activeView.data
       ? activeView.data.id
       : null;
 

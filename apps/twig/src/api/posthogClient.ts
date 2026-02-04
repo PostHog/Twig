@@ -1,10 +1,5 @@
 import { logger } from "@renderer/lib/logger";
-import type {
-  SignalReportArtefactsResponse,
-  SignalReportsResponse,
-  Task,
-  TaskRun,
-} from "@shared/types";
+import type { Task, TaskRun } from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -66,11 +61,7 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(options?: {
-    repository?: string;
-    createdBy?: number;
-    originProduct?: string;
-  }) {
+  async getTasks(options?: { repository?: string; createdBy?: number }) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
@@ -82,10 +73,6 @@ export class PostHogAPIClient {
 
     if (options?.createdBy) {
       params.created_by = options.createdBy;
-    }
-
-    if (options?.originProduct) {
-      params.origin_product = options.originProduct;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {
@@ -385,81 +372,6 @@ export class PostHogAPIClient {
       query: { limit: 1000 },
     });
     return data.results ?? [];
-  }
-
-  async getSignalReports(): Promise<SignalReportsResponse> {
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/`,
-    );
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/projects/${teamId}/signal_reports/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch signal reports: ${response.statusText}`,
-      );
-    }
-
-    const data = await response.json();
-    return {
-      results: data.results ?? data ?? [],
-      count: data.count ?? data.results?.length ?? data?.length ?? 0,
-    };
-  }
-
-  async getSignalReportArtefacts(
-    reportId: string,
-  ): Promise<SignalReportArtefactsResponse> {
-    const teamId = await this.getTeamId();
-    const url = new URL(
-      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
-    );
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch signal report artefacts: ${response.statusText}`,
-      );
-    }
-
-    const data = await response.json();
-    return {
-      results: data.results ?? data ?? [],
-      count: data.count ?? data.results?.length ?? data?.length ?? 0,
-    };
-  }
-
-  /**
-   * Run a HogQL query against the PostHog query API
-   */
-  async runQuery<T = unknown>(query: {
-    kind: string;
-    query: string;
-  }): Promise<T> {
-    const teamId = await this.getTeamId();
-    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/query/`);
-    const response = await this.api.fetcher.fetch({
-      method: "post",
-      url,
-      path: `/api/projects/${teamId}/query/`,
-      overrides: {
-        body: JSON.stringify(query),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to run query: ${response.statusText}`);
-    }
-
-    return await response.json();
   }
 
   /**
