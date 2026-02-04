@@ -26,7 +26,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
-import { SleepService } from "../sleep/service.js";
+import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -872,6 +872,14 @@ For git operations while detached:
     log.info("Cleaning up all agent sessions", {
       sessionCount: sessionIds.length,
     });
+
+    for (const session of this.sessions.values()) {
+      try {
+        await session.agent.flushAllLogs();
+      } catch {
+        log.debug("Failed to flush session logs during shutdown");
+      }
+    }
 
     for (const taskRunId of sessionIds) {
       await this.cleanupSession(taskRunId);
