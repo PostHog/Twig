@@ -60,15 +60,23 @@ export function notifyPromptComplete(
 }
 
 export function notifyPermissionRequest(taskTitle: string): void {
-  const { desktopNotifications, dockBadgeNotifications } =
-    useSettingsStore.getState();
+  const {
+    completionSound,
+    completionVolume,
+    desktopNotifications,
+    dockBadgeNotifications,
+  } = useSettingsStore.getState();
   const isWindowFocused = document.hasFocus();
 
   if (!isWindowFocused) {
+    const hasCustomSound = completionSound !== "none";
+    playCompletionSound(completionSound, completionVolume);
+
     if (desktopNotifications) {
       sendDesktopNotification(
         "Twig",
         `"${truncateTitle(taskTitle)}" needs your input`,
+        hasCustomSound,
       );
     }
     if (dockBadgeNotifications) {
