@@ -21,9 +21,12 @@ const DOT_FILL = "var(--gray-6)";
 
 export function TaskInput() {
   const { view } = useNavigationStore();
-  const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { lastUsedLocalWorkspaceMode, allowBypassPermissions } =
-    useSettingsStore();
+  const { lastUsedDirectory, setLastUsedDirectory } = useTaskDirectoryStore();
+  const {
+    lastUsedLocalWorkspaceMode,
+    setLastUsedLocalWorkspaceMode,
+    allowBypassPermissions,
+  } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,6 +70,7 @@ export function TaskInput() {
 
   const handleDirectoryChange = (newPath: string) => {
     setSelectedDirectory(newPath);
+    setLastUsedDirectory(newPath);
   };
 
   const effectiveWorkspaceMode = workspaceMode;
@@ -149,7 +153,10 @@ export function TaskInput() {
             />
             <WorkspaceModeSelect
               value={workspaceMode}
-              onChange={setWorkspaceMode}
+              onChange={(mode) => {
+                setWorkspaceMode(mode);
+                setLastUsedLocalWorkspaceMode(mode);
+              }}
               size="1"
             />
           </Flex>

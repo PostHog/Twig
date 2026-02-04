@@ -60,6 +60,7 @@ export function FolderPicker({
         variant="outline"
         size={size}
         onClick={handleOpenFilePicker}
+        style={{ cursor: "pointer" }}
       >
         <Flex justify="between" align="center" gap="2" width="100%">
           <Flex align="center" gap="2">
