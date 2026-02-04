@@ -1,6 +1,5 @@
 import { FilePicker } from "@features/command/components/FilePicker";
 import { PanelLayout } from "@features/panels";
-import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskData } from "@features/task-detail/hooks/useTaskData";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
@@ -9,7 +8,6 @@ import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { useStatusBar } from "@hooks/useStatusBar";
 import { GitBranch, Laptop } from "@phosphor-icons/react";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -54,21 +52,6 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   });
 
   useFileWatcher(effectiveRepoPath ?? null, taskId);
-
-  const session = useSessionForTask(taskId);
-  const isRunning =
-    session?.status === "connected" || session?.status === "connecting";
-
-  useStatusBar(
-    isRunning ? "Agent running..." : "Task details",
-    [
-      {
-        keys: [navigator.platform.includes("Mac") ? "⌘" : "Ctrl", "K"],
-        description: "Command",
-      },
-    ],
-    "replace",
-  );
 
   useBlurOnEscape();
   useWorkspaceEvents(taskId);
