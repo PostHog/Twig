@@ -9,6 +9,7 @@ import {
 } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
+import { WorkspaceSetupPrompt } from "@features/task-detail/components/WorkspaceSetupPrompt";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
@@ -16,8 +17,10 @@ import { Box } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
+import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { getTaskRepository } from "@utils/repository";
 import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
 import { ANALYTICS_EVENTS, type FeedbackType } from "@/types/analytics";
@@ -32,6 +35,12 @@ interface TaskLogsPanelProps {
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = useCwd(taskId);
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  const isWorkspaceLoaded = useWorkspaceStore((s) => s.isLoaded);
+  const isCreatingWorkspace = useWorkspaceStore((s) => !!s.isCreating[taskId]);
+  const repoKey = getTaskRepository(task);
+  const hasDirectoryMapping = useTaskDirectoryStore(
+    (s) => !!repoKey && repoKey in s.repoDirectories,
+  );
 
   const session = useSessionForTask(taskId);
   const { deleteWithConfirm } = useDeleteTask();
@@ -238,6 +247,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     },
     [taskId, repoPath],
   );
+
+  if (
+    !repoPath &&
+    isWorkspaceLoaded &&
+    !hasDirectoryMapping &&
+    !isCreatingWorkspace
+  ) {
+    return (
+      <BackgroundWrapper>
+        <Box height="100%" width="100%">
+          <WorkspaceSetupPrompt taskId={taskId} task={task} />
+        </Box>
+      </BackgroundWrapper>
+    );
+  }
 
   return (
     <BackgroundWrapper>
