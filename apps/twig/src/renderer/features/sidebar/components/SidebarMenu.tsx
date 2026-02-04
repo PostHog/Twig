@@ -1,3 +1,4 @@
+import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
@@ -13,6 +14,7 @@ import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
 import { HistoryView } from "./HistoryView";
 import { NewTaskItem } from "./items/HomeItem";
+import { SidebarItem } from "./SidebarItem";
 
 function SidebarMenuComponent() {
   const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
@@ -118,15 +120,23 @@ function SidebarMenuComponent() {
               />
             </Box>
 
-            <HistoryView
-              historyData={sidebarData.historyData}
-              pinnedData={sidebarData.pinnedData}
-              activeTaskId={sidebarData.activeTaskId}
-              onTaskClick={handleTaskClick}
-              onTaskContextMenu={handleTaskContextMenu}
-              onTaskDelete={handleTaskDelete}
-              onTaskTogglePin={handleTaskTogglePin}
-            />
+            {sidebarData.isLoading ? (
+              <SidebarItem
+                depth={0}
+                icon={<DotsCircleSpinner size={12} className="text-gray-10" />}
+                label="Loading tasks..."
+              />
+            ) : (
+              <HistoryView
+                historyData={sidebarData.historyData}
+                pinnedData={sidebarData.pinnedData}
+                activeTaskId={sidebarData.activeTaskId}
+                onTaskClick={handleTaskClick}
+                onTaskContextMenu={handleTaskContextMenu}
+                onTaskDelete={handleTaskDelete}
+                onTaskTogglePin={handleTaskTogglePin}
+              />
+            )}
           </Flex>
         </Box>
       </Box>
