@@ -2,14 +2,16 @@ import { motion } from "framer-motion";
 
 interface LoginTransitionProps {
   isAnimating: boolean;
+  isDarkMode: boolean;
   onComplete: () => void;
 }
 
 export function LoginTransition({
   isAnimating,
+  isDarkMode,
   onComplete,
 }: LoginTransitionProps) {
-  if (!isAnimating) return null;
+  if (!isAnimating || !isDarkMode) return null;
 
   return (
     <motion.div
