@@ -1,11 +1,43 @@
-import { MarkdownRenderer } from "@features/editor/components/MarkdownRenderer";
+import {
+  baseComponents,
+  MarkdownRenderer,
+  remarkPlugins,
+} from "@features/editor/components/MarkdownRenderer";
 import { File } from "@phosphor-icons/react";
-import { Box, Code } from "@radix-ui/themes";
+import { Box, Code, Text } from "@radix-ui/themes";
 import type { ReactNode } from "react";
+import { memo } from "react";
+import type { Components } from "react-markdown";
+import ReactMarkdown from "react-markdown";
 
 interface UserMessageProps {
   content: string;
 }
+
+/**
+ * Markdown components that render paragraphs as inline spans so that
+ * text chunks between file mentions stay on the same line.
+ */
+const inlineComponents: Components = {
+  ...baseComponents,
+  p: ({ children }) => (
+    <Text as="span" size="1" color="gray" highContrast>
+      {children}
+    </Text>
+  ),
+};
+
+const InlineMarkdown = memo(function InlineMarkdown({
+  content,
+}: {
+  content: string;
+}) {
+  return (
+    <ReactMarkdown remarkPlugins={remarkPlugins} components={inlineComponents}>
+      {content}
+    </ReactMarkdown>
+  );
+});
 
 function parseFileMentions(content: string): ReactNode[] {
   const fileTagRegex = /<file\s+path="([^"]+)"\s*\/>/g;
@@ -16,7 +48,7 @@ function parseFileMentions(content: string): ReactNode[] {
     if (match.index !== undefined && match.index > lastIndex) {
       const textBefore = content.slice(lastIndex, match.index);
       parts.push(
-        <MarkdownRenderer key={`text-${lastIndex}`} content={textBefore} />,
+        <InlineMarkdown key={`text-${lastIndex}`} content={textBefore} />,
       );
     }
 
@@ -32,6 +64,7 @@ function parseFileMentions(content: string): ReactNode[] {
           alignItems: "center",
           gap: "4px",
           verticalAlign: "middle",
+          margin: "0 6px",
         }}
       >
         <File size={12} />
@@ -44,7 +77,7 @@ function parseFileMentions(content: string): ReactNode[] {
 
   if (lastIndex < content.length) {
     parts.push(
-      <MarkdownRenderer
+      <InlineMarkdown
         key={`text-${lastIndex}`}
         content={content.slice(lastIndex)}
       />,

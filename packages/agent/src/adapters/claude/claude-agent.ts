@@ -207,6 +207,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       cwd: params.cwd,
       permissionMode: "default",
       mcpServers,
+      systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,
       sdkSessionId: meta?.sdkSessionId,
       additionalDirectories: meta?.claudeCode?.options?.additionalDirectories,

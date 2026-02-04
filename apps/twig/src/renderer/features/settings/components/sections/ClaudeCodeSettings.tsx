@@ -13,7 +13,8 @@ import {
 } from "@radix-ui/themes";
 import { Tooltip } from "@renderer/components/ui/Tooltip";
 import { track } from "@renderer/lib/analytics";
-import { useCallback, useState } from "react";
+import { trpcReact } from "@renderer/trpc";
+import { useCallback, useEffect, useState } from "react";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 function CopyableCommand({ command }: { command: string }) {
@@ -71,10 +72,36 @@ function SettingDescription({
 }
 
 export function ClaudeCodeSettings() {
-  const { allowBypassPermissions, setAllowBypassPermissions } =
-    useSettingsStore();
+  const {
+    allowBypassPermissions,
+    setAllowBypassPermissions,
+    preventSleepWhileRunning,
+    setPreventSleepWhileRunning,
+  } = useSettingsStore();
+
+  const { data: serverPreventSleep } = trpcReact.sleep.getEnabled.useQuery();
+  const preventSleepMutation = trpcReact.sleep.setEnabled.useMutation();
+
+  useEffect(() => {
+    if (serverPreventSleep !== undefined) {
+      setPreventSleepWhileRunning(serverPreventSleep);
+    }
+  }, [serverPreventSleep, setPreventSleepWhileRunning]);
 
   const [showBypassWarning, setShowBypassWarning] = useState(false);
+
+  const handlePreventSleepChange = useCallback(
+    (checked: boolean) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "prevent_sleep_while_running",
+        new_value: checked,
+        old_value: !checked,
+      });
+      setPreventSleepWhileRunning(checked);
+      preventSleepMutation.mutate({ enabled: checked });
+    },
+    [setPreventSleepWhileRunning, preventSleepMutation],
+  );
 
   const handleBypassPermissionsChange = useCallback(
     (checked: boolean) => {
@@ -104,6 +131,17 @@ export function ClaudeCodeSettings() {
 
   return (
     <Flex direction="column">
+      <SettingRow
+        label="Keep awake while agents work"
+        description="Prevent your computer from sleeping while the agent is running a task"
+      >
+        <Switch
+          checked={preventSleepWhileRunning}
+          onCheckedChange={handlePreventSleepChange}
+          size="1"
+        />
+      </SettingRow>
+
       <SettingRow
         label="Enable Bypass Permissions mode"
         description="Enables 'Bypass Permissions' mode in the execution mode selector. When active, Twig will not ask for approval before running potentially dangerous commands."

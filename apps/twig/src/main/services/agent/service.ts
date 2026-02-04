@@ -26,6 +26,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -218,13 +219,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
   private processTracking: ProcessTrackingService;
+  private sleepService: SleepService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
     processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.SleepService)
+    sleepService: SleepService,
   ) {
     super();
     this.processTracking = processTracking;
+    this.sleepService = sleepService;
   }
 
   public updateToken(newToken: string): void {
@@ -347,12 +352,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return servers;
   }
 
+  private buildPostHogSystemPrompt(credentials: Credentials): {
+    append: string;
+  } {
+    return {
+      append: `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`,
+    };
+  }
+
   private getPostHogMcpUrl(apiHost: string): string {
-    if (
-      apiHost.includes("localhost") ||
-      apiHost.includes("127.0.0.1") ||
-      !app.isPackaged
-    ) {
+    const overrideUrl = process.env.POSTHOG_MCP_URL;
+    if (overrideUrl) {
+      return overrideUrl;
+    }
+    if (apiHost.includes("localhost") || apiHost.includes("127.0.0.1")) {
       return "http://localhost:8787/mcp";
     }
     return "https://mcp.posthog.com/mcp";
@@ -475,6 +488,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       let currentModelId: string | undefined;
 
       if (isReconnect) {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
@@ -486,6 +500,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               ...(sdkSessionId && { sdkSessionId }),
+              systemPrompt,
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -505,12 +520,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         availableModels = resumeMeta?.models?.availableModels;
         currentModelId = resumeMeta?.models?.currentModelId;
       } else {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
           _meta: {
             sessionId: taskRunId,
             model,
+            systemPrompt,
             ...(executionMode && { initialModeId: executionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
@@ -637,6 +654,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     session.lastActivityAt = Date.now();
     session.promptPending = true;
+    this.sleepService.acquire(sessionId);
 
     try {
       const result = await session.clientSideConnection.prompt({
@@ -663,6 +681,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw err;
     } finally {
       session.promptPending = false;
+      this.sleepService.release(sessionId);
     }
   }
 
@@ -854,6 +873,14 @@ For git operations while detached:
       sessionCount: sessionIds.length,
     });
 
+    for (const session of this.sessions.values()) {
+      try {
+        await session.agent.flushAllLogs();
+      } catch {
+        log.debug("Failed to flush session logs during shutdown");
+      }
+    }
+
     for (const taskRunId of sessionIds) {
       await this.cleanupSession(taskRunId);
     }
@@ -917,6 +944,7 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      this.sleepService.release(taskRunId);
       try {
         await session.agent.cleanup();
       } catch {
@@ -986,21 +1014,31 @@ For git operations while detached:
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
         if (toolCallId) {
-          return new Promise((resolve, reject) => {
-            const key = `${taskRunId}:${toolCallId}`;
-            service.pendingPermissions.set(key, {
-              resolve,
-              reject,
-              sessionId: taskRunId,
-              toolCallId,
-            });
+          service.sleepService.release(taskRunId);
+          try {
+            return await new Promise<RequestPermissionResponse>(
+              (resolve, reject) => {
+                const key = `${taskRunId}:${toolCallId}`;
+                service.pendingPermissions.set(key, {
+                  resolve,
+                  reject,
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
 
-            log.info("Emitting permission request to renderer", {
-              sessionId: taskRunId,
-              toolCallId,
-            });
-            service.emit(AgentServiceEvent.PermissionRequest, params);
-          });
+                log.info("Emitting permission request to renderer", {
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
+                service.emit(AgentServiceEvent.PermissionRequest, params);
+              },
+            );
+          } finally {
+            // Only re-acquire if session wasn't cleaned up while waiting
+            if (service.sessions.has(taskRunId)) {
+              service.sleepService.acquire(taskRunId);
+            }
+          }
         }
 
         // Fallback: no toolCallId means we can't track the response, auto-approve
@@ -1236,7 +1274,12 @@ For git operations while detached:
       return MODEL_TIER_ORDER.length;
     };
 
-    const mapped = models.map((model) => ({
+    // TODO: Re-enable OpenAI models once the upstream gateway issue is fixed.
+    const filteredModels = models.filter(
+      (model) => model.owned_by !== "openai" && !model.id.startsWith("openai/"),
+    );
+
+    const mapped = filteredModels.map((model) => ({
       modelId: model.id,
       name: formatGatewayModelName(model),
       description: `Context: ${model.context_window.toLocaleString()} tokens`,

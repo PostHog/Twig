@@ -14,15 +14,15 @@ export class NotificationService {
     log.info("Notification service initialized");
   }
 
-  send(title: string, body: string): void {
+  send(title: string, body: string, silent: boolean): void {
     if (!Notification.isSupported()) {
       log.warn("Notifications not supported on this platform");
       return;
     }
 
-    const notification = new Notification({ title, body });
+    const notification = new Notification({ title, body, silent });
     notification.show();
-    log.info("Notification sent", { title, body });
+    log.info("Notification sent", { title, body, silent });
   }
 
   showDockBadge(): void {

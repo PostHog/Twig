@@ -9,6 +9,7 @@ import { initializePostHog } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { initializeConnectivityStore } from "@renderer/stores/connectivityStore";
 import { useFocusStore } from "@renderer/stores/focusStore";
+import { useThemeStore } from "@renderer/stores/themeStore";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@utils/toast";
 import { AnimatePresence, motion } from "framer-motion";
@@ -18,6 +19,7 @@ const log = logger.scope("app");
 
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
+  const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const [isLoading, setIsLoading] = useState(true);
   const [showTransition, setShowTransition] = useState(false);
   const wasAuthenticated = useRef(isAuthenticated);
@@ -170,6 +172,7 @@ function App() {
       <AnimatePresence mode="wait">{renderContent()}</AnimatePresence>
       <LoginTransition
         isAnimating={showTransition}
+        isDarkMode={isDarkMode}
         onComplete={handleTransitionComplete}
       />
     </ErrorBoundary>
