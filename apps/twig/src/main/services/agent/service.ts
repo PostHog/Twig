@@ -347,12 +347,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return servers;
   }
 
+  private buildPostHogSystemPrompt(credentials: Credentials): {
+    append: string;
+  } {
+    return {
+      append: `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`,
+    };
+  }
+
   private getPostHogMcpUrl(apiHost: string): string {
-    if (
-      apiHost.includes("localhost") ||
-      apiHost.includes("127.0.0.1") ||
-      !app.isPackaged
-    ) {
+    const overrideUrl = process.env.POSTHOG_MCP_URL;
+    if (overrideUrl) {
+      return overrideUrl;
+    }
+    if (apiHost.includes("localhost") || apiHost.includes("127.0.0.1")) {
       return "http://localhost:8787/mcp";
     }
     return "https://mcp.posthog.com/mcp";
@@ -475,6 +483,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       let currentModelId: string | undefined;
 
       if (isReconnect) {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
@@ -486,6 +495,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               ...(sdkSessionId && { sdkSessionId }),
+              systemPrompt,
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -505,12 +515,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         availableModels = resumeMeta?.models?.availableModels;
         currentModelId = resumeMeta?.models?.currentModelId;
       } else {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
           _meta: {
             sessionId: taskRunId,
             model,
+            systemPrompt,
             ...(executionMode && { initialModeId: executionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
