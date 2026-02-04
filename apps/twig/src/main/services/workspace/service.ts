@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import path from "node:path";
+import { createGitClient } from "@twig/git/client";
 import { getCurrentBranch, hasTrackedFiles } from "@twig/git/queries";
 import { CreateOrSwitchBranchSaga } from "@twig/git/sagas/branch";
 import { DetachHeadSaga } from "@twig/git/sagas/head";
@@ -567,7 +568,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.error(
           `Init scripts failed for task ${taskId}, cleaning up worktree`,
         );
-        await this.cleanupWorktree(taskId, mainRepoPath, worktree.worktreePath);
+        await this.cleanupWorktree(taskId, mainRepoPath, worktree.worktreePath, association.branchName);
         throw new Error(
           `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
         );
@@ -693,7 +694,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     this.ensureScriptRunner().cleanupTaskSessions(taskId);
 
     if (association.mode === "worktree" && worktreePath) {
-      await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
+      await this.cleanupWorktree(taskId, mainRepoPath, worktreePath, association.branchName);
 
       const otherWorkspacesForFolder = getTaskAssociations().filter(
         (a) =>
@@ -1088,6 +1089,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     taskId: string,
     mainRepoPath: string,
     worktreePath: string,
+    branchName: string,
   ): Promise<void> {
     try {
       const fileWatcher = container.get<FileWatcherService>(
@@ -1107,6 +1109,14 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       await manager.deleteWorktree(worktreePath);
     } catch (error) {
       log.error(`Failed to delete worktree for task ${taskId}:`, error);
+    }
+
+    try {
+      const git = createGitClient(mainRepoPath);
+      await git.deleteLocalBranch(branchName, true);
+      log.info(`Deleted branch ${branchName} for task ${taskId}`);
+    } catch (error) {
+      log.warn(`Failed to delete branch ${branchName} for task ${taskId}:`, error);
     }
   }
 
