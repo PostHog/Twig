@@ -84,9 +84,9 @@ export function ConversationView({
   const queuedMessages = useQueuedMessagesForTask(taskId);
   const { removeQueuedMessage } = useSessionActions();
 
-  const isNearBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(0);
   const prevPendingCountRef = useRef(0);
+  const prevScrollHeightRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   useLayoutEffect(() => {
@@ -96,7 +96,6 @@ export function ConversationView({
     const handleScroll = () => {
       const distanceFromBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight;
-      isNearBottomRef.current = distanceFromBottom <= SCROLL_THRESHOLD;
       setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
     };
 
@@ -113,7 +112,12 @@ export function ConversationView({
     prevItemsLengthRef.current = items.length;
     prevPendingCountRef.current = pendingPermissionsCount;
 
-    if (isNearBottomRef.current || isNewContent || isNewPending) {
+    const prevScrollHeight = prevScrollHeightRef.current || el.scrollHeight;
+    const wasNearBottom =
+      prevScrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
+    prevScrollHeightRef.current = el.scrollHeight;
+
+    if (wasNearBottom || isNewContent || isNewPending) {
       el.scrollTop = el.scrollHeight;
     }
   }, [items, pendingPermissionsCount]);
