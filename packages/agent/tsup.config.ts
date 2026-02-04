@@ -75,6 +75,7 @@ export default defineConfig({
     "@agentclientprotocol/sdk",
     "@anthropic-ai/claude-agent-sdk",
     "@posthog/shared",
+    "@twig/git",
     "dotenv",
     "openai",
     "tar",

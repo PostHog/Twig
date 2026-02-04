@@ -14,7 +14,7 @@
           "image-name": "logo.png",
           "name": "logo",
           "position": {
-            "scale": 1.18,
+            "scale": 1,
             "translation-in-points": [0, 0]
           }
         }

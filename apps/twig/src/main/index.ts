@@ -71,6 +71,7 @@ function initializeServices(): void {
 // ========================================================
 
 app.whenReady().then(() => {
+  log.info(`Twig electron v${app.getVersion()} booting up`);
   migrateTaskAssociations();
   ensureClaudeConfigDir();
   createWindow();
