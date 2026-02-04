@@ -230,7 +230,13 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       await getAvailableSlashCommands(q),
     );
 
-    return { _meta: { models: await this.getAvailableModels() } };
+    return {
+      models: await this.getAvailableModels(),
+      modes: {
+        currentModeId: session.permissionMode,
+        availableModes: getAvailableModes(),
+      },
+    };
   }
 
   async prompt(params: PromptRequest): Promise<PromptResponse> {
@@ -271,8 +277,15 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     if (method === "_posthog/session/resume") {
-      await this.resumeSession(params as unknown as LoadSessionRequest);
-      return {};
+      const result = await this.resumeSession(
+        params as unknown as LoadSessionRequest,
+      );
+      return {
+        _meta: {
+          models: result.models,
+          modes: result.modes,
+        },
+      };
     }
 
     throw RequestError.methodNotFound(method);

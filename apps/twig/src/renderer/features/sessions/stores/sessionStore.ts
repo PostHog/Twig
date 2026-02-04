@@ -722,6 +722,8 @@ const useStore = create<SessionStore>()(
             status: "connected",
             model: sessionModel,
             availableModels: result.availableModels,
+            availableModes: result.availableModes,
+            currentModeId: result.currentModeId,
           });
 
           if (persistedMode) {

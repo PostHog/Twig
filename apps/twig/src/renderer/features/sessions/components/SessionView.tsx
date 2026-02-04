@@ -86,11 +86,20 @@ export function SessionView({
       (currentModeId === "bypassPermissions" ||
         currentModeId === "full-access") &&
       taskId &&
-      !isCloud
+      !isCloud &&
+      availableModes &&
+      availableModes.length > 0
     ) {
-      setSessionMode(taskId, "default");
+      setSessionMode(taskId, availableModes[0].id);
     }
-  }, [allowBypassPermissions, currentModeId, taskId, isCloud, setSessionMode]);
+  }, [
+    allowBypassPermissions,
+    currentModeId,
+    taskId,
+    isCloud,
+    setSessionMode,
+    availableModes,
+  ]);
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;

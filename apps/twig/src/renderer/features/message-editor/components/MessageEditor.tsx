@@ -216,6 +216,14 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             {onModeChange && (currentMode || currentModeId) && (
               <ModeIndicatorInput mode={currentMode} modeId={currentModeId} />
             )}
+            {onModeChange && !currentMode && !currentModeId && (
+              <Text
+                size="1"
+                style={{ color: "var(--gray-8)", fontFamily: "monospace" }}
+              >
+                Loading...
+              </Text>
+            )}
             {adapter && <AdapterIndicator adapter={adapter} />}
             <DiffStatsIndicator repoPath={repoPath} />
           </Flex>
