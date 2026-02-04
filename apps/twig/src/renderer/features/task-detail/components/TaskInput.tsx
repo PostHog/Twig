@@ -175,7 +175,10 @@ export function TaskInput() {
             onModeChange={handleModeChange}
           />
 
-          <SuggestedTasks editorRef={editorRef} />
+          <SuggestedTasks
+            editorRef={editorRef}
+            selectedDirectory={selectedDirectory}
+          />
         </Flex>
       </Flex>
     </div>
