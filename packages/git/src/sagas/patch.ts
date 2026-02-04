@@ -1,27 +1,25 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface ApplyPatchInput {
-  baseDir: string;
+export interface ApplyPatchInput extends GitSagaInput {
   patch: string;
   cached?: boolean;
-  signal?: AbortSignal;
 }
 
 export interface ApplyPatchOutput {
   applied: boolean;
 }
 
-export class ApplyPatchSaga extends Saga<ApplyPatchInput, ApplyPatchOutput> {
+export class ApplyPatchSaga extends GitSaga<ApplyPatchInput, ApplyPatchOutput> {
   private tempFile: string | null = null;
   private cached = false;
 
-  protected async execute(input: ApplyPatchInput): Promise<ApplyPatchOutput> {
-    const { baseDir, patch, cached = false, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+  protected async executeGitOperations(
+    input: ApplyPatchInput,
+  ): Promise<ApplyPatchOutput> {
+    const { patch, cached = false } = input;
     this.cached = cached;
 
     this.tempFile = path.join(
@@ -39,12 +37,14 @@ export class ApplyPatchSaga extends Saga<ApplyPatchInput, ApplyPatchOutput> {
 
     await this.step({
       name: "apply-patch",
-      execute: () => git.applyPatch([this.tempFile!], options),
+      execute: () => this.git.applyPatch([this.tempFile!], options),
       rollback: async () => {
         const reverseOptions = this.cached
           ? ["--reverse", "--cached"]
           : ["--reverse"];
-        await git.applyPatch([this.tempFile!], reverseOptions).catch(() => {});
+        await this.git
+          .applyPatch([this.tempFile!], reverseOptions)
+          .catch(() => {});
       },
     });
 

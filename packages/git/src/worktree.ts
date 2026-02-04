@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createGitClient } from "./client.js";
+import { getGitOperationManager } from "./operation-manager.js";
 import {
   addToLocalExclude,
   branchExists,
@@ -182,7 +182,7 @@ export class WorktreeManager {
   async createWorktree(options?: {
     baseBranch?: string;
   }): Promise<WorktreeInfo> {
-    const git = createGitClient(this.mainRepoPath);
+    const manager = getGitOperationManager();
 
     const setupPromises: Promise<unknown>[] = [];
 
@@ -208,28 +208,30 @@ export class WorktreeManager {
     const worktreePath = this.getWorktreePath(worktreeName);
     const branchName = worktreeName;
 
-    if (this.usesExternalPath()) {
-      await git.raw([
-        "worktree",
-        "add",
-        "--quiet",
-        "-b",
-        branchName,
-        worktreePath,
-        baseBranch,
-      ]);
-    } else {
-      const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-      await git.raw([
-        "worktree",
-        "add",
-        "--quiet",
-        "-b",
-        branchName,
-        relativePath,
-        baseBranch,
-      ]);
-    }
+    await manager.executeWrite(this.mainRepoPath, async (git) => {
+      if (this.usesExternalPath()) {
+        await git.raw([
+          "worktree",
+          "add",
+          "--quiet",
+          "-b",
+          branchName,
+          worktreePath,
+          baseBranch,
+        ]);
+      } else {
+        const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
+        await git.raw([
+          "worktree",
+          "add",
+          "--quiet",
+          "-b",
+          branchName,
+          relativePath,
+          baseBranch,
+        ]);
+      }
+    });
 
     await this.symlinkClaudeConfig(worktreePath);
 
@@ -243,11 +245,10 @@ export class WorktreeManager {
   }
 
   async createWorktreeForExistingBranch(branch: string): Promise<WorktreeInfo> {
-    const git = createGitClient(this.mainRepoPath);
+    const manager = getGitOperationManager();
 
-    try {
-      await git.revparse(["--verify", branch]);
-    } catch {
+    const exists = await branchExists(this.mainRepoPath, branch);
+    if (!exists) {
       throw new Error(`Branch '${branch}' does not exist`);
     }
 
@@ -267,12 +268,14 @@ export class WorktreeManager {
 
     const worktreePath = this.getWorktreePath(worktreeName);
 
-    if (this.usesExternalPath()) {
-      await git.raw(["worktree", "add", "--quiet", worktreePath, branch]);
-    } else {
-      const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
-      await git.raw(["worktree", "add", "--quiet", relativePath, branch]);
-    }
+    await manager.executeWrite(this.mainRepoPath, async (git) => {
+      if (this.usesExternalPath()) {
+        await git.raw(["worktree", "add", "--quiet", worktreePath, branch]);
+      } else {
+        const relativePath = `./${WORKTREE_FOLDER_NAME}/${worktreeName}`;
+        await git.raw(["worktree", "add", "--quiet", relativePath, branch]);
+      }
+    });
 
     await this.symlinkClaudeConfig(worktreePath);
 
@@ -286,7 +289,7 @@ export class WorktreeManager {
   }
 
   async deleteWorktree(worktreePath: string): Promise<void> {
-    const git = createGitClient(this.mainRepoPath);
+    const manager = getGitOperationManager();
     const resolvedWorktreePath = path.resolve(worktreePath);
     const resolvedMainRepoPath = path.resolve(this.mainRepoPath);
 
@@ -320,12 +323,14 @@ export class WorktreeManager {
       }
     }
 
-    try {
-      await git.raw(["worktree", "remove", worktreePath, "--force"]);
-    } catch {
-      await fs.rm(worktreePath, { recursive: true, force: true });
-      await git.raw(["worktree", "prune"]);
-    }
+    await manager.executeWrite(this.mainRepoPath, async (git) => {
+      try {
+        await git.raw(["worktree", "remove", worktreePath, "--force"]);
+      } catch {
+        await fs.rm(worktreePath, { recursive: true, force: true });
+        await git.raw(["worktree", "prune"]);
+      }
+    });
   }
 
   async getWorktreeInfo(worktreePath: string): Promise<WorktreeInfo | null> {

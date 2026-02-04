@@ -1,11 +1,8 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface PullInput {
-  baseDir: string;
+export interface PullInput extends GitSagaInput {
   remote?: string;
   branch?: string;
-  signal?: AbortSignal;
 }
 
 export interface PullOutput {
@@ -14,19 +11,18 @@ export interface PullOutput {
   deletions: number;
 }
 
-export class PullSaga extends Saga<PullInput, PullOutput> {
+export class PullSaga extends GitSaga<PullInput, PullOutput> {
   private stashCreated = false;
 
-  protected async execute(input: PullInput): Promise<PullOutput> {
-    const { baseDir, remote = "origin", branch, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+  protected async executeGitOperations(input: PullInput): Promise<PullOutput> {
+    const { remote = "origin", branch } = input;
 
     const originalHead = await this.readOnlyStep("get-original-head", () =>
-      git.revparse(["HEAD"]),
+      this.git.revparse(["HEAD"]),
     );
 
     const hasChanges = await this.readOnlyStep("check-changes", async () => {
-      const status = await git.status();
+      const status = await this.git.status();
       return !status.isClean();
     });
 
@@ -34,7 +30,7 @@ export class PullSaga extends Saga<PullInput, PullOutput> {
       const stashCountBefore = await this.readOnlyStep(
         "get-stash-count",
         async () => {
-          const result = await git.stashList();
+          const result = await this.git.stashList();
           return result.all.length;
         },
       );
@@ -42,34 +38,37 @@ export class PullSaga extends Saga<PullInput, PullOutput> {
       await this.step({
         name: "stash-changes",
         execute: async () => {
-          await git.stash([
+          await this.git.stash([
             "push",
             "--include-untracked",
             "-m",
             "twig-pull-backup",
           ]);
-          const afterResult = await git.stashList();
+          const afterResult = await this.git.stashList();
           this.stashCreated = afterResult.all.length > stashCountBefore;
         },
         rollback: async () => {
           if (this.stashCreated) {
-            await git.stash(["pop"]).catch(() => {});
+            await this.git.stash(["pop"]).catch(() => {});
           }
         },
       });
     }
 
     const targetBranch =
-      branch ?? (await git.revparse(["--abbrev-ref", "HEAD"]));
+      branch ?? (await this.git.revparse(["--abbrev-ref", "HEAD"]));
 
     const result = await this.step({
       name: "pull",
       execute: () =>
-        git.pull(remote, targetBranch === "HEAD" ? undefined : targetBranch),
+        this.git.pull(
+          remote,
+          targetBranch === "HEAD" ? undefined : targetBranch,
+        ),
       rollback: async () => {
-        await git.reset(["--hard", originalHead]);
+        await this.git.reset(["--hard", originalHead]);
         if (this.stashCreated) {
-          await git.stash(["pop"]).catch(() => {});
+          await this.git.stash(["pop"]).catch(() => {});
           this.stashCreated = false;
         }
       },
@@ -79,7 +78,7 @@ export class PullSaga extends Saga<PullInput, PullOutput> {
       await this.step({
         name: "restore-stash",
         execute: async () => {
-          await git.stash(["pop"]);
+          await this.git.stash(["pop"]);
           this.stashCreated = false;
         },
         rollback: async () => {},
