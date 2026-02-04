@@ -10,6 +10,7 @@ interface TaskDirectoryState {
   lastUsedDirectory: string | null;
   getTaskDirectory: (taskId: string, repoKey?: string) => string | null;
   setRepoDirectory: (repoKey: string, directory: string) => void;
+  setLastUsedDirectory: (directory: string) => void;
   clearRepoDirectory: (repoKey: string) => void;
   validateLastUsedDirectory: () => Promise<void>;
 }
@@ -49,6 +50,10 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
           },
           lastUsedDirectory: directory,
         }));
+      },
+
+      setLastUsedDirectory: (directory: string) => {
+        set({ lastUsedDirectory: directory });
       },
 
       clearRepoDirectory: (repoKey: string) => {
