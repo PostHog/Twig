@@ -10,6 +10,7 @@ import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
+import { AdapterIndicator } from "./AdapterIndicator";
 import { DiffStatsIndicator } from "./DiffStatsIndicator";
 import { EditorToolbar } from "./EditorToolbar";
 import { ModeIndicatorInput } from "./ModeIndicatorInput";
@@ -28,6 +29,7 @@ interface MessageEditorProps {
   autoFocus?: boolean;
   currentMode?: ExecutionMode;
   onModeChange?: () => void;
+  adapter?: "claude" | "codex";
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -43,6 +45,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       autoFocus = false,
       currentMode,
       onModeChange,
+      adapter,
     },
     ref,
   ) => {
@@ -206,9 +209,12 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             )}
           </Flex>
         </Flex>
-        {onModeChange && currentMode && (
+        {(onModeChange || adapter) && (
           <Flex align="center" gap="2">
-            <ModeIndicatorInput mode={currentMode} />
+            {onModeChange && currentMode && (
+              <ModeIndicatorInput mode={currentMode} />
+            )}
+            {adapter && <AdapterIndicator adapter={adapter} />}
             <DiffStatsIndicator repoPath={repoPath} />
           </Flex>
         )}

@@ -17,10 +17,13 @@ export type {
 } from "./acp-extensions.js";
 export { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 export type {
+  AcpConnection,
   AcpConnectionConfig,
+  AgentAdapter,
   InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
 export { createAcpConnection } from "./adapters/acp-connection.js";
+export type { CodexProcessOptions } from "./adapters/codex/spawn.js";
 export { Agent } from "./agent.js";
 export { PostHogAPIClient } from "./posthog-api.js";
 export type {

@@ -16,6 +16,7 @@ import {
   reconnectSessionInput,
   respondToPermissionInput,
   sessionResponseSchema,
+  setConfigOptionInput,
   setModeInput,
   setModelInput,
   startSessionInput,
@@ -71,17 +72,27 @@ export const agentRouter = router({
       getService().setSessionMode(input.sessionId, input.modeId),
     ),
 
+  setConfigOption: publicProcedure
+    .input(setConfigOptionInput)
+    .mutation(({ input }) =>
+      getService().setSessionConfigOption(
+        input.sessionId,
+        input.configId,
+        input.value,
+      ),
+    ),
+
   onSessionEvent: publicProcedure
     .input(subscribeSessionInput)
     .subscription(async function* (opts) {
       const service = getService();
-      const targetSessionId = opts.input.sessionId;
+      const targetTaskRunId = opts.input.taskRunId;
       const iterable = service.toIterable(AgentServiceEvent.SessionEvent, {
         signal: opts.signal,
       });
 
       for await (const event of iterable) {
-        if (event.sessionId === targetSessionId) {
+        if (event.taskRunId === targetTaskRunId) {
           yield event.payload;
         }
       }
@@ -92,13 +103,13 @@ export const agentRouter = router({
     .input(subscribeSessionInput)
     .subscription(async function* (opts) {
       const service = getService();
-      const targetSessionId = opts.input.sessionId;
+      const targetTaskRunId = opts.input.taskRunId;
       const iterable = service.toIterable(AgentServiceEvent.PermissionRequest, {
         signal: opts.signal,
       });
 
       for await (const event of iterable) {
-        if (event.sessionId === targetSessionId) {
+        if (event.taskRunId === targetTaskRunId) {
           yield event;
         }
       }
@@ -109,7 +120,7 @@ export const agentRouter = router({
     .input(respondToPermissionInput)
     .mutation(({ input }) =>
       getService().respondToPermission(
-        input.sessionId,
+        input.taskRunId,
         input.toolCallId,
         input.optionId,
         input.customInput,
@@ -121,7 +132,7 @@ export const agentRouter = router({
   cancelPermission: publicProcedure
     .input(cancelPermissionInput)
     .mutation(({ input }) =>
-      getService().cancelPermission(input.sessionId, input.toolCallId),
+      getService().cancelPermission(input.taskRunId, input.toolCallId),
     ),
 
   listSessions: publicProcedure

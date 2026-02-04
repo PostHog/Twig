@@ -7,6 +7,7 @@ import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   cycleExecutionMode,
   type ExecutionMode,
+  useAdapterForTask,
   useCurrentModeForTask,
   usePendingPermissionsForTask,
   useSessionActions,
@@ -73,6 +74,7 @@ export function SessionView({
   const { respondToPermission, cancelPermission, setSessionMode } =
     useSessionActions();
   const sessionMode = useCurrentModeForTask(taskId);
+  const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
 
   const currentMode: ExecutionMode = sessionMode ?? "default";
@@ -425,6 +427,7 @@ export function SessionView({
                 onCancel={onCancelPrompt}
                 currentMode={currentMode}
                 onModeChange={!isCloud ? handleModeChange : undefined}
+                adapter={adapter}
               />
             </Box>
           )}

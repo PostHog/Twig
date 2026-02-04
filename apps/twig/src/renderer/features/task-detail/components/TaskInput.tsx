@@ -5,6 +5,7 @@ import {
   cycleExecutionMode,
   type ExecutionMode,
 } from "@features/sessions/stores/sessionStore";
+import type { AgentAdapter } from "@features/settings/stores/settingsStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { Flex } from "@radix-ui/themes";
@@ -13,6 +14,7 @@ import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
+import { AdapterSelect } from "./AdapterSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
@@ -25,24 +27,29 @@ export function TaskInput() {
   const {
     lastUsedLocalWorkspaceMode,
     setLastUsedLocalWorkspaceMode,
+    lastUsedAdapter,
+    setLastUsedAdapter,
     allowBypassPermissions,
   } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [selectedDirectory, setSelectedDirectory] = useState(
-    lastUsedDirectory || "",
-  );
-  // We're temporarily removing the cloud/local toggle, so hardcode to local
   const runMode = "local";
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(
-    lastUsedLocalWorkspaceMode || "worktree",
-  );
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
 
-  // Reset to default mode if bypass was disabled while in bypass mode
+  const selectedDirectory = lastUsedDirectory || "";
+  const workspaceMode = lastUsedLocalWorkspaceMode || "worktree";
+  const adapter = lastUsedAdapter;
+
+  const setSelectedDirectory = (path: string) =>
+    setLastUsedDirectory(path || null);
+  const setWorkspaceMode = (mode: WorkspaceMode) =>
+    setLastUsedLocalWorkspaceMode(mode as "worktree" | "local");
+  const setAdapter = (newAdapter: AgentAdapter) =>
+    setLastUsedAdapter(newAdapter);
+
   useEffect(() => {
     if (!allowBypassPermissions && executionMode === "bypassPermissions") {
       setExecutionMode("default");
@@ -59,19 +66,13 @@ export function TaskInput() {
 
   useEffect(() => {
     if (view.folderId) {
-      // Access store directly to avoid folders dependency triggering re-sync
       const currentFolders = useRegisteredFoldersStore.getState().folders;
       const folder = currentFolders.find((f) => f.id === view.folderId);
       if (folder) {
-        setSelectedDirectory(folder.path);
+        setLastUsedDirectory(folder.path);
       }
     }
-  }, [view.folderId]);
-
-  const handleDirectoryChange = (newPath: string) => {
-    setSelectedDirectory(newPath);
-    setLastUsedDirectory(newPath || null);
-  };
+  }, [view.folderId, setLastUsedDirectory]);
 
   const effectiveWorkspaceMode = workspaceMode;
 
@@ -83,6 +84,7 @@ export function TaskInput() {
     branch: null,
     editorIsEmpty,
     executionMode: executionMode === "default" ? undefined : executionMode,
+    adapter,
   });
 
   return (
@@ -147,18 +149,16 @@ export function TaskInput() {
           <Flex gap="2" align="center">
             <FolderPicker
               value={selectedDirectory}
-              onChange={handleDirectoryChange}
+              onChange={setSelectedDirectory}
               placeholder="Select repository..."
               size="1"
             />
             <WorkspaceModeSelect
               value={workspaceMode}
-              onChange={(mode) => {
-                setWorkspaceMode(mode);
-                setLastUsedLocalWorkspaceMode(mode);
-              }}
+              onChange={setWorkspaceMode}
               size="1"
             />
+            <AdapterSelect value={adapter} onChange={setAdapter} size="1" />
           </Flex>
 
           <TaskInputEditor
@@ -173,6 +173,7 @@ export function TaskInput() {
             onEmptyChange={setEditorIsEmpty}
             executionMode={executionMode}
             onModeChange={handleModeChange}
+            adapter={adapter}
           />
 
           <SuggestedTasks editorRef={editorRef} />

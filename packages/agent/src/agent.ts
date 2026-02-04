@@ -32,16 +32,24 @@ export class Agent {
     }
   }
 
-  private async _configureLlmGateway(): Promise<void> {
+  private _configureLlmGateway(_adapter?: "claude" | "codex"): {
+    gatewayUrl: string;
+    apiKey: string;
+  } | null {
     if (!this.posthogAPI) {
-      return;
+      return null;
     }
 
     try {
       const gatewayUrl = this.posthogAPI.getLlmGatewayUrl();
       const apiKey = this.posthogAPI.getApiKey();
+
+      process.env.OPENAI_BASE_URL = `${gatewayUrl}/v1`;
+      process.env.OPENAI_API_KEY = apiKey;
       process.env.ANTHROPIC_BASE_URL = gatewayUrl;
       process.env.ANTHROPIC_AUTH_TOKEN = apiKey;
+
+      return { gatewayUrl, apiKey };
     } catch (error) {
       this.logger.error("Failed to configure LLM gateway", error);
       throw error;
@@ -53,17 +61,27 @@ export class Agent {
     taskRunId: string,
     options: TaskExecutionOptions = {},
   ): Promise<InProcessAcpConnection> {
-    await this._configureLlmGateway();
+    const gatewayConfig = this._configureLlmGateway(options.adapter);
 
     this.taskRunId = taskRunId;
 
     this.acpConnection = createAcpConnection({
       adapter: options.adapter,
       logWriter: this.sessionLogWriter,
-      sessionId: taskRunId,
+      taskRunId,
       taskId,
       logger: this.logger,
       processCallbacks: options.processCallbacks,
+      codexOptions:
+        options.adapter === "codex" && gatewayConfig
+          ? {
+              cwd: options.repositoryPath,
+              apiBaseUrl: `${gatewayConfig.gatewayUrl}/v1`,
+              apiKey: gatewayConfig.apiKey,
+              binaryPath: options.codexBinaryPath,
+              model: options.model ?? "gpt-5.2",
+            }
+          : undefined,
     });
 
     return this.acpConnection;

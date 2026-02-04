@@ -36,6 +36,7 @@ export interface TaskCreationInput {
   branch?: string | null;
   githubIntegrationId?: number;
   executionMode?: ExecutionMode;
+  adapter?: "claude" | "codex";
 }
 
 export interface TaskCreationOutput {
@@ -200,12 +201,12 @@ export class TaskCreationSaga extends Saga<
               repoPath: agentCwd ?? "",
             });
           } else {
-            // Don't await for create - allows faster navigation to task page
             getSessionActions().connectToTask({
               task,
               repoPath: agentCwd ?? "",
               initialPrompt,
               executionMode: input.executionMode,
+              adapter: input.adapter,
             });
           }
           return { taskId: task.id };

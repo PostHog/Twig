@@ -27,7 +27,10 @@ import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { getIsOnline } from "@/renderer/stores/connectivityStore";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
-import type { PermissionRequest } from "../utils/parseSessionLogs";
+import {
+  fetchSessionLogs,
+  type PermissionRequest,
+} from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
 import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
@@ -73,6 +76,8 @@ export interface QueuedMessage {
   queuedAt: number;
 }
 
+export type CodexReasoningLevel = "low" | "medium" | "high" | "xhigh";
+
 export interface AgentSession {
   taskRunId: string;
   taskId: string;
@@ -88,11 +93,12 @@ export interface AgentSession {
   logUrl?: string;
   processedLineCount?: number;
   model?: string;
+  codexReasoningLevel?: CodexReasoningLevel;
   availableModels?: AgentModelOption[];
   framework?: "claude";
+  adapter?: "claude" | "codex";
   currentMode: ExecutionMode;
   pendingPermissions: Map<string, PermissionRequest>;
-  // Queue of messages to send when current turn completes
   messageQueue: QueuedMessage[];
 }
 
@@ -106,6 +112,7 @@ interface SessionActions {
     repoPath: string;
     initialPrompt?: ContentBlock[];
     executionMode?: ExecutionMode;
+    adapter?: "claude" | "codex";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -115,6 +122,10 @@ interface SessionActions {
   cancelPrompt: (taskId: string) => Promise<boolean>;
   setSessionModel: (taskId: string, modelId: string) => Promise<void>;
   setSessionMode: (taskId: string, modeId: ExecutionMode) => Promise<void>;
+  setCodexReasoningLevel: (
+    taskId: string,
+    level: CodexReasoningLevel,
+  ) => Promise<void>;
   appendUserShellExecute: (
     taskId: string,
     command: string,
@@ -165,7 +176,7 @@ function subscribeToChannel(taskRunId: string) {
   }
 
   const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
-    { sessionId: taskRunId },
+    { taskRunId },
     {
       onData: (payload: unknown) => {
         useStore.setState((state) => {
@@ -247,6 +258,25 @@ function subscribeToChannel(taskRunId: string) {
                 }
               }
             }
+
+            // Handle _posthog/sdk_session notifications (adapter info)
+            if (
+              "method" in msg &&
+              msg.method === "_posthog/sdk_session" &&
+              "params" in msg
+            ) {
+              const params = msg.params as {
+                adapter?: "claude" | "codex";
+                sessionId?: string;
+              };
+              if (params.adapter) {
+                session.adapter = params.adapter;
+                log.info("Session adapter updated", {
+                  taskRunId,
+                  adapter: params.adapter,
+                });
+              }
+            }
           }
         });
 
@@ -286,7 +316,7 @@ function subscribeToChannel(taskRunId: string) {
   // Subscribe to permission requests (for AskUserQuestion, ExitPlanMode, etc.)
   const permissionSubscription =
     trpcVanilla.agent.onPermissionRequest.subscribe(
-      { sessionId: taskRunId },
+      { taskRunId },
       {
         onData: async (payload) => {
           log.info("Permission request received in renderer", {
@@ -442,43 +472,6 @@ function shellExecutesToContextBlocks(
     }`,
     _meta: { ui: { hidden: true } },
   }));
-}
-
-async function fetchSessionLogs(
-  logUrl: string,
-): Promise<{ rawEntries: StoredLogEntry[]; sdkSessionId?: string }> {
-  if (!logUrl) return { rawEntries: [] };
-
-  try {
-    const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
-    if (!content?.trim()) return { rawEntries: [] };
-
-    const rawEntries: StoredLogEntry[] = [];
-    let sdkSessionId: string | undefined;
-
-    for (const line of content.trim().split("\n")) {
-      try {
-        const stored = JSON.parse(line) as StoredLogEntry;
-        rawEntries.push(stored);
-
-        if (
-          stored.type === "notification" &&
-          stored.notification?.method?.endsWith("posthog/sdk_session")
-        ) {
-          const params = stored.notification.params as {
-            sdkSessionId?: string;
-          };
-          if (params?.sdkSessionId) sdkSessionId = params.sdkSessionId;
-        }
-      } catch {
-        log.warn("Failed to parse log entry", { line });
-      }
-    }
-
-    return { rawEntries, sdkSessionId };
-  } catch {
-    return { rawEntries: [] };
-  }
 }
 
 function convertStoredEntriesToEvents(
@@ -677,15 +670,20 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
     ) => {
-      const { rawEntries, sdkSessionId } = await fetchSessionLogs(logUrl);
+      const { rawEntries, sessionId, adapter, model } =
+        await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries);
 
       const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, taskTitle, false);
       session.events = events;
       session.logUrl = logUrl;
+      session.model = model;
       if (persistedMode) {
         session.currentMode = persistedMode;
+      }
+      if (adapter) {
+        session.adapter = adapter;
       }
 
       addSession(session);
@@ -700,28 +698,18 @@ const useStore = create<SessionStore>()(
           apiHost: auth.apiHost,
           projectId: auth.projectId,
           logUrl,
-          sdkSessionId,
+          sessionId,
+          adapter,
+          model,
         });
 
         if (result) {
-          const selectedModel = useModelsStore.getState().getEffectiveModel();
+          const sessionModel = result.currentModelId;
           updateSession(taskRunId, {
             status: "connected",
-            model: selectedModel,
+            model: sessionModel,
             availableModels: result.availableModels,
           });
-
-          try {
-            await trpcVanilla.agent.setModel.mutate({
-              sessionId: taskRunId,
-              modelId: selectedModel,
-            });
-          } catch (error) {
-            log.warn("Failed to restore model after reconnect", {
-              taskId,
-              error,
-            });
-          }
 
           if (persistedMode) {
             try {
@@ -766,6 +754,7 @@ const useStore = create<SessionStore>()(
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
       executionMode?: ExecutionMode,
+      adapter?: "claude" | "codex",
     ) => {
       if (!auth.client) {
         throw new Error(
@@ -791,6 +780,7 @@ const useStore = create<SessionStore>()(
         projectId: auth.projectId,
         model: selectedModel,
         executionMode: effectiveMode,
+        adapter,
       });
 
       const session = createBaseSession(
@@ -922,6 +912,7 @@ const useStore = create<SessionStore>()(
           repoPath,
           initialPrompt,
           executionMode,
+          adapter,
         }) => {
           log.info("Connecting to task", { taskId: task.id });
 
@@ -1045,6 +1036,7 @@ const useStore = create<SessionStore>()(
                 auth,
                 initialPrompt,
                 executionMode,
+                adapter,
               );
             }
           } catch (error) {
@@ -1289,6 +1281,27 @@ const useStore = create<SessionStore>()(
           }
         },
 
+        setCodexReasoningLevel: async (taskId, level) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session || session.isCloud || session.adapter !== "codex")
+            return;
+
+          try {
+            await trpcVanilla.agent.setConfigOption.mutate({
+              sessionId: session.taskRunId,
+              configId: "reasoning_effort",
+              value: level,
+            });
+            updateSession(session.taskRunId, { codexReasoningLevel: level });
+          } catch (error) {
+            log.error("Failed to change codex reasoning level", {
+              taskId,
+              level,
+              error,
+            });
+          }
+        },
+
         appendUserShellExecute: async (taskId, command, cwd, result) => {
           const session = getSessionByTaskId(taskId);
           if (!session) return;
@@ -1336,7 +1349,7 @@ const useStore = create<SessionStore>()(
 
           try {
             await trpcVanilla.agent.respondToPermission.mutate({
-              sessionId: session.taskRunId,
+              taskRunId: session.taskRunId,
               toolCallId,
               optionId,
               customInput,
@@ -1385,7 +1398,7 @@ const useStore = create<SessionStore>()(
 
           try {
             await trpcVanilla.agent.cancelPermission.mutate({
-              sessionId: session.taskRunId,
+              taskRunId: session.taskRunId,
               toolCallId,
             });
 
@@ -1636,5 +1649,32 @@ export const useQueuedMessagesForTask = (
       (sess) => sess.taskId === taskId,
     );
     return session?.messageQueue ?? [];
+  });
+};
+
+/**
+ * Hook to get the adapter type (claude or codex) for a task.
+ */
+export const useAdapterForTask = (
+  taskId: string | undefined,
+): "claude" | "codex" | undefined => {
+  return useStore((s) => {
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.adapter;
+  });
+};
+
+export const useCodexReasoningLevelForTask = (
+  taskId: string | undefined,
+): CodexReasoningLevel | undefined => {
+  return useStore((s) => {
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.codexReasoningLevel;
   });
 };

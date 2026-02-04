@@ -27,7 +27,8 @@ export type Session = BaseSession & {
   input: Pushable<SDKUserMessage>;
   permissionMode: TwigExecutionMode;
   cwd: string;
-  sdkSessionId?: string;
+  taskRunId?: string;
+  sessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;
 };
@@ -49,11 +50,11 @@ export type ToolUpdateMeta = {
 };
 
 export type NewSessionMeta = {
-  sessionId?: string;
+  taskRunId?: string;
   initialModeId?: string;
   disableBuiltInTools?: boolean;
   systemPrompt?: unknown;
-  sdkSessionId?: string;
+  sessionId?: string;
   model?: string;
   claudeCode?: {
     options?: Options;

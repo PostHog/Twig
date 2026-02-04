@@ -137,6 +137,43 @@ function copyClaudeExecutable(): Plugin {
   };
 }
 
+function copyCodexAcpBinary(): Plugin {
+  return {
+    name: "copy-codex-acp-binary",
+    writeBundle() {
+      const destDir = join(__dirname, ".vite/build/codex-acp");
+
+      if (!existsSync(destDir)) {
+        mkdirSync(destDir, { recursive: true });
+      }
+
+      const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp";
+      const sourceDir = join(__dirname, "resources/codex-acp");
+      const sourcePath = join(sourceDir, binaryName);
+
+      if (existsSync(sourcePath)) {
+        const destPath = join(destDir, binaryName);
+        copyFileSync(sourcePath, destPath);
+        console.log(`Copied codex-acp binary to ${destDir}`);
+
+        if (process.platform === "darwin") {
+          try {
+            execSync(`xattr -cr "${destPath}"`, { stdio: "inherit" });
+            execSync(`codesign --force --sign - "${destPath}"`, { stdio: "inherit" });
+            console.log("Ad-hoc signed codex-acp binary");
+          } catch (err) {
+            console.warn("Failed to sign codex-acp binary:", err);
+          }
+        }
+      } else {
+        console.warn(
+          `[copy-codex-acp-binary] Binary not found at ${sourcePath}. Run 'node scripts/download-codex-acp.mjs' first.`,
+        );
+      }
+    },
+  };
+}
+
 // Allow forcing dev mode in packaged builds via FORCE_DEV_MODE=1
 const forceDevMode = process.env.FORCE_DEV_MODE === "1";
 
@@ -150,6 +187,7 @@ export default defineConfig(({ mode }) => {
       autoServicesPlugin(join(__dirname, "src/main/services")),
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
+      copyCodexAcpBinary(),
     ],
     define: {
       __BUILD_COMMIT__: JSON.stringify(_getGitCommit()),

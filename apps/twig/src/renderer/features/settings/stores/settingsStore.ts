@@ -1,3 +1,4 @@
+import { electronStorage } from "@renderer/lib/electronStorage";
 import type { WorkspaceMode } from "@shared/types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -6,12 +7,14 @@ export type DefaultRunMode = "local" | "cloud" | "last_used";
 export type LocalWorkspaceMode = "worktree" | "local";
 export type SendMessagesWith = "enter" | "cmd+enter";
 export type CompletionSound = "none" | "guitar" | "danilo" | "revi" | "meep";
+export type AgentAdapter = "claude" | "codex";
 
 interface SettingsStore {
   defaultRunMode: DefaultRunMode;
   lastUsedRunMode: "local" | "cloud";
   lastUsedLocalWorkspaceMode: LocalWorkspaceMode;
   lastUsedWorkspaceMode: WorkspaceMode;
+  lastUsedAdapter: AgentAdapter;
   desktopNotifications: boolean;
   dockBadgeNotifications: boolean;
   cursorGlow: boolean;
@@ -28,6 +31,7 @@ interface SettingsStore {
   setLastUsedRunMode: (mode: "local" | "cloud") => void;
   setLastUsedLocalWorkspaceMode: (mode: LocalWorkspaceMode) => void;
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
+  setLastUsedAdapter: (adapter: AgentAdapter) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setDockBadgeNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
@@ -44,6 +48,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedRunMode: "local",
       lastUsedLocalWorkspaceMode: "worktree",
       lastUsedWorkspaceMode: "worktree",
+      lastUsedAdapter: "claude",
       desktopNotifications: true,
       dockBadgeNotifications: true,
       completionSound: "none",
@@ -61,6 +66,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setLastUsedLocalWorkspaceMode: (mode) =>
         set({ lastUsedLocalWorkspaceMode: mode }),
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
+      setLastUsedAdapter: (adapter) => set({ lastUsedAdapter: adapter }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setDockBadgeNotifications: (enabled) =>
@@ -76,6 +82,27 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: "settings-storage",
+      storage: electronStorage,
+      partialize: (state) => ({
+        defaultRunMode: state.defaultRunMode,
+        lastUsedRunMode: state.lastUsedRunMode,
+        lastUsedLocalWorkspaceMode: state.lastUsedLocalWorkspaceMode,
+        lastUsedWorkspaceMode: state.lastUsedWorkspaceMode,
+        lastUsedAdapter: state.lastUsedAdapter,
+        desktopNotifications: state.desktopNotifications,
+        dockBadgeNotifications: state.dockBadgeNotifications,
+        cursorGlow: state.cursorGlow,
+        autoConvertLongText: state.autoConvertLongText,
+        completionSound: state.completionSound,
+        completionVolume: state.completionVolume,
+        sendMessagesWith: state.sendMessagesWith,
+        allowBypassPermissions: state.allowBypassPermissions,
+        preventSleepWhileRunning: state.preventSleepWhileRunning,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SettingsStore>),
+      }),
     },
   ),
 );

@@ -24,6 +24,7 @@ interface TaskInputEditorProps {
   onEmptyChange?: (isEmpty: boolean) => void;
   executionMode: ExecutionMode;
   onModeChange: () => void;
+  adapter?: "claude" | "codex";
 }
 
 export const TaskInputEditor = forwardRef<
@@ -42,6 +43,7 @@ export const TaskInputEditor = forwardRef<
       onEmptyChange,
       executionMode,
       onModeChange,
+      adapter,
     },
     ref,
   ) => {
@@ -205,6 +207,7 @@ export const TaskInputEditor = forwardRef<
           <Flex justify="between" align="center" px="3" pb="3">
             <EditorToolbar
               disabled={isDisabled}
+              adapter={adapter}
               onInsertChip={insertChip}
               attachTooltip="Attach files from anywhere"
               iconSize={16}

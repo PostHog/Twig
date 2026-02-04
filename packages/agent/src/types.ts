@@ -107,7 +107,9 @@ export interface ProcessSpawnedCallback {
 
 export interface TaskExecutionOptions {
   repositoryPath?: string;
-  adapter?: "claude";
+  adapter?: "claude" | "codex";
+  model?: string;
+  codexBinaryPath?: string;
   processCallbacks?: ProcessSpawnedCallback;
 }
 

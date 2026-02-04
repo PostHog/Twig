@@ -26,6 +26,7 @@ interface UseTaskCreationOptions {
   branch?: string | null;
   editorIsEmpty: boolean;
   executionMode?: ExecutionMode;
+  adapter?: "claude" | "codex";
 }
 
 interface UseTaskCreationReturn {
@@ -80,6 +81,7 @@ function prepareTaskInput(
     workspaceMode: WorkspaceMode;
     branch?: string | null;
     executionMode?: ExecutionMode;
+    adapter?: "claude" | "codex";
   },
 ): TaskCreationInput {
   return {
@@ -91,6 +93,7 @@ function prepareTaskInput(
     workspaceMode: options.workspaceMode,
     branch: options.branch,
     executionMode: options.executionMode,
+    adapter: options.adapter,
   };
 }
 
@@ -115,6 +118,7 @@ export function useTaskCreation({
   branch,
   editorIsEmpty,
   executionMode,
+  adapter,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -149,6 +153,7 @@ export function useTaskCreation({
         workspaceMode,
         branch,
         executionMode,
+        adapter,
       });
 
       const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
@@ -191,6 +196,7 @@ export function useTaskCreation({
     workspaceMode,
     branch,
     executionMode,
+    adapter,
     invalidateTasks,
     navigateToTask,
   ]);

@@ -168,9 +168,11 @@ interface SessionConfig {
   repoPath: string;
   credentials: Credentials;
   logUrl?: string;
-  sdkSessionId?: string;
+  /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
+  sessionId?: string;
   model?: string;
   executionMode?: ExecutionMode;
+  adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
 }
@@ -197,6 +199,7 @@ interface ManagedSession {
     description?: string | null;
   }>;
   currentModelId?: string;
+  sessionId: string;
 }
 
 function getClaudeCliPath(): string {
@@ -206,10 +209,17 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
+function getCodexBinaryPath(): string {
+  const appPath = app.getAppPath();
+  return app.isPackaged
+    ? join(`${appPath}.unpacked`, ".vite/build/codex-acp/codex-acp")
+    : join(appPath, ".vite/build/codex-acp/codex-acp");
+}
+
 interface PendingPermission {
   resolve: (response: RequestPermissionResponse) => void;
   reject: (error: Error) => void;
-  sessionId: string;
+  taskRunId: string;
   toolCallId: string;
 }
 
@@ -268,22 +278,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
    * This resolves the promise that the agent is waiting on.
    */
   public respondToPermission(
-    sessionId: string,
+    taskRunId: string,
     toolCallId: string,
     optionId: string,
     customInput?: string,
     answers?: Record<string, string>,
   ): void {
-    const key = `${sessionId}:${toolCallId}`;
+    const key = `${taskRunId}:${toolCallId}`;
     const pending = this.pendingPermissions.get(key);
 
     if (!pending) {
-      log.warn("No pending permission found", { sessionId, toolCallId });
+      log.warn("No pending permission found", { taskRunId, toolCallId });
       return;
     }
 
     log.info("Permission response received", {
-      sessionId,
+      taskRunId,
       toolCallId,
       optionId,
       hasCustomInput: !!customInput,
@@ -309,19 +319,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
    * Cancel a pending permission request.
    * This resolves the promise with a "cancelled" outcome per ACP spec.
    */
-  public cancelPermission(sessionId: string, toolCallId: string): void {
-    const key = `${sessionId}:${toolCallId}`;
+  public cancelPermission(taskRunId: string, toolCallId: string): void {
+    const key = `${taskRunId}:${toolCallId}`;
     const pending = this.pendingPermissions.get(key);
 
     if (!pending) {
       log.warn("No pending permission found to cancel", {
-        sessionId,
+        taskRunId,
         toolCallId,
       });
       return;
     }
 
-    log.info("Permission cancelled", { sessionId, toolCallId });
+    log.info("Permission cancelled", { taskRunId, toolCallId });
 
     pending.resolve({
       outcome: {
@@ -407,9 +417,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       repoPath,
       credentials,
       logUrl,
-      sdkSessionId,
+      sessionId: existingSessionId,
       model,
       executionMode,
+      adapter,
       additionalDirectories,
     } = config;
 
@@ -442,6 +453,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const acpConnection = await agent.run(taskId, taskRunId, {
+        adapter,
+        model,
+        codexBinaryPath: adapter === "codex" ? getCodexBinaryPath() : undefined,
         processCallbacks: {
           onProcessSpawned: (info) => {
             this.processTracking.register(
@@ -480,14 +494,25 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         },
       });
 
-      const mcpServers = this.buildMcpServers(credentials);
+      const mcpServers =
+        adapter === "codex" ? [] : this.buildMcpServers(credentials);
 
       let availableModels:
         | Array<{ modelId: string; name: string; description?: string | null }>
         | undefined;
       let currentModelId: string | undefined;
+      let agentSessionId: string;
 
-      if (isReconnect) {
+      if (isReconnect && adapter === "codex" && config.sessionId) {
+        const loadResponse = await connection.loadSession({
+          sessionId: config.sessionId,
+          cwd: repoPath,
+          mcpServers,
+        });
+        availableModels = loadResponse.models?.availableModels;
+        currentModelId = loadResponse.models?.currentModelId;
+        agentSessionId = config.sessionId;
+      } else if (isReconnect && adapter !== "codex") {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
@@ -499,7 +524,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               ...(logUrl && {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
-              ...(sdkSessionId && { sdkSessionId }),
+              taskRunId,
+              ...(existingSessionId && { sessionId: existingSessionId }),
               systemPrompt,
               ...(additionalDirectories?.length && {
                 claudeCode: {
@@ -519,13 +545,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           | undefined;
         availableModels = resumeMeta?.models?.availableModels;
         currentModelId = resumeMeta?.models?.currentModelId;
+        agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
           _meta: {
-            sessionId: taskRunId,
+            taskRunId,
             model,
             systemPrompt,
             ...(executionMode && { initialModeId: executionMode }),
@@ -538,7 +565,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         });
         availableModels = newSessionResponse.models?.availableModels;
         currentModelId = newSessionResponse.models?.currentModelId;
+        agentSessionId = newSessionResponse.sessionId;
       }
+
+      config.sessionId = agentSessionId;
 
       const session: ManagedSession = {
         taskRunId,
@@ -555,6 +585,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         promptPending: false,
         availableModels,
         currentModelId,
+        sessionId: agentSessionId,
       };
 
       this.sessions.set(taskRunId, session);
@@ -658,7 +689,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const result = await session.clientSideConnection.prompt({
-        sessionId,
+        sessionId: session.sessionId,
         prompt: finalPrompt,
       });
       return {
@@ -670,7 +701,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
         const result = await session.clientSideConnection.prompt({
-          sessionId,
+          sessionId: session.sessionId,
           prompt: finalPrompt,
         });
         return {
@@ -714,7 +745,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       await session.clientSideConnection.cancel({
-        sessionId,
+        sessionId: session.sessionId,
         _meta: reason ? { interruptReason: reason } : undefined,
       });
       if (reason) {
@@ -740,7 +771,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       await session.clientSideConnection.unstable_setSessionModel({
-        sessionId,
+        sessionId: session.sessionId,
         modelId,
       });
       log.info("Session model updated", { sessionId, modelId });
@@ -757,10 +788,41 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.setSessionMode({ sessionId, modeId });
+      await session.clientSideConnection.setSessionMode({
+        sessionId: session.sessionId,
+        modeId,
+      });
       log.info("Session mode updated", { sessionId, modeId });
     } catch (err) {
       log.error("Failed to set session mode", { sessionId, modeId, err });
+      throw err;
+    }
+  }
+
+  async setSessionConfigOption(
+    sessionId: string,
+    configId: string,
+    value: string,
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    try {
+      await session.clientSideConnection.setSessionConfigOption({
+        sessionId: session.sessionId,
+        configId,
+        value,
+      });
+      log.info("Session config option updated", { sessionId, configId, value });
+    } catch (err) {
+      log.error("Failed to set session config option", {
+        sessionId,
+        configId,
+        value,
+        err,
+      });
       throw err;
     }
   }
@@ -966,7 +1028,7 @@ For git operations while detached:
     const emitToRenderer = (payload: unknown) => {
       // Emit event via TypedEventEmitter for tRPC subscription
       this.emit(AgentServiceEvent.SessionEvent, {
-        sessionId: taskRunId,
+        taskRunId,
         payload,
       });
     };
@@ -1003,7 +1065,7 @@ For git operations while detached:
         const toolCallId = params.toolCall?.toolCallId || "";
 
         log.info("requestPermission called", {
-          sessionId: taskRunId,
+          taskRunId,
           toolCallId,
           toolName,
           title: params.toolCall?.title,
@@ -1022,15 +1084,19 @@ For git operations while detached:
                 service.pendingPermissions.set(key, {
                   resolve,
                   reject,
-                  sessionId: taskRunId,
+                  taskRunId,
                   toolCallId,
                 });
 
                 log.info("Emitting permission request to renderer", {
-                  sessionId: taskRunId,
+                  taskRunId,
                   toolCallId,
                 });
-                service.emit(AgentServiceEvent.PermissionRequest, params);
+                const { sessionId: _agentSessionId, ...rest } = params;
+                service.emit(AgentServiceEvent.PermissionRequest, {
+                  ...rest,
+                  taskRunId,
+                });
               },
             );
           } finally {
@@ -1043,7 +1109,7 @@ For git operations while detached:
 
         // Fallback: no toolCallId means we can't track the response, auto-approve
         log.warn("No toolCallId in permission request, auto-approving", {
-          sessionId: taskRunId,
+          taskRunId,
           toolName,
         });
         const allowOption = params.options.find(
@@ -1066,14 +1132,26 @@ For git operations while detached:
         params: Record<string, unknown>,
       ): Promise<void> => {
         if (method === "_posthog/sdk_session") {
-          const { sessionId, sdkSessionId } = params as {
+          const {
+            taskRunId: notifTaskRunId,
+            sessionId,
+            adapter: notifAdapter,
+          } = params as {
+            taskRunId: string;
             sessionId: string;
-            sdkSessionId: string;
+            adapter: "claude" | "codex";
           };
-          const session = this.sessions.get(sessionId);
+          const session = this.sessions.get(notifTaskRunId);
           if (session) {
-            session.config.sdkSessionId = sdkSessionId;
-            log.info("SDK session ID captured", { sessionId, sdkSessionId });
+            session.config.sessionId = sessionId;
+            if (notifAdapter) {
+              session.config.adapter = notifAdapter;
+            }
+            log.info("Session ID captured", {
+              taskRunId: notifTaskRunId,
+              sessionId,
+              adapter: notifAdapter,
+            });
           }
         }
 
@@ -1081,6 +1159,7 @@ For git operations while detached:
         // The extNotification callback doesn't write to the stream, so we need
         // to manually emit these to the renderer
         if (
+          method === "_posthog/sdk_session" ||
           method === "_posthog/status" ||
           method === "_posthog/task_notification" ||
           method === "_posthog/compact_boundary"
@@ -1132,10 +1211,11 @@ For git operations while detached:
         projectId: params.projectId,
       },
       logUrl: "logUrl" in params ? params.logUrl : undefined,
-      sdkSessionId: "sdkSessionId" in params ? params.sdkSessionId : undefined,
+      sessionId: "sessionId" in params ? params.sessionId : undefined,
       model: "model" in params ? params.model : undefined,
       executionMode:
         "executionMode" in params ? params.executionMode : undefined,
+      adapter: "adapter" in params ? params.adapter : undefined,
       additionalDirectories:
         "additionalDirectories" in params
           ? params.additionalDirectories
@@ -1264,30 +1344,32 @@ For git operations while detached:
     const gatewayUrl = getLlmGatewayUrl(apiHost);
     const models = await fetchGatewayModels({ gatewayUrl });
 
-    const MODEL_TIER_ORDER = ["opus", "sonnet", "haiku"];
-
-    const getModelTier = (modelId: string): number => {
-      const lowerId = modelId.toLowerCase();
-      for (let i = 0; i < MODEL_TIER_ORDER.length; i++) {
-        if (lowerId.includes(MODEL_TIER_ORDER[i])) return i;
-      }
-      return MODEL_TIER_ORDER.length;
-    };
-
-    // TODO: Re-enable OpenAI models once the upstream gateway issue is fixed.
-    const filteredModels = models.filter(
-      (model) => model.owned_by !== "openai" && !model.id.startsWith("openai/"),
-    );
-
-    const mapped = filteredModels.map((model) => ({
+    const mapped = models.map((model) => ({
       modelId: model.id,
       name: formatGatewayModelName(model),
       description: `Context: ${model.context_window.toLocaleString()} tokens`,
       provider: getProviderName(model.owned_by),
     }));
 
-    return mapped.sort(
-      (a, b) => getModelTier(a.modelId) - getModelTier(b.modelId),
-    );
+    const CLAUDE_TIER_ORDER = ["opus", "sonnet", "haiku"];
+    const getModelTier = (modelId: string): number => {
+      const lowerId = modelId.toLowerCase();
+      for (let i = 0; i < CLAUDE_TIER_ORDER.length; i++) {
+        if (lowerId.includes(CLAUDE_TIER_ORDER[i])) return i;
+      }
+      return CLAUDE_TIER_ORDER.length;
+    };
+
+    return mapped.sort((a, b) => {
+      const providerOrder = ["Anthropic", "OpenAI", "Gemini"];
+      const aProviderIdx = providerOrder.indexOf(a.provider ?? "");
+      const bProviderIdx = providerOrder.indexOf(b.provider ?? "");
+      if (aProviderIdx !== bProviderIdx) {
+        const aIdx = aProviderIdx === -1 ? 999 : aProviderIdx;
+        const bIdx = bProviderIdx === -1 ? 999 : bProviderIdx;
+        return aIdx - bIdx;
+      }
+      return getModelTier(a.modelId) - getModelTier(b.modelId);
+    });
   }
 }

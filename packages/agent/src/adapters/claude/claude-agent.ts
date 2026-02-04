@@ -135,7 +135,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     this.checkAuthStatus();
 
     const meta = params._meta as NewSessionMeta | undefined;
-    const sessionId = meta?.sessionId ?? uuidv7();
+    const internalSessionId = uuidv7();
     const permissionMode =
       (meta?.initialModeId as TwigExecutionMode) ?? "default";
 
@@ -143,14 +143,13 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     const options = buildSessionOptions({
       cwd: params.cwd,
-      sessionId,
       mcpServers,
       permissionMode,
-      canUseTool: this.createCanUseTool(sessionId),
+      canUseTool: this.createCanUseTool(internalSessionId),
       logger: this.logger,
       systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,
-      onModeChange: this.createOnModeChange(sessionId),
+      onModeChange: this.createOnModeChange(internalSessionId),
       onProcessSpawned: this.processCallbacks?.onProcessSpawned,
       onProcessExited: this.processCallbacks?.onProcessExited,
     });
@@ -158,27 +157,31 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     const input = new Pushable<SDKUserMessage>();
     const q = query({ prompt: input, options });
 
-    this.createSession(
-      sessionId,
+    const session = this.createSession(
+      internalSessionId,
       q,
       input,
       permissionMode,
       params.cwd,
       options.abortController as AbortController,
     );
-    this.registerPersistence(sessionId, meta as Record<string, unknown>);
+    session.taskRunId = meta?.taskRunId;
+    this.registerPersistence(
+      internalSessionId,
+      meta as Record<string, unknown>,
+    );
 
     if (meta?.model) {
       await this.trySetModel(q, meta.model);
     }
 
     this.sendAvailableCommandsUpdate(
-      sessionId,
+      internalSessionId,
       await getAvailableSlashCommands(q),
     );
 
     return {
-      sessionId,
+      sessionId: internalSessionId,
       models: await this.getAvailableModels(meta?.model ?? DEFAULT_MODEL),
       modes: {
         currentModeId: permissionMode,
@@ -194,8 +197,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   async resumeSession(
     params: LoadSessionRequest,
   ): Promise<LoadSessionResponse> {
-    const { sessionId } = params;
-    if (this.sessionId === sessionId) {
+    const { sessionId: internalSessionId } = params;
+    if (this.sessionId === internalSessionId) {
       return {};
     }
 
@@ -203,23 +206,27 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     const mcpServers = parseMcpServers(params);
 
     const { query: q, session } = await this.initializeQuery({
-      sessionId,
+      internalSessionId,
       cwd: params.cwd,
       permissionMode: "default",
       mcpServers,
       systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,
-      sdkSessionId: meta?.sdkSessionId,
+      sessionId: meta?.sessionId,
       additionalDirectories: meta?.claudeCode?.options?.additionalDirectories,
     });
 
-    if (meta?.sdkSessionId) {
-      session.sdkSessionId = meta.sdkSessionId;
+    session.taskRunId = meta?.taskRunId;
+    if (meta?.sessionId) {
+      session.sessionId = meta.sessionId;
     }
 
-    this.registerPersistence(sessionId, meta as Record<string, unknown>);
+    this.registerPersistence(
+      internalSessionId,
+      meta as Record<string, unknown>,
+    );
     this.sendAvailableCommandsUpdate(
-      sessionId,
+      internalSessionId,
       await getAvailableSlashCommands(q),
     );
 
@@ -294,13 +301,13 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   }
 
   private async initializeQuery(config: {
-    sessionId: string;
+    internalSessionId: string;
     cwd: string;
     permissionMode: TwigExecutionMode;
     mcpServers: ReturnType<typeof parseMcpServers>;
     userProvidedOptions?: Options;
     systemPrompt?: Options["systemPrompt"];
-    sdkSessionId?: string;
+    sessionId?: string;
     additionalDirectories?: string[];
   }): Promise<{
     query: Query;
@@ -311,16 +318,15 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     const options = buildSessionOptions({
       cwd: config.cwd,
-      sessionId: config.sessionId,
       mcpServers: config.mcpServers,
       permissionMode: config.permissionMode,
-      canUseTool: this.createCanUseTool(config.sessionId),
+      canUseTool: this.createCanUseTool(config.internalSessionId),
       logger: this.logger,
       systemPrompt: config.systemPrompt,
       userProvidedOptions: config.userProvidedOptions,
-      sdkSessionId: config.sdkSessionId,
+      sessionId: config.sessionId,
       additionalDirectories: config.additionalDirectories,
-      onModeChange: this.createOnModeChange(config.sessionId),
+      onModeChange: this.createOnModeChange(config.internalSessionId),
       onProcessSpawned: this.processCallbacks?.onProcessSpawned,
       onProcessExited: this.processCallbacks?.onProcessExited,
     });
@@ -329,7 +335,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     const abortController = options.abortController as AbortController;
 
     const session = this.createSession(
-      config.sessionId,
+      config.internalSessionId,
       q,
       input,
       config.permissionMode,

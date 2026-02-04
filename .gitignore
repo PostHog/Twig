@@ -50,3 +50,6 @@ test-results/
 
 *storybook.log
 storybook-static
+
+# Downloaded binaries
+apps/twig/resources/codex-acp/

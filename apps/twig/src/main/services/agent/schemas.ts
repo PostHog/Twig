@@ -21,9 +21,11 @@ export const sessionConfigSchema = z.object({
   repoPath: z.string(),
   credentials: credentialsSchema,
   logUrl: z.string().optional(),
-  sdkSessionId: z.string().optional(),
+  /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
+  sessionId: z.string().optional(),
   model: z.string().optional(),
   executionMode: executionModeSchema.optional(),
+  adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
@@ -46,6 +48,7 @@ export const startSessionInput = z.object({
     .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
     .optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
+  adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
@@ -124,7 +127,9 @@ export const reconnectSessionInput = z.object({
   apiHost: z.string(),
   projectId: z.number(),
   logUrl: z.string().optional(),
-  sdkSessionId: z.string().optional(),
+  sessionId: z.string().optional(),
+  adapter: z.enum(["claude", "codex"]).optional(),
+  model: z.string().optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
@@ -148,9 +153,16 @@ export const setModeInput = z.object({
   modeId: executionModeSchema,
 });
 
+// Set config option input (for Codex reasoning level, etc.)
+export const setConfigOptionInput = z.object({
+  sessionId: z.string(),
+  configId: z.string(),
+  value: z.string(),
+});
+
 // Subscribe to session events input
 export const subscribeSessionInput = z.object({
-  sessionId: z.string(),
+  taskRunId: z.string(),
 });
 
 // Agent events
@@ -160,12 +172,17 @@ export const AgentServiceEvent = {
 } as const;
 
 export interface AgentSessionEventPayload {
-  sessionId: string;
+  taskRunId: string;
   payload: unknown;
 }
 
 export type PermissionOption = SdkPermissionOption;
-export type PermissionRequestPayload = RequestPermissionRequest;
+export type PermissionRequestPayload = Omit<
+  RequestPermissionRequest,
+  "sessionId"
+> & {
+  taskRunId: string;
+};
 
 export interface AgentServiceEvents {
   [AgentServiceEvent.SessionEvent]: AgentSessionEventPayload;
@@ -174,7 +191,7 @@ export interface AgentServiceEvents {
 
 // Permission response input for tRPC
 export const respondToPermissionInput = z.object({
-  sessionId: z.string(),
+  taskRunId: z.string(),
   toolCallId: z.string(),
   optionId: z.string(),
   // For "Other" option: custom text input from user (ACP extension via _meta)
@@ -187,7 +204,7 @@ export type RespondToPermissionInput = z.infer<typeof respondToPermissionInput>;
 
 // Permission cancellation input for tRPC
 export const cancelPermissionInput = z.object({
-  sessionId: z.string(),
+  taskRunId: z.string(),
   toolCallId: z.string(),
 });
 
