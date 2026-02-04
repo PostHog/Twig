@@ -22,12 +22,11 @@ import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
-import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
-import type { SleepService } from "../sleep/service.js";
+import { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -220,17 +219,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
   private processTracking: ProcessTrackingService;
+  private sleepService: SleepService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
     processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.SleepService)
+    sleepService: SleepService,
   ) {
     super();
     this.processTracking = processTracking;
-  }
-
-  private get sleepService() {
-    return container.get<SleepService>(MAIN_TOKENS.SleepService);
+    this.sleepService = sleepService;
   }
 
   public updateToken(newToken: string): void {
@@ -1027,7 +1026,10 @@ For git operations while detached:
               },
             );
           } finally {
-            service.sleepService.acquire(taskRunId);
+            // Only re-acquire if session wasn't cleaned up while waiting
+            if (service.sessions.has(taskRunId)) {
+              service.sleepService.acquire(taskRunId);
+            }
           }
         }
 

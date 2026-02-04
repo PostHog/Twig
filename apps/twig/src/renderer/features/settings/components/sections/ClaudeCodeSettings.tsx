@@ -14,7 +14,7 @@ import {
 import { Tooltip } from "@renderer/components/ui/Tooltip";
 import { track } from "@renderer/lib/analytics";
 import { trpcReact } from "@renderer/trpc";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 function CopyableCommand({ command }: { command: string }) {
@@ -79,7 +79,14 @@ export function ClaudeCodeSettings() {
     setPreventSleepWhileRunning,
   } = useSettingsStore();
 
+  const { data: serverPreventSleep } = trpcReact.sleep.getEnabled.useQuery();
   const preventSleepMutation = trpcReact.sleep.setEnabled.useMutation();
+
+  useEffect(() => {
+    if (serverPreventSleep !== undefined) {
+      setPreventSleepWhileRunning(serverPreventSleep);
+    }
+  }, [serverPreventSleep, setPreventSleepWhileRunning]);
 
   const [showBypassWarning, setShowBypassWarning] = useState(false);
 
@@ -125,8 +132,8 @@ export function ClaudeCodeSettings() {
   return (
     <Flex direction="column">
       <SettingRow
-        label="Prevent sleep while running"
-        description="Keep your computer awake while the agent is running a task"
+        label="Keep awake while agents work"
+        description="Prevent your computer from sleeping while the agent is running a task"
       >
         <Switch
           checked={preventSleepWhileRunning}
