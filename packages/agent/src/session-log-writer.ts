@@ -18,25 +18,14 @@ export class SessionLogWriter {
     this.posthogAPI = posthogAPI;
     this.logger =
       logger ?? new Logger({ debug: false, prefix: "[SessionLogWriter]" });
+  }
 
-    const flushAllAndExit = async () => {
-      const flushPromises: Promise<void>[] = [];
-      for (const sessionId of this.configs.keys()) {
-        flushPromises.push(this.flush(sessionId));
-      }
-      await Promise.all(flushPromises);
-      process.exit(0);
-    };
-
-    process.on("beforeExit", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
-    process.on("SIGINT", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
-    process.on("SIGTERM", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
+  async flushAll(): Promise<void> {
+    const flushPromises: Promise<void>[] = [];
+    for (const sessionId of this.configs.keys()) {
+      flushPromises.push(this.flush(sessionId));
+    }
+    await Promise.all(flushPromises);
   }
 
   register(sessionId: string, config: SessionLogConfig): void {
