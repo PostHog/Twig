@@ -1248,7 +1248,12 @@ For git operations while detached:
       return MODEL_TIER_ORDER.length;
     };
 
-    const mapped = models.map((model) => ({
+    // TODO: Re-enable OpenAI models once the upstream gateway issue is fixed.
+    const filteredModels = models.filter(
+      (model) => model.owned_by !== "openai" && !model.id.startsWith("openai/"),
+    );
+
+    const mapped = filteredModels.map((model) => ({
       modelId: model.id,
       name: formatGatewayModelName(model),
       description: `Context: ${model.context_window.toLocaleString()} tokens`,
