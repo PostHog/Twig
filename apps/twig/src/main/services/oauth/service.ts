@@ -109,44 +109,43 @@ export class OAuthService {
       };
 
       const codeVerifier = this.generateCodeVerifier();
-      const codeChallenge = this.generateCodeChallenge(codeVerifier);
-      const redirectUri = this.getRedirectUri();
+      const authUrl = this.buildAuthorizeUrl(region, codeVerifier);
 
-      // Build the authorization URL
-      const cloudUrl = getCloudUrlFromRegion(region);
-      const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
-      authUrl.searchParams.set("client_id", getOauthClientIdFromRegion(region));
-      authUrl.searchParams.set("redirect_uri", redirectUri);
-      authUrl.searchParams.set("response_type", "code");
-      authUrl.searchParams.set("code_challenge", codeChallenge);
-      authUrl.searchParams.set("code_challenge_method", "S256");
-      authUrl.searchParams.set("scope", config.scopes.join(" "));
-      authUrl.searchParams.set("required_access_level", "project");
-
-      // Create a promise that will be resolved when the callback arrives
-      const code = IS_DEV
-        ? await this.waitForHttpCallback(
-            codeVerifier,
-            config,
-            authUrl.toString(),
-          )
-        : await this.waitForDeepLinkCallback(
-            codeVerifier,
-            config,
-            authUrl.toString(),
-          );
-
-      // Exchange the code for tokens
-      const tokenResponse = await this.exchangeCodeForToken(
-        code,
-        codeVerifier,
+      return await this.startFlowWithUrl(
         config,
+        codeVerifier,
+        authUrl.toString(),
       );
-
+    } catch (error) {
       return {
-        success: true,
-        data: tokenResponse,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
       };
+    }
+  }
+
+  /**
+   * Start the OAuth flow from the signup page.
+   */
+  public async startSignupFlow(region: CloudRegion): Promise<StartFlowOutput> {
+    try {
+      // Cancel any existing flow
+      this.cancelFlow();
+
+      const config: OAuthConfig = {
+        scopes: OAUTH_SCOPES,
+        cloudRegion: region,
+      };
+
+      const codeVerifier = this.generateCodeVerifier();
+      const authUrl = this.buildAuthorizeUrl(region, codeVerifier);
+      const signupUrl = this.buildSignupUrl(region, authUrl);
+
+      return await this.startFlowWithUrl(
+        config,
+        codeVerifier,
+        signupUrl.toString(),
+      );
     } catch (error) {
       return {
         success: false,
@@ -443,11 +442,62 @@ export class OAuthService {
     return response.json();
   }
 
+  private buildAuthorizeUrl(region: CloudRegion, codeVerifier: string): URL {
+    const codeChallenge = this.generateCodeChallenge(codeVerifier);
+    const redirectUri = this.getRedirectUri();
+    const cloudUrl = getCloudUrlFromRegion(region);
+    const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
+    authUrl.searchParams.set("client_id", getOauthClientIdFromRegion(region));
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("code_challenge", codeChallenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    authUrl.searchParams.set("scope", OAUTH_SCOPES.join(" "));
+    authUrl.searchParams.set("required_access_level", "project");
+    return authUrl;
+  }
+
+  private buildSignupUrl(region: CloudRegion, authUrl: URL): URL {
+    const cloudUrl = getCloudUrlFromRegion(region);
+    const signupUrl = new URL(`${cloudUrl}/signup`);
+    const nextPath = `${authUrl.pathname}${authUrl.search}`;
+    signupUrl.searchParams.set("next", nextPath);
+    return signupUrl;
+  }
+
+  private async startFlowWithUrl(
+    config: OAuthConfig,
+    codeVerifier: string,
+    authUrl: string,
+  ): Promise<StartFlowOutput> {
+    const code = IS_DEV
+      ? await this.waitForHttpCallback(codeVerifier, config, authUrl)
+      : await this.waitForDeepLinkCallback(codeVerifier, config, authUrl);
+
+    const tokenResponse = await this.exchangeCodeForToken(
+      code,
+      codeVerifier,
+      config,
+    );
+
+    return {
+      success: true,
+      data: tokenResponse,
+    };
+  }
+
   private generateCodeVerifier(): string {
     return crypto.randomBytes(32).toString("base64url");
   }
 
   private generateCodeChallenge(verifier: string): string {
     return crypto.createHash("sha256").update(verifier).digest("base64url");
+  }
+
+  /**
+   * Open an external URL in the default browser.
+   */
+  public async openExternalUrl(url: string): Promise<void> {
+    await shell.openExternal(url);
   }
 }
