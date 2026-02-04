@@ -568,7 +568,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.error(
           `Init scripts failed for task ${taskId}, cleaning up worktree`,
         );
-        await this.cleanupWorktree(taskId, mainRepoPath, worktree.worktreePath, association.branchName);
+        await this.cleanupWorktree(
+          taskId,
+          mainRepoPath,
+          worktree.worktreePath,
+          association.branchName,
+        );
         throw new Error(
           `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
         );
@@ -694,7 +699,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     this.ensureScriptRunner().cleanupTaskSessions(taskId);
 
     if (association.mode === "worktree" && worktreePath) {
-      await this.cleanupWorktree(taskId, mainRepoPath, worktreePath, association.branchName);
+      await this.cleanupWorktree(
+        taskId,
+        mainRepoPath,
+        worktreePath,
+        association.branchName,
+      );
 
       const otherWorkspacesForFolder = getTaskAssociations().filter(
         (a) =>
@@ -1116,7 +1126,10 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       await git.deleteLocalBranch(branchName, true);
       log.info(`Deleted branch ${branchName} for task ${taskId}`);
     } catch (error) {
-      log.warn(`Failed to delete branch ${branchName} for task ${taskId}:`, error);
+      log.warn(
+        `Failed to delete branch ${branchName} for task ${taskId}:`,
+        error,
+      );
     }
   }
 
