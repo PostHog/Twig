@@ -15,7 +15,7 @@ function createSuggestion(
   return {
     char: "/",
     allowSpaces: false,
-    startOfLine: false,
+    startOfLine: true,
 
     items: ({ query }): CommandSuggestionItem[] => {
       if (!sessionId) return [];

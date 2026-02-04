@@ -2,9 +2,13 @@ import "reflect-metadata";
 import "@radix-ui/themes/styles.css";
 import { Providers } from "@components/Providers";
 import App from "@renderer/App";
+import { logger } from "@renderer/lib/logger";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles/globals.css";
+
+const log = logger.scope("app");
+log.info("Twig renderer booting up");
 
 document.title = import.meta.env.DEV ? "Twig (Development)" : "Twig";
 
