@@ -4,8 +4,10 @@ import { Tooltip } from "@components/ui/Tooltip";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
+import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import {
   ArrowCounterClockwiseIcon,
+  ArrowsClockwise,
   CaretDownIcon,
   CaretUpIcon,
   CodeIcon,
@@ -15,9 +17,11 @@ import {
 import {
   Badge,
   Box,
+  Button,
   DropdownMenu,
   Flex,
   IconButton,
+  Spinner,
   Text,
 } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
@@ -376,6 +380,8 @@ function ChangedFileItem({
 
 export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  const { isFocused, isFocusLoading, handleToggleFocus, handleUnfocus } =
+    useFocusWorkspace(taskId);
   const repoPath = useCwd(taskId);
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
   const openDiff = usePanelLayoutStore((state) => state.openDiff);
@@ -443,6 +449,73 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     return isDiffTabActiveInTree(layout.panelTree, file.path, file.status);
   };
 
+  const showFocusCta = workspace?.mode === "worktree";
+  const focusCta = showFocusCta ? (
+    <Box px="2" pb="2">
+      <Flex
+        align="center"
+        justify="between"
+        gap="2"
+        px="3"
+        py="2"
+        style={{
+          borderRadius: "999px",
+          border: "1px solid var(--gray-4)",
+          backgroundColor: "var(--gray-2)",
+        }}
+      >
+        <Flex align="center" gap="2">
+          {isFocused ? (
+            <Box
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "999px",
+                backgroundColor: "var(--green-9)",
+              }}
+            />
+          ) : (
+            <ArrowsClockwise size={14} weight="bold" />
+          )}
+          <Text size="1" style={{ color: "var(--gray-11)" }}>
+            {isFocused ? "Workspace synced" : "Focus workspace"}
+          </Text>
+        </Flex>
+        {isFocused ? (
+          <Button
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={handleUnfocus}
+            disabled={isFocusLoading}
+            style={{
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
+              color: "var(--gray-11)",
+            }}
+          >
+            {isFocusLoading ? <Spinner size="1" /> : "Cancel"}
+          </Button>
+        ) : (
+          <Button
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={handleToggleFocus}
+            disabled={isFocusLoading}
+            style={{
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
+              color: "var(--gray-11)",
+            }}
+          >
+            {isFocusLoading ? <Spinner size="1" /> : "Focus"}
+          </Button>
+        )}
+      </Flex>
+    </Box>
+  ) : null;
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
@@ -454,12 +527,22 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const hasChanges = changedFiles.length > 0;
 
   if (!hasChanges) {
-    return <PanelMessage>No file changes yet</PanelMessage>;
+    return (
+      <Box height="100%" overflowY="auto" py="2">
+        <Flex direction="column" height="100%">
+          {focusCta}
+          <Box flexGrow="1">
+            <PanelMessage>No file changes yet</PanelMessage>
+          </Box>
+        </Flex>
+      </Box>
+    );
   }
 
   return (
     <Box height="100%" overflowY="auto" py="2">
       <Flex direction="column">
+        {focusCta}
         {changedFiles.map((file) => (
           <ChangedFileItem
             key={file.path}

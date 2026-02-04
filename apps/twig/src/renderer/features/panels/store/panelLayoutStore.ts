@@ -125,6 +125,18 @@ function createDefaultPanelTree(): PanelNode {
           closeable: false,
           draggable: true,
         },
+        {
+          id: DEFAULT_TAB_IDS.SHELL,
+          label: "Terminal",
+          data: {
+            type: "terminal",
+            terminalId: DEFAULT_TAB_IDS.SHELL,
+            cwd: "",
+          },
+          component: null,
+          closeable: true,
+          draggable: true,
+        },
       ],
       activeTabId: DEFAULT_TAB_IDS.LOGS,
       showTabs: true,
