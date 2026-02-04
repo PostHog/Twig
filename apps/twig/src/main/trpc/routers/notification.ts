@@ -13,7 +13,7 @@ export const notificationRouter = router({
       z.object({
         title: z.string(),
         body: z.string(),
-        silent: z.boolean().optional().default(false),
+        silent: z.boolean(),
       }),
     )
     .mutation(({ input }) =>
