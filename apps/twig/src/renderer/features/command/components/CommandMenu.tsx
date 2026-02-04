@@ -1,6 +1,7 @@
 import { Command } from "@features/command/components/Command";
 import { CommandKeyHints } from "@features/command/components/CommandKeyHints";
 import { useRightSidebarStore } from "@features/right-sidebar";
+import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import {
   FileTextIcon,
@@ -25,7 +26,8 @@ interface CommandMenuProps {
 }
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
-  const { navigateToTaskInput, navigateToSettings } = useNavigationStore();
+  const { navigateToTaskInput } = useNavigationStore();
+  const openSettingsDialog = useSettingsDialogStore((state) => state.open);
   const { folders } = useRegisteredFoldersStore();
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
@@ -132,7 +134,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </Command.Item>
               <Command.Item
                 value="Settings"
-                onSelect={runAndClose(navigateToSettings, "settings")}
+                onSelect={runAndClose(() => openSettingsDialog(), "settings")}
               >
                 <GearIcon className="mr-3 h-3 w-3 text-gray-11" />
                 <Text size="1">Settings</Text>

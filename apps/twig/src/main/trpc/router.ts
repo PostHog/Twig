@@ -18,6 +18,7 @@ import { osRouter } from "./routers/os.js";
 import { processTrackingRouter } from "./routers/process-tracking.js";
 import { secureStoreRouter } from "./routers/secure-store.js";
 import { shellRouter } from "./routers/shell.js";
+import { sleepRouter } from "./routers/sleep.js";
 import { uiRouter } from "./routers/ui.js";
 import { updatesRouter } from "./routers/updates.js";
 import { workspaceRouter } from "./routers/workspace.js";
@@ -41,6 +42,7 @@ export const trpcRouter = router({
   logs: logsRouter,
   os: osRouter,
   processTracking: processTrackingRouter,
+  sleep: sleepRouter,
   secureStore: secureStoreRouter,
   shell: shellRouter,
   ui: uiRouter,

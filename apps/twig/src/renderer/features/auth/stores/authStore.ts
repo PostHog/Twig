@@ -45,11 +45,22 @@ interface AuthState {
   client: PostHogAPIClient | null;
   projectId: number | null; // Current team/project ID
 
+  // Multi-project state
+  availableProjectIds: number[]; // All projects from scoped_teams
+  availableOrgIds: string[]; // All orgs from scoped_organizations
+  needsProjectSelection: boolean; // True when multiple projects and no selection stored
+
   // OAuth methods
   loginWithOAuth: (region: CloudRegion) => Promise<void>;
   refreshAccessToken: () => Promise<void>;
   scheduleTokenRefresh: () => void;
   initializeOAuth: () => Promise<boolean>;
+
+  // Signup method
+  signupWithOAuth: (region: CloudRegion) => Promise<void>;
+
+  // Project selection
+  selectProject: (projectId: number) => void;
 
   // Other methods
   logout: () => void;
@@ -74,6 +85,11 @@ export const useAuthStore = create<AuthState>()(
         client: null,
         projectId: null,
 
+        // Multi-project state
+        availableProjectIds: [],
+        availableOrgIds: [],
+        needsProjectSelection: false,
+
         loginWithOAuth: async (region: CloudRegion) => {
           const result = await trpcVanilla.oauth.startFlow.mutate({ region });
 
@@ -84,9 +100,10 @@ export const useAuthStore = create<AuthState>()(
           const tokenResponse = result.data;
           const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
 
-          const projectId = tokenResponse.scoped_teams?.[0];
+          const scopedTeams = tokenResponse.scoped_teams ?? [];
+          const scopedOrgs = tokenResponse.scoped_organizations ?? [];
 
-          if (!projectId) {
+          if (scopedTeams.length === 0) {
             throw new Error("No team found in OAuth scopes");
           }
 
@@ -95,10 +112,20 @@ export const useAuthStore = create<AuthState>()(
             refreshToken: tokenResponse.refresh_token,
             expiresAt,
             cloudRegion: region,
-            scopedTeams: tokenResponse.scoped_teams,
+            scopedTeams,
           };
 
           const apiHost = getCloudUrlFromRegion(region);
+
+          // Check if we have a previously selected project that's still valid
+          const currentProjectId = get().projectId;
+          const previousSelectionValid =
+            currentProjectId !== null && scopedTeams.includes(currentProjectId);
+
+          // Use previously selected project if valid, otherwise default to first project
+          const selectedProjectId = previousSelectionValid
+            ? currentProjectId
+            : scopedTeams[0];
 
           const client = new PostHogAPIClient(
             tokenResponse.access_token,
@@ -111,7 +138,7 @@ export const useAuthStore = create<AuthState>()(
               }
               return token;
             },
-            projectId,
+            selectedProjectId,
           );
 
           try {
@@ -125,7 +152,10 @@ export const useAuthStore = create<AuthState>()(
               storedTokens,
               isAuthenticated: true,
               client,
-              projectId,
+              projectId: selectedProjectId,
+              availableProjectIds: scopedTeams,
+              availableOrgIds: scopedOrgs,
+              needsProjectSelection: false,
             });
 
             trpcVanilla.agent.updateToken
@@ -142,11 +172,11 @@ export const useAuthStore = create<AuthState>()(
             identifyUser(distinctId, {
               email: user.email,
               uuid: user.uuid,
-              project_id: projectId.toString(),
+              project_id: selectedProjectId.toString(),
               region,
             });
             track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
-              project_id: projectId.toString(),
+              project_id: selectedProjectId.toString(),
               region,
             });
 
@@ -155,11 +185,12 @@ export const useAuthStore = create<AuthState>()(
               properties: {
                 email: user.email,
                 uuid: user.uuid,
-                project_id: projectId.toString(),
+                project_id: selectedProjectId.toString(),
                 region,
               },
             });
-          } catch {
+          } catch (error) {
+            log.error("Failed to authenticate with PostHog", error);
             throw new Error("Failed to authenticate with PostHog");
           }
         },
@@ -376,13 +407,28 @@ export const useAuthStore = create<AuthState>()(
               }
 
               const apiHost = getCloudUrlFromRegion(currentTokens.cloudRegion);
-              const projectId = currentTokens.scopedTeams?.[0];
+              const scopedTeams = currentTokens.scopedTeams ?? [];
 
-              if (!projectId) {
-                log.error("No project ID found in stored tokens");
+              if (scopedTeams.length === 0) {
+                log.error("No projects found in stored tokens");
                 get().logout();
                 return false;
               }
+
+              // Check if we have a stored project selection that's still valid
+              const storedProjectId = get().projectId;
+              const availableProjects =
+                get().availableProjectIds.length > 0
+                  ? get().availableProjectIds
+                  : scopedTeams;
+              const hasValidStoredProject =
+                storedProjectId !== null &&
+                availableProjects.includes(storedProjectId);
+
+              // Use stored project if valid, otherwise default to first project
+              const selectedProjectId = hasValidStoredProject
+                ? storedProjectId
+                : scopedTeams[0];
 
               const client = new PostHogAPIClient(
                 currentTokens.accessToken,
@@ -395,7 +441,7 @@ export const useAuthStore = create<AuthState>()(
                   }
                   return token;
                 },
-                projectId,
+                selectedProjectId,
               );
 
               try {
@@ -404,7 +450,9 @@ export const useAuthStore = create<AuthState>()(
                 set({
                   isAuthenticated: true,
                   client,
-                  projectId,
+                  projectId: selectedProjectId,
+                  availableProjectIds: scopedTeams,
+                  needsProjectSelection: false,
                 });
 
                 trpcVanilla.agent.updateToken
@@ -420,7 +468,7 @@ export const useAuthStore = create<AuthState>()(
                 identifyUser(distinctId, {
                   email: user.email,
                   uuid: user.uuid,
-                  project_id: projectId.toString(),
+                  project_id: selectedProjectId.toString(),
                   region: tokens.cloudRegion,
                 });
 
@@ -429,7 +477,7 @@ export const useAuthStore = create<AuthState>()(
                   properties: {
                     email: user.email,
                     uuid: user.uuid,
-                    project_id: projectId.toString(),
+                    project_id: selectedProjectId.toString(),
                     region: tokens.cloudRegion,
                   },
                 });
@@ -449,7 +497,9 @@ export const useAuthStore = create<AuthState>()(
                   set({
                     isAuthenticated: true,
                     client,
-                    projectId,
+                    projectId: selectedProjectId,
+                    availableProjectIds: scopedTeams,
+                    needsProjectSelection: false,
                   });
                   get().scheduleTokenRefresh();
                   return true;
@@ -469,6 +519,169 @@ export const useAuthStore = create<AuthState>()(
           });
 
           return initializePromise;
+        },
+
+        signupWithOAuth: async (region: CloudRegion) => {
+          const result = await trpcVanilla.oauth.startSignupFlow.mutate({
+            region,
+          });
+
+          if (!result.success || !result.data) {
+            throw new Error(result.error || "Signup failed");
+          }
+
+          const tokenResponse = result.data;
+          const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
+
+          const scopedTeams = tokenResponse.scoped_teams ?? [];
+          const scopedOrgs = tokenResponse.scoped_organizations ?? [];
+
+          if (scopedTeams.length === 0) {
+            throw new Error("No team found in OAuth scopes");
+          }
+
+          const storedTokens: StoredTokens = {
+            accessToken: tokenResponse.access_token,
+            refreshToken: tokenResponse.refresh_token,
+            expiresAt,
+            cloudRegion: region,
+            scopedTeams,
+          };
+
+          const apiHost = getCloudUrlFromRegion(region);
+          const selectedProjectId = scopedTeams[0];
+
+          const client = new PostHogAPIClient(
+            tokenResponse.access_token,
+            apiHost,
+            async () => {
+              await get().refreshAccessToken();
+              const token = get().oauthAccessToken;
+              if (!token) {
+                throw new Error("No access token after refresh");
+              }
+              return token;
+            },
+            selectedProjectId,
+          );
+
+          try {
+            const user = await client.getCurrentUser();
+
+            set({
+              oauthAccessToken: tokenResponse.access_token,
+              oauthRefreshToken: tokenResponse.refresh_token,
+              tokenExpiry: expiresAt,
+              cloudRegion: region,
+              storedTokens,
+              isAuthenticated: true,
+              client,
+              projectId: selectedProjectId,
+              availableProjectIds: scopedTeams,
+              availableOrgIds: scopedOrgs,
+              needsProjectSelection: false,
+            });
+
+            trpcVanilla.agent.updateToken
+              .mutate({ token: tokenResponse.access_token })
+              .catch((err) => log.warn("Failed to update agent token", err));
+
+            queryClient.clear();
+
+            get().scheduleTokenRefresh();
+
+            const distinctId = user.distinct_id || user.email;
+            identifyUser(distinctId, {
+              email: user.email,
+              uuid: user.uuid,
+              project_id: selectedProjectId.toString(),
+              region,
+            });
+            track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
+              project_id: selectedProjectId.toString(),
+              region,
+            });
+
+            trpcVanilla.analytics.setUserId.mutate({
+              userId: distinctId,
+              properties: {
+                email: user.email,
+                uuid: user.uuid,
+                project_id: selectedProjectId.toString(),
+                region,
+              },
+            });
+          } catch (error) {
+            log.error("Failed to authenticate with PostHog", error);
+            throw new Error("Failed to authenticate with PostHog");
+          }
+        },
+
+        selectProject: (projectId: number) => {
+          const state = get();
+
+          // Validate that the project is in the available list
+          if (!state.availableProjectIds.includes(projectId)) {
+            log.error("Attempted to select invalid project", { projectId });
+            throw new Error("Invalid project selection");
+          }
+
+          const cloudRegion = state.cloudRegion;
+          if (!cloudRegion) {
+            throw new Error("No cloud region available");
+          }
+
+          const accessToken = state.oauthAccessToken;
+          if (!accessToken) {
+            throw new Error("No access token available");
+          }
+
+          const apiHost = getCloudUrlFromRegion(cloudRegion);
+
+          // Create a new client with the selected project
+          const client = new PostHogAPIClient(
+            accessToken,
+            apiHost,
+            async () => {
+              await get().refreshAccessToken();
+              const token = get().oauthAccessToken;
+              if (!token) {
+                throw new Error("No access token after refresh");
+              }
+              return token;
+            },
+            projectId,
+          );
+
+          // Update stored tokens with the selected project
+          const updatedTokens = state.storedTokens
+            ? { ...state.storedTokens, scopedTeams: state.availableProjectIds }
+            : null;
+
+          set({
+            projectId,
+            client,
+            needsProjectSelection: false,
+            storedTokens: updatedTokens,
+          });
+
+          // Clear query cache to fetch data for the new project
+          queryClient.clear();
+
+          // Navigate to task input after project selection
+          useNavigationStore.getState().navigateToTaskInput();
+
+          // Update analytics with the selected project
+          trpcVanilla.agent.updateToken
+            .mutate({ token: accessToken })
+            .catch((err) => log.warn("Failed to update agent token", err));
+
+          track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
+            project_id: projectId.toString(),
+            region: cloudRegion,
+          });
+
+          log.info("Project selected", { projectId });
         },
 
         logout: () => {
@@ -498,6 +711,9 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             client: null,
             projectId: null,
+            availableProjectIds: [],
+            availableOrgIds: [],
+            needsProjectSelection: false,
           });
         },
       }),
@@ -510,6 +726,8 @@ export const useAuthStore = create<AuthState>()(
           storedTokens: state.storedTokens,
           staleTokens: state.staleTokens,
           projectId: state.projectId,
+          availableProjectIds: state.availableProjectIds,
+          availableOrgIds: state.availableOrgIds,
         }),
       },
     ),

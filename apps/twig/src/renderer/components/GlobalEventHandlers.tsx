@@ -1,6 +1,7 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSessions } from "@features/sessions/stores/sessionStore";
+import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
@@ -27,7 +28,7 @@ export function GlobalEventHandlers({
   onToggleShortcutsSheet,
   commandMenuOpen,
 }: GlobalEventHandlersProps) {
-  const openSettings = useNavigationStore((state) => state.openSettings);
+  const openSettingsDialog = useSettingsDialogStore((state) => state.open);
   const navigateToTaskInput = useNavigationStore(
     (state) => state.navigateToTaskInput,
   );
@@ -119,8 +120,8 @@ export function GlobalEventHandlers({
   );
 
   const handleOpenSettings = useCallback(() => {
-    openSettings();
-  }, [openSettings]);
+    openSettingsDialog();
+  }, [openSettingsDialog]);
 
   const handleFocusTaskMode = useCallback(
     (data?: unknown) => {

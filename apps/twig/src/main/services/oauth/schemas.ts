@@ -22,7 +22,7 @@ export const oAuthTokenResponse = z.object({
   access_token: z.string(),
   expires_in: z.number(),
   token_type: z.string(),
-  scope: z.string(),
+  scope: z.string().optional().default(""),
   refresh_token: z.string(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
@@ -41,6 +41,9 @@ export const startFlowOutput = z.object({
   errorCode: oAuthErrorCode.optional(),
 });
 export type StartFlowOutput = z.infer<typeof startFlowOutput>;
+
+export const startSignupFlowInput = startFlowInput;
+export type StartSignupFlowInput = z.infer<typeof startSignupFlowInput>;
 
 export const refreshTokenInput = z.object({
   refreshToken: z.string(),
@@ -61,3 +64,8 @@ export const cancelFlowOutput = z.object({
   error: z.string().optional(),
 });
 export type CancelFlowOutput = z.infer<typeof cancelFlowOutput>;
+
+export const openExternalUrlInput = z.object({
+  url: z.string().url(),
+});
+export type OpenExternalUrlInput = z.infer<typeof openExternalUrlInput>;

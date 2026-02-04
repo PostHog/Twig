@@ -65,9 +65,12 @@ describe("navigationStore", () => {
       });
     });
 
-    it("navigates to settings", () => {
-      getStore().openSettings();
-      expect(getView().type).toBe("settings");
+    it("navigates to folder settings", () => {
+      getStore().navigateToFolderSettings("folder-123");
+      expect(getView()).toMatchObject({
+        type: "folder-settings",
+        folderId: "folder-123",
+      });
     });
 
     it("navigates to task input with folderId", () => {
@@ -82,7 +85,7 @@ describe("navigationStore", () => {
   describe("history", () => {
     it("tracks history and supports back/forward", async () => {
       await getStore().navigateToTask(mockTask);
-      getStore().navigateToSettings();
+      getStore().navigateToFolderSettings("folder-123");
 
       expect(getStore().history).toHaveLength(3);
       expect(getStore().canGoBack()).toBe(true);
@@ -92,7 +95,7 @@ describe("navigationStore", () => {
 
       expect(getStore().canGoForward()).toBe(true);
       getStore().goForward();
-      expect(getView().type).toBe("settings");
+      expect(getView().type).toBe("folder-settings");
     });
   });
 

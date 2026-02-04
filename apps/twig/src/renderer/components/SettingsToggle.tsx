@@ -1,23 +1,22 @@
+import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { Gear } from "@phosphor-icons/react";
 import { IconButton, Tooltip } from "@radix-ui/themes";
-import { useNavigationStore } from "@stores/navigationStore";
 
 export function SettingsToggle() {
-  const view = useNavigationStore((s) => s.view);
-  const openSettings = useNavigationStore((s) => s.openSettings);
-  const isSettingsOpen = view.type === "settings";
+  const isOpen = useSettingsDialogStore((s) => s.isOpen);
+  const openSettings = useSettingsDialogStore((s) => s.open);
 
   return (
     <Tooltip content="Settings">
       <IconButton
         size="1"
         variant="ghost"
-        onClick={openSettings}
+        onClick={() => openSettings()}
         style={{
-          color: isSettingsOpen ? "var(--blue-9)" : "var(--gray-9)",
+          color: isOpen ? "var(--blue-9)" : "var(--gray-9)",
         }}
       >
-        <Gear size={16} weight={isSettingsOpen ? "fill" : "regular"} />
+        <Gear size={16} weight={isOpen ? "fill" : "regular"} />
       </IconButton>
     </Tooltip>
   );

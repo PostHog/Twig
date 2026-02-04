@@ -21,7 +21,8 @@ test.describe("Smoke Tests", () => {
       .catch(() => {});
 
     const hasAuthScreen = await window
-      .locator("text=Sign in with PostHog")
+      .locator("text=Sign in")
+      .first()
       .isVisible()
       .catch(() => false);
 

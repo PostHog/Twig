@@ -1,19 +1,28 @@
 import { DraggableTitleBar } from "@components/DraggableTitleBar";
+import { TorchGlow } from "@components/TorchGlow";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { Box, Callout, Flex, Select, Spinner, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import caveHero from "@renderer/assets/images/cave-hero.jpg";
 import twigLogo from "@renderer/assets/images/twig-logo.svg";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
-import { IS_DEV } from "@/constants/environment";
+import { useRef, useState } from "react";
+import { LoginForm } from "./LoginForm";
+import { SignupForm } from "./SignupForm";
 
 export const getErrorMessage = (error: unknown) => {
+  if (!error) {
+    return null;
+  }
   if (!(error instanceof Error)) {
     return "Failed to authenticate";
   }
   const message = error.message;
+
+  if (message === "2FA_REQUIRED") {
+    return null; // 2FA dialog will handle this
+  }
 
   if (message.includes("access_denied")) {
     return "Authorization cancelled.";
@@ -23,37 +32,72 @@ export const getErrorMessage = (error: unknown) => {
     return "Authorization timed out. Please try again.";
   }
 
+  if (message.includes("SSO login required")) {
+    return message;
+  }
+
   return message;
 };
 
+type AuthMode = "login" | "signup";
+
 export function AuthScreen() {
+  const caveBackgroundRef = useRef<HTMLDivElement>(null);
   const [region, setRegion] = useState<CloudRegion>("us");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const { loginWithOAuth, signupWithOAuth } = useAuthStore();
 
-  const { loginWithOAuth } = useAuthStore();
-
-  const authMutation = useMutation({
-    mutationFn: async (selectedRegion: CloudRegion) => {
-      await loginWithOAuth(selectedRegion);
+  // Login mutation (OAuth authorization code + PKCE)
+  const loginMutation = useMutation({
+    mutationFn: async () => {
+      await loginWithOAuth(region);
     },
   });
 
-  const handleSignIn = async () => {
-    if (authMutation.isPending) {
-      authMutation.reset();
-      await trpcVanilla.oauth.cancelFlow.mutate();
-    } else {
-      authMutation.mutate(region);
+  // Signup mutation
+  const signupMutation = useMutation({
+    mutationFn: async () => {
+      await signupWithOAuth(region);
+    },
+  });
+
+  const handleLogin = async () => {
+    loginMutation.mutate();
+  };
+
+  const handleSignup = async () => {
+    signupMutation.mutate();
+  };
+
+  const handleAuthModeChange = (mode: AuthMode) => {
+    if (mode !== authMode) {
+      setAuthMode(mode);
     }
   };
 
-  const handleRegionChange = (value: string) => {
-    setRegion(value as CloudRegion);
-    authMutation.reset();
+  const handleRegionChange = (value: CloudRegion) => {
+    setRegion(value);
+    loginMutation.reset();
+    signupMutation.reset();
   };
 
+  const handleCancel = async () => {
+    loginMutation.reset();
+    await trpcVanilla.oauth.cancelFlow.mutate();
+  };
+
+  const isLoading = loginMutation.isPending || signupMutation.isPending;
+  const error = loginMutation.error || signupMutation.error;
+  const errorMessage = getErrorMessage(error);
+
   return (
-    <Flex height="100vh" style={{ position: "relative" }}>
+    <Flex
+      ref={caveBackgroundRef}
+      height="100vh"
+      style={{ position: "relative" }}
+    >
       <DraggableTitleBar />
+      <TorchGlow containerRef={caveBackgroundRef} alwaysShow />
       {/* Full-screen cave painting background */}
       <div
         style={{
@@ -75,7 +119,7 @@ export function AuthScreen() {
           zIndex: 1,
         }}
       >
-        <Flex direction="column" gap="6" style={{ maxWidth: "320px" }}>
+        <Flex direction="column" gap="6" style={{ width: "320px" }}>
           <Flex direction="column" gap="4">
             <img
               src={twigLogo}
@@ -98,64 +142,63 @@ export function AuthScreen() {
             </Text>
           </Flex>
 
-          <Flex direction="column" gap="4">
-            <Flex direction="column" gap="2">
-              <Text
-                size="2"
-                weight="medium"
-                style={{ color: "var(--cave-charcoal)", opacity: 0.6 }}
-              >
-                PostHog region
-              </Text>
-              <Select.Root
-                value={region}
-                onValueChange={handleRegionChange}
-                size="3"
-              >
-                <Select.Trigger />
-                <Select.Content>
-                  <Select.Item value="us">US Cloud</Select.Item>
-                  <Select.Item value="eu">EU Cloud</Select.Item>
-                  {IS_DEV && <Select.Item value="dev">Development</Select.Item>}
-                </Select.Content>
-              </Select.Root>
-            </Flex>
-
-            {authMutation.isError && (
-              <Callout.Root color="red">
-                <Callout.Text>
-                  {getErrorMessage(authMutation.error)}
-                </Callout.Text>
-              </Callout.Root>
-            )}
-
-            {authMutation.isPending && (
-              <Callout.Root color="blue">
-                <Callout.Text>
-                  Waiting for authorization in your browser...
-                </Callout.Text>
-              </Callout.Root>
-            )}
-
-            <button
+          <Flex
+            align="center"
+            gap="2"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.6)",
+              borderRadius: "999px",
+              padding: "4px",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <Button
               type="button"
-              onClick={handleSignIn}
-              className="flex items-center justify-center gap-2 px-6 py-3 font-bold text-base transition-opacity hover:opacity-90"
+              size="2"
+              variant={authMode === "login" ? "solid" : "ghost"}
+              onClick={() => handleAuthModeChange("login")}
               style={{
-                backgroundColor: authMutation.isPending
-                  ? "var(--gray-8)"
-                  : "var(--cave-charcoal)",
-                color: authMutation.isPending
-                  ? "var(--gray-11)"
-                  : "var(--cave-cream)",
+                borderRadius: "999px",
+                flex: 1,
               }}
             >
-              {authMutation.isPending && <Spinner />}
-              {authMutation.isPending
-                ? "Cancel authorization"
-                : "Sign in with PostHog"}
-            </button>
+              Sign in
+            </Button>
+            <Button
+              type="button"
+              size="2"
+              variant={authMode === "signup" ? "solid" : "ghost"}
+              onClick={() => handleAuthModeChange("signup")}
+              style={{
+                borderRadius: "999px",
+                flex: 1,
+              }}
+            >
+              Sign up
+            </Button>
           </Flex>
+
+          {authMode === "login" ? (
+            <LoginForm
+              region={region}
+              onRegionChange={handleRegionChange}
+              onLogin={handleLogin}
+              onSwitchToSignup={() => setAuthMode("signup")}
+              isLoading={isLoading}
+              isPending={loginMutation.isPending}
+              error={errorMessage}
+              onCancel={handleCancel}
+            />
+          ) : (
+            <SignupForm
+              region={region}
+              onRegionChange={handleRegionChange}
+              onSignup={handleSignup}
+              onSwitchToLogin={() => setAuthMode("login")}
+              isLoading={isLoading}
+              error={errorMessage}
+            />
+          )}
         </Flex>
       </Flex>
 
