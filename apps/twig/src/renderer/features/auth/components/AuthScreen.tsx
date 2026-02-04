@@ -1,4 +1,5 @@
 import { DraggableTitleBar } from "@components/DraggableTitleBar";
+import { TorchGlow } from "@components/TorchGlow";
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import caveHero from "@renderer/assets/images/cave-hero.jpg";
@@ -6,7 +7,7 @@ import twigLogo from "@renderer/assets/images/twig-logo.svg";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { LoginForm } from "./LoginForm";
 import { SignupForm } from "./SignupForm";
 
@@ -41,6 +42,7 @@ export const getErrorMessage = (error: unknown) => {
 type AuthMode = "login" | "signup";
 
 export function AuthScreen() {
+  const caveBackgroundRef = useRef<HTMLDivElement>(null);
   const [region, setRegion] = useState<CloudRegion>("us");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const { loginWithOAuth, signupWithOAuth } = useAuthStore();
@@ -89,8 +91,13 @@ export function AuthScreen() {
   const errorMessage = getErrorMessage(error);
 
   return (
-    <Flex height="100vh" style={{ position: "relative" }}>
+    <Flex
+      ref={caveBackgroundRef}
+      height="100vh"
+      style={{ position: "relative" }}
+    >
       <DraggableTitleBar />
+      <TorchGlow containerRef={caveBackgroundRef} alwaysShow />
       {/* Full-screen cave painting background */}
       <div
         style={{
@@ -112,7 +119,7 @@ export function AuthScreen() {
           zIndex: 1,
         }}
       >
-        <Flex direction="column" gap="6" style={{ maxWidth: "320px" }}>
+        <Flex direction="column" gap="6" style={{ width: "320px" }}>
           <Flex direction="column" gap="4">
             <img
               src={twigLogo}
