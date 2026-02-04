@@ -15,7 +15,7 @@ function truncateTitle(title: string): string {
 function sendDesktopNotification(
   title: string,
   body: string,
-  silent = false,
+  silent: boolean,
 ): void {
   trpcVanilla.notification.send.mutate({ title, body, silent }).catch((err) => {
     log.error("Failed to send notification", err);
@@ -44,14 +44,14 @@ export function notifyPromptComplete(
   const isWindowFocused = document.hasFocus();
   if (isWindowFocused) return;
 
-  const hasCustomSound = completionSound !== "none";
+  const willPlayCustomSound = completionSound !== "none";
   playCompletionSound(completionSound, completionVolume);
 
   if (desktopNotifications) {
     sendDesktopNotification(
       "Twig",
       `"${truncateTitle(taskTitle)}" finished`,
-      hasCustomSound,
+      willPlayCustomSound,
     );
   }
   if (dockBadgeNotifications) {
@@ -69,14 +69,14 @@ export function notifyPermissionRequest(taskTitle: string): void {
   const isWindowFocused = document.hasFocus();
 
   if (!isWindowFocused) {
-    const hasCustomSound = completionSound !== "none";
+    const willPlayCustomSound = completionSound !== "none";
     playCompletionSound(completionSound, completionVolume);
 
     if (desktopNotifications) {
       sendDesktopNotification(
         "Twig",
         `"${truncateTitle(taskTitle)}" needs your input`,
-        hasCustomSound,
+        willPlayCustomSound,
       );
     }
     if (dockBadgeNotifications) {

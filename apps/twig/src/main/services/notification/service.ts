@@ -14,7 +14,7 @@ export class NotificationService {
     log.info("Notification service initialized");
   }
 
-  send(title: string, body: string, silent = false): void {
+  send(title: string, body: string, silent: boolean): void {
     if (!Notification.isSupported()) {
       log.warn("Notifications not supported on this platform");
       return;
