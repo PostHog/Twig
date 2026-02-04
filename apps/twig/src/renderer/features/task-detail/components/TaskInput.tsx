@@ -70,7 +70,7 @@ export function TaskInput() {
 
   const handleDirectoryChange = (newPath: string) => {
     setSelectedDirectory(newPath);
-    setLastUsedDirectory(newPath);
+    setLastUsedDirectory(newPath || null);
   };
 
   const effectiveWorkspaceMode = workspaceMode;
