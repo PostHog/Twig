@@ -47,7 +47,7 @@ export function FocusEmptyState({
           <KeyHint style={{ marginLeft: "var(--space-1)" }}>⌘R</KeyHint>
         </Button>
       </Tooltip>
-      <Text size="1" style={{ color: "var(--gray-11)" }}>
+      <Text size="1" style={{ color: "var(--gray-11)", textAlign: "center" }}>
         Synchronise your changes to {displayPath}
       </Text>
     </Flex>
