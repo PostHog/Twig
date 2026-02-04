@@ -17,6 +17,8 @@ export interface FetchGatewayModelsOptions {
 
 export const DEFAULT_GATEWAY_MODEL = "claude-opus-4-5";
 
+export const BLOCKED_MODELS = new Set(["gpt-5-mini", "openai/gpt-5-mini"]);
+
 export async function fetchGatewayModels(
   options?: FetchGatewayModelsOptions,
 ): Promise<GatewayModel[]> {
@@ -35,7 +37,8 @@ export async function fetchGatewayModels(
     }
 
     const data = (await response.json()) as GatewayModelsResponse;
-    return data.data ?? [];
+    const models = data.data ?? [];
+    return models.filter((m) => !BLOCKED_MODELS.has(m.id));
   } catch {
     return [];
   }

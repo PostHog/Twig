@@ -1,10 +1,6 @@
 import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import {
-  cycleExecutionMode,
-  type ExecutionMode,
-} from "@features/sessions/stores/sessionStore";
 import type { AgentAdapter } from "@features/settings/stores/settingsStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
@@ -12,7 +8,7 @@ import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { AdapterSelect } from "./AdapterSelect";
 import { SuggestedTasks } from "./SuggestedTasks";
@@ -29,7 +25,6 @@ export function TaskInput() {
     setLastUsedLocalWorkspaceMode,
     lastUsedAdapter,
     setLastUsedAdapter,
-    allowBypassPermissions,
   } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
@@ -37,7 +32,6 @@ export function TaskInput() {
 
   const runMode = "local";
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>("default");
 
   const selectedDirectory = lastUsedDirectory || "";
   const workspaceMode = lastUsedLocalWorkspaceMode || "worktree";
@@ -49,18 +43,6 @@ export function TaskInput() {
     setLastUsedLocalWorkspaceMode(mode as "worktree" | "local");
   const setAdapter = (newAdapter: AgentAdapter) =>
     setLastUsedAdapter(newAdapter);
-
-  useEffect(() => {
-    if (!allowBypassPermissions && executionMode === "bypassPermissions") {
-      setExecutionMode("default");
-    }
-  }, [allowBypassPermissions, executionMode]);
-
-  const handleModeChange = useCallback(() => {
-    setExecutionMode((current) =>
-      cycleExecutionMode(current, allowBypassPermissions),
-    );
-  }, [allowBypassPermissions]);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -83,7 +65,6 @@ export function TaskInput() {
     workspaceMode: effectiveWorkspaceMode,
     branch: null,
     editorIsEmpty,
-    executionMode: executionMode === "default" ? undefined : executionMode,
     adapter,
   });
 
@@ -171,8 +152,6 @@ export function TaskInput() {
             onSubmit={handleSubmit}
             hasDirectory={!!selectedDirectory}
             onEmptyChange={setEditorIsEmpty}
-            executionMode={executionMode}
-            onModeChange={handleModeChange}
             adapter={adapter}
           />
 

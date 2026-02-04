@@ -1,17 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ExecutionMode } from "./sessionStore";
 
 interface SessionModeState {
-  /** Map of taskId -> last used execution mode */
-  taskModes: Record<string, ExecutionMode>;
+  taskModes: Record<string, string>;
 }
 
 interface SessionModeActions {
-  /** Save the mode for a task */
-  setTaskMode: (taskId: string, mode: ExecutionMode) => void;
-  /** Get the saved mode for a task */
-  getTaskMode: (taskId: string) => ExecutionMode | undefined;
+  setTaskMode: (taskId: string, modeId: string) => void;
+  getTaskMode: (taskId: string) => string | undefined;
 }
 
 type SessionModeStore = SessionModeState & SessionModeActions;
@@ -21,9 +17,9 @@ export const useSessionModeStore = create<SessionModeStore>()(
     (set, get) => ({
       taskModes: {},
 
-      setTaskMode: (taskId, mode) => {
+      setTaskMode: (taskId, modeId) => {
         set((state) => ({
-          taskModes: { ...state.taskModes, [taskId]: mode },
+          taskModes: { ...state.taskModes, [taskId]: modeId },
         }));
       },
 
@@ -37,17 +33,10 @@ export const useSessionModeStore = create<SessionModeStore>()(
   ),
 );
 
-/** Non-hook accessor for getting task mode */
-export function getPersistedTaskMode(
-  taskId: string,
-): ExecutionMode | undefined {
+export function getPersistedTaskMode(taskId: string): string | undefined {
   return useSessionModeStore.getState().getTaskMode(taskId);
 }
 
-/** Non-hook accessor for setting task mode */
-export function setPersistedTaskMode(
-  taskId: string,
-  mode: ExecutionMode,
-): void {
-  useSessionModeStore.getState().setTaskMode(taskId, mode);
+export function setPersistedTaskMode(taskId: string, modeId: string): void {
+  useSessionModeStore.getState().setTaskMode(taskId, modeId);
 }

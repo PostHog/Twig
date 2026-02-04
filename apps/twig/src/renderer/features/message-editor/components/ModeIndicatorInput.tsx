@@ -1,43 +1,66 @@
-import { LockOpen, Pause, Pencil, ShieldCheck } from "@phosphor-icons/react";
+import type { SessionMode } from "@agentclientprotocol/sdk";
+import {
+  Circle,
+  Eye,
+  LockOpen,
+  Pause,
+  Pencil,
+  ShieldCheck,
+} from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
-import type { ExecutionMode } from "@shared/types";
 
-interface ModeIndicatorInputProps {
-  mode: ExecutionMode;
+interface ModeStyle {
+  icon: React.ReactNode;
+  colorVar: string;
 }
 
-const modeConfig: Record<
-  ExecutionMode,
-  {
-    label: string;
-    icon: React.ReactNode;
-    colorVar: string;
-  }
-> = {
+const MODE_STYLES: Record<string, ModeStyle> = {
   plan: {
-    label: "plan mode on",
     icon: <Pause size={12} weight="bold" />,
     colorVar: "var(--amber-11)",
   },
   default: {
-    label: "default mode",
     icon: <Pencil size={12} />,
     colorVar: "var(--gray-11)",
   },
   acceptEdits: {
-    label: "auto-accept edits",
     icon: <ShieldCheck size={12} weight="fill" />,
     colorVar: "var(--green-11)",
   },
   bypassPermissions: {
-    label: "bypass permissions",
+    icon: <LockOpen size={12} weight="bold" />,
+    colorVar: "var(--red-11)",
+  },
+  auto: {
+    icon: <Pencil size={12} />,
+    colorVar: "var(--gray-11)",
+  },
+  "read-only": {
+    icon: <Eye size={12} />,
+    colorVar: "var(--amber-11)",
+  },
+  "full-access": {
     icon: <LockOpen size={12} weight="bold" />,
     colorVar: "var(--red-11)",
   },
 };
 
-export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
-  const config = modeConfig[mode];
+const DEFAULT_STYLE: ModeStyle = {
+  icon: <Circle size={12} />,
+  colorVar: "var(--gray-11)",
+};
+
+interface ModeIndicatorInputProps {
+  mode?: SessionMode;
+  modeId?: string;
+}
+
+export function ModeIndicatorInput({ mode, modeId }: ModeIndicatorInputProps) {
+  const id = mode?.id ?? modeId;
+  if (!id) return null;
+
+  const style = MODE_STYLES[id] ?? DEFAULT_STYLE;
+  const label = mode?.name ?? id;
 
   return (
     <Flex align="center" justify="between" py="1">
@@ -45,15 +68,15 @@ export function ModeIndicatorInput({ mode }: ModeIndicatorInputProps) {
         <Text
           size="1"
           style={{
-            color: config.colorVar,
+            color: style.colorVar,
             fontFamily: "monospace",
             display: "flex",
             alignItems: "center",
             gap: "4px",
           }}
         >
-          {config.icon}
-          {config.label}
+          {style.icon}
+          {label}
         </Text>
         <Text
           size="1"

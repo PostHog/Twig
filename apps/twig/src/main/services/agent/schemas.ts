@@ -2,7 +2,6 @@ import type {
   RequestPermissionRequest,
   PermissionOption as SdkPermissionOption,
 } from "@agentclientprotocol/sdk";
-import { executionModeSchema } from "@shared/types";
 import { z } from "zod";
 
 // Session credentials schema
@@ -24,7 +23,7 @@ export const sessionConfigSchema = z.object({
   /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
   sessionId: z.string().optional(),
   model: z.string().optional(),
-  executionMode: executionModeSchema.optional(),
+  executionMode: z.string().optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
@@ -44,12 +43,9 @@ export const startSessionInput = z.object({
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
   model: z.string().optional(),
-  executionMode: z
-    .enum(["default", "acceptEdits", "plan", "bypassPermissions"])
-    .optional(),
+  executionMode: z.string().optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
-  /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
 
@@ -64,11 +60,21 @@ export const modelOptionSchema = z.object({
 
 export type ModelOption = z.infer<typeof modelOptionSchema>;
 
+export const modeOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+
+export type ModeOption = z.infer<typeof modeOptionSchema>;
+
 export const sessionResponseSchema = z.object({
   sessionId: z.string(),
   channel: z.string(),
   availableModels: z.array(modelOptionSchema).optional(),
   currentModelId: z.string().optional(),
+  availableModes: z.array(modeOptionSchema).optional(),
+  currentModeId: z.string().optional(),
 });
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
@@ -147,10 +153,10 @@ export const setModelInput = z.object({
   modelId: z.string(),
 });
 
-// Set mode input
+// Set mode input - accepts any agent-defined mode ID
 export const setModeInput = z.object({
   sessionId: z.string(),
-  modeId: executionModeSchema,
+  modeId: z.string(),
 });
 
 // Set config option input (for Codex reasoning level, etc.)

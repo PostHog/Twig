@@ -9,6 +9,8 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionMode,
+  type SessionModeId,
 } from "@agentclientprotocol/sdk";
 import { Agent } from "@posthog/agent/agent";
 import {
@@ -20,7 +22,6 @@ import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
-import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
@@ -171,7 +172,7 @@ interface SessionConfig {
   /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
   sessionId?: string;
   model?: string;
-  executionMode?: ExecutionMode;
+  executionMode?: string;
   adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
@@ -199,6 +200,8 @@ interface ManagedSession {
     description?: string | null;
   }>;
   currentModelId?: string;
+  availableModes?: SessionMode[];
+  currentModeId?: SessionModeId;
   sessionId: string;
 }
 
@@ -501,6 +504,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         | Array<{ modelId: string; name: string; description?: string | null }>
         | undefined;
       let currentModelId: string | undefined;
+      let availableModes: SessionMode[] | undefined;
+      let currentModeId: SessionModeId | undefined;
       let agentSessionId: string;
 
       if (isReconnect && adapter === "codex" && config.sessionId) {
@@ -511,6 +516,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         });
         availableModels = loadResponse.models?.availableModels;
         currentModelId = loadResponse.models?.currentModelId;
+        availableModes = loadResponse.modes?.availableModes;
+        currentModeId = loadResponse.modes?.currentModeId;
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
@@ -541,10 +548,16 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 availableModels?: typeof availableModels;
                 currentModelId?: string;
               };
+              modes?: {
+                availableModes?: SessionMode[];
+                currentModeId?: SessionModeId;
+              };
             }
           | undefined;
         availableModels = resumeMeta?.models?.availableModels;
         currentModelId = resumeMeta?.models?.currentModelId;
+        availableModes = resumeMeta?.modes?.availableModes;
+        currentModeId = resumeMeta?.modes?.currentModeId;
         agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
@@ -565,6 +578,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         });
         availableModels = newSessionResponse.models?.availableModels;
         currentModelId = newSessionResponse.models?.currentModelId;
+        availableModes = newSessionResponse.modes?.availableModes;
+        currentModeId = newSessionResponse.modes?.currentModeId;
         agentSessionId = newSessionResponse.sessionId;
       }
 
@@ -585,6 +600,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         promptPending: false,
         availableModels,
         currentModelId,
+        availableModes,
+        currentModeId,
         sessionId: agentSessionId,
       };
 
@@ -1229,6 +1246,8 @@ For git operations while detached:
       channel: session.channel,
       availableModels: session.availableModels,
       currentModelId: session.currentModelId,
+      availableModes: session.availableModes,
+      currentModeId: session.currentModeId,
     };
   }
 

@@ -10,7 +10,7 @@ import type {
   TaskCreationInput,
   TaskService,
 } from "@renderer/services/task/service";
-import type { ExecutionMode, WorkspaceMode } from "@shared/types";
+import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ interface UseTaskCreationOptions {
   workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
-  executionMode?: ExecutionMode;
+  executionMode?: string;
   adapter?: "claude" | "codex";
 }
 
@@ -80,7 +80,7 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    executionMode?: ExecutionMode;
+    executionMode?: string;
     adapter?: "claude" | "codex";
   },
 ): TaskCreationInput {

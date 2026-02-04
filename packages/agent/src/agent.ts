@@ -2,6 +2,7 @@ import {
   createAcpConnection,
   type InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
+import { BLOCKED_MODELS, DEFAULT_GATEWAY_MODEL } from "./gateway-models.js";
 import { PostHogAPIClient } from "./posthog-api.js";
 import { SessionLogWriter } from "./session-log-writer.js";
 import type { AgentConfig, TaskExecutionOptions } from "./types.js";
@@ -65,6 +66,11 @@ export class Agent {
 
     this.taskRunId = taskRunId;
 
+    const sanitizedModel =
+      options.model && !BLOCKED_MODELS.has(options.model)
+        ? options.model
+        : DEFAULT_GATEWAY_MODEL;
+
     this.acpConnection = createAcpConnection({
       adapter: options.adapter,
       logWriter: this.sessionLogWriter,
@@ -79,7 +85,7 @@ export class Agent {
               apiBaseUrl: `${gatewayConfig.gatewayUrl}/v1`,
               apiKey: gatewayConfig.apiKey,
               binaryPath: options.codexBinaryPath,
-              model: options.model ?? "gpt-5.2",
+              model: sanitizedModel,
             }
           : undefined,
     });

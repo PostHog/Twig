@@ -1,6 +1,8 @@
 import type {
   AvailableCommand,
   ContentBlock,
+  SessionMode,
+  SessionModeId,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
@@ -41,6 +43,7 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 
 // Re-export for external consumers
 export type { ExecutionMode, PermissionRequest };
+export type { SessionMode };
 
 export function getExecutionModes(
   allowBypassPermissions: boolean,
@@ -51,16 +54,31 @@ export function getExecutionModes(
 }
 
 export function cycleExecutionMode(
-  current: ExecutionMode,
+  currentModeId: string | undefined,
+  availableModes: SessionMode[] | undefined,
   allowBypassPermissions: boolean,
-): ExecutionMode {
-  const modes = getExecutionModes(allowBypassPermissions);
-  const currentIndex = modes.indexOf(current);
-  if (currentIndex === -1) {
-    return "default";
+): string {
+  if (!availableModes || availableModes.length === 0) {
+    const fallbackModes = getExecutionModes(allowBypassPermissions);
+    const currentIndex = currentModeId
+      ? fallbackModes.indexOf(currentModeId as ExecutionMode)
+      : -1;
+    if (currentIndex === -1) return fallbackModes[0];
+    return fallbackModes[(currentIndex + 1) % fallbackModes.length];
   }
-  const nextIndex = (currentIndex + 1) % modes.length;
-  return modes[nextIndex];
+
+  const filteredModes = allowBypassPermissions
+    ? availableModes
+    : availableModes.filter(
+        (m) => m.id !== "bypassPermissions" && m.id !== "full-access",
+      );
+
+  if (filteredModes.length === 0) return availableModes[0].id;
+
+  const currentIndex = filteredModes.findIndex((m) => m.id === currentModeId);
+  if (currentIndex === -1) return filteredModes[0].id;
+
+  return filteredModes[(currentIndex + 1) % filteredModes.length].id;
 }
 
 export interface AgentModelOption {
@@ -97,7 +115,8 @@ export interface AgentSession {
   availableModels?: AgentModelOption[];
   framework?: "claude";
   adapter?: "claude" | "codex";
-  currentMode: ExecutionMode;
+  availableModes?: SessionMode[];
+  currentModeId?: SessionModeId;
   pendingPermissions: Map<string, PermissionRequest>;
   messageQueue: QueuedMessage[];
 }
@@ -111,7 +130,7 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: ExecutionMode;
+    executionMode?: string;
     adapter?: "claude" | "codex";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
@@ -121,7 +140,7 @@ interface SessionActions {
   ) => Promise<{ stopReason: string }>;
   cancelPrompt: (taskId: string) => Promise<boolean>;
   setSessionModel: (taskId: string, modelId: string) => Promise<void>;
-  setSessionMode: (taskId: string, modeId: ExecutionMode) => Promise<void>;
+  setSessionMode: (taskId: string, modeId: string) => Promise<void>;
   setCodexReasoningLevel: (
     taskId: string,
     level: CodexReasoningLevel,
@@ -241,21 +260,15 @@ function subscribeToChannel(taskRunId: string) {
                 };
               };
 
-              // Handle mode updates from ExitPlanMode approval
+              // Handle mode updates from agent
               if (
                 params?.update?.sessionUpdate === "current_mode_update" &&
                 params.update.currentModeId
               ) {
-                const newMode = params.update.currentModeId as ExecutionMode;
-                if (
-                  newMode === "plan" ||
-                  newMode === "default" ||
-                  newMode === "acceptEdits"
-                ) {
-                  session.currentMode = newMode;
-                  setPersistedTaskMode(session.taskId, newMode);
-                  log.info("Session mode updated", { taskRunId, newMode });
-                }
+                const newModeId = params.update.currentModeId;
+                session.currentModeId = newModeId;
+                setPersistedTaskMode(session.taskId, newModeId);
+                log.info("Session mode updated", { taskRunId, newModeId });
               }
             }
 
@@ -499,7 +512,7 @@ function createBaseSession(
   taskId: string,
   taskTitle: string,
   isCloud: boolean,
-  executionMode?: ExecutionMode,
+  executionModeId?: string,
 ): AgentSession {
   return {
     taskRunId,
@@ -512,7 +525,7 @@ function createBaseSession(
     isPromptPending: false,
     promptStartedAt: null,
     isCloud,
-    currentMode: executionMode ?? "default",
+    currentModeId: executionModeId,
     pendingPermissions: new Map(),
     messageQueue: [],
   };
@@ -680,7 +693,7 @@ const useStore = create<SessionStore>()(
       session.logUrl = logUrl;
       session.model = model;
       if (persistedMode) {
-        session.currentMode = persistedMode;
+        session.currentModeId = persistedMode;
       }
       if (adapter) {
         session.adapter = adapter;
@@ -753,7 +766,7 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: ExecutionMode,
+      executionMode?: string,
       adapter?: "claude" | "codex",
     ) => {
       if (!auth.client) {
@@ -794,8 +807,10 @@ const useStore = create<SessionStore>()(
       session.status = "connected";
       session.model = result.currentModelId ?? selectedModel;
       session.availableModels = result.availableModels;
-      if (persistedMode && !executionMode) {
-        session.currentMode = persistedMode;
+      session.availableModes = result.availableModes;
+      session.currentModeId = result.currentModeId ?? effectiveMode;
+      if (adapter) {
+        session.adapter = adapter;
       }
 
       addSession(session);
@@ -1270,7 +1285,7 @@ const useStore = create<SessionStore>()(
               sessionId: session.taskRunId,
               modeId,
             });
-            updateSession(session.taskRunId, { currentMode: modeId });
+            updateSession(session.taskRunId, { currentModeId: modeId });
             setPersistedTaskMode(taskId, modeId);
           } catch (error) {
             log.error("Failed to change session mode", {
@@ -1615,12 +1630,11 @@ export function getPendingPermissionsForTask(
 }
 
 /**
- * Hook to get the current execution mode for a task.
- * Uses taskRunId lookup via a separate selector to ensure proper updates.
+ * Hook to get the current mode ID for a task.
  */
 export const useCurrentModeForTask = (
   taskId: string | undefined,
-): ExecutionMode | undefined => {
+): string | undefined => {
   const taskRunId = useStore((s) => {
     if (!taskId) return undefined;
     for (const session of Object.values(s.sessions)) {
@@ -1633,7 +1647,45 @@ export const useCurrentModeForTask = (
 
   return useStore((s) => {
     if (!taskRunId) return undefined;
-    return s.sessions[taskRunId]?.currentMode;
+    return s.sessions[taskRunId]?.currentModeId;
+  });
+};
+
+/**
+ * Hook to get the full current mode object for a task (with name, description).
+ */
+export const useCurrentModeObjectForTask = (
+  taskId: string | undefined,
+): SessionMode | undefined => {
+  return useStore((s) => {
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    if (!session?.currentModeId || !session.availableModes) return undefined;
+    return session.availableModes.find((m) => m.id === session.currentModeId);
+  });
+};
+
+/**
+ * Hook to get available modes for a task.
+ */
+export const useAvailableModesForTask = (
+  taskId: string | undefined,
+): SessionMode[] | undefined => {
+  const taskRunId = useStore((s) => {
+    if (!taskId) return undefined;
+    for (const session of Object.values(s.sessions)) {
+      if (session.taskId === taskId) {
+        return session.taskRunId;
+      }
+    }
+    return undefined;
+  });
+
+  return useStore((s) => {
+    if (!taskRunId) return undefined;
+    return s.sessions[taskRunId]?.availableModes;
   });
 };
 

@@ -7,12 +7,7 @@ import { logger } from "@renderer/lib/logger";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
-import type {
-  ExecutionMode,
-  Task,
-  Workspace,
-  WorkspaceMode,
-} from "@shared/types";
+import type { Task, Workspace, WorkspaceMode } from "@shared/types";
 
 const log = logger.scope("task-creation-saga");
 
@@ -35,7 +30,7 @@ export interface TaskCreationInput {
   workspaceMode?: WorkspaceMode;
   branch?: string | null;
   githubIntegrationId?: number;
-  executionMode?: ExecutionMode;
+  executionMode?: string;
   adapter?: "claude" | "codex";
 }
 

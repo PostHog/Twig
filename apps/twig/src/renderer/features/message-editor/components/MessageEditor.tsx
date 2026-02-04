@@ -1,5 +1,5 @@
 import "./message-editor.css";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import type { SessionMode } from "@agentclientprotocol/sdk";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -27,7 +27,8 @@ interface MessageEditorProps {
   onCancel?: () => void;
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
-  currentMode?: ExecutionMode;
+  currentMode?: SessionMode;
+  currentModeId?: string;
   onModeChange?: () => void;
   adapter?: "claude" | "codex";
 }
@@ -44,6 +45,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onAttachFiles,
       autoFocus = false,
       currentMode,
+      currentModeId,
       onModeChange,
       adapter,
     },
@@ -211,8 +213,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         </Flex>
         {(onModeChange || adapter) && (
           <Flex align="center" gap="2">
-            {onModeChange && currentMode && (
-              <ModeIndicatorInput mode={currentMode} />
+            {onModeChange && (currentMode || currentModeId) && (
+              <ModeIndicatorInput mode={currentMode} modeId={currentModeId} />
             )}
             {adapter && <AdapterIndicator adapter={adapter} />}
             <DiffStatsIndicator repoPath={repoPath} />

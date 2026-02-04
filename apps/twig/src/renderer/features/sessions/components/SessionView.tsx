@@ -6,9 +6,10 @@ import {
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   cycleExecutionMode,
-  type ExecutionMode,
   useAdapterForTask,
+  useAvailableModesForTask,
   useCurrentModeForTask,
+  useCurrentModeObjectForTask,
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
@@ -73,28 +74,40 @@ export function SessionView({
   const pendingPermissions = usePendingPermissionsForTask(taskId);
   const { respondToPermission, cancelPermission, setSessionMode } =
     useSessionActions();
-  const sessionMode = useCurrentModeForTask(taskId);
+  const currentModeId = useCurrentModeForTask(taskId);
+  const currentMode = useCurrentModeObjectForTask(taskId);
+  const availableModes = useAvailableModesForTask(taskId);
   const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
-
-  const currentMode: ExecutionMode = sessionMode ?? "default";
 
   useEffect(() => {
     if (
       !allowBypassPermissions &&
-      currentMode === "bypassPermissions" &&
+      (currentModeId === "bypassPermissions" ||
+        currentModeId === "full-access") &&
       taskId &&
       !isCloud
     ) {
       setSessionMode(taskId, "default");
     }
-  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+  }, [allowBypassPermissions, currentModeId, taskId, isCloud, setSessionMode]);
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
-    const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
+    const nextMode = cycleExecutionMode(
+      currentModeId,
+      availableModes,
+      allowBypassPermissions,
+    );
     setSessionMode(taskId, nextMode);
-  }, [taskId, isCloud, currentMode, allowBypassPermissions, setSessionMode]);
+  }, [
+    taskId,
+    isCloud,
+    currentModeId,
+    availableModes,
+    allowBypassPermissions,
+    setSessionMode,
+  ]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -111,13 +124,16 @@ export function SessionView({
     onCancelPrompt,
   ]);
 
-  // Mode cycling with Shift+Tab
   useHotkeys(
     "shift+tab",
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
+      const nextMode = cycleExecutionMode(
+        currentModeId,
+        availableModes,
+        allowBypassPermissions,
+      );
       setSessionMode(taskId, nextMode);
     },
     {
@@ -127,7 +143,8 @@ export function SessionView({
     },
     [
       taskId,
-      currentMode,
+      currentModeId,
+      availableModes,
       isCloud,
       isRunning,
       setSessionMode,
@@ -426,6 +443,7 @@ export function SessionView({
                 onBashModeChange={setIsBashMode}
                 onCancel={onCancelPrompt}
                 currentMode={currentMode}
+                currentModeId={currentModeId}
                 onModeChange={!isCloud ? handleModeChange : undefined}
                 adapter={adapter}
               />
