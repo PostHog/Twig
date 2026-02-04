@@ -1,9 +1,11 @@
-import { exec, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
-import { WorktreeManager } from "@posthog/agent/worktree-manager";
+import { createGitClient } from "@twig/git/client";
+import { getCurrentBranch, hasTrackedFiles } from "@twig/git/queries";
+import { CreateOrSwitchBranchSaga } from "@twig/git/sagas/branch";
+import { DetachHeadSaga } from "@twig/git/sagas/head";
+import { WorktreeManager } from "@twig/git/worktree";
 import { inject, injectable } from "inversify";
 import type {
   TaskFolderAssociation,
@@ -14,10 +16,12 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import { foldersStore } from "../../utils/store";
+import type { AgentService } from "../agent/service.js";
 import { FileWatcherEvent } from "../file-watcher/schemas.js";
 import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FocusService } from "../focus/service.js";
 import { FocusServiceEvent } from "../focus/service.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import { getWorktreeLocation } from "../settingsStore";
 import type { ShellService } from "../shell/service.js";
 import { loadConfig, normalizeScripts } from "./configLoader";
@@ -35,9 +39,6 @@ import type {
 } from "./schemas.js";
 import { ScriptRunner } from "./scriptRunner";
 import { buildWorkspaceEnv } from "./workspaceEnv";
-
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 function getTaskAssociations(): TaskFolderAssociation[] {
   return foldersStore.get("taskAssociations", []);
@@ -61,23 +62,10 @@ function deriveWorktreePath(folderPath: string, worktreeName: string): string {
   return path.join(worktreeBasePath, repoName, worktreeName);
 }
 
-async function hasTrackedFiles(repoPath: string): Promise<boolean> {
-  try {
-    const { stdout } = await execAsync("git ls-files", { cwd: repoPath });
-    return stdout.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
-
 async function hasAnyFiles(repoPath: string): Promise<boolean> {
   try {
-    // Check for any files (tracked or untracked) excluding .git
-    const { stdout } = await execAsync(
-      "find . -maxdepth 1 -not -name .git -not -name . | head -1",
-      { cwd: repoPath },
-    );
-    return stdout.trim().length > 0;
+    const entries = await fsPromises.readdir(repoPath);
+    return entries.some((entry) => entry !== ".git");
   } catch {
     return false;
   }
@@ -134,6 +122,12 @@ export interface WorkspaceServiceEvents {
 export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> {
   @inject(MAIN_TOKENS.ShellService)
   private shellService!: ShellService;
+
+  @inject(MAIN_TOKENS.AgentService)
+  private agentService!: AgentService;
+
+  @inject(MAIN_TOKENS.ProcessTrackingService)
+  private processTracking!: ProcessTrackingService;
 
   private scriptRunner!: ScriptRunner;
   private creatingWorkspaces = new Map<string, Promise<WorkspaceInfo>>();
@@ -346,35 +340,27 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
 
     if (mode === "local") {
       if (branch) {
-        try {
-          const { stdout: currentBranch } = await execFileAsync(
-            "git",
-            ["rev-parse", "--abbrev-ref", "HEAD"],
-            { cwd: folderPath },
-          );
-          if (currentBranch.trim() === branch) {
-            log.info(`Already on branch ${branch}, skipping checkout`);
-          } else {
-            log.info(
-              `Creating/switching to branch ${branch} for task ${taskId}`,
-            );
-            try {
-              await execFileAsync("git", ["checkout", "-b", branch], {
-                cwd: folderPath,
-              });
-              log.info(`Created and switched to new branch ${branch}`);
-            } catch (_error) {
-              await execFileAsync("git", ["checkout", branch], {
-                cwd: folderPath,
-              });
-              log.info(`Switched to existing branch ${branch}`);
-            }
+        const currentBranch = await getCurrentBranch(folderPath);
+        if (currentBranch === branch) {
+          log.info(`Already on branch ${branch}, skipping checkout`);
+        } else {
+          log.info(`Creating/switching to branch ${branch} for task ${taskId}`);
+          const saga = new CreateOrSwitchBranchSaga();
+          const result = await saga.run({
+            baseDir: folderPath,
+            branchName: branch,
+          });
+          if (!result.success) {
+            const message = `Could not switch to branch "${branch}". Please commit or stash your changes first.`;
+            log.error(message, result.error);
+            this.emitWorkspaceError(taskId, message);
+            throw new Error(message);
           }
-        } catch (error) {
-          const message = `Could not switch to branch "${branch}". Please commit or stash your changes first.`;
-          log.error(message, error);
-          this.emitWorkspaceError(taskId, message);
-          throw new Error(message);
+          if (result.data.created) {
+            log.info(`Created and switched to new branch ${branch}`);
+          } else {
+            log.info(`Switched to existing branch ${branch}`);
+          }
         }
       }
 
@@ -483,22 +469,16 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
 
     try {
       if (useExistingBranch && branch) {
-        // Existing branch mode: check out the branch directly (no new branch)
-        // First, ensure main repo is not on the target branch (git constraint)
-        const { stdout: currentBranch } = await execFileAsync(
-          "git",
-          ["rev-parse", "--abbrev-ref", "HEAD"],
-          { cwd: mainRepoPath },
-        );
-
-        if (currentBranch.trim() === branch) {
+        const currentBranch = await getCurrentBranch(mainRepoPath);
+        if (currentBranch === branch) {
           log.info(
             `Main repo is on target branch ${branch}, detaching before creating worktree`,
           );
-          // Detach main repo to free up the branch for the worktree
-          await execFileAsync("git", ["checkout", "--detach"], {
-            cwd: mainRepoPath,
-          });
+          const detachSaga = new DetachHeadSaga();
+          const detachResult = await detachSaga.run({ baseDir: mainRepoPath });
+          if (!detachResult.success) {
+            throw new Error(`Failed to detach HEAD: ${detachResult.error}`);
+          }
         }
 
         worktree =
@@ -588,7 +568,12 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
         log.error(
           `Init scripts failed for task ${taskId}, cleaning up worktree`,
         );
-        await this.cleanupWorktree(taskId, mainRepoPath, worktree.worktreePath);
+        await this.cleanupWorktree(
+          taskId,
+          mainRepoPath,
+          worktree.worktreePath,
+          association.branchName,
+        );
         throw new Error(
           `Workspace init failed: ${initResult.errors?.join(", ") || "Unknown error"}`,
         );
@@ -709,10 +694,17 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       }
     }
 
+    await this.agentService.cancelSessionsByTaskId(taskId);
+    this.processTracking.killByTaskId(taskId);
     this.ensureScriptRunner().cleanupTaskSessions(taskId);
 
     if (association.mode === "worktree" && worktreePath) {
-      await this.cleanupWorktree(taskId, mainRepoPath, worktreePath);
+      await this.cleanupWorktree(
+        taskId,
+        mainRepoPath,
+        worktreePath,
+        association.branchName,
+      );
 
       const otherWorkspacesForFolder = getTaskAssociations().filter(
         (a) =>
@@ -1027,20 +1019,16 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
 
     let worktree: WorktreeInfo;
     try {
-      // First, ensure main repo is not on the target branch
-      const { stdout: currentBranch } = await execFileAsync(
-        "git",
-        ["rev-parse", "--abbrev-ref", "HEAD"],
-        { cwd: mainRepoPath },
-      );
-
-      if (currentBranch.trim() === branch) {
+      const currentBranch = await getCurrentBranch(mainRepoPath);
+      if (currentBranch === branch) {
         log.info(
           `Main repo is on target branch ${branch}, detaching before creating worktree`,
         );
-        await execFileAsync("git", ["checkout", "--detach"], {
-          cwd: mainRepoPath,
-        });
+        const detachSaga = new DetachHeadSaga();
+        const detachResult = await detachSaga.run({ baseDir: mainRepoPath });
+        if (!detachResult.success) {
+          throw new Error(`Failed to detach HEAD: ${detachResult.error}`);
+        }
       }
 
       worktree = await worktreeManager.createWorktreeForExistingBranch(branch);
@@ -1111,6 +1099,7 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
     taskId: string,
     mainRepoPath: string,
     worktreePath: string,
+    branchName: string,
   ): Promise<void> {
     try {
       const fileWatcher = container.get<FileWatcherService>(
@@ -1130,6 +1119,17 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       await manager.deleteWorktree(worktreePath);
     } catch (error) {
       log.error(`Failed to delete worktree for task ${taskId}:`, error);
+    }
+
+    try {
+      const git = createGitClient(mainRepoPath);
+      await git.deleteLocalBranch(branchName, true);
+      log.info(`Deleted branch ${branchName} for task ${taskId}`);
+    } catch (error) {
+      log.warn(
+        `Failed to delete branch ${branchName} for task ${taskId}:`,
+        error,
+      );
     }
   }
 

@@ -63,6 +63,7 @@ export class Agent {
       sessionId: taskRunId,
       taskId,
       logger: this.logger,
+      processCallbacks: options.processCallbacks,
     });
 
     return this.acpConnection;
@@ -98,7 +99,14 @@ export class Agent {
     });
   }
 
+  async flushAllLogs(): Promise<void> {
+    await this.sessionLogWriter?.flushAll();
+  }
+
   async cleanup(): Promise<void> {
+    if (this.sessionLogWriter && this.taskRunId) {
+      await this.sessionLogWriter.flush(this.taskRunId);
+    }
     await this.acpConnection?.cleanup();
   }
 }

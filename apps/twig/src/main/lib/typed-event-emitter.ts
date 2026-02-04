@@ -1,6 +1,11 @@
 import { EventEmitter, on } from "node:events";
 
 export class TypedEventEmitter<TEvents> extends EventEmitter {
+  constructor() {
+    super();
+    this.setMaxListeners(50);
+  }
+
   emit<K extends keyof TEvents & string>(
     event: K,
     payload: TEvents[K],

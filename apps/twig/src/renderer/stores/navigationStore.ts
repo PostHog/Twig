@@ -15,7 +15,6 @@ const log = logger.scope("navigation-store");
 type ViewType =
   | "task-detail"
   | "task-input"
-  | "settings"
   | "folder-settings"
   | "autonomy-onboarding";
 
@@ -32,10 +31,8 @@ interface NavigationStore {
   historyIndex: number;
   navigateToTask: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
-  navigateToSettings: () => void;
   navigateToFolderSettings: (folderId: string) => void;
   navigateToAutonomyOnboarding: () => void;
-  toggleSettings: () => void;
   goBack: () => void;
   goForward: () => void;
   canGoBack: () => boolean;
@@ -86,7 +83,6 @@ export const useNavigationStore = create<NavigationStore>()(
 
           const repoKey = getTaskRepository(task) ?? undefined;
 
-          // Check if this task has an existing workspace with a folder
           const existingWorkspace =
             useWorkspaceStore.getState().workspaces[task.id];
           if (existingWorkspace?.folderId) {
@@ -142,26 +138,12 @@ export const useNavigationStore = create<NavigationStore>()(
           navigate({ type: "task-input", folderId });
         },
 
-        navigateToSettings: () => {
-          navigate({ type: "settings" });
-          track(ANALYTICS_EVENTS.SETTINGS_VIEWED);
-        },
-
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
         },
 
         navigateToAutonomyOnboarding: () => {
           navigate({ type: "autonomy-onboarding" });
-        },
-
-        toggleSettings: () => {
-          const current = get().view;
-          if (current.type === "settings") {
-            get().navigateToTaskInput();
-          } else {
-            get().navigateToSettings();
-          }
         },
 
         goBack: () => {

@@ -3,11 +3,7 @@ import { EditorToolbar } from "@features/message-editor/components/EditorToolbar
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
-import {
-  cycleExecutionMode,
-  type ExecutionMode,
-} from "@features/sessions/stores/sessionStore";
-import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -27,7 +23,7 @@ interface TaskInputEditorProps {
   hasDirectory: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
   executionMode: ExecutionMode;
-  onModeChange: (mode: ExecutionMode) => void;
+  onModeChange: () => void;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -52,26 +48,19 @@ export const TaskInputEditor = forwardRef<
     const isCloudMode = runMode === "cloud";
     const { isOnline } = useConnectivity();
     const isDisabled = isCreatingTask || !isOnline;
-    const { allowBypassPermissions } = useSettingsStore();
 
     useHotkeys(
       "shift+tab",
       (e) => {
         e.preventDefault();
-        onModeChange(cycleExecutionMode(executionMode, allowBypassPermissions));
+        onModeChange();
       },
       {
         enableOnFormTags: true,
         enableOnContentEditable: true,
         enabled: !isCreatingTask && !isCloudMode,
       },
-      [
-        onModeChange,
-        executionMode,
-        allowBypassPermissions,
-        isCreatingTask,
-        isCloudMode,
-      ],
+      [onModeChange, isCreatingTask, isCloudMode],
     );
 
     const {
@@ -245,12 +234,7 @@ export const TaskInputEditor = forwardRef<
             </Flex>
           </Flex>
         </Flex>
-        {!isCloudMode && (
-          <ModeIndicatorInput
-            mode={executionMode}
-            onModeChange={onModeChange}
-          />
-        )}
+        {!isCloudMode && <ModeIndicatorInput mode={executionMode} />}
       </>
     );
   },

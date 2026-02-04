@@ -1,8 +1,12 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
+import { useSessions } from "@features/sessions/stores/sessionStore";
+import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
+import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
@@ -24,7 +28,7 @@ export function GlobalEventHandlers({
   onToggleShortcutsSheet,
   commandMenuOpen,
 }: GlobalEventHandlersProps) {
-  const toggleSettings = useNavigationStore((state) => state.toggleSettings);
+  const openSettingsDialog = useSettingsDialogStore((state) => state.open);
   const navigateToTaskInput = useNavigationStore(
     (state) => state.navigateToTaskInput,
   );
@@ -41,23 +45,63 @@ export function GlobalEventHandlers({
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
 
+  const currentTaskId = view.type === "task-detail" ? view.data?.id : undefined;
+  const { workspace: currentWorkspace, handleToggleFocus } = useFocusWorkspace(
+    currentTaskId ?? "",
+  );
+  const isWorktreeTask = currentWorkspace?.mode === "worktree";
+
   const { data: allTasks = [] } = useTasks();
   const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
+  const sessions = useSessions();
+  const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
+  const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
 
-  // Build ordered task list for CMD+0-9 switching (pinned → active → recent)
+  // Build ordered task list for CMD+0-9 switching, matching sidebar visual order:
+  // pinned (by activity) → active (by activity) → recent (by creation)
   const orderedTasks = useMemo((): Task[] => {
     if (allTasks.length === 0) return [];
 
-    const sortedByActivity = [...allTasks].sort(
-      (a, b) =>
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-    );
+    const getLastActivityAt = (task: Task): number => {
+      const apiUpdatedAt = new Date(task.updated_at).getTime();
+      const localActivity = localActivityAt[task.id];
+      return localActivity
+        ? Math.max(apiUpdatedAt, localActivity)
+        : apiUpdatedAt;
+    };
 
-    const pinned = sortedByActivity.filter((t) => pinnedTaskIds.has(t.id));
-    const unpinned = sortedByActivity.filter((t) => !pinnedTaskIds.has(t.id));
+    const isTaskUnread = (task: Task): boolean => {
+      const taskLastViewedAt = lastViewedAt[task.id];
+      return (
+        taskLastViewedAt !== undefined &&
+        getLastActivityAt(task) > taskLastViewedAt
+      );
+    };
 
-    return [...pinned, ...unpinned];
-  }, [allTasks, pinnedTaskIds]);
+    const taskNeedsPermission = (task: Task): boolean => {
+      const session = Object.values(sessions).find((s) => s.taskId === task.id);
+      return (session?.pendingPermissions?.size ?? 0) > 0;
+    };
+
+    const pinned = allTasks
+      .filter((t) => pinnedTaskIds.has(t.id))
+      .sort((a, b) => getLastActivityAt(b) - getLastActivityAt(a));
+
+    const unpinned = allTasks.filter((t) => !pinnedTaskIds.has(t.id));
+
+    const active = unpinned
+      .filter((t) => isTaskUnread(t) || taskNeedsPermission(t))
+      .sort((a, b) => getLastActivityAt(b) - getLastActivityAt(a));
+
+    const recent = unpinned
+      .filter((t) => !isTaskUnread(t) && !taskNeedsPermission(t))
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+
+    return [...pinned, ...active, ...recent];
+  }, [allTasks, pinnedTaskIds, sessions, lastViewedAt, localActivityAt]);
 
   const handleSwitchTask = useCallback(
     (index: number) => {
@@ -76,8 +120,8 @@ export function GlobalEventHandlers({
   );
 
   const handleOpenSettings = useCallback(() => {
-    toggleSettings();
-  }, [toggleSettings]);
+    openSettingsDialog();
+  }, [openSettingsDialog]);
 
   const handleFocusTaskMode = useCallback(
     (data?: unknown) => {
@@ -128,6 +172,16 @@ export function GlobalEventHandlers({
   );
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
+
+  useHotkeys(
+    SHORTCUTS.TOGGLE_FOCUS,
+    handleToggleFocus,
+    {
+      ...globalOptions,
+      enabled: !!currentTaskId && isWorktreeTask,
+    },
+    [handleToggleFocus],
+  );
 
   // Task switching with mod+0-9
   useHotkeys(

@@ -10,6 +10,7 @@ import {
   Link,
   Text,
 } from "@radix-ui/themes";
+import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -30,7 +31,7 @@ const HeadingText = ({ children }: { children: React.ReactNode }) => (
   </Text>
 );
 
-const components: Components = {
+export const baseComponents: Components = {
   h1: ({ children }) => <HeadingText>{children}</HeadingText>,
   h2: ({ children }) => <HeadingText>{children}</HeadingText>,
   h3: ({ children }) => <HeadingText>{children}</HeadingText>,
@@ -150,10 +151,18 @@ const components: Components = {
   ),
 };
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export const remarkPlugins = [remarkGfm];
+
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  content,
+}: MarkdownRendererProps) {
+  const processedContent = useMemo(
+    () => preprocessMarkdown(content),
+    [content],
+  );
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {preprocessMarkdown(content)}
+    <ReactMarkdown remarkPlugins={remarkPlugins} components={baseComponents}>
+      {processedContent}
     </ReactMarkdown>
   );
-}
+});

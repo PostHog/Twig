@@ -1,91 +1,22 @@
-import { ArrowLeft, GitBranch } from "@phosphor-icons/react";
-import { Button, Spinner, Text, Tooltip } from "@radix-ui/themes";
-import {
-  selectIsFocusedOnWorktree,
-  selectIsLoading,
-  useFocusStore,
-} from "@stores/focusStore";
-import { showFocusSuccessToast } from "@utils/focusToast";
-import { toast } from "@utils/toast";
-import { useCallback } from "react";
-import { selectWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
+import { Tooltip } from "@components/ui/Tooltip";
+import { ArrowLeft, Play, Stop } from "@phosphor-icons/react";
+import { Button, Spinner } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
+import { useFocusWorkspace } from "../hooks/useFocusWorkspace";
 
 interface FocusWorkspaceButtonProps {
   taskId: string;
 }
 
 export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
-  const workspace = useWorkspaceStore(selectWorkspace(taskId));
-  const focusSession = useFocusStore((s) => s.session);
-  const isFocusLoading = useFocusStore(selectIsLoading);
-  const enableFocus = useFocusStore((s) => s.enableFocus);
-  const disableFocus = useFocusStore((s) => s.disableFocus);
-
-  const isFocused = useFocusStore(
-    selectIsFocusedOnWorktree(workspace?.worktreePath ?? ""),
-  );
-
-  const handleUnfocus = useCallback(async () => {
-    if (!focusSession) {
-      toast.error("Could not return to original branch", {
-        description: "No focused workspace found",
-      });
-      return;
-    }
-
-    const hadStash = !!focusSession.mainStashRef;
-    const result = await disableFocus();
-    if (result.success) {
-      toast.success(
-        <>
-          Returned to{" "}
-          <Text style={{ color: "var(--accent-11)" }}>
-            {focusSession.originalBranch}
-          </Text>
-        </>,
-        {
-          description:
-            result.stashPopWarning ??
-            (hadStash ? "Your stashed changes were restored." : undefined),
-        },
-      );
-    } else {
-      toast.error(`Could not return to ${focusSession.originalBranch}`, {
-        description: result.error,
-      });
-    }
-  }, [focusSession, disableFocus]);
-
-  const handleFocus = useCallback(async () => {
-    if (!workspace) return;
-
-    if (
-      workspace.mode !== "worktree" ||
-      !workspace.branchName ||
-      !workspace.worktreePath
-    ) {
-      toast.error("Could not edit workspace", {
-        description: "Only worktree-mode workspaces can be edited",
-      });
-      return;
-    }
-
-    const result = await enableFocus({
-      mainRepoPath: workspace.folderPath,
-      worktreePath: workspace.worktreePath,
-      branch: workspace.branchName,
-    });
-
-    if (result.success) {
-      showFocusSuccessToast(workspace.branchName, result);
-    } else {
-      toast.error("Could not edit workspace", {
-        description: result.error,
-      });
-    }
-  }, [workspace, enableFocus]);
-
-  const handleToggleFocus = isFocused ? handleUnfocus : handleFocus;
+  const {
+    workspace,
+    focusSession,
+    isFocusLoading,
+    isFocused,
+    handleUnfocus,
+    handleToggleFocus,
+  } = useFocusWorkspace(taskId);
 
   if (!workspace) return null;
 
@@ -139,34 +70,35 @@ export function FocusWorkspaceButton({ taskId }: FocusWorkspaceButtonProps) {
     return null;
   }
 
+  const displayPath = compactHomePath(workspace.folderPath);
   const tooltipContent = isFocused
-    ? `Your main repo has this branch. Click to return to ${focusSession?.originalBranch}`
-    : "Check out in your main repo to edit locally";
-
-  const buttonLabel = isFocused ? "Editing workspace" : "Edit workspace";
+    ? `Stop syncing changes to ${displayPath}`
+    : `Sync changes to ${displayPath}`;
 
   return (
-    <Tooltip content={tooltipContent}>
+    <Tooltip content={tooltipContent} shortcut="⌘R">
       <Button
         size="1"
-        variant={isFocused ? "solid" : "outline"}
-        color="blue"
+        variant="outline"
+        color="gray"
         onClick={handleToggleFocus}
         disabled={isFocusLoading}
         style={
           {
             flexShrink: 0,
             WebkitAppRegion: "no-drag",
-            marginLeft: "var(--space-2)",
+            color: "var(--gray-12)",
           } as React.CSSProperties
         }
       >
         {isFocusLoading ? (
           <Spinner size="1" />
+        ) : isFocused ? (
+          <Stop size={14} weight="fill" />
         ) : (
-          <GitBranch size={14} weight={isFocused ? "fill" : "regular"} />
+          <Play size={14} weight="fill" />
         )}
-        {buttonLabel}
+        {isFocused ? "Stop" : "Focus"}
       </Button>
     </Tooltip>
   );

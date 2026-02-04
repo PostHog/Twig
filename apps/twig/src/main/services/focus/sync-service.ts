@@ -1,10 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
+import {
+  getStagedDiff,
+  getUnstagedDiff,
+  listUntrackedFiles,
+} from "@twig/git/queries";
+import { ApplyPatchSaga } from "@twig/git/sagas/patch";
 import ignore, { type Ignore } from "ignore";
 import { injectable, preDestroy } from "inversify";
 import { logger } from "../../lib/logger.js";
-import { git, withGitLock } from "./service.js";
 
 const log = logger.scope("focus-sync");
 
@@ -204,19 +209,14 @@ export class FocusSyncService {
    * Preserves staged vs unstaged state. Handles deletes, renames, moves correctly.
    */
   async copyUncommittedFiles(srcPath: string, dstPath: string): Promise<void> {
-    const [stagedPatch, unstagedPatch, untrackedFiles] = await Promise.all([
-      this.gitRaw(srcPath, "diff", "--cached", "HEAD").catch(() => ""),
-      this.gitRaw(srcPath, "diff").catch(() => ""),
-      git(srcPath, "ls-files", "--others", "--exclude-standard").catch(
-        () => "",
-      ),
+    const [stagedPatch, unstagedPatch, untrackedList] = await Promise.all([
+      getStagedDiff(srcPath).catch(() => ""),
+      getUnstagedDiff(srcPath).catch(() => ""),
+      listUntrackedFiles(srcPath).catch(() => []),
     ]);
 
     const hasStaged = stagedPatch.length > 0;
     const hasUnstaged = unstagedPatch.length > 0;
-    const untrackedList = untrackedFiles
-      .split("\n")
-      .filter((f) => f.trim().length > 0);
     const hasUntracked = untrackedList.length > 0;
 
     if (!hasStaged && !hasUnstaged && !hasUntracked) {
@@ -288,50 +288,16 @@ export class FocusSyncService {
     } catch {}
   }
 
-  private async gitRaw(cwd: string, ...args: string[]): Promise<string> {
-    return withGitLock(async () => {
-      const { execFile } = await import("node:child_process");
-      const { promisify } = await import("node:util");
-      const execFileAsync = promisify(execFile);
-      const { stdout } = await execFileAsync("git", args, { cwd });
-      return stdout;
-    });
-  }
-
   private async applyPatch(
     repoPath: string,
     patch: string,
     cached: boolean,
   ): Promise<void> {
-    return withGitLock(async () => {
-      const { spawn } = await import("node:child_process");
-
-      return new Promise((resolve, reject) => {
-        const args = ["apply"];
-        if (cached) args.push("--cached");
-        args.push("-");
-
-        const proc = spawn("git", args, { cwd: repoPath });
-
-        let stderr = "";
-        proc.stderr.on("data", (data) => {
-          stderr += data.toString();
-        });
-
-        proc.on("close", (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`git apply failed (code ${code}): ${stderr}`));
-          }
-        });
-
-        proc.on("error", reject);
-
-        proc.stdin.write(patch);
-        proc.stdin.end();
-      });
-    });
+    const saga = new ApplyPatchSaga();
+    const result = await saga.run({ baseDir: repoPath, patch, cached });
+    if (!result.success) {
+      throw new Error(`git apply failed: ${result.error}`);
+    }
   }
 
   private async copyFileDirect(

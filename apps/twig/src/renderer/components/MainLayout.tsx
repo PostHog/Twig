@@ -7,7 +7,7 @@ import { AutonomyOnboarding } from "@features/autonomy/components/AutonomyOnboar
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
-import { SettingsView } from "@features/settings/components/SettingsView";
+import { SettingsDialog } from "@features/settings/components/SettingsDialog";
 import { MainSidebar } from "@features/sidebar/components/MainSidebar";
 import { TaskDetail } from "@features/task-detail/components/TaskDetail";
 import { TaskInput } from "@features/task-detail/components/TaskInput";
@@ -59,8 +59,6 @@ export function MainLayout() {
             <TaskDetail key={view.data.id} task={view.data} />
           )}
 
-          {view.type === "settings" && <SettingsView />}
-
           {view.type === "folder-settings" && <FolderSettingsView />}
 
           {view.type === "autonomy-onboarding" && <AutonomyOnboarding />}
@@ -92,6 +90,7 @@ export function MainLayout() {
         onToggleShortcutsSheet={toggleShortcutsSheet}
         commandMenuOpen={commandMenuOpen}
       />
+      <SettingsDialog />
       <Toaster position="bottom-right" />
     </Flex>
   );

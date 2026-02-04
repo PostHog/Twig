@@ -299,10 +299,10 @@ export function toolInfoFromToolUse(
       let label = "Find";
       const pathStr = input?.path ? String(input.path) : undefined;
       if (pathStr) {
-        label += ` \`${pathStr}\``;
+        label += ` "${pathStr}"`;
       }
       if (input?.pattern) {
-        label += ` \`${String(input.pattern)}\``;
+        label += ` "${String(input.pattern)}"`;
       }
       return {
         title: label,

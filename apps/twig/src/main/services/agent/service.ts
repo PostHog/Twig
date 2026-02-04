@@ -19,11 +19,14 @@ import {
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
 import { app } from "electron";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
 import type { ExecutionMode } from "@/shared/types.js";
 import type { AcpMessage } from "../../../shared/types/session-events.js";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
@@ -185,6 +188,7 @@ interface ManagedSession {
   config: SessionConfig;
   interruptReason?: InterruptReason;
   needsRecreation: boolean;
+  recreationPromise?: Promise<ManagedSession>;
   promptPending: boolean;
   pendingContext?: string;
   availableModels?: Array<{
@@ -214,6 +218,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private sessions = new Map<string, ManagedSession>();
   private currentToken: string | null = null;
   private pendingPermissions = new Map<string, PendingPermission>();
+  private processTracking: ProcessTrackingService;
+  private sleepService: SleepService;
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.SleepService)
+    sleepService: SleepService,
+  ) {
+    super();
+    this.processTracking = processTracking;
+    this.sleepService = sleepService;
+  }
 
   public updateToken(newToken: string): void {
     this.currentToken = newToken;
@@ -335,12 +352,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return servers;
   }
 
+  private buildPostHogSystemPrompt(credentials: Credentials): {
+    append: string;
+  } {
+    return {
+      append: `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`,
+    };
+  }
+
   private getPostHogMcpUrl(apiHost: string): string {
-    if (
-      apiHost.includes("localhost") ||
-      apiHost.includes("127.0.0.1") ||
-      !app.isPackaged
-    ) {
+    const overrideUrl = process.env.POSTHOG_MCP_URL;
+    if (overrideUrl) {
+      return overrideUrl;
+    }
+    if (apiHost.includes("localhost") || apiHost.includes("127.0.0.1")) {
       return "http://localhost:8787/mcp";
     }
     return "https://mcp.posthog.com/mcp";
@@ -393,6 +418,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       if (existing) {
         return existing;
       }
+
+      // Kill any lingering processes from previous runs of this task
+      this.processTracking.killByTaskId(taskId);
+
+      // Clean up any prior session for this taskRunId before creating a new one
+      await this.cleanupSession(taskRunId);
     }
 
     const channel = `agent-event:${taskRunId}`;
@@ -410,7 +441,26 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     });
 
     try {
-      const acpConnection = await agent.run(taskId, taskRunId);
+      const acpConnection = await agent.run(taskId, taskRunId, {
+        processCallbacks: {
+          onProcessSpawned: (info) => {
+            this.processTracking.register(
+              info.pid,
+              "agent",
+              `agent:${taskRunId}`,
+              {
+                taskRunId,
+                taskId,
+                command: info.command,
+              },
+              taskId,
+            );
+          },
+          onProcessExited: (pid) => {
+            this.processTracking.unregister(pid, "agent-exited");
+          },
+        },
+      });
       const { clientStreams } = acpConnection;
 
       const connection = this.createClientConnection(
@@ -438,6 +488,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       let currentModelId: string | undefined;
 
       if (isReconnect) {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
@@ -449,6 +500,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               ...(sdkSessionId && { sdkSessionId }),
+              systemPrompt,
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -468,12 +520,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         availableModels = resumeMeta?.models?.availableModels;
         currentModelId = resumeMeta?.models?.currentModelId;
       } else {
+        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
           _meta: {
             sessionId: taskRunId,
             model,
+            systemPrompt,
             ...(executionMode && { initialModeId: executionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
@@ -569,10 +623,18 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     // Recreate session if marked (token was refreshed while session was active)
     if (session.needsRecreation) {
-      log.info("Recreating session before prompt (token refreshed)", {
-        sessionId,
-      });
-      session = await this.recreateSession(sessionId);
+      if (!session.recreationPromise) {
+        log.info("Recreating session before prompt (token refreshed)", {
+          sessionId,
+        });
+        session.recreationPromise = this.recreateSession(sessionId).finally(
+          () => {
+            const s = this.sessions.get(sessionId);
+            if (s) s.recreationPromise = undefined;
+          },
+        );
+      }
+      session = await session.recreationPromise;
     }
 
     // Prepend pending context if present
@@ -592,6 +654,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     session.lastActivityAt = Date.now();
     session.promptPending = true;
+    this.sleepService.acquire(sessionId);
 
     try {
       const result = await session.clientSideConnection.prompt({
@@ -618,6 +681,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       throw err;
     } finally {
       session.promptPending = false;
+      this.sleepService.release(sessionId);
     }
   }
 
@@ -630,6 +694,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       return true;
     } catch (_err) {
       return false;
+    }
+  }
+
+  async cancelSessionsByTaskId(taskId: string): Promise<void> {
+    for (const [taskRunId, session] of this.sessions) {
+      if (session.taskId === taskId) {
+        await this.cleanupSession(taskRunId);
+      }
     }
   }
 
@@ -801,6 +873,14 @@ For git operations while detached:
       sessionCount: sessionIds.length,
     });
 
+    for (const session of this.sessions.values()) {
+      try {
+        await session.agent.flushAllLogs();
+      } catch {
+        log.debug("Failed to flush session logs during shutdown");
+      }
+    }
+
     for (const taskRunId of sessionIds) {
       await this.cleanupSession(taskRunId);
     }
@@ -864,6 +944,7 @@ For git operations while detached:
   private async cleanupSession(taskRunId: string): Promise<void> {
     const session = this.sessions.get(taskRunId);
     if (session) {
+      this.sleepService.release(taskRunId);
       try {
         await session.agent.cleanup();
       } catch {
@@ -933,21 +1014,31 @@ For git operations while detached:
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
         if (toolCallId) {
-          return new Promise((resolve, reject) => {
-            const key = `${taskRunId}:${toolCallId}`;
-            service.pendingPermissions.set(key, {
-              resolve,
-              reject,
-              sessionId: taskRunId,
-              toolCallId,
-            });
+          service.sleepService.release(taskRunId);
+          try {
+            return await new Promise<RequestPermissionResponse>(
+              (resolve, reject) => {
+                const key = `${taskRunId}:${toolCallId}`;
+                service.pendingPermissions.set(key, {
+                  resolve,
+                  reject,
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
 
-            log.info("Emitting permission request to renderer", {
-              sessionId: taskRunId,
-              toolCallId,
-            });
-            service.emit(AgentServiceEvent.PermissionRequest, params);
-          });
+                log.info("Emitting permission request to renderer", {
+                  sessionId: taskRunId,
+                  toolCallId,
+                });
+                service.emit(AgentServiceEvent.PermissionRequest, params);
+              },
+            );
+          } finally {
+            // Only re-acquire if session wasn't cleaned up while waiting
+            if (service.sessions.has(taskRunId)) {
+              service.sleepService.acquire(taskRunId);
+            }
+          }
         }
 
         // Fallback: no toolCallId means we can't track the response, auto-approve
@@ -1183,7 +1274,12 @@ For git operations while detached:
       return MODEL_TIER_ORDER.length;
     };
 
-    const mapped = models.map((model) => ({
+    // TODO: Re-enable OpenAI models once the upstream gateway issue is fixed.
+    const filteredModels = models.filter(
+      (model) => model.owned_by !== "openai" && !model.id.startsWith("openai/"),
+    );
+
+    const mapped = filteredModels.map((model) => ({
       modelId: model.id,
       name: formatGatewayModelName(model),
       description: `Context: ${model.context_window.toLocaleString()} tokens`,

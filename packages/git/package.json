@@ -1,0 +1,30 @@
+{
+  "name": "@twig/git",
+  "version": "1.0.0",
+  "description": "Git utilities for Twig",
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/tar": "^6.1.13",
+    "typescript": "^5.5.0"
+  },
+  "files": [
+    "dist/**/*",
+    "src/**/*"
+  ],
+  "dependencies": {
+    "@posthog/shared": "workspace:*",
+    "simple-git": "^3.30.0",
+    "tar": "^7.5.6"
+  }
+}

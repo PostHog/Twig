@@ -1,4 +1,5 @@
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
+import { memo } from "react";
 
 import { AgentMessage } from "./AgentMessage";
 import { CompactBoundaryView } from "./CompactBoundaryView";
@@ -44,16 +45,18 @@ interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
   turnCancelled?: boolean;
+  turnComplete?: boolean;
 }
 
-export function SessionUpdateView({
+export const SessionUpdateView = memo(function SessionUpdateView({
   item,
   toolCalls,
   turnCancelled,
+  turnComplete,
 }: SessionUpdateViewProps) {
   switch (item.sessionUpdate) {
     case "user_message_chunk":
-      return null; // User messages rendered separately
+      return null;
     case "agent_message_chunk":
       return item.content.type === "text" ? (
         <AgentMessage content={item.content.text} />
@@ -67,12 +70,13 @@ export function SessionUpdateView({
         <ToolCallBlock
           toolCall={toolCalls?.get(item.toolCallId) ?? item}
           turnCancelled={turnCancelled}
+          turnComplete={turnComplete}
         />
       );
     case "tool_call_update":
-      return null; // Updates are merged into the original tool_call
+      return null;
     case "plan":
-      return null; // Plan shown in PlanStatusBar above message input
+      return null;
     case "available_commands_update":
       return null;
     case "current_mode_update":
@@ -113,4 +117,4 @@ export function SessionUpdateView({
     default:
       return null;
   }
-}
+});

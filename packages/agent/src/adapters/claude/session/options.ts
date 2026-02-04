@@ -1,11 +1,23 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { McpServerConfig, Options } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  McpServerConfig,
+  Options,
+  SpawnedProcess,
+  SpawnOptions,
+} from "@anthropic-ai/claude-agent-sdk";
 import { IS_ROOT } from "@/utils/common.js";
 import type { Logger } from "@/utils/logger.js";
 import { createPostToolUseHook, type OnModeChange } from "../hooks.js";
 import type { TwigExecutionMode } from "../tools.js";
+
+export interface ProcessSpawnedInfo {
+  pid: number;
+  command: string;
+  sessionId: string;
+}
 
 export interface BuildOptionsParams {
   cwd: string;
@@ -19,6 +31,8 @@ export interface BuildOptionsParams {
   sdkSessionId?: string;
   additionalDirectories?: string[];
   onModeChange?: OnModeChange;
+  onProcessSpawned?: (info: ProcessSpawnedInfo) => void;
+  onProcessExited?: (pid: number) => void;
 }
 
 const BRANCH_NAMING_INSTRUCTIONS = `
@@ -102,6 +116,66 @@ function getAbortController(
   return controller;
 }
 
+function buildSpawnWrapper(
+  sessionId: string,
+  onProcessSpawned: (info: ProcessSpawnedInfo) => void,
+  onProcessExited?: (pid: number) => void,
+): (options: SpawnOptions) => SpawnedProcess {
+  return (spawnOpts: SpawnOptions): SpawnedProcess => {
+    const child = spawn(spawnOpts.command, spawnOpts.args, {
+      cwd: spawnOpts.cwd,
+      env: spawnOpts.env as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    if (child.pid) {
+      onProcessSpawned({
+        pid: child.pid,
+        command: `${spawnOpts.command} ${spawnOpts.args.join(" ")}`,
+        sessionId,
+      });
+    }
+
+    if (onProcessExited) {
+      child.on("exit", () => {
+        if (child.pid) {
+          onProcessExited(child.pid);
+        }
+      });
+    }
+
+    // Listen for abort signal
+    if (spawnOpts.signal) {
+      spawnOpts.signal.addEventListener("abort", () => {
+        child.kill("SIGTERM");
+      });
+    }
+
+    return {
+      stdin: child.stdin!,
+      stdout: child.stdout!,
+      get killed() {
+        return child.killed;
+      },
+      get exitCode() {
+        return child.exitCode;
+      },
+      kill(signal: NodeJS.Signals) {
+        return child.kill(signal);
+      },
+      on(event: "exit" | "error", listener: (...args: any[]) => void) {
+        child.on(event, listener);
+      },
+      once(event: "exit" | "error", listener: (...args: any[]) => void) {
+        child.once(event, listener);
+      },
+      off(event: "exit" | "error", listener: (...args: any[]) => void) {
+        child.off(event, listener);
+      },
+    };
+  };
+}
+
 export function buildSessionOptions(params: BuildOptionsParams): Options {
   const options: Options = {
     ...params.userProvidedOptions,
@@ -123,6 +197,13 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     abortController: getAbortController(
       params.userProvidedOptions?.abortController,
     ),
+    ...(params.onProcessSpawned && {
+      spawnClaudeCodeProcess: buildSpawnWrapper(
+        params.sessionId,
+        params.onProcessSpawned,
+        params.onProcessExited,
+      ),
+    }),
   };
 
   if (process.env.CLAUDE_CODE_EXECUTABLE) {

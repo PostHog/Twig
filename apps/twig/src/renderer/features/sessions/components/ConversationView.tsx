@@ -78,20 +78,17 @@ export function ConversationView({
   const items = useMemo(() => buildConversationItems(events), [events]);
   const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
 
-  // Track pending permissions for scroll triggering
   const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
   const pendingPermissionsCount = pendingPermissions.size;
 
-  // Get queued messages and actions
   const queuedMessages = useQueuedMessagesForTask(taskId);
   const { removeQueuedMessage } = useSessionActions();
 
-  const isNearBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(0);
   const prevPendingCountRef = useRef(0);
+  const prevScrollHeightRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Update isNearBottom on scroll
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -99,7 +96,6 @@ export function ConversationView({
     const handleScroll = () => {
       const distanceFromBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight;
-      isNearBottomRef.current = distanceFromBottom <= SCROLL_THRESHOLD;
       setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
     };
 
@@ -107,7 +103,6 @@ export function ConversationView({
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll to bottom on first render, new content, or new pending permissions
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -117,7 +112,12 @@ export function ConversationView({
     prevItemsLengthRef.current = items.length;
     prevPendingCountRef.current = pendingPermissionsCount;
 
-    if (isNearBottomRef.current || isNewContent || isNewPending) {
+    const prevScrollHeight = prevScrollHeightRef.current || el.scrollHeight;
+    const wasNearBottom =
+      prevScrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
+    prevScrollHeightRef.current = el.scrollHeight;
+
+    if (wasNearBottom || isNewContent || isNewPending) {
       el.scrollTop = el.scrollHeight;
     }
   }, [items, pendingPermissionsCount]);
@@ -239,6 +239,7 @@ const TurnView = memo(function TurnView({
             item={renderItem}
             toolCalls={turn.toolCalls}
             turnCancelled={wasCancelled}
+            turnComplete={turn.isComplete}
           />
         );
       })}

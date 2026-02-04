@@ -96,9 +96,19 @@ export interface TaskRun {
   completed_at: string | null;
 }
 
+export interface ProcessSpawnedCallback {
+  onProcessSpawned?: (info: {
+    pid: number;
+    command: string;
+    sessionId: string;
+  }) => void;
+  onProcessExited?: (pid: number) => void;
+}
+
 export interface TaskExecutionOptions {
   repositoryPath?: string;
   adapter?: "claude";
+  processCallbacks?: ProcessSpawnedCallback;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -120,14 +130,6 @@ export interface AgentConfig {
   posthog?: PostHogAPIConfig;
   debug?: boolean;
   onLog?: OnLogCallback;
-}
-
-export interface WorktreeInfo {
-  worktreePath: string;
-  worktreeName: string;
-  branchName: string;
-  baseBranch: string;
-  createdAt: string;
 }
 
 // Device info for tracking where work happens

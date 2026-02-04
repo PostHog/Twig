@@ -234,7 +234,8 @@ describe("UpdatesService", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "Updates only available in packaged builds",
+        errorMessage: "Updates only available in packaged builds",
+        errorCode: "disabled",
       });
     });
 
@@ -249,7 +250,8 @@ describe("UpdatesService", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "Auto updates only supported on macOS and Windows",
+        errorMessage: "Auto updates only supported on macOS and Windows",
+        errorCode: "disabled",
       });
     });
 
@@ -261,7 +263,8 @@ describe("UpdatesService", () => {
       const result = service.checkForUpdates();
       expect(result).toEqual({
         success: false,
-        error: "Already checking for updates",
+        errorMessage: "Already checking for updates",
+        errorCode: "already_checking",
       });
     });
 
@@ -277,6 +280,14 @@ describe("UpdatesService", () => {
     it("calls autoUpdater.checkForUpdates", async () => {
       await initializeService(service);
 
+      // Complete the initial check triggered by setupAutoUpdater
+      const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
+        ([event]) => event === "update-not-available",
+      )?.[1];
+      if (notAvailableHandler) {
+        notAvailableHandler();
+      }
+
       mockAutoUpdater.checkForUpdates.mockClear();
       service.checkForUpdates();
 
@@ -286,15 +297,20 @@ describe("UpdatesService", () => {
     it("allows retry after previous check completes", async () => {
       await initializeService(service);
 
-      // First check
-      const result1 = service.checkForUpdates();
-      expect(result1.success).toBe(true);
-
-      // Simulate completion
+      // Complete the initial check triggered by setupAutoUpdater
       const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
         ([event]) => event === "update-not-available",
       )?.[1];
 
+      if (notAvailableHandler) {
+        notAvailableHandler();
+      }
+
+      // First explicit check
+      const result1 = service.checkForUpdates();
+      expect(result1.success).toBe(true);
+
+      // Simulate completion
       if (notAvailableHandler) {
         notAvailableHandler();
       }
@@ -443,6 +459,14 @@ describe("UpdatesService", () => {
     });
 
     it("handles error event gracefully when not checking", () => {
+      // Complete the initial check triggered by setupAutoUpdater so we're not in checking state
+      const notAvailableHandler = mockAutoUpdater.on.mock.calls.find(
+        ([event]) => event === "update-not-available",
+      )?.[1];
+      if (notAvailableHandler) {
+        notAvailableHandler();
+      }
+
       const statusHandler = vi.fn();
       service.on(UpdatesEvent.Status, statusHandler);
 

@@ -1,10 +1,13 @@
 import { Box, Text } from "@radix-ui/themes";
+import { memo } from "react";
 
 interface ThoughtViewProps {
   content: string;
 }
 
-export function ThoughtView({ content }: ThoughtViewProps) {
+export const ThoughtView = memo(function ThoughtView({
+  content,
+}: ThoughtViewProps) {
   return (
     <Box
       className="border-l-2 py-1 pl-3"
@@ -18,4 +21,4 @@ export function ThoughtView({ content }: ThoughtViewProps) {
       </Text>
     </Box>
   );
-}
+});

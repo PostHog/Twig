@@ -28,6 +28,7 @@ export function initializePostHog() {
     api_host: apiHost,
     ui_host: uiHost,
     disable_session_recording: false,
+    capture_exceptions: true,
     loaded: () => {
       log.info("PostHog loaded");
       // Start session recording immediately after load
@@ -88,13 +89,19 @@ export function identifyUser(
   userId: string,
   properties?: UserIdentifyProperties,
 ) {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot identify user");
+    return;
+  }
 
   posthog.identify(userId, properties);
 }
 
 export function resetUser() {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot reset user");
+    return;
+  }
 
   posthog.reset();
 }
@@ -107,6 +114,45 @@ export function track<K extends keyof EventPropertyMap>(
       ? [properties?: EventPropertyMap[K]]
       : [properties: EventPropertyMap[K]]
 ) {
-  if (!isInitialized) return;
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot track event");
+    return;
+  }
+
   posthog.capture(eventName, args[0]);
+}
+
+/**
+ * Capture an exception for error tracking using PostHog's built-in exception tracking.
+ */
+export function captureException(
+  error: Error,
+  additionalProperties?: Record<string, unknown>,
+) {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot capture exception");
+    return;
+  }
+
+  posthog.captureException(error, additionalProperties);
+}
+
+/**
+ * Get the PostHog instance for direct access
+ */
+export function getPostHog() {
+  return isInitialized ? posthog : null;
+}
+
+// ============================================================================
+// Surveys
+// ============================================================================
+
+export function displaySurvey(surveyId: string) {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot display survey");
+    return;
+  }
+
+  posthog.displaySurvey(surveyId);
 }

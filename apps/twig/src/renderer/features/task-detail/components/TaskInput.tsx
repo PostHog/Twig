@@ -1,7 +1,10 @@
 import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import {
+  cycleExecutionMode,
+  type ExecutionMode,
+} from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import { Flex } from "@radix-ui/themes";
@@ -18,9 +21,12 @@ const DOT_FILL = "var(--gray-6)";
 
 export function TaskInput() {
   const { view } = useNavigationStore();
-  const { lastUsedDirectory } = useTaskDirectoryStore();
-  const { lastUsedLocalWorkspaceMode, allowBypassPermissions } =
-    useSettingsStore();
+  const { lastUsedDirectory, setLastUsedDirectory } = useTaskDirectoryStore();
+  const {
+    lastUsedLocalWorkspaceMode,
+    setLastUsedLocalWorkspaceMode,
+    allowBypassPermissions,
+  } = useSettingsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,9 +49,11 @@ export function TaskInput() {
     }
   }, [allowBypassPermissions, executionMode]);
 
-  const handleModeChange = useCallback((mode: ExecutionMode) => {
-    setExecutionMode(mode);
-  }, []);
+  const handleModeChange = useCallback(() => {
+    setExecutionMode((current) =>
+      cycleExecutionMode(current, allowBypassPermissions),
+    );
+  }, [allowBypassPermissions]);
 
   const { githubIntegration } = useRepositoryIntegration();
 
@@ -62,6 +70,7 @@ export function TaskInput() {
 
   const handleDirectoryChange = (newPath: string) => {
     setSelectedDirectory(newPath);
+    setLastUsedDirectory(newPath || null);
   };
 
   const effectiveWorkspaceMode = workspaceMode;
@@ -144,7 +153,10 @@ export function TaskInput() {
             />
             <WorkspaceModeSelect
               value={workspaceMode}
-              onChange={setWorkspaceMode}
+              onChange={(mode) => {
+                setWorkspaceMode(mode);
+                setLastUsedLocalWorkspaceMode(mode);
+              }}
               size="1"
             />
           </Flex>

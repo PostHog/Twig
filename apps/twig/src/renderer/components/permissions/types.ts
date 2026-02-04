@@ -38,15 +38,12 @@ export function toSelectorOptions(
   });
 }
 
-export type DiffContent = Extract<ToolCallContent, { type: "diff" }>;
+export {
+  type DiffContent,
+  findDiffContent,
+} from "@features/sessions/components/session-update/toolCallUtils";
 export type TerminalContent = Extract<ToolCallContent, { type: "terminal" }>;
 export type StandardContent = Extract<ToolCallContent, { type: "content" }>;
-
-export function findDiffContent(
-  content: ToolCallContent[] | null | undefined,
-): DiffContent | undefined {
-  return content?.find((c): c is DiffContent => c.type === "diff");
-}
 
 export function findTerminalContent(
   content: ToolCallContent[] | null | undefined,

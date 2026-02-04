@@ -36,6 +36,9 @@ jobs:
       - name: Build shared
         run: pnpm --filter @posthog/shared build
 
+      - name: Build git
+        run: pnpm --filter @twig/git build
+
       - name: Build agent
         run: pnpm --filter agent build
 

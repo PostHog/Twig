@@ -9,6 +9,7 @@ import { initializePostHog } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { initializeConnectivityStore } from "@renderer/stores/connectivityStore";
 import { useFocusStore } from "@renderer/stores/focusStore";
+import { useThemeStore } from "@renderer/stores/themeStore";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@utils/toast";
 import { AnimatePresence, motion } from "framer-motion";
@@ -18,6 +19,7 @@ const log = logger.scope("app");
 
 function App() {
   const { isAuthenticated, initializeOAuth } = useAuthStore();
+  const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const [isLoading, setIsLoading] = useState(true);
   const [showTransition, setShowTransition] = useState(false);
   const wasAuthenticated = useRef(isAuthenticated);
@@ -138,31 +140,39 @@ function App() {
     );
   }
 
+  // Determine which screen to show
+  const renderContent = () => {
+    if (!isAuthenticated) {
+      return (
+        <motion.div
+          key="auth"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <AuthScreen />
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        key="main"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: showTransition ? 1.5 : 0 }}
+      >
+        <MainLayout />
+      </motion.div>
+    );
+  };
+
   return (
     <ErrorBoundary name="App">
-      <AnimatePresence mode="wait">
-        {!isAuthenticated ? (
-          <motion.div
-            key="auth"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <AuthScreen />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: showTransition ? 1.5 : 0 }}
-          >
-            <MainLayout />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence mode="wait">{renderContent()}</AnimatePresence>
       <LoginTransition
         isAnimating={showTransition}
+        isDarkMode={isDarkMode}
         onComplete={handleTransitionComplete}
       />
     </ErrorBoundary>

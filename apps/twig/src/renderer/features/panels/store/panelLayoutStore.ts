@@ -52,10 +52,7 @@ export interface PanelLayoutStore {
   taskLayouts: Record<string, TaskLayout>;
 
   getLayout: (taskId: string) => TaskLayout | null;
-  initializeTask: (
-    taskId: string,
-    terminalLayoutMode?: "split" | "tabbed",
-  ) => void;
+  initializeTask: (taskId: string) => void;
   openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
   openDiff: (
     taskId: string,
@@ -113,10 +110,8 @@ export interface PanelLayoutStore {
   clearAllLayouts: () => void;
 }
 
-function createDefaultPanelTree(
-  terminalLayoutMode: "split" | "tabbed" = "split",
-): PanelNode {
-  const logsPanel: PanelNode = {
+function createDefaultPanelTree(): PanelNode {
+  return {
     type: "leaf",
     id: DEFAULT_PANEL_IDS.MAIN_PANEL,
     content: {
@@ -130,19 +125,6 @@ function createDefaultPanelTree(
           closeable: false,
           draggable: true,
         },
-      ],
-      activeTabId: DEFAULT_TAB_IDS.LOGS,
-      showTabs: true,
-      droppable: true,
-    },
-  };
-
-  const terminalPanel: PanelNode = {
-    type: "leaf",
-    id: "terminal-panel",
-    content: {
-      id: "terminal-panel",
-      tabs: [
         {
           id: DEFAULT_TAB_IDS.SHELL,
           label: "Terminal",
@@ -156,55 +138,11 @@ function createDefaultPanelTree(
           draggable: true,
         },
       ],
-      activeTabId: DEFAULT_TAB_IDS.SHELL,
+      activeTabId: DEFAULT_TAB_IDS.LOGS,
       showTabs: true,
       droppable: true,
     },
   };
-
-  const centerPanel: PanelNode =
-    terminalLayoutMode === "split"
-      ? {
-          type: "group",
-          id: "left-group",
-          direction: "vertical",
-          sizes: [70, 30],
-          children: [logsPanel, terminalPanel],
-        }
-      : {
-          type: "leaf",
-          id: DEFAULT_PANEL_IDS.MAIN_PANEL,
-          content: {
-            id: DEFAULT_PANEL_IDS.MAIN_PANEL,
-            tabs: [
-              {
-                id: DEFAULT_TAB_IDS.LOGS,
-                label: "Chat",
-                data: { type: "logs" },
-                component: null,
-                closeable: false,
-                draggable: true,
-              },
-              {
-                id: DEFAULT_TAB_IDS.SHELL,
-                label: "Terminal",
-                data: {
-                  type: "terminal",
-                  terminalId: DEFAULT_TAB_IDS.SHELL,
-                  cwd: "",
-                },
-                component: null,
-                closeable: true,
-                draggable: true,
-              },
-            ],
-            activeTabId: DEFAULT_TAB_IDS.LOGS,
-            showTabs: true,
-            droppable: true,
-          },
-        };
-
-  return centerPanel;
 }
 
 function openTab(
@@ -212,6 +150,7 @@ function openTab(
   taskId: string,
   tabId: string,
   asPreview = true,
+  targetPanelId?: string,
 ): { taskLayouts: Record<string, TaskLayout> } {
   return updateTaskLayout(state, taskId, (layout) => {
     // Check if tab already exists in tree
@@ -242,9 +181,10 @@ function openTab(
       return { panelTree: updatedTree };
     }
 
-    // Tab doesn't exist, add it to the focused panel (or main panel as fallback)
-    const targetPanelId = layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
-    let targetPanel = getLeafPanel(layout.panelTree, targetPanelId);
+    // Tab doesn't exist, add it to the specified panel, focused panel, or main panel as fallback
+    const resolvedPanelId =
+      targetPanelId ?? layout.focusedPanelId ?? DEFAULT_PANEL_IDS.MAIN_PANEL;
+    let targetPanel = getLeafPanel(layout.panelTree, resolvedPanelId);
 
     // Fall back to main panel if the focused panel doesn't exist or isn't a leaf
     if (!targetPanel) {
@@ -278,12 +218,12 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         return get().taskLayouts[taskId] || null;
       },
 
-      initializeTask: (taskId, terminalLayoutMode = "split") => {
+      initializeTask: (taskId) => {
         set((state) => ({
           taskLayouts: {
             ...state.taskLayouts,
             [taskId]: {
-              panelTree: createDefaultPanelTree(terminalLayoutMode),
+              panelTree: createDefaultPanelTree(),
               openFiles: [],
               recentFiles: [],
               openArtifacts: [],
@@ -610,12 +550,41 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             const tab = findTabInPanel(sourcePanel, tabId);
             if (!tab) return {};
 
-            // For same-panel splits, need > 1 tab in the panel
+            // For same-panel splits with only 1 tab, create an empty split
+            // (keep the tab in source, add an empty droppable panel)
             if (
               sourcePanelId === targetPanelId &&
               targetPanel.content.tabs.length <= 1
             ) {
-              return {};
+              const singleTabConfig = getSplitConfig(direction);
+              const emptyPanelId = generatePanelId();
+              const emptyPanel: PanelNode = {
+                type: "leaf",
+                id: emptyPanelId,
+                content: {
+                  id: emptyPanelId,
+                  tabs: [],
+                  activeTabId: "",
+                  showTabs: true,
+                  droppable: true,
+                },
+              };
+
+              const updatedTree = updateTreeNode(
+                layout.panelTree,
+                targetPanelId,
+                (panel) => ({
+                  type: "group" as const,
+                  id: generatePanelId(),
+                  direction: singleTabConfig.splitDirection,
+                  sizes: [50, 50],
+                  children: singleTabConfig.isAfter
+                    ? [panel, emptyPanel]
+                    : [emptyPanel, panel],
+                }),
+              );
+
+              return { panelTree: updatedTree, focusedPanelId: emptyPanelId };
             }
 
             const config = getSplitConfig(direction);
@@ -829,7 +798,7 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
     {
       name: "panel-layout-store",
       // Bump this version when the default panel structure changes to reset all layouts
-      version: 8,
+      version: 9,
       migrate: () => ({ taskLayouts: {} }),
     },
   ),
