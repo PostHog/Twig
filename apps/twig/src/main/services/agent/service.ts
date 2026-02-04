@@ -450,6 +450,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       taskRunId,
     });
 
+    // Abort controller that fires when the agent process exits, used to
+    // race initialize/newSession/extMethod so they fail immediately instead
+    // of hanging forever when the subprocess dies early.
+    const processExitController = new AbortController();
+
     const agent = new Agent({
       posthog: {
         apiUrl: credentials.apiHost,
@@ -487,6 +492,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           },
           onProcessExited: (pid) => {
             this.processTracking.unregister(pid, "agent-exited");
+            log.warn("Agent process exited during session setup", {
+              taskRunId,
+              taskId,
+              pid,
+            });
+            processExitController.abort(
+              new Error("Agent process exited unexpectedly"),
+            );
           },
         },
       });
@@ -498,16 +511,36 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         clientStreams,
       );
 
-      await connection.initialize({
-        protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {
-          fs: {
-            readTextFile: true,
-            writeTextFile: true,
+      // Helper: race a promise against the agent process exiting so we
+      // never hang on a dead subprocess.
+      const raceProcessExit = <T>(promise: Promise<T>): Promise<T> => {
+        if (processExitController.signal.aborted) {
+          return Promise.reject(processExitController.signal.reason);
+        }
+        return Promise.race([
+          promise,
+          new Promise<never>((_, reject) => {
+            processExitController.signal.addEventListener(
+              "abort",
+              () => reject(processExitController.signal.reason),
+              { once: true },
+            );
+          }),
+        ]);
+      };
+
+      await raceProcessExit(
+        connection.initialize({
+          protocolVersion: PROTOCOL_VERSION,
+          clientCapabilities: {
+            fs: {
+              readTextFile: true,
+              writeTextFile: true,
+            },
+            terminal: true,
           },
-          terminal: true,
-        },
-      });
+        }),
+      );
 
       const mcpServers =
         adapter === "codex" ? [] : this.buildMcpServers(credentials);
@@ -525,9 +558,8 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
-        const resumeResponse = await connection.extMethod(
-          "_posthog/session/resume",
-          {
+        const resumeResponse = await raceProcessExit(
+          connection.extMethod("_posthog/session/resume", {
             sessionId: taskRunId,
             cwd: repoPath,
             mcpServers,
@@ -544,7 +576,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 },
               }),
             },
-          },
+          }),
         );
         const resumeMeta = resumeResponse?._meta as
           | {
@@ -555,19 +587,21 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
-        const newSessionResponse = await connection.newSession({
-          cwd: repoPath,
-          mcpServers,
-          _meta: {
-            taskRunId,
-            systemPrompt,
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
-              },
-            }),
-          },
-        });
+        const newSessionResponse = await raceProcessExit(
+          connection.newSession({
+            cwd: repoPath,
+            mcpServers,
+            _meta: {
+              taskRunId,
+              systemPrompt,
+              ...(additionalDirectories?.length && {
+                claudeCode: {
+                  options: { additionalDirectories },
+                },
+              }),
+            },
+          }),
+        );
         configOptions = newSessionResponse.configOptions ?? undefined;
         agentSessionId = newSessionResponse.sessionId;
       }
