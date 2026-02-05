@@ -18,7 +18,6 @@ export type Adapter = "claude" | "codex";
 export interface QueuedMessage {
   id: string;
   content: string;
-  queuedAt: number;
 }
 
 export interface AgentSession {
