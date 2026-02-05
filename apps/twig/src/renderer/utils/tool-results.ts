@@ -1,3 +1,5 @@
+import { includesAny } from "./string";
+
 export function parseStringListResult(result: unknown): string[] {
   if (!result) return [];
 
@@ -81,11 +83,13 @@ export interface KillShellResult {
   message: string;
 }
 
+const KILL_SUCCESS_PATTERNS = ["killed", "terminated"] as const;
+
 export function parseKillShellResult(
   result: string | Partial<KillShellResult> | undefined,
 ): KillShellResult {
   return parseToolResult(result, { success: false, message: "" }, (str) => ({
-    success: str.includes("killed") || str.includes("terminated"),
+    success: includesAny(str, KILL_SUCCESS_PATTERNS),
     message: str,
   }));
 }
