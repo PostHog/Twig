@@ -479,7 +479,7 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
 
     case "plan":
     case "available_commands_update":
-    case "current_mode_update":
+    case "config_option_update":
       turn.items.push(update);
       break;
 

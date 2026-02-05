@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
-import { createWriteStream, existsSync, mkdirSync, chmodSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGunzip } from "node:zlib";
-import { extract } from "tar";
-import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { chmodSync, createWriteStream, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
+import { extract } from "tar";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -18,9 +17,7 @@ function getPlatformTarget() {
   const arch = process.arch;
 
   if (platform === "darwin") {
-    return arch === "arm64"
-      ? "aarch64-apple-darwin"
-      : "x86_64-apple-darwin";
+    return arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
   }
 
   if (platform === "linux") {
@@ -53,7 +50,9 @@ async function downloadFile(url, destPath) {
   const response = await fetch(url, { redirect: "follow" });
 
   if (!response.ok) {
-    throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Failed to download: ${response.status} ${response.statusText}`,
+    );
   }
 
   const fileStream = createWriteStream(destPath);
@@ -100,7 +99,10 @@ async function main() {
   const target = getPlatformTarget();
   const url = getDownloadUrl(target);
   const isZip = url.endsWith(".zip");
-  const archivePath = join(destDir, isZip ? "codex-acp.zip" : "codex-acp.tar.gz");
+  const archivePath = join(
+    destDir,
+    isZip ? "codex-acp.zip" : "codex-acp.tar.gz",
+  );
 
   await downloadFile(url, archivePath);
 
@@ -124,7 +126,9 @@ async function main() {
       }
 
       try {
-        execSync(`codesign --force --sign - "${binaryPath}"`, { stdio: "inherit" });
+        execSync(`codesign --force --sign - "${binaryPath}"`, {
+          stdio: "inherit",
+        });
         console.log("Ad-hoc signed binary for macOS");
       } catch (err) {
         console.warn("Failed to ad-hoc sign binary:", err.message);

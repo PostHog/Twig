@@ -47,6 +47,7 @@ interface ToolHandlerContext {
   sessionId: string;
   fileContentCache: { [key: string]: string };
   logger: Logger;
+  emitConfigOptionsUpdate: () => Promise<void>;
 }
 
 async function emitToolDenial(
@@ -158,7 +159,7 @@ async function applyPlanApproval(
   context: ToolHandlerContext,
   updatedInput: Record<string, unknown>,
 ): Promise<ToolPermissionResult> {
-  const { session, client, sessionId } = context;
+  const { session } = context;
 
   if (
     response.outcome?.outcome === "selected" &&
@@ -167,13 +168,7 @@ async function applyPlanApproval(
   ) {
     session.permissionMode = response.outcome.optionId;
     await session.query.setPermissionMode(response.outcome.optionId);
-    await client.sessionUpdate({
-      sessionId,
-      update: {
-        sessionUpdate: "current_mode_update",
-        currentModeId: response.outcome.optionId,
-      },
-    });
+    await context.emitConfigOptionsUpdate();
 
     return {
       behavior: "allow",
@@ -197,17 +192,11 @@ async function applyPlanApproval(
 async function handleEnterPlanModeTool(
   context: ToolHandlerContext,
 ): Promise<ToolPermissionResult> {
-  const { session, client, sessionId, toolInput, logger } = context;
+  const { session, toolInput, logger } = context;
 
   session.permissionMode = "plan";
   await session.query.setPermissionMode("plan");
-  await client.sessionUpdate({
-    sessionId,
-    update: {
-      sessionUpdate: "current_mode_update",
-      currentModeId: "plan",
-    },
-  });
+  await context.emitConfigOptionsUpdate();
 
   return {
     behavior: "allow",

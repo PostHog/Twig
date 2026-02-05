@@ -1,11 +1,12 @@
+import type { SessionConfigSelectGroup } from "@agentclientprotocol/sdk";
 import { Select, Text } from "@radix-ui/themes";
-import { Fragment, useEffect, useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
-  type GroupedModels,
-  type ModelOption,
-  useModelsStore,
-} from "../stores/modelsStore";
-import { useSessionActions, useSessionForTask } from "../stores/sessionStore";
+  flattenSelectOptions,
+  useModelConfigOptionForTask,
+  useSessionActions,
+  useSessionForTask,
+} from "../stores/sessionStore";
 
 interface ModelSelectorProps {
   taskId?: string;
@@ -14,93 +15,42 @@ interface ModelSelectorProps {
   adapter?: "claude" | "codex";
 }
 
-function getProviderForAdapter(adapter: "claude" | "codex"): string {
-  return adapter === "claude" ? "Anthropic" : "OpenAI";
-}
-
-function filterModelsByAdapter(
-  grouped: GroupedModels[],
-  adapter?: "claude" | "codex",
-): GroupedModels[] {
-  if (!adapter) return grouped;
-  const allowedProvider = getProviderForAdapter(adapter);
-  return grouped.filter((group) => group.provider === allowedProvider);
-}
-
-function isModelCompatibleWithAdapter(
-  model: ModelOption | undefined,
-  adapter: "claude" | "codex" | undefined,
-): boolean {
-  if (!model || !adapter) return true;
-  const allowedProvider = getProviderForAdapter(adapter);
-  return model.provider === allowedProvider;
-}
-
-function getDefaultModelForAdapter(
-  models: ModelOption[],
-  adapter: "claude" | "codex",
-): string | undefined {
-  const allowedProvider = getProviderForAdapter(adapter);
-  const compatibleModel = models.find((m) => m.provider === allowedProvider);
-  return compatibleModel?.modelId;
-}
-
-function stripReasoningSuffix(modelId: string | undefined): string | undefined {
-  if (!modelId) return modelId;
-  return modelId.replace(/\/(minimal|low|medium|high|xhigh)$/, "");
-}
-
 export function ModelSelector({
   taskId,
   disabled,
   onModelChange,
-  adapter,
+  adapter: _adapter,
 }: ModelSelectorProps) {
-  const { setSessionModel } = useSessionActions();
+  const { setSessionConfigOption } = useSessionActions();
   const session = useSessionForTask(taskId);
+  const modelOption = useModelConfigOptionForTask(taskId);
 
-  const groupedModels = useModelsStore((s) => s.groupedModels);
-  const models = useModelsStore((s) => s.models);
-  const selectedModel = useModelsStore((s) => s.selectedModel);
-  const setSelectedModel = useModelsStore((s) => s.setSelectedModel);
-
-  const effectiveAdapter = adapter ?? session?.adapter;
-  const filteredGroupedModels = useMemo(
-    () => filterModelsByAdapter(groupedModels, effectiveAdapter),
-    [groupedModels, effectiveAdapter],
-  );
-
-  const rawSessionModel = session?.model;
-  const sessionModel = stripReasoningSuffix(rawSessionModel);
-  const activeModel = sessionModel ?? selectedModel;
-  const currentModel = models.find((m) => m.modelId === activeModel);
-
-  useEffect(() => {
-    if (!effectiveAdapter || !models.length) return;
-
-    if (!isModelCompatibleWithAdapter(currentModel, effectiveAdapter)) {
-      const defaultModel = getDefaultModelForAdapter(models, effectiveAdapter);
-      if (defaultModel) {
-        setSelectedModel(defaultModel);
-        onModelChange?.(defaultModel);
-      }
+  const options = modelOption ? flattenSelectOptions(modelOption.options) : [];
+  const groupedOptions = useMemo(() => {
+    if (!modelOption || modelOption.options.length === 0) return [];
+    if ("group" in modelOption.options[0]) {
+      return modelOption.options as SessionConfigSelectGroup[];
     }
-  }, [effectiveAdapter, currentModel, models, setSelectedModel, onModelChange]);
+    return [];
+  }, [modelOption]);
+
+  if (!modelOption || options.length === 0) return null;
 
   const handleChange = (value: string) => {
-    setSelectedModel(value);
     onModelChange?.(value);
 
     if (taskId && session?.status === "connected" && !session.isCloud) {
-      setSessionModel(taskId, value);
+      setSessionConfigOption(taskId, modelOption.id, value);
     }
   };
 
-  const displayName = currentModel?.name ?? activeModel;
+  const currentValue = modelOption.currentValue;
+  const currentLabel =
+    options.find((opt) => opt.value === currentValue)?.name ?? currentValue;
 
   return (
     <Select.Root
-      value={activeModel}
+      value={currentValue}
       onValueChange={handleChange}
       disabled={disabled}
       size="1"
@@ -117,23 +67,29 @@ export function ModelSelector({
         }}
       >
         <Text size="1" style={{ fontFamily: "var(--font-mono)" }}>
-          {displayName}
+          {currentLabel}
         </Text>
       </Select.Trigger>
       <Select.Content position="popper" sideOffset={4}>
-        {filteredGroupedModels.map((group, index) => (
-          <Fragment key={group.provider}>
-            {index > 0 && <Select.Separator />}
-            <Select.Group>
-              <Select.Label>{group.provider}</Select.Label>
-              {group.models.map((model) => (
-                <Select.Item key={model.modelId} value={model.modelId}>
-                  {model.name}
-                </Select.Item>
-              ))}
-            </Select.Group>
-          </Fragment>
-        ))}
+        {groupedOptions.length > 0
+          ? groupedOptions.map((group, index) => (
+              <Fragment key={group.group}>
+                {index > 0 && <Select.Separator />}
+                <Select.Group>
+                  <Select.Label>{group.name}</Select.Label>
+                  {group.options.map((model) => (
+                    <Select.Item key={model.value} value={model.value}>
+                      {model.name}
+                    </Select.Item>
+                  ))}
+                </Select.Group>
+              </Fragment>
+            ))
+          : options.map((model) => (
+              <Select.Item key={model.value} value={model.value}>
+                {model.name}
+              </Select.Item>
+            ))}
       </Select.Content>
     </Select.Root>
   );

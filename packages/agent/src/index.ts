@@ -26,13 +26,16 @@ export { createAcpConnection } from "./adapters/acp-connection.js";
 export type { CodexProcessOptions } from "./adapters/codex/spawn.js";
 export { Agent } from "./agent.js";
 export {
+  type ArrayModelInfo,
   BLOCKED_MODELS,
   DEFAULT_GATEWAY_MODEL,
   type FetchGatewayModelsOptions,
+  fetchArrayModels,
   fetchGatewayModels,
   formatGatewayModelName,
   type GatewayModel,
   getProviderName,
+  isAnthropicModel,
 } from "./gateway-models.js";
 export { PostHogAPIClient } from "./posthog-api.js";
 export type {

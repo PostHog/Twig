@@ -25,6 +25,7 @@ export type AcpConnectionConfig = {
   logger?: Logger;
   processCallbacks?: ClaudeAcpAgentOptions;
   codexOptions?: CodexProcessOptions;
+  allowedModelIds?: Set<string>;
 };
 
 export type AcpConnection = {
@@ -34,6 +35,102 @@ export type AcpConnection = {
 };
 
 export type InProcessAcpConnection = AcpConnection;
+
+type ConfigOption = {
+  id?: string;
+  category?: string | null;
+  currentValue?: string;
+  options?: Array<
+    { value?: string } | { group?: string; options?: Array<{ value?: string }> }
+  >;
+};
+
+function isGroupedOptions(
+  options: NonNullable<ConfigOption["options"]>,
+): options is Array<{ group?: string; options?: Array<{ value?: string }> }> {
+  return options.length > 0 && "group" in options[0];
+}
+
+function filterModelConfigOptions(
+  msg: Record<string, unknown>,
+  allowedModelIds: Set<string>,
+): Record<string, unknown> | null {
+  const payload = msg as {
+    method?: string;
+    result?: { configOptions?: ConfigOption[] };
+    params?: {
+      update?: { sessionUpdate?: string; configOptions?: ConfigOption[] };
+    };
+  };
+
+  const configOptions =
+    payload.result?.configOptions ?? payload.params?.update?.configOptions;
+  if (!configOptions) return null;
+
+  const filtered = configOptions.map((opt) => {
+    if (opt.category !== "model" || !opt.options) return opt;
+
+    const options = opt.options;
+    if (isGroupedOptions(options)) {
+      const filteredOptions = options.map((group) => ({
+        ...group,
+        options: (group.options ?? []).filter(
+          (o) => o?.value && allowedModelIds.has(o.value),
+        ),
+      }));
+      const flat = filteredOptions.flatMap((g) => g.options ?? []);
+      const currentAllowed =
+        opt.currentValue && allowedModelIds.has(opt.currentValue);
+      const nextCurrent =
+        currentAllowed || flat.length === 0 ? opt.currentValue : flat[0]?.value;
+
+      return {
+        ...opt,
+        currentValue: nextCurrent,
+        options: filteredOptions,
+      };
+    }
+
+    const valueOptions = options as Array<{ value?: string }>;
+    const filteredOptions = valueOptions.filter(
+      (o) => o?.value && allowedModelIds.has(o.value),
+    );
+    const currentAllowed =
+      opt.currentValue && allowedModelIds.has(opt.currentValue);
+    const nextCurrent =
+      currentAllowed || filteredOptions.length === 0
+        ? opt.currentValue
+        : filteredOptions[0]?.value;
+
+    return {
+      ...opt,
+      currentValue: nextCurrent,
+      options: filteredOptions,
+    };
+  });
+
+  if (payload.result?.configOptions) {
+    return { ...msg, result: { ...payload.result, configOptions: filtered } };
+  }
+  if (payload.params?.update?.configOptions) {
+    return {
+      ...msg,
+      params: {
+        ...payload.params,
+        update: { ...payload.params.update, configOptions: filtered },
+      },
+    };
+  }
+  return null;
+}
+
+function extractReasoningEffort(
+  configOptions: ConfigOption[] | undefined,
+): string | undefined {
+  if (!configOptions) return undefined;
+  const option = configOptions.find((opt) => opt.id === "reasoning_effort");
+  return option?.currentValue ?? undefined;
+}
 
 /**
  * Creates an ACP connection with the specified agent framework.
@@ -134,6 +231,7 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
     new Logger({ debug: true, prefix: "[CodexConnection]" });
 
   const { logWriter } = config;
+  const allowedModelIds = config.allowedModelIds;
 
   const codexProcess = spawnCodexProcess({
     ...config.codexOptions,
@@ -147,6 +245,8 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
   let loadRequestId: string | number | null = null;
   let newSessionRequestId: string | number | null = null;
   let sdkSessionEmitted = false;
+  const reasoningEffortBySessionId = new Map<string, string>();
+  let injectedConfigId = 0;
 
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -174,6 +274,16 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
 
           try {
             const msg = JSON.parse(trimmed);
+            const sessionId =
+              msg?.params?.sessionId ?? msg?.result?.sessionId ?? null;
+            const configOptions =
+              msg?.result?.configOptions ?? msg?.params?.update?.configOptions;
+            if (sessionId && configOptions) {
+              const effort = extractReasoningEffort(configOptions);
+              if (effort) {
+                reasoningEffortBySessionId.set(sessionId, effort);
+              }
+            }
 
             if (
               !sdkSessionEmitted &&
@@ -206,6 +316,14 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
               } else if (msg.method === "session/update") {
                 logger.debug("Filtering replay session/update during load");
                 shouldFilter = true;
+              }
+            }
+
+            if (!shouldFilter && allowedModelIds && allowedModelIds.size > 0) {
+              const updated = filterModelConfigOptions(msg, allowedModelIds);
+              if (updated) {
+                outputLines.push(JSON.stringify(updated));
+                continue;
               }
             }
           } catch {
@@ -246,6 +364,43 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
 
       try {
         const msg = JSON.parse(trimmed);
+        if (
+          msg.method === "session/set_config_option" &&
+          msg.params?.configId === "reasoning_effort" &&
+          msg.params?.sessionId &&
+          msg.params?.value
+        ) {
+          reasoningEffortBySessionId.set(
+            msg.params.sessionId,
+            msg.params.value,
+          );
+        }
+        if (msg.method === "session/prompt" && msg.params?.sessionId) {
+          const effort = reasoningEffortBySessionId.get(msg.params.sessionId);
+          if (effort) {
+            const injection = {
+              jsonrpc: "2.0",
+              id: `reasoning_effort_${Date.now()}_${injectedConfigId++}`,
+              method: "session/set_config_option",
+              params: {
+                sessionId: msg.params.sessionId,
+                configId: "reasoning_effort",
+                value: effort,
+              },
+            };
+            const injectionLine = `${JSON.stringify(injection)}\n`;
+            const writer = originalWritable.getWriter();
+            return writer
+              .write(encoder.encode(injectionLine))
+              .then(() => writer.releaseLock())
+              .then(() => {
+                const nextWriter = originalWritable.getWriter();
+                return nextWriter
+                  .write(chunk)
+                  .finally(() => nextWriter.releaseLock());
+              });
+          }
+        }
         if (msg.method === "session/new" && msg.id) {
           logger.debug("session/new detected, tracking request ID");
           newSessionRequestId = msg.id;

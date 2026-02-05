@@ -3,6 +3,7 @@
 import {
   CLIENT_METHODS,
   type RequestPermissionRequest,
+  type SessionConfigOption,
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
 import type { StoredLogEntry as BaseStoredLogEntry } from "@shared/types/session-events";
@@ -17,7 +18,7 @@ export interface ParsedSessionLogs {
   rawEntries: StoredLogEntry[];
   sessionId?: string;
   adapter?: "claude" | "codex";
-  model?: string;
+  configOptions?: SessionConfigOption[];
 }
 
 /**
@@ -41,7 +42,7 @@ export async function fetchSessionLogs(
     const rawEntries: StoredLogEntry[] = [];
     let sessionId: string | undefined;
     let adapter: "claude" | "codex" | undefined;
-    let model: string | undefined;
+    let configOptions: SessionConfigOption[] | undefined;
 
     for (const line of content.trim().split("\n")) {
       try {
@@ -74,16 +75,11 @@ export async function fetchSessionLogs(
           const params = stored.notification.params as {
             update?: {
               sessionUpdate?: string;
-              configOptions?: Array<{ id: string; currentValue?: string }>;
+              configOptions?: SessionConfigOption[];
             };
           };
           if (params.update?.sessionUpdate === "config_option_update") {
-            const modelOption = params.update.configOptions?.find(
-              (opt) => opt.id === "model",
-            );
-            if (modelOption?.currentValue) {
-              model = modelOption.currentValue;
-            }
+            configOptions = params.update.configOptions;
           }
         }
 
@@ -113,7 +109,7 @@ export async function fetchSessionLogs(
       }
     }
 
-    return { notifications, rawEntries, sessionId, adapter, model };
+    return { notifications, rawEntries, sessionId, adapter, configOptions };
   } catch {
     return { notifications: [], rawEntries: [] };
   }

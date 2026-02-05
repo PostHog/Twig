@@ -9,8 +9,7 @@ import {
   PROTOCOL_VERSION,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
-  type SessionMode,
-  type SessionModeId,
+  type SessionConfigOption,
 } from "@agentclientprotocol/sdk";
 import { Agent } from "@posthog/agent/agent";
 import {
@@ -171,8 +170,6 @@ interface SessionConfig {
   logUrl?: string;
   /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
   sessionId?: string;
-  model?: string;
-  executionMode?: string;
   adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
@@ -194,14 +191,7 @@ interface ManagedSession {
   recreationPromise?: Promise<ManagedSession>;
   promptPending: boolean;
   pendingContext?: string;
-  availableModels?: Array<{
-    modelId: string;
-    name: string;
-    description?: string | null;
-  }>;
-  currentModelId?: string;
-  availableModes?: SessionMode[];
-  currentModeId?: SessionModeId;
+  configOptions?: SessionConfigOption[];
   sessionId: string;
 }
 
@@ -421,8 +411,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       credentials,
       logUrl,
       sessionId: existingSessionId,
-      model,
-      executionMode,
       adapter,
       additionalDirectories,
     } = config;
@@ -457,7 +445,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     try {
       const acpConnection = await agent.run(taskId, taskRunId, {
         adapter,
-        model,
         codexBinaryPath: adapter === "codex" ? getCodexBinaryPath() : undefined,
         processCallbacks: {
           onProcessSpawned: (info) => {
@@ -500,12 +487,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       const mcpServers =
         adapter === "codex" ? [] : this.buildMcpServers(credentials);
 
-      let availableModels:
-        | Array<{ modelId: string; name: string; description?: string | null }>
-        | undefined;
-      let currentModelId: string | undefined;
-      let availableModes: SessionMode[] | undefined;
-      let currentModeId: SessionModeId | undefined;
+      let configOptions: SessionConfigOption[] | undefined;
       let agentSessionId: string;
 
       if (isReconnect && adapter === "codex" && config.sessionId) {
@@ -514,10 +496,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           cwd: repoPath,
           mcpServers,
         });
-        availableModels = loadResponse.models?.availableModels;
-        currentModelId = loadResponse.models?.currentModelId;
-        availableModes = loadResponse.modes?.availableModes;
-        currentModeId = loadResponse.modes?.currentModeId;
+        configOptions = loadResponse.configOptions ?? undefined;
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
@@ -544,20 +523,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         );
         const resumeMeta = resumeResponse?._meta as
           | {
-              models?: {
-                availableModels?: typeof availableModels;
-                currentModelId?: string;
-              };
-              modes?: {
-                availableModes?: SessionMode[];
-                currentModeId?: SessionModeId;
-              };
+              configOptions?: SessionConfigOption[];
             }
           | undefined;
-        availableModels = resumeMeta?.models?.availableModels;
-        currentModelId = resumeMeta?.models?.currentModelId;
-        availableModes = resumeMeta?.modes?.availableModes;
-        currentModeId = resumeMeta?.modes?.currentModeId;
+        configOptions = resumeMeta?.configOptions;
         agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
@@ -566,9 +535,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           mcpServers,
           _meta: {
             taskRunId,
-            model,
             systemPrompt,
-            ...(executionMode && { initialModeId: executionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
                 options: { additionalDirectories },
@@ -576,10 +543,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             }),
           },
         });
-        availableModels = newSessionResponse.models?.availableModels;
-        currentModelId = newSessionResponse.models?.currentModelId;
-        availableModes = newSessionResponse.modes?.availableModes;
-        currentModeId = newSessionResponse.modes?.currentModeId;
+        configOptions = newSessionResponse.configOptions ?? undefined;
         agentSessionId = newSessionResponse.sessionId;
       }
 
@@ -598,10 +562,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         config,
         needsRecreation: false,
         promptPending: false,
-        availableModels,
-        currentModelId,
-        availableModes,
-        currentModeId,
+        configOptions,
         sessionId: agentSessionId,
       };
 
@@ -780,42 +741,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return this.sessions.get(taskRunId);
   }
 
-  async setSessionModel(sessionId: string, modelId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    try {
-      await session.clientSideConnection.unstable_setSessionModel({
-        sessionId: session.sessionId,
-        modelId,
-      });
-      log.info("Session model updated", { sessionId, modelId });
-    } catch (err) {
-      log.error("Failed to set session model", { sessionId, modelId, err });
-      throw err;
-    }
-  }
-
-  async setSessionMode(sessionId: string, modeId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    try {
-      await session.clientSideConnection.setSessionMode({
-        sessionId: session.sessionId,
-        modeId,
-      });
-      log.info("Session mode updated", { sessionId, modeId });
-    } catch (err) {
-      log.error("Failed to set session mode", { sessionId, modeId, err });
-      throw err;
-    }
-  }
-
   async setSessionConfigOption(
     sessionId: string,
     configId: string,
@@ -827,11 +752,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     }
 
     try {
-      await session.clientSideConnection.setSessionConfigOption({
+      const result = await session.clientSideConnection.setSessionConfigOption({
         sessionId: session.sessionId,
         configId,
         value,
       });
+      session.configOptions = result.configOptions ?? session.configOptions;
       log.info("Session config option updated", { sessionId, configId, value });
     } catch (err) {
       log.error("Failed to set session config option", {
@@ -1229,9 +1155,6 @@ For git operations while detached:
       },
       logUrl: "logUrl" in params ? params.logUrl : undefined,
       sessionId: "sessionId" in params ? params.sessionId : undefined,
-      model: "model" in params ? params.model : undefined,
-      executionMode:
-        "executionMode" in params ? params.executionMode : undefined,
       adapter: "adapter" in params ? params.adapter : undefined,
       additionalDirectories:
         "additionalDirectories" in params
@@ -1244,10 +1167,7 @@ For git operations while detached:
     return {
       sessionId: session.taskRunId,
       channel: session.channel,
-      availableModels: session.availableModels,
-      currentModelId: session.currentModelId,
-      availableModes: session.availableModes,
-      currentModeId: session.currentModeId,
+      configOptions: session.configOptions,
     };
   }
 

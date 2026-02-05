@@ -15,9 +15,11 @@ import {
   type PromptRequest,
   type PromptResponse,
   RequestError,
-  type SetSessionModelRequest,
-  type SetSessionModeRequest,
-  type SetSessionModeResponse,
+  type SessionConfigOption,
+  type SessionConfigOptionCategory,
+  type SessionConfigSelectOption,
+  type SetSessionConfigOptionRequest,
+  type SetSessionConfigOptionResponse,
 } from "@agentclientprotocol/sdk";
 import {
   type CanUseTool,
@@ -47,7 +49,7 @@ import {
 import { canUseTool } from "./permissions/permission-handlers.js";
 import { getAvailableSlashCommands } from "./session/commands.js";
 import { parseMcpServers } from "./session/mcp-config.js";
-import { DEFAULT_MODEL, toSdkModelId } from "./session/models.js";
+import { toSdkModelId } from "./session/models.js";
 import {
   buildSessionOptions,
   buildSystemPrompt,
@@ -78,6 +80,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   clientCapabilities?: ClientCapabilities;
   private logWriter?: SessionLogWriter;
   private processCallbacks?: ClaudeAcpAgentOptions;
+  private lastSentConfigOptions?: SessionConfigOption[];
 
   constructor(
     client: AgentSideConnection,
@@ -136,8 +139,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     const meta = params._meta as NewSessionMeta | undefined;
     const internalSessionId = uuidv7();
-    const permissionMode =
-      (meta?.initialModeId as TwigExecutionMode) ?? "default";
+    const permissionMode: TwigExecutionMode = "default";
 
     const mcpServers = parseMcpServers(params);
 
@@ -170,10 +172,9 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       internalSessionId,
       meta as Record<string, unknown>,
     );
-
-    if (meta?.model) {
-      await this.trySetModel(q, meta.model);
-    }
+    const modelOptions = await this.getModelConfigOptions();
+    session.modelId = modelOptions.currentModelId;
+    await this.trySetModel(q, modelOptions.currentModelId);
 
     this.sendAvailableCommandsUpdate(
       internalSessionId,
@@ -182,11 +183,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     return {
       sessionId: internalSessionId,
-      models: await this.getAvailableModels(meta?.model ?? DEFAULT_MODEL),
-      modes: {
-        currentModeId: permissionMode,
-        availableModes: getAvailableModes(),
-      },
+      configOptions: await this.buildConfigOptions(modelOptions),
     };
   }
 
@@ -231,11 +228,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     );
 
     return {
-      models: await this.getAvailableModels(),
-      modes: {
-        currentModeId: session.permissionMode,
-        availableModes: getAvailableModes(),
-      },
+      configOptions: await this.buildConfigOptions(),
     };
   }
 
@@ -249,23 +242,28 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     return this.processMessages(params.sessionId);
   }
 
-  async unstable_setSessionModel(params: SetSessionModelRequest) {
-    const sdkModelId = toSdkModelId(params.modelId);
-    await this.session.query.setModel(sdkModelId);
-  }
+  async setSessionConfigOption(
+    params: SetSessionConfigOptionRequest,
+  ): Promise<SetSessionConfigOptionResponse> {
+    const configId = params.configId;
+    const value = params.value;
 
-  async setSessionMode(
-    params: SetSessionModeRequest,
-  ): Promise<SetSessionModeResponse> {
-    const modeId = params.modeId as TwigExecutionMode;
-
-    if (!TWIG_EXECUTION_MODES.includes(modeId)) {
-      throw new Error("Invalid Mode");
+    if (configId === "mode") {
+      const modeId = value as TwigExecutionMode;
+      if (!TWIG_EXECUTION_MODES.includes(modeId)) {
+        throw new Error("Invalid Mode");
+      }
+      this.session.permissionMode = modeId;
+      await this.session.query.setPermissionMode(modeId);
+    } else if (configId === "model") {
+      await this.setModelWithFallback(this.session.query, value);
+      this.session.modelId = value;
+    } else {
+      throw new Error("Unsupported config option");
     }
 
-    this.session.permissionMode = modeId;
-    await this.session.query.setPermissionMode(modeId);
-    return {};
+    await this.emitConfigOptionsUpdate();
+    return { configOptions: await this.buildConfigOptions() };
   }
 
   protected async interruptSession(): Promise<void> {
@@ -282,8 +280,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       );
       return {
         _meta: {
-          models: result.models,
-          modes: result.modes,
+          configOptions: result.configOptions,
         },
       };
     }
@@ -371,6 +368,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         sessionId,
         fileContentCache: this.fileContentCache,
         logger: this.logger,
+        emitConfigOptionsUpdate: () => this.emitConfigOptionsUpdate(sessionId),
       });
   }
 
@@ -379,8 +377,68 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       if (this.session) {
         this.session.permissionMode = newMode;
       }
-      await this.sendModeUpdate(sessionId, newMode);
+      await this.emitConfigOptionsUpdate(sessionId);
     };
+  }
+
+  private async buildConfigOptions(modelOptionsOverride?: {
+    currentModelId: string;
+    options: SessionConfigSelectOption[];
+  }): Promise<SessionConfigOption[]> {
+    const options: SessionConfigOption[] = [];
+
+    const modeOptions = getAvailableModes().map((mode) => ({
+      value: mode.id,
+      name: mode.name,
+      description: mode.description ?? undefined,
+    }));
+
+    options.push({
+      id: "mode",
+      name: "Approval Preset",
+      type: "select",
+      currentValue: this.session.permissionMode,
+      options: modeOptions,
+      category: "mode" as SessionConfigOptionCategory,
+      description: "Choose an approval and sandboxing preset for your session",
+    });
+
+    const modelOptions =
+      modelOptionsOverride ??
+      (await this.getModelConfigOptions(this.session.modelId));
+    this.session.modelId = modelOptions.currentModelId;
+
+    options.push({
+      id: "model",
+      name: "Model",
+      type: "select",
+      currentValue: modelOptions.currentModelId,
+      options: modelOptions.options,
+      category: "model" as SessionConfigOptionCategory,
+      description: "Choose which model Claude should use",
+    });
+
+    return options;
+  }
+
+  private async emitConfigOptionsUpdate(sessionId?: string): Promise<void> {
+    const configOptions = await this.buildConfigOptions();
+    const serialized = JSON.stringify(configOptions);
+    if (
+      this.lastSentConfigOptions &&
+      JSON.stringify(this.lastSentConfigOptions) === serialized
+    ) {
+      return;
+    }
+
+    this.lastSentConfigOptions = configOptions;
+    await this.client.sessionUpdate({
+      sessionId: sessionId ?? this.sessionId,
+      update: {
+        sessionUpdate: "config_option_update",
+        configOptions,
+      },
+    });
   }
 
   private checkAuthStatus() {
@@ -397,9 +455,22 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
   private async trySetModel(q: Query, modelId: string) {
     try {
-      await q.setModel(toSdkModelId(modelId));
+      await this.setModelWithFallback(q, modelId);
     } catch (err) {
       this.logger.warn("Failed to set model", { modelId, error: err });
+    }
+  }
+
+  private async setModelWithFallback(q: Query, modelId: string): Promise<void> {
+    try {
+      await q.setModel(modelId);
+      return;
+    } catch (err) {
+      const fallback = toSdkModelId(modelId);
+      if (fallback === modelId) {
+        throw err;
+      }
+      await q.setModel(fallback);
     }
   }
 

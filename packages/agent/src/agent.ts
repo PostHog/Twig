@@ -2,7 +2,11 @@ import {
   createAcpConnection,
   type InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
-import { BLOCKED_MODELS, DEFAULT_GATEWAY_MODEL } from "./gateway-models.js";
+import {
+  BLOCKED_MODELS,
+  DEFAULT_GATEWAY_MODEL,
+  fetchArrayModels,
+} from "./gateway-models.js";
 import { PostHogAPIClient } from "./posthog-api.js";
 import { SessionLogWriter } from "./session-log-writer.js";
 import type { AgentConfig, TaskExecutionOptions } from "./types.js";
@@ -66,10 +70,36 @@ export class Agent {
 
     this.taskRunId = taskRunId;
 
-    const sanitizedModel =
+    let allowedModelIds: Set<string> | undefined;
+    let sanitizedModel =
       options.model && !BLOCKED_MODELS.has(options.model)
         ? options.model
-        : DEFAULT_GATEWAY_MODEL;
+        : undefined;
+    if (options.adapter === "codex" && gatewayConfig) {
+      const models = await fetchArrayModels({
+        gatewayUrl: gatewayConfig.gatewayUrl,
+      });
+      const codexModelIds = models
+        .filter((model) => {
+          if (BLOCKED_MODELS.has(model.id)) return false;
+          if (model.owned_by) {
+            return model.owned_by === "openai";
+          }
+          return model.id.startsWith("gpt-") || model.id.startsWith("openai/");
+        })
+        .map((model) => model.id);
+
+      if (codexModelIds.length > 0) {
+        allowedModelIds = new Set(codexModelIds);
+      }
+
+      if (!sanitizedModel || !allowedModelIds?.has(sanitizedModel)) {
+        sanitizedModel = codexModelIds[0];
+      }
+    }
+    if (!sanitizedModel) {
+      sanitizedModel = DEFAULT_GATEWAY_MODEL;
+    }
 
     this.acpConnection = createAcpConnection({
       adapter: options.adapter,
@@ -78,6 +108,7 @@ export class Agent {
       taskId,
       logger: this.logger,
       processCallbacks: options.processCallbacks,
+      allowedModelIds,
       codexOptions:
         options.adapter === "codex" && gatewayConfig
           ? {

@@ -22,8 +22,6 @@ export const sessionConfigSchema = z.object({
   logUrl: z.string().optional(),
   /** The agent's session ID (for resume - SDK session ID for Claude, Codex's session ID for Codex) */
   sessionId: z.string().optional(),
-  model: z.string().optional(),
-  executionMode: z.string().optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
@@ -42,8 +40,6 @@ export const startSessionInput = z.object({
   projectId: z.number(),
   permissionMode: z.string().optional(),
   autoProgress: z.boolean().optional(),
-  model: z.string().optional(),
-  executionMode: z.string().optional(),
   runMode: z.enum(["local", "cloud"]).optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
   additionalDirectories: z.array(z.string()).optional(),
@@ -60,21 +56,45 @@ export const modelOptionSchema = z.object({
 
 export type ModelOption = z.infer<typeof modelOptionSchema>;
 
-export const modeOptionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullish(),
-});
+const sessionConfigSelectOptionSchema = z
+  .object({
+    value: z.string(),
+    name: z.string(),
+    description: z.string().nullish(),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .passthrough();
 
-export type ModeOption = z.infer<typeof modeOptionSchema>;
+const sessionConfigSelectGroupSchema = z
+  .object({
+    group: z.string(),
+    name: z.string(),
+    options: z.array(sessionConfigSelectOptionSchema),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .passthrough();
+
+export const sessionConfigOptionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.literal("select"),
+    currentValue: z.string(),
+    options: z
+      .array(sessionConfigSelectOptionSchema)
+      .or(z.array(sessionConfigSelectGroupSchema)),
+    category: z.string().nullish(),
+    description: z.string().nullish(),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .passthrough();
+
+export type SessionConfigOption = z.infer<typeof sessionConfigOptionSchema>;
 
 export const sessionResponseSchema = z.object({
   sessionId: z.string(),
   channel: z.string(),
-  availableModels: z.array(modelOptionSchema).optional(),
-  currentModelId: z.string().optional(),
-  availableModes: z.array(modeOptionSchema).optional(),
-  currentModeId: z.string().optional(),
+  configOptions: z.array(sessionConfigOptionSchema).optional(),
 });
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
@@ -135,7 +155,6 @@ export const reconnectSessionInput = z.object({
   logUrl: z.string().optional(),
   sessionId: z.string().optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
-  model: z.string().optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
 });
@@ -145,18 +164,6 @@ export type ReconnectSessionInput = z.infer<typeof reconnectSessionInput>;
 // Token update input - updates the global token for all agent operations
 export const tokenUpdateInput = z.object({
   token: z.string(),
-});
-
-// Set model input
-export const setModelInput = z.object({
-  sessionId: z.string(),
-  modelId: z.string(),
-});
-
-// Set mode input - accepts any agent-defined mode ID
-export const setModeInput = z.object({
-  sessionId: z.string(),
-  modeId: z.string(),
 });
 
 // Set config option input (for Codex reasoning level, etc.)

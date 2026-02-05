@@ -17,8 +17,6 @@ import {
   respondToPermissionInput,
   sessionResponseSchema,
   setConfigOptionInput,
-  setModeInput,
-  setModelInput,
   startSessionInput,
   subscribeSessionInput,
   tokenUpdateInput,
@@ -59,18 +57,6 @@ export const agentRouter = router({
   updateToken: publicProcedure.input(tokenUpdateInput).mutation(({ input }) => {
     getService().updateToken(input.token);
   }),
-
-  setModel: publicProcedure
-    .input(setModelInput)
-    .mutation(({ input }) =>
-      getService().setSessionModel(input.sessionId, input.modelId),
-    ),
-
-  setMode: publicProcedure
-    .input(setModeInput)
-    .mutation(({ input }) =>
-      getService().setSessionMode(input.sessionId, input.modeId),
-    ),
 
   setConfigOption: publicProcedure
     .input(setConfigOptionInput)

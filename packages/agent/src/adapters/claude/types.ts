@@ -26,6 +26,7 @@ export type Session = BaseSession & {
   query: Query;
   input: Pushable<SDKUserMessage>;
   permissionMode: TwigExecutionMode;
+  modelId?: string;
   cwd: string;
   taskRunId?: string;
   sessionId?: string;
@@ -51,11 +52,9 @@ export type ToolUpdateMeta = {
 
 export type NewSessionMeta = {
   taskRunId?: string;
-  initialModeId?: string;
   disableBuiltInTools?: boolean;
   systemPrompt?: unknown;
   sessionId?: string;
-  model?: string;
   claudeCode?: {
     options?: Options;
   };

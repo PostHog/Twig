@@ -1,9 +1,9 @@
 import { Select, Text } from "@radix-ui/themes";
 import {
-  type CodexReasoningLevel,
-  useCodexReasoningLevelForTask,
+  flattenSelectOptions,
   useSessionActions,
   useSessionForTask,
+  useThoughtLevelConfigOptionForTask,
 } from "../stores/sessionStore";
 
 interface ReasoningLevelSelectorProps {
@@ -11,50 +11,27 @@ interface ReasoningLevelSelectorProps {
   disabled?: boolean;
 }
 
-const REASONING_LEVELS: { value: CodexReasoningLevel; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "XHigh" },
-];
-
-function supportsConfigurableReasoning(model: string | undefined): boolean {
-  if (!model) return false;
-  const normalizedModel = model.toLowerCase();
-  return normalizedModel.includes("gpt-5.2");
-}
-
-function extractReasoningFromModelId(
-  modelId: string | undefined,
-): CodexReasoningLevel | undefined {
-  if (!modelId) return undefined;
-  const match = modelId.match(/\/(low|medium|high|xhigh)$/);
-  return match ? (match[1] as CodexReasoningLevel) : undefined;
-}
-
 export function ReasoningLevelSelector({
   taskId,
   disabled,
 }: ReasoningLevelSelectorProps) {
-  const { setCodexReasoningLevel } = useSessionActions();
+  const { setSessionConfigOption } = useSessionActions();
   const session = useSessionForTask(taskId);
-  const reasoningLevel = useCodexReasoningLevelForTask(taskId);
+  const thoughtOption = useThoughtLevelConfigOptionForTask(taskId);
 
-  const isCodex = session?.adapter === "codex";
-  const hasConfigurableReasoning = supportsConfigurableReasoning(
-    session?.model,
-  );
-
-  if (!isCodex || !hasConfigurableReasoning) {
+  if (!thoughtOption) {
     return null;
   }
 
-  const levelFromModelId = extractReasoningFromModelId(session?.model);
-  const activeLevel = reasoningLevel ?? levelFromModelId ?? "medium";
+  const options = flattenSelectOptions(thoughtOption.options);
+  if (options.length === 0) return null;
+  const activeLevel = thoughtOption.currentValue;
+  const activeLabel =
+    options.find((opt) => opt.value === activeLevel)?.name ?? activeLevel;
 
   const handleChange = (value: string) => {
     if (taskId && session?.status === "connected" && !session.isCloud) {
-      setCodexReasoningLevel(taskId, value as CodexReasoningLevel);
+      setSessionConfigOption(taskId, thoughtOption.id, value);
     }
   };
 
@@ -77,14 +54,13 @@ export function ReasoningLevelSelector({
         }}
       >
         <Text size="1" style={{ fontFamily: "var(--font-mono)" }}>
-          Reasoning:{" "}
-          {REASONING_LEVELS.find((l) => l.value === activeLevel)?.label}
+          Reasoning: {activeLabel}
         </Text>
       </Select.Trigger>
       <Select.Content position="popper" sideOffset={4}>
-        {REASONING_LEVELS.map((level) => (
+        {options.map((level) => (
           <Select.Item key={level.value} value={level.value}>
-            {level.label}
+            {level.name}
           </Select.Item>
         ))}
       </Select.Content>

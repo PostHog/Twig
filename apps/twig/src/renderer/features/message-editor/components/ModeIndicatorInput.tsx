@@ -1,4 +1,8 @@
-import type { SessionMode } from "@agentclientprotocol/sdk";
+import type {
+  SessionConfigOption,
+  SessionConfigSelectGroup,
+  SessionConfigSelectOption,
+} from "@agentclientprotocol/sdk";
 import {
   Circle,
   Eye,
@@ -51,16 +55,29 @@ const DEFAULT_STYLE: ModeStyle = {
 };
 
 interface ModeIndicatorInputProps {
-  mode?: SessionMode;
-  modeId?: string;
+  modeOption: SessionConfigOption;
 }
 
-export function ModeIndicatorInput({ mode, modeId }: ModeIndicatorInputProps) {
-  const id = mode?.id ?? modeId;
-  if (!id) return null;
+function flattenOptions(
+  options: SessionConfigOption["options"],
+): SessionConfigSelectOption[] {
+  if (options.length === 0) return [];
+  if ("group" in options[0]) {
+    return (options as SessionConfigSelectGroup[]).flatMap(
+      (group) => group.options,
+    );
+  }
+  return options as SessionConfigSelectOption[];
+}
+
+export function ModeIndicatorInput({ modeOption }: ModeIndicatorInputProps) {
+  const id = modeOption.currentValue;
 
   const style = MODE_STYLES[id] ?? DEFAULT_STYLE;
-  const label = mode?.name ?? id;
+  const option = flattenOptions(modeOption.options).find(
+    (opt) => opt.value === id,
+  );
+  const label = option?.name ?? id;
 
   return (
     <Flex align="center" justify="between" py="1">

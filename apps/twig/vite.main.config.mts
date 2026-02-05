@@ -147,7 +147,8 @@ function copyCodexAcpBinary(): Plugin {
         mkdirSync(destDir, { recursive: true });
       }
 
-      const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp";
+      const binaryName =
+        process.platform === "win32" ? "codex-acp.exe" : "codex-acp";
       const sourceDir = join(__dirname, "resources/codex-acp");
       const sourcePath = join(sourceDir, binaryName);
 
@@ -159,7 +160,9 @@ function copyCodexAcpBinary(): Plugin {
         if (process.platform === "darwin") {
           try {
             execSync(`xattr -cr "${destPath}"`, { stdio: "inherit" });
-            execSync(`codesign --force --sign - "${destPath}"`, { stdio: "inherit" });
+            execSync(`codesign --force --sign - "${destPath}"`, {
+              stdio: "inherit",
+            });
             console.log("Ad-hoc signed codex-acp binary");
           } catch (err) {
             console.warn("Failed to sign codex-acp binary:", err);

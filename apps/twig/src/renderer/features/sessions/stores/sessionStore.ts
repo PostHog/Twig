@@ -1,8 +1,9 @@
 import type {
   AvailableCommand,
   ContentBlock,
-  SessionMode,
-  SessionModeId,
+  SessionConfigOption,
+  SessionConfigSelectGroup,
+  SessionConfigSelectOption,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
@@ -12,7 +13,7 @@ import {
   notifyPermissionRequest,
   notifyPromptComplete,
 } from "@renderer/lib/notifications";
-import { EXECUTION_MODES, type ExecutionMode, type Task } from "@shared/types";
+import type { ExecutionMode, Task } from "@shared/types";
 import type {
   AcpMessage,
   JsonRpcMessage,
@@ -34,7 +35,6 @@ import {
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
-import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -43,49 +43,50 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 
 // Re-export for external consumers
 export type { ExecutionMode, PermissionRequest };
-export type { SessionMode };
+export type { SessionConfigOption };
 
-export function getExecutionModes(
-  allowBypassPermissions: boolean,
-): ExecutionMode[] {
-  return allowBypassPermissions
-    ? EXECUTION_MODES
-    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
+type SelectOption = SessionConfigSelectOption;
+type SelectGroup = SessionConfigSelectGroup;
+
+function isSelectGroup(
+  options: SessionConfigOption["options"],
+): options is SelectGroup[] {
+  return Array.isArray(options) && options.length > 0 && "group" in options[0];
 }
 
-export function cycleExecutionMode(
-  currentModeId: string | undefined,
-  availableModes: SessionMode[] | undefined,
-  allowBypassPermissions: boolean,
-): string {
-  if (!availableModes || availableModes.length === 0) {
-    const fallbackModes = getExecutionModes(allowBypassPermissions);
-    const currentIndex = currentModeId
-      ? fallbackModes.indexOf(currentModeId as ExecutionMode)
-      : -1;
-    if (currentIndex === -1) return fallbackModes[0];
-    return fallbackModes[(currentIndex + 1) % fallbackModes.length];
-  }
+export function flattenSelectOptions(
+  options: SessionConfigOption["options"],
+): SelectOption[] {
+  if (!isSelectGroup(options)) return options;
+  return options.flatMap((group) => group.options);
+}
 
-  const filteredModes = allowBypassPermissions
-    ? availableModes
-    : availableModes.filter(
-        (m) => m.id !== "bypassPermissions" && m.id !== "full-access",
+export function getConfigOptionByCategory(
+  configOptions: SessionConfigOption[] | undefined,
+  category: string,
+): SessionConfigOption | undefined {
+  return configOptions?.find((opt) => opt.category === category);
+}
+
+export function cycleModeOption(
+  modeOption: SessionConfigOption | undefined,
+  allowBypassPermissions: boolean,
+): string | undefined {
+  if (!modeOption) return undefined;
+  const allOptions = flattenSelectOptions(modeOption.options);
+  const filtered = allowBypassPermissions
+    ? allOptions
+    : allOptions.filter(
+        (opt) =>
+          opt.value !== "bypassPermissions" && opt.value !== "full-access",
       );
+  if (filtered.length === 0) return allOptions[0]?.value;
 
-  if (filteredModes.length === 0) return availableModes[0].id;
-
-  const currentIndex = filteredModes.findIndex((m) => m.id === currentModeId);
-  if (currentIndex === -1) return filteredModes[0].id;
-
-  return filteredModes[(currentIndex + 1) % filteredModes.length].id;
-}
-
-export interface AgentModelOption {
-  modelId: string;
-  name: string;
-  description?: string | null;
-  provider?: string;
+  const currentIndex = filtered.findIndex(
+    (opt) => opt.value === modeOption.currentValue,
+  );
+  if (currentIndex === -1) return filtered[0]?.value;
+  return filtered[(currentIndex + 1) % filtered.length]?.value;
 }
 
 export interface QueuedMessage {
@@ -93,8 +94,6 @@ export interface QueuedMessage {
   content: string;
   queuedAt: number;
 }
-
-export type CodexReasoningLevel = "low" | "medium" | "high" | "xhigh";
 
 export interface AgentSession {
   taskRunId: string;
@@ -110,13 +109,9 @@ export interface AgentSession {
   isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
-  model?: string;
-  codexReasoningLevel?: CodexReasoningLevel;
-  availableModels?: AgentModelOption[];
   framework?: "claude";
   adapter?: "claude" | "codex";
-  availableModes?: SessionMode[];
-  currentModeId?: SessionModeId;
+  configOptions?: SessionConfigOption[];
   pendingPermissions: Map<string, PermissionRequest>;
   messageQueue: QueuedMessage[];
 }
@@ -139,11 +134,15 @@ interface SessionActions {
     prompt: string | ContentBlock[],
   ) => Promise<{ stopReason: string }>;
   cancelPrompt: (taskId: string) => Promise<boolean>;
-  setSessionModel: (taskId: string, modelId: string) => Promise<void>;
-  setSessionMode: (taskId: string, modeId: string) => Promise<void>;
-  setCodexReasoningLevel: (
+  setSessionConfigOption: (
     taskId: string,
-    level: CodexReasoningLevel,
+    configId: string,
+    value: string,
+  ) => Promise<void>;
+  setSessionConfigOptionByCategory: (
+    taskId: string,
+    category: string,
+    value: string,
   ) => Promise<void>;
   appendUserShellExecute: (
     taskId: string,
@@ -251,7 +250,7 @@ function subscribeToChannel(taskRunId: string) {
               const params = msg.params as {
                 update?: {
                   sessionUpdate?: string;
-                  currentModeId?: string;
+                  configOptions?: SessionConfigOption[];
                   inputTokens?: number;
                   outputTokens?: number;
                   cacheReadTokens?: number;
@@ -260,15 +259,11 @@ function subscribeToChannel(taskRunId: string) {
                 };
               };
 
-              // Handle mode updates from agent
               if (
-                params?.update?.sessionUpdate === "current_mode_update" &&
-                params.update.currentModeId
+                params?.update?.sessionUpdate === "config_option_update" &&
+                params.update.configOptions
               ) {
-                const newModeId = params.update.currentModeId;
-                session.currentModeId = newModeId;
-                setPersistedTaskMode(session.taskId, newModeId);
-                log.info("Session mode updated", { taskRunId, newModeId });
+                session.configOptions = params.update.configOptions;
               }
             }
 
@@ -512,7 +507,6 @@ function createBaseSession(
   taskId: string,
   taskTitle: string,
   isCloud: boolean,
-  executionModeId?: string,
 ): AgentSession {
   return {
     taskRunId,
@@ -525,7 +519,6 @@ function createBaseSession(
     isPromptPending: false,
     promptStartedAt: null,
     isCloud,
-    currentModeId: executionModeId,
     pendingPermissions: new Map(),
     messageQueue: [],
   };
@@ -683,18 +676,14 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
     ) => {
-      const { rawEntries, sessionId, adapter, model } =
+      const { rawEntries, sessionId, adapter, configOptions } =
         await fetchSessionLogs(logUrl);
       const events = convertStoredEntriesToEvents(rawEntries);
 
-      const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, taskTitle, false);
       session.events = events;
       session.logUrl = logUrl;
-      session.model = model;
-      if (persistedMode) {
-        session.currentModeId = persistedMode;
-      }
+      session.configOptions = configOptions;
       if (adapter) {
         session.adapter = adapter;
       }
@@ -713,30 +702,28 @@ const useStore = create<SessionStore>()(
           logUrl,
           sessionId,
           adapter,
-          model,
         });
 
         if (result) {
-          const sessionModel = result.currentModelId;
           updateSession(taskRunId, {
             status: "connected",
-            model: sessionModel,
-            availableModels: result.availableModels,
-            availableModes: result.availableModes,
-            currentModeId: result.currentModeId,
+            configOptions: result.configOptions,
           });
 
-          if (persistedMode) {
-            try {
-              await trpcVanilla.agent.setMode.mutate({
-                sessionId: taskRunId,
-                modeId: persistedMode,
-              });
-            } catch (error) {
-              log.warn("Failed to restore persisted mode after reconnect", {
-                taskId,
-                error,
-              });
+          if (configOptions && result.configOptions) {
+            const known = new Map(
+              result.configOptions.map((opt) => [opt.id, opt]),
+            );
+            for (const opt of configOptions) {
+              if (!opt.currentValue) continue;
+              const live = known.get(opt.id);
+              if (live && live.currentValue !== opt.currentValue) {
+                await get().actions.setSessionConfigOption(
+                  taskId,
+                  opt.id,
+                  opt.currentValue,
+                );
+              }
             }
           }
         } else {
@@ -782,10 +769,6 @@ const useStore = create<SessionStore>()(
         throw new Error("Failed to create task run. Please try again.");
       }
 
-      const persistedMode = getPersistedTaskMode(taskId);
-      const effectiveMode = executionMode ?? persistedMode;
-      const selectedModel = useModelsStore.getState().getEffectiveModel();
-
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -793,24 +776,13 @@ const useStore = create<SessionStore>()(
         apiKey: auth.apiKey,
         apiHost: auth.apiHost,
         projectId: auth.projectId,
-        model: selectedModel,
-        executionMode: effectiveMode,
         adapter,
       });
 
-      const session = createBaseSession(
-        taskRun.id,
-        taskId,
-        taskTitle,
-        false,
-        effectiveMode,
-      );
+      const session = createBaseSession(taskRun.id, taskId, taskTitle, false);
       session.channel = result.channel;
       session.status = "connected";
-      session.model = result.currentModelId ?? selectedModel;
-      session.availableModels = result.availableModels;
-      session.availableModes = result.availableModes;
-      session.currentModeId = result.currentModeId ?? effectiveMode;
+      session.configOptions = result.configOptions;
       if (adapter) {
         session.adapter = adapter;
       }
@@ -821,8 +793,24 @@ const useStore = create<SessionStore>()(
       track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
         task_id: taskId,
         execution_type: "local",
-        model: selectedModel,
       });
+
+      if (executionMode) {
+        await get().actions.setSessionConfigOptionByCategory(
+          taskId,
+          "mode",
+          executionMode,
+        );
+      }
+
+      const preferredModel = useModelsStore.getState().getEffectiveModel();
+      if (preferredModel) {
+        await get().actions.setSessionConfigOptionByCategory(
+          taskId,
+          "model",
+          preferredModel,
+        );
+      }
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -1259,64 +1247,58 @@ const useStore = create<SessionStore>()(
           }
         },
 
-        setSessionModel: async (taskId, modelId) => {
+        setSessionConfigOption: async (taskId, configId, value) => {
           const session = getSessionByTaskId(taskId);
           if (!session || session.isCloud) return;
-
-          try {
-            await trpcVanilla.agent.setModel.mutate({
-              sessionId: session.taskRunId,
-              modelId,
-            });
-            updateSession(session.taskRunId, { model: modelId });
-          } catch (error) {
-            log.error("Failed to change session model", {
-              taskId,
-              modelId,
-              error,
-            });
-          }
-        },
-
-        setSessionMode: async (taskId, modeId) => {
-          const session = getSessionByTaskId(taskId);
-          if (!session || session.isCloud) return;
-
-          try {
-            await trpcVanilla.agent.setMode.mutate({
-              sessionId: session.taskRunId,
-              modeId,
-            });
-            updateSession(session.taskRunId, { currentModeId: modeId });
-            setPersistedTaskMode(taskId, modeId);
-          } catch (error) {
-            log.error("Failed to change session mode", {
-              taskId,
-              modeId,
-              error,
-            });
-          }
-        },
-
-        setCodexReasoningLevel: async (taskId, level) => {
-          const session = getSessionByTaskId(taskId);
-          if (!session || session.isCloud || session.adapter !== "codex")
-            return;
 
           try {
             await trpcVanilla.agent.setConfigOption.mutate({
               sessionId: session.taskRunId,
-              configId: "reasoning_effort",
-              value: level,
+              configId,
+              value,
             });
-            updateSession(session.taskRunId, { codexReasoningLevel: level });
+
+            if (session.configOptions) {
+              const updated = session.configOptions.map((opt) =>
+                opt.id === configId ? { ...opt, currentValue: value } : opt,
+              );
+              updateSession(session.taskRunId, { configOptions: updated });
+            }
           } catch (error) {
-            log.error("Failed to change codex reasoning level", {
+            log.error("Failed to change session config option", {
               taskId,
-              level,
+              configId,
+              value,
               error,
             });
           }
+        },
+
+        setSessionConfigOptionByCategory: async (taskId, category, value) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session || session.isCloud) return;
+
+          const option = getConfigOptionByCategory(
+            session.configOptions,
+            category,
+          );
+          if (!option) {
+            log.warn("Config option category not found", { taskId, category });
+            return;
+          }
+
+          const selectable = flattenSelectOptions(option.options);
+          const exists = selectable.some((opt) => opt.value === value);
+          if (!exists) {
+            log.warn("Config option value not available", {
+              taskId,
+              category,
+              value,
+            });
+            return;
+          }
+
+          await get().actions.setSessionConfigOption(taskId, option.id, value);
         },
 
         appendUserShellExecute: async (taskId, command, cwd, result) => {
@@ -1634,61 +1616,35 @@ export function getPendingPermissionsForTask(
 /**
  * Hook to get the current mode ID for a task.
  */
-export const useCurrentModeForTask = (
+export const useConfigOptionForTask = (
   taskId: string | undefined,
-): string | undefined => {
-  const taskRunId = useStore((s) => {
-    if (!taskId) return undefined;
-    for (const session of Object.values(s.sessions)) {
-      if (session.taskId === taskId) {
-        return session.taskRunId;
-      }
-    }
-    return undefined;
-  });
-
-  return useStore((s) => {
-    if (!taskRunId) return undefined;
-    return s.sessions[taskRunId]?.currentModeId;
-  });
-};
-
-/**
- * Hook to get the full current mode object for a task (with name, description).
- */
-export const useCurrentModeObjectForTask = (
-  taskId: string | undefined,
-): SessionMode | undefined => {
+  category: string,
+): SessionConfigOption | undefined => {
   return useStore((s) => {
     if (!taskId) return undefined;
     const session = Object.values(s.sessions).find(
       (sess) => sess.taskId === taskId,
     );
-    if (!session?.currentModeId || !session.availableModes) return undefined;
-    return session.availableModes.find((m) => m.id === session.currentModeId);
+    return getConfigOptionByCategory(session?.configOptions, category);
   });
 };
 
-/**
- * Hook to get available modes for a task.
- */
-export const useAvailableModesForTask = (
+export const useModeConfigOptionForTask = (
   taskId: string | undefined,
-): SessionMode[] | undefined => {
-  const taskRunId = useStore((s) => {
-    if (!taskId) return undefined;
-    for (const session of Object.values(s.sessions)) {
-      if (session.taskId === taskId) {
-        return session.taskRunId;
-      }
-    }
-    return undefined;
-  });
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "mode");
+};
 
-  return useStore((s) => {
-    if (!taskRunId) return undefined;
-    return s.sessions[taskRunId]?.availableModes;
-  });
+export const useModelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "model");
+};
+
+export const useThoughtLevelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "thought_level");
 };
 
 /**
@@ -1718,17 +1674,5 @@ export const useAdapterForTask = (
       (sess) => sess.taskId === taskId,
     );
     return session?.adapter;
-  });
-};
-
-export const useCodexReasoningLevelForTask = (
-  taskId: string | undefined,
-): CodexReasoningLevel | undefined => {
-  return useStore((s) => {
-    if (!taskId) return undefined;
-    const session = Object.values(s.sessions).find(
-      (sess) => sess.taskId === taskId,
-    );
-    return session?.codexReasoningLevel;
   });
 };
