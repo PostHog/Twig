@@ -18,6 +18,8 @@ export type AcpConnectionConfig = {
   logWriter?: SessionLogWriter;
   sessionId?: string;
   taskId?: string;
+  /** Deployment environment - "local" for desktop, "cloud" for cloud sandbox */
+  deviceType?: "local" | "cloud";
   logger?: Logger;
   processCallbacks?: ClaudeAcpAgentOptions;
 };
@@ -52,6 +54,7 @@ export function createAcpConnection(
       logWriter.register(config.sessionId, {
         taskId: config.taskId ?? config.sessionId,
         runId: config.sessionId,
+        deviceType: config.deviceType,
       });
     }
 
