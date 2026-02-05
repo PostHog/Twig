@@ -1,15 +1,7 @@
 import { CodeBlock } from "@components/CodeBlock";
 import { Divider } from "@components/Divider";
 import { List, ListItem } from "@components/List";
-import {
-  Blockquote,
-  Checkbox,
-  Code,
-  Em,
-  Kbd,
-  Link,
-  Text,
-} from "@radix-ui/themes";
+import { Blockquote, Checkbox, Code, Em, Kbd, Text } from "@radix-ui/themes";
 import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
@@ -26,7 +18,7 @@ function preprocessMarkdown(content: string): string {
 }
 
 const HeadingText = ({ children }: { children: React.ReactNode }) => (
-  <Text as="p" size="1" mb="2" style={{ color: "var(--accent-11)" }}>
+  <Text as="p" size="2" mb="3" style={{ color: "var(--accent-11)" }}>
     <strong>{children}</strong>
   </Text>
 );
@@ -45,23 +37,13 @@ export const baseComponents: Components = {
       node.children[0].tagName === "strong";
 
     return (
-      <Text
-        as="p"
-        size="1"
-        mb={isStrongOnly ? "2" : "3"}
-        color="gray"
-        highContrast
-      >
+      <Text as="p" size="1" mb={isStrongOnly ? "2" : "3"}>
         {children}
       </Text>
     );
   },
   blockquote: ({ children }) => (
-    <Blockquote
-      size="1"
-      mb="3"
-      style={{ color: "var(--accent-10)", borderColor: "var(--accent-6)" }}
-    >
+    <Blockquote size="1" mb="3" style={{ borderColor: "var(--accent-6)" }}>
       {children}
     </Blockquote>
   ),
@@ -69,7 +51,7 @@ export const baseComponents: Components = {
     const isInline = !className?.includes("language-");
     if (isInline) {
       return (
-        <Code size="1" variant="soft" color="gray" highContrast>
+        <Code size="1" variant="outline">
           {children}
         </Code>
       );
@@ -78,14 +60,10 @@ export const baseComponents: Components = {
   },
   pre: ({ children }) => <CodeBlock size="1">{children}</CodeBlock>,
   em: ({ children }) => (
-    <Em style={{ fontSize: "var(--font-size-1)", color: "var(--accent-10)" }}>
-      {children}
-    </Em>
+    <Em style={{ fontSize: "var(--font-size-1)" }}>{children}</Em>
   ),
   i: ({ children }) => (
-    <i style={{ fontSize: "var(--font-size-1)", color: "var(--accent-10)" }}>
-      {children}
-    </i>
+    <i style={{ fontSize: "var(--font-size-1)" }}>{children}</i>
   ),
   strong: ({ children }) => (
     <strong
@@ -100,9 +78,37 @@ export const baseComponents: Components = {
     </del>
   ),
   a: ({ href, children }) => (
-    <Link href={href} target="_blank" rel="noopener noreferrer" size="1">
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="markdown-link"
+      style={{
+        fontSize: "var(--font-size-1)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "2px",
+      }}
+    >
       {children}
-    </Link>
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="var(--accent-11)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ marginLeft: "var(--space-1)", flexShrink: 0 }}
+        aria-label="external link icon"
+        role="img"
+      >
+        <path d="M4.5 1.5H2.25C1.836 1.5 1.5 1.836 1.5 2.25V9.75C1.5 10.164 1.836 10.5 2.25 10.5H9.75C10.164 10.5 10.5 10.164 10.5 9.75V7.5" />
+        <path d="M7.5 1.5H10.5V4.5" />
+        <path d="M5.25 6.75L10.5 1.5" />
+      </svg>
+    </a>
   ),
   kbd: ({ children }) => <Kbd size="1">{children}</Kbd>,
   ul: ({ children }) => (
@@ -116,7 +122,7 @@ export const baseComponents: Components = {
     </List>
   ),
   li: ({ children }) => <ListItem size="1">{children}</ListItem>,
-  hr: () => <Divider size="1" />,
+  hr: () => <Divider size="3" />,
   // Task list checkbox
   input: ({ type, checked }) => {
     if (type === "checkbox") {
