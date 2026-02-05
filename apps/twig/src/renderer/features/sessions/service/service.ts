@@ -656,7 +656,7 @@ export class SessionService {
     // If a prompt is already pending, queue this message
     if (session.isPromptPending) {
       const promptText = extractPromptText(prompt);
-      sessionStoreSetters.enqueueMessage(session.taskRunId, promptText);
+      sessionStoreSetters.enqueueMessage(taskId, promptText);
       log.info("Message queued", {
         taskId,
         queueLength: session.messageQueue.length + 1,
@@ -693,7 +693,7 @@ export class SessionService {
   private async sendQueuedMessages(
     taskId: string,
   ): Promise<{ stopReason: string }> {
-    const combinedText = sessionStoreSetters.popQueuedMessagesAsText(taskId);
+    const combinedText = sessionStoreSetters.dequeueMessagesAsText(taskId);
     if (!combinedText) {
       return { stopReason: "skipped" };
     }

@@ -238,9 +238,12 @@ export const sessionStoreSetters = {
     });
   },
 
-  enqueueMessage: (taskRunId: string, content: string) => {
+  enqueueMessage: (taskId: string, content: string) => {
     const id = `queue-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     useSessionStore.setState((state) => {
+      const taskRunId = state.taskIdIndex[taskId];
+      if (!taskRunId) return;
+
       const session = state.sessions[taskRunId];
       if (session) {
         session.messageQueue.push({ id, content, queuedAt: Date.now() });
@@ -248,8 +251,11 @@ export const sessionStoreSetters = {
     });
   },
 
-  clearMessageQueue: (taskRunId: string) => {
+  clearMessageQueue: (taskId: string) => {
     useSessionStore.setState((state) => {
+      const taskRunId = state.taskIdIndex[taskId];
+      if (!taskRunId) return;
+
       const session = state.sessions[taskRunId];
       if (session) {
         session.messageQueue = [];
@@ -257,7 +263,7 @@ export const sessionStoreSetters = {
     });
   },
 
-  popQueuedMessagesAsText: (taskId: string): string | null => {
+  dequeueMessagesAsText: (taskId: string): string | null => {
     let result: string | null = null;
     useSessionStore.setState((state) => {
       const taskRunId = state.taskIdIndex[taskId];
