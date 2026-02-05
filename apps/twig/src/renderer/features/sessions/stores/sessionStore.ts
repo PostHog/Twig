@@ -35,6 +35,7 @@ import {
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
+import { useSessionAdapterStore } from "./sessionAdapterStore";
 import { useSessionConfigStore } from "./sessionConfigStore";
 
 const log = logger.scope("session-store");
@@ -303,6 +304,9 @@ function subscribeToChannel(taskRunId: string) {
               };
               if (params.adapter) {
                 session.adapter = params.adapter;
+                useSessionAdapterStore
+                  .getState()
+                  .setAdapter(taskRunId, params.adapter);
                 log.info("Session adapter updated", {
                   taskRunId,
                   adapter: params.adapter,
@@ -702,6 +706,10 @@ const useStore = create<SessionStore>()(
     ) => {
       const { rawEntries, sessionId, adapter, configOptions } =
         await fetchSessionLogs(logUrl);
+      const storedAdapter = useSessionAdapterStore
+        .getState()
+        .getAdapter(taskRunId);
+      const resolvedAdapter = adapter ?? storedAdapter;
       const events = convertStoredEntriesToEvents(rawEntries);
 
       const session = createBaseSession(taskRunId, taskId, taskTitle, false);
@@ -711,8 +719,11 @@ const useStore = create<SessionStore>()(
         .getState()
         .getConfigOptions(taskRunId);
       session.configOptions = persistedConfigOptions ?? configOptions;
-      if (adapter) {
-        session.adapter = adapter;
+      if (resolvedAdapter) {
+        session.adapter = resolvedAdapter;
+        useSessionAdapterStore
+          .getState()
+          .setAdapter(taskRunId, resolvedAdapter);
       }
 
       addSession(session);
@@ -728,7 +739,7 @@ const useStore = create<SessionStore>()(
           projectId: auth.projectId,
           logUrl,
           sessionId,
-          adapter,
+          adapter: resolvedAdapter,
         });
 
         if (result) {
@@ -755,13 +766,26 @@ const useStore = create<SessionStore>()(
             for (const opt of storedConfigOptions) {
               if (!opt.currentValue) continue;
               const live = known.get(opt.id);
-              if (live && live.currentValue !== opt.currentValue) {
-                await get().actions.setSessionConfigOption(
+              if (!live || live.currentValue === opt.currentValue) continue;
+
+              const selectable = flattenSelectOptions(live.options);
+              const exists = selectable.some(
+                (option) => option.value === opt.currentValue,
+              );
+              if (!exists) {
+                log.warn("Skipping invalid stored config option value", {
                   taskId,
-                  opt.id,
-                  opt.currentValue,
-                );
+                  configId: opt.id,
+                  value: opt.currentValue,
+                });
+                continue;
               }
+
+              await get().actions.setSessionConfigOption(
+                taskId,
+                opt.id,
+                opt.currentValue,
+              );
             }
           }
         } else {
@@ -823,6 +847,7 @@ const useStore = create<SessionStore>()(
       session.configOptions = result.configOptions;
       if (adapter) {
         session.adapter = adapter;
+        useSessionAdapterStore.getState().setAdapter(taskRun.id, adapter);
       }
 
       addSession(session);

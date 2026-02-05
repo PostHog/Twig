@@ -47,6 +47,25 @@ export async function fetchSessionLogs(
     for (const line of content.trim().split("\n")) {
       try {
         const stored = JSON.parse(line) as StoredLogEntry;
+        if (!stored.notification) {
+          const maybeMsg = stored as unknown as {
+            id?: number;
+            method?: string;
+            params?: unknown;
+            result?: unknown;
+            error?: unknown;
+          };
+          if (
+            typeof maybeMsg === "object" &&
+            maybeMsg !== null &&
+            ("method" in maybeMsg ||
+              "result" in maybeMsg ||
+              "error" in maybeMsg ||
+              "id" in maybeMsg)
+          ) {
+            stored.notification = maybeMsg;
+          }
+        }
 
         const msg = stored.notification;
         if (msg) {
@@ -100,8 +119,6 @@ export async function fetchSessionLogs(
           }
           if (params.adapter) {
             adapter = params.adapter;
-          } else if (sessionId) {
-            adapter = "claude";
           }
         }
       } catch {

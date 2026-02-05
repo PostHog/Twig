@@ -1,6 +1,6 @@
-import { mkdirSync, rmSync, symlinkSync } from "node:fs";
+import fs, { mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   type Client,
   ClientSideConnection,
@@ -25,6 +25,7 @@ import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { FsService } from "../fs/service.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -223,16 +224,20 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private pendingPermissions = new Map<string, PendingPermission>();
   private processTracking: ProcessTrackingService;
   private sleepService: SleepService;
+  private fsService: FsService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
     processTracking: ProcessTrackingService,
     @inject(MAIN_TOKENS.SleepService)
     sleepService: SleepService,
+    @inject(MAIN_TOKENS.FsService)
+    fsService: FsService,
   ) {
     super();
     this.processTracking = processTracking;
     this.sleepService = sleepService;
+    this.fsService = fsService;
   }
 
   public updateToken(newToken: string): void {
@@ -1079,6 +1084,38 @@ For git operations while detached:
         };
       },
 
+      async readTextFile(params) {
+        const session = service.sessions.get(taskRunId);
+        if (!session) {
+          throw new Error(`No active session for taskRunId=${taskRunId}`);
+        }
+        const repoPath = session.config.repoPath;
+        const relativePath = service.toRepoRelativePath(repoPath, params.path);
+        const content = await service.fsService.readRepoFile(
+          repoPath,
+          relativePath,
+        );
+        if (content === null) {
+          throw new Error(`File not found: ${params.path}`);
+        }
+        return { content };
+      },
+
+      async writeTextFile(params) {
+        const session = service.sessions.get(taskRunId);
+        if (!session) {
+          throw new Error(`No active session for taskRunId=${taskRunId}`);
+        }
+        const repoPath = session.config.repoPath;
+        const relativePath = service.toRepoRelativePath(repoPath, params.path);
+        await service.fsService.writeRepoFile(
+          repoPath,
+          relativePath,
+          params.content,
+        );
+        return {};
+      },
+
       async sessionUpdate() {
         // session/update notifications flow through the tapped stream
       },
@@ -1152,6 +1189,36 @@ For git operations while detached:
     if (!params.apiKey || !params.apiHost) {
       throw new Error("PostHog API credentials are required");
     }
+  }
+
+  private toRepoRelativePath(repoPath: string, filePath: string): string {
+    const normalize = (inputPath: string): string => {
+      try {
+        return fs.realpathSync(inputPath);
+      } catch {
+        return resolve(inputPath);
+      }
+    };
+
+    const resolvedRepo = normalize(repoPath);
+    const resolvedFile = isAbsolute(filePath)
+      ? resolve(filePath)
+      : resolve(repoPath, filePath);
+    const resolvedFileForCheck = fs.existsSync(resolvedFile)
+      ? normalize(resolvedFile)
+      : resolve(resolvedFile);
+    const repoPrefix = resolvedRepo.endsWith(sep)
+      ? resolvedRepo
+      : `${resolvedRepo}${sep}`;
+
+    if (
+      resolvedFileForCheck === resolvedRepo ||
+      !resolvedFileForCheck.startsWith(repoPrefix)
+    ) {
+      throw new Error(`Access denied: path outside repository (${filePath})`);
+    }
+
+    return relative(resolvedRepo, resolvedFileForCheck);
   }
 
   private toSessionConfig(

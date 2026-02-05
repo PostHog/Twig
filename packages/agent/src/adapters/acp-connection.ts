@@ -317,7 +317,6 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
                 isLoadingSession = false;
                 loadRequestId = null;
               } else if (msg.method === "session/update") {
-                logger.debug("Filtering replay session/update during load");
                 shouldFilter = true;
               }
             }
