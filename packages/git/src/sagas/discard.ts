@@ -122,7 +122,7 @@ export class DiscardFileChangesSaga extends Saga<
       case "untracked":
         await this.step({
           name: "clean-untracked-file",
-          execute: () => git.clean(["f", "--", filePath]),
+          execute: () => git.clean("f", ["--", filePath]),
           rollback: async () => {
             if (this.backupContent) {
               const dir = path.dirname(fullPath);
