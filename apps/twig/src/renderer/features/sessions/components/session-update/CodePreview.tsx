@@ -16,6 +16,7 @@ interface CodePreviewProps {
   showPath?: boolean;
   oldContent?: string | null;
   firstLineNumber?: number;
+  maxHeight?: string;
 }
 
 export function CodePreview({
@@ -24,6 +25,7 @@ export function CodePreview({
   showPath = false,
   oldContent,
   firstLineNumber = 1,
+  maxHeight,
 }: CodePreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<EditorView | null>(null);
@@ -71,7 +73,14 @@ export function CodePreview({
           </Code>
         </div>
       )}
-      <div ref={containerRef} style={CODE_PREVIEW_EDITOR_STYLE} />
+      <div
+        ref={containerRef}
+        style={
+          maxHeight
+            ? { ...CODE_PREVIEW_EDITOR_STYLE, maxHeight }
+            : CODE_PREVIEW_EDITOR_STYLE
+        }
+      />
     </div>
   );
 }
