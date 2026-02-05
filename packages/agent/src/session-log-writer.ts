@@ -35,24 +35,6 @@ export class SessionLogWriter {
     this.logger =
       options.logger ??
       new Logger({ debug: false, prefix: "[SessionLogWriter]" });
-
-    const flushAllAndExit = async () => {
-      const shutdownPromises = Array.from(this.sessions.values())
-        .filter((session) => session.otelWriter)
-        .map((session) => session.otelWriter?.shutdown());
-      await Promise.all(shutdownPromises);
-      process.exit(0);
-    };
-
-    process.on("beforeExit", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
-    process.on("SIGINT", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
-    process.on("SIGTERM", () => {
-      flushAllAndExit().catch((e) => this.logger.error("Flush failed:", e));
-    });
   }
 
   async flushAll(): Promise<void> {
