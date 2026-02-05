@@ -4,12 +4,12 @@ import type {
   SessionConfigOption,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
   getPersistedConfigOptions,
   setPersistedConfigOptions,
   updatePersistedConfigOptionValue,
 } from "@features/sessions/stores/sessionConfigStore";
-import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import type {
   Adapter,
   AgentSession,
@@ -246,7 +246,9 @@ export class SessionService {
     const events = convertStoredEntriesToEvents(rawEntries);
 
     // Resolve adapter from logs or persisted store
-    const storedAdapter = useSessionAdapterStore.getState().getAdapter(taskRunId);
+    const storedAdapter = useSessionAdapterStore
+      .getState()
+      .getAdapter(taskRunId);
     const resolvedAdapter = adapter ?? storedAdapter;
 
     // Get persisted config options for this task run
@@ -1048,9 +1050,7 @@ export class SessionService {
     return { apiKey, apiHost, projectId, client };
   }
 
-  private async fetchSessionLogs(
-    logUrl: string,
-  ): Promise<{
+  private async fetchSessionLogs(logUrl: string): Promise<{
     rawEntries: StoredLogEntry[];
     sessionId?: string;
     adapter?: Adapter;
