@@ -245,6 +245,7 @@ export function useActionSelectorState({
     customInput,
     onSelect,
     saveCurrentStepAnswer,
+    setStep,
   ]);
 
   const selectByIndex = useCallback(
@@ -291,6 +292,7 @@ export function useActionSelectorState({
       toggleCheck,
       onSelect,
       saveCurrentStepAnswer,
+      setStep,
     ],
   );
 
