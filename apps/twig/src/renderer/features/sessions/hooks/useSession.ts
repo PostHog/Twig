@@ -86,12 +86,10 @@ export function getPendingPermissionsForTask(
 export const useCurrentModeForTask = (
   taskId: string | undefined,
 ): ExecutionMode | undefined => {
-  // First selector: get taskRunId from index
   const taskRunId = useSessionStore((s) =>
     taskId ? s.taskIdIndex[taskId] : undefined,
   );
 
-  // Second selector: get currentMode from session
   return useSessionStore((s) => {
     if (!taskRunId) return undefined;
     return s.sessions[taskRunId]?.currentMode;
