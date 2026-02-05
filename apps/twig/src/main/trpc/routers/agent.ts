@@ -1,6 +1,7 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
+import { logger } from "../../lib/logger.js";
 import {
   AgentServiceEvent,
   cancelPermissionInput,
@@ -22,7 +23,12 @@ import {
   tokenUpdateInput,
 } from "../../services/agent/schemas.js";
 import type { AgentService } from "../../services/agent/service.js";
+import type { ProcessTrackingService } from "../../services/process-tracking/service.js";
+import type { ShellService } from "../../services/shell/service.js";
+import type { SleepService } from "../../services/sleep/service.js";
 import { publicProcedure, router } from "../trpc.js";
+
+const log = logger.scope("agent-router");
 
 const getService = () => container.get<AgentService>(MAIN_TOKENS.AgentService);
 
@@ -139,6 +145,30 @@ export const agentRouter = router({
   markAllForRecreation: publicProcedure.mutation(() =>
     getService().markAllSessionsForRecreation(),
   ),
+
+  resetAll: publicProcedure.mutation(async () => {
+    log.info("Resetting all sessions (logout/project switch)");
+
+    // Clean up all agent sessions (flushes logs, stops agents, releases sleep blockers)
+    const agentService = getService();
+    await agentService.cleanupAll();
+
+    // Destroy all shell PTY sessions
+    const shellService = container.get<ShellService>(MAIN_TOKENS.ShellService);
+    shellService.destroyAll();
+
+    // Kill any remaining tracked processes (belt and suspenders)
+    const processTracking = container.get<ProcessTrackingService>(
+      MAIN_TOKENS.ProcessTrackingService,
+    );
+    processTracking.killAll();
+
+    // Release any lingering sleep blockers
+    const sleepService = container.get<SleepService>(MAIN_TOKENS.SleepService);
+    sleepService.cleanup();
+
+    log.info("All sessions reset successfully");
+  }),
 
   getGatewayModels: publicProcedure
     .input(getGatewayModelsInput)
