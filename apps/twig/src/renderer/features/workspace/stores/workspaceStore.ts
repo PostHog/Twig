@@ -2,12 +2,14 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import { trpcVanilla } from "@renderer/trpc";
 import type {
   CreateWorkspaceOptions,
+  EnvironmentCapabilities,
   ScriptExecutionResult,
   Workspace,
   WorkspaceInfo,
   WorkspaceMode,
   WorkspaceTerminalInfo,
 } from "@shared/types";
+import { getCapabilitiesForMode } from "@shared/types";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { create } from "zustand";
 import { logger } from "@/renderer/lib/logger";
@@ -60,6 +62,7 @@ interface WorkspaceState {
   getWorktreeName: (taskId: string) => string | null;
   getBranchName: (taskId: string) => string | null;
   getFolderPath: (taskId: string) => string | null;
+  getCapabilities: (taskId: string) => EnvironmentCapabilities | null;
 
   // Internal state management
   setCreating: (taskId: string, creating: boolean) => void;
@@ -358,6 +361,12 @@ const useWorkspaceStoreBase = create<WorkspaceState>()((set, get) => {
       return get().workspaces[taskId]?.folderPath ?? null;
     },
 
+    getCapabilities: (taskId: string) => {
+      const workspace = get().workspaces[taskId];
+      if (!workspace) return null;
+      return getCapabilitiesForMode(workspace.mode);
+    },
+
     // Internal state management
     setCreating: (taskId: string, creating: boolean) => {
       set((state) => ({
@@ -400,3 +409,11 @@ export const selectBranchName = (taskId: string) => (state: WorkspaceState) =>
 
 export const selectIsCreating = (taskId: string) => (state: WorkspaceState) =>
   state.isCreating[taskId] ?? false;
+
+export const selectCapabilities =
+  (taskId: string) =>
+  (state: WorkspaceState): EnvironmentCapabilities | null => {
+    const workspace = state.workspaces[taskId];
+    if (!workspace) return null;
+    return getCapabilitiesForMode(workspace.mode);
+  };

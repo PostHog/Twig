@@ -13,6 +13,7 @@ import {
   type SmartGitAction,
   useGitStatus,
 } from "@features/task-detail/hooks/useGitStatus";
+import { useEnvironmentCapabilities } from "@features/workspace/hooks/useEnvironmentCapabilities";
 import {
   ArrowsClockwise,
   CloudArrowUp,
@@ -111,16 +112,20 @@ export function GitActionsBar({
   const { sendPrompt } = useSessionActions();
   const session = useSessionForTask(taskId);
   const queryClient = useQueryClient();
+  const capabilities = useEnvironmentCapabilities(taskId);
 
-  const isCloud = session?.isCloud ?? false;
+  // Default to local (true) when capabilities haven't loaded yet
+  const hasGitCapability = capabilities === null ? true : capabilities.git;
 
   const { smartAction, ahead, behind, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
-    enabled: !isCloud,
+    enabled: hasGitCapability,
   });
 
-  const effectiveAction: SmartGitAction = isCloud ? "commit-push" : smartAction;
+  const effectiveAction: SmartGitAction = !hasGitCapability
+    ? "commit-push"
+    : smartAction;
 
   const handleAction = useCallback(
     async (actionType: GitActionType, prompt: string) => {
@@ -184,16 +189,16 @@ export function GitActionsBar({
     return null;
   }
 
-  if (!isCloud && !isFetched) {
+  if (hasGitCapability && !isFetched) {
     return null;
   }
 
-  if (!isCloud && !smartAction) {
+  if (hasGitCapability && !smartAction) {
     return null;
   }
 
   const statusParts: string[] = [];
-  if (!isCloud) {
+  if (hasGitCapability) {
     if (ahead > 0) {
       statusParts.push(`${ahead} ahead`);
     }

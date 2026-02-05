@@ -122,12 +122,11 @@ export function useTaskCreation({
   const { invalidateTasks } = useCreateTask();
   const { isOnline } = useConnectivity();
 
-  const isCloudMode = workspaceMode === "cloud";
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&
     isOnline &&
-    (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
+    (!!selectedDirectory || !!selectedRepository) &&
     !isCreatingTask &&
     !editorIsEmpty;
 

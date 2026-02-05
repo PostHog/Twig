@@ -1,9 +1,9 @@
-import { GitBranch, Laptop } from "@phosphor-icons/react";
+import { Cloud, GitBranch, Laptop } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
 
-export type WorkspaceMode = "local" | "worktree";
+export type WorkspaceMode = "local" | "worktree" | "cloud";
 
 interface WorkspaceModeSelectProps {
   value: WorkspaceMode;
@@ -24,6 +24,11 @@ const MODE_CONFIG: Record<
     label: "Workspace",
     description: "Edits a copy so your work stays isolated",
     icon: <GitBranch size={16} weight="regular" />,
+  },
+  cloud: {
+    label: "Cloud",
+    description: "Runs in an isolated cloud environment",
+    icon: <Cloud size={16} weight="regular" />,
   },
 };
 
@@ -79,6 +84,23 @@ export function WorkspaceModeSelect({
               <Text size="1">{MODE_CONFIG.local.label}</Text>
               <Text size="1" color="gray" style={{ display: "block" }}>
                 {MODE_CONFIG.local.description}
+              </Text>
+            </div>
+          </div>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          onSelect={() => onChange("cloud")}
+          style={{ padding: "6px 8px", height: "auto" }}
+        >
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <Cloud
+              size={12}
+              style={{ marginTop: 2, flexShrink: 0, color: "var(--gray-11)" }}
+            />
+            <div>
+              <Text size="1">{MODE_CONFIG.cloud.label}</Text>
+              <Text size="1" color="gray" style={{ display: "block" }}>
+                {MODE_CONFIG.cloud.description}
               </Text>
             </div>
           </div>

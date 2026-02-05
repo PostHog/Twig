@@ -60,7 +60,7 @@ export class TaskCreationSaga extends Saga<
   ): Promise<TaskCreationOutput> {
     // Step 1: Get or create task
     const taskId = input.taskId;
-    const task = taskId
+    let task = taskId
       ? await this.readOnlyStep("fetch_task", () =>
           this.deps.posthogClient.getTask(taskId),
         )
@@ -160,13 +160,17 @@ export class TaskCreationSaga extends Saga<
 
     // Step 5: Start cloud run (only for new cloud tasks)
     if (workspaceMode === "cloud" && !task.latest_run) {
-      await this.step({
+      const updatedTask = await this.step({
         name: "cloud_run",
         execute: () => this.deps.posthogClient.runTaskInCloud(task.id),
         rollback: async () => {
           log.info("Rolling back: cloud run (no-op)", { taskId: task.id });
         },
       });
+      // Update task with latest_run from the response
+      if (updatedTask?.latest_run) {
+        task = { ...task, latest_run: updatedTask.latest_run };
+      }
     }
 
     // Step 6: Connect to session
@@ -194,10 +198,12 @@ export class TaskCreationSaga extends Saga<
         execute: async () => {
           // For opening existing tasks, await to ensure chat history loads
           // For creating new tasks, we can proceed without waiting
+          const isCloud = workspaceMode === "cloud";
           if (input.taskId) {
             await getSessionActions().connectToTask({
               task,
               repoPath: agentCwd ?? "",
+              isCloud,
             });
           } else {
             // Don't await for create - allows faster navigation to task page
@@ -206,6 +212,7 @@ export class TaskCreationSaga extends Saga<
               repoPath: agentCwd ?? "",
               initialPrompt,
               executionMode: input.executionMode,
+              isCloud,
             });
           }
           return { taskId: task.id };

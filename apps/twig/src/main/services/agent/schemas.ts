@@ -19,13 +19,17 @@ export const sessionConfigSchema = z.object({
   taskId: z.string(),
   taskRunId: z.string(),
   repoPath: z.string(),
-  credentials: credentialsSchema,
+  credentials: credentialsSchema.optional(),
   logUrl: z.string().optional(),
   sdkSessionId: z.string().optional(),
   model: z.string().optional(),
   executionMode: executionModeSchema.optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
+  runMode: z.enum(["local", "cloud"]).optional(),
+  /** Cloud transport config - required when runMode is 'cloud' */
+  sandboxUrl: z.string().optional(),
+  connectionToken: z.string().optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
@@ -48,6 +52,9 @@ export const startSessionInput = z.object({
   runMode: z.enum(["local", "cloud"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
+  /** Cloud transport config - required when runMode is 'cloud' */
+  sandboxUrl: z.string().optional(),
+  connectionToken: z.string().optional(),
 });
 
 export type StartSessionInput = z.infer<typeof startSessionInput>;

@@ -10,14 +10,14 @@ import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import type { RunMode } from "./RunModeSelect";
+import type { WorkspaceMode } from "./WorkspaceModeSelect";
 import "./TaskInput.css";
 
 interface TaskInputEditorProps {
   sessionId: string;
   repoPath: string;
   isCreatingTask: boolean;
-  runMode: RunMode;
+  workspaceMode: WorkspaceMode;
   canSubmit: boolean;
   onSubmit: () => void;
   hasDirectory: boolean;
@@ -35,7 +35,7 @@ export const TaskInputEditor = forwardRef<
       sessionId,
       repoPath,
       isCreatingTask,
-      runMode,
+      workspaceMode,
       canSubmit,
       onSubmit,
       hasDirectory,
@@ -45,7 +45,7 @@ export const TaskInputEditor = forwardRef<
     },
     ref,
   ) => {
-    const isCloudMode = runMode === "cloud";
+    const isCloudMode = workspaceMode === "cloud";
     const { isOnline } = useConnectivity();
     const isDisabled = isCreatingTask || !isOnline;
 

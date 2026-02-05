@@ -3,8 +3,8 @@ import { analyticsRouter } from "./routers/analytics.js";
 import { connectivityRouter } from "./routers/connectivity.js";
 import { contextMenuRouter } from "./routers/context-menu.js";
 import { deepLinkRouter } from "./routers/deep-link.js";
-
 import { encryptionRouter } from "./routers/encryption.js";
+import { environmentRouter } from "./routers/environment.js";
 import { externalAppsRouter } from "./routers/external-apps.js";
 import { fileWatcherRouter } from "./routers/file-watcher.js";
 import { focusRouter } from "./routers/focus.js";
@@ -29,6 +29,7 @@ export const trpcRouter = router({
   analytics: analyticsRouter,
   connectivity: connectivityRouter,
   contextMenu: contextMenuRouter,
+  environment: environmentRouter,
 
   encryption: encryptionRouter,
   externalApps: externalAppsRouter,
