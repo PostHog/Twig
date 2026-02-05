@@ -1,9 +1,9 @@
 import { PostHogAPIClient } from "@api/posthogClient";
+import { resetSessionService } from "@features/sessions/service/service";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
-import { resetSessionService } from "@renderer/services/session/service";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { sleepWithBackoff } from "@shared/utils/backoff";

@@ -149,7 +149,14 @@ export function SessionView({
       enableOnContentEditable: true,
       enabled: !isCloud && isRunning && !!modeOption,
     },
-    [taskId, currentModeId, isCloud, isRunning, modeOption, allowBypassPermissions],
+    [
+      taskId,
+      currentModeId,
+      isCloud,
+      isRunning,
+      modeOption,
+      allowBypassPermissions,
+    ],
   );
 
   const latestPlan = useMemo((): Plan | null => {
@@ -260,7 +267,14 @@ export function SessionView({
 
       requestFocus(sessionId);
     },
-    [firstPendingPermission, taskId, onSendPrompt, isCloud, requestFocus, sessionId],
+    [
+      firstPendingPermission,
+      taskId,
+      onSendPrompt,
+      isCloud,
+      requestFocus,
+      sessionId,
+    ],
   );
 
   const handlePermissionCancel = useCallback(async () => {

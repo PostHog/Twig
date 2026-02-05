@@ -2,6 +2,7 @@ import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { ErrorBoundary } from "@components/ErrorBoundary";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { SessionView } from "@features/sessions/components/SessionView";
+import { getSessionService } from "@features/sessions/service/service";
 import {
   sessionStoreSetters,
   useSessionForTask,
@@ -13,7 +14,6 @@ import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { Box } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
-import { getSessionService } from "@renderer/services/session/service";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";

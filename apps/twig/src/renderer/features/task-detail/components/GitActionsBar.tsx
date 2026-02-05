@@ -2,6 +2,7 @@ import {
   createGitActionMessage,
   type GitActionType,
 } from "@features/sessions/components/GitActionMessage";
+import { getSessionService } from "@features/sessions/service/service";
 import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import {
   GIT_ACTION_EXECUTION_TYPE,
@@ -26,7 +27,6 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
-import { getSessionService } from "@renderer/services/session/service";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
