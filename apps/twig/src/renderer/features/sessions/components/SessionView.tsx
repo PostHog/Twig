@@ -10,7 +10,6 @@ import {
   useAdapterForTask,
   useModeConfigOptionForTask,
   usePendingPermissionsForTask,
-  useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
@@ -72,8 +71,6 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const session = useSessionForTask(taskId);
-  const isCloud = session?.isCloud ?? false;
   const modeOption = useModeConfigOptionForTask(taskId);
   const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
@@ -85,7 +82,6 @@ export function SessionView({
       (currentModeId === "bypassPermissions" ||
         currentModeId === "full-access") &&
       taskId &&
-      !isCloud &&
       modeOption
     ) {
       const options = flattenSelectOptions(modeOption.options);
@@ -102,10 +98,10 @@ export function SessionView({
         );
       }
     }
-  }, [allowBypassPermissions, currentModeId, taskId, isCloud, modeOption]);
+  }, [allowBypassPermissions, currentModeId, taskId, modeOption]);
 
   const handleModeChange = useCallback(() => {
-    if (!taskId || isCloud) return;
+    if (!taskId) return;
     const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
     if (nextMode) {
       getSessionService().setSessionConfigOptionByCategory(
@@ -114,7 +110,7 @@ export function SessionView({
         nextMode,
       );
     }
-  }, [taskId, isCloud, allowBypassPermissions, modeOption]);
+  }, [taskId, allowBypassPermissions, modeOption]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -134,7 +130,7 @@ export function SessionView({
     "shift+tab",
     (e) => {
       e.preventDefault();
-      if (!taskId || isCloud) return;
+      if (!taskId) return;
       const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
       if (nextMode) {
         getSessionService().setSessionConfigOptionByCategory(
@@ -147,16 +143,9 @@ export function SessionView({
     {
       enableOnFormTags: true,
       enableOnContentEditable: true,
-      enabled: !isCloud && isRunning && !!modeOption,
+      enabled: isRunning && !!modeOption,
     },
-    [
-      taskId,
-      currentModeId,
-      isCloud,
-      isRunning,
-      modeOption,
-      allowBypassPermissions,
-    ],
+    [taskId, currentModeId, isRunning, modeOption, allowBypassPermissions],
   );
 
   const latestPlan = useMemo((): Plan | null => {
@@ -228,7 +217,7 @@ export function SessionView({
       const selectedOption = firstPendingPermission.options.find(
         (o) => o.optionId === optionId,
       );
-      if (selectedOption?.kind === "allow_always" && !isCloud) {
+      if (selectedOption?.kind === "allow_always") {
         getSessionService().setSessionConfigOptionByCategory(
           taskId,
           "mode",
@@ -267,14 +256,7 @@ export function SessionView({
 
       requestFocus(sessionId);
     },
-    [
-      firstPendingPermission,
-      taskId,
-      onSendPrompt,
-      isCloud,
-      requestFocus,
-      sessionId,
-    ],
+    [firstPendingPermission, taskId, onSendPrompt, requestFocus, sessionId],
   );
 
   const handlePermissionCancel = useCallback(async () => {
@@ -382,7 +364,6 @@ export function SessionView({
                   isPromptPending={isPromptPending}
                   promptStartedAt={promptStartedAt}
                   repoPath={repoPath}
-                  isCloud={isCloud}
                   taskId={taskId}
                 />
               )}
@@ -455,9 +436,7 @@ export function SessionView({
                       onBashModeChange={setIsBashMode}
                       onCancel={onCancelPrompt}
                       modeOption={modeOption}
-                      onModeChange={
-                        !isCloud && modeOption ? handleModeChange : undefined
-                      }
+                      onModeChange={modeOption ? handleModeChange : undefined}
                       adapter={adapter}
                     />
                   </Box>

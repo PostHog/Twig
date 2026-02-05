@@ -32,7 +32,6 @@ export interface AgentSession {
   errorMessage?: string;
   isPromptPending: boolean;
   promptStartedAt: number | null;
-  isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
   framework?: "claude";

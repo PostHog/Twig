@@ -60,7 +60,6 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
-    const isCloud = context?.isCloud ?? false;
     const repoPath = context?.repoPath;
     const isDisabled = disabled || !isOnline;
 
@@ -83,7 +82,6 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       placeholder,
       disabled: isDisabled,
       isLoading,
-      isCloud,
       autoFocus,
       context: { taskId, repoPath },
       onSubmit,

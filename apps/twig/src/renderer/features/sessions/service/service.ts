@@ -381,7 +381,6 @@ export class SessionService {
     track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
       task_id: taskId,
       execution_type: "local",
-      adapter,
     });
 
     if (initialPrompt?.length) {
@@ -569,7 +568,9 @@ export class SessionService {
 
   private handlePermissionRequest(
     taskRunId: string,
-    payload: RequestPermissionRequest,
+    payload: Omit<RequestPermissionRequest, "sessionId"> & {
+      taskRunId: string;
+    },
   ): void {
     log.info("Permission request received in renderer", {
       taskRunId,
@@ -587,12 +588,9 @@ export class SessionService {
     }
 
     const newPermissions = new Map(session.pendingPermissions);
-    // Transform RequestPermissionRequest to PermissionRequest
-    // (omit sessionId, add taskRunId and receivedAt)
-    const { sessionId: _sessionId, ...rest } = payload;
+    // Add receivedAt to create PermissionRequest
     newPermissions.set(payload.toolCall.toolCallId, {
-      ...rest,
-      taskRunId,
+      ...payload,
       receivedAt: Date.now(),
     });
 
@@ -1074,7 +1072,6 @@ export class SessionService {
     taskRunId: string,
     taskId: string,
     taskTitle: string,
-    isCloud = false,
   ): AgentSession {
     return {
       taskRunId,
@@ -1086,7 +1083,6 @@ export class SessionService {
       status: "connecting",
       isPromptPending: false,
       promptStartedAt: null,
-      isCloud,
       pendingPermissions: new Map(),
       messageQueue: [],
     };
