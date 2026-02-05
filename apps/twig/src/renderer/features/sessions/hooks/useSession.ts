@@ -8,28 +8,30 @@ import {
   type AgentSession,
   type QueuedMessage,
   useSessionStore,
-} from "../stores/sessionStoreCore";
+} from "../stores/sessionStore";
 import type { PermissionRequest } from "../utils/parseSessionLogs";
 
 export const useSessions = () => useSessionStore((s) => s.sessions);
 
+/** O(1) lookup using taskIdIndex */
 export const useSessionForTask = (
   taskId: string | undefined,
 ): AgentSession | undefined =>
-  useSessionStore((s) =>
-    taskId
-      ? Object.values(s.sessions).find((session) => session.taskId === taskId)
-      : undefined,
-  );
+  useSessionStore((s) => {
+    if (!taskId) return undefined;
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return undefined;
+    return s.sessions[taskRunId];
+  });
 
 export const useAvailableCommandsForTask = (
   taskId: string | undefined,
 ): AvailableCommand[] => {
   return useSessionStore((s) => {
     if (!taskId) return [];
-    const session = Object.values(s.sessions).find(
-      (sess) => sess.taskId === taskId,
-    );
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return [];
+    const session = s.sessions[taskRunId];
     if (!session?.events) return [];
     return extractAvailableCommandsFromEvents(session.events);
   });
@@ -39,20 +41,20 @@ export function getAvailableCommandsForTask(
   taskId: string | undefined,
 ): AvailableCommand[] {
   if (!taskId) return [];
-  const sessions = useSessionStore.getState().sessions;
-  const session = Object.values(sessions).find(
-    (sess) => sess.taskId === taskId,
-  );
+  const state = useSessionStore.getState();
+  const taskRunId = state.taskIdIndex[taskId];
+  if (!taskRunId) return [];
+  const session = state.sessions[taskRunId];
   if (!session?.events) return [];
   return extractAvailableCommandsFromEvents(session.events);
 }
 
 export function getUserPromptsForTask(taskId: string | undefined): string[] {
   if (!taskId) return [];
-  const sessions = useSessionStore.getState().sessions;
-  const session = Object.values(sessions).find(
-    (sess) => sess.taskId === taskId,
-  );
+  const state = useSessionStore.getState();
+  const taskRunId = state.taskIdIndex[taskId];
+  if (!taskRunId) return [];
+  const session = state.sessions[taskRunId];
   if (!session?.events) return [];
   return extractUserPromptsFromEvents(session.events);
 }
@@ -62,9 +64,9 @@ export const usePendingPermissionsForTask = (
 ): Map<string, PermissionRequest> => {
   return useSessionStore((s) => {
     if (!taskId) return new Map();
-    const session = Object.values(s.sessions).find(
-      (sess) => sess.taskId === taskId,
-    );
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return new Map();
+    const session = s.sessions[taskRunId];
     return session?.pendingPermissions ?? new Map();
   });
 };
@@ -73,27 +75,23 @@ export function getPendingPermissionsForTask(
   taskId: string | undefined,
 ): Map<string, PermissionRequest> {
   if (!taskId) return new Map();
-  const sessions = useSessionStore.getState().sessions;
-  const session = Object.values(sessions).find(
-    (sess) => sess.taskId === taskId,
-  );
+  const state = useSessionStore.getState();
+  const taskRunId = state.taskIdIndex[taskId];
+  if (!taskRunId) return new Map();
+  const session = state.sessions[taskRunId];
   return session?.pendingPermissions ?? new Map();
 }
 
-// Uses taskRunId lookup via separate selector to ensure proper updates
+/** O(1) lookup using taskIdIndex */
 export const useCurrentModeForTask = (
   taskId: string | undefined,
 ): ExecutionMode | undefined => {
-  const taskRunId = useSessionStore((s) => {
-    if (!taskId) return undefined;
-    for (const session of Object.values(s.sessions)) {
-      if (session.taskId === taskId) {
-        return session.taskRunId;
-      }
-    }
-    return undefined;
-  });
+  // First selector: get taskRunId from index
+  const taskRunId = useSessionStore((s) =>
+    taskId ? s.taskIdIndex[taskId] : undefined,
+  );
 
+  // Second selector: get currentMode from session
   return useSessionStore((s) => {
     if (!taskRunId) return undefined;
     return s.sessions[taskRunId]?.currentMode;
@@ -105,9 +103,9 @@ export const useQueuedMessagesForTask = (
 ): QueuedMessage[] => {
   return useSessionStore((s) => {
     if (!taskId) return [];
-    const session = Object.values(s.sessions).find(
-      (sess) => sess.taskId === taskId,
-    );
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return [];
+    const session = s.sessions[taskRunId];
     return session?.messageQueue ?? [];
   });
 };

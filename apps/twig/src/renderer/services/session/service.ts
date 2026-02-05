@@ -17,12 +17,14 @@ import {
   notifyPromptComplete,
 } from "@renderer/lib/notifications";
 import { trpcVanilla } from "@renderer/trpc/client";
+import { toast } from "@renderer/utils/toast";
 import type { ExecutionMode, Task } from "@shared/types";
 import type { AcpMessage, StoredLogEntry } from "@shared/types/session-events";
 import { isJsonRpcRequest } from "@shared/types/session-events";
 import {
   convertStoredEntriesToEvents,
   createUserShellExecuteEvent,
+  extractPromptText,
   getUserShellExecutesSinceLastPrompt,
   normalizePromptToBlocks,
   shellExecutesToContextBlocks,
@@ -56,6 +58,17 @@ export function getSessionService(): SessionService {
     serviceInstance = new SessionService();
   }
   return serviceInstance;
+}
+
+/**
+ * Reset the session service singleton.
+ * Call this on logout or when the app needs to fully reset state.
+ */
+export function resetSessionService(): void {
+  if (serviceInstance) {
+    serviceInstance.reset();
+    serviceInstance = null;
+  }
 }
 
 export class SessionService {
@@ -427,6 +440,25 @@ export class SessionService {
     this.subscriptions.delete(taskRunId);
   }
 
+  /**
+   * Reset all service state and clean up subscriptions.
+   * Called on logout or app reset.
+   */
+  reset(): void {
+    log.info("Resetting session service", {
+      subscriptionCount: this.subscriptions.size,
+      connectingCount: this.connectingTasks.size,
+    });
+
+    // Unsubscribe from all active subscriptions
+    for (const taskRunId of this.subscriptions.keys()) {
+      this.unsubscribeFromChannel(taskRunId);
+    }
+
+    // Clear connecting tasks
+    this.connectingTasks.clear();
+  }
+
   private handleSessionEvent(taskRunId: string, acpMsg: AcpMessage): void {
     const session = sessionStoreSetters.getSessions()[taskRunId];
     if (!session) return;
@@ -464,16 +496,17 @@ export class SessionService {
       }
 
       // Process queued messages after turn completes
-      const queue = session.messageQueue;
-      if (queue.length > 0 && session.status === "connected") {
-        const nextMessageContent = queue[0].content;
+      if (session.messageQueue.length > 0 && session.status === "connected") {
+        const nextMessage = session.messageQueue[0];
         setTimeout(() => {
-          this.sendPrompt(session.taskId, nextMessageContent).catch((err) => {
-            log.error("Failed to send queued message", {
-              taskId: session.taskId,
-              error: err,
-            });
-          });
+          this.sendPromptFromQueue(session.taskId, nextMessage.id).catch(
+            (err) => {
+              log.error("Failed to send queued message", {
+                taskId: session.taskId,
+                error: err,
+              });
+            },
+          );
         }, 0);
       }
     }
@@ -575,14 +608,7 @@ export class SessionService {
 
     // If a prompt is already pending, queue this message
     if (session.isPromptPending) {
-      const promptText =
-        typeof prompt === "string"
-          ? prompt
-          : (prompt as ContentBlock[])
-              .filter((b) => b.type === "text")
-              .map((b) => (b as { text: string }).text)
-              .join("");
-
+      const promptText = extractPromptText(prompt);
       const queueId = `queue-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       sessionStoreSetters.enqueueMessage(session.taskRunId, {
         id: queueId,
@@ -597,25 +623,6 @@ export class SessionService {
       return { stopReason: "queued" };
     }
 
-    // If this prompt came from the queue, dequeue it first
-    if (session.messageQueue.length > 0) {
-      const promptText =
-        typeof prompt === "string"
-          ? prompt
-          : (prompt as ContentBlock[])
-              .filter((b) => b.type === "text")
-              .map((b) => (b as { text: string }).text)
-              .join("");
-
-      if (session.messageQueue[0].content === promptText) {
-        sessionStoreSetters.dequeueMessage(session.taskRunId);
-        log.info("Sending queued message", {
-          taskId,
-          remainingQueue: session.messageQueue.length - 1,
-        });
-      }
-    }
-
     let blocks = normalizePromptToBlocks(prompt);
 
     // Add shell execute context
@@ -625,18 +632,59 @@ export class SessionService {
       blocks = [...contextBlocks, ...blocks];
     }
 
-    const promptText =
-      typeof prompt === "string"
-        ? prompt
-        : blocks
-            .filter((b) => b.type === "text")
-            .map((b) => (b as { text: string }).text)
-            .join("");
+    const promptText = extractPromptText(prompt);
     track(ANALYTICS_EVENTS.PROMPT_SENT, {
       task_id: taskId,
       is_initial: session.events.length === 0,
       execution_type: "local",
       prompt_length_chars: promptText.length,
+    });
+
+    return this.sendLocalPrompt(session, blocks);
+  }
+
+  /**
+   * Send a prompt from the queue, dequeuing by ID to avoid race conditions.
+   * Called internally when processing queued messages after a turn completes.
+   */
+  private async sendPromptFromQueue(
+    taskId: string,
+    queueId: string,
+  ): Promise<{ stopReason: string }> {
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) throw new Error("No active session for task");
+
+    // Dequeue by ID - this is safe even if the queue changed
+    const queuedMessage = session.messageQueue.find((m) => m.id === queueId);
+    if (!queuedMessage) {
+      log.warn("Queued message no longer exists, skipping", {
+        taskId,
+        queueId,
+      });
+      return { stopReason: "skipped" };
+    }
+
+    sessionStoreSetters.dequeueMessage(session.taskRunId);
+    log.info("Sending queued message", {
+      taskId,
+      queueId,
+      remainingQueue: session.messageQueue.length - 1,
+    });
+
+    // Use the stored content from the queue (not the parameter) for consistency
+    let blocks = normalizePromptToBlocks(queuedMessage.content);
+
+    const shellExecutes = getUserShellExecutesSinceLastPrompt(session.events);
+    if (shellExecutes.length > 0) {
+      const contextBlocks = shellExecutesToContextBlocks(shellExecutes);
+      blocks = [...contextBlocks, ...blocks];
+    }
+
+    track(ANALYTICS_EVENTS.PROMPT_SENT, {
+      task_id: taskId,
+      is_initial: false,
+      execution_type: "local",
+      prompt_length_chars: queuedMessage.content.length,
     });
 
     return this.sendLocalPrompt(session, blocks);
@@ -853,7 +901,7 @@ export class SessionService {
         modelId,
         error,
       });
-      throw error;
+      toast.error("Failed to change model. Please try again.");
     }
   }
 
@@ -888,7 +936,7 @@ export class SessionService {
         modeId,
         error,
       });
-      throw error;
+      toast.error("Failed to change mode. Please try again.");
     }
   }
 
