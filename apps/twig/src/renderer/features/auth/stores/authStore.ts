@@ -262,10 +262,12 @@ export const useAuthStore = create<AuthState>()(
                 };
 
                 const apiHost = getCloudUrlFromRegion(state.cloudRegion);
+                const scopedTeams = tokenResponse.scoped_teams ?? [];
+                const storedProjectId = state.projectId;
                 const projectId =
-                  tokenResponse.scoped_teams?.[0] ||
-                  state.projectId ||
-                  undefined;
+                  storedProjectId && scopedTeams.includes(storedProjectId)
+                    ? storedProjectId
+                    : (scopedTeams[0] ?? storedProjectId ?? undefined);
 
                 const client = new PostHogAPIClient(
                   tokenResponse.access_token,
@@ -288,6 +290,10 @@ export const useAuthStore = create<AuthState>()(
                   storedTokens,
                   client,
                   ...(projectId && { projectId }),
+                  availableProjectIds:
+                    scopedTeams.length > 0
+                      ? scopedTeams
+                      : state.availableProjectIds,
                 });
 
                 trpcVanilla.agent.updateToken
@@ -665,8 +671,15 @@ export const useAuthStore = create<AuthState>()(
             storedTokens: updatedTokens,
           });
 
-          // Clear query cache to fetch data for the new project
-          queryClient.clear();
+          // Clear project-scoped queries, but keep project list/user for the switcher
+          queryClient.removeQueries({
+            predicate: (query) => {
+              const key = Array.isArray(query.queryKey)
+                ? query.queryKey[0]
+                : query.queryKey;
+              return key !== "projects" && key !== "currentUser";
+            },
+          });
 
           // Navigate to task input after project selection
           useNavigationStore.getState().navigateToTaskInput();
