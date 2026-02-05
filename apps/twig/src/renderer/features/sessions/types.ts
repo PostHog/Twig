@@ -25,7 +25,7 @@ export interface ToolCall {
 export type SessionUpdate = SessionNotification["update"];
 
 export type Plan = Extract<SessionUpdate, { sessionUpdate: "plan" }>;
-export type CurrentModeUpdate = Extract<
+export type ConfigOptionUpdate = Extract<
   SessionUpdate,
-  { sessionUpdate: "current_mode_update" }
+  { sessionUpdate: "config_option_update" }
 >;

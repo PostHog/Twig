@@ -5,9 +5,10 @@ import {
 } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
-  cycleExecutionMode,
-  type ExecutionMode,
-  useCurrentModeForTask,
+  cycleModeOption,
+  flattenSelectOptions,
+  useAdapterForTask,
+  useModeConfigOptionForTask,
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
@@ -72,29 +73,57 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const { respondToPermission, cancelPermission, setSessionMode } =
-    useSessionActions();
-  const sessionMode = useCurrentModeForTask(taskId);
+  const {
+    respondToPermission,
+    cancelPermission,
+    setSessionConfigOptionByCategory,
+  } = useSessionActions();
+  const modeOption = useModeConfigOptionForTask(taskId);
+  const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
-
-  const currentMode: ExecutionMode = sessionMode ?? "default";
+  const currentModeId = modeOption?.currentValue;
 
   useEffect(() => {
     if (
       !allowBypassPermissions &&
-      currentMode === "bypassPermissions" &&
+      (currentModeId === "bypassPermissions" ||
+        currentModeId === "full-access") &&
       taskId &&
-      !isCloud
+      !isCloud &&
+      modeOption
     ) {
-      setSessionMode(taskId, "default");
+      const options = flattenSelectOptions(modeOption.options);
+      const safeOption =
+        options.find(
+          (opt) =>
+            opt.value !== "bypassPermissions" && opt.value !== "full-access",
+        ) ?? options[0];
+      if (safeOption) {
+        setSessionConfigOptionByCategory(taskId, "mode", safeOption.value);
+      }
     }
-  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+  }, [
+    allowBypassPermissions,
+    currentModeId,
+    taskId,
+    isCloud,
+    modeOption,
+    setSessionConfigOptionByCategory,
+  ]);
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
-    const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
-    setSessionMode(taskId, nextMode);
-  }, [taskId, isCloud, currentMode, allowBypassPermissions, setSessionMode]);
+    const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
+    if (nextMode) {
+      setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+    }
+  }, [
+    taskId,
+    isCloud,
+    allowBypassPermissions,
+    modeOption,
+    setSessionConfigOptionByCategory,
+  ]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -111,26 +140,28 @@ export function SessionView({
     onCancelPrompt,
   ]);
 
-  // Mode cycling with Shift+Tab
   useHotkeys(
     "shift+tab",
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
-      setSessionMode(taskId, nextMode);
+      const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
+      if (nextMode) {
+        setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+      }
     },
     {
       enableOnFormTags: true,
       enableOnContentEditable: true,
-      enabled: !isCloud && isRunning,
+      enabled: !isCloud && isRunning && !!modeOption,
     },
     [
       taskId,
-      currentMode,
+      currentModeId,
       isCloud,
       isRunning,
-      setSessionMode,
+      modeOption,
+      setSessionConfigOptionByCategory,
       allowBypassPermissions,
     ],
   );
@@ -210,7 +241,7 @@ export function SessionView({
         (o) => o.optionId === optionId,
       );
       if (selectedOption?.kind === "allow_always" && !isCloud) {
-        setSessionMode(taskId, "acceptEdits");
+        setSessionConfigOptionByCategory(taskId, "mode", "acceptEdits");
       }
 
       if (customInput) {
@@ -250,7 +281,7 @@ export function SessionView({
       respondToPermission,
       onSendPrompt,
       isCloud,
-      setSessionMode,
+      setSessionConfigOptionByCategory,
       requestFocus,
       sessionId,
     ],
@@ -440,8 +471,11 @@ export function SessionView({
                       onBashCommand={onBashCommand}
                       onBashModeChange={setIsBashMode}
                       onCancel={onCancelPrompt}
-                      currentMode={currentMode}
-                      onModeChange={!isCloud ? handleModeChange : undefined}
+                      modeOption={modeOption}
+                      onModeChange={
+                        !isCloud && modeOption ? handleModeChange : undefined
+                      }
+                      adapter={adapter}
                     />
                   </Box>
                 </Box>

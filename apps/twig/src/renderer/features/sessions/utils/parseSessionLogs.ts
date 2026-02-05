@@ -3,27 +3,22 @@
 import {
   CLIENT_METHODS,
   type RequestPermissionRequest,
+  type SessionConfigOption,
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
+import type { StoredLogEntry as BaseStoredLogEntry } from "@shared/types/session-events";
 import { trpcVanilla } from "@/renderer/trpc";
 
-export interface StoredLogEntry {
-  type: string;
-  timestamp?: string;
-  notification?: {
-    id?: number;
-    method?: string;
-    params?: unknown;
-    result?: unknown;
-    error?: unknown;
-  };
+export interface StoredLogEntry extends BaseStoredLogEntry {
   direction?: "client" | "agent";
 }
 
 export interface ParsedSessionLogs {
   notifications: SessionNotification[];
   rawEntries: StoredLogEntry[];
-  sdkSessionId?: string;
+  sessionId?: string;
+  adapter?: "claude" | "codex";
+  configOptions?: SessionConfigOption[];
 }
 
 /**
@@ -45,16 +40,33 @@ export async function fetchSessionLogs(
 
     const notifications: SessionNotification[] = [];
     const rawEntries: StoredLogEntry[] = [];
-    let sdkSessionId: string | undefined;
+    let sessionId: string | undefined;
+    let adapter: "claude" | "codex" | undefined;
+    let configOptions: SessionConfigOption[] | undefined;
 
     for (const line of content.trim().split("\n")) {
       try {
         const stored = JSON.parse(line) as StoredLogEntry;
+        if (!stored.notification) {
+          const maybeMsg = stored as unknown as {
+            id?: number;
+            method?: string;
+            params?: unknown;
+            result?: unknown;
+            error?: unknown;
+          };
+          if (
+            typeof maybeMsg === "object" &&
+            maybeMsg !== null &&
+            ("method" in maybeMsg ||
+              "result" in maybeMsg ||
+              "error" in maybeMsg ||
+              "id" in maybeMsg)
+          ) {
+            stored.notification = maybeMsg;
+          }
+        }
 
-        // Infer direction from message structure:
-        // - Request (has id + method) = client → agent
-        // - Response (has id + result/error) = agent → client
-        // - Notification (has method, no id) = agent → client
         const msg = stored.notification;
         if (msg) {
           const hasId = msg.id !== undefined;
@@ -72,26 +84,41 @@ export async function fetchSessionLogs(
 
         rawEntries.push(stored);
 
-        // Extract session/update notifications
         if (
           stored.type === "notification" &&
           stored.notification?.method === "session/update" &&
           stored.notification?.params
         ) {
           notifications.push(stored.notification.params as SessionNotification);
+
+          const params = stored.notification.params as {
+            update?: {
+              sessionUpdate?: string;
+              configOptions?: SessionConfigOption[];
+            };
+          };
+          if (params.update?.sessionUpdate === "config_option_update") {
+            configOptions = params.update.configOptions;
+          }
         }
 
-        // Extract SDK session ID from _posthog/sdk_session notification
         if (
           stored.type === "notification" &&
           stored.notification?.method?.endsWith("posthog/sdk_session") &&
           stored.notification?.params
         ) {
           const params = stored.notification.params as {
+            sessionId?: string;
             sdkSessionId?: string;
+            adapter?: "claude" | "codex";
           };
-          if (params.sdkSessionId) {
-            sdkSessionId = params.sdkSessionId;
+          if (params.sessionId) {
+            sessionId = params.sessionId;
+          } else if (params.sdkSessionId) {
+            sessionId = params.sdkSessionId;
+          }
+          if (params.adapter) {
+            adapter = params.adapter;
           }
         }
       } catch {
@@ -99,13 +126,14 @@ export async function fetchSessionLogs(
       }
     }
 
-    return { notifications, rawEntries, sdkSessionId };
+    return { notifications, rawEntries, sessionId, adapter, configOptions };
   } catch {
     return { notifications: [], rawEntries: [] };
   }
 }
 
-export type PermissionRequest = RequestPermissionRequest & {
+export type PermissionRequest = Omit<RequestPermissionRequest, "sessionId"> & {
+  taskRunId: string;
   receivedAt: number;
 };
 
@@ -182,8 +210,10 @@ export function findPendingPermissions(
     if (isResolved || isStale) continue;
 
     const params = entry.notification?.params as RequestPermissionRequest;
+    const { sessionId, ...rest } = params;
     pending.set(toolCallId, {
-      ...params,
+      ...rest,
+      taskRunId: sessionId,
       receivedAt: entry.timestamp
         ? new Date(entry.timestamp).getTime()
         : Date.now(),

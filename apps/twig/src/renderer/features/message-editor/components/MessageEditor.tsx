@@ -1,5 +1,5 @@
 import "./message-editor.css";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
+import type { SessionConfigOption } from "@agentclientprotocol/sdk";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
@@ -10,6 +10,7 @@ import { useDraftStore } from "../stores/draftStore";
 import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
+import { AdapterIndicator } from "./AdapterIndicator";
 import { DiffStatsIndicator } from "./DiffStatsIndicator";
 import { EditorToolbar } from "./EditorToolbar";
 import { ModeIndicatorInput } from "./ModeIndicatorInput";
@@ -26,8 +27,9 @@ interface MessageEditorProps {
   onCancel?: () => void;
   onAttachFiles?: (files: File[]) => void;
   autoFocus?: boolean;
-  currentMode?: ExecutionMode;
+  modeOption?: SessionConfigOption;
   onModeChange?: () => void;
+  adapter?: "claude" | "codex";
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -43,8 +45,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onCancel,
       onAttachFiles,
       autoFocus = false,
-      currentMode,
+      modeOption,
       onModeChange,
+      adapter,
       onFocus,
       onBlur,
     },
@@ -212,9 +215,20 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             )}
           </Flex>
         </Flex>
-        {onModeChange && currentMode && (
+        {(onModeChange || adapter) && (
           <Flex align="center" gap="2">
-            <ModeIndicatorInput mode={currentMode} />
+            {onModeChange && modeOption && (
+              <ModeIndicatorInput modeOption={modeOption} />
+            )}
+            {onModeChange && !modeOption && (
+              <Text
+                size="1"
+                style={{ color: "var(--gray-8)", fontFamily: "monospace" }}
+              >
+                Loading...
+              </Text>
+            )}
+            {adapter && <AdapterIndicator adapter={adapter} />}
             <DiffStatsIndicator repoPath={repoPath} />
           </Flex>
         )}

@@ -11,7 +11,7 @@ import type {
   PromptResponse,
   ReadTextFileRequest,
   ReadTextFileResponse,
-  SessionModelState,
+  SessionConfigSelectOption,
   SessionNotification,
   WriteTextFileRequest,
   WriteTextFileResponse,
@@ -20,6 +20,7 @@ import {
   DEFAULT_GATEWAY_MODEL,
   fetchGatewayModels,
   formatGatewayModelName,
+  isAnthropicModel,
 } from "@/gateway-models.js";
 import { Logger } from "@/utils/logger.js";
 
@@ -111,30 +112,39 @@ export abstract class BaseAcpAgent implements Agent {
     throw new Error("Method not implemented.");
   }
 
-  async sendModeUpdate(sessionId: string, modeId: string): Promise<void> {
-    await this.client.sessionUpdate({
-      sessionId,
-      update: {
-        sessionUpdate: "current_mode_update",
-        currentModeId: modeId,
-      },
-    });
-  }
-
-  async getAvailableModels(
-    currentModelOverride?: string,
-  ): Promise<SessionModelState> {
+  async getModelConfigOptions(currentModelOverride?: string): Promise<{
+    currentModelId: string;
+    options: SessionConfigSelectOption[];
+  }> {
     const gatewayModels = await fetchGatewayModels();
 
-    const availableModels = gatewayModels.map((model) => ({
-      modelId: model.id,
-      name: formatGatewayModelName(model),
-      description: `Context: ${model.context_window.toLocaleString()} tokens`,
-    }));
+    const options = gatewayModels
+      .filter((model) => isAnthropicModel(model))
+      .map((model) => ({
+        value: model.id,
+        name: formatGatewayModelName(model),
+        description: `Context: ${model.context_window.toLocaleString()} tokens`,
+      }));
 
-    return {
-      availableModels,
-      currentModelId: currentModelOverride ?? DEFAULT_GATEWAY_MODEL,
-    };
+    const isAnthropicModelId = (modelId: string): boolean =>
+      modelId.startsWith("claude-") || modelId.startsWith("anthropic/");
+
+    let currentModelId = currentModelOverride ?? DEFAULT_GATEWAY_MODEL;
+
+    if (!options.some((opt) => opt.value === currentModelId)) {
+      if (!isAnthropicModelId(currentModelId)) {
+        currentModelId = DEFAULT_GATEWAY_MODEL;
+      }
+    }
+
+    if (!options.some((opt) => opt.value === currentModelId)) {
+      options.unshift({
+        value: currentModelId,
+        name: currentModelId,
+        description: "Custom model",
+      });
+    }
+
+    return { currentModelId, options };
   }
 }

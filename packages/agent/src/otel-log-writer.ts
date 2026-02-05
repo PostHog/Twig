@@ -7,7 +7,7 @@ import {
 } from "@opentelemetry/sdk-logs";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import type { StoredNotification } from "./types.js";
-import { Logger } from "./utils/logger.js";
+import type { Logger } from "./utils/logger.js";
 
 export interface OtelLogConfig {
   /** PostHog ingest host, e.g., "https://us.i.posthog.com" */
@@ -36,18 +36,12 @@ export interface SessionContext {
 export class OtelLogWriter {
   private loggerProvider: LoggerProvider;
   private logger: ReturnType<LoggerProvider["getLogger"]>;
-  private debugLogger: Logger;
-  private sessionContext: SessionContext;
 
   constructor(
     config: OtelLogConfig,
     sessionContext: SessionContext,
-    debugLogger?: Logger,
+    _debugLogger?: Logger,
   ) {
-    this.debugLogger =
-      debugLogger ?? new Logger({ debug: false, prefix: "[OtelLogWriter]" });
-    this.sessionContext = sessionContext;
-
     const logsPath = config.logsPath ?? "/i/v1/agent-logs";
     const exporter = new OTLPLogExporter({
       url: `${config.posthogHost}${logsPath}`,
@@ -87,12 +81,6 @@ export class OtelLogWriter {
       attributes: {
         event_type: eventType,
       },
-    });
-
-    this.debugLogger.debug("Emitted OTEL log", {
-      taskId: this.sessionContext.taskId,
-      runId: this.sessionContext.runId,
-      eventType,
     });
   }
 

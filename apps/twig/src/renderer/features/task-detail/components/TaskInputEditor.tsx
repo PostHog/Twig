@@ -1,15 +1,12 @@
 import "@features/message-editor/components/message-editor.css";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
-import type { ExecutionMode } from "@features/sessions/stores/sessionStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { ArrowUp } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 import type { RunMode } from "./RunModeSelect";
 import "./TaskInput.css";
 
@@ -22,8 +19,7 @@ interface TaskInputEditorProps {
   onSubmit: () => void;
   hasDirectory: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
-  executionMode: ExecutionMode;
-  onModeChange: () => void;
+  adapter?: "claude" | "codex";
 }
 
 export const TaskInputEditor = forwardRef<
@@ -40,28 +36,13 @@ export const TaskInputEditor = forwardRef<
       onSubmit,
       hasDirectory,
       onEmptyChange,
-      executionMode,
-      onModeChange,
+      adapter,
     },
     ref,
   ) => {
     const isCloudMode = runMode === "cloud";
     const { isOnline } = useConnectivity();
     const isDisabled = isCreatingTask || !isOnline;
-
-    useHotkeys(
-      "shift+tab",
-      (e) => {
-        e.preventDefault();
-        onModeChange();
-      },
-      {
-        enableOnFormTags: true,
-        enableOnContentEditable: true,
-        enabled: !isCreatingTask && !isCloudMode,
-      },
-      [onModeChange, isCreatingTask, isCloudMode],
-    );
 
     const {
       editor,
@@ -125,117 +106,115 @@ export const TaskInputEditor = forwardRef<
     };
 
     return (
-      <>
+      <Flex
+        direction="column"
+        style={{
+          backgroundColor: "var(--gray-2)",
+          borderRadius: "var(--radius-2)",
+          border: "1px solid var(--gray-a6)",
+          position: "relative",
+          overflow: "visible",
+        }}
+      >
         <Flex
           direction="column"
+          p="3"
           style={{
-            backgroundColor: "var(--gray-2)",
-            borderRadius: "var(--radius-2)",
-            border: "1px solid var(--gray-a6)",
+            cursor: "text",
             position: "relative",
             overflow: "visible",
+            zIndex: 1,
+          }}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest(".ProseMirror")) {
+              focus();
+            }
           }}
         >
           <Flex
-            direction="column"
-            p="3"
+            align="start"
+            gap="2"
             style={{
-              cursor: "text",
-              position: "relative",
+              display: "flex",
               overflow: "visible",
-              zIndex: 1,
-            }}
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              if (!target.closest(".ProseMirror")) {
-                focus();
-              }
+              minWidth: 0,
             }}
           >
-            <Flex
-              align="start"
-              gap="2"
+            <Text
+              size="2"
+              weight="bold"
               style={{
-                display: "flex",
-                overflow: "visible",
-                minWidth: 0,
+                color: "var(--accent-11)",
+                fontFamily: "monospace",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+                bottom: "1px",
+                position: "relative",
               }}
             >
+              &gt;
+            </Text>
+            {isCreatingTask ? (
               <Text
                 size="2"
-                weight="bold"
+                color="gray"
                 style={{
-                  color: "var(--accent-11)",
                   fontFamily: "monospace",
-                  userSelect: "none",
-                  WebkitUserSelect: "none",
-                  bottom: "1px",
-                  position: "relative",
+                  fontSize: "var(--font-size-1)",
                 }}
               >
-                &gt;
+                Creating task...
               </Text>
-              {isCreatingTask ? (
-                <Text
-                  size="2"
-                  color="gray"
-                  style={{
-                    fontFamily: "monospace",
-                    fontSize: "var(--font-size-1)",
-                  }}
-                >
-                  Creating task...
-                </Text>
-              ) : (
-                <Box
-                  style={{
-                    flex: 1,
-                    position: "relative",
-                    minWidth: 0,
-                    maxHeight: "200px",
-                    overflowY: "auto",
-                  }}
-                >
-                  <EditorContent editor={editor} />
-                </Box>
-              )}
-            </Flex>
-          </Flex>
-
-          <Flex justify="between" align="center" px="3" pb="3">
-            <EditorToolbar
-              disabled={isDisabled}
-              onInsertChip={insertChip}
-              attachTooltip="Attach files from anywhere"
-              iconSize={16}
-            />
-
-            <Flex align="center" gap="4">
-              <Tooltip content={getSubmitTooltip()}>
-                <IconButton
-                  size="1"
-                  variant="solid"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSubmit();
-                  }}
-                  disabled={!canSubmit || isDisabled}
-                  loading={isCreatingTask}
-                  style={{
-                    backgroundColor:
-                      !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
-                    color:
-                      !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
-                  }}
-                >
-                  <ArrowUp size={16} weight="bold" />
-                </IconButton>
-              </Tooltip>
-            </Flex>
+            ) : (
+              <Box
+                style={{
+                  flex: 1,
+                  position: "relative",
+                  minWidth: 0,
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                }}
+              >
+                <EditorContent editor={editor} />
+              </Box>
+            )}
           </Flex>
         </Flex>
-        {!isCloudMode && <ModeIndicatorInput mode={executionMode} />}
-      </>
+
+        <Flex justify="between" align="center" px="3" pb="3">
+          <EditorToolbar
+            disabled={isDisabled}
+            adapter={adapter}
+            onInsertChip={insertChip}
+            attachTooltip="Attach files from anywhere"
+            iconSize={16}
+          />
+
+          <Flex align="center" gap="4">
+            <Tooltip content={getSubmitTooltip()}>
+              <IconButton
+                size="1"
+                variant="solid"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSubmit();
+                }}
+                disabled={!canSubmit || isDisabled}
+                loading={isCreatingTask}
+                style={{
+                  backgroundColor:
+                    !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
+                  color:
+                    !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
+                }}
+              >
+                <ArrowUp size={16} weight="bold" />
+              </IconButton>
+            </Tooltip>
+          </Flex>
+        </Flex>
+      </Flex>
     );
   },
 );

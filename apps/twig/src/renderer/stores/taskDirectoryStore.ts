@@ -1,3 +1,4 @@
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { omitKey } from "@utils/object";
 import { expandTildePath } from "@utils/path";
@@ -76,6 +77,7 @@ export const useTaskDirectoryStore = create<TaskDirectoryState>()(
     }),
     {
       name: "task-directory-mappings",
+      storage: electronStorage,
       partialize: (state) => ({
         repoDirectories: state.repoDirectories,
         lastUsedDirectory: state.lastUsedDirectory,

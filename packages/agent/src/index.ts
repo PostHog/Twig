@@ -17,11 +17,26 @@ export type {
 } from "./acp-extensions.js";
 export { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 export type {
+  AcpConnection,
   AcpConnectionConfig,
+  AgentAdapter,
   InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
 export { createAcpConnection } from "./adapters/acp-connection.js";
+export type { CodexProcessOptions } from "./adapters/codex/spawn.js";
 export { Agent } from "./agent.js";
+export {
+  type ArrayModelInfo,
+  BLOCKED_MODELS,
+  DEFAULT_GATEWAY_MODEL,
+  type FetchGatewayModelsOptions,
+  fetchArrayModels,
+  fetchGatewayModels,
+  formatGatewayModelName,
+  type GatewayModel,
+  getProviderName,
+  isAnthropicModel,
+} from "./gateway-models.js";
 export type { OtelLogConfig, SessionContext } from "./otel-log-writer.js";
 export { OtelLogWriter } from "./otel-log-writer.js";
 export { PostHogAPIClient } from "./posthog-api.js";

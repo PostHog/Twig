@@ -6,9 +6,11 @@ import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { PluggableList } from "unified";
 
 interface MarkdownRendererProps {
   content: string;
+  remarkPluginsOverride?: PluggableList;
 }
 
 // Preprocessor to prevent setext heading interpretation of horizontal rules
@@ -157,17 +159,19 @@ export const baseComponents: Components = {
   ),
 };
 
-export const remarkPlugins = [remarkGfm];
+export const defaultRemarkPlugins = [remarkGfm];
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
+  remarkPluginsOverride,
 }: MarkdownRendererProps) {
   const processedContent = useMemo(
     () => preprocessMarkdown(content),
     [content],
   );
+  const plugins = remarkPluginsOverride ?? defaultRemarkPlugins;
   return (
-    <ReactMarkdown remarkPlugins={remarkPlugins} components={baseComponents}>
+    <ReactMarkdown remarkPlugins={plugins} components={baseComponents}>
       {processedContent}
     </ReactMarkdown>
   );

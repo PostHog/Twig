@@ -80,7 +80,7 @@ export const SessionUpdateView = memo(function SessionUpdateView({
       return <PlanView plan={item} />;
     case "available_commands_update":
       return null;
-    case "current_mode_update":
+    case "config_option_update":
       return null;
     case "console":
       return (

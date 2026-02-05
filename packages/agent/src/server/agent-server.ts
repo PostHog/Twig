@@ -450,7 +450,7 @@ export class AgentServer {
     });
 
     const acpConnection = createAcpConnection({
-      sessionId: payload.run_id,
+      taskRunId: payload.run_id,
       taskId: payload.task_id,
       deviceType: deviceInfo.type,
       logWriter,

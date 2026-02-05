@@ -32,7 +32,7 @@ export const POSTHOG_NOTIFICATIONS = {
   /** Console/log output from the agent */
   CONSOLE: "_posthog/console",
 
-  /** Maps a session ID to the underlying SDK session ID (for resumption) */
+  /** Maps taskRunId to agent's sessionId and adapter type (for resumption) */
   SDK_SESSION: "_posthog/sdk_session",
 
   /** Tree state snapshot captured (git tree hash + file archive) */
@@ -96,8 +96,9 @@ export interface ConsoleNotificationPayload {
 }
 
 export interface SdkSessionPayload {
+  taskRunId: string;
   sessionId: string;
-  sdkSessionId: string;
+  adapter: "claude" | "codex";
 }
 
 export interface TreeSnapshotPayload {

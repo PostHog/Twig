@@ -128,7 +128,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: {
       unpack:
-        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**,**/node_modules/file-icon/**}",
+        "{**/*.node,**/spawn-helper,**/.vite/build/claude-cli/**,**/.vite/build/codex-acp/**,**/node_modules/node-pty/**,**/node_modules/@parcel/**,**/node_modules/file-icon/**}",
     },
     prune: false,
     name: "Twig",

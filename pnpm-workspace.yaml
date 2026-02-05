@@ -12,3 +12,6 @@ onlyBuiltDependencies:
   - node-pty
 
 minimumReleaseAge: 1440
+
+minimumReleaseAgeExclude:
+  - "@agentclientprotocol/sdk"

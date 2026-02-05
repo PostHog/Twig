@@ -26,8 +26,10 @@ export type Session = BaseSession & {
   query: Query;
   input: Pushable<SDKUserMessage>;
   permissionMode: TwigExecutionMode;
+  modelId?: string;
   cwd: string;
-  sdkSessionId?: string;
+  taskRunId?: string;
+  sessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;
 };
@@ -49,12 +51,10 @@ export type ToolUpdateMeta = {
 };
 
 export type NewSessionMeta = {
-  sessionId?: string;
-  initialModeId?: string;
+  taskRunId?: string;
   disableBuiltInTools?: boolean;
   systemPrompt?: unknown;
-  sdkSessionId?: string;
-  model?: string;
+  sessionId?: string;
   claudeCode?: {
     options?: Options;
   };
