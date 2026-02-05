@@ -3,7 +3,6 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import {
-  sessionStoreSetters,
   usePendingPermissionsForTask,
   useQueuedMessagesForTask,
 } from "@features/sessions/stores/sessionStore";
@@ -163,14 +162,7 @@ export function ConversationView({
               ),
             )}
             {queuedMessages.map((msg) => (
-              <QueuedMessageView
-                key={msg.id}
-                message={msg}
-                onRemove={() =>
-                  taskId &&
-                  sessionStoreSetters.removeQueuedMessage(taskId, msg.id)
-                }
-              />
+              <QueuedMessageView key={msg.id} message={msg} />
             ))}
           </div>
           <SessionFooter
