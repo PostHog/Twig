@@ -85,6 +85,7 @@ export function EditToolView({
           content={newText}
           filePath={filePath}
           oldContent={isNewFile ? null : oldText}
+          maxHeight="700px"
         />
       )}
     </Box>
