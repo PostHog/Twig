@@ -704,21 +704,35 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
             const tab = findTabInPanel(sourcePanel, tabId);
             if (!tab) return {};
 
-            // For same-panel splits with only 1 tab, create an empty split
-            // (keep the tab in source, add an empty droppable panel)
+            // For same-panel splits with only 1 tab, create a split with a new terminal
+            // (keep the tab in source, add a new terminal tab to the new panel)
             if (
               sourcePanelId === targetPanelId &&
               targetPanel.content.tabs.length <= 1
             ) {
               const singleTabConfig = getSplitConfig(direction);
-              const emptyPanelId = generatePanelId();
-              const emptyPanel: PanelNode = {
+              const newPanelId = generatePanelId();
+              const terminalTabId = `shell-${Date.now()}`;
+              const newPanel: PanelNode = {
                 type: "leaf",
-                id: emptyPanelId,
+                id: newPanelId,
                 content: {
-                  id: emptyPanelId,
-                  tabs: [],
-                  activeTabId: "",
+                  id: newPanelId,
+                  tabs: [
+                    {
+                      id: terminalTabId,
+                      label: "Terminal",
+                      data: {
+                        type: "terminal",
+                        terminalId: terminalTabId,
+                        cwd: "",
+                      },
+                      component: null,
+                      draggable: true,
+                      closeable: true,
+                    },
+                  ],
+                  activeTabId: terminalTabId,
                   showTabs: true,
                   droppable: true,
                 },
@@ -733,12 +747,12 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                   direction: singleTabConfig.splitDirection,
                   sizes: [50, 50],
                   children: singleTabConfig.isAfter
-                    ? [panel, emptyPanel]
-                    : [emptyPanel, panel],
+                    ? [panel, newPanel]
+                    : [newPanel, panel],
                 }),
               );
 
-              return { panelTree: updatedTree, focusedPanelId: emptyPanelId };
+              return { panelTree: updatedTree, focusedPanelId: newPanelId };
             }
 
             const config = getSplitConfig(direction);
