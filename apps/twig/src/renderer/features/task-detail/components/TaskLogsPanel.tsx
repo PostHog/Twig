@@ -137,18 +137,15 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const handleCancelPrompt = useCallback(async () => {
     // Get and clear any queued messages before cancelling
-    const queuedMessages = sessionStoreSetters.popAllQueuedMessages(taskId);
+    const queuedContent = sessionStoreSetters.popQueuedMessagesAsText(taskId);
 
     const result = await getSessionService().cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
 
     // Restore queued messages to the editor
-    if (queuedMessages.length > 0) {
-      const combinedContent = queuedMessages
-        .map((msg) => msg.content)
-        .join("\n\n");
+    if (queuedContent) {
       setPendingContent(taskId, {
-        segments: [{ type: "text", text: combinedContent }],
+        segments: [{ type: "text", text: queuedContent }],
       });
     }
 

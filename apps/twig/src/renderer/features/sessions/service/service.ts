@@ -495,18 +495,15 @@ export class SessionService {
         notifyPromptComplete(session.taskTitle, stopReason);
       }
 
-      // Process queued messages after turn completes
+      // Process queued messages after turn completes - send all as one prompt
       if (session.messageQueue.length > 0 && session.status === "connected") {
-        const nextMessage = session.messageQueue[0];
         setTimeout(() => {
-          this.sendPromptFromQueue(session.taskId, nextMessage.id).catch(
-            (err) => {
-              log.error("Failed to send queued message", {
-                taskId: session.taskId,
-                error: err,
-              });
-            },
-          );
+          this.sendQueuedMessages(session.taskId).catch((err) => {
+            log.error("Failed to send queued messages", {
+              taskId: session.taskId,
+              error: err,
+            });
+          });
         }, 0);
       }
     }
@@ -609,15 +606,9 @@ export class SessionService {
     // If a prompt is already pending, queue this message
     if (session.isPromptPending) {
       const promptText = extractPromptText(prompt);
-      const queueId = `queue-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      sessionStoreSetters.enqueueMessage(session.taskRunId, {
-        id: queueId,
-        content: promptText,
-        queuedAt: Date.now(),
-      });
+      sessionStoreSetters.enqueueMessage(session.taskRunId, promptText);
       log.info("Message queued", {
         taskId,
-        queueId,
         queueLength: session.messageQueue.length + 1,
       });
       return { stopReason: "queued" };
@@ -644,35 +635,26 @@ export class SessionService {
   }
 
   /**
-   * Send a prompt from the queue, dequeuing by ID to avoid race conditions.
-   * Called internally when processing queued messages after a turn completes.
+   * Send all queued messages as a single prompt.
+   * Called internally when a turn completes and there are queued messages.
    */
-  private async sendPromptFromQueue(
+  private async sendQueuedMessages(
     taskId: string,
-    queueId: string,
   ): Promise<{ stopReason: string }> {
-    const session = sessionStoreSetters.getSessionByTaskId(taskId);
-    if (!session) throw new Error("No active session for task");
-
-    // Dequeue by ID - this is safe even if the queue changed
-    const queuedMessage = session.messageQueue.find((m) => m.id === queueId);
-    if (!queuedMessage) {
-      log.warn("Queued message no longer exists, skipping", {
-        taskId,
-        queueId,
-      });
+    const combinedText = sessionStoreSetters.popQueuedMessagesAsText(taskId);
+    if (!combinedText) {
       return { stopReason: "skipped" };
     }
 
-    sessionStoreSetters.dequeueMessage(session.taskRunId);
-    log.info("Sending queued message", {
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) throw new Error("No active session for task");
+
+    log.info("Sending queued messages as single prompt", {
       taskId,
-      queueId,
-      remainingQueue: session.messageQueue.length - 1,
+      promptLength: combinedText.length,
     });
 
-    // Use the stored content from the queue (not the parameter) for consistency
-    let blocks = normalizePromptToBlocks(queuedMessage.content);
+    let blocks = normalizePromptToBlocks(combinedText);
 
     const shellExecutes = getUserShellExecutesSinceLastPrompt(session.events);
     if (shellExecutes.length > 0) {
@@ -684,7 +666,7 @@ export class SessionService {
       task_id: taskId,
       is_initial: false,
       execution_type: "local",
-      prompt_length_chars: queuedMessage.content.length,
+      prompt_length_chars: combinedText.length,
     });
 
     return this.sendLocalPrompt(session, blocks);
