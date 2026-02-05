@@ -722,7 +722,11 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
                     {
                       id: terminalTabId,
                       label: "Terminal",
-                      data: { type: "terminal", terminalId: terminalTabId, cwd: "" },
+                      data: {
+                        type: "terminal",
+                        terminalId: terminalTabId,
+                        cwd: "",
+                      },
                       component: null,
                       draggable: true,
                       closeable: true,
