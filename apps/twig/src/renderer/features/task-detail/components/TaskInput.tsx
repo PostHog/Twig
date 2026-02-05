@@ -136,7 +136,13 @@ export function TaskInput() {
             />
             <WorkspaceModeSelect
               value={workspaceMode}
-              onChange={setWorkspaceMode}
+              onChange={(mode) => {
+                setWorkspaceMode(mode);
+                // Only persist local modes, not cloud
+                if (mode !== "cloud") {
+                  setLastUsedLocalWorkspaceMode(mode);
+                }
+              }}
               size="1"
             />
             <AdapterSelect value={adapter} onChange={setAdapter} size="1" />

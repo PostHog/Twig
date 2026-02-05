@@ -181,6 +181,7 @@ function ChangedFileItem({
 
   const handleDiscard = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
 
     const { message, action } = getDiscardInfo(file, fileName);
 

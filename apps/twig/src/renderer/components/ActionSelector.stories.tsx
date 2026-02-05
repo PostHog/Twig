@@ -12,6 +12,7 @@ const meta: Meta<typeof ActionSelector> = {
     onMultiSelect: { action: "multiSelected" },
     onCancel: { action: "cancelled" },
     onStepAnswer: { action: "stepAnswered" },
+    onStepChange: { action: "stepChanged" },
   },
 };
 

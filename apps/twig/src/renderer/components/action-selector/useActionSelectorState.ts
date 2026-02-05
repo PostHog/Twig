@@ -22,6 +22,7 @@ interface UseActionSelectorStateProps {
   initialSelections?: string[];
   onSelect: ActionSelectorProps["onSelect"];
   onMultiSelect: ActionSelectorProps["onMultiSelect"];
+  onStepChange: ActionSelectorProps["onStepChange"];
   onStepAnswer: ActionSelectorProps["onStepAnswer"];
 }
 
@@ -35,6 +36,7 @@ export function useActionSelectorState({
   initialSelections,
   onSelect,
   onMultiSelect,
+  onStepChange,
   onStepAnswer,
 }: UseActionSelectorStateProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -79,6 +81,15 @@ export function useActionSelectorState({
   useEffect(() => {
     setInternalStep(currentStep);
   }, [currentStep]);
+
+  const setStep = useCallback(
+    (nextStep: number) => {
+      if (nextStep === activeStep) return;
+      onStepChange?.(nextStep);
+      setInternalStep(nextStep);
+    },
+    [activeStep, onStepChange],
+  );
 
   const saveCurrentStepAnswer = useCallback(() => {
     const checkedIds = Array.from(checkedOptions);
@@ -138,15 +149,15 @@ export function useActionSelectorState({
     if (!hasSteps) return;
     saveCurrentStepAnswer();
     const prevStep = activeStep > 0 ? activeStep - 1 : numSteps - 1;
-    setInternalStep(prevStep);
-  }, [hasSteps, activeStep, numSteps, saveCurrentStepAnswer]);
+    setStep(prevStep);
+  }, [hasSteps, activeStep, numSteps, saveCurrentStepAnswer, setStep]);
 
   const moveToNextStep = useCallback(() => {
     if (!hasSteps) return;
     saveCurrentStepAnswer();
     const nextStep = activeStep < numSteps - 1 ? activeStep + 1 : 0;
-    setInternalStep(nextStep);
-  }, [hasSteps, activeStep, numSteps, saveCurrentStepAnswer]);
+    setStep(nextStep);
+  }, [hasSteps, activeStep, numSteps, saveCurrentStepAnswer, setStep]);
 
   const toggleCheck = useCallback(
     (optionId: string) => {
@@ -194,9 +205,13 @@ export function useActionSelectorState({
     const selected = allOptions[selectedIndex];
 
     if (isSubmitOption(selected.id)) {
+      if (!showSubmitButton) {
+        onSelect(selected.id);
+        return;
+      }
       if (hasSteps && activeStep < numSteps - 1) {
         saveCurrentStepAnswer();
-        setInternalStep(activeStep + 1);
+        setStep(activeStep + 1);
       } else {
         if (multiSelect) {
           handleSubmitMulti();
@@ -230,6 +245,7 @@ export function useActionSelectorState({
     customInput,
     onSelect,
     saveCurrentStepAnswer,
+    setStep,
   ]);
 
   const selectByIndex = useCallback(
@@ -239,9 +255,13 @@ export function useActionSelectorState({
       setSelectedIndex(index);
 
       if (isSubmitOption(selected.id)) {
+        if (!showSubmitButton) {
+          onSelect(selected.id);
+          return;
+        }
         if (hasSteps && activeStep < numSteps - 1) {
           saveCurrentStepAnswer();
-          setInternalStep(activeStep + 1);
+          setStep(activeStep + 1);
         } else {
           if (multiSelect) {
             handleSubmitMulti();
@@ -272,15 +292,16 @@ export function useActionSelectorState({
       toggleCheck,
       onSelect,
       saveCurrentStepAnswer,
+      setStep,
     ],
   );
 
   const handleStepClick = useCallback(
     (stepIndex: number) => {
       saveCurrentStepAnswer();
-      setInternalStep(stepIndex);
+      setStep(stepIndex);
     },
-    [saveCurrentStepAnswer],
+    [saveCurrentStepAnswer, setStep],
   );
 
   const handleEscape = useCallback(() => {
