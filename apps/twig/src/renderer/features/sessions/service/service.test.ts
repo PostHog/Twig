@@ -40,7 +40,8 @@ const mockSessionStoreSetters = vi.hoisted(() => ({
   updateSession: vi.fn(),
   appendEvents: vi.fn(),
   enqueueMessage: vi.fn(),
-  dequeueMessage: vi.fn(),
+  clearMessageQueue: vi.fn(),
+  popQueuedMessagesAsText: vi.fn(() => null),
   setPendingPermissions: vi.fn(),
   getSessionByTaskId: vi.fn(),
   getSessions: vi.fn(() => ({})),
@@ -402,9 +403,7 @@ describe("SessionService", () => {
       expect(result.stopReason).toBe("queued");
       expect(mockSessionStoreSetters.enqueueMessage).toHaveBeenCalledWith(
         "run-123",
-        expect.objectContaining({
-          content: "Hello",
-        }),
+        "Hello",
       );
     });
 
