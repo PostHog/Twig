@@ -1,9 +1,9 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
-import { getSessionActions } from "@features/sessions/stores/sessionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
+import { getSessionService } from "@renderer/services/session/service";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
@@ -192,12 +192,13 @@ export class TaskCreationSaga extends Saga<
           // For opening existing tasks, await to ensure chat history loads
           // For creating new tasks, we can proceed without waiting
           if (input.taskId) {
-            await getSessionActions().connectToTask({
+            await getSessionService().connectToTask({
               task,
               repoPath: agentCwd ?? "",
             });
           } else {
-            getSessionActions().connectToTask({
+            // Don't await for create - allows faster navigation to task page
+            getSessionService().connectToTask({
               task,
               repoPath: agentCwd ?? "",
               initialPrompt,
@@ -210,7 +211,7 @@ export class TaskCreationSaga extends Saga<
         },
         rollback: async ({ taskId }) => {
           log.info("Rolling back: disconnecting agent session", { taskId });
-          await getSessionActions().disconnectFromTask(taskId);
+          await getSessionService().disconnectFromTask(taskId);
         },
       });
     }

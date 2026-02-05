@@ -1,4 +1,4 @@
-import { getSessionActions } from "@features/sessions/stores/sessionStore";
+import { sessionStoreSetters } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -153,7 +153,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
               const queuedContent =
-                getSessionActions().popQueuedMessagesAsText(taskId);
+                sessionStoreSetters.popQueuedMessagesAsText(taskId);
               if (queuedContent !== null && queuedContent !== undefined) {
                 event.preventDefault();
                 view.dispatch(

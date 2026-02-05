@@ -2,10 +2,7 @@ import {
   createGitActionMessage,
   type GitActionType,
 } from "@features/sessions/components/GitActionMessage";
-import {
-  useSessionActions,
-  useSessionForTask,
-} from "@features/sessions/stores/sessionStore";
+import { useSessionForTask } from "@features/sessions/stores/sessionStore";
 import {
   GIT_ACTION_EXECUTION_TYPE,
   GIT_ACTION_LABELS,
@@ -29,6 +26,7 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
+import { getSessionService } from "@renderer/services/session/service";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -108,19 +106,16 @@ export function GitActionsBar({
   hasChanges,
 }: GitActionsBarProps) {
   const [isSending, setIsSending] = useState(false);
-  const { sendPrompt } = useSessionActions();
   const session = useSessionForTask(taskId);
   const queryClient = useQueryClient();
-
-  const isCloud = session?.isCloud ?? false;
 
   const { smartAction, ahead, behind, isFetched } = useGitStatus({
     repoPath,
     hasChanges,
-    enabled: !isCloud,
+    enabled: true,
   });
 
-  const effectiveAction: SmartGitAction = isCloud ? "commit-push" : smartAction;
+  const effectiveAction: SmartGitAction = smartAction;
 
   const handleAction = useCallback(
     async (actionType: GitActionType, prompt: string) => {
@@ -143,7 +138,7 @@ export function GitActionsBar({
         } else {
           if (!session) return;
           const message = createGitActionMessage(actionType, prompt);
-          await sendPrompt(taskId, message);
+          await getSessionService().sendPrompt(taskId, message);
           success = true;
         }
 
@@ -172,7 +167,7 @@ export function GitActionsBar({
         setIsSending(false);
       }
     },
-    [taskId, session, sendPrompt, isSending, repoPath, queryClient],
+    [taskId, session, isSending, repoPath, queryClient],
   );
 
   const handlePrimaryAction = useCallback(() => {
@@ -184,22 +179,20 @@ export function GitActionsBar({
     return null;
   }
 
-  if (!isCloud && !isFetched) {
+  if (!isFetched) {
     return null;
   }
 
-  if (!isCloud && !smartAction) {
+  if (!smartAction) {
     return null;
   }
 
   const statusParts: string[] = [];
-  if (!isCloud) {
-    if (ahead > 0) {
-      statusParts.push(`${ahead} ahead`);
-    }
-    if (behind > 0) {
-      statusParts.push(`${behind} behind`);
-    }
+  if (ahead > 0) {
+    statusParts.push(`${ahead} ahead`);
+  }
+  if (behind > 0) {
+    statusParts.push(`${behind} behind`);
   }
   const statusText = statusParts.length > 0 ? statusParts.join(", ") : null;
 

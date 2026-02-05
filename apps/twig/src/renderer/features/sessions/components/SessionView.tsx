@@ -10,7 +10,7 @@ import {
   useAdapterForTask,
   useModeConfigOptionForTask,
   usePendingPermissionsForTask,
-  useSessionActions,
+  useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
@@ -23,6 +23,7 @@ import {
 } from "@shared/types/session-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { getSessionService } from "../service/service";
 import {
   useSessionViewActions,
   useShowRawLogs,
@@ -42,7 +43,6 @@ interface SessionViewProps {
   onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
   repoPath?: string | null;
-  isCloud?: boolean;
   hasError?: boolean;
   errorMessage?: string;
   onRetry?: () => void;
@@ -63,7 +63,6 @@ export function SessionView({
   onBashCommand,
   onCancelPrompt,
   repoPath,
-  isCloud = false,
   hasError = false,
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
@@ -73,11 +72,8 @@ export function SessionView({
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const {
-    respondToPermission,
-    cancelPermission,
-    setSessionConfigOptionByCategory,
-  } = useSessionActions();
+  const session = useSessionForTask(taskId);
+  const isCloud = session?.isCloud ?? false;
   const modeOption = useModeConfigOptionForTask(taskId);
   const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
@@ -99,31 +95,26 @@ export function SessionView({
             opt.value !== "bypassPermissions" && opt.value !== "full-access",
         ) ?? options[0];
       if (safeOption) {
-        setSessionConfigOptionByCategory(taskId, "mode", safeOption.value);
+        getSessionService().setSessionConfigOptionByCategory(
+          taskId,
+          "mode",
+          safeOption.value,
+        );
       }
     }
-  }, [
-    allowBypassPermissions,
-    currentModeId,
-    taskId,
-    isCloud,
-    modeOption,
-    setSessionConfigOptionByCategory,
-  ]);
+  }, [allowBypassPermissions, currentModeId, taskId, isCloud, modeOption]);
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
     const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
     if (nextMode) {
-      setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+      getSessionService().setSessionConfigOptionByCategory(
+        taskId,
+        "mode",
+        nextMode,
+      );
     }
-  }, [
-    taskId,
-    isCloud,
-    allowBypassPermissions,
-    modeOption,
-    setSessionConfigOptionByCategory,
-  ]);
+  }, [taskId, isCloud, allowBypassPermissions, modeOption]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -133,7 +124,6 @@ export function SessionView({
     repoPath,
     disabled: !isRunning,
     isLoading: isPromptPending,
-    isCloud,
   });
 
   useHotkeys("escape", onCancelPrompt, { enabled: isPromptPending }, [
@@ -147,7 +137,11 @@ export function SessionView({
       if (!taskId || isCloud) return;
       const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
       if (nextMode) {
-        setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+        getSessionService().setSessionConfigOptionByCategory(
+          taskId,
+          "mode",
+          nextMode,
+        );
       }
     },
     {
@@ -155,15 +149,7 @@ export function SessionView({
       enableOnContentEditable: true,
       enabled: !isCloud && isRunning && !!modeOption,
     },
-    [
-      taskId,
-      currentModeId,
-      isCloud,
-      isRunning,
-      modeOption,
-      setSessionConfigOptionByCategory,
-      allowBypassPermissions,
-    ],
+    [taskId, currentModeId, isCloud, isRunning, modeOption, allowBypassPermissions],
   );
 
   const latestPlan = useMemo((): Plan | null => {
@@ -171,12 +157,9 @@ export function SessionView({
     let plan: Plan | null = null;
     let turnEndResponseIndex = -1;
 
-    // Find the most recent plan and turn-ending response in one pass
     for (let i = events.length - 1; i >= 0; i--) {
       const msg = events[i].message;
 
-      // Only consider responses that end a turn (session/prompt responses have stopReason)
-      // Other responses (like tool completions) should not invalidate the plan
       if (
         turnEndResponseIndex === -1 &&
         isJsonRpcResponse(msg) &&
@@ -201,7 +184,6 @@ export function SessionView({
       if (planIndex !== -1 && turnEndResponseIndex !== -1) break;
     }
 
-    // Plan is stale only if a turn-ending response came after it
     if (turnEndResponseIndex > planIndex) return null;
 
     return plan;
@@ -236,17 +218,20 @@ export function SessionView({
     ) => {
       if (!firstPendingPermission || !taskId) return;
 
-      // Check if the selected option is "allow_always" and set mode to acceptEdits
       const selectedOption = firstPendingPermission.options.find(
         (o) => o.optionId === optionId,
       );
       if (selectedOption?.kind === "allow_always" && !isCloud) {
-        setSessionConfigOptionByCategory(taskId, "mode", "acceptEdits");
+        getSessionService().setSessionConfigOptionByCategory(
+          taskId,
+          "mode",
+          "acceptEdits",
+        );
       }
 
       if (customInput) {
         if (optionId === "other") {
-          await respondToPermission(
+          await getSessionService().respondToPermission(
             taskId,
             firstPendingPermission.toolCallId,
             optionId,
@@ -254,7 +239,7 @@ export function SessionView({
             answers,
           );
         } else {
-          await respondToPermission(
+          await getSessionService().respondToPermission(
             taskId,
             firstPendingPermission.toolCallId,
             optionId,
@@ -264,7 +249,7 @@ export function SessionView({
           onSendPrompt(customInput);
         }
       } else {
-        await respondToPermission(
+        await getSessionService().respondToPermission(
           taskId,
           firstPendingPermission.toolCallId,
           optionId,
@@ -275,29 +260,17 @@ export function SessionView({
 
       requestFocus(sessionId);
     },
-    [
-      firstPendingPermission,
-      taskId,
-      respondToPermission,
-      onSendPrompt,
-      isCloud,
-      setSessionConfigOptionByCategory,
-      requestFocus,
-      sessionId,
-    ],
+    [firstPendingPermission, taskId, onSendPrompt, isCloud, requestFocus, sessionId],
   );
 
   const handlePermissionCancel = useCallback(async () => {
     if (!firstPendingPermission || !taskId) return;
-    await cancelPermission(taskId, firstPendingPermission.toolCallId);
+    await getSessionService().cancelPermission(
+      taskId,
+      firstPendingPermission.toolCallId,
+    );
     requestFocus(sessionId);
-  }, [
-    firstPendingPermission,
-    taskId,
-    cancelPermission,
-    requestFocus,
-    sessionId,
-  ]);
+  }, [firstPendingPermission, taskId, requestFocus, sessionId]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -333,7 +306,6 @@ export function SessionView({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      // In Electron, File objects have a 'path' property
       const filePath = (file as File & { path?: string }).path;
       if (filePath) {
         editorRef.current?.insertChip({
@@ -347,18 +319,15 @@ export function SessionView({
     editorRef.current?.focus();
   }, []);
 
-  // Click anywhere in chat pane to focus editor (except interactive elements)
   const handlePaneClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
-    // Check if click was on or inside an interactive element
     const interactiveSelector =
       'button, a, input, textarea, select, [role="button"], [role="link"], [contenteditable="true"], [data-interactive]';
     if (target.closest(interactiveSelector)) {
       return;
     }
 
-    // Don't focus if user is selecting text
     const selection = window.getSelection();
     if (selection && selection.toString().length > 0) {
       return;
