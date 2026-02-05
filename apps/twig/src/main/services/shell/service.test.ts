@@ -65,66 +65,85 @@ vi.mock("../../di/tokens.js", () => ({
   },
 }));
 
+let mockShellManager: MockShellManager;
+
+interface MockShellManager {
+  create: ReturnType<typeof vi.fn>;
+  createSession: ReturnType<typeof vi.fn>;
+  write: ReturnType<typeof vi.fn>;
+  resize: ReturnType<typeof vi.fn>;
+  destroy: ReturnType<typeof vi.fn>;
+  destroyAll: ReturnType<typeof vi.fn>;
+  destroyByPrefix: ReturnType<typeof vi.fn>;
+  hasSession: ReturnType<typeof vi.fn>;
+  getSession: ReturnType<typeof vi.fn>;
+  getSessionsByPrefix: ReturnType<typeof vi.fn>;
+  getSessionCount: ReturnType<typeof vi.fn>;
+  getProcess: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  getTaskEnv: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
+}
+
+function createMockShellManager(): MockShellManager {
+  return {
+    create: vi.fn(),
+    createSession: vi.fn(),
+    write: vi.fn(),
+    resize: vi.fn(),
+    destroy: vi.fn(),
+    destroyAll: vi.fn(),
+    destroyByPrefix: vi.fn(),
+    hasSession: vi.fn(() => false),
+    getSession: vi.fn(() => undefined),
+    getSessionsByPrefix: vi.fn(() => []),
+    getSessionCount: vi.fn(() => 0),
+    getProcess: vi.fn(() => null),
+    execute: vi.fn(() =>
+      Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
+    ),
+    getTaskEnv: vi.fn(() => Promise.resolve(undefined)),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
+}
+
 vi.mock("../../di/container.js", () => ({
   container: {
     get: vi.fn(() => ({
-      get: vi.fn(() => ({
-        shell: {
-          getTaskEnv: vi.fn(() => Promise.resolve(undefined)),
-        },
-      })),
+      getLocalEnvironment: () => ({
+        shell: mockShellManager,
+      }),
     })),
   },
 }));
 
-import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { EnvironmentService } from "../environment/service.js";
 import { ShellService } from "./service.js";
 
-function createMockProcessTracking(): ProcessTrackingService {
+function createMockEnvironmentService(
+  shellManager: MockShellManager,
+): EnvironmentService {
   return {
-    register: vi.fn(),
-    unregister: vi.fn(),
-    getAll: vi.fn(() => []),
-    getByCategory: vi.fn(() => []),
-    getSnapshot: vi.fn(),
-    discoverChildren: vi.fn(),
-    isAlive: vi.fn(() => true),
-    kill: vi.fn(),
-    killByCategory: vi.fn(),
-    killAll: vi.fn(),
-  } as unknown as ProcessTrackingService;
+    getLocalEnvironment: () => ({
+      shell: shellManager,
+    }),
+  } as unknown as EnvironmentService;
 }
 
 describe("ShellService", () => {
   let service: ShellService;
-  let mockPtyProcess: {
-    onData: ReturnType<typeof vi.fn>;
-    onExit: ReturnType<typeof vi.fn>;
-    write: ReturnType<typeof vi.fn>;
-    resize: ReturnType<typeof vi.fn>;
-    kill: ReturnType<typeof vi.fn>;
-    process: string;
-  };
-
-  let mockProcessTracking: ProcessTrackingService;
+  let mockEnvironmentService: EnvironmentService;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockPtyProcess = {
-      onData: vi.fn(),
-      onExit: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(),
-      process: "/bin/bash",
-    };
-
-    mockPty.spawn.mockReturnValue(mockPtyProcess);
+    mockShellManager = createMockShellManager();
     mockExistsSync.mockReturnValue(true);
-    mockProcessTracking = createMockProcessTracking();
 
-    service = new ShellService(mockProcessTracking);
+    mockEnvironmentService = createMockEnvironmentService(mockShellManager);
+    service = new ShellService(mockEnvironmentService);
   });
 
   afterEach(() => {
@@ -132,63 +151,164 @@ describe("ShellService", () => {
   });
 
   describe("create", () => {
-    it("creates a new shell session", async () => {
+    it("delegates to shell manager", async () => {
       await service.create("session-1", "/home/user/project");
 
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        expect.any(String),
-        ["-l"],
-        expect.objectContaining({
-          name: "xterm-256color",
-          cols: 80,
-          rows: 24,
-          cwd: "/home/user/project",
-        }),
+      expect(mockShellManager.create).toHaveBeenCalledWith(
+        "session-1",
+        "/home/user/project",
+        undefined,
       );
     });
 
-    it("uses home directory when cwd not specified", async () => {
+    it("passes taskId to shell manager", async () => {
+      await service.create("session-1", "/home/user/project", "task-123");
+
+      expect(mockShellManager.create).toHaveBeenCalledWith(
+        "session-1",
+        "/home/user/project",
+        "task-123",
+      );
+    });
+
+    it("sets up event forwarding on first create", async () => {
       await service.create("session-1");
 
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        expect.any(String),
-        ["-l"],
-        expect.objectContaining({
-          cwd: "/home/testuser",
-        }),
+      expect(mockShellManager.on).toHaveBeenCalledWith(
+        "data",
+        expect.any(Function),
+      );
+      expect(mockShellManager.on).toHaveBeenCalledWith(
+        "exit",
+        expect.any(Function),
       );
     });
 
-    it("falls back to home when cwd does not exist", async () => {
-      mockExistsSync.mockReturnValue(false);
+    it("only sets up event forwarding once", async () => {
+      await service.create("session-1");
+      await service.create("session-2");
 
-      await service.create("session-1", "/nonexistent/path");
+      expect(mockShellManager.on).toHaveBeenCalledTimes(2);
+    });
+  });
 
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        expect.any(String),
-        ["-l"],
-        expect.objectContaining({
-          cwd: "/home/testuser",
-        }),
+  describe("createSession", () => {
+    it("delegates to shell manager", async () => {
+      const mockSession = { pty: {}, exitPromise: Promise.resolve({ exitCode: 0 }) };
+      mockShellManager.createSession.mockResolvedValue(mockSession);
+
+      const result = await service.createSession({
+        sessionId: "session-1",
+        cwd: "/home/user",
+        initialCommand: "ls",
+      });
+
+      expect(mockShellManager.createSession).toHaveBeenCalledWith({
+        sessionId: "session-1",
+        cwd: "/home/user",
+        initialCommand: "ls",
+      });
+      expect(result).toBe(mockSession);
+    });
+  });
+
+  describe("write", () => {
+    it("delegates to shell manager", () => {
+      service.write("session-1", "ls -la\n");
+
+      expect(mockShellManager.write).toHaveBeenCalledWith(
+        "session-1",
+        "ls -la\n",
       );
     });
+  });
 
-    it("does not recreate existing session", async () => {
-      await service.create("session-1", "/home/user");
-      await service.create("session-1", "/different/path");
+  describe("resize", () => {
+    it("delegates to shell manager", () => {
+      service.resize("session-1", 120, 40);
 
-      expect(mockPty.spawn).toHaveBeenCalledTimes(1);
+      expect(mockShellManager.resize).toHaveBeenCalledWith("session-1", 120, 40);
+    });
+  });
+
+  describe("check", () => {
+    it("returns true when shell manager has session", () => {
+      mockShellManager.hasSession.mockReturnValue(true);
+
+      expect(service.check("session-1")).toBe(true);
     });
 
-    it("emits data events from pty", async () => {
+    it("returns false when shell manager does not have session", () => {
+      mockShellManager.hasSession.mockReturnValue(false);
+
+      expect(service.check("nonexistent")).toBe(false);
+    });
+  });
+
+  describe("destroy", () => {
+    it("delegates to shell manager", () => {
+      service.destroy("session-1");
+
+      expect(mockShellManager.destroy).toHaveBeenCalledWith("session-1");
+    });
+  });
+
+  describe("destroyAll", () => {
+    it("delegates to shell manager", () => {
+      service.destroyAll();
+
+      expect(mockShellManager.destroyAll).toHaveBeenCalled();
+    });
+  });
+
+  describe("getProcess", () => {
+    it("returns process name from shell manager", () => {
+      mockShellManager.getProcess.mockReturnValue("/bin/bash");
+
+      expect(service.getProcess("session-1")).toBe("/bin/bash");
+    });
+
+    it("returns null when shell manager returns null", () => {
+      mockShellManager.getProcess.mockReturnValue(null);
+
+      expect(service.getProcess("nonexistent")).toBeNull();
+    });
+  });
+
+  describe("execute", () => {
+    it("delegates to shell manager", async () => {
+      mockShellManager.execute.mockResolvedValue({
+        stdout: "output",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const result = await service.execute("/home/user", "echo hello");
+
+      expect(mockShellManager.execute).toHaveBeenCalledWith(
+        "/home/user",
+        "echo hello",
+      );
+      expect(result).toEqual({
+        stdout: "output",
+        stderr: "",
+        exitCode: 0,
+      });
+    });
+  });
+
+  describe("event forwarding", () => {
+    it("forwards data events from shell manager", async () => {
       const dataHandler = vi.fn();
       service.on(ShellEvent.Data, dataHandler);
 
       await service.create("session-1");
 
-      // Get the onData callback and call it
-      const onDataCallback = mockPtyProcess.onData.mock.calls[0][0];
-      onDataCallback("test output");
+      const onDataCallback = mockShellManager.on.mock.calls.find(
+        (call) => call[0] === "data",
+      )?.[1];
+
+      onDataCallback?.({ sessionId: "session-1", data: "test output" });
 
       expect(dataHandler).toHaveBeenCalledWith({
         sessionId: "session-1",
@@ -196,246 +316,54 @@ describe("ShellService", () => {
       });
     });
 
-    it("emits exit events from pty", async () => {
+    it("forwards exit events from shell manager", async () => {
       const exitHandler = vi.fn();
       service.on(ShellEvent.Exit, exitHandler);
 
       await service.create("session-1");
 
-      // Get the onExit callback and call it
-      const onExitCallback = mockPtyProcess.onExit.mock.calls[0][0];
-      onExitCallback({ exitCode: 0 });
+      const onExitCallback = mockShellManager.on.mock.calls.find(
+        (call) => call[0] === "exit",
+      )?.[1];
+
+      onExitCallback?.({ sessionId: "session-1", exitCode: 0 });
 
       expect(exitHandler).toHaveBeenCalledWith({
         sessionId: "session-1",
         exitCode: 0,
       });
     });
+  });
 
-    it("cleans up session on exit", async () => {
-      await service.create("session-1");
-      expect(service.check("session-1")).toBe(true);
+  describe("getSessionsByPrefix", () => {
+    it("delegates to shell manager", () => {
+      mockShellManager.getSessionsByPrefix.mockReturnValue([
+        "prefix-1",
+        "prefix-2",
+      ]);
 
-      // Simulate exit
-      const onExitCallback = mockPtyProcess.onExit.mock.calls[0][0];
-      onExitCallback({ exitCode: 0 });
+      const result = service.getSessionsByPrefix("prefix-");
 
-      expect(service.check("session-1")).toBe(false);
-    });
-
-    it("sets TERM_PROGRAM environment variable", async () => {
-      await service.create("session-1");
-
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Array),
-        expect.objectContaining({
-          env: expect.objectContaining({
-            TERM_PROGRAM: "Twig",
-            COLORTERM: "truecolor",
-            FORCE_COLOR: "3",
-          }),
-        }),
+      expect(mockShellManager.getSessionsByPrefix).toHaveBeenCalledWith(
+        "prefix-",
       );
+      expect(result).toEqual(["prefix-1", "prefix-2"]);
     });
   });
 
-  describe("write", () => {
-    it("writes data to session", async () => {
-      await service.create("session-1");
+  describe("destroyByPrefix", () => {
+    it("delegates to shell manager", () => {
+      service.destroyByPrefix("prefix-");
 
-      service.write("session-1", "ls -la\n");
-
-      expect(mockPtyProcess.write).toHaveBeenCalledWith("ls -la\n");
-    });
-
-    it("throws error for non-existent session", () => {
-      expect(() => service.write("nonexistent", "data")).toThrow(
-        "Shell session nonexistent not found",
-      );
+      expect(mockShellManager.destroyByPrefix).toHaveBeenCalledWith("prefix-");
     });
   });
 
-  describe("resize", () => {
-    it("resizes session terminal", async () => {
-      await service.create("session-1");
+  describe("getSessionCount", () => {
+    it("delegates to shell manager", () => {
+      mockShellManager.getSessionCount.mockReturnValue(5);
 
-      service.resize("session-1", 120, 40);
-
-      expect(mockPtyProcess.resize).toHaveBeenCalledWith(120, 40);
-    });
-
-    it("throws error for non-existent session", () => {
-      expect(() => service.resize("nonexistent", 80, 24)).toThrow(
-        "Shell session nonexistent not found",
-      );
-    });
-  });
-
-  describe("check", () => {
-    it("returns true for existing session", async () => {
-      await service.create("session-1");
-
-      expect(service.check("session-1")).toBe(true);
-    });
-
-    it("returns false for non-existent session", () => {
-      expect(service.check("nonexistent")).toBe(false);
-    });
-  });
-
-  describe("destroy", () => {
-    it("kills and removes session", async () => {
-      await service.create("session-1");
-
-      service.destroy("session-1");
-
-      expect(mockPtyProcess.kill).toHaveBeenCalled();
-      expect(service.check("session-1")).toBe(false);
-    });
-
-    it("does nothing for non-existent session", () => {
-      expect(() => service.destroy("nonexistent")).not.toThrow();
-    });
-  });
-
-  describe("getProcess", () => {
-    it("returns process name for existing session", async () => {
-      await service.create("session-1");
-
-      expect(service.getProcess("session-1")).toBe("/bin/bash");
-    });
-
-    it("returns null for non-existent session", () => {
-      expect(service.getProcess("nonexistent")).toBeNull();
-    });
-  });
-
-  describe("execute", () => {
-    it("executes command and returns output", async () => {
-      mockExec.mockImplementation((_cmd, _opts, callback) => {
-        callback(null, "command output", "");
-      });
-
-      const result = await service.execute("/home/user", "echo hello");
-
-      expect(result).toEqual({
-        stdout: "command output",
-        stderr: "",
-        exitCode: 0,
-      });
-    });
-
-    it("returns stderr on command errors", async () => {
-      mockExec.mockImplementation((_cmd, _opts, callback) => {
-        callback({ code: 1 }, "", "error message");
-      });
-
-      const result = await service.execute("/home/user", "bad-command");
-
-      expect(result).toEqual({
-        stdout: "",
-        stderr: "error message",
-        exitCode: 1,
-      });
-    });
-
-    it("handles command timeout", async () => {
-      mockExec.mockImplementation((_cmd, opts, callback) => {
-        // Verify timeout is set
-        expect(opts.timeout).toBe(60000);
-        callback(null, "output", "");
-      });
-
-      await service.execute("/home/user", "slow-command");
-
-      expect(mockExec).toHaveBeenCalledWith(
-        "slow-command",
-        expect.objectContaining({
-          cwd: "/home/user",
-          timeout: 60000,
-        }),
-        expect.any(Function),
-      );
-    });
-
-    it("returns empty strings when stdout/stderr are undefined", async () => {
-      mockExec.mockImplementation((_cmd, _opts, callback) => {
-        callback(null, undefined, undefined);
-      });
-
-      const result = await service.execute("/home/user", "silent-command");
-
-      expect(result).toEqual({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      });
-    });
-  });
-
-  describe("platform-specific behavior", () => {
-    it("uses SHELL env on Unix", async () => {
-      const originalShell = process.env.SHELL;
-      process.env.SHELL = "/bin/zsh";
-      mockPlatform.mockReturnValue("darwin");
-
-      await service.create("session-1");
-
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        "/bin/zsh",
-        expect.any(Array),
-        expect.any(Object),
-      );
-
-      process.env.SHELL = originalShell;
-    });
-
-    it("falls back to /bin/bash when SHELL not set", async () => {
-      const originalShell = process.env.SHELL;
-      delete process.env.SHELL;
-      mockPlatform.mockReturnValue("darwin");
-
-      // Create a new service instance to pick up the env change
-      const newService = new ShellService(mockProcessTracking);
-      await newService.create("session-1");
-
-      expect(mockPty.spawn).toHaveBeenCalledWith(
-        "/bin/bash",
-        expect.any(Array),
-        expect.any(Object),
-      );
-
-      process.env.SHELL = originalShell;
-    });
-  });
-
-  describe("multiple sessions", () => {
-    it("manages multiple independent sessions", async () => {
-      const mockPty1 = { ...mockPtyProcess, process: "bash-1" };
-      const mockPty2 = { ...mockPtyProcess, process: "bash-2" };
-
-      mockPty.spawn.mockReturnValueOnce(mockPty1).mockReturnValueOnce(mockPty2);
-
-      await service.create("session-1", "/path/1");
-      await service.create("session-2", "/path/2");
-
-      expect(service.check("session-1")).toBe(true);
-      expect(service.check("session-2")).toBe(true);
-      expect(service.getProcess("session-1")).toBe("bash-1");
-      expect(service.getProcess("session-2")).toBe("bash-2");
-    });
-
-    it("destroys sessions independently", async () => {
-      mockPty.spawn.mockReturnValue({ ...mockPtyProcess });
-
-      await service.create("session-1");
-      await service.create("session-2");
-
-      service.destroy("session-1");
-
-      expect(service.check("session-1")).toBe(false);
-      expect(service.check("session-2")).toBe(true);
+      expect(service.getSessionCount()).toBe(5);
     });
   });
 });

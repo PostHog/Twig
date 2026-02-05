@@ -1,10 +1,9 @@
 import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import type { FileWatcherService } from "../file-watcher/service.js";
 import type { FsService } from "../fs/service.js";
 import type { GitService } from "../git/service.js";
-import type { ShellService } from "../shell/service.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
 import type { BaseEnvironment } from "./base.js";
 import { CloudEnvironment } from "./cloud.js";
@@ -20,11 +19,10 @@ export class EnvironmentService {
   private cloudEnvironment: CloudEnvironment | null = null;
 
   constructor(
-    @inject(MAIN_TOKENS.ShellService) private shellService: ShellService,
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    private processTrackingService: ProcessTrackingService,
     @inject(MAIN_TOKENS.WorkspaceService)
     private workspaceService: WorkspaceService,
-    @inject(MAIN_TOKENS.FileWatcherService)
-    private fileWatcherService: FileWatcherService,
     @inject(MAIN_TOKENS.FsService) private fsService: FsService,
     @inject(MAIN_TOKENS.GitService) private gitService: GitService,
   ) {}
@@ -86,9 +84,8 @@ export class EnvironmentService {
   private getOrCreateLocalEnvironment(): LocalEnvironment {
     if (!this.localEnvironment) {
       this.localEnvironment = new LocalEnvironment({
-        shellService: this.shellService,
+        processTrackingService: this.processTrackingService,
         workspaceService: this.workspaceService,
-        fileWatcherService: this.fileWatcherService,
         fsService: this.fsService,
         gitService: this.gitService,
       });

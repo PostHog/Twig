@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getChangedFiles, listAllFiles } from "@twig/git/queries";
-import { inject, injectable } from "inversify";
+import { injectable } from "inversify";
+import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { FileWatcherEvent } from "../file-watcher/schemas.js";
@@ -14,24 +15,29 @@ const log = logger.scope("fs");
 export class FsService {
   private static readonly CACHE_TTL = 30000;
   private cache = new Map<string, { files: FileEntry[]; timestamp: number }>();
+  private eventSubscriptionSetup = false;
 
-  constructor(
-    @inject(MAIN_TOKENS.FileWatcherService)
-    private fileWatcher: FileWatcherService,
-  ) {
-    this.fileWatcher.on(FileWatcherEvent.FileChanged, ({ repoPath }) => {
+  private setupEventSubscription(): void {
+    if (this.eventSubscriptionSetup) return;
+    this.eventSubscriptionSetup = true;
+
+    const fileWatcher = container.get<FileWatcherService>(
+      MAIN_TOKENS.FileWatcherService,
+    );
+
+    fileWatcher.on(FileWatcherEvent.FileChanged, ({ repoPath }) => {
       this.invalidateCache(repoPath);
     });
 
-    this.fileWatcher.on(FileWatcherEvent.FileDeleted, ({ repoPath }) => {
+    fileWatcher.on(FileWatcherEvent.FileDeleted, ({ repoPath }) => {
       this.invalidateCache(repoPath);
     });
 
-    this.fileWatcher.on(FileWatcherEvent.DirectoryChanged, ({ repoPath }) => {
+    fileWatcher.on(FileWatcherEvent.DirectoryChanged, ({ repoPath }) => {
       this.invalidateCache(repoPath);
     });
 
-    this.fileWatcher.on(FileWatcherEvent.GitStateChanged, ({ repoPath }) => {
+    fileWatcher.on(FileWatcherEvent.GitStateChanged, ({ repoPath }) => {
       this.invalidateCache(repoPath);
     });
   }
@@ -42,6 +48,8 @@ export class FsService {
     limit?: number,
   ): Promise<FileEntry[]> {
     if (!repoPath) return [];
+
+    this.setupEventSubscription();
 
     try {
       const changedFiles = await getChangedFiles(repoPath);
