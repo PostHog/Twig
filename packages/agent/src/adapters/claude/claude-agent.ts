@@ -28,10 +28,8 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { v7 as uuidv7 } from "uuid";
-import type {
-  SessionLogConfig,
-  SessionLogWriter,
-} from "@/session-log-writer.js";
+import type { SessionContext } from "@/otel-log-writer.js";
+import type { SessionLogWriter } from "@/session-log-writer.js";
 import { unreachable } from "@/utils/common.js";
 import { Logger } from "@/utils/logger.js";
 import { Pushable } from "@/utils/streams.js";
@@ -388,7 +386,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     sessionId: string,
     meta: Record<string, unknown> | undefined,
   ) {
-    const persistence = meta?.persistence as SessionLogConfig | undefined;
+    const persistence = meta?.persistence as SessionContext | undefined;
     if (persistence && this.logWriter) {
       this.logWriter.register(sessionId, persistence);
     }

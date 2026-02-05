@@ -64,7 +64,7 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     const remoteUrl = await getRemoteUrl(directoryPath);
     if (!remoteUrl) return null;
 
-    const repo = await parseGitHubUrl(remoteUrl);
+    const repo = parseGitHubUrl(remoteUrl);
     if (!repo) return null;
 
     const branch = await getCurrentBranch(directoryPath);
