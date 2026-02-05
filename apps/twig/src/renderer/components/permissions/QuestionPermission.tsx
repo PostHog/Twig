@@ -200,6 +200,10 @@ export function QuestionPermission({
     [],
   );
 
+  const handleStepChange = useCallback((stepIndex: number) => {
+    setActiveStep(stepIndex);
+  }, []);
+
   const hasUnanswered = useMemo(() => {
     for (let i = 0; i < totalQuestions; i++) {
       if (!isQuestionAnswered(stepAnswers, i)) {
@@ -275,6 +279,7 @@ export function QuestionPermission({
       onSelect={handleSelect}
       onMultiSelect={handleMultiSelect}
       onCancel={onCancel}
+      onStepChange={handleStepChange}
       onStepAnswer={handleStepAnswer}
     />
   );

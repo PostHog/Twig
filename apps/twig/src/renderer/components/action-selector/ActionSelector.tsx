@@ -25,6 +25,7 @@ export function ActionSelector({
   onSelect,
   onMultiSelect,
   onCancel,
+  onStepChange,
   onStepAnswer,
 }: ActionSelectorProps) {
   const state = useActionSelectorState({
@@ -37,6 +38,7 @@ export function ActionSelector({
     initialSelections,
     onSelect,
     onMultiSelect,
+    onStepChange,
     onStepAnswer,
   });
 
