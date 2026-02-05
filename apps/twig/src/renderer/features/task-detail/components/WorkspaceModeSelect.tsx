@@ -1,9 +1,12 @@
-import { GitBranch, Laptop } from "@phosphor-icons/react";
+import { useFeatureFlag } from "@hooks/useFeatureFlag";
+import { Cloud, GitBranch, Laptop } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
 import type { Responsive } from "@radix-ui/themes/dist/esm/props/prop-def.js";
+import type { WorkspaceMode } from "@shared/types";
+import { useMemo } from "react";
 
-export type WorkspaceMode = "local" | "worktree";
+export type { WorkspaceMode };
 
 interface WorkspaceModeSelectProps {
   value: WorkspaceMode;
@@ -25,6 +28,11 @@ const MODE_CONFIG: Record<
     description: "Edits a copy so your work stays isolated",
     icon: <GitBranch size={16} weight="regular" />,
   },
+  cloud: {
+    label: "Cloud",
+    description: "Runs in isolated sandbox",
+    icon: <Cloud size={16} weight="regular" />,
+  },
 };
 
 export function WorkspaceModeSelect({
@@ -32,6 +40,14 @@ export function WorkspaceModeSelect({
   onChange,
   size = "1",
 }: WorkspaceModeSelectProps) {
+  const cloudModeEnabled = useFeatureFlag("twig-cloud-mode-toggle");
+
+  const availableModes = useMemo<WorkspaceMode[]>(
+    () =>
+      cloudModeEnabled ? ["worktree", "local", "cloud"] : ["worktree", "local"],
+    [cloudModeEnabled],
+  );
+
   const currentMode = MODE_CONFIG[value] ?? MODE_CONFIG.worktree;
 
   return (
@@ -49,40 +65,36 @@ export function WorkspaceModeSelect({
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Content align="start" size="1">
-        <DropdownMenu.Item
-          onSelect={() => onChange("worktree")}
-          style={{ padding: "6px 8px", height: "auto" }}
-        >
-          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-            <GitBranch
-              size={12}
-              style={{ marginTop: 2, flexShrink: 0, color: "var(--gray-11)" }}
-            />
-            <div>
-              <Text size="1">{MODE_CONFIG.worktree.label}</Text>
-              <Text size="1" color="gray" style={{ display: "block" }}>
-                {MODE_CONFIG.worktree.description}
-              </Text>
-            </div>
-          </div>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          onSelect={() => onChange("local")}
-          style={{ padding: "6px 8px", height: "auto" }}
-        >
-          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-            <Laptop
-              size={12}
-              style={{ marginTop: 2, flexShrink: 0, color: "var(--gray-11)" }}
-            />
-            <div>
-              <Text size="1">{MODE_CONFIG.local.label}</Text>
-              <Text size="1" color="gray" style={{ display: "block" }}>
-                {MODE_CONFIG.local.description}
-              </Text>
-            </div>
-          </div>
-        </DropdownMenu.Item>
+        {availableModes.map((mode) => {
+          const config = MODE_CONFIG[mode];
+          return (
+            <DropdownMenu.Item
+              key={mode}
+              onSelect={() => onChange(mode)}
+              style={{ padding: "6px 8px", height: "auto" }}
+            >
+              <div
+                style={{ display: "flex", gap: 6, alignItems: "flex-start" }}
+              >
+                <span
+                  style={{
+                    marginTop: 2,
+                    flexShrink: 0,
+                    color: "var(--gray-11)",
+                  }}
+                >
+                  {config.icon}
+                </span>
+                <div>
+                  <Text size="1">{config.label}</Text>
+                  <Text size="1" color="gray" style={{ display: "block" }}>
+                    {config.description}
+                  </Text>
+                </div>
+              </div>
+            </DropdownMenu.Item>
+          );
+        })}
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );

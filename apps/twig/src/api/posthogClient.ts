@@ -431,4 +431,40 @@ export class PostHogAPIClient {
       slug: org.slug ?? org.id,
     }));
   }
+
+  /**
+   * Check if a feature flag is enabled for the current project.
+   * Returns true if the flag exists and is active, false otherwise.
+   */
+  async isFeatureFlagEnabled(flagKey: string): Promise<boolean> {
+    try {
+      const teamId = await this.getTeamId();
+      const url = new URL(
+        `${this.api.baseUrl}/api/projects/${teamId}/feature_flags/`,
+      );
+      url.searchParams.set("key", flagKey);
+
+      const response = await this.api.fetcher.fetch({
+        method: "get",
+        url,
+        path: `/api/projects/${teamId}/feature_flags/`,
+      });
+
+      if (!response.ok) {
+        log.warn(`Failed to fetch feature flags: ${response.statusText}`);
+        return false;
+      }
+
+      const data = await response.json();
+      const flags = data.results ?? data ?? [];
+      const flag = flags.find(
+        (f: { key: string; active: boolean }) => f.key === flagKey,
+      );
+
+      return flag?.active ?? false;
+    } catch (error) {
+      log.warn(`Error checking feature flag "${flagKey}":`, error);
+      return false;
+    }
+  }
 }

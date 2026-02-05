@@ -156,3 +156,34 @@ export function displaySurvey(surveyId: string) {
 
   posthog.displaySurvey(surveyId);
 }
+
+// ============================================================================
+// Feature Flags
+// ============================================================================
+
+/**
+ * Check if a feature flag is enabled for the current user.
+ * Returns false if PostHog is not initialized or flag is not found.
+ */
+export function isFeatureFlagEnabled(flagKey: string): boolean {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot check feature flag");
+    return false;
+  }
+
+  return posthog.isFeatureEnabled(flagKey) ?? false;
+}
+
+/**
+ * Subscribe to feature flag changes.
+ * Callback is called when flags are loaded or updated.
+ * Returns unsubscribe function.
+ */
+export function onFeatureFlagsLoaded(callback: () => void): () => void {
+  if (!isInitialized) {
+    log.warn("PostHog not initialized, cannot subscribe to feature flags");
+    return () => {};
+  }
+
+  return posthog.onFeatureFlags(callback);
+}
