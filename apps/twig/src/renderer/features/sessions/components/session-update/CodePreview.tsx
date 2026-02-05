@@ -13,7 +13,6 @@ import {
 interface CodePreviewProps {
   content: string;
   filePath?: string;
-  maxHeight?: number;
   showPath?: boolean;
   oldContent?: string | null;
   firstLineNumber?: number;
@@ -22,7 +21,6 @@ interface CodePreviewProps {
 export function CodePreview({
   content,
   filePath,
-  maxHeight = 400,
   showPath = false,
   oldContent,
   firstLineNumber = 1,
@@ -73,7 +71,7 @@ export function CodePreview({
           </Code>
         </div>
       )}
-      <div ref={containerRef} style={CODE_PREVIEW_EDITOR_STYLE(maxHeight)} />
+      <div ref={containerRef} style={CODE_PREVIEW_EDITOR_STYLE} />
     </div>
   );
 }

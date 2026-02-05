@@ -3,6 +3,14 @@ import type { ToolCall, ToolCallContent } from "@features/sessions/types";
 import { type Icon, Minus, Plus } from "@phosphor-icons/react";
 import { Box, Text } from "@radix-ui/themes";
 
+export function ToolTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <Text size="1" className="text-gray-11">
+      {children}
+    </Text>
+  );
+}
+
 export function StatusIndicators({
   isFailed,
   wasCancelled,
@@ -13,12 +21,12 @@ export function StatusIndicators({
   return (
     <>
       {isFailed && (
-        <Text size="1" color="gray">
+        <Text size="1" className="text-gray-10">
           (Failed)
         </Text>
       )}
       {wasCancelled && (
-        <Text size="1" color="gray">
+        <Text size="1" className="text-gray-10">
           (Cancelled)
         </Text>
       )}
@@ -197,7 +205,7 @@ export function ExpandedContentBox({
   children: React.ReactNode;
 }) {
   return (
-    <Box className="max-w-4xl overflow-hidden rounded-lg border border-gray-6">
+    <Box className="mt-2 ml-5 max-w-4xl overflow-hidden rounded-lg border border-gray-6">
       <ContentPre>{children}</ContentPre>
     </Box>
   );

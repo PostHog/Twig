@@ -1,7 +1,6 @@
 import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
-import { StatusBar } from "@components/StatusBar";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
@@ -67,8 +66,6 @@ export function MainLayout() {
           </RightSidebar>
         )}
       </Flex>
-
-      <StatusBar />
 
       <CommandMenu open={commandMenuOpen} onOpenChange={setCommandMenuOpen} />
       <KeyboardShortcutsSheet

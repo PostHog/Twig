@@ -112,7 +112,7 @@ function ChangedFileItem({
   isActive,
   mainRepoPath,
 }: ChangedFileItemProps) {
-  const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const openDiffInSplit = usePanelLayoutStore((state) => state.openDiffInSplit);
   const closeDiffTabsForFile = usePanelLayoutStore(
     (state) => state.closeDiffTabsForFile,
   );
@@ -131,11 +131,11 @@ function ChangedFileItem({
   const indicator = getStatusIndicator(file.status);
 
   const handleClick = () => {
-    openDiff(taskId, file.path, file.status);
+    openDiffInSplit(taskId, file.path, file.status);
   };
 
   const handleDoubleClick = () => {
-    openDiff(taskId, file.path, file.status, false);
+    openDiffInSplit(taskId, file.path, file.status, false);
   };
 
   const workspaceContext = {
@@ -385,7 +385,7 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     useFocusWorkspace(taskId);
   const repoPath = useCwd(taskId);
   const layout = usePanelLayoutStore((state) => state.getLayout(taskId));
-  const openDiff = usePanelLayoutStore((state) => state.openDiff);
+  const openDiffInSplit = usePanelLayoutStore((state) => state.openDiffInSplit);
   const pendingPermissions = usePendingPermissionsForTask(taskId);
   const hasPendingPermissions = pendingPermissions.size > 0;
 
@@ -426,10 +426,10 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
 
       const file = changedFiles[newIndex];
       if (file) {
-        openDiff(taskId, file.path, file.status);
+        openDiffInSplit(taskId, file.path, file.status);
       }
     },
-    [changedFiles, getActiveIndex, openDiff, taskId],
+    [changedFiles, getActiveIndex, openDiffInSplit, taskId],
   );
 
   useHotkeys(

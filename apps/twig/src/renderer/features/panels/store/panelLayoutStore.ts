@@ -54,7 +54,18 @@ export interface PanelLayoutStore {
   getLayout: (taskId: string) => TaskLayout | null;
   initializeTask: (taskId: string) => void;
   openFile: (taskId: string, filePath: string, asPreview?: boolean) => void;
+  openFileInSplit: (
+    taskId: string,
+    filePath: string,
+    asPreview?: boolean,
+  ) => void;
   openDiff: (
+    taskId: string,
+    filePath: string,
+    status?: string,
+    asPreview?: boolean,
+  ) => void;
+  openDiffInSplit: (
     taskId: string,
     filePath: string,
     status?: string,
@@ -209,6 +220,105 @@ function openTab(
   });
 }
 
+function findNonMainLeafPanel(node: PanelNode): PanelNode | null {
+  if (node.type === "leaf") {
+    return node.id !== DEFAULT_PANEL_IDS.MAIN_PANEL ? node : null;
+  }
+  if (node.type === "group") {
+    for (const child of node.children) {
+      const found = findNonMainLeafPanel(child);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function openTabInSplit(
+  state: { taskLayouts: Record<string, TaskLayout> },
+  taskId: string,
+  tabId: string,
+  asPreview = true,
+): { taskLayouts: Record<string, TaskLayout> } {
+  return updateTaskLayout(state, taskId, (layout) => {
+    const existingTab = findTabInTree(layout.panelTree, tabId);
+
+    if (existingTab) {
+      const updatedTree = updateTreeNode(
+        layout.panelTree,
+        existingTab.panelId,
+        (panel) => {
+          if (panel.type !== "leaf") return panel;
+          return {
+            ...panel,
+            content: {
+              ...panel.content,
+              tabs: asPreview
+                ? panel.content.tabs
+                : panel.content.tabs.map((tab) =>
+                    tab.id === tabId ? { ...tab, isPreview: false } : tab,
+                  ),
+              activeTabId: tabId,
+            },
+          };
+        },
+      );
+
+      return { panelTree: updatedTree };
+    }
+
+    const nonMainPanel = findNonMainLeafPanel(layout.panelTree);
+
+    if (nonMainPanel) {
+      const updatedTree = updateTreeNode(
+        layout.panelTree,
+        nonMainPanel.id,
+        (panel) => addNewTabToPanel(panel, tabId, true, asPreview),
+      );
+
+      const metadata = updateMetadataForTab(layout, tabId, "add");
+      return { panelTree: updatedTree, ...metadata };
+    }
+
+    const newPanelId = generatePanelId();
+    const newPanel: PanelNode = {
+      type: "leaf",
+      id: newPanelId,
+      content: {
+        id: newPanelId,
+        tabs: [],
+        activeTabId: "",
+        showTabs: true,
+        droppable: true,
+      },
+    };
+
+    const mainPanel = getLeafPanel(
+      layout.panelTree,
+      DEFAULT_PANEL_IDS.MAIN_PANEL,
+    );
+    if (!mainPanel) return {};
+
+    const splitTree = updateTreeNode(
+      layout.panelTree,
+      DEFAULT_PANEL_IDS.MAIN_PANEL,
+      (panel) => ({
+        type: "group" as const,
+        id: generatePanelId(),
+        direction: "horizontal" as const,
+        sizes: [50, 50],
+        children: [panel, newPanel],
+      }),
+    );
+
+    const finalTree = updateTreeNode(splitTree, newPanelId, (panel) =>
+      addNewTabToPanel(panel, tabId, true, asPreview),
+    );
+
+    const metadata = updateMetadataForTab(layout, tabId, "add");
+    return { panelTree: finalTree, focusedPanelId: newPanelId, ...metadata };
+  });
+}
+
 export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
   persist(
     (set, get) => ({
@@ -263,11 +373,55 @@ export const usePanelLayoutStore = createWithEqualityFn<PanelLayoutStore>()(
         });
       },
 
+      openFileInSplit: (taskId, filePath, asPreview = true) => {
+        const tabId = createFileTabId(filePath);
+        set((state) => {
+          const afterOpenTab = openTabInSplit(state, taskId, tabId, asPreview);
+          const layout = afterOpenTab.taskLayouts[taskId];
+          if (!layout) return afterOpenTab;
+
+          const recentFiles = [
+            filePath,
+            ...(layout.recentFiles || []).filter((f) => f !== filePath),
+          ].slice(0, MAX_RECENT_FILES);
+
+          return {
+            ...afterOpenTab,
+            taskLayouts: {
+              ...afterOpenTab.taskLayouts,
+              [taskId]: { ...layout, recentFiles },
+            },
+          };
+        });
+
+        track(ANALYTICS_EVENTS.FILE_OPENED, {
+          file_extension: getFileExtension(filePath),
+          source: "sidebar",
+          task_id: taskId,
+        });
+      },
+
       openDiff: (taskId, filePath, status, asPreview = true) => {
         const tabId = createDiffTabId(filePath, status);
         set((state) => openTab(state, taskId, tabId, asPreview));
 
-        // Track diff viewed
+        const changeType =
+          status === "added"
+            ? "added"
+            : status === "deleted"
+              ? "deleted"
+              : "modified";
+        track(ANALYTICS_EVENTS.FILE_DIFF_VIEWED, {
+          file_extension: getFileExtension(filePath),
+          change_type: changeType,
+          task_id: taskId,
+        });
+      },
+
+      openDiffInSplit: (taskId, filePath, status, asPreview = true) => {
+        const tabId = createDiffTabId(filePath, status);
+        set((state) => openTabInSplit(state, taskId, tabId, asPreview));
+
         const changeType =
           status === "added"
             ? "added"

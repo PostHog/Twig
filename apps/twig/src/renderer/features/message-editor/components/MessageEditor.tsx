@@ -28,6 +28,8 @@ interface MessageEditorProps {
   autoFocus?: boolean;
   currentMode?: ExecutionMode;
   onModeChange?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -43,6 +45,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       autoFocus = false,
       currentMode,
       onModeChange,
+      onFocus,
+      onBlur,
     },
     ref,
   ) => {
@@ -82,6 +86,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onSubmit,
       onBashCommand,
       onBashModeChange,
+      onFocus,
+      onBlur,
     });
 
     useImperativeHandle(

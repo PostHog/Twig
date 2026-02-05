@@ -42,13 +42,11 @@ export const CODE_PREVIEW_CONTAINER_STYLE: React.CSSProperties = {
   "--color-background": "transparent",
 } as React.CSSProperties;
 
-export const CODE_PREVIEW_EDITOR_STYLE = (
-  maxHeight: number,
-): React.CSSProperties => ({
-  maxHeight,
-  overflow: "auto",
+export const CODE_PREVIEW_EDITOR_STYLE: React.CSSProperties = {
   fontSize: "12px",
-});
+  maxHeight: "750px",
+  overflow: "auto",
+};
 
 export const CODE_PREVIEW_PATH_STYLE: React.CSSProperties = {
   padding: "8px 12px",

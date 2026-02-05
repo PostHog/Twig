@@ -1,5 +1,5 @@
 import { FileText } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box, Flex } from "@radix-ui/themes";
 import { useState } from "react";
 import { CodePreview } from "./CodePreview";
 import { FileMentionChip } from "./FileMentionChip";
@@ -7,6 +7,7 @@ import {
   ExpandableIcon,
   getReadToolContent,
   StatusIndicators,
+  ToolTitle,
   type ToolViewProps,
   useToolCallStatus,
 } from "./toolCallUtils";
@@ -51,20 +52,22 @@ export function ReadToolView({
           isExpandable={isExpandable}
           isExpanded={isExpanded}
         />
-        <Text size="1">
+        <ToolTitle>
           Read{lineCount !== null ? ` ${lineCount} lines in` : ""}
-        </Text>
+        </ToolTitle>
         {filePath && <FileMentionChip filePath={filePath} />}
         <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />
       </Flex>
 
       {isExpanded && fileContent && (
-        <Box className="max-w-4xl overflow-hidden rounded-lg border border-gray-6">
-          <CodePreview
-            content={fileContent}
-            filePath={filePath}
-            firstLineNumber={firstLineNumber}
-          />
+        <Box className="mt-2 ml-5">
+          <Box className="max-w-4xl overflow-hidden rounded-lg border border-gray-6">
+            <CodePreview
+              content={fileContent}
+              filePath={filePath}
+              firstLineNumber={firstLineNumber}
+            />
+          </Box>
         </Box>
       )}
     </Box>

@@ -68,12 +68,12 @@ export class ContextMenuService {
   async showTaskContextMenu(
     input: TaskContextMenuInput,
   ): Promise<TaskContextMenuResult> {
-    const { worktreePath } = input;
+    const { worktreePath, isPinned } = input;
     const { apps, lastUsedAppId } = await this.getExternalAppsData();
 
     return this.showMenu<TaskAction>([
       this.item("Rename", { type: "rename" }),
-      this.item("Duplicate", { type: "duplicate" }),
+      this.item(isPinned ? "Unpin" : "Pin", { type: "pin" }),
       this.separator(),
       this.item("Delete", { type: "delete" }),
       ...(worktreePath

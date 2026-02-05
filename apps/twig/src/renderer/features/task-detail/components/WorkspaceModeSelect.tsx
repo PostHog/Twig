@@ -24,7 +24,7 @@ const MODE_CONFIG: Record<
     icon: <Laptop size={16} weight="regular" />,
   },
   worktree: {
-    label: "Workspace",
+    label: "Worktree",
     description: "Edits a copy so your work stays isolated",
     icon: <GitBranch size={16} weight="regular" />,
   },
