@@ -711,7 +711,10 @@ export class SessionService {
 
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) {
-      log.warn("No session found for queued messages", { taskId });
+      log.warn("No session found for queued messages, messages lost", {
+        taskId,
+        lostMessageLength: combinedText.length,
+      });
       return { stopReason: "no_session" };
     }
 
@@ -735,7 +738,17 @@ export class SessionService {
       prompt_length_chars: combinedText.length,
     });
 
-    return this.sendLocalPrompt(session, blocks);
+    try {
+      return await this.sendLocalPrompt(session, blocks);
+    } catch (error) {
+      // Log that queued messages were lost due to send failure
+      log.error("Failed to send queued messages, messages lost", {
+        taskId,
+        lostMessageLength: combinedText.length,
+        error,
+      });
+      throw error;
+    }
   }
 
   private async sendLocalPrompt(
