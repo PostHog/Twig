@@ -53,7 +53,7 @@ export function LoginForm({
         type="button"
         size="3"
         onClick={handleButtonClick}
-        disabled={isLoading}
+        disabled={isLoading && !isPending}
         style={{
           backgroundColor: isPending ? "var(--gray-8)" : "var(--cave-charcoal)",
           color: isPending ? "var(--gray-11)" : "var(--cave-cream)",
