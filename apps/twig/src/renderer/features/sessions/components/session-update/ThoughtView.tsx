@@ -1,5 +1,8 @@
-import { Box, Text } from "@radix-ui/themes";
+import { MarkdownRenderer } from "@features/editor/components/MarkdownRenderer";
+import { Box } from "@radix-ui/themes";
 import { memo } from "react";
+import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
 
 interface ThoughtViewProps {
   content: string;
@@ -9,16 +12,11 @@ export const ThoughtView = memo(function ThoughtView({
   content,
 }: ThoughtViewProps) {
   return (
-    <Box
-      className="border-l-2 py-1 pl-3"
-      style={{ borderColor: "var(--accent-6)" }}
-    >
-      <Text size="1" className="text-gray-11">
-        <Text style={{ color: "var(--accent-11)" }} className="italic">
-          Thinking:
-        </Text>{" "}
-        {content}
-      </Text>
+    <Box className="py-1 pl-3 text-gray-9 italic [&>*:last-child]:mb-0 [&_*]:text-gray-9">
+      <MarkdownRenderer
+        content={content}
+        remarkPluginsOverride={[remarkGfm, remarkBreaks]}
+      />
     </Box>
   );
 });

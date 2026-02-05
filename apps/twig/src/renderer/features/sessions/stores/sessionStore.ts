@@ -35,6 +35,7 @@ import {
   type PermissionRequest,
 } from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
+import { useSessionConfigStore } from "./sessionConfigStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -59,6 +60,26 @@ export function flattenSelectOptions(
 ): SelectOption[] {
   if (!isSelectGroup(options)) return options;
   return options.flatMap((group) => group.options);
+}
+
+function mergeConfigOptions(
+  live: SessionConfigOption[],
+  stored: SessionConfigOption[] | undefined,
+): SessionConfigOption[] {
+  if (!stored) return live;
+  const storedById = new Map(stored.map((opt) => [opt.id, opt]));
+  return live.map((opt) => {
+    if (!opt.id) return opt;
+    const storedOpt = storedById.get(opt.id);
+    if (!storedOpt?.currentValue) return opt;
+    if (!opt.options) {
+      return { ...opt, currentValue: storedOpt.currentValue };
+    }
+    const available = flattenSelectOptions(opt.options);
+    const exists = available.some((o) => o.value === storedOpt.currentValue);
+    if (!exists) return opt;
+    return { ...opt, currentValue: storedOpt.currentValue };
+  });
 }
 
 export function getConfigOptionByCategory(
@@ -264,6 +285,9 @@ function subscribeToChannel(taskRunId: string) {
                 params.update.configOptions
               ) {
                 session.configOptions = params.update.configOptions;
+                useSessionConfigStore
+                  .getState()
+                  .setConfigOptions(taskRunId, params.update.configOptions);
               }
             }
 
@@ -683,7 +707,10 @@ const useStore = create<SessionStore>()(
       const session = createBaseSession(taskRunId, taskId, taskTitle, false);
       session.events = events;
       session.logUrl = logUrl;
-      session.configOptions = configOptions;
+      const persistedConfigOptions = useSessionConfigStore
+        .getState()
+        .getConfigOptions(taskRunId);
+      session.configOptions = persistedConfigOptions ?? configOptions;
       if (adapter) {
         session.adapter = adapter;
       }
@@ -705,16 +732,27 @@ const useStore = create<SessionStore>()(
         });
 
         if (result) {
+          const mergedConfigOptions = result.configOptions
+            ? mergeConfigOptions(result.configOptions, persistedConfigOptions)
+            : result.configOptions;
           updateSession(taskRunId, {
             status: "connected",
-            configOptions: result.configOptions,
+            configOptions: mergedConfigOptions,
           });
 
-          if (configOptions && result.configOptions) {
+          if (mergedConfigOptions) {
+            useSessionConfigStore
+              .getState()
+              .setConfigOptions(taskRunId, mergedConfigOptions);
+          }
+
+          const storedConfigOptions = persistedConfigOptions ?? configOptions;
+
+          if (storedConfigOptions && result.configOptions) {
             const known = new Map(
               result.configOptions.map((opt) => [opt.id, opt]),
             );
-            for (const opt of configOptions) {
+            for (const opt of storedConfigOptions) {
               if (!opt.currentValue) continue;
               const live = known.get(opt.id);
               if (live && live.currentValue !== opt.currentValue) {
@@ -788,6 +826,11 @@ const useStore = create<SessionStore>()(
       }
 
       addSession(session);
+      if (result.configOptions) {
+        useSessionConfigStore
+          .getState()
+          .setConfigOptions(taskRun.id, result.configOptions);
+      }
       subscribeToChannel(taskRun.id);
 
       track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
@@ -1263,6 +1306,9 @@ const useStore = create<SessionStore>()(
                 opt.id === configId ? { ...opt, currentValue: value } : opt,
               );
               updateSession(session.taskRunId, { configOptions: updated });
+              useSessionConfigStore
+                .getState()
+                .setConfigOptions(session.taskRunId, updated);
             }
           } catch (error) {
             log.error("Failed to change session config option", {

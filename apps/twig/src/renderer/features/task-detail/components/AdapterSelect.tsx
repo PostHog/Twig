@@ -21,7 +21,7 @@ const ADAPTER_CONFIG: Record<
   },
   codex: {
     label: "Codex",
-    description: "OpenAI Codex",
+    description: "",
     icon: <Cpu size={16} weight="regular" />,
   },
 };

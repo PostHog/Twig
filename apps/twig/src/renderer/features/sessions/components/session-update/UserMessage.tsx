@@ -1,7 +1,7 @@
 import {
   baseComponents,
+  defaultRemarkPlugins,
   MarkdownRenderer,
-  remarkPlugins,
 } from "@features/editor/components/MarkdownRenderer";
 import { File } from "@phosphor-icons/react";
 import { Box, Code, Text } from "@radix-ui/themes";
@@ -33,7 +33,10 @@ const InlineMarkdown = memo(function InlineMarkdown({
   content: string;
 }) {
   return (
-    <ReactMarkdown remarkPlugins={remarkPlugins} components={inlineComponents}>
+    <ReactMarkdown
+      remarkPlugins={defaultRemarkPlugins}
+      components={inlineComponents}
+    >
       {content}
     </ReactMarkdown>
   );
