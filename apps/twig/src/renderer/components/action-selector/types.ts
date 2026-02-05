@@ -32,6 +32,7 @@ export interface ActionSelectorProps {
   onSelect: (optionId: string, customInput?: string) => void;
   onMultiSelect?: (optionIds: string[], customInput?: string) => void;
   onCancel?: () => void;
+  onStepChange?: (stepIndex: number) => void;
   onStepAnswer?: (
     stepIndex: number,
     optionIds: string[],

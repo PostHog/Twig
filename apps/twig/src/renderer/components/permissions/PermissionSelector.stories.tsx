@@ -718,6 +718,21 @@ export const QuestionMultiStep: Story = {
   },
 };
 
+export const QuestionMultiStepSync: Story = {
+  args: {
+    toolCall: buildQuestionToolCallData(multiStepQuestions),
+    options: buildQuestionOptions(multiStepQuestions[0]),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Regression: advancing steps should update the question text and options for each step.",
+      },
+    },
+  },
+};
+
 const multiSelectQuestion: QuestionItem[] = [
   {
     question: "Which features do you want to enable?",
