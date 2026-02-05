@@ -1,9 +1,9 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
+import type { TaskService } from "@features/task-detail/service/service";
 import { get } from "@renderer/di/container";
 import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
-import type { TaskService } from "@renderer/services/task/service";
 import { trpcReact, trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";

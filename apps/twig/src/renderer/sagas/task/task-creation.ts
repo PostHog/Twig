@@ -1,9 +1,9 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
+import { getSessionService } from "@features/sessions/service/service";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
-import { getSessionService } from "@renderer/services/session/service";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
