@@ -1,28 +1,60 @@
 import type { SessionConfigOption } from "@agentclientprotocol/sdk";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { electronStorage } from "@/renderer/lib/electronStorage";
 
 interface SessionConfigState {
+  /** Map of taskRunId -> persisted config options */
   configsByRunId: Record<string, SessionConfigOption[]>;
-  setConfigOptions: (taskRunId: string, options: SessionConfigOption[]) => void;
-  getConfigOptions: (taskRunId: string) => SessionConfigOption[] | undefined;
-  removeConfigOptions: (taskRunId: string) => void;
 }
 
-export const useSessionConfigStore = create<SessionConfigState>()(
+interface SessionConfigActions {
+  /** Save config options for a task run */
+  setConfigOptions: (taskRunId: string, options: SessionConfigOption[]) => void;
+  /** Get config options for a task run */
+  getConfigOptions: (taskRunId: string) => SessionConfigOption[] | undefined;
+  /** Remove config options for a task run */
+  removeConfigOptions: (taskRunId: string) => void;
+  /** Update a single config option value */
+  updateConfigOptionValue: (
+    taskRunId: string,
+    configId: string,
+    value: string,
+  ) => void;
+}
+
+type SessionConfigStore = SessionConfigState & SessionConfigActions;
+
+export const useSessionConfigStore = create<SessionConfigStore>()(
   persist(
     (set, get) => ({
       configsByRunId: {},
+
       setConfigOptions: (taskRunId, options) =>
         set((state) => ({
           configsByRunId: { ...state.configsByRunId, [taskRunId]: options },
         })),
+
       getConfigOptions: (taskRunId) => get().configsByRunId[taskRunId],
+
       removeConfigOptions: (taskRunId) =>
         set((state) => {
           const { [taskRunId]: _removed, ...rest } = state.configsByRunId;
           return { configsByRunId: rest };
+        }),
+
+      updateConfigOptionValue: (taskRunId, configId, value) =>
+        set((state) => {
+          const existing = state.configsByRunId[taskRunId];
+          if (!existing) return state;
+
+          const updated = existing.map((opt) =>
+            opt.id === configId ? { ...opt, currentValue: value } : opt,
+          );
+
+          return {
+            configsByRunId: { ...state.configsByRunId, [taskRunId]: updated },
+          };
         }),
     }),
     {
@@ -32,3 +64,29 @@ export const useSessionConfigStore = create<SessionConfigState>()(
     },
   ),
 );
+
+/** Non-hook accessor for getting persisted config options */
+export function getPersistedConfigOptions(
+  taskRunId: string,
+): SessionConfigOption[] | undefined {
+  return useSessionConfigStore.getState().getConfigOptions(taskRunId);
+}
+
+/** Non-hook accessor for setting persisted config options */
+export function setPersistedConfigOptions(
+  taskRunId: string,
+  options: SessionConfigOption[],
+): void {
+  useSessionConfigStore.getState().setConfigOptions(taskRunId, options);
+}
+
+/** Non-hook accessor for updating a single config option value */
+export function updatePersistedConfigOptionValue(
+  taskRunId: string,
+  configId: string,
+  value: string,
+): void {
+  useSessionConfigStore
+    .getState()
+    .updateConfigOptionValue(taskRunId, configId, value);
+}

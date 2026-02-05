@@ -10,8 +10,7 @@ const mockTrpcAgent = vi.hoisted(() => ({
   cancel: { mutate: vi.fn() },
   prompt: { mutate: vi.fn() },
   cancelPrompt: { mutate: vi.fn() },
-  setModel: { mutate: vi.fn() },
-  setMode: { mutate: vi.fn() },
+  setConfigOption: { mutate: vi.fn() },
   respondToPermission: { mutate: vi.fn() },
   cancelPermission: { mutate: vi.fn() },
   onSessionEvent: { subscribe: vi.fn() },
@@ -75,14 +74,15 @@ vi.mock("@features/sessions/stores/modelsStore", () => ({
   },
 }));
 
-const mockSessionModeStore = vi.hoisted(() => ({
-  getPersistedTaskMode: vi.fn(() => null),
-  setPersistedTaskMode: vi.fn(),
+const mockSessionConfigStore = vi.hoisted(() => ({
+  getPersistedConfigOptions: vi.fn(() => undefined),
+  setPersistedConfigOptions: vi.fn(),
+  updatePersistedConfigOptionValue: vi.fn(),
 }));
 
 vi.mock(
-  "@features/sessions/stores/sessionModeStore",
-  () => mockSessionModeStore,
+  "@features/sessions/stores/sessionConfigStore",
+  () => mockSessionConfigStore,
 );
 
 const mockGetIsOnline = vi.hoisted(() => vi.fn(() => true));
@@ -121,6 +121,9 @@ vi.mock("@utils/session", () => ({
   })),
   extractPromptText: vi.fn((p) => (typeof p === "string" ? p : "text")),
   getUserShellExecutesSinceLastPrompt: vi.fn(() => []),
+  isFatalSessionError: vi.fn((errorMessage: string) =>
+    errorMessage?.includes("process exited"),
+  ),
   normalizePromptToBlocks: vi.fn((p) =>
     typeof p === "string" ? [{ type: "text", text: p }] : p,
   ),
@@ -155,7 +158,6 @@ const createMockSession = (
   status: "connected",
   isPromptPending: false,
   promptStartedAt: null,
-  currentMode: "default",
   pendingPermissions: new Map(),
   messageQueue: [],
   ...overrides,
@@ -436,12 +438,16 @@ describe("SessionService", () => {
 
       await expect(service.sendPrompt("task-123", "Hello")).rejects.toThrow();
 
-      expect(mockSessionStoreSetters.updateSession).toHaveBeenCalledWith(
-        "run-123",
-        expect.objectContaining({
-          status: "error",
-        }),
+      // Check that one of the updateSession calls set status to error
+      const updateCalls = mockSessionStoreSetters.updateSession.mock.calls as [
+        string,
+        { status?: string },
+      ][];
+      const errorCall = updateCalls.find(
+        ([, updates]) => updates.status === "error",
       );
+      expect(errorCall).toBeDefined();
+      expect(errorCall?.[0]).toBe("run-123");
     });
   });
 
@@ -506,7 +512,7 @@ describe("SessionService", () => {
 
       expect(mockSessionStoreSetters.setPendingPermissions).toHaveBeenCalled();
       expect(mockTrpcAgent.respondToPermission.mutate).toHaveBeenCalledWith({
-        sessionId: "run-123",
+        taskRunId: "run-123",
         toolCallId: "tool-1",
         optionId: "allow",
         customInput: undefined,
@@ -535,103 +541,142 @@ describe("SessionService", () => {
 
       expect(mockSessionStoreSetters.setPendingPermissions).toHaveBeenCalled();
       expect(mockTrpcAgent.cancelPermission.mutate).toHaveBeenCalledWith({
-        sessionId: "run-123",
+        taskRunId: "run-123",
         toolCallId: "tool-1",
       });
     });
   });
 
-  describe("setSessionModel", () => {
+  describe("setSessionConfigOption", () => {
     it("does nothing if no session exists", async () => {
       const service = getSessionService();
       mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(undefined);
 
-      await service.setSessionModel("task-123", "claude-3-sonnet");
+      await service.setSessionConfigOption(
+        "task-123",
+        "model",
+        "claude-3-sonnet",
+      );
 
-      expect(mockTrpcAgent.setModel.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcAgent.setConfigOption.mutate).not.toHaveBeenCalled();
+    });
+
+    it("does nothing if config option not found", async () => {
+      const service = getSessionService();
+      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
+        createMockSession({
+          configOptions: [
+            {
+              id: "mode",
+              name: "Mode",
+              type: "select",
+              category: "mode",
+              currentValue: "default",
+              options: [],
+            },
+          ],
+        }),
+      );
+
+      await service.setSessionConfigOption(
+        "task-123",
+        "unknown-option",
+        "value",
+      );
+
+      expect(mockTrpcAgent.setConfigOption.mutate).not.toHaveBeenCalled();
     });
 
     it("optimistically updates and calls API", async () => {
       const service = getSessionService();
       mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
-        createMockSession({ model: "claude-3-opus" }),
+        createMockSession({
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              type: "select",
+              category: "model",
+              currentValue: "claude-3-opus",
+              options: [],
+            },
+          ],
+        }),
       );
 
-      await service.setSessionModel("task-123", "claude-3-sonnet");
+      await service.setSessionConfigOption(
+        "task-123",
+        "model",
+        "claude-3-sonnet",
+      );
 
       // Optimistic update
       expect(mockSessionStoreSetters.updateSession).toHaveBeenCalledWith(
         "run-123",
-        { model: "claude-3-sonnet" },
-      );
-      expect(mockTrpcAgent.setModel.mutate).toHaveBeenCalledWith({
-        sessionId: "run-123",
-        modelId: "claude-3-sonnet",
-      });
-    });
-
-    it("rolls back on API failure", async () => {
-      const service = getSessionService();
-      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
-        createMockSession({ model: "claude-3-opus" }),
-      );
-      mockTrpcAgent.setModel.mutate.mockRejectedValue(new Error("Failed"));
-
-      await service.setSessionModel("task-123", "claude-3-sonnet");
-
-      // Should rollback
-      expect(mockSessionStoreSetters.updateSession).toHaveBeenLastCalledWith(
-        "run-123",
-        { model: "claude-3-opus" },
-      );
-    });
-  });
-
-  describe("setSessionMode", () => {
-    it("does nothing if no session exists", async () => {
-      const service = getSessionService();
-      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(undefined);
-
-      await service.setSessionMode("task-123", "acceptEdits");
-
-      expect(mockTrpcAgent.setMode.mutate).not.toHaveBeenCalled();
-    });
-
-    it("optimistically updates and calls API", async () => {
-      const service = getSessionService();
-      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
-        createMockSession({ currentMode: "default" }),
-      );
-
-      await service.setSessionMode("task-123", "acceptEdits");
-
-      expect(mockSessionStoreSetters.updateSession).toHaveBeenCalledWith(
-        "run-123",
-        { currentMode: "acceptEdits" },
-      );
-      expect(mockTrpcAgent.setMode.mutate).toHaveBeenCalledWith({
-        sessionId: "run-123",
-        modeId: "acceptEdits",
-      });
-    });
-
-    it("rolls back on API failure", async () => {
-      const service = getSessionService();
-      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
-        createMockSession({ currentMode: "default" }),
-      );
-      mockTrpcAgent.setMode.mutate.mockRejectedValue(new Error("Failed"));
-
-      await service.setSessionMode("task-123", "acceptEdits");
-
-      // Should rollback
-      expect(mockSessionStoreSetters.updateSession).toHaveBeenLastCalledWith(
-        "run-123",
-        { currentMode: "default" },
+        {
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              type: "select",
+              category: "model",
+              currentValue: "claude-3-sonnet",
+              options: [],
+            },
+          ],
+        },
       );
       expect(
-        mockSessionModeStore.setPersistedTaskMode,
-      ).toHaveBeenLastCalledWith("task-123", "default");
+        mockSessionConfigStore.updatePersistedConfigOptionValue,
+      ).toHaveBeenCalledWith("run-123", "model", "claude-3-sonnet");
+      expect(mockTrpcAgent.setConfigOption.mutate).toHaveBeenCalledWith({
+        sessionId: "run-123",
+        configId: "model",
+        value: "claude-3-sonnet",
+      });
+    });
+
+    it("rolls back on API failure", async () => {
+      const service = getSessionService();
+      mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(
+        createMockSession({
+          configOptions: [
+            {
+              id: "mode",
+              name: "Mode",
+              type: "select",
+              category: "mode",
+              currentValue: "default",
+              options: [],
+            },
+          ],
+        }),
+      );
+      mockTrpcAgent.setConfigOption.mutate.mockRejectedValue(
+        new Error("Failed"),
+      );
+
+      await service.setSessionConfigOption("task-123", "mode", "acceptEdits");
+
+      // Should rollback
+      expect(mockSessionStoreSetters.updateSession).toHaveBeenLastCalledWith(
+        "run-123",
+        {
+          configOptions: [
+            {
+              id: "mode",
+              name: "Mode",
+              type: "select",
+              category: "mode",
+              currentValue: "default",
+              options: [],
+            },
+          ],
+        },
+      );
+      expect(
+        mockSessionConfigStore.updatePersistedConfigOptionValue,
+      ).toHaveBeenLastCalledWith("run-123", "mode", "default");
     });
   });
 
