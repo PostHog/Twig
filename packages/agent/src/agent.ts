@@ -27,13 +27,16 @@ export class Agent {
       this.posthogAPI = new PostHogAPIClient(config.posthog);
     }
 
-    if (config.otelTransport) {
+    if (config.posthog || config.otelTransport) {
       this.sessionLogWriter = new SessionLogWriter({
-        otelConfig: {
-          posthogHost: config.otelTransport.host,
-          apiKey: config.otelTransport.apiKey,
-          logsPath: config.otelTransport.logsPath,
-        },
+        posthogAPI: this.posthogAPI,
+        otelConfig: config.otelTransport
+          ? {
+              posthogHost: config.otelTransport.host,
+              apiKey: config.otelTransport.apiKey,
+              logsPath: config.otelTransport.logsPath,
+            }
+          : undefined,
         logger: this.logger.child("SessionLogWriter"),
       });
     }
