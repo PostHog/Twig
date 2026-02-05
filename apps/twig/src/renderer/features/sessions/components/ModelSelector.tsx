@@ -1,10 +1,10 @@
 import type { SessionConfigSelectGroup } from "@agentclientprotocol/sdk";
 import { Select, Text } from "@radix-ui/themes";
 import { Fragment, useMemo } from "react";
+import { getSessionService } from "../service/service";
 import {
   flattenSelectOptions,
   useModelConfigOptionForTask,
-  useSessionActions,
   useSessionForTask,
 } from "../stores/sessionStore";
 
@@ -21,7 +21,6 @@ export function ModelSelector({
   onModelChange,
   adapter: _adapter,
 }: ModelSelectorProps) {
-  const { setSessionConfigOption } = useSessionActions();
   const session = useSessionForTask(taskId);
   const modelOption = useModelConfigOptionForTask(taskId);
 
@@ -40,7 +39,7 @@ export function ModelSelector({
     onModelChange?.(value);
 
     if (taskId && session?.status === "connected" && !session.isCloud) {
-      setSessionConfigOption(taskId, modelOption.id, value);
+      getSessionService().setSessionConfigOption(taskId, modelOption.id, value);
     }
   };
 
