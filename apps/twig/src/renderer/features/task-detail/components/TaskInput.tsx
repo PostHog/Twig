@@ -155,7 +155,10 @@ export function TaskInput() {
               value={workspaceMode}
               onChange={(mode) => {
                 setWorkspaceMode(mode);
-                setLastUsedLocalWorkspaceMode(mode);
+                // Only persist local modes, not cloud
+                if (mode !== "cloud") {
+                  setLastUsedLocalWorkspaceMode(mode);
+                }
               }}
               size="1"
             />
