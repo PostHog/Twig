@@ -194,8 +194,19 @@ body {
   padding: 0;
 }
 
+.plan-markdown ul {
+  list-style-type: disc;
+  padding-left: 4px;
+}
+
+.plan-markdown ol {
+  list-style-type: decimal;
+  padding-left: 4px;
+}
+
 .plan-markdown li {
   margin: 2px 0;
+  display: list-item;
 }
 
 .plan-markdown code {

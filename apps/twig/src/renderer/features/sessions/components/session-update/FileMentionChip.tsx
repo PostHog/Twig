@@ -6,7 +6,10 @@ import { findTabInTree } from "@features/panels/store/panelTree";
 import type { PanelNode } from "@features/panels/store/panelTypes";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskStore } from "@features/tasks/stores/taskStore";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc/client";
+import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { memo, useCallback } from "react";
 import { getFilename } from "./toolCallUtils";
 
@@ -45,12 +48,16 @@ export const FileMentionChip = memo(function FileMentionChip({
 }: FileMentionChipProps) {
   const taskId = useTaskStore((s) => s.selectedTaskId);
   const repoPath = useCwd(taskId ?? "");
+  const workspace = useWorkspaceStore((s) =>
+    taskId ? s.workspaces[taskId] : null,
+  );
   const getLayout = usePanelLayoutStore((s) => s.getLayout);
   const openFile = usePanelLayoutStore((s) => s.openFile);
   const splitPanel = usePanelLayoutStore((s) => s.splitPanel);
   const setFocusedPanel = usePanelLayoutStore((s) => s.setFocusedPanel);
 
   const filename = getFilename(filePath);
+  const mainRepoPath = workspace?.folderPath;
 
   const handleClick = useCallback(() => {
     if (!taskId) return;
@@ -101,6 +108,34 @@ export const FileMentionChip = memo(function FileMentionChip({
     setFocusedPanel,
   ]);
 
+  const handleContextMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      const absolutePath = filePath.startsWith("/")
+        ? filePath
+        : repoPath
+          ? `${repoPath}/${filePath}`
+          : filePath;
+
+      const result = await trpcVanilla.contextMenu.showFileContextMenu.mutate({
+        filePath: absolutePath,
+        showCollapseAll: false,
+      });
+
+      if (!result.action) return;
+
+      if (result.action.type === "external-app") {
+        await handleExternalAppAction(
+          result.action.action,
+          absolutePath,
+          filename,
+          { workspace, mainRepoPath },
+        );
+      }
+    },
+    [filePath, repoPath, filename, workspace, mainRepoPath],
+  );
+
   const isClickable = !!taskId;
 
   return (
@@ -109,6 +144,7 @@ export const FileMentionChip = memo(function FileMentionChip({
       gap="1"
       asChild
       onClick={isClickable ? handleClick : undefined}
+      onContextMenu={handleContextMenu}
       className={isClickable ? "cursor-pointer hover:underline" : ""}
     >
       <Text size="1">

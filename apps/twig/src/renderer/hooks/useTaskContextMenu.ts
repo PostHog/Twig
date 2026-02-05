@@ -1,7 +1,4 @@
-import {
-  useDeleteTask,
-  useDuplicateTask,
-} from "@features/tasks/hooks/useTasks";
+import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc/client";
@@ -14,19 +11,29 @@ const log = logger.scope("context-menu");
 export function useTaskContextMenu() {
   const [renameTask, setRenameTask] = useState<Task | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const duplicateTask = useDuplicateTask();
   const { deleteWithConfirm } = useDeleteTask();
 
   const showContextMenu = useCallback(
-    async (task: Task, event: React.MouseEvent, worktreePath?: string) => {
+    async (
+      task: Task,
+      event: React.MouseEvent,
+      options?: {
+        worktreePath?: string;
+        isPinned?: boolean;
+        onTogglePin?: () => void;
+      },
+    ) => {
       event.preventDefault();
       event.stopPropagation();
+
+      const { worktreePath, isPinned, onTogglePin } = options ?? {};
 
       try {
         const result = await trpcVanilla.contextMenu.showTaskContextMenu.mutate(
           {
             taskTitle: task.title,
             worktreePath,
+            isPinned,
           },
         );
 
@@ -37,8 +44,8 @@ export function useTaskContextMenu() {
             setRenameTask(task);
             setRenameDialogOpen(true);
             break;
-          case "duplicate":
-            await duplicateTask.mutateAsync(task.id);
+          case "pin":
+            onTogglePin?.();
             break;
           case "delete":
             await deleteWithConfirm({
@@ -67,7 +74,7 @@ export function useTaskContextMenu() {
         log.error("Failed to show context menu", error);
       }
     },
-    [duplicateTask, deleteWithConfirm],
+    [deleteWithConfirm],
   );
 
   return {

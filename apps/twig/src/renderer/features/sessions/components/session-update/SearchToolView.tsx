@@ -1,5 +1,5 @@
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box, Flex } from "@radix-ui/themes";
 import { useState } from "react";
 import { ToolRow } from "./ToolRow";
 import {
@@ -7,6 +7,7 @@ import {
   ExpandedContentBox,
   getContentText,
   StatusIndicators,
+  ToolTitle,
   type ToolViewProps,
   useToolCallStatus,
 } from "./toolCallUtils";
@@ -62,10 +63,10 @@ export function SearchToolView({
           isExpandable
           isExpanded={isExpanded}
         />
-        <Text size="1">{title || "Search"}</Text>
-        <Text size="1" color="gray">
+        <ToolTitle>{title || "Search"}</ToolTitle>
+        <ToolTitle>
           {resultCount} {resultCount === 1 ? "result" : "results"}
-        </Text>
+        </ToolTitle>
         <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />
       </Flex>
 

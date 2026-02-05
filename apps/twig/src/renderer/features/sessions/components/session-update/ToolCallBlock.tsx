@@ -22,7 +22,7 @@ export function ToolCallBlock({
     | undefined;
   const toolName = meta?.claudeCode?.toolName;
 
-  if (toolName === "EnterPlanMode" || toolName === "ExitPlanMode") {
+  if (toolName === "EnterPlanMode") {
     return null;
   }
 

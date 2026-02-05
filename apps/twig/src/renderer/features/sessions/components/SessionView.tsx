@@ -401,31 +401,35 @@ export function SessionView({
               </Flex>
             </Flex>
           ) : firstPendingPermission ? (
-            <PermissionSelector
-              toolCall={firstPendingPermission.toolCall}
-              options={firstPendingPermission.options}
-              onSelect={handlePermissionSelect}
-              onCancel={handlePermissionCancel}
-            />
+            <Box className="border-gray-4 border-t">
+              <Box className="mx-auto max-w-[750px] p-2">
+                <PermissionSelector
+                  toolCall={firstPendingPermission.toolCall}
+                  options={firstPendingPermission.options}
+                  onSelect={handlePermissionSelect}
+                  onCancel={handlePermissionCancel}
+                />
+              </Box>
+            </Box>
           ) : (
             <Box
               className={
-                isBashMode
-                  ? "border border-accent-9 p-2"
-                  : "border-gray-4 border-t p-2"
+                isBashMode ? "border border-accent-9" : "border-gray-4 border-t"
               }
             >
-              <MessageEditor
-                ref={editorRef}
-                sessionId={sessionId}
-                placeholder="Type a message... @ to mention files, ! for bash mode"
-                onSubmit={handleSubmit}
-                onBashCommand={onBashCommand}
-                onBashModeChange={setIsBashMode}
-                onCancel={onCancelPrompt}
-                currentMode={currentMode}
-                onModeChange={!isCloud ? handleModeChange : undefined}
-              />
+              <Box className="mx-auto max-w-[750px] p-2">
+                <MessageEditor
+                  ref={editorRef}
+                  sessionId={sessionId}
+                  placeholder="Type a message... @ to mention files, ! for bash mode"
+                  onSubmit={handleSubmit}
+                  onBashCommand={onBashCommand}
+                  onBashModeChange={setIsBashMode}
+                  onCancel={onCancelPrompt}
+                  currentMode={currentMode}
+                  onModeChange={!isCloud ? handleModeChange : undefined}
+                />
+              </Box>
             </Box>
           )}
         </Flex>

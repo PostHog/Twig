@@ -4,20 +4,24 @@ interface SessionViewState {
   showRawLogs: boolean;
   searchQuery: string;
   showSearch: boolean;
+  scrollPositions: Record<string, number>;
 }
 
 interface SessionViewActions {
   setShowRawLogs: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
   toggleSearch: () => void;
+  saveScrollPosition: (taskId: string, position: number) => void;
+  getScrollPosition: (taskId: string) => number;
 }
 
 type SessionViewStore = SessionViewState & { actions: SessionViewActions };
 
-const useStore = create<SessionViewStore>((set) => ({
+const useStore = create<SessionViewStore>((set, get) => ({
   showRawLogs: false,
   searchQuery: "",
   showSearch: false,
+  scrollPositions: {},
   actions: {
     setShowRawLogs: (show) => set({ showRawLogs: show }),
     setSearchQuery: (query) => set({ searchQuery: query }),
@@ -26,6 +30,11 @@ const useStore = create<SessionViewStore>((set) => ({
         showSearch: !state.showSearch,
         searchQuery: state.showSearch ? "" : state.searchQuery,
       })),
+    saveScrollPosition: (taskId, position) =>
+      set((state) => ({
+        scrollPositions: { ...state.scrollPositions, [taskId]: position },
+      })),
+    getScrollPosition: (taskId) => get().scrollPositions[taskId] ?? 0,
   },
 }));
 

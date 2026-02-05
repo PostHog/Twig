@@ -14,7 +14,7 @@ import type { Task } from "@shared/types";
 import { useEffect, useMemo, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { WorktreePathDisplay } from "./WorktreePathDisplay";
+import { ExternalAppsOpener } from "./ExternalAppsOpener";
 
 interface TaskDetailProps {
   task: Task;
@@ -99,7 +99,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             </Tooltip>
           )}
         </Flex>
-        {worktreePath && <WorktreePathDisplay worktreePath={worktreePath} />}
+        {worktreePath && <ExternalAppsOpener targetPath={worktreePath} />}
       </Flex>
     ),
     [
