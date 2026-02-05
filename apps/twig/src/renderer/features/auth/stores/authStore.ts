@@ -3,6 +3,7 @@ import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
+import { resetSessionService } from "@renderer/services/session/service";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { CloudRegion } from "@shared/types/oauth";
 import { sleepWithBackoff } from "@shared/utils/backoff";
@@ -700,6 +701,9 @@ export const useAuthStore = create<AuthState>()(
         logout: () => {
           track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
           resetUser();
+
+          // Clean up session service subscriptions before clearing auth state
+          resetSessionService();
 
           trpcVanilla.analytics.resetUser.mutate();
 
