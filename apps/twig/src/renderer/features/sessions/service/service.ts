@@ -26,6 +26,7 @@ import {
   createUserShellExecuteEvent,
   extractPromptText,
   getUserShellExecutesSinceLastPrompt,
+  isFatalSessionError,
   normalizePromptToBlocks,
   shellExecutesToContextBlocks,
 } from "@utils/session";
@@ -697,14 +698,7 @@ export class SessionService {
       const errorDetails = (error as { data?: { details?: string } }).data
         ?.details;
 
-      const isFatalError =
-        errorMessage.includes("Internal error") ||
-        errorDetails?.includes("process exited") ||
-        errorDetails?.includes("Session did not end") ||
-        errorDetails?.includes("not ready for writing") ||
-        errorDetails?.includes("Session not found");
-
-      if (isFatalError) {
+      if (isFatalSessionError(errorMessage, errorDetails)) {
         log.error("Fatal prompt error, setting session to error state", {
           taskRunId: session.taskRunId,
           errorMessage,
