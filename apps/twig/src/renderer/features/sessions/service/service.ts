@@ -455,7 +455,6 @@ export class SessionService {
       this.unsubscribeFromChannel(taskRunId);
     }
 
-    // Clear connecting tasks
     this.connectingTasks.clear();
   }
 
@@ -463,12 +462,10 @@ export class SessionService {
     const session = sessionStoreSetters.getSessions()[taskRunId];
     if (!session) return;
 
-    // Append event
     sessionStoreSetters.appendEvents(taskRunId, [acpMsg]);
 
     const msg = acpMsg.message;
 
-    // Track isPromptPending from ACP events
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
       sessionStoreSetters.updateSession(taskRunId, {
         isPromptPending: true,
@@ -476,7 +473,6 @@ export class SessionService {
       });
     }
 
-    // Check for prompt response
     if (
       "id" in msg &&
       "result" in msg &&
@@ -489,7 +485,6 @@ export class SessionService {
         promptStartedAt: null,
       });
 
-      // Notify on completion
       const stopReason = (msg.result as { stopReason?: string }).stopReason;
       if (stopReason) {
         notifyPromptComplete(session.taskTitle, stopReason);
@@ -508,7 +503,6 @@ export class SessionService {
       }
     }
 
-    // Handle session/update notifications
     if ("method" in msg && msg.method === "session/update" && "params" in msg) {
       const params = msg.params as {
         update?: {
@@ -637,6 +631,8 @@ export class SessionService {
   /**
    * Send all queued messages as a single prompt.
    * Called internally when a turn completes and there are queued messages.
+   * Queue is cleared atomically before sending - if sending fails, messages are lost
+   * (this is acceptable since the user can re-type; avoiding complex retry logic).
    */
   private async sendQueuedMessages(
     taskId: string,
@@ -647,7 +643,10 @@ export class SessionService {
     }
 
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
-    if (!session) throw new Error("No active session for task");
+    if (!session) {
+      log.warn("No session found for queued messages", { taskId });
+      return { stopReason: "no_session" };
+    }
 
     log.info("Sending queued messages as single prompt", {
       taskId,
@@ -682,10 +681,16 @@ export class SessionService {
     });
 
     try {
-      return await trpcVanilla.agent.prompt.mutate({
+      const result = await trpcVanilla.agent.prompt.mutate({
         sessionId: session.taskRunId,
         prompt: blocks,
       });
+      // Clear pending state on success
+      sessionStoreSetters.updateSession(session.taskRunId, {
+        isPromptPending: false,
+        promptStartedAt: null,
+      });
+      return result;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -721,16 +726,6 @@ export class SessionService {
       }
 
       throw error;
-    } finally {
-      // Only clear pending state if not already done in catch
-      const currentSession =
-        sessionStoreSetters.getSessions()[session.taskRunId];
-      if (currentSession?.isPromptPending) {
-        sessionStoreSetters.updateSession(session.taskRunId, {
-          isPromptPending: false,
-          promptStartedAt: null,
-        });
-      }
     }
   }
 
@@ -779,14 +774,12 @@ export class SessionService {
     customInput?: string,
     answers?: Record<string, string>,
   ): Promise<void> {
-    // Get fresh session state (avoid stale reference)
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) {
       log.error("No session found for permission response", { taskId });
       return;
     }
 
-    // Remove permission from UI state immediately
     const newPermissions = new Map(session.pendingPermissions);
     newPermissions.delete(toolCallId);
     sessionStoreSetters.setPendingPermissions(
@@ -823,14 +816,12 @@ export class SessionService {
    * Cancel a permission request.
    */
   async cancelPermission(taskId: string, toolCallId: string): Promise<void> {
-    // Get fresh session state
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) {
       log.error("No session found for permission cancellation", { taskId });
       return;
     }
 
-    // Remove permission from UI state immediately
     const newPermissions = new Map(session.pendingPermissions);
     newPermissions.delete(toolCallId);
     sessionStoreSetters.setPendingPermissions(
@@ -864,8 +855,6 @@ export class SessionService {
     if (!session) return;
 
     const previousModel = session.model;
-
-    // Optimistic update
     sessionStoreSetters.updateSession(session.taskRunId, { model: modelId });
 
     try {
@@ -874,7 +863,6 @@ export class SessionService {
         modelId,
       });
     } catch (error) {
-      // Rollback on failure
       sessionStoreSetters.updateSession(session.taskRunId, {
         model: previousModel,
       });
@@ -895,8 +883,6 @@ export class SessionService {
     if (!session) return;
 
     const previousMode = session.currentMode;
-
-    // Optimistic update
     sessionStoreSetters.updateSession(session.taskRunId, {
       currentMode: modeId,
     });
@@ -908,7 +894,6 @@ export class SessionService {
         modeId,
       });
     } catch (error) {
-      // Rollback on failure
       sessionStoreSetters.updateSession(session.taskRunId, {
         currentMode: previousMode,
       });
@@ -1057,11 +1042,8 @@ export class SessionService {
     event: AcpMessage,
     storedEntry: StoredLogEntry,
   ): Promise<void> {
-    sessionStoreSetters.appendEvents(
-      session.taskRunId,
-      [event],
-      (session.processedLineCount ?? 0) + 1,
-    );
+    // Don't update processedLineCount - it tracks S3 log lines, not local events
+    sessionStoreSetters.appendEvents(session.taskRunId, [event]);
 
     const auth = useAuthStore.getState();
     if (auth.client) {
