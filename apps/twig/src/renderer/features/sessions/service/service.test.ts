@@ -348,6 +348,53 @@ describe("SessionService", () => {
       // Access private map to verify it's cleared
       expect(() => service.reset()).not.toThrow();
     });
+
+    it("unsubscribes from all active subscriptions", async () => {
+      const service = getSessionService();
+
+      // Setup: create mocks for subscriptions
+      const eventUnsubscribe = vi.fn();
+      const permissionUnsubscribe = vi.fn();
+      mockTrpcAgent.onSessionEvent.subscribe.mockReturnValue({
+        unsubscribe: eventUnsubscribe,
+      });
+      mockTrpcAgent.onPermissionRequest.subscribe.mockReturnValue({
+        unsubscribe: permissionUnsubscribe,
+      });
+
+      // Setup: create a task run to trigger subscription creation
+      const createTaskRunMock = vi.fn().mockResolvedValue({ id: "run-456" });
+      mockAuthStore.useAuthStore.getState.mockReturnValue({
+        oauthAccessToken: "test-token",
+        cloudRegion: "us",
+        projectId: 123,
+        client: {
+          createTaskRun: createTaskRunMock,
+          appendTaskRunLog: vi.fn(),
+        },
+      });
+      mockTrpcAgent.start.mutate.mockResolvedValue({
+        channel: "test-channel",
+        configOptions: [],
+      });
+
+      // Connect to task (this creates subscriptions)
+      await service.connectToTask({
+        task: createMockTask({ id: "task-456" }),
+        repoPath: "/repo",
+      });
+
+      // Verify subscriptions were created
+      expect(mockTrpcAgent.onSessionEvent.subscribe).toHaveBeenCalled();
+      expect(mockTrpcAgent.onPermissionRequest.subscribe).toHaveBeenCalled();
+
+      // Reset the service
+      service.reset();
+
+      // Verify unsubscribe was called for both subscriptions
+      expect(eventUnsubscribe).toHaveBeenCalled();
+      expect(permissionUnsubscribe).toHaveBeenCalled();
+    });
   });
 
   describe("sendPrompt", () => {
