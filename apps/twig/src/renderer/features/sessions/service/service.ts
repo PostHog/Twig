@@ -9,6 +9,7 @@ import {
   setPersistedConfigOptions,
   updatePersistedConfigOptionValue,
 } from "@features/sessions/stores/sessionConfigStore";
+import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import type {
   Adapter,
   AgentSession,
@@ -240,8 +241,13 @@ export class SessionService {
     repoPath: string,
     auth: AuthCredentials,
   ): Promise<void> {
-    const { rawEntries, sessionId } = await this.fetchSessionLogs(logUrl);
+    const { rawEntries, sessionId, adapter } =
+      await this.fetchSessionLogs(logUrl);
     const events = convertStoredEntriesToEvents(rawEntries);
+
+    // Resolve adapter from logs or persisted store
+    const storedAdapter = useSessionAdapterStore.getState().getAdapter(taskRunId);
+    const resolvedAdapter = adapter ?? storedAdapter;
 
     // Get persisted config options for this task run
     const persistedConfigOptions = getPersistedConfigOptions(taskRunId);
@@ -251,6 +257,10 @@ export class SessionService {
     session.logUrl = logUrl;
     if (persistedConfigOptions) {
       session.configOptions = persistedConfigOptions;
+    }
+    if (resolvedAdapter) {
+      session.adapter = resolvedAdapter;
+      useSessionAdapterStore.getState().setAdapter(taskRunId, resolvedAdapter);
     }
 
     sessionStoreSetters.setSession(session);
@@ -266,6 +276,7 @@ export class SessionService {
         projectId: auth.projectId,
         logUrl,
         sessionId,
+        adapter: resolvedAdapter,
       });
 
       if (result) {
@@ -373,6 +384,11 @@ export class SessionService {
     // Persist the config options
     if (configOptions) {
       setPersistedConfigOptions(taskRun.id, configOptions);
+    }
+
+    // Persist the adapter
+    if (adapter) {
+      useSessionAdapterStore.getState().setAdapter(taskRun.id, adapter);
     }
 
     sessionStoreSetters.setSession(session);
@@ -558,6 +574,7 @@ export class SessionService {
         sessionStoreSetters.updateSession(taskRunId, {
           adapter: params.adapter,
         });
+        useSessionAdapterStore.getState().setAdapter(taskRunId, params.adapter);
         log.info("Session adapter updated", {
           taskRunId,
           adapter: params.adapter,
@@ -1033,7 +1050,11 @@ export class SessionService {
 
   private async fetchSessionLogs(
     logUrl: string,
-  ): Promise<{ rawEntries: StoredLogEntry[]; sessionId?: string }> {
+  ): Promise<{
+    rawEntries: StoredLogEntry[];
+    sessionId?: string;
+    adapter?: Adapter;
+  }> {
     if (!logUrl) return { rawEntries: [] };
 
     try {
@@ -1042,6 +1063,7 @@ export class SessionService {
 
       const rawEntries: StoredLogEntry[] = [];
       let sessionId: string | undefined;
+      let adapter: Adapter | undefined;
 
       for (const line of content.trim().split("\n")) {
         try {
@@ -1054,15 +1076,17 @@ export class SessionService {
           ) {
             const params = stored.notification.params as {
               sdkSessionId?: string;
+              adapter?: Adapter;
             };
             if (params?.sdkSessionId) sessionId = params.sdkSessionId;
+            if (params?.adapter) adapter = params.adapter;
           }
         } catch {
           log.warn("Failed to parse log entry", { line });
         }
       }
 
-      return { rawEntries, sessionId };
+      return { rawEntries, sessionId, adapter };
     } catch {
       return { rawEntries: [] };
     }
