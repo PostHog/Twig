@@ -6,16 +6,11 @@ import { useConnectivity } from "@hooks/useConnectivity";
 import { get } from "@renderer/di/container";
 import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
-
-import type {
-  TaskCreationInput,
-  TaskService,
-} from "@renderer/services/task/service";
 import type { WorkspaceMode } from "@shared/types";
-
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import type { TaskCreationInput, TaskService } from "../service/service";
 
 const log = logger.scope("task-creation");
 

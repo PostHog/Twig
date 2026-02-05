@@ -1,15 +1,23 @@
 import type {
   ContentBlock,
   RequestPermissionRequest,
+  SessionConfigOption,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
-import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import {
-  getPersistedTaskMode,
-  setPersistedTaskMode,
-} from "@features/sessions/stores/sessionModeStore";
-import type { AgentSession } from "@features/sessions/stores/sessionStore";
-import { sessionStoreSetters } from "@features/sessions/stores/sessionStore";
+  getPersistedConfigOptions,
+  setPersistedConfigOptions,
+  updatePersistedConfigOptionValue,
+} from "@features/sessions/stores/sessionConfigStore";
+import type {
+  Adapter,
+  AgentSession,
+} from "@features/sessions/stores/sessionStore";
+import {
+  getConfigOptionByCategory,
+  mergeConfigOptions,
+  sessionStoreSetters,
+} from "@features/sessions/stores/sessionStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import {
@@ -48,6 +56,7 @@ interface ConnectParams {
   repoPath: string;
   initialPrompt?: ContentBlock[];
   executionMode?: ExecutionMode;
+  adapter?: "claude" | "codex";
 }
 
 // --- Singleton Service Instance ---
@@ -122,7 +131,7 @@ export class SessionService {
   }
 
   private async doConnect(params: ConnectParams): Promise<void> {
-    const { task, repoPath, initialPrompt, executionMode } = params;
+    const { task, repoPath, initialPrompt, executionMode, adapter } = params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
 
@@ -197,6 +206,7 @@ export class SessionService {
           auth,
           initialPrompt,
           executionMode,
+          adapter,
         );
       }
     } catch (error) {
@@ -230,15 +240,17 @@ export class SessionService {
     repoPath: string,
     auth: AuthCredentials,
   ): Promise<void> {
-    const { rawEntries, sdkSessionId } = await this.fetchSessionLogs(logUrl);
+    const { rawEntries, sessionId } = await this.fetchSessionLogs(logUrl);
     const events = convertStoredEntriesToEvents(rawEntries);
 
-    const persistedMode = getPersistedTaskMode(taskId);
+    // Get persisted config options for this task run
+    const persistedConfigOptions = getPersistedConfigOptions(taskRunId);
+
     const session = this.createBaseSession(taskRunId, taskId, taskTitle);
     session.events = events;
     session.logUrl = logUrl;
-    if (persistedMode) {
-      session.currentMode = persistedMode;
+    if (persistedConfigOptions) {
+      session.configOptions = persistedConfigOptions;
     }
 
     sessionStoreSetters.setSession(session);
@@ -253,40 +265,50 @@ export class SessionService {
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         logUrl,
-        sdkSessionId,
+        sessionId,
       });
 
       if (result) {
-        const selectedModel = useModelsStore.getState().getEffectiveModel();
-        sessionStoreSetters.updateSession(taskRunId, {
-          status: "connected",
-          model: selectedModel,
-          availableModels: result.availableModels,
-        });
-
-        try {
-          await trpcVanilla.agent.setModel.mutate({
-            sessionId: taskRunId,
-            modelId: selectedModel,
-          });
-        } catch (error) {
-          log.warn("Failed to restore model after reconnect", {
-            taskId,
-            error,
-          });
+        // Cast and merge live configOptions with persisted values
+        let configOptions = result.configOptions as
+          | SessionConfigOption[]
+          | undefined;
+        if (configOptions && persistedConfigOptions) {
+          configOptions = mergeConfigOptions(
+            configOptions,
+            persistedConfigOptions,
+          );
         }
 
-        if (persistedMode) {
-          try {
-            await trpcVanilla.agent.setMode.mutate({
-              sessionId: taskRunId,
-              modeId: persistedMode,
-            });
-          } catch (error) {
-            log.warn("Failed to restore persisted mode after reconnect", {
-              taskId,
-              error,
-            });
+        sessionStoreSetters.updateSession(taskRunId, {
+          status: "connected",
+          configOptions,
+        });
+
+        // Persist the merged config options
+        if (configOptions) {
+          setPersistedConfigOptions(taskRunId, configOptions);
+        }
+
+        // Restore persisted config options to server
+        if (persistedConfigOptions) {
+          for (const opt of persistedConfigOptions) {
+            try {
+              await trpcVanilla.agent.setConfigOption.mutate({
+                sessionId: taskRunId,
+                configId: opt.id,
+                value: opt.currentValue,
+              });
+            } catch (error) {
+              log.warn(
+                "Failed to restore persisted config option after reconnect",
+                {
+                  taskId,
+                  configId: opt.id,
+                  error,
+                },
+              );
+            }
           }
         }
       } else {
@@ -317,6 +339,7 @@ export class SessionService {
     auth: AuthCredentials,
     initialPrompt?: ContentBlock[],
     executionMode?: ExecutionMode,
+    adapter?: "claude" | "codex",
   ): Promise<void> {
     if (!auth.client) {
       throw new Error("Unable to reach server. Please check your connection.");
@@ -327,10 +350,6 @@ export class SessionService {
       throw new Error("Failed to create task run. Please try again.");
     }
 
-    const persistedMode = getPersistedTaskMode(taskId);
-    const effectiveMode = executionMode ?? persistedMode;
-    const selectedModel = useModelsStore.getState().getEffectiveModel();
-
     const result = await trpcVanilla.agent.start.mutate({
       taskId,
       taskRunId: taskRun.id,
@@ -338,22 +357,22 @@ export class SessionService {
       apiKey: auth.apiKey,
       apiHost: auth.apiHost,
       projectId: auth.projectId,
-      model: selectedModel,
-      executionMode: effectiveMode,
+      permissionMode: executionMode,
+      adapter,
     });
 
-    const session = this.createBaseSession(
-      taskRun.id,
-      taskId,
-      taskTitle,
-      effectiveMode,
-    );
+    const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
     session.channel = result.channel;
     session.status = "connected";
-    session.model = result.currentModelId ?? selectedModel;
-    session.availableModels = result.availableModels;
-    if (persistedMode && !executionMode) {
-      session.currentMode = persistedMode;
+    session.adapter = adapter;
+    const configOptions = result.configOptions as
+      | SessionConfigOption[]
+      | undefined;
+    session.configOptions = configOptions;
+
+    // Persist the config options
+    if (configOptions) {
+      setPersistedConfigOptions(taskRun.id, configOptions);
     }
 
     sessionStoreSetters.setSession(session);
@@ -362,7 +381,7 @@ export class SessionService {
     track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
       task_id: taskId,
       execution_type: "local",
-      model: selectedModel,
+      adapter,
     });
 
     if (initialPrompt?.length) {
@@ -396,7 +415,7 @@ export class SessionService {
     }
 
     const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
-      { sessionId: taskRunId },
+      { taskRunId },
       {
         onData: (payload: unknown) => {
           this.handleSessionEvent(taskRunId, payload as AcpMessage);
@@ -414,7 +433,7 @@ export class SessionService {
 
     const permissionSubscription =
       trpcVanilla.agent.onPermissionRequest.subscribe(
-        { sessionId: taskRunId },
+        { taskRunId },
         {
           onData: async (payload) => {
             this.handlePermissionRequest(taskRunId, payload);
@@ -508,27 +527,42 @@ export class SessionService {
       const params = msg.params as {
         update?: {
           sessionUpdate?: string;
-          currentModeId?: string;
+          configOptions?: SessionConfigOption[];
         };
       };
 
-      // Handle mode updates from ExitPlanMode approval
+      // Handle config option updates (replaces current_mode_update)
       if (
-        params?.update?.sessionUpdate === "current_mode_update" &&
-        params.update.currentModeId
+        params?.update?.sessionUpdate === "config_option_update" &&
+        params.update.configOptions
       ) {
-        const newMode = params.update.currentModeId as ExecutionMode;
-        if (
-          newMode === "plan" ||
-          newMode === "default" ||
-          newMode === "acceptEdits"
-        ) {
-          sessionStoreSetters.updateSession(taskRunId, {
-            currentMode: newMode,
-          });
-          setPersistedTaskMode(session.taskId, newMode);
-          log.info("Session mode updated", { taskRunId, newMode });
-        }
+        const configOptions = params.update.configOptions;
+        sessionStoreSetters.updateSession(taskRunId, {
+          configOptions,
+        });
+        // Persist the updated config options
+        setPersistedConfigOptions(taskRunId, configOptions);
+        log.info("Session config options updated", { taskRunId });
+      }
+    }
+
+    // Handle _posthog/sdk_session notifications for adapter info
+    if (
+      "method" in msg &&
+      msg.method === "_posthog/sdk_session" &&
+      "params" in msg
+    ) {
+      const params = msg.params as {
+        adapter?: Adapter;
+      };
+      if (params?.adapter) {
+        sessionStoreSetters.updateSession(taskRunId, {
+          adapter: params.adapter,
+        });
+        log.info("Session adapter updated", {
+          taskRunId,
+          adapter: params.adapter,
+        });
       }
     }
   }
@@ -553,8 +587,12 @@ export class SessionService {
     }
 
     const newPermissions = new Map(session.pendingPermissions);
+    // Transform RequestPermissionRequest to PermissionRequest
+    // (omit sessionId, add taskRunId and receivedAt)
+    const { sessionId: _sessionId, ...rest } = payload;
     newPermissions.set(payload.toolCall.toolCallId, {
-      ...payload,
+      ...rest,
+      taskRunId,
       receivedAt: Date.now(),
     });
 
@@ -783,7 +821,7 @@ export class SessionService {
 
     try {
       await trpcVanilla.agent.respondToPermission.mutate({
-        sessionId: session.taskRunId,
+        taskRunId: session.taskRunId,
         toolCallId,
         optionId,
         customInput,
@@ -825,7 +863,7 @@ export class SessionService {
 
     try {
       await trpcVanilla.agent.cancelPermission.mutate({
-        sessionId: session.taskRunId,
+        taskRunId: session.taskRunId,
         toolCallId,
       });
 
@@ -839,66 +877,90 @@ export class SessionService {
     }
   }
 
-  // --- Model/Mode Changes (Optimistic Updates) ---
+  // --- Config Option Changes (Optimistic Updates) ---
 
   /**
-   * Set session model with optimistic update and rollback.
+   * Set a session configuration option with optimistic update and rollback.
+   * This is the unified method for model, mode, thought level, etc.
    */
-  async setSessionModel(taskId: string, modelId: string): Promise<void> {
+  async setSessionConfigOption(
+    taskId: string,
+    configId: string,
+    value: string,
+  ): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
-    const previousModel = session.model;
-    sessionStoreSetters.updateSession(session.taskRunId, { model: modelId });
+    // Find the config option and save previous value for rollback
+    const configOptions = session.configOptions ?? [];
+    const optionIndex = configOptions.findIndex((opt) => opt.id === configId);
+    if (optionIndex === -1) {
+      log.warn("Config option not found", { taskId, configId });
+      return;
+    }
+
+    const previousValue = configOptions[optionIndex].currentValue;
+
+    // Optimistic update
+    const updatedOptions = configOptions.map((opt) =>
+      opt.id === configId ? { ...opt, currentValue: value } : opt,
+    );
+    sessionStoreSetters.updateSession(session.taskRunId, {
+      configOptions: updatedOptions,
+    });
+    updatePersistedConfigOptionValue(session.taskRunId, configId, value);
 
     try {
-      await trpcVanilla.agent.setModel.mutate({
+      await trpcVanilla.agent.setConfigOption.mutate({
         sessionId: session.taskRunId,
-        modelId,
+        configId,
+        value,
       });
     } catch (error) {
+      // Rollback on error
+      const rolledBackOptions = configOptions.map((opt) =>
+        opt.id === configId ? { ...opt, currentValue: previousValue } : opt,
+      );
       sessionStoreSetters.updateSession(session.taskRunId, {
-        model: previousModel,
+        configOptions: rolledBackOptions,
       });
-      log.error("Failed to change session model", {
+      updatePersistedConfigOptionValue(
+        session.taskRunId,
+        configId,
+        previousValue,
+      );
+      log.error("Failed to set session config option", {
         taskId,
-        modelId,
+        configId,
+        value,
         error,
       });
-      toast.error("Failed to change model. Please try again.");
+      toast.error("Failed to change setting. Please try again.");
     }
   }
 
   /**
-   * Set session mode with optimistic update and rollback.
+   * Set a session configuration option by category (e.g., "mode", "model").
+   * This is a convenience method that looks up the config ID by category.
    */
-  async setSessionMode(taskId: string, modeId: ExecutionMode): Promise<void> {
+  async setSessionConfigOptionByCategory(
+    taskId: string,
+    category: string,
+    value: string,
+  ): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
-    const previousMode = session.currentMode;
-    sessionStoreSetters.updateSession(session.taskRunId, {
-      currentMode: modeId,
-    });
-    setPersistedTaskMode(taskId, modeId);
-
-    try {
-      await trpcVanilla.agent.setMode.mutate({
-        sessionId: session.taskRunId,
-        modeId,
-      });
-    } catch (error) {
-      sessionStoreSetters.updateSession(session.taskRunId, {
-        currentMode: previousMode,
-      });
-      setPersistedTaskMode(taskId, previousMode);
-      log.error("Failed to change session mode", {
-        taskId,
-        modeId,
-        error,
-      });
-      toast.error("Failed to change mode. Please try again.");
+    const configOption = getConfigOptionByCategory(
+      session.configOptions,
+      category,
+    );
+    if (!configOption) {
+      log.warn("Config option not found for category", { taskId, category });
+      return;
     }
+
+    await this.setSessionConfigOption(taskId, configOption.id, value);
   }
 
   /**
@@ -973,7 +1035,7 @@ export class SessionService {
 
   private async fetchSessionLogs(
     logUrl: string,
-  ): Promise<{ rawEntries: StoredLogEntry[]; sdkSessionId?: string }> {
+  ): Promise<{ rawEntries: StoredLogEntry[]; sessionId?: string }> {
     if (!logUrl) return { rawEntries: [] };
 
     try {
@@ -981,7 +1043,7 @@ export class SessionService {
       if (!content?.trim()) return { rawEntries: [] };
 
       const rawEntries: StoredLogEntry[] = [];
-      let sdkSessionId: string | undefined;
+      let sessionId: string | undefined;
 
       for (const line of content.trim().split("\n")) {
         try {
@@ -995,14 +1057,14 @@ export class SessionService {
             const params = stored.notification.params as {
               sdkSessionId?: string;
             };
-            if (params?.sdkSessionId) sdkSessionId = params.sdkSessionId;
+            if (params?.sdkSessionId) sessionId = params.sdkSessionId;
           }
         } catch {
           log.warn("Failed to parse log entry", { line });
         }
       }
 
-      return { rawEntries, sdkSessionId };
+      return { rawEntries, sessionId };
     } catch {
       return { rawEntries: [] };
     }
@@ -1012,7 +1074,7 @@ export class SessionService {
     taskRunId: string,
     taskId: string,
     taskTitle: string,
-    executionMode?: ExecutionMode,
+    isCloud = false,
   ): AgentSession {
     return {
       taskRunId,
@@ -1024,7 +1086,7 @@ export class SessionService {
       status: "connecting",
       isPromptPending: false,
       promptStartedAt: null,
-      currentMode: executionMode ?? "default",
+      isCloud,
       pendingPermissions: new Map(),
       messageQueue: [],
     };

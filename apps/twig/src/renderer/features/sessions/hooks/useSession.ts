@@ -1,11 +1,15 @@
-import type { AvailableCommand } from "@agentclientprotocol/sdk";
-import type { ExecutionMode } from "@shared/types";
+import type {
+  AvailableCommand,
+  SessionConfigOption,
+} from "@agentclientprotocol/sdk";
 import {
   extractAvailableCommandsFromEvents,
   extractUserPromptsFromEvents,
 } from "@utils/session";
 import {
+  type Adapter,
   type AgentSession,
+  getConfigOptionByCategory,
   type QueuedMessage,
   useSessionStore,
 } from "../stores/sessionStore";
@@ -82,20 +86,6 @@ export function getPendingPermissionsForTask(
   return session?.pendingPermissions ?? new Map();
 }
 
-/** O(1) lookup using taskIdIndex */
-export const useCurrentModeForTask = (
-  taskId: string | undefined,
-): ExecutionMode | undefined => {
-  const taskRunId = useSessionStore((s) =>
-    taskId ? s.taskIdIndex[taskId] : undefined,
-  );
-
-  return useSessionStore((s) => {
-    if (!taskRunId) return undefined;
-    return s.sessions[taskRunId]?.currentMode;
-  });
-};
-
 export const useQueuedMessagesForTask = (
   taskId: string | undefined,
 ): QueuedMessage[] => {
@@ -105,5 +95,54 @@ export const useQueuedMessagesForTask = (
     if (!taskRunId) return [];
     const session = s.sessions[taskRunId];
     return session?.messageQueue ?? [];
+  });
+};
+
+// --- Config Option Hooks ---
+
+/** Get a config option by category for a task */
+export const useConfigOptionForTask = (
+  taskId: string | undefined,
+  category: string,
+): SessionConfigOption | undefined => {
+  return useSessionStore((s) => {
+    if (!taskId) return undefined;
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return undefined;
+    const session = s.sessions[taskRunId];
+    return getConfigOptionByCategory(session?.configOptions, category);
+  });
+};
+
+/** Get the mode config option for a task */
+export const useModeConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "mode");
+};
+
+/** Get the model config option for a task */
+export const useModelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "model");
+};
+
+/** Get the thought level config option for a task */
+export const useThoughtLevelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "thought_level");
+};
+
+/** Get the adapter type for a task */
+export const useAdapterForTask = (
+  taskId: string | undefined,
+): Adapter | undefined => {
+  return useSessionStore((s) => {
+    if (!taskId) return undefined;
+    const taskRunId = s.taskIdIndex[taskId];
+    if (!taskRunId) return undefined;
+    return s.sessions[taskRunId]?.adapter;
   });
 };
