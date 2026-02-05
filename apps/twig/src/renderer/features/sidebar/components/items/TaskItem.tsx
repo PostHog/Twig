@@ -3,7 +3,6 @@ import { Tooltip } from "@components/ui/Tooltip";
 import {
   ArrowsClockwise,
   BellRinging,
-  Cloud,
   GitBranch as GitBranchIcon,
   Laptop as LaptopIcon,
   PushPin,
@@ -101,7 +100,6 @@ export function TaskItem({
     selectIsFocusedOnWorktree(worktreePath ?? ""),
   );
 
-  const isCloudTask = workspaceMode === "cloud";
   const isWorktreeTask = workspaceMode === "worktree";
 
   const icon = needsPermission ? (
@@ -114,12 +112,6 @@ export function TaskItem({
     </span>
   ) : isPinned ? (
     <PushPin size={ICON_SIZE} className="text-accent-11" />
-  ) : isCloudTask ? (
-    <Tooltip content="Cloud workspace" side="right">
-      <span className="flex items-center justify-center">
-        <Cloud size={ICON_SIZE} />
-      </span>
-    </Tooltip>
   ) : isWorktreeTask ? (
     isFocused ? (
       <Tooltip content="Worktree (syncing)" side="right">

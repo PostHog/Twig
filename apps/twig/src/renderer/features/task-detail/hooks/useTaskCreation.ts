@@ -6,7 +6,7 @@ import { useConnectivity } from "@hooks/useConnectivity";
 import { get } from "@renderer/di/container";
 import { RENDERER_TOKENS } from "@renderer/di/tokens";
 import { logger } from "@renderer/lib/logger";
-import type { WorkspaceMode } from "@shared/types";
+import type { ExecutionMode, WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -22,7 +22,7 @@ interface UseTaskCreationOptions {
   workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
-  executionMode?: string;
+  executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
 }
 
@@ -77,7 +77,7 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    executionMode?: string;
+    executionMode?: ExecutionMode;
     adapter?: "claude" | "codex";
   },
 ): TaskCreationInput {
@@ -123,11 +123,8 @@ export function useTaskCreation({
   const { invalidateTasks } = useCreateTask();
   const { isOnline } = useConnectivity();
 
-  const isCloudMode = workspaceMode === "cloud";
   // Cloud mode can work with either selectedRepository (production) or selectedDirectory (dev testing)
-  const hasRequiredPath = isCloudMode
-    ? !!selectedRepository || !!selectedDirectory
-    : !!selectedDirectory;
+  const hasRequiredPath = !!selectedRepository || !!selectedDirectory;
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&
