@@ -137,7 +137,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const handleCancelPrompt = useCallback(async () => {
     // Get and clear any queued messages before cancelling
-    const queuedContent = sessionStoreSetters.popQueuedMessagesAsText(taskId);
+    const queuedContent = sessionStoreSetters.dequeueMessagesAsText(taskId);
 
     const result = await getSessionService().cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });

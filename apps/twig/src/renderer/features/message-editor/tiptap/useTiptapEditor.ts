@@ -151,7 +151,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
               const queuedContent =
-                sessionStoreSetters.popQueuedMessagesAsText(taskId);
+                sessionStoreSetters.dequeueMessagesAsText(taskId);
               if (queuedContent !== null && queuedContent !== undefined) {
                 event.preventDefault();
                 view.dispatch(
