@@ -13,7 +13,7 @@ import {
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { Warning } from "@phosphor-icons/react";
+import { Spinner, Warning } from "@phosphor-icons/react";
 import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
@@ -46,6 +46,7 @@ interface SessionViewProps {
   errorMessage?: string;
   onRetry?: () => void;
   onDelete?: () => void;
+  isInitializing?: boolean;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -66,6 +67,7 @@ export function SessionView({
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
   onDelete,
+  isInitializing = false,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -347,90 +349,104 @@ export function SessionView({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <DropZoneOverlay isVisible={isDraggingFile} />
-          {showRawLogs ? (
-            <RawLogsView events={events} />
-          ) : (
-            <ConversationView
-              events={events}
-              isPromptPending={isPromptPending}
-              promptStartedAt={promptStartedAt}
-              repoPath={repoPath}
-              isCloud={isCloud}
-              taskId={taskId}
-            />
-          )}
-
-          <PlanStatusBar plan={latestPlan} />
-
-          {hasError ? (
+          {isInitializing ? (
             <Flex
               align="center"
               justify="center"
-              direction="column"
-              gap="2"
               className="absolute inset-0 bg-gray-1"
             >
-              <Warning size={32} weight="duotone" color="var(--red-9)" />
-              <Text size="3" weight="medium" color="red">
-                Session Error
-              </Text>
-              <Text
-                size="2"
-                align="center"
-                className="max-w-md px-4 text-gray-11"
-              >
-                {errorMessage}
-              </Text>
-              <Flex gap="2" mt="2">
-                {onRetry && (
-                  <Button variant="soft" size="2" onClick={onRetry}>
-                    Retry
-                  </Button>
-                )}
-                {onDelete && (
-                  <Button
-                    variant="soft"
-                    size="2"
-                    color="red"
-                    onClick={onDelete}
-                  >
-                    Delete Task
-                  </Button>
-                )}
-              </Flex>
+              <Spinner size={32} className="animate-spin text-gray-9" />
             </Flex>
-          ) : firstPendingPermission ? (
-            <Box className="border-gray-4 border-t">
-              <Box className="mx-auto max-w-[750px] p-2">
-                <PermissionSelector
-                  toolCall={firstPendingPermission.toolCall}
-                  options={firstPendingPermission.options}
-                  onSelect={handlePermissionSelect}
-                  onCancel={handlePermissionCancel}
-                />
-              </Box>
-            </Box>
           ) : (
-            <Box
-              className={
-                isBashMode ? "border border-accent-9" : "border-gray-4 border-t"
-              }
-            >
-              <Box className="mx-auto max-w-[750px] p-2">
-                <MessageEditor
-                  ref={editorRef}
-                  sessionId={sessionId}
-                  placeholder="Type a message... @ to mention files, ! for bash mode"
-                  onSubmit={handleSubmit}
-                  onBashCommand={onBashCommand}
-                  onBashModeChange={setIsBashMode}
-                  onCancel={onCancelPrompt}
-                  currentMode={currentMode}
-                  onModeChange={!isCloud ? handleModeChange : undefined}
+            <>
+              <DropZoneOverlay isVisible={isDraggingFile} />
+              {showRawLogs ? (
+                <RawLogsView events={events} />
+              ) : (
+                <ConversationView
+                  events={events}
+                  isPromptPending={isPromptPending}
+                  promptStartedAt={promptStartedAt}
+                  repoPath={repoPath}
+                  isCloud={isCloud}
+                  taskId={taskId}
                 />
-              </Box>
-            </Box>
+              )}
+
+              <PlanStatusBar plan={latestPlan} />
+
+              {hasError ? (
+                <Flex
+                  align="center"
+                  justify="center"
+                  direction="column"
+                  gap="2"
+                  className="absolute inset-0 bg-gray-1"
+                >
+                  <Warning size={32} weight="duotone" color="var(--red-9)" />
+                  <Text size="3" weight="medium" color="red">
+                    Session Error
+                  </Text>
+                  <Text
+                    size="2"
+                    align="center"
+                    className="max-w-md px-4 text-gray-11"
+                  >
+                    {errorMessage}
+                  </Text>
+                  <Flex gap="2" mt="2">
+                    {onRetry && (
+                      <Button variant="soft" size="2" onClick={onRetry}>
+                        Retry
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button
+                        variant="soft"
+                        size="2"
+                        color="red"
+                        onClick={onDelete}
+                      >
+                        Delete Task
+                      </Button>
+                    )}
+                  </Flex>
+                </Flex>
+              ) : firstPendingPermission ? (
+                <Box className="border-gray-4 border-t">
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <PermissionSelector
+                      toolCall={firstPendingPermission.toolCall}
+                      options={firstPendingPermission.options}
+                      onSelect={handlePermissionSelect}
+                      onCancel={handlePermissionCancel}
+                    />
+                  </Box>
+                </Box>
+              ) : (
+                <Box
+                  className={
+                    isBashMode
+                      ? "border border-accent-9"
+                      : "border-gray-4 border-t"
+                  }
+                >
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <MessageEditor
+                      ref={editorRef}
+                      sessionId={sessionId}
+                      placeholder="Type a message... @ to mention files, ! for bash mode"
+                      onSubmit={handleSubmit}
+                      onBashCommand={onBashCommand}
+                      onBashModeChange={setIsBashMode}
+                      onCancel={onCancelPrompt}
+                      currentMode={currentMode}
+                      onModeChange={!isCloud ? handleModeChange : undefined}
+                    />
+                  </Box>
+                </Box>
+              )}
+            </>
           )}
         </Flex>
       </ContextMenu.Trigger>

@@ -57,6 +57,7 @@ function HistoryTaskItem({
       isUnread={task.isUnread}
       isPinned={task.isPinned}
       needsPermission={task.needsPermission}
+      createdAt={task.createdAt}
       onClick={onClick}
       onContextMenu={(e) => onContextMenu(e, task.isPinned ?? false)}
       onDelete={onDelete}

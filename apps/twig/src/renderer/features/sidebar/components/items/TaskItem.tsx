@@ -1,4 +1,5 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
+import { Tooltip } from "@components/ui/Tooltip";
 import {
   ArrowsClockwise,
   BellRinging,
@@ -22,9 +23,30 @@ interface TaskItemProps {
   isUnread?: boolean;
   isPinned?: boolean;
   needsPermission?: boolean;
+  createdAt?: number;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (years > 0) return `${years}y`;
+  if (months > 0) return `${months}mo`;
+  if (weeks > 0) return `${weeks}w`;
+  if (days > 0) return `${days}d`;
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return "now";
 }
 
 interface TaskHoverToolbarProps {
@@ -68,6 +90,7 @@ export function TaskItem({
   isUnread,
   isPinned = false,
   needsPermission = false,
+  createdAt,
   onClick,
   onContextMenu,
   onDelete,
@@ -90,25 +113,55 @@ export function TaskItem({
   ) : isPinned ? (
     <PushPin size={ICON_SIZE} className="text-accent-11" />
   ) : isCloudTask ? (
-    <Cloud size={ICON_SIZE} />
+    <Tooltip content="Cloud workspace" side="right">
+      <span className="flex items-center justify-center">
+        <Cloud size={ICON_SIZE} />
+      </span>
+    </Tooltip>
   ) : isWorktreeTask ? (
     isFocused ? (
-      <ArrowsClockwise
-        size={ICON_SIZE}
-        weight="duotone"
-        className="animate-sync-rotate text-blue-11"
-      />
+      <Tooltip content="Worktree (syncing)" side="right">
+        <span className="flex items-center justify-center">
+          <ArrowsClockwise
+            size={ICON_SIZE}
+            weight="duotone"
+            className="animate-sync-rotate text-blue-11"
+          />
+        </span>
+      </Tooltip>
     ) : (
-      <GitBranchIcon size={ICON_SIZE} />
+      <Tooltip content="Worktree" side="right">
+        <span className="flex items-center justify-center">
+          <GitBranchIcon size={ICON_SIZE} />
+        </span>
+      </Tooltip>
     )
   ) : (
-    <LaptopIcon size={ICON_SIZE} />
+    <Tooltip content="Local" side="right">
+      <span className="flex items-center justify-center">
+        <LaptopIcon size={ICON_SIZE} />
+      </span>
+    </Tooltip>
   );
 
-  const endContent = useMemo(
-    () => (onDelete ? <TaskHoverToolbar onDelete={onDelete} /> : null),
-    [onDelete],
-  );
+  const endContent = useMemo(() => {
+    const timestamp = createdAt ? (
+      <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
+        {formatRelativeTime(createdAt)}
+      </span>
+    ) : null;
+
+    const toolbar = onDelete ? <TaskHoverToolbar onDelete={onDelete} /> : null;
+
+    if (!timestamp && !toolbar) return null;
+
+    return (
+      <>
+        {timestamp}
+        {toolbar}
+      </>
+    );
+  }, [createdAt, onDelete]);
 
   return (
     <SidebarItem
