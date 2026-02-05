@@ -289,4 +289,11 @@ export const sessionStoreSetters = {
   getSessions: (): Record<string, AgentSession> => {
     return useSessionStore.getState().sessions;
   },
+
+  clearAll: () => {
+    useSessionStore.setState((state) => {
+      state.sessions = {};
+      state.taskIdIndex = {};
+    });
+  },
 };

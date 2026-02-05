@@ -643,6 +643,9 @@ export const useAuthStore = create<AuthState>()(
             throw new Error("No access token available");
           }
 
+          // Clean up all existing sessions before switching projects
+          resetSessionService();
+
           const apiHost = getCloudUrlFromRegion(cloudRegion);
 
           // Create a new client with the selected project
