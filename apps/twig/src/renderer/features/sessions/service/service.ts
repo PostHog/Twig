@@ -4,6 +4,7 @@ import type {
   SessionConfigOption,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
   getPersistedConfigOptions,
@@ -400,6 +401,16 @@ export class SessionService {
       task_id: taskId,
       execution_type: "local",
     });
+
+    // Set the user's preferred model if available
+    const preferredModel = useModelsStore.getState().getEffectiveModel();
+    if (preferredModel) {
+      await this.setSessionConfigOptionByCategory(
+        taskId,
+        "model",
+        preferredModel,
+      );
+    }
 
     if (initialPrompt?.length) {
       await this.sendPrompt(taskId, initialPrompt);
