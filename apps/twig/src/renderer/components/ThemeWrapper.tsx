@@ -24,7 +24,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
     <Theme
       appearance={isDarkMode ? "dark" : "light"}
       accentColor={isDarkMode ? "orange" : "yellow"}
-      grayColor="slate"
+      grayColor="sand"
       panelBackground="solid"
       radius="none"
       scaling="105%"

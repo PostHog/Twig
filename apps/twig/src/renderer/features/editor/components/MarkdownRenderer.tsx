@@ -53,7 +53,7 @@ export const baseComponents: Components = {
     const isInline = !className?.includes("language-");
     if (isInline) {
       return (
-        <Code size="1" variant="outline">
+        <Code size="1" variant="ghost" style={{ color: "var(--accent-11)" }}>
           {children}
         </Code>
       );

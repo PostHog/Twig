@@ -50,6 +50,7 @@ export function createWindow(): void {
     minHeight: 600,
     backgroundColor: "#0a0a0a",
     titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 12, y: 9 },
     show: false,
     webPreferences: {
       nodeIntegration: true,

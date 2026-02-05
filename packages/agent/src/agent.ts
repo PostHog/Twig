@@ -30,10 +30,17 @@ export class Agent {
 
     if (config.posthog) {
       this.posthogAPI = new PostHogAPIClient(config.posthog);
-      this.sessionLogWriter = new SessionLogWriter(
-        this.posthogAPI,
-        this.logger.child("SessionLogWriter"),
-      );
+    }
+
+    if (config.otelTransport) {
+      this.sessionLogWriter = new SessionLogWriter({
+        otelConfig: {
+          posthogHost: config.otelTransport.host,
+          apiKey: config.otelTransport.apiKey,
+          logsPath: config.otelTransport.logsPath,
+        },
+        logger: this.logger.child("SessionLogWriter"),
+      });
     }
   }
 
@@ -106,6 +113,7 @@ export class Agent {
       logWriter: this.sessionLogWriter,
       taskRunId,
       taskId,
+      deviceType: "local",
       logger: this.logger,
       processCallbacks: options.processCallbacks,
       allowedModelIds,

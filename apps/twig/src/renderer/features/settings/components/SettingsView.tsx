@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
+import { useProjects } from "@features/projects/hooks/useProjects";
 import {
   type CompletionSound,
   type SendMessagesWith,
@@ -8,7 +9,7 @@ import {
 import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { Warning } from "@phosphor-icons/react";
+import { Buildings, Check, Plus, Warning } from "@phosphor-icons/react";
 import {
   AlertDialog,
   Badge,
@@ -16,6 +17,7 @@ import {
   Button,
   Callout,
   Card,
+  DropdownMenu,
   Flex,
   Heading,
   Select,
@@ -35,6 +37,7 @@ import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsSt
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { trpcReact, trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 import { useThemeStore } from "../../../stores/themeStore";
@@ -73,8 +76,14 @@ const TERMINAL_FONT_PRESETS = [
 export function SettingsView() {
   useSetHeaderContent(null);
 
-  const { isAuthenticated, cloudRegion, loginWithOAuth, logout } =
-    useAuthStore();
+  const {
+    isAuthenticated,
+    cloudRegion,
+    loginWithOAuth,
+    logout,
+    selectProject,
+  } = useAuthStore();
+  const { groupedProjects, currentProjectId } = useProjects();
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
   const {
@@ -381,6 +390,21 @@ export function SettingsView() {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleProjectSelect = (projectId: number) => {
+    if (projectId !== currentProjectId) {
+      selectProject(projectId);
+    }
+  };
+
+  const handleAddProject = async () => {
+    if (cloudRegion) {
+      const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+      await trpcVanilla.oauth.openExternalUrl.mutate({
+        url: `${cloudUrl}/organization/create-project`,
+      });
+    }
   };
 
   const checkUpdatesMutation = trpcReact.updates.check.useMutation();
@@ -829,9 +853,55 @@ export function SettingsView() {
                     <Text size="1" weight="medium">
                       Project
                     </Text>
-                    <Text size="1" color="gray">
-                      {project.name} (ID: {project.id})
-                    </Text>
+                    {groupedProjects.length > 1 ? (
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger>
+                          <Button variant="outline" size="1">
+                            <Buildings size={14} />
+                            {project.name}
+                          </Button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Content
+                          align="start"
+                          style={{ minWidth: "220px" }}
+                        >
+                          {groupedProjects.flatMap((group) =>
+                            group.projects.map((proj) => (
+                              <DropdownMenu.Item
+                                key={proj.id}
+                                onSelect={() => handleProjectSelect(proj.id)}
+                              >
+                                <Flex
+                                  align="center"
+                                  justify="between"
+                                  gap="2"
+                                  width="100%"
+                                >
+                                  <Text size="2">{proj.name}</Text>
+                                  {proj.id === currentProjectId && (
+                                    <Check
+                                      size={14}
+                                      style={{ color: "var(--accent-11)" }}
+                                    />
+                                  )}
+                                </Flex>
+                              </DropdownMenu.Item>
+                            )),
+                          )}
+                          <DropdownMenu.Separator />
+                          <DropdownMenu.Item onSelect={handleAddProject}>
+                            <Flex align="center" gap="2">
+                              <Plus size={14} />
+                              <Text size="2">Add project</Text>
+                            </Flex>
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Root>
+                    ) : (
+                      <Text size="1" color="gray">
+                        {project.name} (ID: {project.id})
+                      </Text>
+                    )}
                   </Flex>
                 )}
 

@@ -22,6 +22,8 @@ export type AcpConnectionConfig = {
   logWriter?: SessionLogWriter;
   taskRunId?: string;
   taskId?: string;
+  /** Deployment environment - "local" for desktop, "cloud" for cloud sandbox */
+  deviceType?: "local" | "cloud";
   logger?: Logger;
   processCallbacks?: ClaudeAcpAgentOptions;
   codexOptions?: CodexProcessOptions;
@@ -166,6 +168,7 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
       logWriter.register(config.taskRunId, {
         taskId: config.taskId ?? config.taskRunId,
         runId: config.taskRunId,
+        deviceType: config.deviceType,
       });
     }
 

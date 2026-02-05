@@ -33,26 +33,31 @@ export function PlanApprovalView({
     return null;
   }, [content, toolCall.rawInput]);
 
-  if (!isComplete && !wasCancelled) return null;
+  const showPlanContent = !isComplete && !wasCancelled;
+  const showResult = isComplete || wasCancelled;
+
+  if (!planText && !showResult) return null;
 
   return (
     <Box className="my-3">
-      {planText && <PlanContent plan={planText} />}
+      {showPlanContent && planText && <PlanContent plan={planText} />}
 
-      <Flex align="center" gap="2" className="mt-2 px-1">
-        {isComplete ? (
-          <>
-            <CheckCircle size={14} weight="fill" className="text-green-9" />
-            <Text size="1" className="text-green-11">
-              Plan approved — proceeding with implementation
+      {showResult && (
+        <Flex align="center" gap="2" className="px-1">
+          {isComplete ? (
+            <>
+              <CheckCircle size={14} weight="fill" className="text-green-9" />
+              <Text size="1" className="text-green-11">
+                Plan approved — proceeding with implementation
+              </Text>
+            </>
+          ) : wasCancelled ? (
+            <Text size="1" className="text-gray-10">
+              (Plan rejected)
             </Text>
-          </>
-        ) : wasCancelled ? (
-          <Text size="1" className="text-gray-9">
-            (Cancelled)
-          </Text>
-        ) : null}
-      </Flex>
+          ) : null}
+        </Flex>
+      )}
     </Box>
   );
 }

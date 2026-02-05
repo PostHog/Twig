@@ -53,6 +53,18 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isPromptPending = session?.isPromptPending ?? false;
   const promptStartedAt = session?.promptStartedAt;
 
+  const isNewSessionWithInitialPrompt =
+    !task.latest_run?.id && !!task.description;
+  const isResumingExistingSession = !!task.latest_run?.id;
+  const isInitializing =
+    !session ||
+    session.status === "connecting" ||
+    (session.status === "connected" &&
+      events.length === 0 &&
+      (isPromptPending ||
+        isNewSessionWithInitialPrompt ||
+        isResumingExistingSession));
+
   const isConnecting = useRef(false);
 
   // Focus the message editor when navigating to this task
@@ -206,6 +218,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             errorMessage={errorMessage}
             onRetry={handleRetry}
             onDelete={handleDelete}
+            isInitializing={isInitializing}
           />
         </ErrorBoundary>
       </Box>

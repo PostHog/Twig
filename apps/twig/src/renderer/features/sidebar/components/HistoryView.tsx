@@ -14,9 +14,12 @@ interface HistoryViewProps {
   pinnedData: PinnedData;
   activeTaskId: string | null;
   onTaskClick: (taskId: string) => void;
-  onTaskContextMenu: (taskId: string, e: React.MouseEvent) => void;
+  onTaskContextMenu: (
+    taskId: string,
+    e: React.MouseEvent,
+    isPinned: boolean,
+  ) => void;
   onTaskDelete: (taskId: string) => void;
-  onTaskTogglePin: (taskId: string) => void;
 }
 
 function HistorySectionLabel({ label }: { label: string }) {
@@ -31,9 +34,8 @@ interface HistoryTaskItemProps {
   task: HistoryTaskData;
   isActive: boolean;
   onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, isPinned: boolean) => void;
   onDelete: () => void;
-  onTogglePin: () => void;
 }
 
 function HistoryTaskItem({
@@ -42,27 +44,23 @@ function HistoryTaskItem({
   onClick,
   onContextMenu,
   onDelete,
-  onTogglePin,
 }: HistoryTaskItemProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[task.id]);
 
   return (
     <TaskItem
-      id={task.id}
       label={task.title}
       isActive={isActive}
       workspaceMode={workspace?.mode}
-      mainRepoPath={workspace?.folderPath}
       worktreePath={workspace?.worktreePath ?? undefined}
-      lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
       needsPermission={task.needsPermission}
+      createdAt={task.createdAt}
       onClick={onClick}
-      onContextMenu={onContextMenu}
+      onContextMenu={(e) => onContextMenu(e, task.isPinned ?? false)}
       onDelete={onDelete}
-      onTogglePin={onTogglePin}
     />
   );
 }
@@ -71,9 +69,8 @@ interface PinnedTaskItemProps {
   task: TaskData;
   isActive: boolean;
   onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, isPinned: boolean) => void;
   onDelete: () => void;
-  onTogglePin: () => void;
 }
 
 function PinnedTaskItem({
@@ -82,27 +79,22 @@ function PinnedTaskItem({
   onClick,
   onContextMenu,
   onDelete,
-  onTogglePin,
 }: PinnedTaskItemProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[task.id]);
 
   return (
     <TaskItem
-      id={task.id}
       label={task.title}
       isActive={isActive}
       workspaceMode={workspace?.mode}
-      mainRepoPath={workspace?.folderPath}
       worktreePath={workspace?.worktreePath ?? undefined}
-      lastActivityAt={task.lastActivityAt}
       isGenerating={task.isGenerating}
       isUnread={task.isUnread}
       isPinned={task.isPinned}
       needsPermission={task.needsPermission}
       onClick={onClick}
-      onContextMenu={onContextMenu}
+      onContextMenu={(e) => onContextMenu(e, task.isPinned ?? false)}
       onDelete={onDelete}
-      onTogglePin={onTogglePin}
     />
   );
 }
@@ -114,7 +106,6 @@ export function HistoryView({
   onTaskClick,
   onTaskContextMenu,
   onTaskDelete,
-  onTaskTogglePin,
 }: HistoryViewProps) {
   const loadMoreHistory = useSidebarStore((state) => state.loadMoreHistory);
   const { activeTasks, recentTasks, hasMore } = historyData;
@@ -134,9 +125,10 @@ export function HistoryView({
               task={task}
               isActive={activeTaskId === task.id}
               onClick={() => onTaskClick(task.id)}
-              onContextMenu={(e) => onTaskContextMenu(task.id, e)}
+              onContextMenu={(e, isPinned) =>
+                onTaskContextMenu(task.id, e, isPinned)
+              }
               onDelete={() => onTaskDelete(task.id)}
-              onTogglePin={() => onTaskTogglePin(task.id)}
             />
           ))}
           {(hasActiveTasks || hasRecentTasks) && (
@@ -154,9 +146,10 @@ export function HistoryView({
               task={task}
               isActive={activeTaskId === task.id}
               onClick={() => onTaskClick(task.id)}
-              onContextMenu={(e) => onTaskContextMenu(task.id, e)}
+              onContextMenu={(e, isPinned) =>
+                onTaskContextMenu(task.id, e, isPinned)
+              }
               onDelete={() => onTaskDelete(task.id)}
-              onTogglePin={() => onTaskTogglePin(task.id)}
             />
           ))}
           {hasRecentTasks && (
@@ -174,9 +167,10 @@ export function HistoryView({
               task={task}
               isActive={activeTaskId === task.id}
               onClick={() => onTaskClick(task.id)}
-              onContextMenu={(e) => onTaskContextMenu(task.id, e)}
+              onContextMenu={(e, isPinned) =>
+                onTaskContextMenu(task.id, e, isPinned)
+              }
               onDelete={() => onTaskDelete(task.id)}
-              onTogglePin={() => onTaskTogglePin(task.id)}
             />
           ))}
         </>

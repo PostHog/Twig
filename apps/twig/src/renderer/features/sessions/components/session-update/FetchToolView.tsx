@@ -1,5 +1,5 @@
 import { Globe } from "@phosphor-icons/react";
-import { Box, Flex, Link, Text } from "@radix-ui/themes";
+import { Box, Flex, Link } from "@radix-ui/themes";
 import { useState } from "react";
 import {
   ContentPre,
@@ -7,6 +7,7 @@ import {
   findResourceLink,
   getContentText,
   StatusIndicators,
+  ToolTitle,
   type ToolViewProps,
   truncateText,
   useToolCallStatus,
@@ -54,11 +55,13 @@ export function FetchToolView({
           isExpandable={isExpandable}
           isExpanded={isExpanded}
         />
-        <Text size="1">{title || "Fetch"}</Text>
+        <ToolTitle>{title || "Fetch"}</ToolTitle>
         {url && (
-          <Text size="1" className="font-mono text-accent-11">
-            {truncateText(url, MAX_URL_LENGTH)}
-          </Text>
+          <ToolTitle>
+            <span className="font-mono text-accent-11">
+              {truncateText(url, MAX_URL_LENGTH)}
+            </span>
+          </ToolTitle>
         )}
         <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />
       </Flex>

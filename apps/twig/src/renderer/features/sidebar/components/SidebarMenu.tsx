@@ -69,12 +69,20 @@ function SidebarMenuComponent() {
     }
   };
 
-  const handleTaskContextMenu = (taskId: string, e: React.MouseEvent) => {
+  const handleTaskContextMenu = (
+    taskId: string,
+    e: React.MouseEvent,
+    isPinned: boolean,
+  ) => {
     const task = taskMap.get(taskId);
     if (task) {
       const workspace = workspaces[taskId];
       const effectivePath = workspace?.worktreePath ?? workspace?.folderPath;
-      showContextMenu(task, e, effectivePath ?? undefined);
+      showContextMenu(task, e, {
+        worktreePath: effectivePath ?? undefined,
+        isPinned,
+        onTogglePin: () => togglePin(taskId),
+      });
     }
   };
 
@@ -90,10 +98,6 @@ function SidebarMenuComponent() {
       taskTitle: task.title,
       hasWorktree,
     });
-  };
-
-  const handleTaskTogglePin = (taskId: string) => {
-    togglePin(taskId);
   };
 
   return (
@@ -134,7 +138,6 @@ function SidebarMenuComponent() {
                 onTaskClick={handleTaskClick}
                 onTaskContextMenu={handleTaskContextMenu}
                 onTaskDelete={handleTaskDelete}
-                onTaskTogglePin={handleTaskTogglePin}
               />
             )}
           </Flex>

@@ -432,11 +432,22 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
     this.setupEnvironment(credentials, mockNodeDir);
 
+    // Route agent logs to dedicated agent_logs Kafka topic via capture-logs-agent service
+    // In local dev, use Caddy proxy (port 8010) which routes /i/v1/agent-logs to capture-logs-agent
+    // In prod, use the main API host which proxies /i/v1/agent-logs to capture-logs-agent
+    const otelHost = credentials.apiHost;
+    const otelPath = "/i/v1/agent-logs";
+
     const agent = new Agent({
       posthog: {
         apiUrl: credentials.apiHost,
         getApiKey: () => this.getToken(credentials.apiKey),
         projectId: credentials.projectId,
+      },
+      otelTransport: {
+        host: otelHost,
+        apiKey: this.getToken(credentials.apiKey),
+        logsPath: otelPath,
       },
       debug: !app.isPackaged,
       onLog: onAgentLog,
@@ -586,7 +597,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         return this.getOrCreateSession(config, isReconnect, true);
       }
       log.error(
-        `Failed to ${isReconnect ? "reconnect" : "create"} session${isRetry ? " after retry" : ""}`,
+        `Failed to ${isReconnect ? "reconnect" : "create"} session${
+          isRetry ? " after retry" : ""
+        }`,
         err,
       );
       if (isReconnect) return null;

@@ -7,7 +7,7 @@ import {
 } from "@features/right-sidebar/stores/fileTreeStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box, Flex } from "@radix-ui/themes";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,7 +45,7 @@ function LazyTreeItem({
   const isExpanded = useFileTreeStore(selectIsPathExpanded(taskId, entry.path));
   const togglePath = useFileTreeStore((state) => state.togglePath);
   const collapseAll = useFileTreeStore((state) => state.collapseAll);
-  const openFile = usePanelLayoutStore((state) => state.openFile);
+  const openFileInSplit = usePanelLayoutStore((state) => state.openFileInSplit);
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId] ?? null);
 
   const { data: children } = useQuery({
@@ -63,13 +63,13 @@ function LazyTreeItem({
     if (entry.type === "directory") {
       togglePath(taskId, entry.path);
     } else {
-      openFile(taskId, relativePath);
+      openFileInSplit(taskId, relativePath);
     }
   };
 
   const handleDoubleClick = () => {
     if (entry.type === "file") {
-      openFile(taskId, relativePath, false);
+      openFileInSplit(taskId, relativePath, false);
     }
   };
 
@@ -104,7 +104,7 @@ function LazyTreeItem({
         style={{
           paddingLeft: `${depth * 12 + 4}px`,
           paddingRight: "8px",
-          height: "26px",
+          height: "22px",
           cursor: "pointer",
         }}
         className={
@@ -149,7 +149,6 @@ function LazyTreeItem({
           ) : (
             <FolderIcon
               size={14}
-              weight="fill"
               color="var(--accent-9)"
               style={{ flexShrink: 0 }}
             />
@@ -157,18 +156,12 @@ function LazyTreeItem({
         ) : (
           <FileIcon filename={entry.name} size={14} />
         )}
-        <Text
-          size="1"
-          style={{
-            userSelect: "none",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            marginLeft: "4px",
-          }}
+        <span
+          className="select-none overflow-hidden text-ellipsis whitespace-nowrap text-[12px]"
+          style={{ marginLeft: "4px" }}
         >
           {entry.name}
-        </Text>
+        </span>
       </Flex>
       {isExpanded &&
         children?.map((child) => (

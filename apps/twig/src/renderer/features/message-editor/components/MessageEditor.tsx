@@ -30,6 +30,8 @@ interface MessageEditorProps {
   modeOption?: SessionConfigOption;
   onModeChange?: () => void;
   adapter?: "claude" | "codex";
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
@@ -46,6 +48,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       modeOption,
       onModeChange,
       adapter,
+      onFocus,
+      onBlur,
     },
     ref,
   ) => {
@@ -85,6 +89,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       onSubmit,
       onBashCommand,
       onBashModeChange,
+      onFocus,
+      onBlur,
     });
 
     useImperativeHandle(
