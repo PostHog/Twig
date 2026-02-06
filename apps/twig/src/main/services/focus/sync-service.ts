@@ -8,8 +8,10 @@ import {
 } from "@twig/git/queries";
 import { ApplyPatchSaga } from "@twig/git/sagas/patch";
 import ignore, { type Ignore } from "ignore";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 
 const log = logger.scope("focus-sync");
 
@@ -45,6 +47,11 @@ export class FocusSyncService {
 
   /** Files we recently wrote - map of absolute path to write timestamp */
   private recentWrites: Map<string, number> = new Map();
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    private processTracking: ProcessTrackingService,
+  ) {}
 
   async startSync(mainRepoPath: string, worktreePath: string): Promise<void> {
     const [mainExists, worktreeExists] = await Promise.all([
@@ -99,6 +106,7 @@ export class FocusSyncService {
       const mainSubPromise = watcher.subscribe(
         mainRepoPath,
         (err, events) => {
+          if (this.processTracking.isShuttingDown) return;
           if (err) {
             log.error("Main repo watcher error:", err);
             return;
@@ -128,6 +136,7 @@ export class FocusSyncService {
       const worktreeSubPromise = watcher.subscribe(
         worktreePath,
         (err, events) => {
+          if (this.processTracking.isShuttingDown) return;
           if (err) {
             log.error("Worktree watcher error:", err);
             return;
