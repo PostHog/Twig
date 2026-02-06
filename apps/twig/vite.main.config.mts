@@ -4,12 +4,12 @@ import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
 import {
   createForceDevModeDefine,
   createPosthogPlugin,
   mainAliases,
 } from "./vite.shared.mjs";
+import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
 
 function getGitCommit(): string {
   try {
