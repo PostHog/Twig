@@ -7,6 +7,9 @@ export type TaskStatus =
   | "completed"
   | "failed";
 
+export type OrganizeMode = "by-project" | "chronological";
+export type SortMode = "updated" | "created";
+
 export interface SidebarItemAction {
   icon: ReactNode;
   onClick: () => void;

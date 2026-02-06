@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 interface TaskItemProps {
+  depth?: number;
   label: string;
   isActive: boolean;
   workspaceMode?: WorkspaceMode;
@@ -23,7 +24,7 @@ interface TaskItemProps {
   isUnread?: boolean;
   isPinned?: boolean;
   needsPermission?: boolean;
-  createdAt?: number;
+  timestamp?: number;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
@@ -82,6 +83,7 @@ function TaskHoverToolbar({ onDelete }: TaskHoverToolbarProps) {
 const ICON_SIZE = 12;
 
 export function TaskItem({
+  depth = 0,
   label,
   isActive,
   workspaceMode,
@@ -90,7 +92,7 @@ export function TaskItem({
   isUnread,
   isPinned = false,
   needsPermission = false,
-  createdAt,
+  timestamp,
   onClick,
   onContextMenu,
   onDelete,
@@ -145,27 +147,27 @@ export function TaskItem({
   );
 
   const endContent = useMemo(() => {
-    const timestamp = createdAt ? (
+    const timestampNode = timestamp ? (
       <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
-        {formatRelativeTime(createdAt)}
+        {formatRelativeTime(timestamp)}
       </span>
     ) : null;
 
     const toolbar = onDelete ? <TaskHoverToolbar onDelete={onDelete} /> : null;
 
-    if (!timestamp && !toolbar) return null;
+    if (!timestampNode && !toolbar) return null;
 
     return (
       <>
-        {timestamp}
+        {timestampNode}
         {toolbar}
       </>
     );
-  }, [createdAt, onDelete]);
+  }, [timestamp, onDelete]);
 
   return (
     <SidebarItem
-      depth={0}
+      depth={depth}
       icon={icon}
       label={label}
       isActive={isActive}

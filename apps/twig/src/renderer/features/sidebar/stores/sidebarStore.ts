@@ -9,6 +9,8 @@ interface SidebarStoreState {
   collapsedSections: Set<string>;
   folderOrder: string[];
   historyVisibleCount: number;
+  organizeMode: "by-project" | "chronological";
+  sortMode: "updated" | "created";
 }
 
 interface SidebarStoreActions {
@@ -23,6 +25,8 @@ interface SidebarStoreActions {
   syncFolderOrder: (folderIds: string[]) => void;
   loadMoreHistory: () => void;
   resetHistoryVisibleCount: () => void;
+  setOrganizeMode: (mode: SidebarStoreState["organizeMode"]) => void;
+  setSortMode: (mode: SidebarStoreState["sortMode"]) => void;
 }
 
 type SidebarStore = SidebarStoreState & SidebarStoreActions;
@@ -37,6 +41,8 @@ export const useSidebarStore = create<SidebarStore>()(
       collapsedSections: new Set<string>(),
       folderOrder: [],
       historyVisibleCount: 25,
+      organizeMode: "by-project",
+      sortMode: "updated",
       setOpen: (open) => set({ open, hasUserSetOpen: true }),
       setOpenAuto: (open) =>
         set((state) => (state.hasUserSetOpen ? state : { open })),
@@ -83,6 +89,8 @@ export const useSidebarStore = create<SidebarStore>()(
           historyVisibleCount: state.historyVisibleCount + 25,
         })),
       resetHistoryVisibleCount: () => set({ historyVisibleCount: 25 }),
+      setOrganizeMode: (organizeMode) => set({ organizeMode }),
+      setSortMode: (sortMode) => set({ sortMode }),
     }),
     {
       name: "sidebar-storage",
@@ -93,6 +101,8 @@ export const useSidebarStore = create<SidebarStore>()(
         collapsedSections: Array.from(state.collapsedSections),
         folderOrder: state.folderOrder,
         historyVisibleCount: state.historyVisibleCount,
+        organizeMode: state.organizeMode,
+        sortMode: state.sortMode,
       }),
       merge: (persisted, current) => {
         const persistedState = persisted as {
@@ -102,6 +112,8 @@ export const useSidebarStore = create<SidebarStore>()(
           collapsedSections?: string[];
           folderOrder?: string[];
           historyVisibleCount?: number;
+          organizeMode?: SidebarStoreState["organizeMode"];
+          sortMode?: SidebarStoreState["sortMode"];
         };
         return {
           ...current,
@@ -113,6 +125,8 @@ export const useSidebarStore = create<SidebarStore>()(
           folderOrder: persistedState.folderOrder ?? [],
           historyVisibleCount:
             persistedState.historyVisibleCount ?? current.historyVisibleCount,
+          organizeMode: persistedState.organizeMode ?? current.organizeMode,
+          sortMode: persistedState.sortMode ?? current.sortMode,
         };
       },
     },
