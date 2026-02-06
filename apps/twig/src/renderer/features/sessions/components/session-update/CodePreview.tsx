@@ -2,6 +2,7 @@ import { unifiedMergeView } from "@codemirror/merge";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { Code } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
 import { useEffect, useRef } from "react";
 import {
   CODE_PREVIEW_CONTAINER_STYLE,
@@ -67,9 +68,9 @@ export function CodePreview({
   return (
     <div style={CODE_PREVIEW_CONTAINER_STYLE}>
       {showPath && filePath && (
-        <div style={CODE_PREVIEW_PATH_STYLE}>
-          <Code variant="ghost" size="1">
-            {filePath}
+        <div style={CODE_PREVIEW_PATH_STYLE} title={filePath}>
+          <Code variant="ghost" size="1" className="truncate">
+            {compactHomePath(filePath)}
           </Code>
         </div>
       )}

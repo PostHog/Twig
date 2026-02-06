@@ -1,12 +1,13 @@
+import { Tooltip } from "@components/ui/Tooltip";
 import {
   baseComponents,
   defaultRemarkPlugins,
   MarkdownRenderer,
 } from "@features/editor/components/MarkdownRenderer";
-import { File } from "@phosphor-icons/react";
-import { Box, Code, Text } from "@radix-ui/themes";
+import { Check, Copy, File } from "@phosphor-icons/react";
+import { Box, Code, IconButton, Text } from "@radix-ui/themes";
 import type { ReactNode } from "react";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 
@@ -92,10 +93,17 @@ function parseFileMentions(content: string): ReactNode[] {
 
 export function UserMessage({ content }: UserMessageProps) {
   const hasFileMentions = /<file\s+path="[^"]+"\s*\/>/.test(content);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [content]);
 
   return (
     <Box
-      className="border-l-2 bg-gray-2 py-2 pl-3"
+      className="group/msg relative border-l-2 bg-gray-2 py-2 pl-3"
       style={{ borderColor: "var(--accent-9)" }}
     >
       <Box className="font-medium [&>*:last-child]:mb-0">
@@ -104,6 +112,18 @@ export function UserMessage({ content }: UserMessageProps) {
         ) : (
           <MarkdownRenderer content={content} />
         )}
+      </Box>
+      <Box className="absolute top-1 right-1 opacity-0 transition-opacity group-hover/msg:opacity-100">
+        <Tooltip content={copied ? "Copied!" : "Copy message"}>
+          <IconButton
+            size="1"
+            variant="ghost"
+            color={copied ? "green" : "gray"}
+            onClick={handleCopy}
+          >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </IconButton>
+        </Tooltip>
       </Box>
     </Box>
   );

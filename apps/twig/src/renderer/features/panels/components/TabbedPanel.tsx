@@ -1,9 +1,10 @@
+import { Tooltip } from "@components/ui/Tooltip";
 import { useDroppable } from "@dnd-kit/react";
 import { SquareSplitHorizontalIcon, Terminal } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import type { PanelContent } from "../store/panelStore";
 import { PanelDropZones } from "./PanelDropZones";
@@ -15,33 +16,37 @@ interface TabBarButtonProps {
   children: React.ReactNode;
 }
 
-function TabBarButton({ ariaLabel, onClick, children }: TabBarButtonProps) {
-  const [isHovered, setIsHovered] = useState(false);
+const TabBarButton = forwardRef<HTMLButtonElement, TabBarButtonProps>(
+  function TabBarButton({ ariaLabel, onClick, children, ...props }, ref) {
+    const [isHovered, setIsHovered] = useState(false);
 
-  return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        height: "32px",
-        width: "32px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: isHovered ? "var(--gray-4)" : "var(--color-background)",
-        border: "none",
-        borderBottom: "1px solid var(--gray-6)",
-        cursor: "pointer",
-        color: "var(--gray-11)",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
+    return (
+      <button
+        ref={ref}
+        type="button"
+        aria-label={ariaLabel}
+        onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          height: "32px",
+          width: "32px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: isHovered ? "var(--gray-4)" : "var(--color-background)",
+          border: "none",
+          borderBottom: "1px solid var(--gray-6)",
+          cursor: "pointer",
+          color: "var(--gray-11)",
+        }}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  },
+);
 
 interface TabbedPanelProps {
   panelId: string;
@@ -209,17 +214,24 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
             >
               {rightContent}
               {content.droppable && onSplitPanel && (
-                <TabBarButton
-                  ariaLabel="Split panel"
-                  onClick={handleSplitClick}
-                >
-                  <SquareSplitHorizontalIcon width={12} height={12} />
-                </TabBarButton>
+                <Tooltip content="Split panel" side="bottom">
+                  <TabBarButton
+                    ariaLabel="Split panel"
+                    onClick={handleSplitClick}
+                  >
+                    <SquareSplitHorizontalIcon width={12} height={12} />
+                  </TabBarButton>
+                </Tooltip>
               )}
               {content.droppable && onAddTerminal && (
-                <TabBarButton ariaLabel="Add terminal" onClick={onAddTerminal}>
-                  <Terminal size={14} />
-                </TabBarButton>
+                <Tooltip content="New terminal" side="bottom">
+                  <TabBarButton
+                    ariaLabel="Add terminal"
+                    onClick={onAddTerminal}
+                  >
+                    <Terminal size={14} />
+                  </TabBarButton>
+                </Tooltip>
               )}
             </Flex>
           )}
