@@ -76,8 +76,6 @@ export default defineConfig({
     ...builtinModules.map((m) => `node:${m}`),
     "@agentclientprotocol/sdk",
     "@anthropic-ai/claude-agent-sdk",
-    "@posthog/shared",
-    "@twig/git",
     "dotenv",
     "openai",
     "tar",
