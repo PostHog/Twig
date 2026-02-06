@@ -1,13 +1,10 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface InitRepositoryInput {
-  baseDir: string;
+export interface InitRepositoryInput extends GitSagaInput {
   initialCommit?: boolean;
   commitMessage?: string;
-  signal?: AbortSignal;
 }
 
 export interface InitRepositoryOutput {
@@ -15,22 +12,20 @@ export interface InitRepositoryOutput {
   commitSha?: string;
 }
 
-export class InitRepositorySaga extends Saga<
+export class InitRepositorySaga extends GitSaga<
   InitRepositoryInput,
   InitRepositoryOutput
 > {
   private wasAlreadyRepo = false;
 
-  protected async execute(
+  protected async executeGitOperations(
     input: InitRepositoryInput,
   ): Promise<InitRepositoryOutput> {
     const {
       baseDir,
       initialCommit = true,
       commitMessage = "Initial commit",
-      signal,
     } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
     const gitDir = path.join(baseDir, ".git");
 
     this.wasAlreadyRepo = await this.readOnlyStep(
@@ -47,7 +42,7 @@ export class InitRepositorySaga extends Saga<
 
     await this.step({
       name: "init",
-      execute: () => git.init(),
+      execute: () => this.git.init(),
       rollback: async () => {
         if (!this.wasAlreadyRepo) {
           await fs.rm(gitDir, { recursive: true, force: true }).catch(() => {});
@@ -59,7 +54,7 @@ export class InitRepositorySaga extends Saga<
       const result = await this.step({
         name: "initial-commit",
         execute: () =>
-          git.commit(commitMessage, undefined, { "--allow-empty": null }),
+          this.git.commit(commitMessage, undefined, { "--allow-empty": null }),
         rollback: async () => {
           if (!this.wasAlreadyRepo) {
             await fs

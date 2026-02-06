@@ -1,11 +1,9 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
+import { detectDefaultBranch } from "../queries.js";
 
-export interface CreateBranchInput {
-  baseDir: string;
+export interface CreateBranchInput extends GitSagaInput {
   branchName: string;
   baseBranch?: string;
-  signal?: AbortSignal;
 }
 
 export interface CreateBranchOutput {
@@ -13,36 +11,29 @@ export interface CreateBranchOutput {
   baseBranch: string;
 }
 
-/** Create a new branch and check it out. */
-export class CreateBranchSaga extends Saga<
+export class CreateBranchSaga extends GitSaga<
   CreateBranchInput,
   CreateBranchOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: CreateBranchInput,
   ): Promise<CreateBranchOutput> {
-    const { baseDir, branchName, baseBranch, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { branchName, baseBranch } = input;
 
-    // Record current branch for rollback
     const originalBranch = await this.readOnlyStep("get-original-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
-    // Determine base branch
     const base = baseBranch ?? originalBranch;
 
-    // Create and checkout new branch (rollback: checkout original branch, delete new branch)
     await this.step({
       name: "create-branch",
-      execute: () => git.checkoutBranch(branchName, base),
+      execute: () => this.git.checkoutBranch(branchName, base),
       rollback: async () => {
-        await git.checkout(originalBranch);
+        await this.git.checkout(originalBranch);
         try {
-          await git.deleteLocalBranch(branchName, true);
-        } catch {
-          // Branch may not exist if creation failed
-        }
+          await this.git.deleteLocalBranch(branchName, true);
+        } catch {}
       },
     });
 
@@ -50,10 +41,8 @@ export class CreateBranchSaga extends Saga<
   }
 }
 
-export interface SwitchBranchInput {
-  baseDir: string;
+export interface SwitchBranchInput extends GitSagaInput {
   branchName: string;
-  signal?: AbortSignal;
 }
 
 export interface SwitchBranchOutput {
@@ -61,28 +50,24 @@ export interface SwitchBranchOutput {
   currentBranch: string;
 }
 
-/** Switch to an existing branch. */
-export class SwitchBranchSaga extends Saga<
+export class SwitchBranchSaga extends GitSaga<
   SwitchBranchInput,
   SwitchBranchOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: SwitchBranchInput,
   ): Promise<SwitchBranchOutput> {
-    const { baseDir, branchName, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { branchName } = input;
 
-    // Record current branch for rollback
     const originalBranch = await this.readOnlyStep("get-original-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
-    // Switch to target branch (rollback: switch back to original)
     await this.step({
       name: "switch-branch",
-      execute: () => git.checkout(branchName),
+      execute: () => this.git.checkout(branchName),
       rollback: async () => {
-        await git.checkout(originalBranch);
+        await this.git.checkout(originalBranch);
       },
     });
 
@@ -90,11 +75,9 @@ export class SwitchBranchSaga extends Saga<
   }
 }
 
-export interface CreateOrSwitchBranchInput {
-  baseDir: string;
+export interface CreateOrSwitchBranchInput extends GitSagaInput {
   branchName: string;
   baseBranch?: string;
-  signal?: AbortSignal;
 }
 
 export interface CreateOrSwitchBranchOutput {
@@ -102,29 +85,26 @@ export interface CreateOrSwitchBranchOutput {
   created: boolean;
 }
 
-/** Create a branch if it doesn't exist, or switch to it if it does. */
-export class CreateOrSwitchBranchSaga extends Saga<
+export class CreateOrSwitchBranchSaga extends GitSaga<
   CreateOrSwitchBranchInput,
   CreateOrSwitchBranchOutput
 > {
-  protected async execute(
+  private branchCreated = false;
+
+  protected async executeGitOperations(
     input: CreateOrSwitchBranchInput,
   ): Promise<CreateOrSwitchBranchOutput> {
-    const { baseDir, branchName, baseBranch, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
-    let branchCreated = false;
+    const { branchName, baseBranch } = input;
 
-    // Record current branch for rollback
     const originalBranch = await this.readOnlyStep("get-original-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
-    // Check if branch exists
     const branchExists = await this.readOnlyStep(
       "check-branch-exists",
       async () => {
         try {
-          await git.revparse(["--verify", branchName]);
+          await this.git.revparse(["--verify", branchName]);
           return true;
         } catch {
           return false;
@@ -133,33 +113,28 @@ export class CreateOrSwitchBranchSaga extends Saga<
     );
 
     if (branchExists) {
-      // Switch to existing branch (rollback: switch back)
       await this.step({
         name: "switch-to-existing",
-        execute: () => git.checkout(branchName),
+        execute: () => this.git.checkout(branchName),
         rollback: async () => {
-          await git.checkout(originalBranch);
+          await this.git.checkout(originalBranch);
         },
       });
     } else {
-      // Get base branch
       const base = baseBranch ?? originalBranch;
 
-      // Create and checkout new branch (rollback: checkout original, delete branch)
       await this.step({
         name: "create-new-branch",
         execute: async () => {
-          await git.checkoutBranch(branchName, base);
-          branchCreated = true;
+          await this.git.checkoutBranch(branchName, base);
+          this.branchCreated = true;
         },
         rollback: async () => {
-          await git.checkout(originalBranch);
-          if (branchCreated) {
+          await this.git.checkout(originalBranch);
+          if (this.branchCreated) {
             try {
-              await git.deleteLocalBranch(branchName, true);
-            } catch {
-              // Branch may not exist
-            }
+              await this.git.deleteLocalBranch(branchName, true);
+            } catch {}
           }
         },
       });
@@ -169,10 +144,7 @@ export class CreateOrSwitchBranchSaga extends Saga<
   }
 }
 
-export interface ResetToDefaultBranchInput {
-  baseDir: string;
-  signal?: AbortSignal;
-}
+export interface ResetToDefaultBranchInput extends GitSagaInput {}
 
 export interface ResetToDefaultBranchOutput {
   previousBranch: string;
@@ -180,56 +152,27 @@ export interface ResetToDefaultBranchOutput {
   switched: boolean;
 }
 
-/** Switch to the default branch if not already on it. */
-export class ResetToDefaultBranchSaga extends Saga<
+export class ResetToDefaultBranchSaga extends GitSaga<
   ResetToDefaultBranchInput,
   ResetToDefaultBranchOutput
 > {
-  protected async execute(
-    input: ResetToDefaultBranchInput,
+  protected async executeGitOperations(
+    _input: ResetToDefaultBranchInput,
   ): Promise<ResetToDefaultBranchOutput> {
-    const { baseDir, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
-
-    // Get current branch
     const originalBranch = await this.readOnlyStep("get-current-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
-    // Determine default branch
-    const defaultBranch = await this.readOnlyStep(
-      "get-default-branch",
-      async () => {
-        try {
-          const remoteBranch = await git.raw([
-            "symbolic-ref",
-            "refs/remotes/origin/HEAD",
-          ]);
-          return remoteBranch.trim().replace("refs/remotes/origin/", "");
-        } catch {
-          try {
-            await git.revparse(["--verify", "main"]);
-            return "main";
-          } catch {
-            try {
-              await git.revparse(["--verify", "master"]);
-              return "master";
-            } catch {
-              throw new Error("Cannot determine default branch");
-            }
-          }
-        }
-      },
+    const defaultBranch = await this.readOnlyStep("get-default-branch", () =>
+      detectDefaultBranch(this.git),
     );
 
-    // Already on default branch
     if (originalBranch === defaultBranch) {
       return { previousBranch: originalBranch, defaultBranch, switched: false };
     }
 
-    // Check for uncommitted changes
     const hasChanges = await this.readOnlyStep("check-changes", async () => {
-      const status = await git.status();
+      const status = await this.git.status();
       return !status.isClean();
     });
 
@@ -239,12 +182,11 @@ export class ResetToDefaultBranchSaga extends Saga<
       );
     }
 
-    // Switch to default branch (rollback: switch back)
     await this.step({
       name: "switch-to-default",
-      execute: () => git.checkout(defaultBranch),
+      execute: () => this.git.checkout(defaultBranch),
       rollback: async () => {
-        await git.checkout(originalBranch);
+        await this.git.checkout(originalBranch);
       },
     });
 

@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Saga } from "@posthog/shared";
 import * as tar from "tar";
-import { createGitClient } from "../client.js";
+import type { GitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 import { getHeadSha } from "../queries.js";
 
 export type FileStatus = "A" | "M" | "D";
@@ -20,9 +20,7 @@ export interface TreeSnapshot {
   timestamp: string;
 }
 
-export interface CaptureTreeInput {
-  baseDir: string;
-  signal?: AbortSignal;
+export interface CaptureTreeInput extends GitSagaInput {
   lastTreeHash?: string | null;
   archivePath?: string;
 }
@@ -33,12 +31,16 @@ export interface CaptureTreeOutput {
   changed: boolean;
 }
 
-export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
+export class CaptureTreeSaga extends GitSaga<
+  CaptureTreeInput,
+  CaptureTreeOutput
+> {
   private tempIndexPath: string | null = null;
 
-  protected async execute(input: CaptureTreeInput): Promise<CaptureTreeOutput> {
-    const { baseDir, lastTreeHash, archivePath } = input;
-    const git = createGitClient(baseDir);
+  protected async executeGitOperations(
+    input: CaptureTreeInput,
+  ): Promise<CaptureTreeOutput> {
+    const { baseDir, lastTreeHash, archivePath, signal } = input;
     const tmpDir = path.join(baseDir, ".git", "twig-tmp");
 
     await this.step({
@@ -48,7 +50,7 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
     });
 
     this.tempIndexPath = path.join(tmpDir, `index-${Date.now()}`);
-    const tempIndexGit = createGitClient(baseDir).env({
+    const tempIndexGit = this.git.env({
       ...process.env,
       GIT_INDEX_FILE: this.tempIndexPath,
     });
@@ -79,14 +81,14 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
 
     const baseCommit = await this.readOnlyStep("get_base_commit", async () => {
       try {
-        return await getHeadSha(baseDir, { abortSignal: input.signal });
+        return await getHeadSha(baseDir, { abortSignal: signal });
       } catch {
         return null;
       }
     });
 
     const changes = await this.readOnlyStep("get_changes", () =>
-      this.getChanges(git, baseCommit, treeHash),
+      this.getChanges(this.git, baseCommit, treeHash),
     );
 
     await fs.rm(this.tempIndexPath, { force: true }).catch(() => {});
@@ -160,7 +162,7 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
   }
 
   private async getChanges(
-    git: ReturnType<typeof createGitClient>,
+    git: GitClient,
     fromRef: string | null,
     toRef: string,
   ): Promise<FileChange[]> {
@@ -202,13 +204,11 @@ export class CaptureTreeSaga extends Saga<CaptureTreeInput, CaptureTreeOutput> {
   }
 }
 
-export interface ApplyTreeInput {
-  baseDir: string;
+export interface ApplyTreeInput extends GitSagaInput {
   treeHash: string;
   baseCommit?: string | null;
   changes: FileChange[];
   archivePath?: string;
-  signal?: AbortSignal;
 }
 
 export interface ApplyTreeOutput {
@@ -216,29 +216,29 @@ export interface ApplyTreeOutput {
   checkoutPerformed: boolean;
 }
 
-export class ApplyTreeSaga extends Saga<ApplyTreeInput, ApplyTreeOutput> {
+export class ApplyTreeSaga extends GitSaga<ApplyTreeInput, ApplyTreeOutput> {
   private originalHead: string | null = null;
   private originalBranch: string | null = null;
   private extractedFiles: string[] = [];
   private fileBackups: Map<string, Buffer> = new Map();
 
-  protected async execute(input: ApplyTreeInput): Promise<ApplyTreeOutput> {
-    const { baseDir, treeHash, baseCommit, changes, archivePath, signal } =
-      input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+  protected async executeGitOperations(
+    input: ApplyTreeInput,
+  ): Promise<ApplyTreeOutput> {
+    const { baseDir, treeHash, baseCommit, changes, archivePath } = input;
 
     const headInfo = await this.readOnlyStep("get_current_head", async () => {
       let head: string | null = null;
       let branch: string | null = null;
 
       try {
-        head = await git.revparse(["HEAD"]);
+        head = await this.git.revparse(["HEAD"]);
       } catch {
         head = null;
       }
 
       try {
-        branch = await git.raw(["symbolic-ref", "--short", "HEAD"]);
+        branch = await this.git.raw(["symbolic-ref", "--short", "HEAD"]);
       } catch {
         branch = null;
       }
@@ -252,7 +252,7 @@ export class ApplyTreeSaga extends Saga<ApplyTreeInput, ApplyTreeOutput> {
 
     if (baseCommit && baseCommit !== this.originalHead) {
       await this.readOnlyStep("check_working_tree", async () => {
-        const status = await git.status();
+        const status = await this.git.status();
         if (!status.isClean()) {
           const changedFiles =
             status.modified.length +
@@ -268,7 +268,7 @@ export class ApplyTreeSaga extends Saga<ApplyTreeInput, ApplyTreeOutput> {
       await this.step({
         name: "checkout_base",
         execute: async () => {
-          await git.checkout(baseCommit);
+          await this.git.checkout(baseCommit);
           checkoutPerformed = true;
           this.log.warn(
             "Applied tree from different commit - now in detached HEAD state",
@@ -282,9 +282,9 @@ export class ApplyTreeSaga extends Saga<ApplyTreeInput, ApplyTreeOutput> {
         rollback: async () => {
           try {
             if (this.originalBranch) {
-              await git.checkout(this.originalBranch);
+              await this.git.checkout(this.originalBranch);
             } else if (this.originalHead) {
-              await git.checkout(this.originalHead);
+              await this.git.checkout(this.originalHead);
             }
           } catch (error) {
             this.log.warn("Failed to rollback checkout", { error });
@@ -375,23 +375,22 @@ export class ApplyTreeSaga extends Saga<ApplyTreeInput, ApplyTreeOutput> {
   }
 }
 
-export interface ReadTreeInput {
-  baseDir: string;
+export interface ReadTreeInput extends GitSagaInput {
   treeHash: string;
-  signal?: AbortSignal;
 }
 
 export interface ReadTreeOutput {
   files: string[];
 }
 
-export class ReadTreeSaga extends Saga<ReadTreeInput, ReadTreeOutput> {
-  protected async execute(input: ReadTreeInput): Promise<ReadTreeOutput> {
-    const { baseDir, treeHash, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+export class ReadTreeSaga extends GitSaga<ReadTreeInput, ReadTreeOutput> {
+  protected async executeGitOperations(
+    input: ReadTreeInput,
+  ): Promise<ReadTreeOutput> {
+    const { treeHash } = input;
 
     const stdout = await this.readOnlyStep("ls_tree", () =>
-      git.raw(["ls-tree", "-r", "--name-only", treeHash]),
+      this.git.raw(["ls-tree", "-r", "--name-only", treeHash]),
     );
 
     const files = stdout.split("\n").filter((f) => f.trim());

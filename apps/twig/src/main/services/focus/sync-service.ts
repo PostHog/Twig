@@ -227,8 +227,6 @@ export class FocusSyncService {
       `Syncing changes: staged=${hasStaged}, unstaged=${hasUnstaged}, untracked=${untrackedList.length} files`,
     );
 
-    await this.cleanStaleLockFile(dstPath);
-
     if (hasStaged) {
       try {
         await this.applyPatch(dstPath, stagedPatch, true);
@@ -252,40 +250,6 @@ export class FocusSyncService {
         await this.copyFileDirect(src, dst);
       }
     }
-  }
-
-  private async cleanStaleLockFile(repoPath: string): Promise<void> {
-    const possibleLockPaths = [
-      path.join(repoPath, ".git", "index.lock"),
-      path.join(repoPath, ".git", "worktrees"),
-    ];
-
-    for (const lockPath of possibleLockPaths) {
-      if (lockPath.endsWith("worktrees")) {
-        try {
-          const entries = await fs.readdir(lockPath);
-          for (const entry of entries) {
-            const worktreeLock = path.join(lockPath, entry, "index.lock");
-            await this.removeStaleLock(worktreeLock);
-          }
-        } catch {}
-      } else {
-        await this.removeStaleLock(lockPath);
-      }
-    }
-  }
-
-  private async removeStaleLock(lockPath: string): Promise<void> {
-    try {
-      const stat = await fs.stat(lockPath);
-      const ageMs = Date.now() - stat.mtimeMs;
-      if (ageMs > 5000) {
-        await fs.rm(lockPath);
-        log.info(
-          `Removed stale index.lock (age: ${Math.round(ageMs / 1000)}s)`,
-        );
-      }
-    } catch {}
   }
 
   private async applyPatch(

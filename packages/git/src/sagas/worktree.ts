@@ -1,19 +1,16 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 import {
   addToLocalExclude,
   branchExists,
   getDefaultBranch,
 } from "../queries.js";
 
-export interface CreateWorktreeInput {
-  baseDir: string;
+export interface CreateWorktreeInput extends GitSagaInput {
   worktreePath: string;
   branchName: string;
   baseBranch?: string;
-  signal?: AbortSignal;
 }
 
 export interface CreateWorktreeOutput {
@@ -22,27 +19,24 @@ export interface CreateWorktreeOutput {
   baseBranch: string;
 }
 
-/** Create a new worktree with a new branch. */
-export class CreateWorktreeSaga extends Saga<
+export class CreateWorktreeSaga extends GitSaga<
   CreateWorktreeInput,
   CreateWorktreeOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: CreateWorktreeInput,
   ): Promise<CreateWorktreeOutput> {
     const { baseDir, worktreePath, branchName, baseBranch, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
 
     const base = await this.readOnlyStep("get-base-branch", async () => {
       if (baseBranch) return baseBranch;
       return getDefaultBranch(baseDir, { abortSignal: signal });
     });
 
-    // Create worktree with new branch (rollback: remove worktree and branch)
     await this.step({
       name: "create-worktree",
       execute: () =>
-        git.raw([
+        this.git.raw([
           "worktree",
           "add",
           "--quiet",
@@ -53,16 +47,14 @@ export class CreateWorktreeSaga extends Saga<
         ]),
       rollback: async () => {
         try {
-          await git.raw(["worktree", "remove", worktreePath, "--force"]);
+          await this.git.raw(["worktree", "remove", worktreePath, "--force"]);
         } catch {
           await fs.rm(worktreePath, { recursive: true, force: true });
-          await git.raw(["worktree", "prune"]);
+          await this.git.raw(["worktree", "prune"]);
         }
         try {
-          await git.deleteLocalBranch(branchName, true);
-        } catch {
-          // Branch may not exist
-        }
+          await this.git.deleteLocalBranch(branchName, true);
+        } catch {}
       },
     });
 
@@ -101,11 +93,9 @@ export class CreateWorktreeSaga extends Saga<
   }
 }
 
-export interface CreateWorktreeForBranchInput {
-  baseDir: string;
+export interface CreateWorktreeForBranchInput extends GitSagaInput {
   worktreePath: string;
   branchName: string;
-  signal?: AbortSignal;
 }
 
 export interface CreateWorktreeForBranchOutput {
@@ -113,16 +103,14 @@ export interface CreateWorktreeForBranchOutput {
   branchName: string;
 }
 
-/** Create a worktree for an existing branch (no new branch created). */
-export class CreateWorktreeForBranchSaga extends Saga<
+export class CreateWorktreeForBranchSaga extends GitSaga<
   CreateWorktreeForBranchInput,
   CreateWorktreeForBranchOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: CreateWorktreeForBranchInput,
   ): Promise<CreateWorktreeForBranchOutput> {
     const { baseDir, worktreePath, branchName, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
 
     await this.readOnlyStep("verify-branch-exists", async () => {
       const exists = await branchExists(baseDir, branchName, {
@@ -133,17 +121,16 @@ export class CreateWorktreeForBranchSaga extends Saga<
       }
     });
 
-    // Create worktree for existing branch (rollback: remove worktree)
     await this.step({
       name: "create-worktree",
       execute: () =>
-        git.raw(["worktree", "add", "--quiet", worktreePath, branchName]),
+        this.git.raw(["worktree", "add", "--quiet", worktreePath, branchName]),
       rollback: async () => {
         try {
-          await git.raw(["worktree", "remove", worktreePath, "--force"]);
+          await this.git.raw(["worktree", "remove", worktreePath, "--force"]);
         } catch {
           await fs.rm(worktreePath, { recursive: true, force: true });
-          await git.raw(["worktree", "prune"]);
+          await this.git.raw(["worktree", "prune"]);
         }
       },
     });
@@ -183,31 +170,26 @@ export class CreateWorktreeForBranchSaga extends Saga<
   }
 }
 
-export interface DeleteWorktreeInput {
-  baseDir: string;
+export interface DeleteWorktreeInput extends GitSagaInput {
   worktreePath: string;
-  signal?: AbortSignal;
 }
 
 export interface DeleteWorktreeOutput {
   deleted: boolean;
 }
 
-/** Delete a worktree with safety checks. */
-export class DeleteWorktreeSaga extends Saga<
+export class DeleteWorktreeSaga extends GitSaga<
   DeleteWorktreeInput,
   DeleteWorktreeOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: DeleteWorktreeInput,
   ): Promise<DeleteWorktreeOutput> {
-    const { baseDir, worktreePath, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { baseDir, worktreePath } = input;
 
     const resolvedWorktreePath = path.resolve(worktreePath);
     const resolvedMainRepoPath = path.resolve(baseDir);
 
-    // Safety checks (read-only, no rollback needed)
     await this.readOnlyStep("safety-checks", async () => {
       if (resolvedWorktreePath === resolvedMainRepoPath) {
         throw new Error("Cannot delete worktree: path matches main repo path");
@@ -238,15 +220,14 @@ export class DeleteWorktreeSaga extends Saga<
       }
     });
 
-    // Delete worktree (no rollback - destructive operation)
     await this.step({
       name: "delete-worktree",
       execute: async () => {
         try {
-          await git.raw(["worktree", "remove", worktreePath, "--force"]);
+          await this.git.raw(["worktree", "remove", worktreePath, "--force"]);
         } catch {
           await fs.rm(worktreePath, { recursive: true, force: true });
-          await git.raw(["worktree", "prune"]);
+          await this.git.raw(["worktree", "prune"]);
         }
       },
       rollback: async () => {},

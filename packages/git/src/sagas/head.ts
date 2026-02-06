@@ -1,40 +1,34 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface DetachHeadInput {
-  baseDir: string;
-  signal?: AbortSignal;
-}
+export interface DetachHeadInput extends GitSagaInput {}
 
 export interface DetachHeadOutput {
   previousBranch: string | null;
   detachedAt: string;
 }
 
-/** Detach HEAD from current branch. */
-export class DetachHeadSaga extends Saga<DetachHeadInput, DetachHeadOutput> {
-  protected async execute(input: DetachHeadInput): Promise<DetachHeadOutput> {
-    const { baseDir, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
-
+export class DetachHeadSaga extends GitSaga<DetachHeadInput, DetachHeadOutput> {
+  protected async executeGitOperations(
+    _input: DetachHeadInput,
+  ): Promise<DetachHeadOutput> {
     const previousBranch = await this.readOnlyStep(
       "get-current-branch",
       async () => {
-        const branch = await git.revparse(["--abbrev-ref", "HEAD"]);
+        const branch = await this.git.revparse(["--abbrev-ref", "HEAD"]);
         return branch === "HEAD" ? null : branch;
       },
     );
 
     const commitSha = await this.readOnlyStep("get-head-sha", () =>
-      git.revparse(["HEAD"]),
+      this.git.revparse(["HEAD"]),
     );
 
     await this.step({
       name: "detach-head",
-      execute: () => git.checkout(["--detach"]),
+      execute: () => this.git.checkout(["--detach"]),
       rollback: async () => {
         if (previousBranch) {
-          await git.checkout(previousBranch);
+          await this.git.checkout(previousBranch);
         }
       },
     });
@@ -43,39 +37,35 @@ export class DetachHeadSaga extends Saga<DetachHeadInput, DetachHeadOutput> {
   }
 }
 
-export interface ReattachBranchInput {
-  baseDir: string;
+export interface ReattachBranchInput extends GitSagaInput {
   branchName: string;
-  signal?: AbortSignal;
 }
 
 export interface ReattachBranchOutput {
   branchName: string;
 }
 
-/** Reattach to a branch (checkout -B to force update branch to current HEAD). */
-export class ReattachBranchSaga extends Saga<
+export class ReattachBranchSaga extends GitSaga<
   ReattachBranchInput,
   ReattachBranchOutput
 > {
   private branchExistedBefore = false;
   private originalBranchSha: string | null = null;
 
-  protected async execute(
+  protected async executeGitOperations(
     input: ReattachBranchInput,
   ): Promise<ReattachBranchOutput> {
-    const { baseDir, branchName, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { branchName } = input;
 
     const originalHead = await this.readOnlyStep("get-head-sha", () =>
-      git.revparse(["HEAD"]),
+      this.git.revparse(["HEAD"]),
     );
 
     const branchInfo = await this.readOnlyStep(
       "check-branch-exists",
       async () => {
         try {
-          const sha = await git.revparse([branchName]);
+          const sha = await this.git.revparse([branchName]);
           return { exists: true, sha };
         } catch {
           return { exists: false, sha: null };
@@ -87,13 +77,18 @@ export class ReattachBranchSaga extends Saga<
 
     await this.step({
       name: "reattach-branch",
-      execute: () => git.checkout(["-B", branchName]),
+      execute: () => this.git.checkout(["-B", branchName]),
       rollback: async () => {
-        await git.checkout(["--detach", originalHead]);
+        await this.git.checkout(["--detach", originalHead]);
         if (this.branchExistedBefore && this.originalBranchSha) {
-          await git.raw(["branch", "-f", branchName, this.originalBranchSha]);
+          await this.git.raw([
+            "branch",
+            "-f",
+            branchName,
+            this.originalBranchSha,
+          ]);
         } else if (!this.branchExistedBefore) {
-          await git.deleteLocalBranch(branchName, true).catch(() => {});
+          await this.git.deleteLocalBranch(branchName, true).catch(() => {});
         }
       },
     });

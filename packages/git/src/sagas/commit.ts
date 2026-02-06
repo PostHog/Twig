@@ -1,12 +1,9 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface CommitInput {
-  baseDir: string;
+export interface CommitInput extends GitSagaInput {
   message: string;
   paths?: string[];
   allowEmpty?: boolean;
-  signal?: AbortSignal;
 }
 
 export interface CommitOutput {
@@ -14,54 +11,50 @@ export interface CommitOutput {
   branch: string;
 }
 
-/** Stage files and create a commit. */
-export class CommitSaga extends Saga<CommitInput, CommitOutput> {
+export class CommitSaga extends GitSaga<CommitInput, CommitOutput> {
   private previouslyStagedFiles: string[] = [];
 
-  protected async execute(input: CommitInput): Promise<CommitOutput> {
-    const { baseDir, message, paths, allowEmpty, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+  protected async executeGitOperations(
+    input: CommitInput,
+  ): Promise<CommitOutput> {
+    const { message, paths, allowEmpty } = input;
 
-    // Record HEAD for rollback
     const originalHead = await this.readOnlyStep("get-original-head", () =>
-      git.revparse(["HEAD"]),
+      this.git.revparse(["HEAD"]),
     );
 
-    // Get current branch
     const branch = await this.readOnlyStep("get-current-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
     this.previouslyStagedFiles = await this.readOnlyStep(
       "get-staged-files",
       async () => {
-        const status = await git.status();
+        const status = await this.git.status();
         return status.staged;
       },
     );
 
-    // Stage files (rollback: restore previous staging state)
     await this.step({
       name: "stage-files",
       execute: () =>
-        paths && paths.length > 0 ? git.add(paths) : git.add("-A"),
+        paths && paths.length > 0 ? this.git.add(paths) : this.git.add("-A"),
       rollback: async () => {
-        await git.reset();
+        await this.git.reset();
         if (this.previouslyStagedFiles.length > 0) {
-          await git.add(this.previouslyStagedFiles);
+          await this.git.add(this.previouslyStagedFiles);
         }
       },
     });
 
-    // Create commit (rollback: reset to original HEAD)
     const commitResult = await this.step({
       name: "commit",
       execute: () =>
         allowEmpty
-          ? git.commit(message, undefined, { "--allow-empty": null })
-          : git.commit(message),
+          ? this.git.commit(message, undefined, { "--allow-empty": null })
+          : this.git.commit(message),
       rollback: async () => {
-        await git.reset(["--soft", originalHead]);
+        await this.git.reset(["--soft", originalHead]);
       },
     });
 
@@ -69,11 +62,9 @@ export class CommitSaga extends Saga<CommitInput, CommitOutput> {
   }
 }
 
-export interface StageAndCommitInput {
-  baseDir: string;
+export interface StageAndCommitInput extends GitSagaInput {
   message: string;
   paths: string[];
-  signal?: AbortSignal;
 }
 
 export interface StageAndCommitOutput {
@@ -82,42 +73,36 @@ export interface StageAndCommitOutput {
   filesStaged: number;
 }
 
-/** Stage specific files and create a commit. */
-export class StageAndCommitSaga extends Saga<
+export class StageAndCommitSaga extends GitSaga<
   StageAndCommitInput,
   StageAndCommitOutput
 > {
-  protected async execute(
+  protected async executeGitOperations(
     input: StageAndCommitInput,
   ): Promise<StageAndCommitOutput> {
-    const { baseDir, message, paths, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { message, paths } = input;
 
-    // Record HEAD for rollback
     const originalHead = await this.readOnlyStep("get-original-head", () =>
-      git.revparse(["HEAD"]),
+      this.git.revparse(["HEAD"]),
     );
 
-    // Get current branch
     const branch = await this.readOnlyStep("get-current-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
-    // Stage specific files (rollback: unstage them)
     await this.step({
       name: "stage-files",
-      execute: () => git.add(paths),
+      execute: () => this.git.add(paths),
       rollback: async () => {
-        await git.reset(paths);
+        await this.git.reset(paths);
       },
     });
 
-    // Create commit (rollback: reset to original HEAD)
     const commitResult = await this.step({
       name: "commit",
-      execute: () => git.commit(message),
+      execute: () => this.git.commit(message),
       rollback: async () => {
-        await git.reset(["--soft", originalHead]);
+        await this.git.reset(["--soft", originalHead]);
       },
     });
 

@@ -1,7 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
 export type GitFileStatus =
   | "modified"
@@ -10,11 +9,9 @@ export type GitFileStatus =
   | "renamed"
   | "untracked";
 
-export interface DiscardFileChangesInput {
-  baseDir: string;
+export interface DiscardFileChangesInput extends GitSagaInput {
   filePath: string;
   fileStatus: GitFileStatus;
-  signal?: AbortSignal;
 }
 
 export interface DiscardFileChangesOutput {
@@ -22,8 +19,7 @@ export interface DiscardFileChangesOutput {
   backupStashSha: string | null;
 }
 
-/** Discard changes to a single file based on its status. */
-export class DiscardFileChangesSaga extends Saga<
+export class DiscardFileChangesSaga extends GitSaga<
   DiscardFileChangesInput,
   DiscardFileChangesOutput
 > {
@@ -32,11 +28,10 @@ export class DiscardFileChangesSaga extends Saga<
   private stashCountBefore = 0;
   private backupStashCreated = false;
 
-  protected async execute(
+  protected async executeGitOperations(
     input: DiscardFileChangesInput,
   ): Promise<DiscardFileChangesOutput> {
-    const { baseDir, filePath, fileStatus, signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+    const { baseDir, filePath, fileStatus } = input;
     const fullPath = path.join(baseDir, filePath);
 
     if (
@@ -60,7 +55,7 @@ export class DiscardFileChangesSaga extends Saga<
       this.stashCountBefore = await this.readOnlyStep(
         "get-stash-count",
         async () => {
-          const result = await git.stashList();
+          const result = await this.git.stashList();
           return result.all.length;
         },
       );
@@ -68,7 +63,7 @@ export class DiscardFileChangesSaga extends Saga<
       await this.step({
         name: "stash-file-changes",
         execute: async () => {
-          await git.stash([
+          await this.git.stash([
             "push",
             "--include-untracked",
             "-m",
@@ -76,16 +71,16 @@ export class DiscardFileChangesSaga extends Saga<
             "--",
             filePath,
           ]);
-          const afterResult = await git.stashList();
+          const afterResult = await this.git.stashList();
           this.backupStashCreated =
             afterResult.all.length > this.stashCountBefore;
           if (this.backupStashCreated) {
-            this.backupStashSha = await git.revparse(["stash@{0}"]);
+            this.backupStashSha = await this.git.revparse(["stash@{0}"]);
           }
         },
         rollback: async () => {
           if (this.backupStashCreated) {
-            await git.stash(["pop"]).catch(() => {});
+            await this.git.stash(["pop"]).catch(() => {});
           }
         },
       });
@@ -97,7 +92,7 @@ export class DiscardFileChangesSaga extends Saga<
       case "deleted":
         await this.step({
           name: "checkout-file",
-          execute: () => git.checkout(["HEAD", "--", filePath]),
+          execute: () => this.git.checkout(["HEAD", "--", filePath]),
           rollback: async () => {
             await fs.rm(fullPath, { force: true }).catch(() => {});
           },
@@ -107,13 +102,13 @@ export class DiscardFileChangesSaga extends Saga<
       case "added":
         await this.step({
           name: "remove-staged-file",
-          execute: () => git.rm(["-f", filePath]),
+          execute: () => this.git.rm(["-f", filePath]),
           rollback: async () => {
             if (this.backupContent) {
               const dir = path.dirname(fullPath);
               await fs.mkdir(dir, { recursive: true }).catch(() => {});
               await fs.writeFile(fullPath, this.backupContent);
-              await git.add(filePath).catch(() => {});
+              await this.git.add(filePath).catch(() => {});
             }
           },
         });
@@ -122,7 +117,7 @@ export class DiscardFileChangesSaga extends Saga<
       case "untracked":
         await this.step({
           name: "clean-untracked-file",
-          execute: () => git.clean("f", ["--", filePath]),
+          execute: () => this.git.clean("f", ["--", filePath]),
           rollback: async () => {
             if (this.backupContent) {
               const dir = path.dirname(fullPath);

@@ -1,10 +1,7 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface PublishInput {
-  baseDir: string;
+export interface PublishInput extends GitSagaInput {
   remote?: string;
-  signal?: AbortSignal;
 }
 
 export interface PublishOutput {
@@ -12,14 +9,14 @@ export interface PublishOutput {
   remote: string;
 }
 
-/** Push current branch with -u to set upstream tracking. */
-export class PublishSaga extends Saga<PublishInput, PublishOutput> {
-  protected async execute(input: PublishInput): Promise<PublishOutput> {
-    const { baseDir, remote = "origin", signal } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+export class PublishSaga extends GitSaga<PublishInput, PublishOutput> {
+  protected async executeGitOperations(
+    input: PublishInput,
+  ): Promise<PublishOutput> {
+    const { remote = "origin" } = input;
 
     const currentBranch = await this.readOnlyStep("get-current-branch", () =>
-      git.revparse(["--abbrev-ref", "HEAD"]),
+      this.git.revparse(["--abbrev-ref", "HEAD"]),
     );
 
     if (currentBranch === "HEAD") {
@@ -28,7 +25,7 @@ export class PublishSaga extends Saga<PublishInput, PublishOutput> {
 
     await this.step({
       name: "push-with-upstream",
-      execute: () => git.push(["-u", remote, currentBranch]),
+      execute: () => this.git.push(["-u", remote, currentBranch]),
       rollback: async () => {},
     });
 

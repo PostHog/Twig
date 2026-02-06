@@ -1,12 +1,9 @@
-import { Saga } from "@posthog/shared";
-import { createGitClient } from "../client.js";
+import { GitSaga, type GitSagaInput } from "../git-saga.js";
 
-export interface PushInput {
-  baseDir: string;
+export interface PushInput extends GitSagaInput {
   remote?: string;
   branch?: string;
   setUpstream?: boolean;
-  signal?: AbortSignal;
 }
 
 export interface PushOutput {
@@ -14,19 +11,12 @@ export interface PushOutput {
   remote: string;
 }
 
-export class PushSaga extends Saga<PushInput, PushOutput> {
-  protected async execute(input: PushInput): Promise<PushOutput> {
-    const {
-      baseDir,
-      remote = "origin",
-      branch,
-      setUpstream = false,
-      signal,
-    } = input;
-    const git = createGitClient(baseDir, { abortSignal: signal });
+export class PushSaga extends GitSaga<PushInput, PushOutput> {
+  protected async executeGitOperations(input: PushInput): Promise<PushOutput> {
+    const { remote = "origin", branch, setUpstream = false } = input;
 
     const targetBranch =
-      branch ?? (await git.revparse(["--abbrev-ref", "HEAD"]));
+      branch ?? (await this.git.revparse(["--abbrev-ref", "HEAD"]));
     if (targetBranch === "HEAD") {
       throw new Error("Cannot push: HEAD is detached");
     }
@@ -37,7 +27,7 @@ export class PushSaga extends Saga<PushInput, PushOutput> {
 
     await this.step({
       name: "push",
-      execute: () => git.push(args),
+      execute: () => this.git.push(args),
       rollback: async () => {},
     });
 
