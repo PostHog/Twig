@@ -35,7 +35,7 @@ export function FeedbackToggle() {
             variant="ghost"
             style={{ color: "var(--gray-9)" }}
           >
-            <ChatCircle size={16} />
+            <ChatCircle size={12} />
           </IconButton>
         </DropdownMenu.Trigger>
       </Tooltip>

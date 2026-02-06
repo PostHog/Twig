@@ -1,3 +1,4 @@
+import type { Readable, Writable } from "node:stream";
 import { ReadableStream, WritableStream } from "node:stream/web";
 import type { Logger } from "./logger.js";
 
@@ -166,4 +167,54 @@ export function createTappedWritableStream(
       }
     },
   });
+}
+
+export function nodeReadableToWebReadable(
+  nodeStream: Readable,
+): globalThis.ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      nodeStream.on("data", (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk));
+      });
+      nodeStream.on("end", () => {
+        controller.close();
+      });
+      nodeStream.on("error", (err) => {
+        controller.error(err);
+      });
+    },
+    cancel() {
+      nodeStream.destroy();
+    },
+  }) as unknown as globalThis.ReadableStream<Uint8Array>;
+}
+
+export function nodeWritableToWebWritable(
+  nodeStream: Writable,
+): globalThis.WritableStream<Uint8Array> {
+  return new WritableStream<Uint8Array>({
+    write(chunk) {
+      return new Promise((resolve, reject) => {
+        const ok = nodeStream.write(Buffer.from(chunk), (err) => {
+          if (err) reject(err);
+        });
+        if (ok) {
+          resolve();
+        } else {
+          nodeStream.once("drain", resolve);
+        }
+      });
+    },
+    close() {
+      return new Promise((resolve) => {
+        nodeStream.end(resolve);
+      });
+    },
+    abort(reason) {
+      nodeStream.destroy(
+        reason instanceof Error ? reason : new Error(String(reason)),
+      );
+    },
+  }) as globalThis.WritableStream<Uint8Array>;
 }

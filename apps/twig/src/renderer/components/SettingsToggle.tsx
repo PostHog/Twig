@@ -16,7 +16,7 @@ export function SettingsToggle() {
           color: isOpen ? "var(--blue-9)" : "var(--gray-9)",
         }}
       >
-        <Gear size={16} weight={isOpen ? "fill" : "regular"} />
+        <Gear size={12} weight={isOpen ? "fill" : "regular"} />
       </IconButton>
     </Tooltip>
   );

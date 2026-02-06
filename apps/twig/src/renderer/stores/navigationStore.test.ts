@@ -1,6 +1,20 @@
 import type { Task } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useNavigationStore } from "./navigationStore";
+
+const { getItem, setItem } = vi.hoisted(() => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+}));
+
+vi.mock("@renderer/trpc/client", () => ({
+  trpcVanilla: {
+    secureStore: {
+      getItem: { query: getItem },
+      setItem: { query: setItem },
+      removeItem: { query: vi.fn() },
+    },
+  },
+}));
 
 vi.mock("@renderer/lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("@renderer/lib/logger", () => ({
@@ -23,6 +37,8 @@ vi.mock("@stores/taskDirectoryStore", () => ({
   useTaskDirectoryStore: { getState: () => ({ getTaskDirectory: () => null }) },
 }));
 
+import { useNavigationStore } from "./navigationStore";
+
 const mockTask: Task = {
   id: "task-123",
   task_number: 1,
@@ -36,14 +52,13 @@ const mockTask: Task = {
 
 const getStore = () => useNavigationStore.getState();
 const getView = () => getStore().view;
-const getPersistedState = () => {
-  const data = localStorage.getItem("navigation-storage");
-  return data ? JSON.parse(data).state : null;
-};
 
 describe("navigationStore", () => {
   beforeEach(() => {
-    localStorage.clear();
+    getItem.mockReset();
+    setItem.mockReset();
+    getItem.mockResolvedValue(null);
+    setItem.mockResolvedValue(undefined);
     useNavigationStore.setState({
       view: { type: "task-input" },
       history: [{ type: "task-input" }],
@@ -103,17 +118,32 @@ describe("navigationStore", () => {
     it("persists view type and taskId but not full task data", async () => {
       await getStore().navigateToTask(mockTask);
 
-      const persisted = getPersistedState();
-      expect(persisted.view).toEqual({
+      await vi.waitFor(() => {
+        expect(setItem).toHaveBeenCalled();
+      });
+
+      const lastCall = setItem.mock.calls[setItem.mock.calls.length - 1];
+      const persisted = JSON.parse(lastCall[0].value);
+      expect(persisted.state.view).toEqual({
         type: "task-detail",
         taskId: "task-123",
         folderId: undefined,
       });
     });
 
-    it("restores view from localStorage without task data", async () => {
-      await getStore().navigateToTask(mockTask);
-      const storedData = localStorage.getItem("navigation-storage");
+    it("restores view from electronStorage without task data", async () => {
+      const storedState = JSON.stringify({
+        state: {
+          view: {
+            type: "task-detail",
+            taskId: "task-123",
+            folderId: undefined,
+          },
+        },
+        version: 0,
+      });
+
+      getItem.mockResolvedValue(storedState);
 
       useNavigationStore.setState({
         view: { type: "task-input" },
@@ -121,8 +151,7 @@ describe("navigationStore", () => {
         historyIndex: 0,
       });
 
-      localStorage.setItem("navigation-storage", storedData!);
-      useNavigationStore.persist.rehydrate();
+      await useNavigationStore.persist.rehydrate();
 
       expect(getView()).toMatchObject({
         type: "task-detail",

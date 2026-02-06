@@ -20,7 +20,7 @@ export function FilePicker({
   repoPath,
 }: FilePickerProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const openFile = usePanelLayoutStore((state) => state.openFile);
+  const openFileInSplit = usePanelLayoutStore((state) => state.openFileInSplit);
   const recentFiles = usePanelLayoutStore(
     (state) => state.taskLayouts[taskId]?.recentFiles ?? [],
   );
@@ -51,10 +51,10 @@ export function FilePicker({
 
   const handleSelect = useCallback(
     (filePath: string) => {
-      openFile(taskId, filePath, false);
+      openFileInSplit(taskId, filePath, false);
       handleOpenChange(false);
     },
-    [openFile, taskId, handleOpenChange],
+    [openFileInSplit, taskId, handleOpenChange],
   );
 
   return (

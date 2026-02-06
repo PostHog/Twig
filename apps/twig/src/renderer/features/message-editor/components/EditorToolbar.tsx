@@ -1,4 +1,5 @@
 import { ModelSelector } from "@features/sessions/components/ModelSelector";
+import { ReasoningLevelSelector } from "@features/sessions/components/ReasoningLevelSelector";
 import { Paperclip } from "@phosphor-icons/react";
 import { Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import { useRef } from "react";
@@ -7,6 +8,7 @@ import type { MentionChip } from "../utils/content";
 interface EditorToolbarProps {
   disabled?: boolean;
   taskId?: string;
+  adapter?: "claude" | "codex";
   onInsertChip: (chip: MentionChip) => void;
   onAttachFiles?: (files: File[]) => void;
   attachTooltip?: string;
@@ -16,6 +18,7 @@ interface EditorToolbarProps {
 export function EditorToolbar({
   disabled = false,
   taskId,
+  adapter,
   onInsertChip,
   onAttachFiles,
   attachTooltip = "Attach file",
@@ -65,7 +68,8 @@ export function EditorToolbar({
           <Paperclip size={iconSize} weight="bold" />
         </IconButton>
       </Tooltip>
-      <ModelSelector taskId={taskId} disabled={disabled} />
+      <ModelSelector taskId={taskId} adapter={adapter} disabled={disabled} />
+      <ReasoningLevelSelector taskId={taskId} disabled={disabled} />
     </Flex>
   );
 }

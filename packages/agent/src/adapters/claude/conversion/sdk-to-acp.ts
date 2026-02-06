@@ -332,12 +332,13 @@ export async function handleSystemMessage(
 
   switch (message.subtype) {
     case "init":
-      if (message.session_id) {
-        if (session && !session.sdkSessionId) {
-          session.sdkSessionId = message.session_id;
+      if (message.session_id && session && !session.sessionId) {
+        session.sessionId = message.session_id;
+        if (session.taskRunId) {
           await client.extNotification("_posthog/sdk_session", {
-            sessionId,
-            sdkSessionId: message.session_id,
+            taskRunId: session.taskRunId,
+            sessionId: message.session_id,
+            adapter: "claude",
           });
         }
       }

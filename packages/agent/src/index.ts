@@ -17,11 +17,28 @@ export type {
 } from "./acp-extensions.js";
 export { POSTHOG_NOTIFICATIONS } from "./acp-extensions.js";
 export type {
+  AcpConnection,
   AcpConnectionConfig,
+  AgentAdapter,
   InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
 export { createAcpConnection } from "./adapters/acp-connection.js";
+export type { CodexProcessOptions } from "./adapters/codex/spawn.js";
 export { Agent } from "./agent.js";
+export {
+  type ArrayModelInfo,
+  BLOCKED_MODELS,
+  DEFAULT_GATEWAY_MODEL,
+  type FetchGatewayModelsOptions,
+  fetchArrayModels,
+  fetchGatewayModels,
+  formatGatewayModelName,
+  type GatewayModel,
+  getProviderName,
+  isAnthropicModel,
+} from "./gateway-models.js";
+export type { OtelLogConfig, SessionContext } from "./otel-log-writer.js";
+export { OtelLogWriter } from "./otel-log-writer.js";
 export { PostHogAPIClient } from "./posthog-api.js";
 export type {
   ConversationTurn,
@@ -30,6 +47,8 @@ export type {
   ToolCallInfo,
 } from "./resume.js";
 export { conversationToPromptHistory, resumeFromLog } from "./resume.js";
+export type { SessionLogWriterOptions } from "./session-log-writer.js";
+export { SessionLogWriter } from "./session-log-writer.js";
 export type { TreeSnapshot, TreeTrackerConfig } from "./tree-tracker.js";
 export {
   isCommitOnRemote,
@@ -44,6 +63,7 @@ export type {
   FileStatus,
   LogLevel,
   OnLogCallback,
+  OtelTransportConfig,
   StoredEntry,
   StoredNotification,
   Task,

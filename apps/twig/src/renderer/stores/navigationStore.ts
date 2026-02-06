@@ -1,6 +1,7 @@
 import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutionStore";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import type { Task, WorkspaceMode } from "@shared/types";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
@@ -184,6 +185,7 @@ export const useNavigationStore = create<NavigationStore>()(
     },
     {
       name: "navigation-storage",
+      storage: electronStorage,
       partialize: (state) => ({
         view: {
           type: state.view.type,

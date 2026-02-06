@@ -15,7 +15,7 @@ export function CampfireToggle() {
           color: isDarkMode ? "var(--orange-9)" : "var(--gray-9)",
         }}
       >
-        <Campfire size={16} weight={isDarkMode ? "fill" : "regular"} />
+        <Campfire size={12} weight={isDarkMode ? "fill" : "regular"} />
       </IconButton>
     </Tooltip>
   );

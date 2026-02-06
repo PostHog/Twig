@@ -1,8 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
 import { RenameTaskDialog } from "@components/RenameTaskDialog";
 import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
-import { useTaskStore } from "@features/tasks/stores/taskStore";
-import { useMeQuery } from "@hooks/useMeQuery";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
@@ -12,15 +10,13 @@ import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspac
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
-import { HistoryView } from "./HistoryView";
 import { NewTaskItem } from "./items/HomeItem";
 import { SidebarItem } from "./SidebarItem";
+import { TaskListView } from "./TaskListView";
 
 function SidebarMenuComponent() {
   const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
 
-  const activeFilters = useTaskStore((state) => state.activeFilters);
-  const { data: currentUser } = useMeQuery();
   const { data: allTasks = [] } = useTasks();
 
   const workspaces = useWorkspaceStore.use.workspaces();
@@ -33,8 +29,6 @@ function SidebarMenuComponent() {
 
   const sidebarData = useSidebarData({
     activeView: view,
-    activeFilters,
-    currentUser,
   });
 
   const previousTaskIdRef = useRef<string | null>(null);
@@ -69,12 +63,20 @@ function SidebarMenuComponent() {
     }
   };
 
-  const handleTaskContextMenu = (taskId: string, e: React.MouseEvent) => {
+  const handleTaskContextMenu = (
+    taskId: string,
+    e: React.MouseEvent,
+    isPinned: boolean,
+  ) => {
     const task = taskMap.get(taskId);
     if (task) {
       const workspace = workspaces[taskId];
       const effectivePath = workspace?.worktreePath ?? workspace?.folderPath;
-      showContextMenu(task, e, effectivePath ?? undefined);
+      showContextMenu(task, e, {
+        worktreePath: effectivePath ?? undefined,
+        isPinned,
+        onTogglePin: () => togglePin(taskId),
+      });
     }
   };
 
@@ -90,10 +92,6 @@ function SidebarMenuComponent() {
       taskTitle: task.title,
       hasWorktree,
     });
-  };
-
-  const handleTaskTogglePin = (taskId: string) => {
-    togglePin(taskId);
   };
 
   return (
@@ -127,14 +125,15 @@ function SidebarMenuComponent() {
                 label="Loading tasks..."
               />
             ) : (
-              <HistoryView
-                historyData={sidebarData.historyData}
-                pinnedData={sidebarData.pinnedData}
+              <TaskListView
+                pinnedTasks={sidebarData.pinnedTasks}
+                flatTasks={sidebarData.flatTasks}
+                groupedTasks={sidebarData.groupedTasks}
                 activeTaskId={sidebarData.activeTaskId}
                 onTaskClick={handleTaskClick}
                 onTaskContextMenu={handleTaskContextMenu}
                 onTaskDelete={handleTaskDelete}
-                onTaskTogglePin={handleTaskTogglePin}
+                hasMore={sidebarData.hasMore}
               />
             )}
           </Flex>

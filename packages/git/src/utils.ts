@@ -4,9 +4,12 @@ export interface GitHubRepo {
 }
 
 export function parseGitHubUrl(url: string): GitHubRepo | null {
+  // Trim whitespace/newlines that git commands may include
+  const trimmedUrl = url.trim();
+
   const match =
-    url.match(/github\.com[:/](.+?)\/(.+?)(\.git)?$/) ||
-    url.match(/git@github\.com:(.+?)\/(.+?)(\.git)?$/);
+    trimmedUrl.match(/github\.com[:/](.+?)\/(.+?)(\.git)?$/) ||
+    trimmedUrl.match(/git@github\.com:(.+?)\/(.+?)(\.git)?$/);
 
   if (!match) return null;
 

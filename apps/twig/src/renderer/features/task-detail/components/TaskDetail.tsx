@@ -8,13 +8,12 @@ import { useWorkspaceEvents } from "@features/workspace/hooks";
 import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
-import { GitBranch, Laptop } from "@phosphor-icons/react";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
 import type { Task } from "@shared/types";
 import { useEffect, useMemo, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { WorktreePathDisplay } from "./WorktreePathDisplay";
+import { ExternalAppsOpener } from "./ExternalAppsOpener";
 
 interface TaskDetailProps {
   task: Task;
@@ -56,27 +55,13 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
   useBlurOnEscape();
   useWorkspaceEvents(taskId);
 
-  const workspaceMode = workspace?.mode ?? "local";
   const worktreePath = workspace?.worktreePath;
 
   const headerContent = useMemo(
     () => (
       <Flex align="center" justify="between" gap="2" width="100%">
         <Flex align="center" gap="2" minWidth="0">
-          <Tooltip
-            content={
-              workspaceMode === "worktree"
-                ? "Worktree workspace"
-                : "Local workspace"
-            }
-          >
-            {workspaceMode === "worktree" ? (
-              <GitBranch size={16} style={{ flexShrink: 0, opacity: 0.6 }} />
-            ) : (
-              <Laptop size={16} style={{ flexShrink: 0, opacity: 0.6 }} />
-            )}
-          </Tooltip>
-          <Text size="2" weight="medium" truncate>
+          <Text size="1" weight="medium" truncate>
             {initialTask.title}
           </Text>
           <StartWorkspaceButton taskId={taskId} />
@@ -99,16 +84,10 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
             </Tooltip>
           )}
         </Flex>
-        {worktreePath && <WorktreePathDisplay worktreePath={worktreePath} />}
+        {worktreePath && <ExternalAppsOpener targetPath={worktreePath} />}
       </Flex>
     ),
-    [
-      initialTask.title,
-      taskId,
-      workspace?.branchName,
-      workspaceMode,
-      worktreePath,
-    ],
+    [initialTask.title, taskId, workspace?.branchName, worktreePath],
   );
 
   useSetHeaderContent(headerContent);

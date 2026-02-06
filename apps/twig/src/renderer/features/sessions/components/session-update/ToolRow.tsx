@@ -1,7 +1,7 @@
 import type { Icon } from "@phosphor-icons/react";
-import { Flex, Text } from "@radix-ui/themes";
+import { Flex } from "@radix-ui/themes";
 import type { ReactNode } from "react";
-import { LoadingIcon, StatusIndicators } from "./toolCallUtils";
+import { LoadingIcon, StatusIndicators, ToolTitle } from "./toolCallUtils";
 
 interface ToolRowProps {
   icon: Icon;
@@ -21,7 +21,7 @@ export function ToolRow({
   return (
     <Flex align="center" gap="2" className="py-0.5">
       <LoadingIcon icon={icon} isLoading={isLoading} />
-      <Text size="1">{children}</Text>
+      <ToolTitle>{children}</ToolTitle>
       <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />
     </Flex>
   );

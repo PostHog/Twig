@@ -1,14 +1,26 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { Command } from "@features/command/components/Command";
 import { useProjects } from "@features/projects/hooks/useProjects";
-import { Buildings, CaretUpDown, Check, Plus } from "@phosphor-icons/react";
-import { Box, DropdownMenu, Flex, Spinner, Text } from "@radix-ui/themes";
+import {
+  CaretDown,
+  Check,
+  FolderSimple,
+  Plus,
+  SignOut,
+} from "@phosphor-icons/react";
+import { Box, Dialog, Flex, Popover, Spinner, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import "./ProjectSwitcher.css";
 
 export function ProjectSwitcher() {
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const cloudRegion = useAuthStore((s) => s.cloudRegion);
   const selectProject = useAuthStore((s) => s.selectProject);
+  const logout = useAuthStore((s) => s.logout);
   const client = useAuthStore((s) => s.client);
   const { groupedProjects, currentProject, currentProjectId, isLoading } =
     useProjects();
@@ -19,112 +31,148 @@ export function ProjectSwitcher() {
     enabled: !!client,
   });
 
-  // Don't show the switcher if there's only one project
-  if (!isLoading && groupedProjects.length === 0) {
-    return null;
-  }
-
   const handleProjectSelect = (projectId: number) => {
     if (projectId !== currentProjectId) {
       selectProject(projectId);
     }
+    setPopoverOpen(false);
+    setDialogOpen(false);
   };
 
-  const handleAddProject = async () => {
-    // Open PostHog in browser to add a new project
+  const handleCreateProject = async () => {
     if (cloudRegion) {
       const cloudUrl = getCloudUrlFromRegion(cloudRegion);
       await trpcVanilla.oauth.openExternalUrl.mutate({
         url: `${cloudUrl}/organization/create-project`,
       });
     }
+    setPopoverOpen(false);
+  };
+
+  const handleAllProjects = () => {
+    setPopoverOpen(false);
+    setDialogOpen(true);
+  };
+
+  const handleLogout = () => {
+    setPopoverOpen(false);
+    logout();
   };
 
   return (
-    <Box px="2" py="2">
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
+    <>
+      <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <Popover.Trigger>
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-md px-2 py-1.5 transition-colors hover:bg-gray-3"
-            style={{
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-            }}
+            className="flex w-full cursor-pointer items-center justify-between border-none bg-transparent px-3 py-2 transition-colors hover:bg-gray-3"
           >
-            <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-              <Buildings
-                size={16}
-                weight="regular"
-                className="shrink-0 text-gray-11"
-              />
+            <Flex
+              direction="column"
+              align="start"
+              style={{ minWidth: 0, flex: 1 }}
+            >
               {isLoading ? (
                 <Spinner size="1" />
               ) : (
-                <Flex direction="column" align="start" style={{ minWidth: 0 }}>
-                  <Text
-                    size="2"
-                    weight="medium"
-                    className="truncate"
-                    style={{ maxWidth: "180px" }}
-                  >
+                <>
+                  <Text size="1" weight="medium" className="truncate">
                     {currentProject?.name ?? "Select project"}
                   </Text>
                   {currentUser?.email && (
-                    <Text
-                      size="1"
-                      className="truncate text-gray-10"
-                      style={{ maxWidth: "180px" }}
-                    >
+                    <Text size="1" className="truncate text-gray-10">
                       {currentUser.email}
                     </Text>
                   )}
-                </Flex>
+                </>
               )}
             </Flex>
-            <CaretUpDown size={14} className="shrink-0 text-gray-10" />
+            <CaretDown size={14} className="shrink-0 text-gray-10" />
           </button>
-        </DropdownMenu.Trigger>
+        </Popover.Trigger>
 
-        <DropdownMenu.Content
+        <Popover.Content
           align="start"
-          style={{ minWidth: "220px" }}
-          size="2"
+          side="bottom"
+          style={{ padding: 0, width: "var(--radix-popover-trigger-width)" }}
+          sideOffset={4}
         >
-          {currentUser?.email && (
-            <DropdownMenu.Label>
+          <Box>
+            <Box className="border-gray-6 border-b px-3 py-2">
+              {currentUser?.first_name && (
+                <Text size="1" weight="medium" className="mt-1 block">
+                  {currentUser.first_name}
+                  {currentUser.last_name && ` ${currentUser.last_name}`}
+                </Text>
+              )}
               <Text size="1" className="text-gray-10">
-                {currentUser.email}
+                {currentUser?.email}
               </Text>
-            </DropdownMenu.Label>
-          )}
-          {groupedProjects.flatMap((group) =>
-            group.projects.map((project) => (
-              <DropdownMenu.Item
-                key={project.id}
-                onSelect={() => handleProjectSelect(project.id)}
+            </Box>
+
+            <Box className="py-1">
+              <button
+                type="button"
+                onClick={handleAllProjects}
+                className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
               >
-                <Flex align="center" justify="between" gap="2" width="100%">
-                  <Text size="2">{project.name}</Text>
-                  {project.id === currentProjectId && (
-                    <Check size={14} className="text-accent-11" />
-                  )}
-                </Flex>
-              </DropdownMenu.Item>
-            )),
-          )}
+                <FolderSimple size={14} className="text-gray-11" />
+                <Text size="1">All projects</Text>
+              </button>
 
-          <DropdownMenu.Separator />
+              <button
+                type="button"
+                onClick={handleCreateProject}
+                className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
+              >
+                <Plus size={14} className="text-gray-11" />
+                <Text size="1">Create project</Text>
+              </button>
 
-          <DropdownMenu.Item onSelect={handleAddProject}>
-            <Flex align="center" gap="2">
-              <Plus size={14} />
-              <Text size="2">Add project</Text>
-            </Flex>
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
-    </Box>
+              <Box className="mx-3 my-1 h-px bg-gray-6" />
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
+              >
+                <SignOut size={14} className="text-gray-11" />
+                <Text size="1">Log out</Text>
+              </button>
+            </Box>
+          </Box>
+        </Popover.Content>
+      </Popover.Root>
+
+      <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog.Content
+          className="project-picker-dialog"
+          style={{ maxWidth: 600, padding: 0 }}
+        >
+          <Command.Root shouldFilter={true} label="Project picker">
+            <Command.Input placeholder="Search projects..." autoFocus={true} />
+            <Command.List>
+              <Command.Empty>No projects found.</Command.Empty>
+              {groupedProjects.map((group) =>
+                group.projects.map((project) => (
+                  <Command.Item
+                    key={project.id}
+                    value={`${project.name} ${project.id}`}
+                    onSelect={() => handleProjectSelect(project.id)}
+                  >
+                    <Flex align="center" justify="between" width="100%">
+                      <Text size="1">{project.name}</Text>
+                      {project.id === currentProjectId && (
+                        <Check size={14} className="text-accent-11" />
+                      )}
+                    </Flex>
+                  </Command.Item>
+                )),
+              )}
+            </Command.List>
+          </Command.Root>
+        </Dialog.Content>
+      </Dialog.Root>
+    </>
   );
 }

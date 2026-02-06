@@ -1,11 +1,12 @@
 import { Terminal } from "@phosphor-icons/react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box, Flex } from "@radix-ui/themes";
 import { useState } from "react";
 import {
   ExpandableIcon,
   ExpandedContentBox,
   getContentText,
   StatusIndicators,
+  ToolTitle,
   type ToolViewProps,
   useToolCallStatus,
 } from "./toolCallUtils";
@@ -59,11 +60,15 @@ export function ExecuteToolView({
             isExpanded={isExpanded}
           />
         </Box>
-        <Text size="1" as="div">
-          {description && <>{description} </>}
-          <span className="font-mono text-accent-11">{command}</span>
+        <Flex align="center" gap="2" wrap="wrap">
+          {description && <ToolTitle>{description}</ToolTitle>}
+          {command && (
+            <ToolTitle>
+              <span className="font-mono text-accent-11">{command}</span>
+            </ToolTitle>
+          )}
           <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />
-        </Text>
+        </Flex>
       </Flex>
 
       {isExpanded && hasOutput && (

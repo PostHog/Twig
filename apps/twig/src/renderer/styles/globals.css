@@ -194,8 +194,19 @@ body {
   padding: 0;
 }
 
+.plan-markdown ul {
+  list-style-type: disc;
+  padding-left: 4px;
+}
+
+.plan-markdown ol {
+  list-style-type: decimal;
+  padding-left: 4px;
+}
+
 .plan-markdown li {
   margin: 2px 0;
+  display: list-item;
 }
 
 .plan-markdown code {
@@ -338,6 +349,16 @@ body {
 
 .rich-text-link:hover {
   color: var(--accent-12);
+}
+
+.markdown-link {
+  color: var(--accent-11);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.markdown-link:hover {
+  text-decoration: underline;
 }
 
 .rich-text-editor-content {

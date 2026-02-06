@@ -7,6 +7,7 @@ import {
   useQueuedMessagesForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
+import { useSessionViewActions } from "@features/sessions/stores/sessionViewStore";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { ArrowDown, XCircle } from "@phosphor-icons/react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
@@ -20,6 +21,7 @@ import {
 import {
   memo,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -83,29 +85,48 @@ export function ConversationView({
 
   const queuedMessages = useQueuedMessagesForTask(taskId);
   const { removeQueuedMessage } = useSessionActions();
+  const { saveScrollPosition, getScrollPosition } = useSessionViewActions();
 
   const prevItemsLengthRef = useRef(0);
   const prevPendingCountRef = useRef(0);
   const prevScrollHeightRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const hasRestoredScrollRef = useRef(false);
+
+  useEffect(() => {
+    hasRestoredScrollRef.current = false;
+  }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || !taskId) return;
 
     const handleScroll = () => {
       const distanceFromBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight;
       setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
+      saveScrollPosition(taskId, el.scrollTop);
     };
 
     el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+      saveScrollPosition(taskId, el.scrollTop);
+    };
+  }, [taskId, saveScrollPosition]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || !taskId) return;
+
+    if (!hasRestoredScrollRef.current) {
+      const savedPosition = getScrollPosition(taskId);
+      if (savedPosition > 0) {
+        el.scrollTop = savedPosition;
+        hasRestoredScrollRef.current = true;
+        return;
+      }
+    }
 
     const isNewContent = items.length > prevItemsLengthRef.current;
     const isNewPending = pendingPermissionsCount > prevPendingCountRef.current;
@@ -120,7 +141,7 @@ export function ConversationView({
     if (wasNearBottom || isNewContent || isNewPending) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [items, pendingPermissionsCount]);
+  }, [items, pendingPermissionsCount, taskId, getScrollPosition]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -133,39 +154,41 @@ export function ConversationView({
     <div className="relative flex-1">
       <div
         ref={scrollRef}
-        className="absolute inset-0 overflow-auto bg-white p-2 pb-16 dark:bg-gray-1"
+        className="absolute inset-0 overflow-auto bg-gray-1 p-2 pb-16"
       >
-        <div className="flex flex-col gap-3">
-          {items.map((item) =>
-            item.type === "turn" ? (
-              <TurnView
-                key={item.id}
-                turn={item}
-                repoPath={repoPath}
-                isCloud={isCloud}
+        <div className="mx-auto max-w-[750px]">
+          <div className="flex flex-col gap-3">
+            {items.map((item) =>
+              item.type === "turn" ? (
+                <TurnView
+                  key={item.id}
+                  turn={item}
+                  repoPath={repoPath}
+                  isCloud={isCloud}
+                />
+              ) : (
+                <UserShellExecuteView key={item.id} item={item} />
+              ),
+            )}
+            {queuedMessages.map((msg) => (
+              <QueuedMessageView
+                key={msg.id}
+                message={msg}
+                onRemove={() => taskId && removeQueuedMessage(taskId, msg.id)}
               />
-            ) : (
-              <UserShellExecuteView key={item.id} item={item} />
-            ),
-          )}
-          {queuedMessages.map((msg) => (
-            <QueuedMessageView
-              key={msg.id}
-              message={msg}
-              onRemove={() => taskId && removeQueuedMessage(taskId, msg.id)}
-            />
-          ))}
+            ))}
+          </div>
+          <SessionFooter
+            isPromptPending={isPromptPending}
+            promptStartedAt={promptStartedAt}
+            lastGenerationDuration={
+              lastTurn?.isComplete ? lastTurn.durationMs : null
+            }
+            lastStopReason={lastTurn?.stopReason}
+            queuedCount={queuedMessages.length}
+            hasPendingPermission={pendingPermissionsCount > 0}
+          />
         </div>
-        <SessionFooter
-          isPromptPending={isPromptPending}
-          promptStartedAt={promptStartedAt}
-          lastGenerationDuration={
-            lastTurn?.isComplete ? lastTurn.durationMs : null
-          }
-          lastStopReason={lastTurn?.stopReason}
-          queuedCount={queuedMessages.length}
-          hasPendingPermission={pendingPermissionsCount > 0}
-        />
       </div>
       {showScrollButton && (
         <Box className="absolute right-4 bottom-4 z-10">
@@ -479,7 +502,7 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
 
     case "plan":
     case "available_commands_update":
-    case "current_mode_update":
+    case "config_option_update":
       turn.items.push(update);
       break;
 

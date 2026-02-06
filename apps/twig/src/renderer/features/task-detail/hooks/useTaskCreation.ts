@@ -10,7 +10,7 @@ import type {
   TaskCreationInput,
   TaskService,
 } from "@renderer/services/task/service";
-import type { ExecutionMode, WorkspaceMode } from "@shared/types";
+import type { WorkspaceMode } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -25,7 +25,8 @@ interface UseTaskCreationOptions {
   workspaceMode: WorkspaceMode;
   branch?: string | null;
   editorIsEmpty: boolean;
-  executionMode?: ExecutionMode;
+  executionMode?: string;
+  adapter?: "claude" | "codex";
 }
 
 interface UseTaskCreationReturn {
@@ -79,7 +80,8 @@ function prepareTaskInput(
     githubIntegrationId?: number;
     workspaceMode: WorkspaceMode;
     branch?: string | null;
-    executionMode?: ExecutionMode;
+    executionMode?: string;
+    adapter?: "claude" | "codex";
   },
 ): TaskCreationInput {
   return {
@@ -91,6 +93,7 @@ function prepareTaskInput(
     workspaceMode: options.workspaceMode,
     branch: options.branch,
     executionMode: options.executionMode,
+    adapter: options.adapter,
   };
 }
 
@@ -115,6 +118,7 @@ export function useTaskCreation({
   branch,
   editorIsEmpty,
   executionMode,
+  adapter,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -123,11 +127,15 @@ export function useTaskCreation({
   const { isOnline } = useConnectivity();
 
   const isCloudMode = workspaceMode === "cloud";
+  // Cloud mode can work with either selectedRepository (production) or selectedDirectory (dev testing)
+  const hasRequiredPath = isCloudMode
+    ? !!selectedRepository || !!selectedDirectory
+    : !!selectedDirectory;
   const canSubmit =
     !!editorRef.current &&
     isAuthenticated &&
     isOnline &&
-    (isCloudMode ? !!selectedRepository : !!selectedDirectory) &&
+    hasRequiredPath &&
     !isCreatingTask &&
     !editorIsEmpty;
 
@@ -149,6 +157,7 @@ export function useTaskCreation({
         workspaceMode,
         branch,
         executionMode,
+        adapter,
       });
 
       const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
@@ -191,6 +200,7 @@ export function useTaskCreation({
     workspaceMode,
     branch,
     executionMode,
+    adapter,
     invalidateTasks,
     navigateToTask,
   ]);

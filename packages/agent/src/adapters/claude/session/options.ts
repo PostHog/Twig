@@ -21,14 +21,13 @@ export interface ProcessSpawnedInfo {
 
 export interface BuildOptionsParams {
   cwd: string;
-  sessionId: string;
   mcpServers: Record<string, McpServerConfig>;
   permissionMode: TwigExecutionMode;
   canUseTool: Options["canUseTool"];
   logger: Logger;
   systemPrompt?: Options["systemPrompt"];
   userProvidedOptions?: Options;
-  sdkSessionId?: string;
+  sessionId?: string;
   additionalDirectories?: string[];
   onModeChange?: OnModeChange;
   onProcessSpawned?: (info: ProcessSpawnedInfo) => void;
@@ -199,7 +198,7 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     ),
     ...(params.onProcessSpawned && {
       spawnClaudeCodeProcess: buildSpawnWrapper(
-        params.sessionId,
+        params.sessionId ?? "unknown",
         params.onProcessSpawned,
         params.onProcessExited,
       ),
@@ -210,8 +209,8 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     options.pathToClaudeCodeExecutable = process.env.CLAUDE_CODE_EXECUTABLE;
   }
 
-  if (params.sdkSessionId) {
-    options.resume = params.sdkSessionId;
+  if (params.sessionId) {
+    options.resume = params.sessionId;
   }
 
   if (params.additionalDirectories) {

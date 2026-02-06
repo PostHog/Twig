@@ -1,6 +1,9 @@
 import type {
   AvailableCommand,
   ContentBlock,
+  SessionConfigOption,
+  SessionConfigSelectGroup,
+  SessionConfigSelectOption,
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import { useAuthStore } from "@features/auth/stores/authStore";
@@ -10,7 +13,7 @@ import {
   notifyPermissionRequest,
   notifyPromptComplete,
 } from "@renderer/lib/notifications";
-import { EXECUTION_MODES, type ExecutionMode, type Task } from "@shared/types";
+import type { ExecutionMode, Task } from "@shared/types";
 import type {
   AcpMessage,
   JsonRpcMessage,
@@ -27,9 +30,13 @@ import { getCloudUrlFromRegion } from "@/constants/oauth";
 import { getIsOnline } from "@/renderer/stores/connectivityStore";
 import { trpcVanilla } from "@/renderer/trpc";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
-import type { PermissionRequest } from "../utils/parseSessionLogs";
+import {
+  fetchSessionLogs,
+  type PermissionRequest,
+} from "../utils/parseSessionLogs";
 import { useModelsStore } from "./modelsStore";
-import { getPersistedTaskMode, setPersistedTaskMode } from "./sessionModeStore";
+import { useSessionAdapterStore } from "./sessionAdapterStore";
+import { useSessionConfigStore } from "./sessionConfigStore";
 
 const log = logger.scope("session-store");
 const CLOUD_POLLING_INTERVAL_MS = 500;
@@ -38,33 +45,70 @@ const CLOUD_POLLING_INTERVAL_MS = 500;
 
 // Re-export for external consumers
 export type { ExecutionMode, PermissionRequest };
+export type { SessionConfigOption };
 
-export function getExecutionModes(
-  allowBypassPermissions: boolean,
-): ExecutionMode[] {
-  return allowBypassPermissions
-    ? EXECUTION_MODES
-    : EXECUTION_MODES.filter((m) => m !== "bypassPermissions");
+type SelectOption = SessionConfigSelectOption;
+type SelectGroup = SessionConfigSelectGroup;
+
+function isSelectGroup(
+  options: SessionConfigOption["options"],
+): options is SelectGroup[] {
+  return Array.isArray(options) && options.length > 0 && "group" in options[0];
 }
 
-export function cycleExecutionMode(
-  current: ExecutionMode,
-  allowBypassPermissions: boolean,
-): ExecutionMode {
-  const modes = getExecutionModes(allowBypassPermissions);
-  const currentIndex = modes.indexOf(current);
-  if (currentIndex === -1) {
-    return "default";
-  }
-  const nextIndex = (currentIndex + 1) % modes.length;
-  return modes[nextIndex];
+export function flattenSelectOptions(
+  options: SessionConfigOption["options"],
+): SelectOption[] {
+  if (!isSelectGroup(options)) return options;
+  return options.flatMap((group) => group.options);
 }
 
-export interface AgentModelOption {
-  modelId: string;
-  name: string;
-  description?: string | null;
-  provider?: string;
+function mergeConfigOptions(
+  live: SessionConfigOption[],
+  stored: SessionConfigOption[] | undefined,
+): SessionConfigOption[] {
+  if (!stored) return live;
+  const storedById = new Map(stored.map((opt) => [opt.id, opt]));
+  return live.map((opt) => {
+    if (!opt.id) return opt;
+    const storedOpt = storedById.get(opt.id);
+    if (!storedOpt?.currentValue) return opt;
+    if (!opt.options) {
+      return { ...opt, currentValue: storedOpt.currentValue };
+    }
+    const available = flattenSelectOptions(opt.options);
+    const exists = available.some((o) => o.value === storedOpt.currentValue);
+    if (!exists) return opt;
+    return { ...opt, currentValue: storedOpt.currentValue };
+  });
+}
+
+export function getConfigOptionByCategory(
+  configOptions: SessionConfigOption[] | undefined,
+  category: string,
+): SessionConfigOption | undefined {
+  return configOptions?.find((opt) => opt.category === category);
+}
+
+export function cycleModeOption(
+  modeOption: SessionConfigOption | undefined,
+  allowBypassPermissions: boolean,
+): string | undefined {
+  if (!modeOption) return undefined;
+  const allOptions = flattenSelectOptions(modeOption.options);
+  const filtered = allowBypassPermissions
+    ? allOptions
+    : allOptions.filter(
+        (opt) =>
+          opt.value !== "bypassPermissions" && opt.value !== "full-access",
+      );
+  if (filtered.length === 0) return allOptions[0]?.value;
+
+  const currentIndex = filtered.findIndex(
+    (opt) => opt.value === modeOption.currentValue,
+  );
+  if (currentIndex === -1) return filtered[0]?.value;
+  return filtered[(currentIndex + 1) % filtered.length]?.value;
 }
 
 export interface QueuedMessage {
@@ -87,12 +131,10 @@ export interface AgentSession {
   isCloud: boolean;
   logUrl?: string;
   processedLineCount?: number;
-  model?: string;
-  availableModels?: AgentModelOption[];
   framework?: "claude";
-  currentMode: ExecutionMode;
+  adapter?: "claude" | "codex";
+  configOptions?: SessionConfigOption[];
   pendingPermissions: Map<string, PermissionRequest>;
-  // Queue of messages to send when current turn completes
   messageQueue: QueuedMessage[];
 }
 
@@ -105,7 +147,8 @@ interface SessionActions {
     task: Task;
     repoPath: string;
     initialPrompt?: ContentBlock[];
-    executionMode?: ExecutionMode;
+    executionMode?: string;
+    adapter?: "claude" | "codex";
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -113,8 +156,16 @@ interface SessionActions {
     prompt: string | ContentBlock[],
   ) => Promise<{ stopReason: string }>;
   cancelPrompt: (taskId: string) => Promise<boolean>;
-  setSessionModel: (taskId: string, modelId: string) => Promise<void>;
-  setSessionMode: (taskId: string, modeId: ExecutionMode) => Promise<void>;
+  setSessionConfigOption: (
+    taskId: string,
+    configId: string,
+    value: string,
+  ) => Promise<void>;
+  setSessionConfigOptionByCategory: (
+    taskId: string,
+    category: string,
+    value: string,
+  ) => Promise<void>;
   appendUserShellExecute: (
     taskId: string,
     command: string,
@@ -165,7 +216,7 @@ function subscribeToChannel(taskRunId: string) {
   }
 
   const eventSubscription = trpcVanilla.agent.onSessionEvent.subscribe(
-    { sessionId: taskRunId },
+    { taskRunId },
     {
       onData: (payload: unknown) => {
         useStore.setState((state) => {
@@ -221,7 +272,7 @@ function subscribeToChannel(taskRunId: string) {
               const params = msg.params as {
                 update?: {
                   sessionUpdate?: string;
-                  currentModeId?: string;
+                  configOptions?: SessionConfigOption[];
                   inputTokens?: number;
                   outputTokens?: number;
                   cacheReadTokens?: number;
@@ -230,21 +281,36 @@ function subscribeToChannel(taskRunId: string) {
                 };
               };
 
-              // Handle mode updates from ExitPlanMode approval
               if (
-                params?.update?.sessionUpdate === "current_mode_update" &&
-                params.update.currentModeId
+                params?.update?.sessionUpdate === "config_option_update" &&
+                params.update.configOptions
               ) {
-                const newMode = params.update.currentModeId as ExecutionMode;
-                if (
-                  newMode === "plan" ||
-                  newMode === "default" ||
-                  newMode === "acceptEdits"
-                ) {
-                  session.currentMode = newMode;
-                  setPersistedTaskMode(session.taskId, newMode);
-                  log.info("Session mode updated", { taskRunId, newMode });
-                }
+                session.configOptions = params.update.configOptions;
+                useSessionConfigStore
+                  .getState()
+                  .setConfigOptions(taskRunId, params.update.configOptions);
+              }
+            }
+
+            // Handle _posthog/sdk_session notifications (adapter info)
+            if (
+              "method" in msg &&
+              msg.method === "_posthog/sdk_session" &&
+              "params" in msg
+            ) {
+              const params = msg.params as {
+                adapter?: "claude" | "codex";
+                sessionId?: string;
+              };
+              if (params.adapter) {
+                session.adapter = params.adapter;
+                useSessionAdapterStore
+                  .getState()
+                  .setAdapter(taskRunId, params.adapter);
+                log.info("Session adapter updated", {
+                  taskRunId,
+                  adapter: params.adapter,
+                });
               }
             }
           }
@@ -286,7 +352,7 @@ function subscribeToChannel(taskRunId: string) {
   // Subscribe to permission requests (for AskUserQuestion, ExitPlanMode, etc.)
   const permissionSubscription =
     trpcVanilla.agent.onPermissionRequest.subscribe(
-      { sessionId: taskRunId },
+      { taskRunId },
       {
         onData: async (payload) => {
           log.info("Permission request received in renderer", {
@@ -444,43 +510,6 @@ function shellExecutesToContextBlocks(
   }));
 }
 
-async function fetchSessionLogs(
-  logUrl: string,
-): Promise<{ rawEntries: StoredLogEntry[]; sdkSessionId?: string }> {
-  if (!logUrl) return { rawEntries: [] };
-
-  try {
-    const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
-    if (!content?.trim()) return { rawEntries: [] };
-
-    const rawEntries: StoredLogEntry[] = [];
-    let sdkSessionId: string | undefined;
-
-    for (const line of content.trim().split("\n")) {
-      try {
-        const stored = JSON.parse(line) as StoredLogEntry;
-        rawEntries.push(stored);
-
-        if (
-          stored.type === "notification" &&
-          stored.notification?.method?.endsWith("posthog/sdk_session")
-        ) {
-          const params = stored.notification.params as {
-            sdkSessionId?: string;
-          };
-          if (params?.sdkSessionId) sdkSessionId = params.sdkSessionId;
-        }
-      } catch {
-        log.warn("Failed to parse log entry", { line });
-      }
-    }
-
-    return { rawEntries, sdkSessionId };
-  } catch {
-    return { rawEntries: [] };
-  }
-}
-
 function convertStoredEntriesToEvents(
   entries: StoredLogEntry[],
   taskDescription?: string,
@@ -506,7 +535,6 @@ function createBaseSession(
   taskId: string,
   taskTitle: string,
   isCloud: boolean,
-  executionMode?: ExecutionMode,
 ): AgentSession {
   return {
     taskRunId,
@@ -519,7 +547,6 @@ function createBaseSession(
     isPromptPending: false,
     promptStartedAt: null,
     isCloud,
-    currentMode: executionMode ?? "default",
     pendingPermissions: new Map(),
     messageQueue: [],
   };
@@ -677,15 +704,26 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
     ) => {
-      const { rawEntries, sdkSessionId } = await fetchSessionLogs(logUrl);
+      const { rawEntries, sessionId, adapter, configOptions } =
+        await fetchSessionLogs(logUrl);
+      const storedAdapter = useSessionAdapterStore
+        .getState()
+        .getAdapter(taskRunId);
+      const resolvedAdapter = adapter ?? storedAdapter;
       const events = convertStoredEntriesToEvents(rawEntries);
 
-      const persistedMode = getPersistedTaskMode(taskId);
       const session = createBaseSession(taskRunId, taskId, taskTitle, false);
       session.events = events;
       session.logUrl = logUrl;
-      if (persistedMode) {
-        session.currentMode = persistedMode;
+      const persistedConfigOptions = useSessionConfigStore
+        .getState()
+        .getConfigOptions(taskRunId);
+      session.configOptions = persistedConfigOptions ?? configOptions;
+      if (resolvedAdapter) {
+        session.adapter = resolvedAdapter;
+        useSessionAdapterStore
+          .getState()
+          .setAdapter(taskRunId, resolvedAdapter);
       }
 
       addSession(session);
@@ -700,40 +738,54 @@ const useStore = create<SessionStore>()(
           apiHost: auth.apiHost,
           projectId: auth.projectId,
           logUrl,
-          sdkSessionId,
+          sessionId,
+          adapter: resolvedAdapter,
         });
 
         if (result) {
-          const selectedModel = useModelsStore.getState().getEffectiveModel();
+          const mergedConfigOptions = result.configOptions
+            ? mergeConfigOptions(result.configOptions, persistedConfigOptions)
+            : result.configOptions;
           updateSession(taskRunId, {
             status: "connected",
-            model: selectedModel,
-            availableModels: result.availableModels,
+            configOptions: mergedConfigOptions,
           });
 
-          try {
-            await trpcVanilla.agent.setModel.mutate({
-              sessionId: taskRunId,
-              modelId: selectedModel,
-            });
-          } catch (error) {
-            log.warn("Failed to restore model after reconnect", {
-              taskId,
-              error,
-            });
+          if (mergedConfigOptions) {
+            useSessionConfigStore
+              .getState()
+              .setConfigOptions(taskRunId, mergedConfigOptions);
           }
 
-          if (persistedMode) {
-            try {
-              await trpcVanilla.agent.setMode.mutate({
-                sessionId: taskRunId,
-                modeId: persistedMode,
-              });
-            } catch (error) {
-              log.warn("Failed to restore persisted mode after reconnect", {
+          const storedConfigOptions = persistedConfigOptions ?? configOptions;
+
+          if (storedConfigOptions && result.configOptions) {
+            const known = new Map(
+              result.configOptions.map((opt) => [opt.id, opt]),
+            );
+            for (const opt of storedConfigOptions) {
+              if (!opt.currentValue) continue;
+              const live = known.get(opt.id);
+              if (!live || live.currentValue === opt.currentValue) continue;
+
+              const selectable = flattenSelectOptions(live.options);
+              const exists = selectable.some(
+                (option) => option.value === opt.currentValue,
+              );
+              if (!exists) {
+                log.warn("Skipping invalid stored config option value", {
+                  taskId,
+                  configId: opt.id,
+                  value: opt.currentValue,
+                });
+                continue;
+              }
+
+              await get().actions.setSessionConfigOption(
                 taskId,
-                error,
-              });
+                opt.id,
+                opt.currentValue,
+              );
             }
           }
         } else {
@@ -765,7 +817,8 @@ const useStore = create<SessionStore>()(
       repoPath: string,
       auth: AuthCredentials,
       initialPrompt?: ContentBlock[],
-      executionMode?: ExecutionMode,
+      executionMode?: string,
+      adapter?: "claude" | "codex",
     ) => {
       if (!auth.client) {
         throw new Error(
@@ -778,10 +831,6 @@ const useStore = create<SessionStore>()(
         throw new Error("Failed to create task run. Please try again.");
       }
 
-      const persistedMode = getPersistedTaskMode(taskId);
-      const effectiveMode = executionMode ?? persistedMode;
-      const selectedModel = useModelsStore.getState().getEffectiveModel();
-
       const result = await trpcVanilla.agent.start.mutate({
         taskId,
         taskRunId: taskRun.id,
@@ -789,33 +838,47 @@ const useStore = create<SessionStore>()(
         apiKey: auth.apiKey,
         apiHost: auth.apiHost,
         projectId: auth.projectId,
-        model: selectedModel,
-        executionMode: effectiveMode,
+        adapter,
       });
 
-      const session = createBaseSession(
-        taskRun.id,
-        taskId,
-        taskTitle,
-        false,
-        effectiveMode,
-      );
+      const session = createBaseSession(taskRun.id, taskId, taskTitle, false);
       session.channel = result.channel;
       session.status = "connected";
-      session.model = result.currentModelId ?? selectedModel;
-      session.availableModels = result.availableModels;
-      if (persistedMode && !executionMode) {
-        session.currentMode = persistedMode;
+      session.configOptions = result.configOptions;
+      if (adapter) {
+        session.adapter = adapter;
+        useSessionAdapterStore.getState().setAdapter(taskRun.id, adapter);
       }
 
       addSession(session);
+      if (result.configOptions) {
+        useSessionConfigStore
+          .getState()
+          .setConfigOptions(taskRun.id, result.configOptions);
+      }
       subscribeToChannel(taskRun.id);
 
       track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
         task_id: taskId,
         execution_type: "local",
-        model: selectedModel,
       });
+
+      if (executionMode) {
+        await get().actions.setSessionConfigOptionByCategory(
+          taskId,
+          "mode",
+          executionMode,
+        );
+      }
+
+      const preferredModel = useModelsStore.getState().getEffectiveModel();
+      if (preferredModel) {
+        await get().actions.setSessionConfigOptionByCategory(
+          taskId,
+          "model",
+          preferredModel,
+        );
+      }
 
       if (initialPrompt?.length) {
         await get().actions.sendPrompt(taskId, initialPrompt);
@@ -922,6 +985,7 @@ const useStore = create<SessionStore>()(
           repoPath,
           initialPrompt,
           executionMode,
+          adapter,
         }) => {
           log.info("Connecting to task", { taskId: task.id });
 
@@ -1045,6 +1109,7 @@ const useStore = create<SessionStore>()(
                 auth,
                 initialPrompt,
                 executionMode,
+                adapter,
               );
             }
           } catch (error) {
@@ -1250,43 +1315,61 @@ const useStore = create<SessionStore>()(
           }
         },
 
-        setSessionModel: async (taskId, modelId) => {
+        setSessionConfigOption: async (taskId, configId, value) => {
           const session = getSessionByTaskId(taskId);
           if (!session || session.isCloud) return;
 
           try {
-            await trpcVanilla.agent.setModel.mutate({
+            await trpcVanilla.agent.setConfigOption.mutate({
               sessionId: session.taskRunId,
-              modelId,
+              configId,
+              value,
             });
-            updateSession(session.taskRunId, { model: modelId });
+
+            if (session.configOptions) {
+              const updated = session.configOptions.map((opt) =>
+                opt.id === configId ? { ...opt, currentValue: value } : opt,
+              );
+              updateSession(session.taskRunId, { configOptions: updated });
+              useSessionConfigStore
+                .getState()
+                .setConfigOptions(session.taskRunId, updated);
+            }
           } catch (error) {
-            log.error("Failed to change session model", {
+            log.error("Failed to change session config option", {
               taskId,
-              modelId,
+              configId,
+              value,
               error,
             });
           }
         },
 
-        setSessionMode: async (taskId, modeId) => {
+        setSessionConfigOptionByCategory: async (taskId, category, value) => {
           const session = getSessionByTaskId(taskId);
           if (!session || session.isCloud) return;
 
-          try {
-            await trpcVanilla.agent.setMode.mutate({
-              sessionId: session.taskRunId,
-              modeId,
-            });
-            updateSession(session.taskRunId, { currentMode: modeId });
-            setPersistedTaskMode(taskId, modeId);
-          } catch (error) {
-            log.error("Failed to change session mode", {
-              taskId,
-              modeId,
-              error,
-            });
+          const option = getConfigOptionByCategory(
+            session.configOptions,
+            category,
+          );
+          if (!option) {
+            log.warn("Config option category not found", { taskId, category });
+            return;
           }
+
+          const selectable = flattenSelectOptions(option.options);
+          const exists = selectable.some((opt) => opt.value === value);
+          if (!exists) {
+            log.warn("Config option value not available", {
+              taskId,
+              category,
+              value,
+            });
+            return;
+          }
+
+          await get().actions.setSessionConfigOption(taskId, option.id, value);
         },
 
         appendUserShellExecute: async (taskId, command, cwd, result) => {
@@ -1336,7 +1419,7 @@ const useStore = create<SessionStore>()(
 
           try {
             await trpcVanilla.agent.respondToPermission.mutate({
-              sessionId: session.taskRunId,
+              taskRunId: session.taskRunId,
               toolCallId,
               optionId,
               customInput,
@@ -1385,7 +1468,7 @@ const useStore = create<SessionStore>()(
 
           try {
             await trpcVanilla.agent.cancelPermission.mutate({
-              sessionId: session.taskRunId,
+              taskRunId: session.taskRunId,
               toolCallId,
             });
 
@@ -1602,26 +1685,37 @@ export function getPendingPermissionsForTask(
 }
 
 /**
- * Hook to get the current execution mode for a task.
- * Uses taskRunId lookup via a separate selector to ensure proper updates.
+ * Hook to get the current mode ID for a task.
  */
-export const useCurrentModeForTask = (
+export const useConfigOptionForTask = (
   taskId: string | undefined,
-): ExecutionMode | undefined => {
-  const taskRunId = useStore((s) => {
-    if (!taskId) return undefined;
-    for (const session of Object.values(s.sessions)) {
-      if (session.taskId === taskId) {
-        return session.taskRunId;
-      }
-    }
-    return undefined;
-  });
-
+  category: string,
+): SessionConfigOption | undefined => {
   return useStore((s) => {
-    if (!taskRunId) return undefined;
-    return s.sessions[taskRunId]?.currentMode;
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return getConfigOptionByCategory(session?.configOptions, category);
   });
+};
+
+export const useModeConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "mode");
+};
+
+export const useModelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "model");
+};
+
+export const useThoughtLevelConfigOptionForTask = (
+  taskId: string | undefined,
+): SessionConfigOption | undefined => {
+  return useConfigOptionForTask(taskId, "thought_level");
 };
 
 /**
@@ -1636,5 +1730,20 @@ export const useQueuedMessagesForTask = (
       (sess) => sess.taskId === taskId,
     );
     return session?.messageQueue ?? [];
+  });
+};
+
+/**
+ * Hook to get the adapter type (claude or codex) for a task.
+ */
+export const useAdapterForTask = (
+  taskId: string | undefined,
+): "claude" | "codex" | undefined => {
+  return useStore((s) => {
+    if (!taskId) return undefined;
+    const session = Object.values(s.sessions).find(
+      (sess) => sess.taskId === taskId,
+    );
+    return session?.adapter;
   });
 };

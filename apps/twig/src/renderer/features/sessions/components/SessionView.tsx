@@ -5,15 +5,16 @@ import {
 } from "@features/message-editor/components/MessageEditor";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
-  cycleExecutionMode,
-  type ExecutionMode,
-  useCurrentModeForTask,
+  cycleModeOption,
+  flattenSelectOptions,
+  useAdapterForTask,
+  useModeConfigOptionForTask,
   usePendingPermissionsForTask,
   useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import type { Plan } from "@features/sessions/types";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
-import { Warning } from "@phosphor-icons/react";
+import { Spinner, Warning } from "@phosphor-icons/react";
 import { Box, Button, ContextMenu, Flex, Text } from "@radix-ui/themes";
 import {
   type AcpMessage,
@@ -46,6 +47,7 @@ interface SessionViewProps {
   errorMessage?: string;
   onRetry?: () => void;
   onDelete?: () => void;
+  isInitializing?: boolean;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -66,33 +68,62 @@ export function SessionView({
   errorMessage = DEFAULT_ERROR_MESSAGE,
   onRetry,
   onDelete,
+  isInitializing = false,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
   const pendingPermissions = usePendingPermissionsForTask(taskId);
-  const { respondToPermission, cancelPermission, setSessionMode } =
-    useSessionActions();
-  const sessionMode = useCurrentModeForTask(taskId);
+  const {
+    respondToPermission,
+    cancelPermission,
+    setSessionConfigOptionByCategory,
+  } = useSessionActions();
+  const modeOption = useModeConfigOptionForTask(taskId);
+  const adapter = useAdapterForTask(taskId);
   const { allowBypassPermissions } = useSettingsStore();
-
-  const currentMode: ExecutionMode = sessionMode ?? "default";
+  const currentModeId = modeOption?.currentValue;
 
   useEffect(() => {
     if (
       !allowBypassPermissions &&
-      currentMode === "bypassPermissions" &&
+      (currentModeId === "bypassPermissions" ||
+        currentModeId === "full-access") &&
       taskId &&
-      !isCloud
+      !isCloud &&
+      modeOption
     ) {
-      setSessionMode(taskId, "default");
+      const options = flattenSelectOptions(modeOption.options);
+      const safeOption =
+        options.find(
+          (opt) =>
+            opt.value !== "bypassPermissions" && opt.value !== "full-access",
+        ) ?? options[0];
+      if (safeOption) {
+        setSessionConfigOptionByCategory(taskId, "mode", safeOption.value);
+      }
     }
-  }, [allowBypassPermissions, currentMode, taskId, isCloud, setSessionMode]);
+  }, [
+    allowBypassPermissions,
+    currentModeId,
+    taskId,
+    isCloud,
+    modeOption,
+    setSessionConfigOptionByCategory,
+  ]);
 
   const handleModeChange = useCallback(() => {
     if (!taskId || isCloud) return;
-    const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
-    setSessionMode(taskId, nextMode);
-  }, [taskId, isCloud, currentMode, allowBypassPermissions, setSessionMode]);
+    const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
+    if (nextMode) {
+      setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+    }
+  }, [
+    taskId,
+    isCloud,
+    allowBypassPermissions,
+    modeOption,
+    setSessionConfigOptionByCategory,
+  ]);
 
   const sessionId = taskId ?? "default";
   const setContext = useDraftStore((s) => s.actions.setContext);
@@ -109,26 +140,28 @@ export function SessionView({
     onCancelPrompt,
   ]);
 
-  // Mode cycling with Shift+Tab
   useHotkeys(
     "shift+tab",
     (e) => {
       e.preventDefault();
       if (!taskId || isCloud) return;
-      const nextMode = cycleExecutionMode(currentMode, allowBypassPermissions);
-      setSessionMode(taskId, nextMode);
+      const nextMode = cycleModeOption(modeOption, allowBypassPermissions);
+      if (nextMode) {
+        setSessionConfigOptionByCategory(taskId, "mode", nextMode);
+      }
     },
     {
       enableOnFormTags: true,
       enableOnContentEditable: true,
-      enabled: !isCloud && isRunning,
+      enabled: !isCloud && isRunning && !!modeOption,
     },
     [
       taskId,
-      currentMode,
+      currentModeId,
       isCloud,
       isRunning,
-      setSessionMode,
+      modeOption,
+      setSessionConfigOptionByCategory,
       allowBypassPermissions,
     ],
   );
@@ -208,7 +241,7 @@ export function SessionView({
         (o) => o.optionId === optionId,
       );
       if (selectedOption?.kind === "allow_always" && !isCloud) {
-        setSessionMode(taskId, "acceptEdits");
+        setSessionConfigOptionByCategory(taskId, "mode", "acceptEdits");
       }
 
       if (customInput) {
@@ -248,7 +281,7 @@ export function SessionView({
       respondToPermission,
       onSendPrompt,
       isCloud,
-      setSessionMode,
+      setSessionConfigOptionByCategory,
       requestFocus,
       sessionId,
     ],
@@ -347,86 +380,107 @@ export function SessionView({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <DropZoneOverlay isVisible={isDraggingFile} />
-          {showRawLogs ? (
-            <RawLogsView events={events} />
-          ) : (
-            <ConversationView
-              events={events}
-              isPromptPending={isPromptPending}
-              promptStartedAt={promptStartedAt}
-              repoPath={repoPath}
-              isCloud={isCloud}
-              taskId={taskId}
-            />
-          )}
-
-          <PlanStatusBar plan={latestPlan} />
-
-          {hasError ? (
+          {isInitializing ? (
             <Flex
               align="center"
               justify="center"
-              direction="column"
-              gap="2"
               className="absolute inset-0 bg-gray-1"
             >
-              <Warning size={32} weight="duotone" color="var(--red-9)" />
-              <Text size="3" weight="medium" color="red">
-                Session Error
-              </Text>
-              <Text
-                size="2"
-                align="center"
-                className="max-w-md px-4 text-gray-11"
-              >
-                {errorMessage}
-              </Text>
-              <Flex gap="2" mt="2">
-                {onRetry && (
-                  <Button variant="soft" size="2" onClick={onRetry}>
-                    Retry
-                  </Button>
-                )}
-                {onDelete && (
-                  <Button
-                    variant="soft"
-                    size="2"
-                    color="red"
-                    onClick={onDelete}
-                  >
-                    Delete Task
-                  </Button>
-                )}
-              </Flex>
+              <Spinner size={32} className="animate-spin text-gray-9" />
             </Flex>
-          ) : firstPendingPermission ? (
-            <PermissionSelector
-              toolCall={firstPendingPermission.toolCall}
-              options={firstPendingPermission.options}
-              onSelect={handlePermissionSelect}
-              onCancel={handlePermissionCancel}
-            />
           ) : (
-            <Box
-              className={
-                isBashMode
-                  ? "border border-accent-9 p-2"
-                  : "border-gray-4 border-t p-2"
-              }
-            >
-              <MessageEditor
-                ref={editorRef}
-                sessionId={sessionId}
-                placeholder="Type a message... @ to mention files, ! for bash mode"
-                onSubmit={handleSubmit}
-                onBashCommand={onBashCommand}
-                onBashModeChange={setIsBashMode}
-                onCancel={onCancelPrompt}
-                currentMode={currentMode}
-                onModeChange={!isCloud ? handleModeChange : undefined}
-              />
-            </Box>
+            <>
+              <DropZoneOverlay isVisible={isDraggingFile} />
+              {showRawLogs ? (
+                <RawLogsView events={events} />
+              ) : (
+                <ConversationView
+                  events={events}
+                  isPromptPending={isPromptPending}
+                  promptStartedAt={promptStartedAt}
+                  repoPath={repoPath}
+                  isCloud={isCloud}
+                  taskId={taskId}
+                />
+              )}
+
+              <PlanStatusBar plan={latestPlan} />
+
+              {hasError ? (
+                <Flex
+                  align="center"
+                  justify="center"
+                  direction="column"
+                  gap="2"
+                  className="absolute inset-0 bg-gray-1"
+                >
+                  <Warning size={32} weight="duotone" color="var(--red-9)" />
+                  <Text size="3" weight="medium" color="red">
+                    Session Error
+                  </Text>
+                  <Text
+                    size="2"
+                    align="center"
+                    className="max-w-md px-4 text-gray-11"
+                  >
+                    {errorMessage}
+                  </Text>
+                  <Flex gap="2" mt="2">
+                    {onRetry && (
+                      <Button variant="soft" size="2" onClick={onRetry}>
+                        Retry
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button
+                        variant="soft"
+                        size="2"
+                        color="red"
+                        onClick={onDelete}
+                      >
+                        Delete Task
+                      </Button>
+                    )}
+                  </Flex>
+                </Flex>
+              ) : firstPendingPermission ? (
+                <Box className="border-gray-4 border-t">
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <PermissionSelector
+                      toolCall={firstPendingPermission.toolCall}
+                      options={firstPendingPermission.options}
+                      onSelect={handlePermissionSelect}
+                      onCancel={handlePermissionCancel}
+                    />
+                  </Box>
+                </Box>
+              ) : (
+                <Box
+                  className={
+                    isBashMode
+                      ? "border border-accent-9"
+                      : "border-gray-4 border-t"
+                  }
+                >
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <MessageEditor
+                      ref={editorRef}
+                      sessionId={sessionId}
+                      placeholder="Type a message... @ to mention files, ! for bash mode"
+                      onSubmit={handleSubmit}
+                      onBashCommand={onBashCommand}
+                      onBashModeChange={setIsBashMode}
+                      onCancel={onCancelPrompt}
+                      modeOption={modeOption}
+                      onModeChange={
+                        !isCloud && modeOption ? handleModeChange : undefined
+                      }
+                      adapter={adapter}
+                    />
+                  </Box>
+                </Box>
+              )}
+            </>
           )}
         </Flex>
       </ContextMenu.Trigger>
