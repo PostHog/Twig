@@ -50,16 +50,10 @@ class GitOperationManagerImpl {
     operation: (git: ReturnType<typeof createGitClient>) => Promise<T>,
     options?: ExecuteOptions,
   ): Promise<T> {
-    const state = this.getRepoState(repoPath);
-    await state.lock.acquireRead();
-    try {
-      const git = createGitClient(repoPath, {
-        abortSignal: options?.signal,
-      }).env({ GIT_OPTIONAL_LOCKS: "0" });
-      return await operation(git);
-    } finally {
-      state.lock.releaseRead();
-    }
+    const git = createGitClient(repoPath, {
+      abortSignal: options?.signal,
+    }).env({ GIT_OPTIONAL_LOCKS: "0" });
+    return operation(git);
   }
 
   async executeWrite<T>(
