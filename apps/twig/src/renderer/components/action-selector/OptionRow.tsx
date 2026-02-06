@@ -1,4 +1,5 @@
 import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
 import { useRef } from "react";
 import { isOtherOption, isSubmitOption } from "./constants";
 import { InlineEditableText } from "./InlineEditableText";
@@ -108,7 +109,7 @@ export function OptionRow({
 
     const displayText = showsCustomInput
       ? customInput || getPlaceholder(option, customInputPlaceholder)
-      : option.label;
+      : compactHomePath(option.label);
 
     const textClass =
       showsCustomInput && !customInput
@@ -169,7 +170,7 @@ export function OptionRow({
             marginTop: "2px",
           }}
         >
-          {option.description}
+          {compactHomePath(option.description)}
         </Text>
       )}
     </Box>

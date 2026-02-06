@@ -1,6 +1,10 @@
 import { ArrowsLeftRight } from "@phosphor-icons/react";
 import { ToolRow } from "./ToolRow";
-import { type ToolViewProps, useToolCallStatus } from "./toolCallUtils";
+import {
+  getFilename,
+  type ToolViewProps,
+  useToolCallStatus,
+} from "./toolCallUtils";
 
 export function MoveToolView({
   toolCall,
@@ -26,7 +30,7 @@ export function MoveToolView({
     >
       {title ||
         (sourcePath && destPath
-          ? `Move ${sourcePath} → ${destPath}`
+          ? `Move ${getFilename(sourcePath)} → ${getFilename(destPath)}`
           : "Move file")}
     </ToolRow>
   );

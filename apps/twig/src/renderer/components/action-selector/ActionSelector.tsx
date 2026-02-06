@@ -1,4 +1,5 @@
 import { Box, Flex, Text } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
 import { useCallback, useEffect, useRef } from "react";
 import { isOtherOption } from "./constants";
 import { OptionRow } from "./OptionRow";
@@ -217,8 +218,8 @@ export function ActionSelector({
         )}
 
         {title && (
-          <Text size="1" weight="medium" className="text-blue-11">
-            {title}
+          <Text size="1" weight="medium" className="text-blue-11" title={title}>
+            {compactHomePath(title)}
           </Text>
         )}
 

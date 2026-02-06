@@ -1,5 +1,6 @@
 import { Terminal } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
 import { useState } from "react";
 import {
   ExpandableIcon,
@@ -64,7 +65,9 @@ export function ExecuteToolView({
           {description && <ToolTitle>{description}</ToolTitle>}
           {command && (
             <ToolTitle>
-              <span className="font-mono text-accent-11">{command}</span>
+              <span className="font-mono text-accent-11" title={command}>
+                {compactHomePath(command)}
+              </span>
             </ToolTitle>
           )}
           <StatusIndicators isFailed={isFailed} wasCancelled={wasCancelled} />

@@ -38,46 +38,50 @@ export function PlanStatusBar({ plan }: PlanStatusBarProps) {
       className="cursor-pointer border-gray-4 border-t bg-gray-2"
       onClick={() => setIsExpanded(!isExpanded)}
     >
-      <Flex align="center" gap="2" className="px-3 py-2">
-        {isExpanded ? (
-          <CaretDown size={12} className="text-gray-9" />
-        ) : (
-          <CaretRight size={12} className="text-gray-9" />
-        )}
-        <Text size="1" color="gray">
-          {stats.completed}/{stats.total} completed
-        </Text>
-        {stats.inProgress && (
-          <>
-            <Text size="1" color="gray">
-              •
-            </Text>
-            <Spinner size={12} className="animate-spin text-blue-9" />
-            <Text size="1" className="truncate text-gray-11">
-              {stats.inProgress.content}
-            </Text>
-          </>
-        )}
-      </Flex>
+      <Box className="mx-auto max-w-[750px]">
+        <Flex align="center" gap="2" className="px-3 py-2">
+          {isExpanded ? (
+            <CaretDown size={12} className="text-gray-9" />
+          ) : (
+            <CaretRight size={12} className="text-gray-9" />
+          )}
+          <Text size="1" color="gray">
+            {stats.completed}/{stats.total} completed
+          </Text>
+          {stats.inProgress && (
+            <>
+              <Text size="1" color="gray">
+                •
+              </Text>
+              <Spinner size={12} className="animate-spin text-blue-9" />
+              <Text size="1" className="truncate text-gray-11">
+                {stats.inProgress.content}
+              </Text>
+            </>
+          )}
+        </Flex>
 
-      {isExpanded && plan && (
-        <Box className="border-gray-4 border-t px-3 pb-2">
-          <Flex direction="column" gap="1" className="pt-2">
-            {plan.entries.map((entry) => (
-              <Flex key={entry.content} align="center" gap="2">
-                <StatusIcon status={entry.status} />
-                <Text
-                  size="1"
-                  color={entry.status === "completed" ? "gray" : undefined}
-                  className={entry.status === "completed" ? "text-gray-9" : ""}
-                >
-                  {entry.content}
-                </Text>
-              </Flex>
-            ))}
-          </Flex>
-        </Box>
-      )}
+        {isExpanded && plan && (
+          <Box className="border-gray-4 border-t px-3 pb-2">
+            <Flex direction="column" gap="1" className="pt-2">
+              {plan.entries.map((entry) => (
+                <Flex key={entry.content} align="center" gap="2">
+                  <StatusIcon status={entry.status} />
+                  <Text
+                    size="1"
+                    color={entry.status === "completed" ? "gray" : undefined}
+                    className={
+                      entry.status === "completed" ? "text-gray-9" : ""
+                    }
+                  >
+                    {entry.content}
+                  </Text>
+                </Flex>
+              ))}
+            </Flex>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }
