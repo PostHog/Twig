@@ -13,9 +13,9 @@ import type {
   BetaContentBlock,
   BetaRawContentBlockDelta,
 } from "@anthropic-ai/sdk/resources/beta.mjs";
-import { image, text } from "@/utils/acp-content.js";
-import { unreachable } from "@/utils/common.js";
-import type { Logger } from "@/utils/logger.js";
+import { image, text } from "../../../utils/acp-content.js";
+import { unreachable } from "../../../utils/common.js";
+import type { Logger } from "../../../utils/logger.js";
 import { registerHookCallback } from "../hooks.js";
 import type { Session, ToolUpdateMeta, ToolUseCache } from "../types.js";
 import {

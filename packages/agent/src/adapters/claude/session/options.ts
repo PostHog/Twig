@@ -8,8 +8,8 @@ import type {
   SpawnedProcess,
   SpawnOptions,
 } from "@anthropic-ai/claude-agent-sdk";
-import { IS_ROOT } from "@/utils/common.js";
-import type { Logger } from "@/utils/logger.js";
+import { IS_ROOT } from "../../../utils/common.js";
+import type { Logger } from "../../../utils/logger.js";
 import { createPostToolUseHook, type OnModeChange } from "../hooks.js";
 import type { TwigExecutionMode } from "../tools.js";
 

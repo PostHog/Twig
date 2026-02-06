@@ -17,6 +17,7 @@ import {
   captureException,
   initializePostHog,
   trackAppEvent,
+  withTeamContext,
 } from "./services/posthog-analytics.js";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
@@ -70,13 +71,17 @@ function initializeServices(): void {
 // App lifecycle
 // ========================================================
 
-app.whenReady().then(() => {
-  log.info(`Twig electron v${app.getVersion()} booting up`);
-  migrateTaskAssociations();
-  ensureClaudeConfigDir();
-  createWindow();
-  initializeServices();
-  initializeDeepLinks();
+initializePostHog();
+
+withTeamContext(() => {
+  app.whenReady().then(() => {
+    log.info(`Twig electron v${app.getVersion()} booting up`);
+    migrateTaskAssociations();
+    ensureClaudeConfigDir();
+    createWindow();
+    initializeServices();
+    initializeDeepLinks();
+  });
 });
 
 app.on("window-all-closed", () => {
@@ -136,20 +141,20 @@ process.on("SIGHUP", () => handleShutdownSignal("SIGHUP"));
 
 process.on("uncaughtException", (error) => {
   if (error.message === "write EIO") {
-    // stdout/stderr pipe is broken (shutdown). Disable the console transport
-    // so it stops hitting the broken pipe, then log to file.
     log.transports.console.level = false;
     log.error("Stdout pipe broken during shutdown (write EIO)");
     return;
   }
   log.error("Uncaught exception", error);
-
-  captureException(error, { source: "main", type: "uncaughtException" });
+  withTeamContext(() => {
+    captureException(error, { source: "main", type: "uncaughtException" });
+  });
 });
 
 process.on("unhandledRejection", (reason) => {
   log.error("Unhandled rejection", reason);
-
   const error = reason instanceof Error ? reason : new Error(String(reason));
-  captureException(error, { source: "main", type: "unhandledRejection" });
+  withTeamContext(() => {
+    captureException(error, { source: "main", type: "unhandledRejection" });
+  });
 });

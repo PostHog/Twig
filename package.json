@@ -15,6 +15,7 @@
     "dev:twig": "pnpm --filter twig dev",
     "start": "pnpm --filter twig start",
     "build": "turbo build",
+    "package": "turbo build && pnpm --filter twig package",
     "typecheck": "turbo typecheck",
     "lint": "biome check --write --unsafe",
     "format": "biome format --write",
@@ -53,6 +54,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
+    "@posthog/cli": "^0.5.26",
     "husky": "^9.1.7",
     "knip": "^5.66.3",
     "lint-staged": "^15.5.2",

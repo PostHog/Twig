@@ -17,9 +17,17 @@ export function initializePostHog() {
 
   posthogClient = new PostHog(apiKey, {
     host: apiHost || "https://internal-c.posthog.com",
+    enableExceptionAutocapture: true,
   });
 
   return posthogClient;
+}
+
+export function withTeamContext<T>(fn: () => T): T {
+  if (!posthogClient) {
+    return fn();
+  }
+  return posthogClient.withContext({ properties: { team: "twig" } }, fn);
 }
 
 export function setCurrentUserId(userId: string | null) {
@@ -38,18 +46,16 @@ export function trackAppEvent(
     return;
   }
 
-  // Use real user ID if available, otherwise use anonymous ID
   const distinctId = currentUserId || "anonymous-app-event";
-
-  properties = {
-    ...properties,
-    $process_person_profile: !!currentUserId,
-  };
 
   posthogClient.capture({
     distinctId,
     event: eventName,
-    properties,
+    properties: {
+      team: "twig",
+      ...properties,
+      $process_person_profile: !!currentUserId,
+    },
   });
 }
 
@@ -93,5 +99,8 @@ export function captureException(
   }
 
   const distinctId = currentUserId || "anonymous-app-event";
-  posthogClient.captureException(error, distinctId, additionalProperties);
+  posthogClient.captureException(error, distinctId, {
+    team: "twig",
+    ...additionalProperties,
+  });
 }

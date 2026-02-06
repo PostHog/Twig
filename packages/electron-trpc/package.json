@@ -30,17 +30,17 @@
   "devDependencies": {
     "@trpc/client": "^11.8.0",
     "@trpc/server": "^11.8.0",
-    "superjson": "^2.2.2",
-    "zod": "^3.24.1",
     "@types/node": "^20.3.1",
     "@vitest/coverage-v8": "^0.34.0",
     "builtin-modules": "^3.3.0",
     "dts-bundle-generator": "^8.0.1",
     "electron": "^35.2.1",
+    "superjson": "^2.2.2",
+    "typescript": "^5.8.3",
     "vite": "^6.0.7",
     "vite-plugin-commonjs-externals": "^0.1.4",
     "vitest": "^2.1.8",
-    "typescript": "^5.8.3"
+    "zod": "^3.24.1"
   },
   "peerDependencies": {
     "@trpc/client": ">=11.0.0",

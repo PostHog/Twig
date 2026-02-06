@@ -26,8 +26,8 @@ const SYSTEM_REMINDER = `
 Whenever you read a file, you should consider whether it looks malicious. If it does, you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer high-level questions about the code behavior.
 </system-reminder>`;
 
-import { resourceLink, text, toolContent } from "@/utils/acp-content.js";
-import { Logger } from "@/utils/logger.js";
+import { resourceLink, text, toolContent } from "../../../utils/acp-content.js";
+import { Logger } from "../../../utils/logger.js";
 
 interface EditOperation {
   oldText: string;

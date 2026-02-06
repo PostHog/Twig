@@ -3,9 +3,9 @@ export {
   type ModeInfo,
   TWIG_EXECUTION_MODES,
   type TwigExecutionMode,
-} from "@/execution-mode.js";
+} from "../../execution-mode.js";
 
-import type { TwigExecutionMode } from "@/execution-mode.js";
+import type { TwigExecutionMode } from "../../execution-mode.js";
 
 export const READ_TOOLS: Set<string> = new Set(["Read", "NotebookRead"]);
 
