@@ -5,7 +5,6 @@ import { AgentMessage } from "./AgentMessage";
 import { CompactBoundaryView } from "./CompactBoundaryView";
 import { ConsoleMessage } from "./ConsoleMessage";
 import { ErrorNotificationView } from "./ErrorNotificationView";
-import { PlanView } from "./PlanView";
 import { StatusNotificationView } from "./StatusNotificationView";
 import { TaskNotificationView } from "./TaskNotificationView";
 import { ThoughtView } from "./ThoughtView";
@@ -77,7 +76,7 @@ export const SessionUpdateView = memo(function SessionUpdateView({
     case "tool_call_update":
       return null;
     case "plan":
-      return <PlanView plan={item} />;
+      return null;
     case "available_commands_update":
       return null;
     case "config_option_update":
