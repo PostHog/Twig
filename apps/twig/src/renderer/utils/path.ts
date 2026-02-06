@@ -7,16 +7,9 @@ export function expandTildePath(path: string): string {
   return path;
 }
 
-export function compactHomePath(path: string): string {
-  // Replace common home directory patterns with ~
-  const userPattern = /^\/Users\/[^/]+/;
-  const homePattern = /^\/home\/[^/]+/;
-
-  if (userPattern.test(path)) {
-    return path.replace(userPattern, "~");
-  }
-  if (homePattern.test(path)) {
-    return path.replace(homePattern, "~");
-  }
-  return path;
+export function compactHomePath(text: string): string {
+  // Replace all occurrences of home directory patterns with ~
+  return text
+    .replace(/\/Users\/[^/\s]+/g, "~")
+    .replace(/\/home\/[^/\s]+/g, "~");
 }

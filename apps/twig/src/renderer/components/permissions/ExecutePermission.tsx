@@ -1,5 +1,6 @@
 import { ActionSelector } from "@components/ActionSelector";
 import { Code } from "@radix-ui/themes";
+import { compactHomePath } from "@utils/path";
 import {
   type BasePermissionProps,
   findTextContent,
@@ -19,8 +20,8 @@ export function ExecutePermission({
       title={toolCall.title ?? "Execute command"}
       pendingAction={
         command ? (
-          <Code variant="ghost" size="1">
-            {command}
+          <Code variant="ghost" size="1" title={command}>
+            {compactHomePath(command)}
           </Code>
         ) : undefined
       }
