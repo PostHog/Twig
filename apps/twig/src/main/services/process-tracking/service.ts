@@ -34,6 +34,12 @@ export interface ProcessSnapshot {
 
 @injectable()
 export class ProcessTrackingService {
+  private _isShuttingDown = false;
+
+  get isShuttingDown(): boolean {
+    return this._isShuttingDown;
+  }
+
   private processes = new Map<number, TrackedProcess>();
   private taskProcesses = new Map<string, Set<number>>();
 
@@ -235,6 +241,8 @@ export class ProcessTrackingService {
 
   @preDestroy()
   killAll(): void {
+    this._isShuttingDown = true;
+
     const count = this.processes.size;
     if (count > 0) {
       log.info(`Killing all tracked processes (${count} active)`);

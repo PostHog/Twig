@@ -3,9 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
 import { app } from "electron";
-import { injectable, preDestroy } from "inversify";
+import { inject, injectable, preDestroy } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { ProcessTrackingService } from "../process-tracking/service.js";
 import {
   type DirectoryEntry,
   FileWatcherEvent,
@@ -34,6 +36,13 @@ interface RepoWatcher {
 @injectable()
 export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
   private watchers = new Map<string, RepoWatcher>();
+
+  constructor(
+    @inject(MAIN_TOKENS.ProcessTrackingService)
+    private processTracking: ProcessTrackingService,
+  ) {
+    super();
+  }
 
   async listDirectory(dirPath: string): Promise<DirectoryEntry[]> {
     try {
@@ -144,6 +153,7 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     return watcher.subscribe(
       repoPath,
       (err, events) => {
+        if (this.processTracking.isShuttingDown) return;
         if (err) {
           this.handleWatcherError(err, repoPath);
           return;
@@ -221,6 +231,7 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     try {
       const gitDir = await this.resolveGitDir(repoPath);
       return watcher.subscribe(gitDir, (err, events) => {
+        if (this.processTracking.isShuttingDown) return;
         if (err) {
           log.error("Git watcher error:", err);
           return;
