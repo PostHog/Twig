@@ -37,7 +37,10 @@ program
   .name("agent-server")
   .description("PostHog cloud agent server - runs in sandbox environments")
   .option("--port <port>", "HTTP server port", "3001")
+  .option("--mode <mode>", "Execution mode: interactive or background", "interactive")
   .requiredOption("--repositoryPath <path>", "Path to the repository")
+  .requiredOption("--taskId <id>", "Task ID")
+  .requiredOption("--runId <id>", "Task run ID")
   .action(async (options) => {
     const envResult = envSchema.safeParse(process.env);
 
@@ -51,6 +54,8 @@ program
 
     const env = envResult.data;
 
+    const mode = options.mode === "background" ? "background" : "interactive";
+
     const server = new AgentServer({
       port: parseInt(options.port, 10),
       jwtPublicKey: env.JWT_PUBLIC_KEY,
@@ -58,6 +63,9 @@ program
       apiUrl: env.POSTHOG_API_URL,
       apiKey: env.POSTHOG_PERSONAL_API_KEY,
       projectId: env.POSTHOG_PROJECT_ID,
+      mode,
+      taskId: options.taskId,
+      runId: options.runId,
     });
 
     process.on("SIGINT", async () => {

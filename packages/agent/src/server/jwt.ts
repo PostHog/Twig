@@ -9,6 +9,7 @@ export const userDataSchema = z.object({
   team_id: z.number(),
   user_id: z.number(),
   distinct_id: z.string(),
+  mode: z.enum(["interactive", "background"]).optional().default("interactive"),
 });
 
 const jwtPayloadSchema = userDataSchema.extend({

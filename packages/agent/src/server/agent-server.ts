@@ -13,7 +13,7 @@ import {
 import { PostHogAPIClient } from "../posthog-api.js";
 import { SessionLogWriter } from "../session-log-writer.js";
 import { TreeTracker } from "../tree-tracker.js";
-import type { DeviceInfo, TreeSnapshotEvent } from "../types.js";
+import type { AgentMode, DeviceInfo, TreeSnapshotEvent } from "../types.js";
 import { AsyncMutex } from "../utils/async-mutex.js";
 import { getLlmGatewayUrl } from "../utils/gateway.js";
 import { Logger } from "../utils/logger.js";
@@ -144,11 +144,21 @@ export class AgentServer {
   private server: ServerType | null = null;
   private session: ActiveSession | null = null;
   private app: Hono;
+  private posthogAPI: PostHogAPIClient;
 
   constructor(config: AgentServerConfig) {
     this.config = config;
     this.logger = new Logger({ debug: true, prefix: "[AgentServer]" });
+    this.posthogAPI = new PostHogAPIClient({
+      apiUrl: config.apiUrl,
+      projectId: config.projectId,
+      getApiKey: () => config.apiKey,
+    });
     this.app = this.createApp();
+  }
+
+  private getEffectiveMode(payload: JwtPayload): AgentMode {
+    return payload.mode ?? this.config.mode;
   }
 
   private createApp(): Hono {
@@ -309,7 +319,7 @@ export class AgentServer {
   }
 
   async start(): Promise<void> {
-    return new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       this.server = serve(
         {
           fetch: this.app.fetch,
@@ -321,6 +331,27 @@ export class AgentServer {
         },
       );
     });
+
+    // Auto-initialize session and start working on the task
+    await this.autoInitializeSession();
+  }
+
+  private async autoInitializeSession(): Promise<void> {
+    const { taskId, runId, mode, projectId } = this.config;
+
+    this.logger.info("Auto-initializing session", { taskId, runId, mode });
+
+    // Create a synthetic payload from config (no JWT needed for auto-init)
+    const payload: JwtPayload = {
+      task_id: taskId,
+      run_id: runId,
+      team_id: projectId,
+      user_id: 0, // System-initiated
+      distinct_id: "agent-server",
+      mode,
+    };
+
+    await this.initializeSession(payload, null);
   }
 
   async stop(): Promise<void> {
@@ -409,7 +440,7 @@ export class AgentServer {
 
   private async initializeSession(
     payload: JwtPayload,
-    sseController: SseController,
+    sseController: SseController | null,
   ): Promise<void> {
     if (this.session) {
       await this.cleanupSession();
@@ -501,6 +532,73 @@ export class AgentServer {
     };
 
     this.logger.info("Session initialized successfully");
+
+    await this.sendInitialTaskMessage(payload);
+  }
+
+  private async sendInitialTaskMessage(payload: JwtPayload): Promise<void> {
+    if (!this.session) return;
+
+    try {
+      this.logger.info("Fetching task details", { taskId: payload.task_id });
+      const task = await this.posthogAPI.getTask(payload.task_id);
+
+      if (!task.description) {
+        this.logger.warn("Task has no description, skipping initial message");
+        return;
+      }
+
+      this.logger.info("Sending initial task message", {
+        taskId: payload.task_id,
+        descriptionLength: task.description.length,
+      });
+
+      const result = await this.session.clientConnection.prompt({
+        sessionId: payload.run_id,
+        prompt: [{ type: "text", text: task.description }],
+      });
+
+      this.logger.info("Initial task message completed", {
+        stopReason: result.stopReason,
+      });
+
+      // Only auto-complete for background mode
+      const mode = this.getEffectiveMode(payload);
+      if (mode === "background") {
+        await this.signalTaskComplete(payload, result.stopReason);
+      } else {
+        this.logger.info("Interactive mode - staying open for conversation");
+      }
+    } catch (error) {
+      this.logger.error("Failed to send initial task message", error);
+      // Signal failure for background mode
+      const mode = this.getEffectiveMode(payload);
+      if (mode === "background") {
+        await this.signalTaskComplete(payload, "error");
+      }
+    }
+  }
+
+  private async signalTaskComplete(
+    payload: JwtPayload,
+    stopReason: string,
+  ): Promise<void> {
+    const status =
+      stopReason === "cancelled"
+        ? "cancelled"
+        : stopReason === "error"
+          ? "failed"
+          : "completed";
+
+    try {
+      await this.posthogAPI.updateTaskRun(payload.task_id, payload.run_id, {
+        status,
+        error_message: stopReason === "error" ? "Agent error" : undefined,
+      });
+      this.logger.info("Task completion signaled", { status, stopReason });
+    } catch (error) {
+      this.logger.error("Failed to signal task completion", error);
+    }
   }
 
   private configureEnvironment(): void {
@@ -529,11 +627,21 @@ export class AgentServer {
     });
   }
 
-  private createCloudClient(_payload: JwtPayload) {
+  private createCloudClient(payload: JwtPayload) {
+    const mode = this.getEffectiveMode(payload);
+
     return {
       requestPermission: async (params: {
         options: Array<{ kind: string; optionId: string }>;
       }) => {
+        // Background mode: always auto-approve permissions
+        // Interactive mode: also auto-approve for now (user can monitor via SSE)
+        // Future: interactive mode could pause and wait for user approval via SSE
+        this.logger.debug("Permission request", {
+          mode,
+          options: params.options,
+        });
+
         const allowOption = params.options.find(
           (o) => o.kind === "allow_once" || o.kind === "allow_always",
         );

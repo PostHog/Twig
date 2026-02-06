@@ -2,6 +2,7 @@ import type {
   ArtifactType,
   PostHogAPIConfig,
   StoredEntry,
+  Task,
   TaskRun,
   TaskRunArtifact,
 } from "./types.js";
@@ -88,6 +89,11 @@ export class PostHogAPIClient {
 
   getLlmGatewayUrl(): string {
     return getLlmGatewayUrl(this.baseUrl);
+  }
+
+  async getTask(taskId: string): Promise<Task> {
+    const teamId = this.getTeamId();
+    return this.apiRequest<Task>(`/api/projects/${teamId}/tasks/${taskId}/`);
   }
 
   async getTaskRun(taskId: string, runId: string): Promise<TaskRun> {

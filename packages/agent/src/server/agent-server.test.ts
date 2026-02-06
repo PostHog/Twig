@@ -96,6 +96,9 @@ describe("AgentServer HTTP Mode", () => {
       apiUrl: "http://localhost:8000",
       apiKey: "test-api-key",
       projectId: 1,
+      mode: "interactive",
+      taskId: "test-task-id",
+      runId: "test-run-id",
     });
     return server;
   };
@@ -108,6 +111,7 @@ describe("AgentServer HTTP Mode", () => {
         team_id: 1,
         user_id: 1,
         distinct_id: "test-distinct-id",
+        mode: "interactive",
         ...overrides,
       },
       TEST_PRIVATE_KEY,
