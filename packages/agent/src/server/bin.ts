@@ -37,7 +37,11 @@ program
   .name("agent-server")
   .description("PostHog cloud agent server - runs in sandbox environments")
   .option("--port <port>", "HTTP server port", "3001")
-  .option("--mode <mode>", "Execution mode: interactive or background", "interactive")
+  .option(
+    "--mode <mode>",
+    "Execution mode: interactive or background",
+    "interactive",
+  )
   .requiredOption("--repositoryPath <path>", "Path to the repository")
   .requiredOption("--taskId <id>", "Task ID")
   .requiredOption("--runId <id>", "Task run ID")

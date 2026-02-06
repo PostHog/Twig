@@ -332,7 +332,6 @@ export class AgentServer {
       );
     });
 
-    // Auto-initialize session and start working on the task
     await this.autoInitializeSession();
   }
 
