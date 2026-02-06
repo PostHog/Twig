@@ -15,18 +15,21 @@ export function killProcessTree(pid: number): void {
       // Windows: use taskkill with /T to kill process tree
       execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
     } else {
-      // Unix: kill the process group by using negative PID
-      // This sends SIGTERM to all processes in the group
-      try {
-        process.kill(-pid, "SIGTERM");
-      } catch {
-        // If SIGTERM fails (process may have already exited), try SIGKILL
+      // Try process group first (-pid), fall back to individual process (pid).
+      // SIGTERM for graceful shutdown, SIGKILL as last resort.
+      const signals: Array<[number, NodeJS.Signals]> = [
+        [-pid, "SIGTERM"],
+        [-pid, "SIGKILL"],
+        [pid, "SIGTERM"],
+        [pid, "SIGKILL"],
+      ];
+      for (const [target, signal] of signals) {
         try {
-          process.kill(-pid, "SIGKILL");
-        } catch (err) {
-          log.warn(`Failed to kill process group for PID ${pid}`, err);
-        }
+          process.kill(target, signal);
+          return;
+        } catch {}
       }
+      log.warn(`Failed to kill process ${pid}`);
     }
   } catch (err) {
     log.warn(`Failed to kill process tree for PID ${pid}`, err);
