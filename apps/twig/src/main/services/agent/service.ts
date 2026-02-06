@@ -26,6 +26,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
+import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -437,11 +438,16 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
     this.setupEnvironment(credentials, mockNodeDir);
 
-    // Route agent logs to dedicated agent_logs Kafka topic via capture-logs-agent service
-    // In local dev, use Caddy proxy (port 8010) which routes /i/v1/agent-logs to capture-logs-agent
-    // In prod, use the main API host which proxies /i/v1/agent-logs to capture-logs-agent
-    const otelHost = credentials.apiHost;
-    const otelPath = "/i/v1/agent-logs";
+    // OTEL log pipeline or legacy S3 writer if FF false
+    const useOtelPipeline = await this.isFeatureFlagEnabled(
+      "twig-agent-logs-pipeline",
+    );
+
+    log.info("Agent log transport", {
+      transport: useOtelPipeline ? "otel" : "s3",
+      taskId,
+      taskRunId,
+    });
 
     const agent = new Agent({
       posthog: {
@@ -449,11 +455,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         getApiKey: () => this.getToken(credentials.apiKey),
         projectId: credentials.projectId,
       },
-      otelTransport: {
-        host: otelHost,
-        apiKey: this.getToken(credentials.apiKey),
-        logsPath: otelPath,
-      },
+      otelTransport: useOtelPipeline
+        ? {
+            host: credentials.apiHost,
+            apiKey: this.getToken(credentials.apiKey),
+            logsPath: "/i/v1/agent-logs",
+          }
+        : undefined,
       debug: !app.isPackaged,
       onLog: onAgentLog,
     });
@@ -954,6 +962,20 @@ For git operations while detached:
       log.warn("Failed to setup mock node environment", err);
     }
     return mockNodeDir;
+  }
+
+  private async isFeatureFlagEnabled(flagKey: string): Promise<boolean> {
+    try {
+      const client = getPostHogClient();
+      const userId = getCurrentUserId();
+      if (!client || !userId) {
+        return false;
+      }
+      return (await client.isFeatureEnabled(flagKey, userId)) ?? false;
+    } catch (error) {
+      log.warn(`Error checking feature flag "${flagKey}":`, error);
+      return false;
+    }
   }
 
   private cleanupMockNodeEnvironment(mockNodeDir: string): void {
