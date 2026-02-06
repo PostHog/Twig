@@ -1,16 +1,7 @@
-import type { Schemas } from "@api/generated";
-import {
-  type AgentSession,
-  useSessions,
-} from "@features/sessions/stores/sessionStore";
+import { useSessions } from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
-import type { ActiveFilters } from "@features/tasks/stores/taskStore";
-import { getUserDisplayName } from "@hooks/useUsers";
-import { filtersMatch } from "@lib/filters";
-import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
-import type { RegisteredFolder, Task, Workspace } from "@shared/types";
-import { useEffect, useMemo } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
+import type { Task } from "@shared/types";
+import { useMemo } from "react";
 import {
   getTaskRepository,
   parseRepository,
@@ -18,63 +9,40 @@ import {
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
+import type { SortMode } from "../types";
 
-export interface TaskView {
-  id: string;
-  label: string;
-  filters: ActiveFilters;
-}
-
-export interface Repository {
+export interface TaskRepositoryInfo {
   fullPath: string;
   name: string;
-}
-
-export interface FolderData {
-  id: string;
-  name: string;
-  path: string;
-  tasks: TaskData[];
 }
 
 export interface TaskData {
   id: string;
   title: string;
-  lastActivityAt?: number;
-  isGenerating?: boolean;
-  isUnread?: boolean;
-  isPinned?: boolean;
-  needsPermission?: boolean;
-}
-
-export interface HistoryTaskData extends TaskData {
   createdAt: number;
-  folderName?: string;
+  lastActivityAt: number;
+  isGenerating: boolean;
+  isUnread: boolean;
+  isPinned: boolean;
+  needsPermission: boolean;
+  repository: TaskRepositoryInfo | null;
 }
 
-export interface HistoryData {
-  activeTasks: HistoryTaskData[];
-  recentTasks: HistoryTaskData[];
-  totalCount: number;
-  hasMore: boolean;
-}
-
-export interface PinnedData {
+export interface TaskGroup {
+  id: string;
+  name: string;
   tasks: TaskData[];
 }
 
 export interface SidebarData {
-  userName: string;
   isHomeActive: boolean;
-  views: TaskView[];
-  activeViewId: string | null;
-  repositories: Repository[];
-  activeRepository: string | null;
   isLoading: boolean;
-  folders: FolderData[];
   activeTaskId: string | null;
-  historyData: HistoryData;
-  pinnedData: PinnedData;
+  pinnedTasks: TaskData[];
+  flatTasks: TaskData[];
+  groupedTasks: TaskGroup[];
+  totalCount: number;
+  hasMore: boolean;
 }
 
 interface ViewState {
@@ -84,409 +52,170 @@ interface ViewState {
 
 interface UseSidebarDataProps {
   activeView: ViewState;
-  activeFilters: ActiveFilters;
-  currentUser: Schemas.User | undefined;
 }
 
-function buildRepositoryMap(tasks: Task[]): Repository[] {
-  const repositoryMap = new Map<string, Repository>();
-  for (const task of tasks) {
-    const repository = getTaskRepository(task);
-    if (repository) {
-      const parsed = parseRepository(repository);
-      if (parsed) {
-        repositoryMap.set(repository, {
-          fullPath: repository,
-          name: parsed.repoName,
-        });
-      }
-    }
-  }
-  return Array.from(repositoryMap.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-}
-
-function groupTasksByFolder(
-  tasks: Task[],
-  folders: RegisteredFolder[],
-  workspaces: Record<string, Workspace>,
-): Map<string, Task[]> {
-  const tasksByFolder = new Map<string, Task[]>();
-
-  for (const task of tasks) {
-    const workspace = workspaces[task.id];
-    if (!workspace) continue;
-    const folder = folders.find((f) => f.id === workspace.folderId);
-    if (!folder) continue;
-    if (!tasksByFolder.has(folder.id)) {
-      tasksByFolder.set(folder.id, []);
-    }
-    tasksByFolder.get(folder.id)?.push(task);
-  }
-
-  return tasksByFolder;
-}
-
-function sortFoldersByOrder(
-  folders: RegisteredFolder[],
-  order: string[],
-): RegisteredFolder[] {
-  const folderMap = new Map(folders.map((f) => [f.id, f]));
-  const result: RegisteredFolder[] = [];
-
-  for (const id of order) {
-    const folder = folderMap.get(id);
-    if (folder) {
-      result.push(folder);
-      folderMap.delete(id);
-    }
-  }
-  // Add any remaining folders not in the order (sorted by createdAt as fallback)
-  const remaining = Array.from(folderMap.values()).sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
-  return [...result, ...remaining];
-}
-
-function createTaskViews(currentUser: Schemas.User | undefined): TaskView[] {
-  const views: TaskView[] = [];
-
-  if (currentUser) {
-    const userDisplayName = getUserDisplayName(currentUser);
-    views.push({
-      id: "my-tasks",
-      label: "My tasks",
-      filters: {
-        creator: [{ value: userDisplayName, operator: "is" }],
-      },
-    });
-  }
-
-  views.push({
-    id: "all-tasks",
-    label: "All tasks",
-    filters: {},
-  });
-
-  return views;
-}
-
-function getActiveViewId(
-  views: TaskView[],
-  activeFilters: ActiveFilters,
-): string | null {
-  for (const view of views) {
-    if (filtersMatch(activeFilters, view.filters)) {
-      return view.id;
-    }
-  }
-  return null;
-}
-
-function getActiveRepository(activeFilters: ActiveFilters): string | null {
-  const repositoryFilters = activeFilters.repository || [];
-  return repositoryFilters.length === 1 ? repositoryFilters[0].value : null;
-}
-
-function buildHistoryData(
-  allTasks: Task[],
-  workspaces: Record<string, Workspace>,
-  folders: RegisteredFolder[],
-  sessions: Record<string, AgentSession>,
-  lastViewedAt: Record<string, number>,
-  localActivityAt: Record<string, number>,
-  pinnedTaskIds: Set<string>,
-  _activeTaskId: string | null,
-  visibleCount: number,
-): HistoryData {
-  const getSessionForTask = (taskId: string): AgentSession | undefined => {
-    return Object.values(sessions).find((s) => s.taskId === taskId);
-  };
-
-  // Transform all tasks to HistoryTaskData
-  const historyTasks: HistoryTaskData[] = allTasks.map((task) => {
-    const session = getSessionForTask(task.id);
-    const workspace = workspaces[task.id];
-    const folder = workspace
-      ? folders.find((f) => f.id === workspace.folderId)
-      : undefined;
-
-    const apiUpdatedAt = new Date(task.updated_at).getTime();
-    const localActivity = localActivityAt[task.id];
-    const lastActivityAt = localActivity
-      ? Math.max(apiUpdatedAt, localActivity)
-      : apiUpdatedAt;
-
-    const taskLastViewedAt = lastViewedAt[task.id];
-    const isUnread =
-      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
-
-    return {
-      id: task.id,
-      title: task.title,
-      lastActivityAt,
-      createdAt: new Date(task.created_at).getTime(),
-      isGenerating: session?.isPromptPending ?? false,
-      isUnread,
-      isPinned: pinnedTaskIds.has(task.id),
-      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
-      folderName: folder?.name,
-    };
-  });
-
-  // Filter out pinned tasks - they will be shown in their own section
-  const unpinnedTasks = historyTasks.filter((t) => !pinnedTaskIds.has(t.id));
-
-  // Partition into active (unread or needs permission) and inactive tasks
-  const activeTasks = unpinnedTasks
-    .filter((t) => t.isUnread || t.needsPermission)
-    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
-
-  const inactiveTasks = unpinnedTasks
-    .filter((t) => !t.isUnread && !t.needsPermission)
-    .sort((a, b) => b.createdAt - a.createdAt);
-
-  // Apply pagination to inactive tasks only (active always shown)
-  const totalCount = allTasks.length;
-  const recentTasks = inactiveTasks.slice(0, visibleCount);
-  const hasMore = inactiveTasks.length > visibleCount;
-
+function getRepositoryInfo(task: Task): TaskRepositoryInfo | null {
+  const repository = getTaskRepository(task);
+  if (!repository) return null;
+  const parsed = parseRepository(repository);
   return {
-    activeTasks,
-    recentTasks,
-    totalCount,
-    hasMore,
+    fullPath: repository,
+    name: parsed?.repoName ?? repository,
   };
 }
 
-function buildPinnedData(
-  allTasks: Task[],
-  sessions: Record<string, AgentSession>,
-  lastViewedAt: Record<string, number>,
-  localActivityAt: Record<string, number>,
-  pinnedTaskIds: Set<string>,
-  _activeTaskId: string | null,
-): PinnedData {
-  const getSessionForTask = (taskId: string): AgentSession | undefined => {
-    return Object.values(sessions).find((s) => s.taskId === taskId);
-  };
+function getSortValue(task: TaskData, sortMode: SortMode): number {
+  return sortMode === "updated" ? task.lastActivityAt : task.createdAt;
+}
 
-  // Filter to only pinned tasks
-  const pinnedTasks = allTasks.filter((task) => pinnedTaskIds.has(task.id));
+function sortTasks(tasks: TaskData[], sortMode: SortMode): TaskData[] {
+  return tasks.sort(
+    (a, b) => getSortValue(b, sortMode) - getSortValue(a, sortMode),
+  );
+}
 
-  // Transform to TaskData
-  const tasks: TaskData[] = pinnedTasks.map((task) => {
-    const session = getSessionForTask(task.id);
+function groupByRepository(
+  tasks: TaskData[],
+  folderOrder: string[],
+): TaskGroup[] {
+  const groupMap = new Map<string, TaskGroup>();
 
-    const apiUpdatedAt = new Date(task.updated_at).getTime();
-    const localActivity = localActivityAt[task.id];
-    const lastActivityAt = localActivity
-      ? Math.max(apiUpdatedAt, localActivity)
-      : apiUpdatedAt;
+  for (const task of tasks) {
+    const repository = task.repository;
+    const groupId = repository?.fullPath ?? "other";
+    const groupName = repository?.name ?? "Other";
 
-    const taskLastViewedAt = lastViewedAt[task.id];
-    const isUnread =
-      taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
+    if (!groupMap.has(groupId)) {
+      groupMap.set(groupId, { id: groupId, name: groupName, tasks: [] });
+    }
 
-    return {
-      id: task.id,
-      title: task.title,
-      lastActivityAt,
-      isGenerating: session?.isPromptPending ?? false,
-      isUnread,
-      isPinned: true,
-      needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
-    };
+    groupMap.get(groupId)?.tasks.push(task);
+  }
+
+  const groups = Array.from(groupMap.values());
+
+  if (folderOrder.length === 0) {
+    return groups.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return groups.sort((a, b) => {
+    const aIndex = folderOrder.indexOf(a.id);
+    const bIndex = folderOrder.indexOf(b.id);
+    if (aIndex === -1 && bIndex === -1) {
+      return a.name.localeCompare(b.name);
+    }
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
   });
-
-  // Sort by activity
-  tasks.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
-
-  return { tasks };
 }
 
 export function useSidebarData({
   activeView,
-  activeFilters,
-  currentUser,
 }: UseSidebarDataProps): SidebarData {
   const { data: allTasks = [], isLoading } = useTasks();
-  const { folders } = useRegisteredFoldersStore();
-  const workspaces = useWorkspaceStore.use.workspaces();
   const sessions = useSessions();
   const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
   const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
-  const folderOrder = useSidebarStore((state) => state.folderOrder);
-  const syncFolderOrder = useSidebarStore((state) => state.syncFolderOrder);
   const historyVisibleCount = useSidebarStore(
     (state) => state.historyVisibleCount,
   );
   const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
+  const organizeMode = useSidebarStore((state) => state.organizeMode);
+  const sortMode = useSidebarStore((state) => state.sortMode);
+  const folderOrder = useSidebarStore((state) => state.folderOrder);
 
-  const userName = currentUser?.first_name || currentUser?.email || "Account";
   const isHomeActive = activeView.type === "task-input";
-
-  const views = createTaskViews(currentUser);
-  const activeViewId = getActiveViewId(views, activeFilters);
-
-  const repositories = buildRepositoryMap(allTasks);
-  const activeRepository = getActiveRepository(activeFilters);
-
-  // Sync folder order when folders change
-  const folderIds = folders.map((f) => f.id);
-  useEffect(() => {
-    syncFolderOrder(folderIds);
-  }, [syncFolderOrder, folderIds]);
 
   const activeTaskId =
     activeView.type === "task-detail" && activeView.data
       ? activeView.data.id
       : null;
 
-  // Memoize sorted folders to maintain stable reference
-  const sortedFolders = useMemo(
-    () => sortFoldersByOrder(folders, folderOrder),
-    [folders, folderOrder],
-  );
+  const sessionByTaskId = useMemo(() => {
+    const map = new Map<string, (typeof sessions)[string]>();
+    for (const session of Object.values(sessions)) {
+      if (session.taskId) {
+        map.set(session.taskId, session);
+      }
+    }
+    return map;
+  }, [sessions]);
 
-  // Memoize tasks grouped by folder to maintain stable reference
-  const tasksByFolder = useMemo(
-    () => groupTasksByFolder(allTasks, folders, workspaces),
-    [allTasks, folders, workspaces],
-  );
+  const taskData = useMemo(() => {
+    return allTasks.map((task) => {
+      const session = sessionByTaskId.get(task.id);
+      const apiUpdatedAt = new Date(task.updated_at).getTime();
+      const localActivity = localActivityAt[task.id];
+      const lastActivityAt = localActivity
+        ? Math.max(apiUpdatedAt, localActivity)
+        : apiUpdatedAt;
+      const createdAt = new Date(task.created_at).getTime();
 
-  // Memoize folder data to prevent unnecessary re-renders in consumers
-  const folderData: FolderData[] = useMemo(() => {
-    const getSessionForTask = (taskId: string): AgentSession | undefined => {
-      return Object.values(sessions).find((s) => s.taskId === taskId);
-    };
-
-    return sortedFolders.map((folder) => {
-      const folderTasks = tasksByFolder.get(folder.id) || [];
-
-      const tasksWithActivity = folderTasks.map((task) => {
-        const session = getSessionForTask(task.id);
-        const apiUpdatedAt = new Date(task.updated_at).getTime();
-        const localActivity = localActivityAt[task.id];
-        const lastActivityAt = localActivity
-          ? Math.max(apiUpdatedAt, localActivity)
-          : apiUpdatedAt;
-        const isPinned = pinnedTaskIds.has(task.id);
-        return {
-          task,
-          lastActivityAt,
-          isGenerating: session?.isPromptPending ?? false,
-          isPinned,
-          needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
-        };
-      });
-
-      // Sort by pinned first, then by most recent activity
-      tasksWithActivity.sort((a, b) => {
-        // Pinned tasks come first
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        // Then sort by most recent activity
-        return b.lastActivityAt - a.lastActivityAt;
-      });
+      const taskLastViewedAt = lastViewedAt[task.id];
+      const isUnread =
+        taskLastViewedAt !== undefined && lastActivityAt > taskLastViewedAt;
 
       return {
-        id: folder.id,
-        name: folder.name,
-        path: folder.path,
-        tasks: tasksWithActivity.map(
-          ({
-            task,
-            lastActivityAt,
-            isGenerating,
-            isPinned,
-            needsPermission,
-          }) => {
-            const taskLastViewedAt = lastViewedAt[task.id];
-            const isUnread =
-              taskLastViewedAt !== undefined &&
-              lastActivityAt > taskLastViewedAt;
-
-            return {
-              id: task.id,
-              title: task.title,
-              lastActivityAt,
-              isGenerating,
-              isUnread,
-              isPinned,
-              needsPermission,
-            };
-          },
-        ),
+        id: task.id,
+        title: task.title,
+        createdAt,
+        lastActivityAt,
+        isGenerating: session?.isPromptPending ?? false,
+        isUnread,
+        isPinned: pinnedTaskIds.has(task.id),
+        needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
+        repository: getRepositoryInfo(task),
       };
     });
-  }, [
-    sortedFolders,
-    tasksByFolder,
-    sessions,
-    localActivityAt,
-    pinnedTaskIds,
-    lastViewedAt,
-  ]);
+  }, [allTasks, lastViewedAt, localActivityAt, pinnedTaskIds, sessionByTaskId]);
 
-  const historyData = useMemo(
-    () =>
-      buildHistoryData(
-        allTasks,
-        workspaces,
-        folders,
-        sessions,
-        lastViewedAt,
-        localActivityAt,
-        pinnedTaskIds,
-        activeTaskId,
-        historyVisibleCount,
-      ),
-    [
-      allTasks,
-      workspaces,
-      folders,
-      sessions,
-      lastViewedAt,
-      localActivityAt,
-      pinnedTaskIds,
-      activeTaskId,
-      historyVisibleCount,
-    ],
+  const pinnedTasks = useMemo(() => {
+    const pinned = taskData.filter((task) => task.isPinned);
+    return sortTasks(pinned, sortMode);
+  }, [taskData, sortMode]);
+
+  const unpinnedTasks = useMemo(
+    () => taskData.filter((task) => !task.isPinned),
+    [taskData],
   );
 
-  const pinnedData = useMemo(
-    () =>
-      buildPinnedData(
-        allTasks,
-        sessions,
-        lastViewedAt,
-        localActivityAt,
-        pinnedTaskIds,
-        activeTaskId,
-      ),
-    [
-      allTasks,
-      sessions,
-      lastViewedAt,
-      localActivityAt,
-      pinnedTaskIds,
-      activeTaskId,
-    ],
+  const sortedUnpinnedTasks = useMemo(
+    () => sortTasks([...unpinnedTasks], sortMode),
+    [unpinnedTasks, sortMode],
   );
+
+  const totalCount = unpinnedTasks.length;
+  const hasMore =
+    organizeMode === "chronological" &&
+    sortedUnpinnedTasks.length > historyVisibleCount;
+
+  const flatTasks = useMemo(() => {
+    if (organizeMode !== "chronological") {
+      return sortedUnpinnedTasks;
+    }
+    return sortedUnpinnedTasks.slice(0, historyVisibleCount);
+  }, [organizeMode, sortedUnpinnedTasks, historyVisibleCount]);
+
+  const groupedTasks = useMemo(() => {
+    const groups = groupByRepository(sortedUnpinnedTasks, folderOrder);
+    if (groups.length > 0) {
+      const groupIds = groups.map((g) => g.id);
+      queueMicrotask(() =>
+        useSidebarStore.getState().syncFolderOrder(groupIds),
+      );
+    }
+    return groups;
+  }, [sortedUnpinnedTasks, folderOrder]);
 
   return {
-    userName,
     isHomeActive,
-    views,
-    activeViewId,
-    repositories,
-    activeRepository,
     isLoading,
-    folders: folderData,
     activeTaskId,
-    historyData,
-    pinnedData,
+    pinnedTasks,
+    flatTasks,
+    groupedTasks,
+    totalCount,
+    hasMore,
   };
 }
