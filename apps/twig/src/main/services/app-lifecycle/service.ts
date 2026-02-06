@@ -7,6 +7,7 @@ import { withTimeout } from "../../lib/async.js";
 import { logger } from "../../lib/logger.js";
 import { shutdownPostHog, trackAppEvent } from "../posthog-analytics.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { WatcherRegistryService } from "../watcher-registry/service.js";
 
 const log = logger.scope("app-lifecycle");
 
@@ -56,6 +57,16 @@ export class AppLifecycleService {
 
   private async doShutdown(): Promise<void> {
     log.info("Shutdown started");
+
+    log.info("Shutting down native watchers first");
+    try {
+      const watcherRegistry = container.get<WatcherRegistryService>(
+        MAIN_TOKENS.WatcherRegistryService,
+      );
+      await watcherRegistry.shutdownAll();
+    } catch (error) {
+      log.warn("Failed to shutdown watcher registry", error);
+    }
 
     try {
       const processTracking = container.get<ProcessTrackingService>(
