@@ -5,7 +5,9 @@ import type { Alias, Plugin } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export function createPosthogPlugin(env: Record<string, string>): Plugin | null {
+export function createPosthogPlugin(
+  env: Record<string, string>,
+): Plugin | null {
   if (!env.POSTHOG_SOURCEMAP_API_KEY || !env.POSTHOG_ENV_ID) {
     return null;
   }
@@ -54,21 +56,42 @@ export const mainAliases: Alias[] = [
   ...baseAliases,
   {
     find: "@posthog/electron-trpc/main",
-    replacement: path.resolve(__dirname, "../../packages/electron-trpc/src/main/index.ts"),
+    replacement: path.resolve(
+      __dirname,
+      "../../packages/electron-trpc/src/main/index.ts",
+    ),
   },
   ...agentAliases,
 ];
 
 export const rendererAliases: Alias[] = [
   ...baseAliases,
-  { find: "@features", replacement: path.resolve(__dirname, "./src/renderer/features") },
-  { find: "@components", replacement: path.resolve(__dirname, "./src/renderer/components") },
-  { find: "@stores", replacement: path.resolve(__dirname, "./src/renderer/stores") },
-  { find: "@hooks", replacement: path.resolve(__dirname, "./src/renderer/hooks") },
-  { find: "@utils", replacement: path.resolve(__dirname, "./src/renderer/utils") },
+  {
+    find: "@features",
+    replacement: path.resolve(__dirname, "./src/renderer/features"),
+  },
+  {
+    find: "@components",
+    replacement: path.resolve(__dirname, "./src/renderer/components"),
+  },
+  {
+    find: "@stores",
+    replacement: path.resolve(__dirname, "./src/renderer/stores"),
+  },
+  {
+    find: "@hooks",
+    replacement: path.resolve(__dirname, "./src/renderer/hooks"),
+  },
+  {
+    find: "@utils",
+    replacement: path.resolve(__dirname, "./src/renderer/utils"),
+  },
   {
     find: "@posthog/electron-trpc/renderer",
-    replacement: path.resolve(__dirname, "../../packages/electron-trpc/src/renderer/index.ts"),
+    replacement: path.resolve(
+      __dirname,
+      "../../packages/electron-trpc/src/renderer/index.ts",
+    ),
   },
   ...agentAliases,
 ];
