@@ -3,11 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import * as watcher from "@parcel/watcher";
 import { app } from "electron";
-import { inject, injectable, preDestroy } from "inversify";
+import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
-import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { WatcherRegistryService } from "../watcher-registry/service.js";
 import {
   type DirectoryEntry,
   FileWatcherEvent,
@@ -28,8 +28,8 @@ interface PendingChanges {
 }
 
 interface RepoWatcher {
-  files: watcher.AsyncSubscription;
-  git: watcher.AsyncSubscription | null;
+  filesId: string;
+  gitId: string | null;
   pending: PendingChanges;
 }
 
@@ -38,8 +38,8 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
   private watchers = new Map<string, RepoWatcher>();
 
   constructor(
-    @inject(MAIN_TOKENS.ProcessTrackingService)
-    private processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.WatcherRegistryService)
+    private watcherRegistry: WatcherRegistryService,
   ) {
     super();
   }
@@ -80,9 +80,20 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
       timer: null,
     };
 
+    const filesId = `file-watcher:files:${repoPath}`;
+    const gitId = `file-watcher:git:${repoPath}`;
+
+    const filesSub = await this.watchFiles(repoPath, pending);
+    this.watcherRegistry.register(filesId, filesSub);
+
+    const gitSub = await this.watchGit(repoPath);
+    if (gitSub) {
+      this.watcherRegistry.register(gitId, gitSub);
+    }
+
     this.watchers.set(repoPath, {
-      files: await this.watchFiles(repoPath, pending),
-      git: await this.watchGit(repoPath),
+      filesId,
+      gitId: gitSub ? gitId : null,
       pending,
     });
   }
@@ -93,18 +104,11 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
 
     if (w.pending.timer) clearTimeout(w.pending.timer);
     await this.saveSnapshot(repoPath);
-    await w.files.unsubscribe();
-    await w.git?.unsubscribe();
+    await this.watcherRegistry.unregister(w.filesId);
+    if (w.gitId) {
+      await this.watcherRegistry.unregister(w.gitId);
+    }
     this.watchers.delete(repoPath);
-  }
-
-  @preDestroy()
-  async shutdown(): Promise<void> {
-    log.info("Shutting down file watcher service", {
-      watcherCount: this.watchers.size,
-    });
-    const repoPaths = Array.from(this.watchers.keys());
-    await Promise.all(repoPaths.map((repoPath) => this.stopWatching(repoPath)));
   }
 
   private get snapshotsDir(): string {
@@ -153,7 +157,7 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     return watcher.subscribe(
       repoPath,
       (err, events) => {
-        if (this.processTracking.isShuttingDown) return;
+        if (this.watcherRegistry.isShutdown) return;
         if (err) {
           this.handleWatcherError(err, repoPath);
           return;
@@ -231,7 +235,7 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     try {
       const gitDir = await this.resolveGitDir(repoPath);
       return watcher.subscribe(gitDir, (err, events) => {
-        if (this.processTracking.isShuttingDown) return;
+        if (this.watcherRegistry.isShutdown) return;
         if (err) {
           log.error("Git watcher error:", err);
           return;

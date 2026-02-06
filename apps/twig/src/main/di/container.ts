@@ -21,6 +21,7 @@ import { SleepService } from "../services/sleep/service.js";
 import { TaskLinkService } from "../services/task-link/service.js";
 import { UIService } from "../services/ui/service.js";
 import { UpdatesService } from "../services/updates/service.js";
+import { WatcherRegistryService } from "../services/watcher-registry/service.js";
 import { WorkspaceService } from "../services/workspace/service.js";
 import { MAIN_TOKENS } from "./tokens.js";
 
@@ -49,4 +50,5 @@ container.bind(MAIN_TOKENS.ShellService).to(ShellService);
 container.bind(MAIN_TOKENS.UIService).to(UIService);
 container.bind(MAIN_TOKENS.UpdatesService).to(UpdatesService);
 container.bind(MAIN_TOKENS.TaskLinkService).to(TaskLinkService);
+container.bind(MAIN_TOKENS.WatcherRegistryService).to(WatcherRegistryService);
 container.bind(MAIN_TOKENS.WorkspaceService).to(WorkspaceService);

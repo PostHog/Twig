@@ -15,13 +15,13 @@ import {
   StashPopSaga,
   StashPushSaga,
 } from "@twig/git/sagas/stash";
-import { inject, injectable, preDestroy } from "inversify";
+import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter";
 import { type FocusSession, focusStore } from "../../utils/store.js";
-import type { ProcessTrackingService } from "../process-tracking/service.js";
 import { getWorktreeLocation } from "../settingsStore";
+import type { WatcherRegistryService } from "../watcher-registry/service.js";
 import type { FocusResult, StashResult } from "./schemas.js";
 
 const log = logger.scope("focus");
@@ -48,18 +48,18 @@ export interface FocusServiceEvents {
 
 @injectable()
 export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
-  private mainRepoWatcher: watcher.AsyncSubscription | null = null;
   private watchedMainRepo: string | null = null;
+  private mainRepoWatcherId: string | null = null;
 
   constructor(
-    @inject(MAIN_TOKENS.ProcessTrackingService)
-    private processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.WatcherRegistryService)
+    private watcherRegistry: WatcherRegistryService,
   ) {
     super();
   }
 
   async startWatchingMainRepo(mainRepoPath: string): Promise<void> {
-    if (this.watchedMainRepo === mainRepoPath && this.mainRepoWatcher) {
+    if (this.watchedMainRepo === mainRepoPath && this.mainRepoWatcherId) {
       return;
     }
 
@@ -69,8 +69,10 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
     log.info(`Starting main repo watcher: ${gitDir}`);
 
     this.watchedMainRepo = mainRepoPath;
-    this.mainRepoWatcher = await watcher.subscribe(gitDir, (err, events) => {
-      if (this.processTracking.isShuttingDown) {
+    this.mainRepoWatcherId = `focus:main-repo:${mainRepoPath}`;
+
+    const subscription = await watcher.subscribe(gitDir, (err, events) => {
+      if (this.watcherRegistry.isShutdown) {
         return;
       }
 
@@ -88,13 +90,14 @@ export class FocusService extends TypedEventEmitter<FocusServiceEvents> {
         this.checkForBranchRename(mainRepoPath);
       }
     });
+
+    this.watcherRegistry.register(this.mainRepoWatcherId, subscription);
   }
 
-  @preDestroy()
   async stopWatchingMainRepo(): Promise<void> {
-    if (this.mainRepoWatcher) {
-      await this.mainRepoWatcher.unsubscribe();
-      this.mainRepoWatcher = null;
+    if (this.mainRepoWatcherId) {
+      await this.watcherRegistry.unregister(this.mainRepoWatcherId);
+      this.mainRepoWatcherId = null;
       this.watchedMainRepo = null;
       log.info("Stopped main repo watcher");
     }

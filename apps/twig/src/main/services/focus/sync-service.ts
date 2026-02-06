@@ -8,10 +8,10 @@ import {
 } from "@twig/git/queries";
 import { ApplyPatchSaga } from "@twig/git/sagas/patch";
 import ignore, { type Ignore } from "ignore";
-import { inject, injectable, preDestroy } from "inversify";
+import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import type { ProcessTrackingService } from "../process-tracking/service.js";
+import type { WatcherRegistryService } from "../watcher-registry/service.js";
 
 const log = logger.scope("focus-sync");
 
@@ -33,8 +33,8 @@ const WRITE_COOLDOWN_MS = 1000;
 export class FocusSyncService {
   private mainRepoPath: string | null = null;
   private worktreePath: string | null = null;
-  private mainSubscription: watcher.AsyncSubscription | null = null;
-  private worktreeSubscription: watcher.AsyncSubscription | null = null;
+  private mainWatcherId: string | null = null;
+  private worktreeWatcherId: string | null = null;
   private gitignore!: Ignore;
   private pending: PendingSync = {
     mainToWorktree: new Map(),
@@ -45,12 +45,11 @@ export class FocusSyncService {
   private initialSyncing = false;
   private currentSyncPromise: Promise<void> | null = null;
 
-  /** Files we recently wrote - map of absolute path to write timestamp */
   private recentWrites: Map<string, number> = new Map();
 
   constructor(
-    @inject(MAIN_TOKENS.ProcessTrackingService)
-    private processTracking: ProcessTrackingService,
+    @inject(MAIN_TOKENS.WatcherRegistryService)
+    private watcherRegistry: WatcherRegistryService,
   ) {}
 
   async startSync(mainRepoPath: string, worktreePath: string): Promise<void> {
@@ -79,7 +78,7 @@ export class FocusSyncService {
       return;
     }
 
-    if (this.mainSubscription || this.worktreeSubscription) {
+    if (this.mainWatcherId || this.worktreeWatcherId) {
       await this.stopSync();
     }
 
@@ -106,7 +105,7 @@ export class FocusSyncService {
       const mainSubPromise = watcher.subscribe(
         mainRepoPath,
         (err, events) => {
-          if (this.processTracking.isShuttingDown) return;
+          if (this.watcherRegistry.isShutdown) return;
           if (err) {
             log.error("Main repo watcher error:", err);
             return;
@@ -125,8 +124,9 @@ export class FocusSyncService {
 
       if (mainSubResult.timeout) {
         log.warn("Main repo watcher subscription timed out");
-      } else {
-        this.mainSubscription = mainSubResult.sub;
+      } else if (mainSubResult.sub) {
+        this.mainWatcherId = `focus-sync:main:${mainRepoPath}`;
+        this.watcherRegistry.register(this.mainWatcherId, mainSubResult.sub);
       }
     } catch (error) {
       log.error("Failed to subscribe to main repo watcher:", error);
@@ -136,7 +136,7 @@ export class FocusSyncService {
       const worktreeSubPromise = watcher.subscribe(
         worktreePath,
         (err, events) => {
-          if (this.processTracking.isShuttingDown) return;
+          if (this.watcherRegistry.isShutdown) return;
           if (err) {
             log.error("Worktree watcher error:", err);
             return;
@@ -155,15 +155,18 @@ export class FocusSyncService {
 
       if (worktreeSubResult.timeout) {
         log.warn("Worktree watcher subscription timed out");
-      } else {
-        this.worktreeSubscription = worktreeSubResult.sub;
+      } else if (worktreeSubResult.sub) {
+        this.worktreeWatcherId = `focus-sync:worktree:${worktreePath}`;
+        this.watcherRegistry.register(
+          this.worktreeWatcherId,
+          worktreeSubResult.sub,
+        );
       }
     } catch (error) {
       log.error("Failed to subscribe to worktree watcher:", error);
     }
   }
 
-  @preDestroy()
   async stopSync(): Promise<void> {
     if (this.pending.timer) {
       clearTimeout(this.pending.timer);
@@ -187,22 +190,14 @@ export class FocusSyncService {
       ]);
     }
 
-    if (this.mainSubscription) {
-      const sub = this.mainSubscription;
-      this.mainSubscription = null;
-      await Promise.race([
-        sub.unsubscribe(),
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
+    if (this.mainWatcherId) {
+      await this.watcherRegistry.unregister(this.mainWatcherId);
+      this.mainWatcherId = null;
     }
 
-    if (this.worktreeSubscription) {
-      const sub = this.worktreeSubscription;
-      this.worktreeSubscription = null;
-      await Promise.race([
-        sub.unsubscribe(),
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
+    if (this.worktreeWatcherId) {
+      await this.watcherRegistry.unregister(this.worktreeWatcherId);
+      this.worktreeWatcherId = null;
     }
 
     this.mainRepoPath = null;
