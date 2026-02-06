@@ -13,8 +13,13 @@ import {
   Trash,
   Wrench,
 } from "@phosphor-icons/react";
+import { compactHomePath } from "@utils/path";
 import { ToolRow } from "./ToolRow";
-import { type ToolViewProps, useToolCallStatus } from "./toolCallUtils";
+import {
+  getFilename,
+  type ToolViewProps,
+  useToolCallStatus,
+} from "./toolCallUtils";
 
 const kindIcons: Record<TwigToolKind, Icon> = {
   read: FileText,
@@ -44,7 +49,11 @@ export function ToolCallView({
   const KindIcon = (kind && kindIcons[kind]) || Wrench;
 
   const filePath = kind === "read" && locations?.[0]?.path;
-  const displayText = filePath ? `Read ${filePath}` : title;
+  const displayText = filePath
+    ? `Read ${getFilename(filePath)}`
+    : title
+      ? compactHomePath(title)
+      : undefined;
 
   return (
     <ToolRow

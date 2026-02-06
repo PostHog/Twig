@@ -65,7 +65,7 @@ export function InlineEditableText({
       } else if (e.key === "ArrowDown" || e.key === "Tab") {
         e.preventDefault();
         onNavigateDown();
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         onSubmit();
       } else if (!value && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
@@ -103,6 +103,8 @@ export function InlineEditableText({
           outline: "none",
           minWidth: "200px",
           display: "inline-block",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
         }}
       />
     </Text>

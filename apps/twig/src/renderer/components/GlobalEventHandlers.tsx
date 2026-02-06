@@ -151,12 +151,6 @@ export function GlobalEventHandlers({
     preventDefault: true,
   } as const;
 
-  const nonEditorOptions = {
-    enableOnFormTags: false,
-    enableOnContentEditable: false,
-    preventDefault: true,
-  } as const;
-
   useHotkeys(SHORTCUTS.COMMAND_MENU, onToggleCommandMenu, {
     ...globalOptions,
     enabled: !commandMenuOpen,
@@ -165,11 +159,7 @@ export function GlobalEventHandlers({
   useHotkeys(SHORTCUTS.SETTINGS, handleOpenSettings, globalOptions);
   useHotkeys(SHORTCUTS.GO_BACK, goBack, globalOptions);
   useHotkeys(SHORTCUTS.GO_FORWARD, goForward, globalOptions);
-  useHotkeys(
-    SHORTCUTS.TOGGLE_LEFT_SIDEBAR,
-    toggleLeftSidebar,
-    nonEditorOptions,
-  );
+  useHotkeys(SHORTCUTS.TOGGLE_LEFT_SIDEBAR, toggleLeftSidebar, globalOptions);
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
 
