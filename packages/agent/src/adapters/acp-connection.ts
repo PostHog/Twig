@@ -1,6 +1,7 @@
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
 import { POSTHOG_NOTIFICATIONS } from "@/acp-extensions.js";
 import type { SessionLogWriter } from "@/session-log-writer.js";
+import type { ProcessSpawnedCallback } from "@/types.js";
 import { Logger } from "@/utils/logger.js";
 import {
   createBidirectionalStreams,
@@ -9,10 +10,7 @@ import {
   nodeWritableToWebWritable,
   type StreamPair,
 } from "@/utils/streams.js";
-import {
-  ClaudeAcpAgent,
-  type ClaudeAcpAgentOptions,
-} from "./claude/claude-agent.js";
+import { ClaudeAcpAgent } from "./claude/claude-agent.js";
 import { type CodexProcessOptions, spawnCodexProcess } from "./codex/spawn.js";
 
 export type AgentAdapter = "claude" | "codex";
@@ -25,7 +23,7 @@ export type AcpConnectionConfig = {
   /** Deployment environment - "local" for desktop, "cloud" for cloud sandbox */
   deviceType?: "local" | "cloud";
   logger?: Logger;
-  processCallbacks?: ClaudeAcpAgentOptions;
+  processCallbacks?: ProcessSpawnedCallback;
   codexOptions?: CodexProcessOptions;
   allowedModelIds?: Set<string>;
 };
@@ -239,6 +237,7 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
   const codexProcess = spawnCodexProcess({
     ...config.codexOptions,
     logger,
+    processCallbacks: config.processCallbacks,
   });
 
   let clientReadable = nodeReadableToWebReadable(codexProcess.stdout);

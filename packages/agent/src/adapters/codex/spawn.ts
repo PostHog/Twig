@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
+import type { ProcessSpawnedCallback } from "@/types.js";
 import { Logger } from "@/utils/logger.js";
 
 export interface CodexProcessOptions {
@@ -10,6 +11,7 @@ export interface CodexProcessOptions {
   model?: string;
   binaryPath?: string;
   logger?: Logger;
+  processCallbacks?: ProcessSpawnedCallback;
 }
 
 export interface CodexProcess {
@@ -97,10 +99,20 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
 
   child.on("exit", (code, signal) => {
     logger.info("codex-acp process exited", { code, signal });
+    if (child.pid && options.processCallbacks?.onProcessExited) {
+      options.processCallbacks.onProcessExited(child.pid);
+    }
   });
 
   if (!child.stdin || !child.stdout) {
     throw new Error("Failed to get stdio streams from codex-acp process");
+  }
+
+  if (child.pid && options.processCallbacks?.onProcessSpawned) {
+    options.processCallbacks.onProcessSpawned({
+      pid: child.pid,
+      command,
+    });
   }
 
   return {
@@ -108,7 +120,7 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
     stdin: child.stdin,
     stdout: child.stdout,
     kill: () => {
-      logger.info("Killing codex-acp process");
+      logger.info("Killing codex-acp process", { pid: child.pid });
       child.kill("SIGTERM");
     },
   };

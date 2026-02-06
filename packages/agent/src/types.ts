@@ -100,7 +100,7 @@ export interface ProcessSpawnedCallback {
   onProcessSpawned?: (info: {
     pid: number;
     command: string;
-    sessionId: string;
+    sessionId?: string;
   }) => void;
   onProcessExited?: (pid: number) => void;
 }
