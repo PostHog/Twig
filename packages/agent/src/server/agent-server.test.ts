@@ -96,6 +96,9 @@ describe("AgentServer HTTP Mode", () => {
       apiUrl: "http://localhost:8000",
       apiKey: "test-api-key",
       projectId: 1,
+      mode: "interactive",
+      taskId: "test-task-id",
+      runId: "test-run-id",
     });
     return server;
   };
@@ -108,6 +111,7 @@ describe("AgentServer HTTP Mode", () => {
         team_id: 1,
         user_id: 1,
         distinct_id: "test-distinct-id",
+        mode: "interactive",
         ...overrides,
       },
       TEST_PRIVATE_KEY,
@@ -115,14 +119,14 @@ describe("AgentServer HTTP Mode", () => {
   };
 
   describe("GET /health", () => {
-    it("returns ok status", async () => {
+    it("returns ok status with active session", async () => {
       await createServer().start();
 
       const response = await fetch(`http://localhost:${port}/health`);
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body).toEqual({ status: "ok", hasSession: false });
+      expect(body).toEqual({ status: "ok", hasSession: true });
     });
   });
 
@@ -179,9 +183,9 @@ describe("AgentServer HTTP Mode", () => {
       expect(response.status).toBe(401);
     });
 
-    it("returns 400 when no session exists", async () => {
+    it("returns 400 when run_id does not match active session", async () => {
       await createServer().start();
-      const token = createToken();
+      const token = createToken({ run_id: "different-run-id" });
 
       const response = await fetch(`http://localhost:${port}/command`, {
         method: "POST",

@@ -25,6 +25,9 @@ export function createAgentServerConfig(
     apiKey: "test-api-key",
     projectId: 1,
     jwtPublicKey: TEST_PUBLIC_KEY,
+    mode: "interactive",
+    taskId: "test-task-id",
+    runId: "test-run-id",
     ...overrides,
   };
 }
