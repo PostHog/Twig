@@ -149,6 +149,7 @@ interface SessionActions {
     initialPrompt?: ContentBlock[];
     executionMode?: string;
     adapter?: "claude" | "codex";
+    model?: string;
   }) => Promise<void>;
   disconnectFromTask: (taskId: string) => Promise<void>;
   sendPrompt: (
@@ -819,6 +820,7 @@ const useStore = create<SessionStore>()(
       initialPrompt?: ContentBlock[],
       executionMode?: string,
       adapter?: "claude" | "codex",
+      model?: string,
     ) => {
       if (!auth.client) {
         throw new Error(
@@ -871,12 +873,12 @@ const useStore = create<SessionStore>()(
         );
       }
 
-      const preferredModel = useModelsStore.getState().getEffectiveModel();
-      if (preferredModel) {
+      const modelToUse = model ?? useModelsStore.getState().getEffectiveModel();
+      if (modelToUse) {
         await get().actions.setSessionConfigOptionByCategory(
           taskId,
           "model",
-          preferredModel,
+          modelToUse,
         );
       }
 
@@ -986,6 +988,7 @@ const useStore = create<SessionStore>()(
           initialPrompt,
           executionMode,
           adapter,
+          model,
         }) => {
           log.info("Connecting to task", { taskId: task.id });
 
@@ -1110,6 +1113,7 @@ const useStore = create<SessionStore>()(
                 initialPrompt,
                 executionMode,
                 adapter,
+                model,
               );
             }
           } catch (error) {

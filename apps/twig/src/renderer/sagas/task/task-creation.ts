@@ -32,6 +32,7 @@ export interface TaskCreationInput {
   githubIntegrationId?: number;
   executionMode?: string;
   adapter?: "claude" | "codex";
+  model?: string;
 }
 
 export interface TaskCreationOutput {
@@ -202,6 +203,7 @@ export class TaskCreationSaga extends Saga<
               initialPrompt,
               executionMode: input.executionMode,
               adapter: input.adapter,
+              model: input.model,
             });
           }
           return { taskId: task.id };
