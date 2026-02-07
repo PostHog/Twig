@@ -200,7 +200,10 @@ export function TaskInput() {
             adapter={adapter}
           />
 
-          <SuggestedTasks editorRef={editorRef} />
+          <SuggestedTasks
+            editorRef={editorRef}
+            selectedDirectory={selectedDirectory}
+          />
         </Flex>
       </Flex>
     </div>

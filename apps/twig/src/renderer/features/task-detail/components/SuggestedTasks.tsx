@@ -1,13 +1,57 @@
+import { useAutonomyFeatureFlag } from "@features/autonomy/hooks/useAutonomyFeatureFlag";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
-import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
+import { ArrowsClockwiseIcon, SparkleIcon } from "@phosphor-icons/react";
+import { Box, Button, Flex, IconButton, Text } from "@radix-ui/themes";
+import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { useSuggestedTasksStore } from "../stores/suggestedTasksStore";
 
 interface SuggestedTasksProps {
   editorRef: React.RefObject<MessageEditorHandle | null>;
+  selectedDirectory: string;
 }
 
-export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
+interface AutonomySetupCTAProps {
+  onSetup: () => void;
+  repoName: string | null;
+}
+
+function AutonomySetupCTA({ onSetup, repoName }: AutonomySetupCTAProps) {
+  const isDisabled = !repoName;
+
+  return (
+    <Box
+      mt="3"
+      p="3"
+      className="rounded border border-gray-7 border-dashed bg-gray-1"
+    >
+      <Flex direction="column" align="center" gap="2">
+        <Text size="1" color="gray" align="center">
+          <strong>Let your product build itself.</strong>
+          <br />
+          Twig Autonomy continuously identifies high-impact tasks by analyzing
+          your product's usage and operations. Ship what matters, faster than
+          ever.
+        </Text>
+        <Button
+          size="1"
+          variant="soft"
+          onClick={onSetup}
+          disabled={isDisabled}
+          title={isDisabled ? "Select a repository first" : undefined}
+        >
+          {repoName ? `Set up Autonomy for ${repoName}` : "Set up Autonomy"}
+          <SparkleIcon size={14} />
+        </Button>
+      </Flex>
+    </Box>
+  );
+}
+
+export function SuggestedTasks({
+  editorRef,
+  selectedDirectory,
+}: SuggestedTasksProps) {
+  const isAutonomyEnabled = useAutonomyFeatureFlag();
   const suggestions = useSuggestedTasksStore((state) => state.getSuggestions());
   const rotateSuggestions = useSuggestedTasksStore(
     (state) => state.rotateSuggestions,
@@ -15,6 +59,8 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
   const incrementUsage = useSuggestedTasksStore(
     (state) => state.incrementUsage,
   );
+  const { navigateToAutonomyOnboarding } = useNavigationStore();
+  const repoName = selectedDirectory?.split("/").pop() || null;
 
   const handleSuggestionClick = (suggestionTitle: string, prompt: string) => {
     const editor = editorRef.current;
@@ -24,7 +70,18 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
     editor.setContent(prompt);
   };
 
-  if (suggestions.length === 0) return null;
+  // Show Autonomy setup CTA if no suggestions and feature flag is enabled
+  if (suggestions.length === 0) {
+    if (!isAutonomyEnabled) {
+      return null;
+    }
+    return (
+      <AutonomySetupCTA
+        onSetup={navigateToAutonomyOnboarding}
+        repoName={repoName}
+      />
+    );
+  }
 
   return (
     <Box mt="3">
@@ -70,6 +127,13 @@ export function SuggestedTasks({ editorRef }: SuggestedTasksProps) {
           );
         })}
       </Flex>
+
+      {isAutonomyEnabled && (
+        <AutonomySetupCTA
+          onSetup={navigateToAutonomyOnboarding}
+          repoName={repoName}
+        />
+      )}
     </Box>
   );
 }

@@ -375,6 +375,32 @@ export class PostHogAPIClient {
   }
 
   /**
+   * Update the current team/project settings
+   */
+  async updateTeam(updates: {
+    proactive_tasks_enabled?: boolean;
+    session_recording_opt_in?: boolean;
+    autocapture_exceptions_opt_in?: boolean;
+  }): Promise<Schemas.Team> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/`);
+    const response = await this.api.fetcher.fetch({
+      method: "patch",
+      url,
+      path: `/api/projects/${teamId}/`,
+      overrides: {
+        body: JSON.stringify(updates),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update team: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
    * Get details for multiple projects by their IDs.
    * Returns project info including organization details.
    */
