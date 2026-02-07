@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isTwigBranch } from "@shared/constants";
+import { execGh } from "@twig/git/gh";
 import {
   getAllBranches,
   getChangedFilesDetailed,
@@ -17,6 +18,7 @@ import {
 } from "@twig/git/queries";
 import { CreateBranchSaga } from "@twig/git/sagas/branch";
 import { CloneSaga } from "@twig/git/sagas/clone";
+import { CommitSaga } from "@twig/git/sagas/commit";
 import { DiscardFileChangesSaga } from "@twig/git/sagas/discard";
 import { PullSaga } from "@twig/git/sagas/pull";
 import { PushSaga } from "@twig/git/sagas/push";
@@ -26,14 +28,19 @@ import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type {
   ChangedFile,
   CloneProgressPayload,
+  CommitOutput,
+  CreatePrOutput,
   DetectRepoResult,
   DiffStats,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
+  GhStatusOutput,
   GitCommitInfo,
   GitFileStatus,
   GitRepoInfo,
   GitSyncStatus,
+  OpenPrOutput,
+  PrStatusOutput,
   PublishOutput,
   PullOutput,
   PushOutput,
@@ -356,5 +363,188 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     sampleSize = 20,
   ): Promise<GetCommitConventionsOutput> {
     return getCommitConventions(directoryPath, sampleSize);
+  }
+
+  public async commit(
+    directoryPath: string,
+    message: string,
+    paths?: string[],
+    allowEmpty?: boolean,
+  ): Promise<CommitOutput> {
+    const fail = (msg: string): CommitOutput => ({
+      success: false,
+      message: msg,
+      commitSha: null,
+      branch: null,
+    });
+
+    if (!message.trim()) return fail("Commit message is required");
+
+    const saga = new CommitSaga();
+    const result = await saga.run({
+      baseDir: directoryPath,
+      message: message.trim(),
+      paths,
+      allowEmpty,
+    });
+
+    if (!result.success) return fail(result.error);
+
+    return {
+      success: true,
+      message: `Committed ${result.data.commitSha.slice(0, 7)}`,
+      commitSha: result.data.commitSha,
+      branch: result.data.branch,
+    };
+  }
+
+  public async getGhStatus(): Promise<GhStatusOutput> {
+    const versionResult = await execGh(["--version"]);
+    if (versionResult.exitCode !== 0) {
+      return {
+        installed: false,
+        version: null,
+        authenticated: false,
+        username: null,
+        error: versionResult.error ?? versionResult.stderr ?? null,
+      };
+    }
+
+    const version = versionResult.stdout.split("\n")[0]?.trim() ?? null;
+    const authResult = await execGh(["auth", "status"]);
+    const authenticated = authResult.exitCode === 0;
+    const authOutput = `${authResult.stdout}\n${authResult.stderr}`;
+    const usernameMatch = authOutput.match(/Logged in to github.com as (\S+)/);
+
+    return {
+      installed: true,
+      version,
+      authenticated,
+      username: usernameMatch?.[1] ?? null,
+      error: authenticated
+        ? null
+        : authResult.stderr || authResult.error || null,
+    };
+  }
+
+  public async getPrStatus(directoryPath: string): Promise<PrStatusOutput> {
+    const base: PrStatusOutput = {
+      hasRemote: false,
+      isGitHubRepo: false,
+      currentBranch: null,
+      defaultBranch: null,
+      prExists: false,
+      prUrl: null,
+      prState: null,
+      baseBranch: null,
+      headBranch: null,
+      isDraft: null,
+      error: null,
+    };
+
+    try {
+      const remoteUrl = await getRemoteUrl(directoryPath);
+      const isGitHubRepo = !!(remoteUrl && parseGitHubUrl(remoteUrl));
+      const currentBranch = await getCurrentBranch(directoryPath);
+      const defaultBranch = await getDefaultBranch(directoryPath).catch(
+        () => null,
+      );
+
+      if (!isGitHubRepo || !currentBranch) {
+        return {
+          ...base,
+          hasRemote: !!remoteUrl,
+          isGitHubRepo,
+          currentBranch,
+          defaultBranch,
+        };
+      }
+
+      const prResult = await execGh(
+        ["pr", "view", "--json", "url,state,baseRefName,headRefName,isDraft"],
+        { cwd: directoryPath },
+      );
+
+      const shared = {
+        hasRemote: true,
+        isGitHubRepo: true,
+        currentBranch,
+        defaultBranch,
+      };
+
+      if (prResult.exitCode !== 0) {
+        return { ...base, ...shared };
+      }
+
+      const data = JSON.parse(prResult.stdout) as {
+        url?: string;
+        state?: string;
+        baseRefName?: string;
+        headRefName?: string;
+        isDraft?: boolean;
+      };
+
+      return {
+        ...base,
+        ...shared,
+        prExists: !!data.url,
+        prUrl: data.url ?? null,
+        prState: data.state ?? null,
+        baseBranch: data.baseRefName ?? null,
+        headBranch: data.headRefName ?? null,
+        isDraft: data.isDraft ?? null,
+      };
+    } catch (error) {
+      return {
+        ...base,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  public async createPr(
+    directoryPath: string,
+    title?: string,
+    body?: string,
+    draft?: boolean,
+  ): Promise<CreatePrOutput> {
+    const args = ["pr", "create"];
+    if (title) args.push("--title", title);
+    if (body) args.push("--body", body);
+    if (draft) args.push("--draft");
+
+    const result = await execGh(args, { cwd: directoryPath });
+    if (result.exitCode !== 0) {
+      return {
+        success: false,
+        message: result.stderr || result.error || "Failed to create PR",
+        prUrl: null,
+      };
+    }
+
+    const prUrlMatch = result.stdout.match(/https:\/\/github\.com\/[^\s]+/);
+    return {
+      success: true,
+      message: "Pull request created",
+      prUrl: prUrlMatch?.[0] ?? null,
+    };
+  }
+
+  public async openPr(directoryPath: string): Promise<OpenPrOutput> {
+    const result = await execGh(["pr", "view", "--json", "url"], {
+      cwd: directoryPath,
+    });
+
+    if (result.exitCode !== 0) {
+      return {
+        success: false,
+        message: result.stderr || result.error || "Failed to fetch PR",
+        prUrl: null,
+      };
+    }
+
+    const data = JSON.parse(result.stdout) as { url?: string };
+    const prUrl = data.url ?? null;
+    return { success: !!prUrl, message: prUrl ? "OK" : "No PR found", prUrl };
   }
 }

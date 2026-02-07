@@ -192,6 +192,82 @@ export const pullOutput = z.object({
 export type PullInput = z.infer<typeof pullInput>;
 export type PullOutput = z.infer<typeof pullOutput>;
 
+// Commit operation
+export const commitInput = z.object({
+  directoryPath: z.string(),
+  message: z.string(),
+  paths: z.array(z.string()).optional(),
+  allowEmpty: z.boolean().optional(),
+});
+
+export const commitOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  commitSha: z.string().nullable(),
+  branch: z.string().nullable(),
+});
+
+export type CommitInput = z.infer<typeof commitInput>;
+export type CommitOutput = z.infer<typeof commitOutput>;
+
+// GitHub CLI status
+export const ghStatusOutput = z.object({
+  installed: z.boolean(),
+  version: z.string().nullable(),
+  authenticated: z.boolean(),
+  username: z.string().nullable(),
+  error: z.string().nullable(),
+});
+
+export type GhStatusOutput = z.infer<typeof ghStatusOutput>;
+
+// Pull request status
+export const prStatusInput = directoryPathInput;
+export const prStatusOutput = z.object({
+  hasRemote: z.boolean(),
+  isGitHubRepo: z.boolean(),
+  currentBranch: z.string().nullable(),
+  defaultBranch: z.string().nullable(),
+  prExists: z.boolean(),
+  prUrl: z.string().nullable(),
+  prState: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+  headBranch: z.string().nullable(),
+  isDraft: z.boolean().nullable(),
+  error: z.string().nullable(),
+});
+
+export type PrStatusInput = z.infer<typeof prStatusInput>;
+export type PrStatusOutput = z.infer<typeof prStatusOutput>;
+
+// Create PR operation
+export const createPrInput = z.object({
+  directoryPath: z.string(),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  draft: z.boolean().optional(),
+});
+
+export const createPrOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  prUrl: z.string().nullable(),
+});
+
+export type CreatePrInput = z.infer<typeof createPrInput>;
+export type CreatePrOutput = z.infer<typeof createPrOutput>;
+
+// Open PR operation
+export const openPrInput = directoryPathInput;
+export const openPrOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  prUrl: z.string().nullable(),
+});
+
+export type OpenPrInput = z.infer<typeof openPrInput>;
+export type OpenPrOutput = z.infer<typeof openPrOutput>;
+
 // Publish (push with upstream) operation
 export const publishInput = z.object({
   directoryPath: z.string(),

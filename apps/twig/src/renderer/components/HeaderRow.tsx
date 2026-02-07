@@ -1,3 +1,4 @@
+import { GitInteractionHeader } from "@features/git-interaction/components/GitInteractionHeader";
 import { RightSidebarTrigger } from "@features/right-sidebar/components/RightSidebarTrigger";
 import { useRightSidebarStore } from "@features/right-sidebar/stores/rightSidebarStore";
 import { SidebarTrigger } from "@features/sidebar/components/SidebarTrigger";
@@ -102,7 +103,7 @@ export function HeaderRow() {
         <Flex
           align="center"
           justify="between"
-          px="2"
+          pr="4"
           pl="3"
           style={{
             width: rightSidebarOpen
@@ -118,6 +119,7 @@ export function HeaderRow() {
           }}
         >
           <RightSidebarTrigger />
+          <GitInteractionHeader taskId={view.data.id} />
           {rightSidebarOpen && (
             <Box
               onMouseDown={handleRightSidebarMouseDown}

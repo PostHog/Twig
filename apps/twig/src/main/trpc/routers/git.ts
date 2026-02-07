@@ -3,7 +3,11 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   cloneRepositoryInput,
   cloneRepositoryOutput,
+  commitInput,
+  commitOutput,
   createBranchInput,
+  createPrInput,
+  createPrOutput,
   detectRepoInput,
   detectRepoOutput,
   discardFileChangesInput,
@@ -29,6 +33,11 @@ import {
   getLatestCommitOutput,
   getPrTemplateInput,
   getPrTemplateOutput,
+  ghStatusOutput,
+  openPrInput,
+  openPrOutput,
+  prStatusInput,
+  prStatusOutput,
   publishInput,
   publishOutput,
   pullInput,
@@ -149,6 +158,18 @@ export const gitRouter = router({
     .output(getGitRepoInfoOutput)
     .query(({ input }) => getService().getGitRepoInfo(input.directoryPath)),
 
+  commit: publicProcedure
+    .input(commitInput)
+    .output(commitOutput)
+    .mutation(({ input }) =>
+      getService().commit(
+        input.directoryPath,
+        input.message,
+        input.paths,
+        input.allowEmpty,
+      ),
+    ),
+
   push: publicProcedure
     .input(pushInput)
     .output(pushOutput)
@@ -181,6 +202,32 @@ export const gitRouter = router({
     .mutation(({ input }) =>
       getService().sync(input.directoryPath, input.remote),
     ),
+
+  getGhStatus: publicProcedure
+    .output(ghStatusOutput)
+    .query(() => getService().getGhStatus()),
+
+  getPrStatus: publicProcedure
+    .input(prStatusInput)
+    .output(prStatusOutput)
+    .query(({ input }) => getService().getPrStatus(input.directoryPath)),
+
+  createPr: publicProcedure
+    .input(createPrInput)
+    .output(createPrOutput)
+    .mutation(({ input }) =>
+      getService().createPr(
+        input.directoryPath,
+        input.title,
+        input.body,
+        input.draft,
+      ),
+    ),
+
+  openPr: publicProcedure
+    .input(openPrInput)
+    .output(openPrOutput)
+    .mutation(({ input }) => getService().openPr(input.directoryPath)),
 
   getPrTemplate: publicProcedure
     .input(getPrTemplateInput)

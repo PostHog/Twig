@@ -374,6 +374,16 @@ function matchesExcludePattern(filePath: string, patterns: string[]): boolean {
   });
 }
 
+async function countFileLines(filePath: string): Promise<number> {
+  try {
+    const content = await fs.readFile(filePath, "utf-8");
+    if (!content) return 0;
+    return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function getChangedFilesDetailed(
   baseDir: string,
   options?: GetChangedFilesDetailedOptions,
@@ -433,7 +443,13 @@ export async function getChangedFilesDetailed(
             ) {
               continue;
             }
-            files.push({ path: file, status: "untracked" });
+            const lineCount = await countFileLines(path.join(baseDir, file));
+            files.push({
+              path: file,
+              status: "untracked",
+              linesAdded: lineCount,
+              linesRemoved: 0,
+            });
           }
         }
 
@@ -512,13 +528,16 @@ export async function getSyncStatus(
 
         const defaultBranch = await detectDefaultBranchWithFallback(git);
         const hasRemote = status.tracking !== null;
+        const isWorkspaceBranch = currentBranch?.startsWith("workspace-");
+        const isFeatureBranch =
+          currentBranch !== defaultBranch && !isWorkspaceBranch;
 
         return {
           ahead: status.ahead,
           behind: status.behind,
           hasRemote,
           currentBranch,
-          isFeatureBranch: currentBranch !== defaultBranch,
+          isFeatureBranch,
         };
       } catch {
         return {
