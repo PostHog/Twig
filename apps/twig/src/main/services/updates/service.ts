@@ -115,8 +115,12 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
     });
 
     try {
-      await this.lifecycleService.shutdown();
+      // Set the flag FIRST so before-quit handler won't prevent quit
       this.lifecycleService.setQuittingForUpdate();
+
+      // Do lightweight cleanup: kill processes, shut down watchers
+      // Skip container teardown so before-quit handler can still access services
+      await this.lifecycleService.cleanupForUpdate();
 
       autoUpdater.quitAndInstall();
       return { installed: true };

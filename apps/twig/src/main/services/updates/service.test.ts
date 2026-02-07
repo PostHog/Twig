@@ -17,6 +17,7 @@ const { mockApp, mockAutoUpdater, mockLifecycleService } = vi.hoisted(() => ({
   },
   mockLifecycleService: {
     shutdown: vi.fn(() => Promise.resolve()),
+    cleanupForUpdate: vi.fn(() => Promise.resolve()),
     setQuittingForUpdate: vi.fn(),
   },
 }));
@@ -341,9 +342,27 @@ describe("UpdatesService", () => {
 
       const result = await service.installUpdate();
       expect(result).toEqual({ installed: true });
-      expect(mockLifecycleService.shutdown).toHaveBeenCalled();
+
+      // Verify setQuittingForUpdate is called first
       expect(mockLifecycleService.setQuittingForUpdate).toHaveBeenCalled();
+
+      // Verify cleanupForUpdate is called (not full shutdown)
+      expect(mockLifecycleService.cleanupForUpdate).toHaveBeenCalled();
+      expect(mockLifecycleService.shutdown).not.toHaveBeenCalled();
+
+      // Verify quitAndInstall is called after cleanup
       expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalled();
+
+      // Verify order: setQuittingForUpdate -> cleanupForUpdate -> quitAndInstall
+      const setQuittingOrder =
+        mockLifecycleService.setQuittingForUpdate.mock.invocationCallOrder[0];
+      const cleanupOrder =
+        mockLifecycleService.cleanupForUpdate.mock.invocationCallOrder[0];
+      const quitAndInstallOrder =
+        mockAutoUpdater.quitAndInstall.mock.invocationCallOrder[0];
+
+      expect(setQuittingOrder).toBeLessThan(cleanupOrder);
+      expect(cleanupOrder).toBeLessThan(quitAndInstallOrder);
     });
 
     it("returns false if quitAndInstall throws", async () => {
