@@ -1017,10 +1017,20 @@ const useStore = create<SessionStore>()(
           connectAttempts.add(taskId);
 
           try {
-            // Check auth first
-            const auth = getAuthCredentials();
+            // Check auth first, try to refresh if missing
+            let auth = getAuthCredentials();
             if (!auth) {
-              log.error("Missing auth credentials");
+              log.warn("Missing auth credentials, attempting token refresh");
+              try {
+                await useAuthStore.getState().refreshAccessToken();
+                auth = getAuthCredentials();
+              } catch (refreshError) {
+                log.error("Token refresh failed", refreshError);
+              }
+            }
+
+            if (!auth) {
+              log.error("Missing auth credentials after refresh attempt");
               const taskRunId = latestRun?.id ?? `error-${taskId}`;
               const session = createBaseSession(
                 taskRunId,
