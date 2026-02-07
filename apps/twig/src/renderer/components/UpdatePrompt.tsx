@@ -1,5 +1,5 @@
 import { DownloadIcon } from "@phosphor-icons/react";
-import { Button, Card, Dialog, Flex, Spinner, Text } from "@radix-ui/themes";
+import { Button, Card, Flex, Spinner, Text } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import { trpcReact } from "@renderer/trpc";
 import { useCallback, useRef, useState } from "react";
@@ -7,17 +7,13 @@ import { toast as sonnerToast } from "sonner";
 
 const log = logger.scope("updates");
 const UPDATE_TOAST_ID = "update-available";
+const CHECK_TOAST_ID = "update-check-status";
 
 export function UpdatePrompt() {
   const { data: isEnabledData } = trpcReact.updates.isEnabled.useQuery();
   const isEnabled = isEnabledData?.enabled ?? false;
 
   const [isInstalling, setIsInstalling] = useState(false);
-  const [checkDialogOpen, setCheckDialogOpen] = useState(false);
-  const [checkingForUpdates, setCheckingForUpdates] = useState(false);
-  const [checkResultMessage, setCheckResultMessage] = useState<string | null>(
-    null,
-  );
   const toastShownRef = useRef(false);
 
   const checkMutation = trpcReact.updates.check.useMutation();
@@ -83,9 +79,8 @@ export function UpdatePrompt() {
   trpcReact.updates.onReady.useSubscription(undefined, {
     enabled: isEnabled,
     onData: () => {
-      // Close check dialog if open
-      setCheckDialogOpen(false);
-      setCheckingForUpdates(false);
+      // Dismiss any check status toast
+      sonnerToast.dismiss(CHECK_TOAST_ID);
 
       // Show persistent toast with action buttons
       if (!toastShownRef.current) {
@@ -151,17 +146,52 @@ export function UpdatePrompt() {
     enabled: isEnabled,
     onData: (status) => {
       if (status.checking === false && status.error) {
-        setCheckingForUpdates(false);
-        setCheckResultMessage(status.error);
+        // Show error toast
+        sonnerToast.custom(
+          () => (
+            <Card size="2">
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">
+                  Update check failed
+                </Text>
+                <Text size="2" color="gray">
+                  {status.error}
+                </Text>
+              </Flex>
+            </Card>
+          ),
+          { id: CHECK_TOAST_ID, duration: 4000 },
+        );
       } else if (status.checking === false && status.upToDate) {
-        setCheckingForUpdates(false);
+        // Show up-to-date toast
         const versionSuffix = status.version ? ` (v${status.version})` : "";
-        setCheckResultMessage(`Twig is up to date${versionSuffix}`);
-      } else if (status.checking === false) {
-        setCheckingForUpdates(false);
+        sonnerToast.custom(
+          () => (
+            <Card size="2">
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">
+                  Twig is up to date{versionSuffix}
+                </Text>
+              </Flex>
+            </Card>
+          ),
+          { id: CHECK_TOAST_ID, duration: 3000 },
+        );
       } else if (status.checking === true) {
-        setCheckingForUpdates(true);
-        setCheckResultMessage(null);
+        // Show checking toast
+        sonnerToast.custom(
+          () => (
+            <Card size="2">
+              <Flex gap="2" align="center">
+                <Spinner size="1" />
+                <Text size="2" weight="medium">
+                  Checking for updates...
+                </Text>
+              </Flex>
+            </Card>
+          ),
+          { id: CHECK_TOAST_ID, duration: Number.POSITIVE_INFINITY },
+        );
       }
     },
   });
@@ -169,23 +199,58 @@ export function UpdatePrompt() {
   trpcReact.updates.onCheckFromMenu.useSubscription(undefined, {
     enabled: isEnabled,
     onData: async () => {
-      setCheckDialogOpen(true);
-      setCheckingForUpdates(true);
-      setCheckResultMessage(null);
+      // Show checking toast immediately
+      sonnerToast.custom(
+        () => (
+          <Card size="2">
+            <Flex gap="2" align="center">
+              <Spinner size="1" />
+              <Text size="2" weight="medium">
+                Checking for updates...
+              </Text>
+            </Flex>
+          </Card>
+        ),
+        { id: CHECK_TOAST_ID, duration: Number.POSITIVE_INFINITY },
+      );
 
       try {
         const result = await checkMutation.mutateAsync();
 
         if (!result.success && result.errorCode !== "already_checking") {
-          setCheckingForUpdates(false);
-          setCheckResultMessage(
-            result.errorMessage || "Failed to check for updates",
+          sonnerToast.custom(
+            () => (
+              <Card size="2">
+                <Flex direction="column" gap="2">
+                  <Text size="2" weight="medium">
+                    Update check failed
+                  </Text>
+                  <Text size="2" color="gray">
+                    {result.errorMessage || "Failed to check for updates"}
+                  </Text>
+                </Flex>
+              </Card>
+            ),
+            { id: CHECK_TOAST_ID, duration: 4000 },
           );
         }
       } catch (error) {
         log.error("Failed to check for updates:", error);
-        setCheckingForUpdates(false);
-        setCheckResultMessage("An unexpected error occurred");
+        sonnerToast.custom(
+          () => (
+            <Card size="2">
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">
+                  Update check failed
+                </Text>
+                <Text size="2" color="gray">
+                  An unexpected error occurred
+                </Text>
+              </Flex>
+            </Card>
+          ),
+          { id: CHECK_TOAST_ID, duration: 4000 },
+        );
       }
     },
   });
@@ -194,38 +259,5 @@ export function UpdatePrompt() {
     return null;
   }
 
-  return (
-    <>
-      {checkDialogOpen && (
-        <Dialog.Root open={checkDialogOpen} onOpenChange={setCheckDialogOpen}>
-          <Dialog.Content maxWidth="360px">
-            <Flex direction="column" gap="3">
-              <Dialog.Title className="mb-0">Check for Updates</Dialog.Title>
-              <Dialog.Description>
-                {checkingForUpdates ? (
-                  <Flex align="center" gap="2">
-                    <Spinner />
-                    <Text>Checking for updates...</Text>
-                  </Flex>
-                ) : checkResultMessage ? (
-                  <Text>{checkResultMessage}</Text>
-                ) : (
-                  <Text>Ready to check for updates</Text>
-                )}
-              </Dialog.Description>
-              <Flex justify="end" mt="2">
-                <Button
-                  type="button"
-                  onClick={() => setCheckDialogOpen(false)}
-                  disabled={checkingForUpdates}
-                >
-                  OK
-                </Button>
-              </Flex>
-            </Flex>
-          </Dialog.Content>
-        </Dialog.Root>
-      )}
-    </>
-  );
+  return null;
 }
