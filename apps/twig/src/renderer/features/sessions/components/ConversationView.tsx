@@ -5,7 +5,6 @@ import type {
 import {
   usePendingPermissionsForTask,
   useQueuedMessagesForTask,
-  useSessionActions,
 } from "@features/sessions/stores/sessionStore";
 import { useSessionViewActions } from "@features/sessions/stores/sessionViewStore";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
@@ -61,7 +60,6 @@ interface ConversationViewProps {
   isPromptPending: boolean;
   promptStartedAt?: number | null;
   repoPath?: string | null;
-  isCloud?: boolean;
   taskId?: string;
 }
 
@@ -73,7 +71,6 @@ export function ConversationView({
   isPromptPending,
   promptStartedAt,
   repoPath,
-  isCloud = false,
   taskId,
 }: ConversationViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -84,7 +81,6 @@ export function ConversationView({
   const pendingPermissionsCount = pendingPermissions.size;
 
   const queuedMessages = useQueuedMessagesForTask(taskId);
-  const { removeQueuedMessage } = useSessionActions();
   const { saveScrollPosition, getScrollPosition } = useSessionViewActions();
 
   const prevItemsLengthRef = useRef(0);
@@ -160,22 +156,13 @@ export function ConversationView({
           <div className="flex flex-col gap-3">
             {items.map((item) =>
               item.type === "turn" ? (
-                <TurnView
-                  key={item.id}
-                  turn={item}
-                  repoPath={repoPath}
-                  isCloud={isCloud}
-                />
+                <TurnView key={item.id} turn={item} repoPath={repoPath} />
               ) : (
                 <UserShellExecuteView key={item.id} item={item} />
               ),
             )}
             {queuedMessages.map((msg) => (
-              <QueuedMessageView
-                key={msg.id}
-                message={msg}
-                onRemove={() => taskId && removeQueuedMessage(taskId, msg.id)}
-              />
+              <QueuedMessageView key={msg.id} message={msg} />
             ))}
           </div>
           <SessionFooter
@@ -205,7 +192,6 @@ export function ConversationView({
 interface TurnViewProps {
   turn: Turn;
   repoPath?: string | null;
-  isCloud?: boolean;
 }
 
 function getInterruptMessage(reason?: string): string {
@@ -217,11 +203,7 @@ function getInterruptMessage(reason?: string): string {
   }
 }
 
-const TurnView = memo(function TurnView({
-  turn,
-  repoPath,
-  isCloud = false,
-}: TurnViewProps) {
+const TurnView = memo(function TurnView({ turn, repoPath }: TurnViewProps) {
   const wasCancelled = turn.stopReason === "cancelled";
   const gitAction = parseGitActionMessage(turn.userContent);
   const showGitResult =
@@ -271,7 +253,6 @@ const TurnView = memo(function TurnView({
           actionType={gitAction.actionType}
           repoPath={repoPath}
           turnId={turn.id}
-          isCloud={isCloud}
         />
       )}
       {wasCancelled && (

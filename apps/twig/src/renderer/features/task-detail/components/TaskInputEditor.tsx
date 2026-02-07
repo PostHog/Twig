@@ -31,7 +31,6 @@ export const TaskInputEditor = forwardRef<
       sessionId,
       repoPath,
       isCreatingTask,
-      runMode,
       canSubmit,
       onSubmit,
       hasDirectory,
@@ -40,7 +39,6 @@ export const TaskInputEditor = forwardRef<
     },
     ref,
   ) => {
-    const isCloudMode = runMode === "cloud";
     const { isOnline } = useConnectivity();
     const isDisabled = isCreatingTask || !isOnline;
 
@@ -59,7 +57,6 @@ export const TaskInputEditor = forwardRef<
       placeholder: "What do you want to work on? - @ to add context",
       disabled: isDisabled,
       isLoading: isCreatingTask,
-      isCloud: isCloudMode,
       autoFocus: true,
       context: { repoPath },
       capabilities: { commands: false, bashMode: false },
