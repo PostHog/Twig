@@ -40,7 +40,7 @@ export const TaskInputEditor = forwardRef<
     ref,
   ) => {
     const { isOnline } = useConnectivity();
-    const isDisabled = isCreatingTask || !isOnline;
+    const isSubmitDisabled = isCreatingTask || !isOnline;
 
     const {
       editor,
@@ -55,7 +55,8 @@ export const TaskInputEditor = forwardRef<
     } = useTiptapEditor({
       sessionId,
       placeholder: "What do you want to work on? - @ to add context",
-      disabled: isDisabled,
+      disabled: isCreatingTask,
+      submitDisabled: !isOnline,
       isLoading: isCreatingTask,
       autoFocus: true,
       context: { repoPath },
@@ -95,7 +96,7 @@ export const TaskInputEditor = forwardRef<
 
     const getSubmitTooltip = () => {
       if (isCreatingTask) return "Creating task...";
-      if (!isOnline) return "You're offline";
+      if (!isOnline) return "You're offline — send when reconnected";
       if (isEmpty) return "Enter a task description";
       if (!hasDirectory) return "Select a folder first";
       if (!canSubmit) return "Missing required fields";
@@ -181,7 +182,7 @@ export const TaskInputEditor = forwardRef<
 
         <Flex justify="between" align="center" px="3" pb="3">
           <EditorToolbar
-            disabled={isDisabled}
+            disabled={isCreatingTask}
             adapter={adapter}
             onInsertChip={insertChip}
             attachTooltip="Attach files from anywhere"
@@ -197,13 +198,17 @@ export const TaskInputEditor = forwardRef<
                   e.stopPropagation();
                   onSubmit();
                 }}
-                disabled={!canSubmit || isDisabled}
+                disabled={!canSubmit || isSubmitDisabled}
                 loading={isCreatingTask}
                 style={{
                   backgroundColor:
-                    !canSubmit || isDisabled ? "var(--accent-a4)" : undefined,
+                    !canSubmit || isSubmitDisabled
+                      ? "var(--accent-a4)"
+                      : undefined,
                   color:
-                    !canSubmit || isDisabled ? "var(--accent-8)" : undefined,
+                    !canSubmit || isSubmitDisabled
+                      ? "var(--accent-8)"
+                      : undefined,
                 }}
               >
                 <ArrowUp size={16} weight="bold" />

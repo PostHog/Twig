@@ -15,6 +15,7 @@ export interface UseTiptapEditorOptions {
   taskId?: string;
   placeholder?: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   isLoading?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
@@ -41,6 +42,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     taskId,
     placeholder = "",
     disabled = false,
+    submitDisabled = false,
     isLoading = false,
     autoFocus = false,
     context,
@@ -76,6 +78,9 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onFocus,
     onBlur,
   };
+
+  const submitDisabledRef = useRef(submitDisabled);
+  submitDisabledRef.current = submitDisabled;
 
   const prevBashModeRef = useRef(false);
   const prevIsEmptyRef = useRef(true);
@@ -128,7 +133,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
               : !event.shiftKey;
 
             if (isSubmitKey) {
-              if (!view.editable) return false;
+              if (!view.editable || submitDisabledRef.current) return false;
               const suggestionPopup =
                 document.querySelector("[data-tippy-root]");
               if (suggestionPopup) return false;
@@ -341,7 +346,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const submit = useCallback(() => {
     if (!editor) return;
-    if (disabled) return;
+    if (disabled || submitDisabled) return;
 
     const content = draft.getContent();
     if (isContentEmpty(content)) return;
@@ -366,7 +371,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       prevBashModeRef.current = false;
       draft.clearDraft();
     }
-  }, [editor, disabled, isLoading, draft, clearOnSubmit]);
+  }, [editor, disabled, submitDisabled, isLoading, draft, clearOnSubmit]);
 
   submitRef.current = submit;
 
