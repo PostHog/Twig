@@ -15,6 +15,7 @@ interface SettingsStore {
   lastUsedLocalWorkspaceMode: LocalWorkspaceMode;
   lastUsedWorkspaceMode: WorkspaceMode;
   lastUsedAdapter: AgentAdapter;
+  lastUsedModel: string | null;
   desktopNotifications: boolean;
   dockBadgeNotifications: boolean;
   cursorGlow: boolean;
@@ -32,6 +33,7 @@ interface SettingsStore {
   setLastUsedLocalWorkspaceMode: (mode: LocalWorkspaceMode) => void;
   setLastUsedWorkspaceMode: (mode: WorkspaceMode) => void;
   setLastUsedAdapter: (adapter: AgentAdapter) => void;
+  setLastUsedModel: (model: string) => void;
   setDesktopNotifications: (enabled: boolean) => void;
   setDockBadgeNotifications: (enabled: boolean) => void;
   setCursorGlow: (enabled: boolean) => void;
@@ -49,6 +51,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastUsedLocalWorkspaceMode: "worktree",
       lastUsedWorkspaceMode: "worktree",
       lastUsedAdapter: "claude",
+      lastUsedModel: null,
       desktopNotifications: true,
       dockBadgeNotifications: true,
       completionSound: "none",
@@ -67,6 +70,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ lastUsedLocalWorkspaceMode: mode }),
       setLastUsedWorkspaceMode: (mode) => set({ lastUsedWorkspaceMode: mode }),
       setLastUsedAdapter: (adapter) => set({ lastUsedAdapter: adapter }),
+      setLastUsedModel: (model) => set({ lastUsedModel: model }),
       setDesktopNotifications: (enabled) =>
         set({ desktopNotifications: enabled }),
       setDockBadgeNotifications: (enabled) =>
@@ -89,6 +93,7 @@ export const useSettingsStore = create<SettingsStore>()(
         lastUsedLocalWorkspaceMode: state.lastUsedLocalWorkspaceMode,
         lastUsedWorkspaceMode: state.lastUsedWorkspaceMode,
         lastUsedAdapter: state.lastUsedAdapter,
+        lastUsedModel: state.lastUsedModel,
         desktopNotifications: state.desktopNotifications,
         dockBadgeNotifications: state.dockBadgeNotifications,
         cursorGlow: state.cursorGlow,
