@@ -4,9 +4,14 @@ import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import {
+  createForceDevModeDefine,
+  createPosthogPlugin,
+  mainAliases,
+} from "./vite.shared.mjs";
 import { autoServicesPlugin } from "./vite-plugin-auto-services.js";
 
-function _getGitCommit(): string {
+function getGitCommit(): string {
   try {
     return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
   } catch {
@@ -14,22 +19,12 @@ function _getGitCommit(): string {
   }
 }
 
-function _getBuildDate(): string {
+function getBuildDate(): string {
   return new Date().toISOString();
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * Custom Vite plugin to fix circular __filename references in bundled ESM packages.
- *
- * When Vite bundles ESM packages like @posthog/agent that use import.meta.url,
- * it transforms them into a complex polyfill that creates circular references:
- * `const __filename2 = fileURLToPath(... pathToFileURL(__filename2) ...)`
- *
- * This plugin post-processes the bundle to replace the circular reference with
- * a simple assignment to Node.js's global __filename variable.
- */
 function fixFilenameCircularRef(): Plugin {
   return {
     name: "fix-filename-circular-ref",
@@ -38,7 +33,6 @@ function fixFilenameCircularRef(): Plugin {
       for (const fileName in bundle) {
         const chunk = bundle[fileName];
         if (chunk.type === "chunk") {
-          // Replace circular __filename references with direct __filename usage
           chunk.code = chunk.code.replace(
             /const __filename(\d+) = [\w$]+\.fileURLToPath\(typeof document === "undefined" \? require\("url"\)\.pathToFileURL\(__filename\1\)\.href : [^;]+\);/g,
             "const __filename$1 = __filename;",
@@ -49,9 +43,6 @@ function fixFilenameCircularRef(): Plugin {
   };
 }
 
-/**
- * Copy Claude executable to the build directory
- */
 function copyClaudeExecutable(): Plugin {
   return {
     name: "copy-claude-executable",
@@ -62,16 +53,11 @@ function copyClaudeExecutable(): Plugin {
         mkdirSync(destDir, { recursive: true });
       }
 
-      // Define potential sources for the Claude CLI artifacts
-      // Priority 1: Pre-built agent package (Production / CI)
-      // Priority 2: Workspace source files (Development)
       const candidates = [
-        // Local node_modules (standard package structure)
         {
           path: join(__dirname, "node_modules/@posthog/agent/dist/claude-cli"),
           type: "package",
         },
-        // Root node_modules (hoisted package)
         {
           path: join(
             __dirname,
@@ -79,14 +65,12 @@ function copyClaudeExecutable(): Plugin {
           ),
           type: "package",
         },
-        // Direct workspace access (monorepo build)
         {
           path: join(__dirname, "../../packages/agent/dist/claude-cli"),
           type: "package",
         },
       ];
 
-      // Check if any pre-built candidate exists
       for (const candidate of candidates) {
         if (
           existsSync(join(candidate.path, "cli.js")) &&
@@ -177,12 +161,8 @@ function copyCodexAcpBinary(): Plugin {
   };
 }
 
-// Allow forcing dev mode in packaged builds via FORCE_DEV_MODE=1
-const forceDevMode = process.env.FORCE_DEV_MODE === "1";
-
 export default defineConfig(({ mode }) => {
-  // Load VITE_* env vars from monorepo root .env file
-  const env = loadEnv(mode, path.resolve(__dirname, "../.."), "VITE_");
+  const env = loadEnv(mode, path.resolve(__dirname, "../.."), "");
 
   return {
     plugins: [
@@ -191,37 +171,26 @@ export default defineConfig(({ mode }) => {
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
       copyCodexAcpBinary(),
-    ],
+      createPosthogPlugin(env),
+    ].filter(Boolean),
     define: {
-      __BUILD_COMMIT__: JSON.stringify(_getGitCommit()),
-      __BUILD_DATE__: JSON.stringify(_getBuildDate()),
-      // Inject PostHog env vars at build time (process.env is not available in packaged builds)
+      __BUILD_COMMIT__: JSON.stringify(getGitCommit()),
+      __BUILD_DATE__: JSON.stringify(getBuildDate()),
       "process.env.VITE_POSTHOG_API_KEY": JSON.stringify(
         env.VITE_POSTHOG_API_KEY || "",
       ),
       "process.env.VITE_POSTHOG_API_HOST": JSON.stringify(
         env.VITE_POSTHOG_API_HOST || "",
       ),
-      ...(forceDevMode
-        ? {
-            "import.meta.env.DEV": "true",
-            "import.meta.env.PROD": "false",
-            "import.meta.env.MODE": '"development"',
-          }
-        : {}),
+      ...createForceDevModeDefine(),
     },
     resolve: {
-      alias: {
-        "@": path.resolve(__dirname, "./src"),
-        "@main": path.resolve(__dirname, "./src/main"),
-        "@renderer": path.resolve(__dirname, "./src/renderer"),
-        "@shared": path.resolve(__dirname, "./src/shared"),
-        "@api": path.resolve(__dirname, "./src/api"),
-      },
+      alias: mainAliases,
     },
     cacheDir: ".vite/cache",
     build: {
       target: "node18",
+      sourcemap: true,
       minify: false,
       reportCompressedSize: false,
       commonjsOptions: {

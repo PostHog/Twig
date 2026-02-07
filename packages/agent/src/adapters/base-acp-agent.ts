@@ -21,8 +21,8 @@ import {
   fetchGatewayModels,
   formatGatewayModelName,
   isAnthropicModel,
-} from "@/gateway-models.js";
-import { Logger } from "@/utils/logger.js";
+} from "../gateway-models.js";
+import { Logger } from "../utils/logger.js";
 
 export interface BaseSession {
   notificationHistory: SessionNotification[];

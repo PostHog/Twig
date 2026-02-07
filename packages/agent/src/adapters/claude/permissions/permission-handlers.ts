@@ -3,8 +3,8 @@ import type {
   RequestPermissionResponse,
 } from "@agentclientprotocol/sdk";
 import type { PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
-import { text } from "@/utils/acp-content.js";
-import type { Logger } from "@/utils/logger.js";
+import { text } from "../../../utils/acp-content.js";
+import type { Logger } from "../../../utils/logger.js";
 import { toolInfoFromToolUse } from "../conversion/tool-use-to-acp.js";
 import {
   getClaudePlansDir,

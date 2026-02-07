@@ -1,8 +1,8 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
-import type { ProcessSpawnedCallback } from "@/types.js";
-import { Logger } from "@/utils/logger.js";
+import type { ProcessSpawnedCallback } from "../../types.js";
+import { Logger } from "../../utils/logger.js";
 
 export interface CodexProcessOptions {
   cwd?: string;

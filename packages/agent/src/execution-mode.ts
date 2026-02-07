@@ -1,4 +1,4 @@
-import { IS_ROOT } from "@/utils/common.js";
+import { IS_ROOT } from "./utils/common.js";
 
 export interface ModeInfo {
   id: TwigExecutionMode;

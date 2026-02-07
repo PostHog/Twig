@@ -30,12 +30,12 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { v7 as uuidv7 } from "uuid";
-import type { SessionContext } from "@/otel-log-writer.js";
-import type { SessionLogWriter } from "@/session-log-writer.js";
-import { unreachable } from "@/utils/common.js";
-import { Logger } from "@/utils/logger.js";
-import { Pushable } from "@/utils/streams.js";
 import packageJson from "../../../package.json" with { type: "json" };
+import type { SessionContext } from "../../otel-log-writer.js";
+import type { SessionLogWriter } from "../../session-log-writer.js";
+import { unreachable } from "../../utils/common.js";
+import { Logger } from "../../utils/logger.js";
+import { Pushable } from "../../utils/streams.js";
 import { BaseAcpAgent } from "../base-acp-agent.js";
 import { promptToClaude } from "./conversion/acp-to-sdk.js";
 import {

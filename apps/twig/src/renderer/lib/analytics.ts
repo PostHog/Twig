@@ -28,15 +28,21 @@ export function initializePostHog() {
     api_host: apiHost,
     ui_host: uiHost,
     disable_session_recording: false,
-    capture_exceptions: true,
+    capture_exceptions: import.meta.env.DEV
+      ? false
+      : {
+          capture_unhandled_errors: true,
+          capture_unhandled_rejections: true,
+          capture_console_errors: true,
+        },
     loaded: () => {
       log.info("PostHog loaded");
-      // Start session recording immediately after load
-      // In Electron, we need to explicitly start since there's no page navigation trigger
       posthog.startSessionRecording();
       log.info("Session recording started");
     },
   });
+
+  posthog.register({ team: "twig" });
 
   isInitialized = true;
 }
@@ -134,7 +140,10 @@ export function captureException(
     return;
   }
 
-  posthog.captureException(error, additionalProperties);
+  posthog.captureException(error, {
+    team: "twig",
+    ...additionalProperties,
+  });
 }
 
 /**
