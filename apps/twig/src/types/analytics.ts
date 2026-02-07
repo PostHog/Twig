@@ -9,8 +9,11 @@ export type GitActionType =
   | "pull"
   | "sync"
   | "publish"
+  | "commit"
   | "commit-push"
-  | "create-pr";
+  | "create-pr"
+  | "view-pr"
+  | "update-pr";
 export type FileOpenSource = "sidebar" | "agent-suggestion" | "search" | "diff";
 export type FileChangeType = "added" | "modified" | "deleted";
 export type StopReason = "user_cancelled" | "completed" | "error" | "timeout";

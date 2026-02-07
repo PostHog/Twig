@@ -1,6 +1,7 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
+import { useGitQueries } from "@features/git-interaction/hooks/useGitQueries";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -27,7 +28,7 @@ import {
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
@@ -389,17 +390,7 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const pendingPermissions = usePendingPermissionsForTask(taskId);
   const hasPendingPermissions = pendingPermissions.size > 0;
 
-  const { data: changedFiles = [], isLoading } = useQuery({
-    queryKey: ["changed-files-head", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getChangedFilesHead.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    placeholderData: (prev) => prev,
-  });
+  const { changedFiles, changesLoading: isLoading } = useGitQueries(repoPath);
 
   const getActiveIndex = useCallback((): number => {
     if (!layout) return -1;

@@ -15,15 +15,8 @@ export type GitActionType =
   | "sync"
   | "create-pr";
 
-export const GIT_ACTION_MARKER_PREFIX = "<!-- GIT_ACTION:";
-export const GIT_ACTION_MARKER_SUFFIX = " -->";
-
-export function createGitActionMessage(
-  actionType: GitActionType,
-  prompt: string,
-): string {
-  return `${GIT_ACTION_MARKER_PREFIX}${actionType}${GIT_ACTION_MARKER_SUFFIX}\n${prompt}`;
-}
+const GIT_ACTION_MARKER_PREFIX = "<!-- GIT_ACTION:";
+const GIT_ACTION_MARKER_SUFFIX = " -->";
 
 export function parseGitActionMessage(content: string): {
   isGitAction: boolean;
