@@ -34,6 +34,51 @@ export class AppLifecycleService {
     process.exit(1);
   }
 
+  async cleanupForUpdate(): Promise<void> {
+    log.info("Cleanup for update started");
+
+    // Shut down watchers
+    log.info("Shutting down native watchers");
+    try {
+      const watcherRegistry = container.get<WatcherRegistryService>(
+        MAIN_TOKENS.WatcherRegistryService,
+      );
+      await watcherRegistry.shutdownAll();
+    } catch (error) {
+      log.warn("Failed to shutdown watcher registry", error);
+    }
+
+    // Kill all tracked processes
+    try {
+      const processTracking = container.get<ProcessTrackingService>(
+        MAIN_TOKENS.ProcessTrackingService,
+      );
+      const snapshot = await processTracking.getSnapshot(true);
+      log.info("Process snapshot before update", {
+        tracked: {
+          shell: snapshot.tracked.shell.length,
+          agent: snapshot.tracked.agent.length,
+          child: snapshot.tracked.child.length,
+        },
+      });
+
+      if (
+        snapshot.tracked.shell.length +
+          snapshot.tracked.agent.length +
+          snapshot.tracked.child.length >
+        0
+      ) {
+        log.info("Killing all tracked processes before update");
+        processTracking.killAll();
+      }
+    } catch (error) {
+      log.warn("Failed to kill processes before update", error);
+    }
+
+    // Skip container unbind, PostHog shutdown - app is restarting anyway
+    log.info("Cleanup for update complete");
+  }
+
   async shutdown(): Promise<void> {
     if (this._isShuttingDown) {
       log.warn("Shutdown already in progress, forcing exit");
