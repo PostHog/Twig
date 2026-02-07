@@ -7,6 +7,12 @@ import type { CommandSuggestionItem, FileSuggestionItem } from "../types";
 
 const COMMAND_LIMIT = 5;
 
+// Client-side commands that don't go to the agent
+const CLIENT_COMMANDS: AvailableCommand[] = [
+  { name: "good", description: "Send positive feedback for this session" },
+  { name: "bad", description: "Send negative feedback for this session" },
+];
+
 const COMMAND_FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
   keys: [
     { name: "name", weight: 0.7 },
@@ -67,8 +73,9 @@ export function getCommandSuggestions(
   query: string,
 ): CommandSuggestionItem[] {
   const taskId = useDraftStore.getState().contexts[sessionId]?.taskId;
-  const commands = getAvailableCommandsForTask(taskId);
-  const filtered = searchCommands(commands, query);
+  const aiCommands = getAvailableCommandsForTask(taskId);
+  const allCommands = [...CLIENT_COMMANDS, ...aiCommands];
+  const filtered = searchCommands(allCommands, query);
 
   return filtered.map((cmd) => ({
     id: cmd.name,

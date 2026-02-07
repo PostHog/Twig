@@ -5,6 +5,7 @@ import type { SuggestionOptions } from "@tiptap/suggestion";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import { getCommandSuggestions } from "../suggestions/getSuggestions";
 import type { CommandSuggestionItem, SuggestionItem } from "../types";
+import { executeClientCommand, isClientCommand } from "../utils/clientCommands";
 import { SuggestionList, type SuggestionListRef } from "./SuggestionList";
 
 function createSuggestion(
@@ -82,6 +83,13 @@ function createSuggestion(
 
     command: ({ editor, range, props }) => {
       const item = props as CommandSuggestionItem;
+
+      // Client-side commands execute locally without going to agent
+      if (isClientCommand(item.command.name)) {
+        executeClientCommand(item.command.name, sessionId);
+        editor.chain().focus().deleteRange(range).run();
+        return;
+      }
 
       // Commands without input hints execute immediately
       if (!item.command.input?.hint) {
