@@ -59,6 +59,7 @@ interface ConnectParams {
   initialPrompt?: ContentBlock[];
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
+  model?: string;
 }
 
 // --- Singleton Service Instance ---

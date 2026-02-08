@@ -24,10 +24,7 @@ export function initializePostHog() {
 }
 
 export function withTeamContext<T>(fn: () => T): T {
-  if (!posthogClient) {
-    return fn();
-  }
-  return posthogClient.withContext({ properties: { team: "twig" } }, fn);
+  return fn();
 }
 
 export function setCurrentUserId(userId: string | null) {
