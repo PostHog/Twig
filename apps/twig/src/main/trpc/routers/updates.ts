@@ -4,9 +4,9 @@ import {
   checkForUpdatesOutput,
   installUpdateOutput,
   isEnabledOutput,
-  updateReadyStatusOutput,
   UpdatesEvent,
   type UpdatesEvents,
+  updateReadyStatusOutput,
 } from "../../services/updates/schemas.js";
 import type { UpdatesService } from "../../services/updates/service.js";
 import { publicProcedure, router } from "../trpc.js";

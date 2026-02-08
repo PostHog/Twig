@@ -198,4 +198,3 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
     </button>
   );
 }
-
