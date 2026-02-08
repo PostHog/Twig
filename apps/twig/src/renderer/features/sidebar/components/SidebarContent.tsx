@@ -4,6 +4,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import type React from "react";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { SidebarMenu } from "./SidebarMenu";
+import { UpdateBanner } from "./UpdateBanner";
 
 export const SidebarContent: React.FC = () => {
   const isSettingsOpen = useSettingsDialogStore((s) => s.isOpen);
@@ -25,6 +26,7 @@ export const SidebarContent: React.FC = () => {
           <Gear size={14} weight={isSettingsOpen ? "fill" : "regular"} />
           <span>Settings</span>
         </button>
+        <UpdateBanner />
       </Box>
     </Flex>
   );

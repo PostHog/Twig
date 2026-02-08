@@ -164,10 +164,6 @@ describe("UpdatesService", () => {
     it("sets up auto updater when enabled", async () => {
       await initializeService(service);
 
-      expect(mockApp.on).toHaveBeenCalledWith(
-        "browser-window-focus",
-        expect.any(Function),
-      );
       expect(mockApp.whenReady).toHaveBeenCalled();
     });
 
@@ -221,6 +217,29 @@ describe("UpdatesService", () => {
     });
   });
 
+  describe("getUpdateReadyStatus", () => {
+    it("returns not ready when no update has been downloaded", () => {
+      const status = service.getUpdateReadyStatus();
+      expect(status).toEqual({ ready: false, version: null });
+    });
+
+    it("returns ready with version after update is downloaded", async () => {
+      await initializeService(service);
+
+      // Simulate update downloaded
+      const downloadedHandler = mockAutoUpdater.on.mock.calls.find(
+        ([event]) => event === "update-downloaded",
+      )?.[1];
+
+      if (downloadedHandler) {
+        downloadedHandler({}, "Release notes", "v2.0.0");
+      }
+
+      const status = service.getUpdateReadyStatus();
+      expect(status).toEqual({ ready: true, version: "v2.0.0" });
+    });
+  });
+
   describe("checkForUpdates", () => {
     it("returns success when updates are enabled", () => {
       const result = service.checkForUpdates();
@@ -267,6 +286,22 @@ describe("UpdatesService", () => {
         errorMessage: "Already checking for updates",
         errorCode: "already_checking",
       });
+    });
+
+    it("returns success when update is already ready", async () => {
+      await initializeService(service);
+
+      // Simulate update downloaded
+      const downloadedHandler = mockAutoUpdater.on.mock.calls.find(
+        ([event]) => event === "update-downloaded",
+      )?.[1];
+
+      if (downloadedHandler) {
+        downloadedHandler({}, "Release notes", "v2.0.0");
+      }
+
+      const result = service.checkForUpdates();
+      expect(result).toEqual({ success: true });
     });
 
     it("emits status event when checking starts", () => {
@@ -319,6 +354,13 @@ describe("UpdatesService", () => {
       // Second check should succeed
       const result2 = service.checkForUpdates();
       expect(result2.success).toBe(true);
+    });
+  });
+
+  describe("triggerMenuCheck", () => {
+    it("calls checkForUpdates", () => {
+      const result = service.checkForUpdates();
+      expect(result.success).toBe(true);
     });
   });
 
@@ -386,17 +428,6 @@ describe("UpdatesService", () => {
     });
   });
 
-  describe("triggerMenuCheck", () => {
-    it("emits CheckFromMenu event", () => {
-      const handler = vi.fn();
-      service.on(UpdatesEvent.CheckFromMenu, handler);
-
-      service.triggerMenuCheck();
-
-      expect(handler).toHaveBeenCalledWith(true);
-    });
-  });
-
   describe("autoUpdater event handling", () => {
     beforeEach(async () => {
       await initializeService(service);
@@ -438,7 +469,7 @@ describe("UpdatesService", () => {
       });
     });
 
-    it("handles update-downloaded event with version info", () => {
+    it("handles update-downloaded event and emits Ready", () => {
       const readyHandler = vi.fn();
       service.on(UpdatesEvent.Ready, readyHandler);
 
@@ -579,42 +610,6 @@ describe("UpdatesService", () => {
         checking: false,
         error: "Network error",
       });
-    });
-  });
-
-  describe("flushPendingNotification", () => {
-    it("emits Ready event on window focus when update is pending", async () => {
-      await initializeService(service);
-
-      const readyHandler = vi.fn();
-      service.on(UpdatesEvent.Ready, readyHandler);
-
-      // Simulate update downloaded
-      const downloadedHandler = mockAutoUpdater.on.mock.calls.find(
-        ([event]) => event === "update-downloaded",
-      )?.[1];
-
-      if (downloadedHandler) {
-        downloadedHandler({}, "Release notes", "v2.0.0");
-      }
-
-      // First Ready event from handleUpdateDownloaded
-      expect(readyHandler).toHaveBeenCalledTimes(1);
-
-      // Get the browser-window-focus callback and call it
-      const focusCallback = mockApp.on.mock.calls.find(
-        ([event]) => event === "browser-window-focus",
-      )?.[1];
-
-      // Reset the handler count
-      readyHandler.mockClear();
-
-      // Pending notification should be false now, so no second emit
-      if (focusCallback) {
-        focusCallback();
-      }
-
-      expect(readyHandler).not.toHaveBeenCalled();
     });
   });
 

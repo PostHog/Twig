@@ -7,6 +7,7 @@ import type { AppLifecycleService } from "../app-lifecycle/service.js";
 import {
   type CheckForUpdatesOutput,
   type InstallUpdateOutput,
+  type UpdateReadyStatusOutput,
   UpdatesEvent,
   type UpdatesEvents,
 } from "./schemas.js";
@@ -27,7 +28,6 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
   private lifecycleService!: AppLifecycleService;
 
   private updateReady = false;
-  private pendingNotification = false;
   private checkingForUpdates = false;
   private checkTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private checkIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -62,12 +62,18 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       return;
     }
 
-    app.on("browser-window-focus", () => this.flushPendingNotification());
     app.whenReady().then(() => this.setupAutoUpdater());
   }
 
   triggerMenuCheck(): void {
-    this.emit(UpdatesEvent.CheckFromMenu, true);
+    this.checkForUpdates();
+  }
+
+  getUpdateReadyStatus(): UpdateReadyStatusOutput {
+    return {
+      ready: this.updateReady,
+      version: this.downloadedVersion,
+    };
   }
 
   checkForUpdates(): CheckForUpdatesOutput {
@@ -86,14 +92,9 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       };
     }
 
-    // If an update is already downloaded and ready, show the prompt again
-    // instead of checking (which would incorrectly report "up to date")
+    // If an update is already downloaded and ready, just return success
+    // (the renderer queries isUpdateReady to show the banner)
     if (this.updateReady) {
-      log.info("Update already downloaded, showing prompt again", {
-        downloadedVersion: this.downloadedVersion,
-      });
-      this.pendingNotification = true;
-      this.flushPendingNotification();
       return { success: true };
     }
 
@@ -214,32 +215,16 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
 
   private handleUpdateDownloaded(releaseName?: string): void {
     this.clearCheckTimeout();
-    const wasChecking = this.checkingForUpdates;
     this.checkingForUpdates = false;
     this.downloadedVersion = releaseName ?? null;
+    this.updateReady = true;
 
-    if (wasChecking) {
-      this.emitStatus({ checking: false });
-    }
-
-    log.info("Update downloaded, awaiting user confirmation", {
+    log.info("Update downloaded and ready", {
       currentVersion: app.getVersion(),
       downloadedVersion: this.downloadedVersion,
     });
 
-    this.updateReady = true;
-    this.pendingNotification = true;
-    this.flushPendingNotification();
-  }
-
-  private flushPendingNotification(): void {
-    if (this.updateReady && this.pendingNotification) {
-      log.info("Notifying user that update is ready", {
-        downloadedVersion: this.downloadedVersion,
-      });
-      this.emit(UpdatesEvent.Ready, true);
-      this.pendingNotification = false;
-    }
+    this.emit(UpdatesEvent.Ready, true);
   }
 
   private emitStatus(status: {

@@ -17,15 +17,20 @@ export const installUpdateOutput = z.object({
   installed: z.boolean(),
 });
 
+export const updateReadyStatusOutput = z.object({
+  ready: z.boolean(),
+  version: z.string().nullable(),
+});
+
 export type IsEnabledOutput = z.infer<typeof isEnabledOutput>;
 
 export type CheckForUpdatesOutput = z.infer<typeof checkForUpdatesOutput>;
 export type InstallUpdateOutput = z.infer<typeof installUpdateOutput>;
+export type UpdateReadyStatusOutput = z.infer<typeof updateReadyStatusOutput>;
 
 export const UpdatesEvent = {
   Ready: "ready",
   Status: "status",
-  CheckFromMenu: "check-from-menu",
 } as const;
 
 export type UpdatesStatusPayload = {
@@ -38,5 +43,4 @@ export type UpdatesStatusPayload = {
 export interface UpdatesEvents {
   [UpdatesEvent.Ready]: true;
   [UpdatesEvent.Status]: UpdatesStatusPayload;
-  [UpdatesEvent.CheckFromMenu]: true;
 }

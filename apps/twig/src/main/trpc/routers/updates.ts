@@ -4,6 +4,7 @@ import {
   checkForUpdatesOutput,
   installUpdateOutput,
   isEnabledOutput,
+  updateReadyStatusOutput,
   UpdatesEvent,
   type UpdatesEvents,
 } from "../../services/updates/schemas.js";
@@ -29,6 +30,11 @@ export const updatesRouter = router({
     return { enabled: service.isEnabled };
   }),
 
+  isUpdateReady: publicProcedure.output(updateReadyStatusOutput).query(() => {
+    const service = getService();
+    return service.getUpdateReadyStatus();
+  }),
+
   check: publicProcedure.output(checkForUpdatesOutput).mutation(() => {
     const service = getService();
     return service.checkForUpdates();
@@ -41,5 +47,4 @@ export const updatesRouter = router({
 
   onReady: subscribe(UpdatesEvent.Ready),
   onStatus: subscribe(UpdatesEvent.Status),
-  onCheckFromMenu: subscribe(UpdatesEvent.CheckFromMenu),
 });

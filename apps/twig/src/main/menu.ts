@@ -79,7 +79,7 @@ function buildAppMenu(): MenuItemConstructorOptions {
               click: () => {
                 container
                   .get<UpdatesService>(MAIN_TOKENS.UpdatesService)
-                  .triggerMenuCheck();
+                  .checkForUpdates();
               },
             },
           ]
