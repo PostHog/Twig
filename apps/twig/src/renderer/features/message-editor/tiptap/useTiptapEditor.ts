@@ -1,4 +1,4 @@
-import { getSessionActions } from "@features/sessions/stores/sessionStore";
+import { sessionStoreSetters } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -16,7 +16,6 @@ export interface UseTiptapEditorOptions {
   placeholder?: string;
   disabled?: boolean;
   isLoading?: boolean;
-  isCloud?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
   capabilities?: {
@@ -43,7 +42,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     placeholder = "",
     disabled = false,
     isLoading = false,
-    isCloud = false,
     autoFocus = false,
     context,
     capabilities = {},
@@ -153,7 +151,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
               const queuedContent =
-                getSessionActions().popQueuedMessagesAsText(taskId);
+                sessionStoreSetters.dequeueMessagesAsText(taskId);
               if (queuedContent !== null && queuedContent !== undefined) {
                 event.preventDefault();
                 view.dispatch(
@@ -351,10 +349,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     const text = editor.getText().trim();
 
     if (text.startsWith("!")) {
-      if (isCloud) {
-        toast.error("Bash mode is not supported in cloud sessions");
-        return;
-      }
       // Bash mode requires immediate execution, can't be queued
       if (isLoading) {
         toast.error("Cannot run shell commands while agent is generating");
@@ -372,7 +366,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       prevBashModeRef.current = false;
       draft.clearDraft();
     }
-  }, [editor, disabled, isLoading, isCloud, draft, clearOnSubmit]);
+  }, [editor, disabled, isLoading, draft, clearOnSubmit]);
 
   submitRef.current = submit;
 
