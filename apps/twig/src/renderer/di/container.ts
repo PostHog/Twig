@@ -1,9 +1,9 @@
 import "reflect-metadata";
+import { TaskService } from "@features/task-detail/service/service";
 import type { TrpcRouter } from "@main/trpc/router.js";
 import { trpcVanilla } from "@renderer/trpc";
 import type { TRPCClient } from "@trpc/client";
 import { Container } from "inversify";
-import { TaskService } from "../services/task/service";
 import { RENDERER_TOKENS } from "./tokens";
 
 /**

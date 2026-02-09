@@ -1,4 +1,4 @@
-import { getSessionActions } from "@features/sessions/stores/sessionStore";
+import { sessionStoreSetters } from "@features/sessions/stores/sessionStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -15,8 +15,8 @@ export interface UseTiptapEditorOptions {
   taskId?: string;
   placeholder?: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   isLoading?: boolean;
-  isCloud?: boolean;
   autoFocus?: boolean;
   context?: DraftContext;
   capabilities?: {
@@ -42,8 +42,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     taskId,
     placeholder = "",
     disabled = false,
+    submitDisabled = false,
     isLoading = false,
-    isCloud = false,
     autoFocus = false,
     context,
     capabilities = {},
@@ -78,6 +78,9 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     onFocus,
     onBlur,
   };
+
+  const submitDisabledRef = useRef(submitDisabled);
+  submitDisabledRef.current = submitDisabled;
 
   const prevBashModeRef = useRef(false);
   const prevIsEmptyRef = useRef(true);
@@ -130,7 +133,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
               : !event.shiftKey;
 
             if (isSubmitKey) {
-              if (!view.editable) return false;
+              if (!view.editable || submitDisabledRef.current) return false;
               const suggestionPopup =
                 document.querySelector("[data-tippy-root]");
               if (suggestionPopup) return false;
@@ -153,7 +156,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
             if (event.key === "ArrowUp" && (isEmpty || isAtStart)) {
               const queuedContent =
-                getSessionActions().popQueuedMessagesAsText(taskId);
+                sessionStoreSetters.dequeueMessagesAsText(taskId);
               if (queuedContent !== null && queuedContent !== undefined) {
                 event.preventDefault();
                 view.dispatch(
@@ -343,7 +346,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
   const submit = useCallback(() => {
     if (!editor) return;
-    if (disabled) return;
+    if (disabled || submitDisabled) return;
 
     const content = draft.getContent();
     if (isContentEmpty(content)) return;
@@ -351,10 +354,6 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     const text = editor.getText().trim();
 
     if (text.startsWith("!")) {
-      if (isCloud) {
-        toast.error("Bash mode is not supported in cloud sessions");
-        return;
-      }
       // Bash mode requires immediate execution, can't be queued
       if (isLoading) {
         toast.error("Cannot run shell commands while agent is generating");
@@ -372,7 +371,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       prevBashModeRef.current = false;
       draft.clearDraft();
     }
-  }, [editor, disabled, isLoading, isCloud, draft, clearOnSubmit]);
+  }, [editor, disabled, submitDisabled, isLoading, draft, clearOnSubmit]);
 
   submitRef.current = submit;
 

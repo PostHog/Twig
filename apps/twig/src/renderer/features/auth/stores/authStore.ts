@@ -1,4 +1,5 @@
 import { PostHogAPIClient } from "@api/posthogClient";
+import { resetSessionService } from "@features/sessions/service/service";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
@@ -642,6 +643,9 @@ export const useAuthStore = create<AuthState>()(
             throw new Error("No access token available");
           }
 
+          // Clean up all existing sessions before switching projects
+          resetSessionService();
+
           const apiHost = getCloudUrlFromRegion(cloudRegion);
 
           // Create a new client with the selected project
@@ -700,6 +704,9 @@ export const useAuthStore = create<AuthState>()(
         logout: () => {
           track(ANALYTICS_EVENTS.USER_LOGGED_OUT);
           resetUser();
+
+          // Clean up session service subscriptions before clearing auth state
+          resetSessionService();
 
           trpcVanilla.analytics.resetUser.mutate();
 

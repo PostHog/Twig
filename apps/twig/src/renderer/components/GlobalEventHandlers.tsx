@@ -1,10 +1,9 @@
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useRightSidebarStore } from "@features/right-sidebar";
-import { useSessions } from "@features/sessions/stores/sessionStore";
 import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
-import { usePinnedTasksStore } from "@features/sidebar/stores/pinnedTasksStore";
+import { useSidebarData } from "@features/sidebar/hooks/useSidebarData";
+import { useVisualTaskOrder } from "@features/sidebar/hooks/useVisualTaskOrder";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
-import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
@@ -52,71 +51,30 @@ export function GlobalEventHandlers({
   const isWorktreeTask = currentWorkspace?.mode === "worktree";
 
   const { data: allTasks = [] } = useTasks();
-  const pinnedTaskIds = usePinnedTasksStore((state) => state.pinnedTaskIds);
-  const sessions = useSessions();
-  const lastViewedAt = useTaskViewedStore((state) => state.lastViewedAt);
-  const localActivityAt = useTaskViewedStore((state) => state.lastActivityAt);
+  const sidebarData = useSidebarData({ activeView: view });
+  const visualTaskOrder = useVisualTaskOrder(sidebarData);
 
-  // Build ordered task list for CMD+0-9 switching, matching sidebar visual order:
-  // pinned (by activity) → active (by activity) → recent (by creation)
-  const orderedTasks = useMemo((): Task[] => {
-    if (allTasks.length === 0) return [];
-
-    const getLastActivityAt = (task: Task): number => {
-      const apiUpdatedAt = new Date(task.updated_at).getTime();
-      const localActivity = localActivityAt[task.id];
-      return localActivity
-        ? Math.max(apiUpdatedAt, localActivity)
-        : apiUpdatedAt;
-    };
-
-    const isTaskUnread = (task: Task): boolean => {
-      const taskLastViewedAt = lastViewedAt[task.id];
-      return (
-        taskLastViewedAt !== undefined &&
-        getLastActivityAt(task) > taskLastViewedAt
-      );
-    };
-
-    const taskNeedsPermission = (task: Task): boolean => {
-      const session = Object.values(sessions).find((s) => s.taskId === task.id);
-      return (session?.pendingPermissions?.size ?? 0) > 0;
-    };
-
-    const pinned = allTasks
-      .filter((t) => pinnedTaskIds.has(t.id))
-      .sort((a, b) => getLastActivityAt(b) - getLastActivityAt(a));
-
-    const unpinned = allTasks.filter((t) => !pinnedTaskIds.has(t.id));
-
-    const active = unpinned
-      .filter((t) => isTaskUnread(t) || taskNeedsPermission(t))
-      .sort((a, b) => getLastActivityAt(b) - getLastActivityAt(a));
-
-    const recent = unpinned
-      .filter((t) => !isTaskUnread(t) && !taskNeedsPermission(t))
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-
-    return [...pinned, ...active, ...recent];
-  }, [allTasks, pinnedTaskIds, sessions, lastViewedAt, localActivityAt]);
+  const taskById = useMemo(() => {
+    const map = new Map<string, Task>();
+    for (const task of allTasks) {
+      map.set(task.id, task);
+    }
+    return map;
+  }, [allTasks]);
 
   const handleSwitchTask = useCallback(
     (index: number) => {
       if (index === 0) {
-        // mod+0 goes to home/task input
         navigateToTaskInput();
       } else {
-        // mod+1-9 switches to task at that index (1-based)
-        const task = orderedTasks[index - 1];
+        const taskData = visualTaskOrder[index - 1];
+        const task = taskData ? taskById.get(taskData.id) : undefined;
         if (task) {
           navigateToTask(task);
         }
       }
     },
-    [orderedTasks, navigateToTask, navigateToTaskInput],
+    [visualTaskOrder, taskById, navigateToTask, navigateToTaskInput],
   );
 
   const handleOpenSettings = useCallback(() => {

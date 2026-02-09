@@ -13,7 +13,6 @@ export interface EditorContext {
   repoPath: string | null | undefined;
   disabled: boolean;
   isLoading: boolean;
-  isCloud: boolean;
 }
 
 interface DraftState {
@@ -81,15 +80,13 @@ export const useDraftStore = create<DraftStore>()(
             repoPath: context.repoPath ?? existing?.repoPath,
             disabled: context.disabled ?? existing?.disabled ?? false,
             isLoading: context.isLoading ?? existing?.isLoading ?? false,
-            isCloud: context.isCloud ?? existing?.isCloud ?? false,
           };
           if (
             existing?.sessionId === newContext.sessionId &&
             existing?.taskId === newContext.taskId &&
             existing?.repoPath === newContext.repoPath &&
             existing?.disabled === newContext.disabled &&
-            existing?.isLoading === newContext.isLoading &&
-            existing?.isCloud === newContext.isCloud
+            existing?.isLoading === newContext.isLoading
           ) {
             return;
           }

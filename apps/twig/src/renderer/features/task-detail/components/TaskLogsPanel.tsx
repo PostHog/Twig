@@ -2,8 +2,9 @@ import { BackgroundWrapper } from "@components/BackgroundWrapper";
 import { ErrorBoundary } from "@components/ErrorBoundary";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import { SessionView } from "@features/sessions/components/SessionView";
+import { getSessionService } from "@features/sessions/service/service";
 import {
-  useSessionActions,
+  sessionStoreSetters,
   useSessionForTask,
 } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -31,15 +32,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
 
   const session = useSessionForTask(taskId);
-  const {
-    connectToTask,
-    sendPrompt,
-    cancelPrompt,
-    clearSessionError,
-    popAllQueuedMessages,
-    startUserShellExecute,
-    completeUserShellExecute,
-  } = useSessionActions();
   const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
@@ -69,7 +61,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const isConnecting = useRef(false);
 
-  // Focus the message editor when navigating to this task
   useEffect(() => {
     requestFocus(taskId);
   }, [taskId, requestFocus]);
@@ -79,7 +70,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Don't reconnect if already connected, connecting, or in error state
     if (
       session?.status === "connected" ||
       session?.status === "connecting" ||
@@ -103,28 +93,29 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       sessionStatus: session?.status ?? "none",
     });
 
-    connectToTask({
-      task,
-      repoPath,
-      initialPrompt: hasInitialPrompt
-        ? [{ type: "text", text: task.description }]
-        : undefined,
-    }).finally(() => {
-      isConnecting.current = false;
-    });
-  }, [task, repoPath, session, connectToTask, markActivity, isOnline]);
+    getSessionService()
+      .connectToTask({
+        task,
+        repoPath,
+        initialPrompt: hasInitialPrompt
+          ? [{ type: "text", text: task.description }]
+          : undefined,
+      })
+      .finally(() => {
+        isConnecting.current = false;
+      });
+  }, [task, repoPath, session, markActivity, isOnline]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
       try {
         markAsViewed(taskId);
 
-        const result = await sendPrompt(taskId, text);
+        const result = await getSessionService().sendPrompt(taskId, text);
         log.info("Prompt completed", { stopReason: result.stopReason });
 
         markActivity(taskId);
 
-        // if we are currently viewing this task by the end of the prompt, mark it as viewed
         const view = useNavigationStore.getState().view;
         const isViewingTask =
           view?.type === "task-detail" && view?.data?.id === taskId;
@@ -138,40 +129,29 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         log.error("Failed to send prompt", error);
       }
     },
-    [taskId, sendPrompt, markActivity, markAsViewed],
+    [taskId, markActivity, markAsViewed],
   );
 
   const handleCancelPrompt = useCallback(async () => {
-    // Get and clear any queued messages before cancelling
-    const queuedMessages = popAllQueuedMessages(taskId);
+    const queuedContent = sessionStoreSetters.dequeueMessagesAsText(taskId);
 
-    const result = await cancelPrompt(taskId);
+    const result = await getSessionService().cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
 
-    // Restore queued messages to the editor
-    if (queuedMessages.length > 0) {
-      const combinedContent = queuedMessages
-        .map((msg) => msg.content)
-        .join("\n\n");
+    if (queuedContent) {
       setPendingContent(taskId, {
-        segments: [{ type: "text", text: combinedContent }],
+        segments: [{ type: "text", text: queuedContent }],
       });
     }
 
     requestFocus(taskId);
-  }, [
-    taskId,
-    cancelPrompt,
-    popAllQueuedMessages,
-    setPendingContent,
-    requestFocus,
-  ]);
+  }, [taskId, setPendingContent, requestFocus]);
 
   const handleRetry = useCallback(async () => {
     if (!repoPath) return;
-    await clearSessionError(taskId);
-    connectToTask({ task, repoPath });
-  }, [taskId, repoPath, task, clearSessionError, connectToTask]);
+    await getSessionService().clearSessionError(taskId);
+    getSessionService().connectToTask({ task, repoPath });
+  }, [taskId, repoPath, task]);
 
   const handleDelete = useCallback(() => {
     const hasWorktree = workspace?.mode === "worktree";
@@ -187,14 +167,19 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       if (!repoPath) return;
 
       const execId = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      await startUserShellExecute(taskId, execId, command, repoPath);
+      await getSessionService().startUserShellExecute(
+        taskId,
+        execId,
+        command,
+        repoPath,
+      );
 
       try {
         const result = await trpcVanilla.shell.execute.mutate({
           cwd: repoPath,
           command,
         });
-        await completeUserShellExecute(
+        await getSessionService().completeUserShellExecute(
           taskId,
           execId,
           command,
@@ -203,14 +188,20 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         );
       } catch (error) {
         log.error("Failed to execute shell command", error);
-        await completeUserShellExecute(taskId, execId, command, repoPath, {
-          stdout: "",
-          stderr: error instanceof Error ? error.message : "Command failed",
-          exitCode: 1,
-        });
+        await getSessionService().completeUserShellExecute(
+          taskId,
+          execId,
+          command,
+          repoPath,
+          {
+            stdout: "",
+            stderr: error instanceof Error ? error.message : "Command failed",
+            exitCode: 1,
+          },
+        );
       }
     },
-    [taskId, repoPath, startUserShellExecute, completeUserShellExecute],
+    [taskId, repoPath],
   );
 
   return (
@@ -227,7 +218,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
             onBashCommand={handleBashCommand}
             onCancelPrompt={handleCancelPrompt}
             repoPath={repoPath}
-            isCloud={session?.isCloud ?? false}
             hasError={hasError}
             errorMessage={errorMessage}
             onRetry={handleRetry}
