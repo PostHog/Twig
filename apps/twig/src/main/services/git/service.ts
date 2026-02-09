@@ -2,14 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { isTwigBranch } from "@shared/constants";
 import {
+  type ChangedFileInfo,
+  computeDiffStatsFromFiles,
   getAllBranches,
+  getChangedFilesBranch,
   getChangedFilesDetailed,
+  getChangedFilesStaged,
+  getChangedFilesUnstaged,
   getCommitConventions,
   getCurrentBranch,
   getDefaultBranch,
   getDiffStats,
   getFileAtHead,
+  getFileAtRef as getFileAtRefQuery,
   getLatestCommit,
+  getMergeBase as getMergeBaseQuery,
   getRemoteUrl,
   getSyncStatus,
   fetch as gitFetch,
@@ -27,6 +34,7 @@ import type {
   ChangedFile,
   CloneProgressPayload,
   DetectRepoResult,
+  DiffMode,
   DiffStats,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
@@ -356,5 +364,56 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     sampleSize = 20,
   ): Promise<GetCommitConventionsOutput> {
     return getCommitConventions(directoryPath, sampleSize);
+  }
+
+  private async getFilesByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<ChangedFileInfo[]> {
+    const excludePatterns = [".claude", "CLAUDE.local.md"];
+    switch (mode) {
+      case "staged":
+        return getChangedFilesStaged(directoryPath, { excludePatterns });
+      case "unstaged":
+        return getChangedFilesUnstaged(directoryPath, { excludePatterns });
+      case "branch":
+        return getChangedFilesBranch(directoryPath, { excludePatterns });
+      default:
+        return getChangedFilesDetailed(directoryPath, { excludePatterns });
+    }
+  }
+
+  public async getChangedFilesByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<ChangedFile[]> {
+    const files = await this.getFilesByMode(directoryPath, mode);
+    return files.map((f) => ({
+      path: f.path,
+      status: f.status,
+      originalPath: f.originalPath,
+      linesAdded: f.linesAdded,
+      linesRemoved: f.linesRemoved,
+    }));
+  }
+
+  public async getFileAtRef(
+    directoryPath: string,
+    filePath: string,
+    ref: string,
+  ): Promise<string | null> {
+    return getFileAtRefQuery(directoryPath, filePath, ref);
+  }
+
+  public async getMergeBase(directoryPath: string): Promise<string> {
+    return getMergeBaseQuery(directoryPath);
+  }
+
+  public async getDiffStatsByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<DiffStats> {
+    const files = await this.getFilesByMode(directoryPath, mode);
+    return computeDiffStatsFromFiles(files);
   }
 }

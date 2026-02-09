@@ -26,6 +26,8 @@ interface DiffOptions extends UseCodeMirrorOptions {
   original: string;
   modified: string;
   mode: "split" | "unified";
+  loadFullFiles?: boolean;
+  wordDiffs?: boolean;
   onContentChange?: (content: string) => void;
 }
 
@@ -36,15 +38,24 @@ const createMergeControls = (onReject?: () => void) => {
     }
 
     const button = document.createElement("button");
-    button.textContent = "Reject";
+    button.textContent = "\u21a9 Revert";
     button.name = "reject";
     button.style.background = "var(--red-9)";
     button.style.color = "white";
     button.style.border = "none";
-    button.style.padding = "2px 6px";
-    button.style.borderRadius = "3px";
+    button.style.padding = "4px 10px";
+    button.style.borderRadius = "4px";
     button.style.cursor = "pointer";
     button.style.fontSize = "11px";
+    button.style.fontWeight = "500";
+    button.style.lineHeight = "1";
+
+    button.onmouseenter = () => {
+      button.style.background = "var(--red-10)";
+    };
+    button.onmouseleave = () => {
+      button.style.background = "var(--red-9)";
+    };
 
     button.onmousedown = (e) => {
       action(e);
@@ -56,10 +67,13 @@ const createMergeControls = (onReject?: () => void) => {
 };
 
 const getBaseDiffConfig = (
+  options?: { loadFullFiles?: boolean; wordDiffs?: boolean },
   onReject?: () => void,
 ): Partial<Parameters<typeof unifiedMergeView>[0]> => ({
-  collapseUnchanged: { margin: 3, minSize: 4 },
-  highlightChanges: false,
+  collapseUnchanged: options?.loadFullFiles
+    ? undefined
+    : { margin: 20, minSize: 8 },
+  highlightChanges: options?.wordDiffs ?? true,
   gutter: true,
   mergeControls: createMergeControls(onReject),
 });
@@ -84,6 +98,7 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
       });
     } else if (options.mode === "split") {
       const diffConfig = getBaseDiffConfig(
+        { loadFullFiles: options.loadFullFiles, wordDiffs: options.wordDiffs },
         options.onContentChange
           ? () => {
               if (instanceRef.current instanceof MergeView) {
@@ -107,7 +122,14 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
         : [];
 
       instanceRef.current = new MergeView({
-        a: { doc: options.original, extensions: options.extensions },
+        a: {
+          doc: options.original,
+          extensions: [
+            ...options.extensions,
+            EditorView.editable.of(false),
+            EditorState.readOnly.of(true),
+          ],
+        },
         b: {
           doc: options.modified,
           extensions: [
@@ -123,6 +145,7 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
       });
     } else {
       const diffConfig = getBaseDiffConfig(
+        { loadFullFiles: options.loadFullFiles, wordDiffs: options.wordDiffs },
         options.onContentChange
           ? () => {
               if (instanceRef.current instanceof EditorView) {
@@ -200,7 +223,7 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
     };
   }, [options.filePath]);
 
-  return containerRef;
+  return { containerRef, instanceRef };
 }
 
 export { acceptChunk, rejectChunk };

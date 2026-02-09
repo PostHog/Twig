@@ -101,6 +101,7 @@
     "@codemirror/lang-yaml": "^6.1.2",
     "@codemirror/language": "^6.11.3",
     "@codemirror/merge": "^6.11.2",
+    "@codemirror/search": "^6.6.0",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.8",
     "@dnd-kit/react": "^0.1.21",
