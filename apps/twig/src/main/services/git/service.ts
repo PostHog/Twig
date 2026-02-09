@@ -2,14 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { isTwigBranch } from "@shared/constants";
 import {
+  type ChangedFileInfo,
+  computeDiffStatsFromFiles,
   getAllBranches,
+  getChangedFilesBranch,
   getChangedFilesDetailed,
+  getChangedFilesStaged,
+  getChangedFilesUnstaged,
   getCommitConventions,
   getCurrentBranch,
   getDefaultBranch,
   getDiffStats,
   getFileAtHead,
+  getFileAtRef as getFileAtRefQuery,
   getLatestCommit,
+  getMergeBase as getMergeBaseQuery,
   getRemoteUrl,
   getSyncStatus,
   fetch as gitFetch,
@@ -27,6 +34,7 @@ import type {
   ChangedFile,
   CloneProgressPayload,
   DetectRepoResult,
+  DiffMode,
   DiffStats,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
@@ -356,5 +364,77 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     sampleSize = 20,
   ): Promise<GetCommitConventionsOutput> {
     return getCommitConventions(directoryPath, sampleSize);
+  }
+
+  public async getChangedFilesByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<ChangedFile[]> {
+    const excludePatterns = [".claude", "CLAUDE.local.md"];
+    let files: ChangedFileInfo[];
+    switch (mode) {
+      case "staged":
+        files = await getChangedFilesStaged(directoryPath, { excludePatterns });
+        break;
+      case "unstaged":
+        files = await getChangedFilesUnstaged(directoryPath, {
+          excludePatterns,
+        });
+        break;
+      case "branch":
+        files = await getChangedFilesBranch(directoryPath, { excludePatterns });
+        break;
+      default:
+        files = await getChangedFilesDetailed(directoryPath, {
+          excludePatterns,
+        });
+        break;
+    }
+    return files.map((f) => ({
+      path: f.path,
+      status: f.status,
+      originalPath: f.originalPath,
+      linesAdded: f.linesAdded,
+      linesRemoved: f.linesRemoved,
+    }));
+  }
+
+  public async getFileAtRef(
+    directoryPath: string,
+    filePath: string,
+    ref: string,
+  ): Promise<string | null> {
+    return getFileAtRefQuery(directoryPath, filePath, ref);
+  }
+
+  public async getMergeBase(directoryPath: string): Promise<string> {
+    return getMergeBaseQuery(directoryPath);
+  }
+
+  public async getDiffStatsByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<DiffStats> {
+    const excludePatterns = [".claude", "CLAUDE.local.md"];
+    let files: ChangedFileInfo[];
+    switch (mode) {
+      case "staged":
+        files = await getChangedFilesStaged(directoryPath, { excludePatterns });
+        break;
+      case "unstaged":
+        files = await getChangedFilesUnstaged(directoryPath, {
+          excludePatterns,
+        });
+        break;
+      case "branch":
+        files = await getChangedFilesBranch(directoryPath, { excludePatterns });
+        break;
+      default:
+        files = await getChangedFilesDetailed(directoryPath, {
+          excludePatterns,
+        });
+        break;
+    }
+    return computeDiffStatsFromFiles(files);
   }
 }

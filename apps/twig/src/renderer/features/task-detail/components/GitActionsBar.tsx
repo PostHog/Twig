@@ -135,6 +135,24 @@ export function GitActionsBar({
           await queryClient.invalidateQueries({
             queryKey: ["changed-files-head", repoPath],
           });
+          await queryClient.invalidateQueries({
+            queryKey: ["changed-files-mode", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["diff-stats", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["diff-stats-mode", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["merge-base", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["file-at-head", repoPath],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["file-at-ref", repoPath],
+          });
         } else {
           if (!session) return;
           const message = createGitActionMessage(actionType, prompt);

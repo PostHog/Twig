@@ -1,8 +1,12 @@
+import type { SessionNotification } from "@agentclientprotocol/sdk";
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
-import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
+import {
+  usePendingPermissionsForTask,
+  useSessionStore,
+} from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import {
@@ -10,6 +14,7 @@ import {
   ArrowsClockwise,
   CaretDownIcon,
   CaretUpIcon,
+  CheckIcon,
   CodeIcon,
   CopyIcon,
   FilePlus,
@@ -26,13 +31,24 @@ import {
 } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
+import type { AcpMessage } from "@shared/types/session-events";
+import {
+  isJsonRpcNotification,
+  isJsonRpcRequest,
+  isJsonRpcResponse,
+} from "@shared/types/session-events";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
+import {
+  type ComparisonMode,
+  resolveGitDiffMode,
+  useChangesModeStore,
+} from "../stores/changesModeStore";
 
 interface ChangesPanelProps {
   taskId: string;
@@ -207,6 +223,15 @@ function ChangedFileItem({
     queryClient.invalidateQueries({
       queryKey: ["changed-files-head", repoPath],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["changed-files-mode", repoPath],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["diff-stats", repoPath],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["diff-stats-mode", repoPath],
+    });
   };
 
   const hasLineStats =
@@ -379,6 +404,64 @@ function ChangedFileItem({
   );
 }
 
+const COMPARISON_MODE_LABELS: Record<ComparisonMode, string> = {
+  branch: "All branch changes",
+  lastTurn: "Last turn changes",
+};
+
+function extractLastTurnFilePaths(events: AcpMessage[]): Set<string> {
+  const paths = new Set<string>();
+
+  // Walk events backward: find the last completed turn's tool calls
+  let inLastTurn = false;
+
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i].message;
+
+    // Find the last response (turn completion)
+    if (!inLastTurn && isJsonRpcResponse(msg)) {
+      inLastTurn = true;
+      continue;
+    }
+
+    // Find the matching prompt request — once found, we've scanned the whole turn
+    if (
+      inLastTurn &&
+      isJsonRpcRequest(msg) &&
+      msg.method === "session/prompt"
+    ) {
+      break;
+    }
+
+    // Collect file paths from tool call notifications in this turn
+    if (
+      inLastTurn &&
+      isJsonRpcNotification(msg) &&
+      msg.method === "session/update"
+    ) {
+      const update = (msg.params as SessionNotification | undefined)?.update;
+      if (
+        update &&
+        "sessionUpdate" in update &&
+        update.sessionUpdate === "tool_call"
+      ) {
+        const toolCall = update as {
+          kind?: string | null;
+          locations?: { path: string }[];
+        };
+        const kind = toolCall.kind;
+        if (kind === "edit" || kind === "delete" || kind === "move") {
+          for (const loc of toolCall.locations ?? []) {
+            if (loc.path) paths.add(loc.path);
+          }
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
 export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
   const { isFocused, isFocusLoading, handleToggleFocus, handleUnfocus } =
@@ -389,11 +472,32 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const pendingPermissions = usePendingPermissionsForTask(taskId);
   const hasPendingPermissions = pendingPermissions.size > 0;
 
+  // Comparison mode state
+  const mode = useChangesModeStore((s) => s.mode);
+  const setMode = useChangesModeStore((s) => s.setMode);
+  const gitDiffMode = resolveGitDiffMode(mode);
+
+  // Session events for last turn mode
+  const taskIdIndex = useSessionStore((s) => s.taskIdIndex);
+  const sessions = useSessionStore((s) => s.sessions);
+  const sessionEvents = useMemo(() => {
+    const taskRunId = taskIdIndex[taskId];
+    if (!taskRunId) return [];
+    return sessions[taskRunId]?.events ?? [];
+  }, [taskIdIndex, taskId, sessions]);
+
+  const lastTurnPaths = useMemo(
+    () => extractLastTurnFilePaths(sessionEvents),
+    [sessionEvents],
+  );
+
+  // Mode-aware file query
   const { data: changedFiles = [], isLoading } = useQuery({
-    queryKey: ["changed-files-head", repoPath],
+    queryKey: ["changed-files-mode", repoPath, gitDiffMode],
     queryFn: () =>
-      trpcVanilla.git.getChangedFilesHead.query({
+      trpcVanilla.git.getChangedFilesByMode.query({
         directoryPath: repoPath as string,
+        mode: gitDiffMode === "lastTurn" ? "uncommitted" : gitDiffMode,
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",
@@ -401,35 +505,46 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     placeholderData: (prev) => prev,
   });
 
+  // For last turn mode, filter by paths from the last turn
+  const displayFiles = useMemo(() => {
+    if (mode !== "lastTurn") return changedFiles;
+    if (lastTurnPaths.size === 0) return [];
+
+    return changedFiles.filter((file) => {
+      const fullPath = repoPath ? `${repoPath}/${file.path}` : file.path;
+      return lastTurnPaths.has(fullPath) || lastTurnPaths.has(file.path);
+    });
+  }, [changedFiles, mode, lastTurnPaths, repoPath]);
+
   const getActiveIndex = useCallback((): number => {
     if (!layout) return -1;
-    return changedFiles.findIndex((file) =>
+    return displayFiles.findIndex((file) =>
       isDiffTabActiveInTree(layout.panelTree, file.path, file.status),
     );
-  }, [layout, changedFiles]);
+  }, [layout, displayFiles]);
 
   const handleKeyNavigation = useCallback(
     (direction: "up" | "down") => {
-      if (changedFiles.length === 0) return;
+      if (displayFiles.length === 0) return;
 
       const currentIndex = getActiveIndex();
       const startIndex =
         currentIndex === -1
           ? direction === "down"
             ? -1
-            : changedFiles.length
+            : displayFiles.length
           : currentIndex;
       const newIndex =
         direction === "up"
           ? Math.max(0, startIndex - 1)
-          : Math.min(changedFiles.length - 1, startIndex + 1);
+          : Math.min(displayFiles.length - 1, startIndex + 1);
 
-      const file = changedFiles[newIndex];
+      const file = displayFiles[newIndex];
       if (file) {
         openDiffInSplit(taskId, file.path, file.status);
       }
     },
-    [changedFiles, getActiveIndex, openDiffInSplit, taskId],
+    [displayFiles, getActiveIndex, openDiffInSplit, taskId],
   );
 
   useHotkeys(
@@ -517,6 +632,41 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     </Box>
   ) : null;
 
+  const comparisonControls = (
+    <Box px="2" pb="2">
+      <Flex direction="column" gap="2">
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <Button
+              size="1"
+              variant="soft"
+              color="gray"
+              style={{ width: "100%", justifyContent: "space-between" }}
+            >
+              <Text size="1">{COMPARISON_MODE_LABELS[mode]}</Text>
+              <CaretDownIcon size={12} />
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content size="1">
+            {(
+              Object.entries(COMPARISON_MODE_LABELS) as [
+                ComparisonMode,
+                string,
+              ][]
+            ).map(([value, label]) => (
+              <DropdownMenu.Item key={value} onSelect={() => setMode(value)}>
+                <Flex align="center" gap="2">
+                  {mode === value && <CheckIcon size={12} />}
+                  <Text size="1">{label}</Text>
+                </Flex>
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+      </Flex>
+    </Box>
+  );
+
   if (!repoPath) {
     return <PanelMessage>No repository path available</PanelMessage>;
   }
@@ -525,13 +675,14 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     return <PanelMessage>Loading changes...</PanelMessage>;
   }
 
-  const hasChanges = changedFiles.length > 0;
+  const hasChanges = displayFiles.length > 0;
 
   if (!hasChanges) {
     return (
       <Box height="100%" overflowY="auto" py="2">
         <Flex direction="column" height="100%">
           {focusCta}
+          {comparisonControls}
           <Box flexGrow="1">
             <PanelMessage>No file changes yet</PanelMessage>
           </Box>
@@ -544,7 +695,8 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
     <Box height="100%" overflowY="auto" py="2">
       <Flex direction="column">
         {focusCta}
-        {changedFiles.map((file) => (
+        {comparisonControls}
+        {displayFiles.map((file) => (
           <ChangedFileItem
             key={file.path}
             file={file}

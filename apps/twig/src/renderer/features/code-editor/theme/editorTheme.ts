@@ -82,10 +82,46 @@ function createEditorTheme(colors: typeof dark, isDark: boolean) {
         color: colors.ivory,
       },
       ".cm-panels.cm-panels-top": {
-        borderBottom: "2px solid black",
+        borderBottom: `1px solid ${colors.selection}`,
       },
       ".cm-panels.cm-panels-bottom": {
-        borderTop: "2px solid black",
+        borderTop: `1px solid ${colors.selection}`,
+      },
+      ".cm-panel.cm-search": {
+        padding: "6px 8px",
+        fontSize: "12px",
+        gap: "4px",
+        "& input": {
+          background: colors.highlightBackground,
+          color: colors.ivory,
+          border: `1px solid ${colors.selection}`,
+          borderRadius: "3px",
+          padding: "2px 6px",
+          fontSize: "12px",
+          outline: "none",
+          "&:focus": {
+            borderColor: colors.malibu,
+          },
+        },
+        "& button": {
+          background: colors.highlightBackground,
+          color: colors.ivory,
+          border: `1px solid ${colors.selection}`,
+          borderRadius: "3px",
+          padding: "2px 8px",
+          fontSize: "11px",
+          cursor: "pointer",
+          "&:hover": {
+            background: colors.selection,
+          },
+        },
+        "& label": {
+          fontSize: "11px",
+          color: colors.stone,
+        },
+        "& .cm-button": {
+          backgroundImage: "none",
+        },
       },
       ".cm-searchMatch": {
         backgroundColor: withAlpha(colors.malibu, 0.35),
@@ -220,22 +256,12 @@ export const mergeViewTheme = EditorView.baseTheme({
     flexBasis: "0",
     overflow: "hidden",
   },
-  ".cm-merge-revert": {
-    width: "1.6em",
-    flexGrow: "0",
-    flexShrink: "0",
-    position: "relative",
-  },
   ".cm-merge-revert button": {
-    position: "absolute",
-    display: "block",
-    width: "100%",
-    boxSizing: "border-box",
-    textAlign: "center",
-    background: "none",
-    border: "none",
-    font: "inherit",
-    cursor: "pointer",
+    opacity: "0",
+    transition: "opacity 0.15s ease",
+  },
+  ".cm-merge-revert:hover button": {
+    opacity: "1",
   },
   // Light mode - subtle backgrounds
   "&light.cm-merge-a .cm-changedLine, &light .cm-deletedChunk": {
@@ -279,15 +305,21 @@ export const mergeViewTheme = EditorView.baseTheme({
     "& .cm-chunkButtons": {
       position: "absolute",
       insetInlineEnd: "5px",
+      opacity: "0",
+      transition: "opacity 0.15s ease",
+    },
+    "&:hover .cm-chunkButtons": {
+      opacity: "1",
     },
     "& button": {
-      border: "none",
       cursor: "pointer",
-      color: "white",
       margin: "0 2px",
-      borderRadius: "3px",
-      "&[name=accept]": { background: "#2a2" },
-      "&[name=reject]": { background: "#d43" },
+      "&[name=accept]": {
+        border: "none",
+        background: "#2a2",
+        color: "white",
+        borderRadius: "3px",
+      },
     },
   },
   ".cm-collapsedLines": {

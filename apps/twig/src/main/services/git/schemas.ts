@@ -247,3 +247,43 @@ export const getCommitConventionsOutput = z.object({
 export type GetCommitConventionsOutput = z.infer<
   typeof getCommitConventionsOutput
 >;
+
+// Diff mode for comparison mode dropdown
+export const diffModeSchema = z.enum([
+  "uncommitted",
+  "staged",
+  "unstaged",
+  "branch",
+  "lastTurn",
+]);
+
+export type DiffMode = z.infer<typeof diffModeSchema>;
+
+// getChangedFilesByMode schemas
+export const getChangedFilesByModeInput = z.object({
+  directoryPath: z.string(),
+  mode: diffModeSchema.default("uncommitted"),
+});
+
+export const getChangedFilesByModeOutput = z.array(changedFileSchema);
+
+// getFileAtRef schemas
+export const getFileAtRefInput = z.object({
+  directoryPath: z.string(),
+  filePath: z.string(),
+  ref: z.string(),
+});
+
+export const getFileAtRefOutput = z.string().nullable();
+
+// getMergeBase schemas
+export const getMergeBaseInput = directoryPathInput;
+export const getMergeBaseOutput = z.string();
+
+// getDiffStatsByMode schemas
+export const getDiffStatsByModeInput = z.object({
+  directoryPath: z.string(),
+  mode: diffModeSchema.default("uncommitted"),
+});
+
+export const getDiffStatsByModeOutput = diffStatsSchema;

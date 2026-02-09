@@ -433,7 +433,22 @@ export async function getChangedFilesDetailed(
             ) {
               continue;
             }
-            files.push({ path: file, status: "untracked" });
+            let linesAdded: number | undefined;
+            try {
+              const content = await fs.readFile(
+                path.join(baseDir, file),
+                "utf-8",
+              );
+              linesAdded = content.split("\n").length;
+            } catch {
+              // Binary file or read error — leave as undefined
+            }
+            files.push({
+              path: file,
+              status: "untracked",
+              linesAdded,
+              linesRemoved: linesAdded !== undefined ? 0 : undefined,
+            });
           }
         }
 
@@ -780,4 +795,303 @@ export async function addToLocalExclude(
     ? `${content.trimEnd()}\n${pattern}\n`
     : `${pattern}\n`;
   await fs.writeFile(excludePath, newContent);
+}
+
+export async function getFileAtRef(
+  baseDir: string,
+  filePath: string,
+  ref: string,
+  options?: CreateGitClientOptions,
+): Promise<string | null> {
+  const manager = getGitOperationManager();
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        return await git.show([`${ref}:${filePath}`]);
+      } catch {
+        return null;
+      }
+    },
+    { signal: options?.abortSignal },
+  );
+}
+
+export async function getMergeBase(
+  baseDir: string,
+  options?: CreateGitClientOptions,
+): Promise<string> {
+  const manager = getGitOperationManager();
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      const defaultBranch = await detectDefaultBranchWithFallback(git);
+      const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
+      let mergeBaseSha = mergeBase.trim();
+
+      // After merging master into the branch, merge-base still points to
+      // the original divergence point. Detect this and use HEAD instead
+      // so diffs only show post-merge working-tree changes.
+      const headParents = await git
+        .raw(["rev-parse", "HEAD^@"])
+        .then((s) => s.trim().split("\n"));
+      if (headParents.length > 1) {
+        const isAncestor = await git
+          .raw(["merge-base", "--is-ancestor", mergeBaseSha, headParents[1]])
+          .then(() => true)
+          .catch(() => false);
+        if (isAncestor) {
+          mergeBaseSha = await git
+            .raw(["rev-parse", "HEAD"])
+            .then((s) => s.trim());
+        }
+      }
+
+      return mergeBaseSha;
+    },
+    { signal: options?.abortSignal },
+  );
+}
+
+export async function getChangedFilesBranch(
+  baseDir: string,
+  options?: GetChangedFilesDetailedOptions,
+): Promise<ChangedFileInfo[]> {
+  const { excludePatterns, ...gitOptions } = options ?? {};
+  const manager = getGitOperationManager();
+
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        const defaultBranch = await detectDefaultBranchWithFallback(git);
+        const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
+        let mergeBaseSha = mergeBase.trim();
+
+        // After merging master into the branch, merge-base still points to
+        // the original divergence point, so all of master's changes appear
+        // as diffs. Detect this case and use HEAD instead.
+        const headParents = await git
+          .raw(["rev-parse", "HEAD^@"])
+          .then((s) => s.trim().split("\n"));
+        if (headParents.length > 1) {
+          const isAncestor = await git
+            .raw(["merge-base", "--is-ancestor", mergeBaseSha, headParents[1]])
+            .then(() => true)
+            .catch(() => false);
+          if (isAncestor) {
+            mergeBaseSha = await git
+              .raw(["rev-parse", "HEAD"])
+              .then((s) => s.trim());
+          }
+        }
+
+        const [diffSummary, status] = await Promise.all([
+          git.diffSummary(["-M", mergeBaseSha]),
+          git.status(),
+        ]);
+
+        const seenPaths = new Set<string>();
+        const files: ChangedFileInfo[] = [];
+
+        for (const file of diffSummary.files) {
+          if (
+            excludePatterns &&
+            matchesExcludePattern(file.file, excludePatterns)
+          ) {
+            seenPaths.add(file.file);
+            continue;
+          }
+
+          const hasFrom = "from" in file && file.from;
+          const isBinary = file.binary;
+          files.push({
+            path: file.file,
+            status: hasFrom
+              ? "renamed"
+              : status.deleted.includes(file.file)
+                ? "deleted"
+                : status.created.includes(file.file) ||
+                    status.not_added.includes(file.file)
+                  ? "added"
+                  : "modified",
+            originalPath: hasFrom ? (file.from as string) : undefined,
+            linesAdded: isBinary
+              ? undefined
+              : (file as { insertions: number }).insertions,
+            linesRemoved: isBinary
+              ? undefined
+              : (file as { deletions: number }).deletions,
+          });
+          seenPaths.add(file.file);
+          if (hasFrom) seenPaths.add(file.from as string);
+        }
+
+        // Include untracked files (not in the diff since they're new)
+        for (const file of status.not_added) {
+          if (!seenPaths.has(file)) {
+            if (
+              excludePatterns &&
+              matchesExcludePattern(file, excludePatterns)
+            ) {
+              continue;
+            }
+            let linesAdded: number | undefined;
+            try {
+              const content = await fs.readFile(
+                path.join(baseDir, file),
+                "utf-8",
+              );
+              linesAdded = content.split("\n").length;
+            } catch {
+              // Binary file or read error
+            }
+            files.push({
+              path: file,
+              status: "untracked",
+              linesAdded,
+              linesRemoved: linesAdded !== undefined ? 0 : undefined,
+            });
+          }
+        }
+
+        return files;
+      } catch {
+        return [];
+      }
+    },
+    { signal: gitOptions?.abortSignal },
+  );
+}
+
+export async function getChangedFilesStaged(
+  baseDir: string,
+  options?: GetChangedFilesDetailedOptions,
+): Promise<ChangedFileInfo[]> {
+  const { excludePatterns, ...gitOptions } = options ?? {};
+  const manager = getGitOperationManager();
+
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        const diffSummary = await git.diffSummary(["--cached", "-M", "HEAD"]);
+        const files: ChangedFileInfo[] = [];
+
+        for (const file of diffSummary.files) {
+          if (
+            excludePatterns &&
+            matchesExcludePattern(file.file, excludePatterns)
+          ) {
+            continue;
+          }
+
+          const hasFrom = "from" in file && file.from;
+          const isBinary = file.binary;
+          files.push({
+            path: file.file,
+            status: hasFrom ? "renamed" : "modified",
+            originalPath: hasFrom ? (file.from as string) : undefined,
+            linesAdded: isBinary
+              ? undefined
+              : (file as { insertions: number }).insertions,
+            linesRemoved: isBinary
+              ? undefined
+              : (file as { deletions: number }).deletions,
+          });
+        }
+
+        return files;
+      } catch {
+        return [];
+      }
+    },
+    { signal: gitOptions?.abortSignal },
+  );
+}
+
+export async function getChangedFilesUnstaged(
+  baseDir: string,
+  options?: GetChangedFilesDetailedOptions,
+): Promise<ChangedFileInfo[]> {
+  const { excludePatterns, ...gitOptions } = options ?? {};
+  const manager = getGitOperationManager();
+
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        const [diffSummary, status] = await Promise.all([
+          git.diffSummary(["-M"]),
+          git.status(),
+        ]);
+
+        const seenPaths = new Set<string>();
+        const files: ChangedFileInfo[] = [];
+
+        for (const file of diffSummary.files) {
+          if (
+            excludePatterns &&
+            matchesExcludePattern(file.file, excludePatterns)
+          ) {
+            seenPaths.add(file.file);
+            continue;
+          }
+
+          const hasFrom = "from" in file && file.from;
+          const isBinary = file.binary;
+          files.push({
+            path: file.file,
+            status: hasFrom
+              ? "renamed"
+              : status.deleted.includes(file.file)
+                ? "deleted"
+                : "modified",
+            originalPath: hasFrom ? (file.from as string) : undefined,
+            linesAdded: isBinary
+              ? undefined
+              : (file as { insertions: number }).insertions,
+            linesRemoved: isBinary
+              ? undefined
+              : (file as { deletions: number }).deletions,
+          });
+          seenPaths.add(file.file);
+          if (hasFrom) seenPaths.add(file.from as string);
+        }
+
+        // Include untracked files (inherently "unstaged")
+        for (const file of status.not_added) {
+          if (!seenPaths.has(file)) {
+            if (
+              excludePatterns &&
+              matchesExcludePattern(file, excludePatterns)
+            ) {
+              continue;
+            }
+            let linesAdded: number | undefined;
+            try {
+              const content = await fs.readFile(
+                path.join(baseDir, file),
+                "utf-8",
+              );
+              linesAdded = content.split("\n").length;
+            } catch {
+              // Binary file or read error
+            }
+            files.push({
+              path: file,
+              status: "untracked",
+              linesAdded,
+              linesRemoved: linesAdded !== undefined ? 0 : undefined,
+            });
+          }
+        }
+
+        return files;
+      } catch {
+        return [];
+      }
+    },
+    { signal: gitOptions?.abortSignal },
+  );
 }

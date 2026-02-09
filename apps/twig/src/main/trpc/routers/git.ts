@@ -9,6 +9,8 @@ import {
   discardFileChangesInput,
   getAllBranchesInput,
   getAllBranchesOutput,
+  getChangedFilesByModeInput,
+  getChangedFilesByModeOutput,
   getChangedFilesHeadInput,
   getChangedFilesHeadOutput,
   getCommitConventionsInput,
@@ -17,16 +19,22 @@ import {
   getCurrentBranchOutput,
   getDefaultBranchInput,
   getDefaultBranchOutput,
+  getDiffStatsByModeInput,
+  getDiffStatsByModeOutput,
   getDiffStatsInput,
   getDiffStatsOutput,
   getFileAtHeadInput,
   getFileAtHeadOutput,
+  getFileAtRefInput,
+  getFileAtRefOutput,
   getGitRepoInfoInput,
   getGitRepoInfoOutput,
   getGitSyncStatusInput,
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
+  getMergeBaseInput,
+  getMergeBaseOutput,
   getPrTemplateInput,
   getPrTemplateOutput,
   publishInput,
@@ -121,6 +129,33 @@ export const gitRouter = router({
     .input(getDiffStatsInput)
     .output(getDiffStatsOutput)
     .query(({ input }) => getService().getDiffStats(input.directoryPath)),
+
+  // Mode-aware operations
+  getChangedFilesByMode: publicProcedure
+    .input(getChangedFilesByModeInput)
+    .output(getChangedFilesByModeOutput)
+    .query(({ input }) =>
+      getService().getChangedFilesByMode(input.directoryPath, input.mode),
+    ),
+
+  getFileAtRef: publicProcedure
+    .input(getFileAtRefInput)
+    .output(getFileAtRefOutput)
+    .query(({ input }) =>
+      getService().getFileAtRef(input.directoryPath, input.filePath, input.ref),
+    ),
+
+  getMergeBase: publicProcedure
+    .input(getMergeBaseInput)
+    .output(getMergeBaseOutput)
+    .query(({ input }) => getService().getMergeBase(input.directoryPath)),
+
+  getDiffStatsByMode: publicProcedure
+    .input(getDiffStatsByModeInput)
+    .output(getDiffStatsByModeOutput)
+    .query(({ input }) =>
+      getService().getDiffStatsByMode(input.directoryPath, input.mode),
+    ),
 
   discardFileChanges: publicProcedure
     .input(discardFileChangesInput)
