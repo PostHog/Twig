@@ -13,12 +13,20 @@ import { getWorktreeLocation } from "../settingsStore.js";
 import { buildWorkspaceEnv } from "../workspace/workspaceEnv.js";
 import { type ExecuteOutput, ShellEvent, type ShellEvents } from "./schemas.js";
 
+// node-pty exposes destroy() at runtime but it's missing from type definitions
+declare module "node-pty" {
+  interface IPty {
+    destroy(): void;
+  }
+}
+
 const log = logger.scope("shell");
 
 export interface ShellSession {
   pty: pty.IPty;
   exitPromise: Promise<{ exitCode: number }>;
   command?: string;
+  disposables: pty.IDisposable[];
 }
 
 function getDefaultShell(): string {
@@ -123,17 +131,30 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       resolveExit = resolve;
     });
 
-    ptyProcess.onData((data: string) => {
-      this.emit(ShellEvent.Data, { sessionId, data });
-    });
+    const disposables: pty.IDisposable[] = [];
 
-    ptyProcess.onExit(({ exitCode }) => {
-      log.info(`Shell session ${sessionId} exited with code ${exitCode}`);
-      this.processTracking.unregister(ptyProcess.pid, "exited");
-      this.sessions.delete(sessionId);
-      this.emit(ShellEvent.Exit, { sessionId, exitCode });
-      resolveExit({ exitCode });
-    });
+    disposables.push(
+      ptyProcess.onData((data: string) => {
+        this.emit(ShellEvent.Data, { sessionId, data });
+      }),
+    );
+
+    disposables.push(
+      ptyProcess.onExit(({ exitCode }) => {
+        log.info(`Shell session ${sessionId} exited with code ${exitCode}`);
+        this.processTracking.unregister(ptyProcess.pid, "exited");
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          for (const d of session.disposables) {
+            d.dispose();
+          }
+          session.pty.destroy();
+          this.sessions.delete(sessionId);
+        }
+        this.emit(ShellEvent.Exit, { sessionId, exitCode });
+        resolveExit({ exitCode });
+      }),
+    );
 
     if (initialCommand) {
       setTimeout(() => {
@@ -145,6 +166,7 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
       pty: ptyProcess,
       exitPromise,
       command: initialCommand,
+      disposables,
     };
 
     this.sessions.set(sessionId, session);
@@ -194,7 +216,10 @@ export class ShellService extends TypedEventEmitter<ShellEvents> {
     if (session) {
       const pid = session.pty.pid;
       this.processTracking.kill(pid);
-      session.pty.kill();
+      for (const disposable of session.disposables) {
+        disposable.dispose();
+      }
+      session.pty.destroy();
       this.sessions.delete(sessionId);
     }
   }

@@ -90,20 +90,24 @@ describe("ShellService", () => {
     write: ReturnType<typeof vi.fn>;
     resize: ReturnType<typeof vi.fn>;
     kill: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
     process: string;
   };
 
   let mockProcessTracking: ProcessTrackingService;
 
+  const createMockDisposable = () => ({ dispose: vi.fn() });
+
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockPtyProcess = {
-      onData: vi.fn(),
-      onExit: vi.fn(),
+      onData: vi.fn(() => createMockDisposable()),
+      onExit: vi.fn(() => createMockDisposable()),
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
+      destroy: vi.fn(),
       process: "/bin/bash",
     };
 
@@ -272,12 +276,12 @@ describe("ShellService", () => {
   });
 
   describe("destroy", () => {
-    it("kills and removes session", async () => {
+    it("disposes listeners, destroys pty, and removes session", async () => {
       await service.create("session-1");
 
       service.destroy("session-1");
 
-      expect(mockPtyProcess.kill).toHaveBeenCalled();
+      expect(mockPtyProcess.destroy).toHaveBeenCalled();
       expect(service.check("session-1")).toBe(false);
     });
 
