@@ -240,7 +240,7 @@ function InlineEditInput({
 
   return (
     <div
-      className={`flex w-full items-start px-2 py-1.5 font-mono text-[12px]${isActive ? " bg-accent-4 text-gray-12" : ""}`}
+      className={`flex w-full items-start px-2 py-1.5 font-mono text-[12px]${isActive ? "bg-accent-4 text-gray-12" : ""}`}
       style={{
         paddingLeft: `${depth * INDENT_SIZE + 8 + (depth > 0 ? 4 : 0)}px`,
         gap: "4px",
