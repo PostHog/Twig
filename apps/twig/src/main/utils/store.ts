@@ -172,22 +172,32 @@ function getWorktreePath(folderPath: string, worktreeName: string): string {
 
 export async function clearAllStoreData(): Promise<void> {
   const associations = foldersStore.get("taskAssociations", []);
+  const worktreesToDelete: Array<{
+    worktreePath: string;
+    mainRepoPath: string;
+  }> = [];
+
   for (const assoc of associations) {
     if (assoc.mode === "worktree") {
       const folderPath = getFolderPath(assoc.folderId);
       if (!folderPath) continue;
+      worktreesToDelete.push({
+        worktreePath: getWorktreePath(folderPath, assoc.worktree),
+        mainRepoPath: folderPath,
+      });
+    }
+  }
 
-      const worktreePath = getWorktreePath(folderPath, assoc.worktree);
-      try {
-        const worktreeBasePath = getWorktreeLocation();
-        const manager = new WorktreeManager({
-          mainRepoPath: folderPath,
-          worktreeBasePath,
-        });
-        await manager.deleteWorktree(worktreePath);
-      } catch (error) {
-        log.error(`Failed to delete worktree ${worktreePath}:`, error);
-      }
+  for (const { worktreePath, mainRepoPath } of worktreesToDelete) {
+    try {
+      const worktreeBasePath = getWorktreeLocation();
+      const manager = new WorktreeManager({
+        mainRepoPath,
+        worktreeBasePath,
+      });
+      await manager.deleteWorktree(worktreePath);
+    } catch (error) {
+      log.error(`Failed to delete worktree ${worktreePath}:`, error);
     }
   }
 
