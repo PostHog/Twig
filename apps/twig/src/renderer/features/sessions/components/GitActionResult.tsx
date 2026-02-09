@@ -13,22 +13,18 @@ interface GitActionResultProps {
   actionType: GitActionType;
   repoPath: string;
   turnId: string;
-  isCloud?: boolean;
 }
 
 export function GitActionResult({
   actionType,
   repoPath,
   turnId,
-  isCloud = false,
 }: GitActionResultProps) {
-  const canQueryGit = !isCloud && !!repoPath;
-
   const { data: commitInfo } = useQuery({
     queryKey: ["git-latest-commit", repoPath, turnId],
     queryFn: () =>
       trpcVanilla.git.getLatestCommit.query({ directoryPath: repoPath }),
-    enabled: canQueryGit,
+    enabled: !!repoPath,
     staleTime: 0,
   });
 
@@ -36,26 +32,13 @@ export function GitActionResult({
     queryKey: ["git-repo-info", repoPath, turnId],
     queryFn: () =>
       trpcVanilla.git.getGitRepoInfo.query({ directoryPath: repoPath }),
-    enabled: canQueryGit,
+    enabled: !!repoPath,
     staleTime: 30000,
   });
 
   const handleOpenUrl = (url: string) => {
     trpcVanilla.os.openExternal.mutate({ url });
   };
-
-  if (isCloud) {
-    return (
-      <Box className="mt-3 rounded-lg border border-green-6 bg-green-2 p-3">
-        <Flex align="center" gap="2">
-          <CheckCircle size={16} weight="fill" className="text-green-9" />
-          <Text size="2" weight="medium" className="text-green-11">
-            {getCompletionLabel(actionType)}
-          </Text>
-        </Flex>
-      </Box>
-    );
-  }
 
   const showCommit = commitInfo != null;
   const showPrLink = repoInfo?.compareUrl != null;

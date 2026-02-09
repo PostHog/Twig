@@ -67,32 +67,55 @@ export const useDragDropHandlers = (taskId: string) => {
     const sourceData = event.operation.source?.data;
     const targetData = event.operation.target?.data;
 
-    // Tab reordering within same panel is handled by onDragOver
-    // Here we only handle cross-panel moves and splits
-
-    // Handle panel splitting/moving
     if (
       sourceData?.type !== "tab" ||
-      targetData?.type !== "panel" ||
       !sourceData.tabId ||
-      !sourceData.panelId ||
+      !sourceData.panelId
+    ) {
+      return;
+    }
+
+    const { tabId, panelId: sourcePanelId } = sourceData;
+
+    // Defer structural tree changes to the next frame so @dnd-kit can finish
+    // its DOM cleanup first. Without this, React tries to removeChild on nodes
+    // that @dnd-kit has already repositioned, causing a DOM exception.
+    const applyMove = (fn: () => void) => requestAnimationFrame(fn);
+
+    // Handle drop on tab bar or on a tab in a different panel -> move tab
+    if (
+      (targetData?.type === "tab-bar" || targetData?.type === "tab") &&
+      targetData.panelId &&
+      targetData.panelId !== sourcePanelId
+    ) {
+      applyMove(() => {
+        moveTab(taskId, tabId, sourcePanelId, targetData.panelId);
+        setFocusedPanel(taskId, targetData.panelId);
+      });
+      return;
+    }
+
+    // Handle panel drop zones (center and split directions)
+    if (
+      targetData?.type !== "panel" ||
       !targetData.panelId ||
       !targetData.zone
     ) {
       return;
     }
 
-    const { tabId, panelId: sourcePanelId } = sourceData;
     const { panelId: targetPanelId, zone } = targetData;
 
     if (zone === "center") {
-      moveTab(taskId, tabId, sourcePanelId, targetPanelId);
-      setFocusedPanel(taskId, targetPanelId);
+      applyMove(() => {
+        moveTab(taskId, tabId, sourcePanelId, targetPanelId);
+        setFocusedPanel(taskId, targetPanelId);
+      });
     } else if (isSplitDirection(zone)) {
-      splitPanel(taskId, tabId, sourcePanelId, targetPanelId, zone);
-      // For splits, the new panel gets a generated ID, so we can't easily focus it here
-      // The target panel remains focused which is reasonable behavior
-      setFocusedPanel(taskId, targetPanelId);
+      applyMove(() => {
+        splitPanel(taskId, tabId, sourcePanelId, targetPanelId, zone);
+        setFocusedPanel(taskId, targetPanelId);
+      });
     }
   };
 

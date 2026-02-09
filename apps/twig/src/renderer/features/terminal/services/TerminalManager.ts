@@ -229,6 +229,15 @@ class TerminalManagerImpl {
 
       if (instance.attachedElement) {
         instance.fitAddon.fit();
+        trpcVanilla.shell.resize
+          .mutate({
+            sessionId,
+            cols: instance.term.cols,
+            rows: instance.term.rows,
+          })
+          .catch((error: Error) => {
+            log.error("Failed to sync initial terminal size:", error);
+          });
       }
 
       this.emit("ready", {

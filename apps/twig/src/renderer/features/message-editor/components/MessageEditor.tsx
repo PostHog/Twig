@@ -60,9 +60,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
     const taskId = context?.taskId;
     const disabled = context?.disabled ?? false;
     const isLoading = context?.isLoading ?? false;
-    const isCloud = context?.isCloud ?? false;
     const repoPath = context?.repoPath;
-    const isDisabled = disabled || !isOnline;
+    const isSubmitDisabled = disabled || !isOnline;
 
     const {
       editor,
@@ -81,9 +80,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       sessionId,
       taskId,
       placeholder,
-      disabled: isDisabled,
+      disabled,
+      submitDisabled: !isOnline,
       isLoading,
-      isCloud,
       autoFocus,
       context: { taskId, repoPath },
       onSubmit,
@@ -159,7 +158,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         <Flex justify="between" align="center">
           <Flex gap="2" align="center">
             <EditorToolbar
-              disabled={isDisabled}
+              disabled={disabled}
               taskId={taskId}
               onInsertChip={insertChip}
               onAttachFiles={onAttachFiles}
@@ -187,8 +186,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
               <Tooltip
                 content={
                   !isOnline
-                    ? "You're offline"
-                    : isDisabled || isEmpty
+                    ? "You're offline — send when reconnected"
+                    : isSubmitDisabled || isEmpty
                       ? "Enter a message"
                       : "Send message"
                 }
@@ -200,13 +199,17 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
                     e.stopPropagation();
                     submit();
                   }}
-                  disabled={isDisabled || isEmpty}
+                  disabled={isSubmitDisabled || isEmpty}
                   loading={isLoading}
                   style={{
                     backgroundColor:
-                      isDisabled || isEmpty ? "var(--accent-a4)" : undefined,
+                      isSubmitDisabled || isEmpty
+                        ? "var(--accent-a4)"
+                        : undefined,
                     color:
-                      isDisabled || isEmpty ? "var(--accent-8)" : undefined,
+                      isSubmitDisabled || isEmpty
+                        ? "var(--accent-8)"
+                        : undefined,
                   }}
                 >
                   <ArrowUp size={14} weight="bold" />

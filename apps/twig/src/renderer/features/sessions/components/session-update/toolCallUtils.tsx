@@ -131,6 +131,7 @@ export interface ToolViewProps {
   toolCall: ToolCall;
   turnCancelled?: boolean;
   turnComplete?: boolean;
+  expanded?: boolean;
 }
 
 const ICON_SIZE = 12;

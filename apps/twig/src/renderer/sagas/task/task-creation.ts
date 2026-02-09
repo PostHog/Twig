@@ -1,13 +1,18 @@
 import type { PostHogAPIClient } from "@api/posthogClient";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
-import { getSessionActions } from "@features/sessions/stores/sessionStore";
+import { getSessionService } from "@features/sessions/service/service";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
-import type { Task, Workspace, WorkspaceMode } from "@shared/types";
+import type {
+  ExecutionMode,
+  Task,
+  Workspace,
+  WorkspaceMode,
+} from "@shared/types";
 
 const log = logger.scope("task-creation-saga");
 
@@ -30,8 +35,9 @@ export interface TaskCreationInput {
   workspaceMode?: WorkspaceMode;
   branch?: string | null;
   githubIntegrationId?: number;
-  executionMode?: string;
+  executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
+  model?: string;
 }
 
 export interface TaskCreationOutput {
@@ -191,24 +197,26 @@ export class TaskCreationSaga extends Saga<
           // For opening existing tasks, await to ensure chat history loads
           // For creating new tasks, we can proceed without waiting
           if (input.taskId) {
-            await getSessionActions().connectToTask({
+            await getSessionService().connectToTask({
               task,
               repoPath: agentCwd ?? "",
             });
           } else {
-            getSessionActions().connectToTask({
+            // Don't await for create - allows faster navigation to task page
+            getSessionService().connectToTask({
               task,
               repoPath: agentCwd ?? "",
               initialPrompt,
               executionMode: input.executionMode,
               adapter: input.adapter,
+              model: input.model,
             });
           }
           return { taskId: task.id };
         },
         rollback: async ({ taskId }) => {
           log.info("Rolling back: disconnecting agent session", { taskId });
-          await getSessionActions().disconnectFromTask(taskId);
+          await getSessionService().disconnectFromTask(taskId);
         },
       });
     }

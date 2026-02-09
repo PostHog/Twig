@@ -101,14 +101,17 @@ export class FoldersService {
   }
 
   async removeFolder(folderId: string): Promise<void> {
-    const folders = foldersStore.get("folders", []);
-    const folder = folders.find((f) => f.id === folderId);
-    const associations = foldersStore.get("taskAssociations", []);
+    const folder = foldersStore
+      .get("folders", [])
+      .find((f) => f.id === folderId);
+    const worktreeAssocs = foldersStore
+      .get("taskAssociations", [])
+      .filter(
+        (a) =>
+          a.folderId === folderId && a.mode === "worktree" && "worktree" in a,
+      );
 
-    const associationsToRemove = associations.filter(
-      (a) => a.folderId === folderId,
-    );
-    for (const assoc of associationsToRemove) {
+    for (const assoc of worktreeAssocs) {
       if (assoc.mode === "worktree" && folder) {
         const worktreeBasePath = getWorktreeLocation();
         const worktreePath = path.join(
@@ -128,13 +131,17 @@ export class FoldersService {
       }
     }
 
-    const filtered = folders.filter((f) => f.id !== folderId);
-    const filteredAssociations = associations.filter(
-      (a) => a.folderId !== folderId,
-    );
+    const currentFolders = foldersStore.get("folders", []);
+    const currentAssociations = foldersStore.get("taskAssociations", []);
 
-    foldersStore.set("folders", filtered);
-    foldersStore.set("taskAssociations", filteredAssociations);
+    foldersStore.set(
+      "folders",
+      currentFolders.filter((f) => f.id !== folderId),
+    );
+    foldersStore.set(
+      "taskAssociations",
+      currentAssociations.filter((a) => a.folderId !== folderId),
+    );
     log.debug(`Removed folder with ID: ${folderId}`);
   }
 

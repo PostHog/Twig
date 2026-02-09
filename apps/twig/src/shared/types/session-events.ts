@@ -80,16 +80,20 @@ export interface StoredLogEntry {
   };
 }
 
+export interface UserShellExecuteResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 /**
  * Params for user shell execute ACP extension notification.
  * Used for bash mode where user runs shell commands directly.
+ * When `result` is undefined, the command is still in progress.
  */
 export interface UserShellExecuteParams {
+  id: string;
   command: string;
   cwd: string;
-  result: {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-  };
+  result?: UserShellExecuteResult;
 }

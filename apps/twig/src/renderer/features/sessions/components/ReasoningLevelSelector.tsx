@@ -1,7 +1,7 @@
 import { Select, Text } from "@radix-ui/themes";
+import { getSessionService } from "../service/service";
 import {
   flattenSelectOptions,
-  useSessionActions,
   useSessionForTask,
   useThoughtLevelConfigOptionForTask,
 } from "../stores/sessionStore";
@@ -15,7 +15,6 @@ export function ReasoningLevelSelector({
   taskId,
   disabled,
 }: ReasoningLevelSelectorProps) {
-  const { setSessionConfigOption } = useSessionActions();
   const session = useSessionForTask(taskId);
   const thoughtOption = useThoughtLevelConfigOptionForTask(taskId);
 
@@ -30,8 +29,12 @@ export function ReasoningLevelSelector({
     options.find((opt) => opt.value === activeLevel)?.name ?? activeLevel;
 
   const handleChange = (value: string) => {
-    if (taskId && session?.status === "connected" && !session.isCloud) {
-      setSessionConfigOption(taskId, thoughtOption.id, value);
+    if (taskId && session?.status === "connected") {
+      getSessionService().setSessionConfigOption(
+        taskId,
+        thoughtOption.id,
+        value,
+      );
     }
   };
 
