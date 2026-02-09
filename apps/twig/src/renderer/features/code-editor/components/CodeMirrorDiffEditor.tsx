@@ -67,8 +67,7 @@ export function CodeMirrorDiffEditor({
 
       e.preventDefault();
       e.stopPropagation();
-      const editorView =
-        instance instanceof EditorView ? instance : instance.b;
+      const editorView = instance instanceof EditorView ? instance : instance.b;
       openSearchPanel(editorView);
     };
 
