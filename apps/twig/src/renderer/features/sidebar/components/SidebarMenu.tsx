@@ -9,6 +9,7 @@ import { Box, Flex } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
+import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
@@ -99,6 +100,7 @@ function SidebarMenuComponent() {
   };
 
   const updateTask = useUpdateTask();
+  const queryClient = useQueryClient();
   const log = logger.scope("sidebar-menu");
 
   const handleTaskDoubleClick = useCallback(
@@ -111,6 +113,16 @@ function SidebarMenuComponent() {
   const handleTaskEditSubmit = useCallback(
     async (taskId: string, newTitle: string) => {
       setEditingTaskId(null);
+
+      // Optimistically update task title in all cached task lists
+      queryClient.setQueriesData<Task[]>(
+        { queryKey: ["tasks", "list"] },
+        (old) =>
+          old?.map((task) =>
+            task.id === taskId ? { ...task, title: newTitle } : task,
+          ),
+      );
+
       try {
         await updateTask.mutateAsync({
           taskId,
@@ -118,9 +130,11 @@ function SidebarMenuComponent() {
         });
       } catch (error) {
         log.error("Failed to rename task", error);
+        // Refetch to revert optimistic update on failure
+        queryClient.invalidateQueries({ queryKey: ["tasks", "list"] });
       }
     },
-    [setEditingTaskId, updateTask, log],
+    [setEditingTaskId, updateTask, queryClient, log],
   );
 
   const handleTaskEditCancel = useCallback(() => {
