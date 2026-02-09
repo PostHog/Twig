@@ -366,30 +366,28 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     return getCommitConventions(directoryPath, sampleSize);
   }
 
+  private async getFilesByMode(
+    directoryPath: string,
+    mode: DiffMode,
+  ): Promise<ChangedFileInfo[]> {
+    const excludePatterns = [".claude", "CLAUDE.local.md"];
+    switch (mode) {
+      case "staged":
+        return getChangedFilesStaged(directoryPath, { excludePatterns });
+      case "unstaged":
+        return getChangedFilesUnstaged(directoryPath, { excludePatterns });
+      case "branch":
+        return getChangedFilesBranch(directoryPath, { excludePatterns });
+      default:
+        return getChangedFilesDetailed(directoryPath, { excludePatterns });
+    }
+  }
+
   public async getChangedFilesByMode(
     directoryPath: string,
     mode: DiffMode,
   ): Promise<ChangedFile[]> {
-    const excludePatterns = [".claude", "CLAUDE.local.md"];
-    let files: ChangedFileInfo[];
-    switch (mode) {
-      case "staged":
-        files = await getChangedFilesStaged(directoryPath, { excludePatterns });
-        break;
-      case "unstaged":
-        files = await getChangedFilesUnstaged(directoryPath, {
-          excludePatterns,
-        });
-        break;
-      case "branch":
-        files = await getChangedFilesBranch(directoryPath, { excludePatterns });
-        break;
-      default:
-        files = await getChangedFilesDetailed(directoryPath, {
-          excludePatterns,
-        });
-        break;
-    }
+    const files = await this.getFilesByMode(directoryPath, mode);
     return files.map((f) => ({
       path: f.path,
       status: f.status,
@@ -415,26 +413,7 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     directoryPath: string,
     mode: DiffMode,
   ): Promise<DiffStats> {
-    const excludePatterns = [".claude", "CLAUDE.local.md"];
-    let files: ChangedFileInfo[];
-    switch (mode) {
-      case "staged":
-        files = await getChangedFilesStaged(directoryPath, { excludePatterns });
-        break;
-      case "unstaged":
-        files = await getChangedFilesUnstaged(directoryPath, {
-          excludePatterns,
-        });
-        break;
-      case "branch":
-        files = await getChangedFilesBranch(directoryPath, { excludePatterns });
-        break;
-      default:
-        files = await getChangedFilesDetailed(directoryPath, {
-          excludePatterns,
-        });
-        break;
-    }
+    const files = await this.getFilesByMode(directoryPath, mode);
     return computeDiffStatsFromFiles(files);
   }
 }

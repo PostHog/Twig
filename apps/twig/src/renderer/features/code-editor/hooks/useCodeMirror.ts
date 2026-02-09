@@ -40,7 +40,7 @@ const createMergeControls = (onReject?: () => void) => {
     const button = document.createElement("button");
     button.textContent = "\u21a9 Revert";
     button.name = "reject";
-    button.style.background = "#dc3545";
+    button.style.background = "var(--red-9)";
     button.style.color = "white";
     button.style.border = "none";
     button.style.padding = "4px 10px";
@@ -51,10 +51,10 @@ const createMergeControls = (onReject?: () => void) => {
     button.style.lineHeight = "1";
 
     button.onmouseenter = () => {
-      button.style.background = "#b02a37";
+      button.style.background = "var(--red-10)";
     };
     button.onmouseleave = () => {
-      button.style.background = "#dc3545";
+      button.style.background = "var(--red-9)";
     };
 
     button.onmousedown = (e) => {

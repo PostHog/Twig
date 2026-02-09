@@ -46,7 +46,6 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import {
   type ComparisonMode,
-  resolveGitDiffMode,
   useChangesModeStore,
 } from "../stores/changesModeStore";
 
@@ -475,7 +474,6 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   // Comparison mode state
   const mode = useChangesModeStore((s) => s.mode);
   const setMode = useChangesModeStore((s) => s.setMode);
-  const gitDiffMode = resolveGitDiffMode(mode);
 
   // Session events for last turn mode
   const taskIdIndex = useSessionStore((s) => s.taskIdIndex);
@@ -493,11 +491,11 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
 
   // Mode-aware file query
   const { data: changedFiles = [], isLoading } = useQuery({
-    queryKey: ["changed-files-mode", repoPath, gitDiffMode],
+    queryKey: ["changed-files-mode", repoPath, mode],
     queryFn: () =>
       trpcVanilla.git.getChangedFilesByMode.query({
         directoryPath: repoPath as string,
-        mode: gitDiffMode === "lastTurn" ? "uncommitted" : gitDiffMode,
+        mode: mode === "lastTurn" ? "uncommitted" : mode,
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",

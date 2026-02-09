@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { CreateGitClientOptions } from "./client.js";
+import type { CreateGitClientOptions, GitClient } from "./client.js";
 import { getGitOperationManager } from "./operation-manager.js";
 
 export interface WorktreeListEntry {
@@ -808,13 +808,45 @@ export async function getFileAtRef(
     baseDir,
     async (git) => {
       try {
-        return await git.show([`${ref}:${filePath}`]);
+        return await git.show(["--", `${ref}:${filePath}`]);
       } catch {
         return null;
       }
     },
     { signal: options?.abortSignal },
   );
+}
+
+/**
+ * Resolves the effective merge-base SHA for the current branch against the
+ * default branch. After merging the default branch into the feature branch,
+ * the raw merge-base still points to the original divergence point, which
+ * causes all of the default branch's changes to appear in diffs. This helper
+ * detects that case and returns HEAD instead.
+ */
+async function resolveEffectiveMergeBase(
+  git: GitClient,
+): Promise<string> {
+  const defaultBranch = await detectDefaultBranchWithFallback(git);
+  const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
+  let mergeBaseSha = mergeBase.trim();
+
+  const headParents = await git
+    .raw(["rev-parse", "HEAD^@"])
+    .then((s) => s.trim().split("\n"));
+  if (headParents.length > 1) {
+    const isAncestor = await git
+      .raw(["merge-base", "--is-ancestor", mergeBaseSha, headParents[1]])
+      .then(() => true)
+      .catch(() => false);
+    if (isAncestor) {
+      mergeBaseSha = await git
+        .raw(["rev-parse", "HEAD"])
+        .then((s) => s.trim());
+    }
+  }
+
+  return mergeBaseSha;
 }
 
 export async function getMergeBase(
@@ -824,31 +856,7 @@ export async function getMergeBase(
   const manager = getGitOperationManager();
   return manager.executeRead(
     baseDir,
-    async (git) => {
-      const defaultBranch = await detectDefaultBranchWithFallback(git);
-      const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
-      let mergeBaseSha = mergeBase.trim();
-
-      // After merging master into the branch, merge-base still points to
-      // the original divergence point. Detect this and use HEAD instead
-      // so diffs only show post-merge working-tree changes.
-      const headParents = await git
-        .raw(["rev-parse", "HEAD^@"])
-        .then((s) => s.trim().split("\n"));
-      if (headParents.length > 1) {
-        const isAncestor = await git
-          .raw(["merge-base", "--is-ancestor", mergeBaseSha, headParents[1]])
-          .then(() => true)
-          .catch(() => false);
-        if (isAncestor) {
-          mergeBaseSha = await git
-            .raw(["rev-parse", "HEAD"])
-            .then((s) => s.trim());
-        }
-      }
-
-      return mergeBaseSha;
-    },
+    async (git) => resolveEffectiveMergeBase(git),
     { signal: options?.abortSignal },
   );
 }
@@ -864,27 +872,7 @@ export async function getChangedFilesBranch(
     baseDir,
     async (git) => {
       try {
-        const defaultBranch = await detectDefaultBranchWithFallback(git);
-        const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
-        let mergeBaseSha = mergeBase.trim();
-
-        // After merging master into the branch, merge-base still points to
-        // the original divergence point, so all of master's changes appear
-        // as diffs. Detect this case and use HEAD instead.
-        const headParents = await git
-          .raw(["rev-parse", "HEAD^@"])
-          .then((s) => s.trim().split("\n"));
-        if (headParents.length > 1) {
-          const isAncestor = await git
-            .raw(["merge-base", "--is-ancestor", mergeBaseSha, headParents[1]])
-            .then(() => true)
-            .catch(() => false);
-          if (isAncestor) {
-            mergeBaseSha = await git
-              .raw(["rev-parse", "HEAD"])
-              .then((s) => s.trim());
-          }
-        }
+        const mergeBaseSha = await resolveEffectiveMergeBase(git);
 
         const [diffSummary, status] = await Promise.all([
           git.diffSummary(["-M", mergeBaseSha]),
