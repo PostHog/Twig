@@ -18,7 +18,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePreviewSession } from "../hooks/usePreviewSession";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { AdapterSelect } from "./AdapterSelect";
-import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
 
@@ -206,8 +205,6 @@ export function TaskInput() {
             modeOption={modeOption}
             onCycleMode={handleCycleMode}
           />
-
-          <SuggestedTasks editorRef={editorRef} />
         </Flex>
       </Flex>
     </div>
