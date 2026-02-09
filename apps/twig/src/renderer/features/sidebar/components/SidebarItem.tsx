@@ -9,6 +9,7 @@ interface SidebarItemProps {
   subtitle?: React.ReactNode;
   isActive?: boolean;
   onClick?: () => void;
+  onDoubleClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   action?: SidebarItemAction;
   endContent?: React.ReactNode;
@@ -21,6 +22,7 @@ export function SidebarItem({
   subtitle,
   isActive,
   onClick,
+  onDoubleClick,
   onContextMenu,
   endContent,
 }: SidebarItemProps) {
@@ -34,6 +36,7 @@ export function SidebarItem({
         gap: "4px",
       }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
     >
       {icon && (

@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import type { WorkspaceMode } from "@shared/types";
 import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 interface TaskItemProps {
@@ -24,9 +24,13 @@ interface TaskItemProps {
   isPinned?: boolean;
   needsPermission?: boolean;
   timestamp?: number;
+  isEditing?: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
+  onEditSubmit?: (newTitle: string) => void;
+  onEditCancel?: () => void;
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -80,6 +84,7 @@ function TaskHoverToolbar({ onDelete }: TaskHoverToolbarProps) {
 }
 
 const ICON_SIZE = 12;
+const INDENT_SIZE = 8;
 
 export function TaskItem({
   depth = 0,
@@ -92,9 +97,13 @@ export function TaskItem({
   isPinned = false,
   needsPermission = false,
   timestamp,
+  isEditing = false,
   onClick,
+  onDoubleClick,
   onContextMenu,
   onDelete,
+  onEditSubmit,
+  onEditCancel,
 }: TaskItemProps) {
   const isFocused = useFocusStore(
     selectIsFocusedOnWorktree(worktreePath ?? ""),
@@ -157,6 +166,19 @@ export function TaskItem({
     );
   }, [timestamp, onDelete]);
 
+  if (isEditing) {
+    return (
+      <InlineEditInput
+        depth={depth}
+        icon={icon}
+        label={label}
+        isActive={isActive}
+        onSubmit={(newTitle) => onEditSubmit?.(newTitle)}
+        onCancel={() => onEditCancel?.()}
+      />
+    );
+  }
+
   return (
     <SidebarItem
       depth={depth}
@@ -164,8 +186,92 @@ export function TaskItem({
       label={label}
       isActive={isActive}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       endContent={endContent}
     />
+  );
+}
+
+function InlineEditInput({
+  depth,
+  icon,
+  label,
+  isActive,
+  onSubmit,
+  onCancel,
+}: {
+  depth: number;
+  icon: React.ReactNode;
+  label: string;
+  isActive: boolean;
+  onSubmit: (newTitle: string) => void;
+  onCancel: () => void;
+}) {
+  const [editValue, setEditValue] = useState(label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }, []);
+
+  const handleSubmit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== label) {
+      onSubmit(trimmed);
+    } else {
+      onCancel();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      className={`flex w-full items-start px-2 py-1.5 font-mono text-[12px]${isActive ? "bg-accent-4 text-gray-12" : ""}`}
+      style={{
+        paddingLeft: `${depth * INDENT_SIZE + 8 + (depth > 0 ? 4 : 0)}px`,
+        gap: "4px",
+      }}
+    >
+      {icon && (
+        <span
+          className={`flex shrink-0 items-center ${isActive ? "text-gray-11" : "text-gray-10"}`}
+          style={{
+            height: "18px",
+            width: "18px",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
+        </span>
+      )}
+      <span className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <span className="flex items-center" style={{ height: "18px" }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSubmit}
+            className="min-w-0 flex-1 rounded-sm border border-accent-8 bg-gray-2 px-1 font-mono text-[12px] text-gray-12 outline-none"
+            style={{ height: "18px" }}
+          />
+        </span>
+      </span>
+    </div>
   );
 }
