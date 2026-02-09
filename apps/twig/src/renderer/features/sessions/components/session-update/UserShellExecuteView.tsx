@@ -1,11 +1,14 @@
 import { Box } from "@radix-ui/themes";
-import type { UserShellExecuteParams } from "@shared/types/session-events";
+import type { UserShellExecuteResult } from "@shared/types/session-events";
 import { memo } from "react";
 import { ExecuteToolView } from "./ExecuteToolView";
 
-export interface UserShellExecute extends UserShellExecuteParams {
+export interface UserShellExecute {
   type: "user_shell_execute";
   id: string;
+  command: string;
+  cwd: string;
+  result?: UserShellExecuteResult;
 }
 
 interface UserShellExecuteViewProps {
@@ -15,6 +18,12 @@ interface UserShellExecuteViewProps {
 export const UserShellExecuteView = memo(function UserShellExecuteView({
   item,
 }: UserShellExecuteViewProps) {
+  const isInProgress = !item.result;
+  const status = isInProgress ? "in_progress" : "completed";
+  const output = item.result
+    ? item.result.stdout || item.result.stderr || ""
+    : "";
+
   return (
     <Box className="border-accent-9 border-l-2 pl-2">
       <ExecuteToolView
@@ -22,18 +31,13 @@ export const UserShellExecuteView = memo(function UserShellExecuteView({
           toolCallId: item.id,
           title: item.command,
           kind: "execute",
-          status: "completed",
-          rawInput: { command: item.command, description: "User command" },
-          content: [
-            {
-              type: "content",
-              content: {
-                type: "text",
-                text: item.result.stdout || item.result.stderr || "",
-              },
-            },
-          ],
+          status,
+          rawInput: { command: item.command, description: "" },
+          content: output
+            ? [{ type: "content", content: { type: "text", text: output } }]
+            : [],
         }}
+        expanded={true}
       />
     </Box>
   );

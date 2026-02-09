@@ -274,26 +274,35 @@ const TurnView = memo(function TurnView({ turn, repoPath }: TurnViewProps) {
 function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
   const items: ConversationItem[] = [];
   let currentTurn: Turn | null = null;
-  // Map prompt request IDs to their turns for matching responses
   const pendingPrompts = new Map<number, Turn>();
-  let shellExecuteCounter = 0;
+  const shellExecutes = new Map<
+    string,
+    { item: UserShellExecute; index: number }
+  >();
 
   for (const event of events) {
     const msg = event.message;
 
-    // User shell execute notification - standalone item
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "_array/user_shell_execute"
     ) {
       const params = msg.params as UserShellExecuteParams;
-      items.push({
-        type: "user_shell_execute",
-        id: `shell-exec-${shellExecuteCounter++}`,
-        command: params.command,
-        cwd: params.cwd,
-        result: params.result,
-      });
+      const existing = shellExecutes.get(params.id);
+
+      if (existing) {
+        existing.item.result = params.result;
+      } else {
+        const item: UserShellExecute = {
+          type: "user_shell_execute",
+          id: params.id,
+          command: params.command,
+          cwd: params.cwd,
+          result: params.result,
+        };
+        shellExecutes.set(params.id, { item, index: items.length });
+        items.push(item);
+      }
       continue;
     }
 

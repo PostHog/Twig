@@ -23,8 +23,9 @@ export function ExecuteToolView({
   toolCall,
   turnCancelled,
   turnComplete,
+  expanded = false,
 }: ToolViewProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(expanded);
   const { status, rawInput, content, title } = toolCall;
   const { isLoading, isFailed, wasCancelled } = useToolCallStatus(
     status,

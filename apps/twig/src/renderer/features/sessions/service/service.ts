@@ -1008,10 +1008,29 @@ export class SessionService {
   }
 
   /**
-   * Append a user shell execute event.
+   * Start a user shell execute event (shows command as running).
+   * Call completeUserShellExecute with the same id when the command finishes.
    */
-  async appendUserShellExecute(
+  async startUserShellExecute(
     taskId: string,
+    id: string,
+    command: string,
+    cwd: string,
+  ): Promise<void> {
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) return;
+
+    const event = createUserShellExecuteEvent(command, cwd, undefined, id);
+    sessionStoreSetters.appendEvents(session.taskRunId, [event]);
+  }
+
+  /**
+   * Complete a user shell execute event with results.
+   * Must be called after startUserShellExecute with the same id.
+   */
+  async completeUserShellExecute(
+    taskId: string,
+    id: string,
     command: string,
     cwd: string,
     result: { stdout: string; stderr: string; exitCode: number },
@@ -1023,13 +1042,39 @@ export class SessionService {
       type: "notification",
       timestamp: new Date().toISOString(),
       notification: {
-        // TODO: Migrate to twig
         method: "_array/user_shell_execute",
-        params: { command, cwd, result },
+        params: { id, command, cwd, result },
       },
     };
 
-    const event = createUserShellExecuteEvent(command, cwd, result);
+    const event = createUserShellExecuteEvent(command, cwd, result, id);
+
+    await this.appendAndPersist(taskId, session, event, storedEntry);
+  }
+
+  /**
+   * Append a user shell execute event (synchronous version for backwards compatibility).
+   */
+  async appendUserShellExecute(
+    taskId: string,
+    command: string,
+    cwd: string,
+    result: { stdout: string; stderr: string; exitCode: number },
+  ): Promise<void> {
+    const id = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) return;
+
+    const storedEntry: StoredLogEntry = {
+      type: "notification",
+      timestamp: new Date().toISOString(),
+      notification: {
+        method: "_array/user_shell_execute",
+        params: { id, command, cwd, result },
+      },
+    };
+
+    const event = createUserShellExecuteEvent(command, cwd, result, id);
 
     await this.appendAndPersist(taskId, session, event, storedEntry);
   }

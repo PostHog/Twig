@@ -61,7 +61,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const isConnecting = useRef(false);
 
-  // Focus the message editor when navigating to this task
   useEffect(() => {
     requestFocus(taskId);
   }, [taskId, requestFocus]);
@@ -71,7 +70,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Don't reconnect if already connected, connecting, or in error state
     if (
       session?.status === "connected" ||
       session?.status === "connecting" ||
@@ -118,7 +116,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
         markActivity(taskId);
 
-        // if we are currently viewing this task by the end of the prompt, mark it as viewed
         const view = useNavigationStore.getState().view;
         const isViewingTask =
           view?.type === "task-detail" && view?.data?.id === taskId;
@@ -136,13 +133,11 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   );
 
   const handleCancelPrompt = useCallback(async () => {
-    // Get and clear any queued messages before cancelling
     const queuedContent = sessionStoreSetters.dequeueMessagesAsText(taskId);
 
     const result = await getSessionService().cancelPrompt(taskId);
     log.info("Prompt cancelled", { success: result });
 
-    // Restore queued messages to the editor
     if (queuedContent) {
       setPendingContent(taskId, {
         segments: [{ type: "text", text: queuedContent }],
@@ -171,19 +166,39 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     async (command: string) => {
       if (!repoPath) return;
 
+      const execId = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      await getSessionService().startUserShellExecute(
+        taskId,
+        execId,
+        command,
+        repoPath,
+      );
+
       try {
         const result = await trpcVanilla.shell.execute.mutate({
           cwd: repoPath,
           command,
         });
-        getSessionService().appendUserShellExecute(
+        await getSessionService().completeUserShellExecute(
           taskId,
+          execId,
           command,
           repoPath,
           result,
         );
       } catch (error) {
         log.error("Failed to execute shell command", error);
+        await getSessionService().completeUserShellExecute(
+          taskId,
+          execId,
+          command,
+          repoPath,
+          {
+            stdout: "",
+            stderr: error instanceof Error ? error.message : "Command failed",
+            exitCode: 1,
+          },
+        );
       }
     },
     [taskId, repoPath],
