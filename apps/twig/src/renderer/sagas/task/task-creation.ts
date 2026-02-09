@@ -38,6 +38,7 @@ export interface TaskCreationInput {
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
   model?: string;
+  reasoningLevel?: string;
 }
 
 export interface TaskCreationOutput {
@@ -210,6 +211,7 @@ export class TaskCreationSaga extends Saga<
               executionMode: input.executionMode,
               adapter: input.adapter,
               model: input.model,
+              reasoningLevel: input.reasoningLevel,
             });
           }
           return { taskId: task.id };
