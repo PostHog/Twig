@@ -1,5 +1,7 @@
+import { openSearchPanel } from "@codemirror/search";
+import { EditorView } from "@codemirror/view";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useCodeMirror } from "../hooks/useCodeMirror";
 import { useEditorExtensions } from "../hooks/useEditorExtensions";
 
@@ -21,7 +23,24 @@ export function CodeMirrorEditor({
     () => ({ doc: content, extensions, filePath }),
     [content, extensions, filePath],
   );
-  const containerRef = useCodeMirror(options);
+  const { containerRef, instanceRef } = useCodeMirror(options);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "f") return;
+
+      const instance = instanceRef.current;
+      if (!instance || !(instance instanceof EditorView)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      openSearchPanel(instance);
+    };
+
+    document.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [instanceRef]);
 
   if (!relativePath) {
     return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
