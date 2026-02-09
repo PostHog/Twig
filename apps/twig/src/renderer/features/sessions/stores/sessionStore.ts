@@ -167,8 +167,15 @@ interface SessionActions {
     category: string,
     value: string,
   ) => Promise<void>;
-  appendUserShellExecute: (
+  startUserShellExecute: (
     taskId: string,
+    id: string,
+    command: string,
+    cwd: string,
+  ) => Promise<void>;
+  completeUserShellExecute: (
+    taskId: string,
+    id: string,
     command: string,
     cwd: string,
     result: { stdout: string; stderr: string; exitCode: number },
@@ -452,63 +459,67 @@ function createUserMessageEvent(text: string, ts: number): AcpMessage {
 }
 
 function createUserShellExecuteEvent(
+  id: string,
   command: string,
   cwd: string,
-  result: { stdout: string; stderr: string; exitCode: number },
+  result?: { stdout: string; stderr: string; exitCode: number },
 ): AcpMessage {
   return {
     type: "acp_message",
     ts: Date.now(),
     message: {
       jsonrpc: "2.0",
-      // TODO: Migrate to twig
       method: "_array/user_shell_execute",
-      params: { command, cwd, result },
+      params: { id, command, cwd, result },
     },
   };
 }
 
 /**
- * Collects user shell executes that occurred after the last prompt request.
+ * Collects completed user shell executes that occurred after the last prompt request.
  * These are included as hidden context in the next prompt so the agent
  * knows what commands the user ran between turns.
  *
  * Scans backwards from the end of events, stopping at the most recent
  * session/prompt request (not response), collecting any _array/user_shell_execute
- * notifications found along the way.
+ * notifications found along the way. Deduplicates by ID, keeping only completed executes.
  */
 function getUserShellExecutesSinceLastPrompt(
   events: AcpMessage[],
 ): UserShellExecuteParams[] {
-  const results: UserShellExecuteParams[] = [];
+  const execMap = new Map<string, UserShellExecuteParams>();
 
   for (let i = events.length - 1; i >= 0; i--) {
     const msg = events[i].message;
 
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") break;
 
-    // TODO: Migrate to twig
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "_array/user_shell_execute"
     ) {
-      results.unshift(msg.params as UserShellExecuteParams);
+      const params = msg.params as UserShellExecuteParams;
+      if (params.result && !execMap.has(params.id)) {
+        execMap.set(params.id, params);
+      }
     }
   }
 
-  return results;
+  return Array.from(execMap.values()).reverse();
 }
 
 function shellExecutesToContextBlocks(
   shellExecutes: UserShellExecuteParams[],
 ): ContentBlock[] {
-  return shellExecutes.map((cmd) => ({
-    type: "text" as const,
-    text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${
-      cmd.result.stdout || cmd.result.stderr || "(no output)"
-    }`,
-    _meta: { ui: { hidden: true } },
-  }));
+  return shellExecutes
+    .filter((cmd) => cmd.result)
+    .map((cmd) => ({
+      type: "text" as const,
+      text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${
+        cmd.result?.stdout || cmd.result?.stderr || "(no output)"
+      }`,
+      _meta: { ui: { hidden: true } },
+    }));
 }
 
 function convertStoredEntriesToEvents(
@@ -1386,7 +1397,7 @@ const useStore = create<SessionStore>()(
           await get().actions.setSessionConfigOption(taskId, option.id, value);
         },
 
-        appendUserShellExecute: async (taskId, command, cwd, result) => {
+        startUserShellExecute: async (taskId, id, command, cwd) => {
           const session = getSessionByTaskId(taskId);
           if (!session) return;
 
@@ -1394,14 +1405,29 @@ const useStore = create<SessionStore>()(
             type: "notification",
             timestamp: new Date().toISOString(),
             notification: {
-              // TODO: Migrate to twig
               method: "_array/user_shell_execute",
-              params: { command, cwd, result },
+              params: { id, command, cwd },
             },
           };
 
-          const event = createUserShellExecuteEvent(command, cwd, result);
+          const event = createUserShellExecuteEvent(id, command, cwd);
+          await appendAndPersist(taskId, session, event, storedEntry);
+        },
 
+        completeUserShellExecute: async (taskId, id, command, cwd, result) => {
+          const session = getSessionByTaskId(taskId);
+          if (!session) return;
+
+          const storedEntry: StoredLogEntry = {
+            type: "notification",
+            timestamp: new Date().toISOString(),
+            notification: {
+              method: "_array/user_shell_execute",
+              params: { id, command, cwd, result },
+            },
+          };
+
+          const event = createUserShellExecuteEvent(id, command, cwd, result);
           await appendAndPersist(taskId, session, event, storedEntry);
         },
 

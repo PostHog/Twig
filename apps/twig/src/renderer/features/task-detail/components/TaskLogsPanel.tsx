@@ -37,6 +37,8 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     cancelPrompt,
     clearSessionError,
     popAllQueuedMessages,
+    startUserShellExecute,
+    completeUserShellExecute,
   } = useSessionActions();
   const { deleteWithConfirm } = useDeleteTask();
   const markActivity = useTaskViewedStore((state) => state.markActivity);
@@ -165,8 +167,6 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     requestFocus,
   ]);
 
-  const { appendUserShellExecute } = useSessionActions();
-
   const handleRetry = useCallback(async () => {
     if (!repoPath) return;
     await clearSessionError(taskId);
@@ -186,17 +186,31 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     async (command: string) => {
       if (!repoPath) return;
 
+      const execId = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      await startUserShellExecute(taskId, execId, command, repoPath);
+
       try {
         const result = await trpcVanilla.shell.execute.mutate({
           cwd: repoPath,
           command,
         });
-        appendUserShellExecute(taskId, command, repoPath, result);
+        await completeUserShellExecute(
+          taskId,
+          execId,
+          command,
+          repoPath,
+          result,
+        );
       } catch (error) {
         log.error("Failed to execute shell command", error);
+        await completeUserShellExecute(taskId, execId, command, repoPath, {
+          stdout: "",
+          stderr: error instanceof Error ? error.message : "Command failed",
+          exitCode: 1,
+        });
       }
     },
-    [taskId, repoPath, appendUserShellExecute],
+    [taskId, repoPath, startUserShellExecute, completeUserShellExecute],
   );
 
   return (
