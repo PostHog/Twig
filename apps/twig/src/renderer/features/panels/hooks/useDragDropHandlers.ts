@@ -67,22 +67,36 @@ export const useDragDropHandlers = (taskId: string) => {
     const sourceData = event.operation.source?.data;
     const targetData = event.operation.target?.data;
 
-    // Tab reordering within same panel is handled by onDragOver
-    // Here we only handle cross-panel moves and splits
-
-    // Handle panel splitting/moving
     if (
       sourceData?.type !== "tab" ||
-      targetData?.type !== "panel" ||
       !sourceData.tabId ||
-      !sourceData.panelId ||
+      !sourceData.panelId
+    ) {
+      return;
+    }
+
+    const { tabId, panelId: sourcePanelId } = sourceData;
+
+    // Handle drop on tab bar or on a tab in a different panel -> move tab
+    if (
+      (targetData?.type === "tab-bar" || targetData?.type === "tab") &&
+      targetData.panelId &&
+      targetData.panelId !== sourcePanelId
+    ) {
+      moveTab(taskId, tabId, sourcePanelId, targetData.panelId);
+      setFocusedPanel(taskId, targetData.panelId);
+      return;
+    }
+
+    // Handle panel drop zones (center and split directions)
+    if (
+      targetData?.type !== "panel" ||
       !targetData.panelId ||
       !targetData.zone
     ) {
       return;
     }
 
-    const { tabId, panelId: sourcePanelId } = sourceData;
     const { panelId: targetPanelId, zone } = targetData;
 
     if (zone === "center") {
