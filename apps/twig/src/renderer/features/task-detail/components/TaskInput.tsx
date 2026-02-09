@@ -12,7 +12,6 @@ import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useEffect, useRef, useState } from "react";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { AdapterSelect } from "./AdapterSelect";
-import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
 import { TaskInputModelSelector } from "./TaskInputModelSelector";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
@@ -199,8 +198,6 @@ export function TaskInput() {
             onEmptyChange={setEditorIsEmpty}
             adapter={adapter}
           />
-
-          <SuggestedTasks editorRef={editorRef} />
         </Flex>
       </Flex>
     </div>
