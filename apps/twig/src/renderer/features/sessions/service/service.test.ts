@@ -15,6 +15,7 @@ const mockTrpcAgent = vi.hoisted(() => ({
   cancelPermission: { mutate: vi.fn() },
   onSessionEvent: { subscribe: vi.fn() },
   onPermissionRequest: { subscribe: vi.fn() },
+  resetAll: { mutate: vi.fn().mockResolvedValue(undefined) },
 }));
 
 const mockTrpcWorkspace = vi.hoisted(() => ({
@@ -44,6 +45,7 @@ const mockSessionStoreSetters = vi.hoisted(() => ({
   setPendingPermissions: vi.fn(),
   getSessionByTaskId: vi.fn(),
   getSessions: vi.fn(() => ({})),
+  clearAll: vi.fn(),
 }));
 
 vi.mock("@features/sessions/stores/sessionStore", () => ({

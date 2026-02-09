@@ -73,15 +73,17 @@ export function getSessionService(): SessionService {
   return serviceInstance;
 }
 
-/**
- * Reset the session service singleton.
- * Call this on logout or when the app needs to fully reset state.
- */
 export function resetSessionService(): void {
   if (serviceInstance) {
     serviceInstance.reset();
     serviceInstance = null;
   }
+
+  sessionStoreSetters.clearAll();
+
+  trpcVanilla.agent.resetAll.mutate().catch((err) => {
+    log.error("Failed to reset all sessions on main process", err);
+  });
 }
 
 export class SessionService {
