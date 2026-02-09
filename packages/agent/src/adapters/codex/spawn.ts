@@ -121,6 +121,9 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
     stdout: child.stdout,
     kill: () => {
       logger.info("Killing codex-acp process", { pid: child.pid });
+      child.stdin?.destroy();
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       child.kill("SIGTERM");
     },
   };
