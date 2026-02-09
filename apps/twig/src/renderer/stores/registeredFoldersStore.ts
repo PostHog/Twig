@@ -45,14 +45,20 @@ export const useRegisteredFoldersStore = create<RegisteredFoldersState>()(
       try {
         const loadedFolders = await loadFolders();
 
-        // Remove folders that no longer exist on disk
         const deletedFolders = loadedFolders.filter((f) => f.exists === false);
-        for (const folder of deletedFolders) {
-          trpcVanilla.folders.removeFolder
-            .mutate({ folderId: folder.id })
-            .catch((err) =>
-              log.error(`Failed to remove deleted folder ${folder.path}:`, err),
-            );
+        if (deletedFolders.length > 0) {
+          await Promise.all(
+            deletedFolders.map((folder) =>
+              trpcVanilla.folders.removeFolder
+                .mutate({ folderId: folder.id })
+                .catch((err) =>
+                  log.error(
+                    `Failed to remove deleted folder ${folder.path}:`,
+                    err,
+                  ),
+                ),
+            ),
+          );
         }
         const existingFolders = loadedFolders.filter((f) => f.exists !== false);
 
