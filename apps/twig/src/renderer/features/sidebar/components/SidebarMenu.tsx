@@ -1,11 +1,15 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
-import { RenameTaskDialog } from "@components/RenameTaskDialog";
-import { useDeleteTask, useTasks } from "@features/tasks/hooks/useTasks";
+import {
+  useDeleteTask,
+  useTasks,
+  useUpdateTask,
+} from "@features/tasks/hooks/useTasks";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { memo, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
@@ -22,7 +26,7 @@ function SidebarMenuComponent() {
   const workspaces = useWorkspaceStore.use.workspaces();
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
 
-  const { showContextMenu, renameTask, renameDialogOpen, setRenameDialogOpen } =
+  const { showContextMenu, editingTaskId, setEditingTaskId } =
     useTaskContextMenu();
   const { deleteWithConfirm } = useDeleteTask();
   const togglePin = usePinnedTasksStore((state) => state.togglePin);
@@ -94,52 +98,77 @@ function SidebarMenuComponent() {
     });
   };
 
+  const updateTask = useUpdateTask();
+  const log = logger.scope("sidebar-menu");
+
+  const handleTaskDoubleClick = useCallback(
+    (taskId: string) => {
+      setEditingTaskId(taskId);
+    },
+    [setEditingTaskId],
+  );
+
+  const handleTaskEditSubmit = useCallback(
+    async (taskId: string, newTitle: string) => {
+      setEditingTaskId(null);
+      try {
+        await updateTask.mutateAsync({
+          taskId,
+          updates: { title: newTitle },
+        });
+      } catch (error) {
+        log.error("Failed to rename task", error);
+      }
+    },
+    [setEditingTaskId, updateTask, log],
+  );
+
+  const handleTaskEditCancel = useCallback(() => {
+    setEditingTaskId(null);
+  }, [setEditingTaskId]);
+
   return (
-    <>
-      <RenameTaskDialog
-        task={renameTask}
-        open={renameDialogOpen}
-        onOpenChange={setRenameDialogOpen}
-      />
+    <Box height="100%" position="relative">
+      <Box
+        style={{
+          height: "100%",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
+        <Flex direction="column" py="2">
+          <Box mb="2">
+            <NewTaskItem
+              isActive={sidebarData.isHomeActive}
+              onClick={handleNewTaskClick}
+            />
+          </Box>
 
-      <Box height="100%" position="relative">
-        <Box
-          style={{
-            height: "100%",
-            overflowY: "auto",
-            overflowX: "hidden",
-          }}
-        >
-          <Flex direction="column" py="2">
-            <Box mb="2">
-              <NewTaskItem
-                isActive={sidebarData.isHomeActive}
-                onClick={handleNewTaskClick}
-              />
-            </Box>
-
-            {sidebarData.isLoading ? (
-              <SidebarItem
-                depth={0}
-                icon={<DotsCircleSpinner size={12} className="text-gray-10" />}
-                label="Loading tasks..."
-              />
-            ) : (
-              <TaskListView
-                pinnedTasks={sidebarData.pinnedTasks}
-                flatTasks={sidebarData.flatTasks}
-                groupedTasks={sidebarData.groupedTasks}
-                activeTaskId={sidebarData.activeTaskId}
-                onTaskClick={handleTaskClick}
-                onTaskContextMenu={handleTaskContextMenu}
-                onTaskDelete={handleTaskDelete}
-                hasMore={sidebarData.hasMore}
-              />
-            )}
-          </Flex>
-        </Box>
+          {sidebarData.isLoading ? (
+            <SidebarItem
+              depth={0}
+              icon={<DotsCircleSpinner size={12} className="text-gray-10" />}
+              label="Loading tasks..."
+            />
+          ) : (
+            <TaskListView
+              pinnedTasks={sidebarData.pinnedTasks}
+              flatTasks={sidebarData.flatTasks}
+              groupedTasks={sidebarData.groupedTasks}
+              activeTaskId={sidebarData.activeTaskId}
+              editingTaskId={editingTaskId}
+              onTaskClick={handleTaskClick}
+              onTaskDoubleClick={handleTaskDoubleClick}
+              onTaskContextMenu={handleTaskContextMenu}
+              onTaskDelete={handleTaskDelete}
+              onTaskEditSubmit={handleTaskEditSubmit}
+              onTaskEditCancel={handleTaskEditCancel}
+              hasMore={sidebarData.hasMore}
+            />
+          )}
+        </Flex>
       </Box>
-    </>
+    </Box>
   );
 }
 
