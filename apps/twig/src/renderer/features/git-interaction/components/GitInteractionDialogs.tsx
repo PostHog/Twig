@@ -5,6 +5,7 @@ import {
   GitBranch,
   GitCommit,
   GitPullRequest,
+  Sparkle,
 } from "@phosphor-icons/react";
 import { CheckIcon } from "@radix-ui/react-icons";
 import {
@@ -12,6 +13,8 @@ import {
   Button,
   Dialog,
   Flex,
+  IconButton,
+  Spinner,
   Text,
   TextArea,
   TextField,
@@ -173,6 +176,8 @@ interface GitCommitDialogProps {
   onContinue: () => void;
   isSubmitting: boolean;
   error: string | null;
+  onGenerateMessage: () => void;
+  isGeneratingMessage: boolean;
 }
 
 export function GitCommitDialog({
@@ -189,6 +194,8 @@ export function GitCommitDialog({
   onContinue,
   isSubmitting,
   error,
+  onGenerateMessage,
+  isGeneratingMessage,
 }: GitCommitDialogProps) {
   const options = [
     {
@@ -218,7 +225,7 @@ export function GitCommitDialog({
       title="Commit"
       error={error}
       buttonLabel="Continue"
-      buttonDisabled={!commitMessage.trim()}
+      buttonDisabled={isGeneratingMessage}
       isSubmitting={isSubmitting}
       onSubmit={onContinue}
     >
@@ -243,19 +250,36 @@ export function GitCommitDialog({
       </Flex>
 
       <Flex direction="column" gap="1">
-        <Text size="1" color="gray">
-          Message
-        </Text>
+        <Flex align="center" justify="between">
+          <Text size="1" color="gray">
+            Message
+          </Text>
+          <Tooltip content="Generate commit message with AI">
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={onGenerateMessage}
+              disabled={isGeneratingMessage || isSubmitting}
+            >
+              {isGeneratingMessage ? (
+                <Spinner size="1" />
+              ) : (
+                <Sparkle size={14} />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Flex>
         <TextArea
           value={commitMessage}
           onChange={(e) => onCommitMessageChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              if (commitMessage.trim() && !isSubmitting) onContinue();
+              if (!isSubmitting && !isGeneratingMessage) onContinue();
             }
           }}
-          placeholder="Describe your changes"
+          placeholder="Leave empty to generate with AI"
           size="1"
           rows={1}
           autoFocus

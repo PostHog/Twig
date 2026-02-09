@@ -53,6 +53,8 @@ export function GitInteractionHeader({ taskId }: GitInteractionHeaderProps) {
         onContinue={actions.runCommit}
         isSubmitting={modals.isSubmitting}
         error={modals.commitError}
+        onGenerateMessage={actions.generateCommitMessage}
+        isGeneratingMessage={modals.isGeneratingCommitMessage}
       />
 
       <GitPushDialog

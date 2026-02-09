@@ -1,3 +1,4 @@
+import { useAuthStore } from "@features/auth/stores/authStore";
 import { useGitQueries } from "@features/git-interaction/hooks/useGitQueries";
 import { computeGitInteractionState } from "@features/git-interaction/state/gitInteractionLogic";
 import {
@@ -10,10 +11,13 @@ import type {
   GitMenuActionId,
 } from "@features/git-interaction/types";
 import { track } from "@renderer/lib/analytics";
+import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
+
+const log = logger.scope("git-interaction");
 
 export type { GitMenuAction, GitMenuActionId };
 
@@ -47,6 +51,7 @@ interface GitInteractionActions {
   runCommit: () => Promise<void>;
   runPush: () => Promise<void>;
   runPr: () => Promise<void>;
+  generateCommitMessage: () => Promise<void>;
 }
 
 function trackGitAction(taskId: string, actionType: string, success: boolean) {
@@ -145,12 +150,6 @@ export function useGitInteraction(
   const runCommit = async () => {
     if (!repoPath) return;
 
-    const message = store.commitMessage.trim();
-    if (!message) {
-      modal.setCommitError("Commit message is required.");
-      return;
-    }
-
     if (
       store.commitNextStep === "commit-pr" &&
       computed.commitPrDisabledReason
@@ -169,6 +168,54 @@ export function useGitInteraction(
 
     modal.setIsSubmitting(true);
     modal.setCommitError(null);
+
+    let message = store.commitMessage.trim();
+
+    if (!message) {
+      const authState = useAuthStore.getState();
+      const apiKey = authState.oauthAccessToken;
+      const cloudRegion = authState.cloudRegion;
+
+      if (!apiKey || !cloudRegion) {
+        modal.setCommitError(
+          "Authentication required to generate commit message.",
+        );
+        modal.setIsSubmitting(false);
+        return;
+      }
+
+      const apiHost =
+        cloudRegion === "eu"
+          ? "https://eu.posthog.com"
+          : "https://us.posthog.com";
+
+      try {
+        const generated = await trpcVanilla.git.generateCommitMessage.mutate({
+          directoryPath: repoPath,
+          credentials: { apiKey, apiHost },
+        });
+
+        if (!generated.message) {
+          modal.setCommitError(
+            "No changes detected to generate a commit message.",
+          );
+          modal.setIsSubmitting(false);
+          return;
+        }
+
+        message = generated.message;
+        modal.setCommitMessage(message);
+      } catch (error) {
+        log.error("Failed to generate commit message", error);
+        modal.setCommitError(
+          error instanceof Error
+            ? error.message
+            : "Failed to generate commit message.",
+        );
+        modal.setIsSubmitting(false);
+        return;
+      }
+    }
 
     try {
       const result = await trpcVanilla.git.commit.mutate({
@@ -296,6 +343,53 @@ export function useGitInteraction(
     }
   };
 
+  const generateCommitMessage = async () => {
+    if (!repoPath) return;
+
+    const authState = useAuthStore.getState();
+    const apiKey = authState.oauthAccessToken;
+    const cloudRegion = authState.cloudRegion;
+
+    if (!apiKey || !cloudRegion) {
+      modal.setCommitError(
+        "Authentication required to generate commit message.",
+      );
+      return;
+    }
+
+    const apiHost =
+      cloudRegion === "eu"
+        ? "https://eu.posthog.com"
+        : "https://us.posthog.com";
+
+    modal.setIsGeneratingCommitMessage(true);
+    modal.setCommitError(null);
+
+    try {
+      const result = await trpcVanilla.git.generateCommitMessage.mutate({
+        directoryPath: repoPath,
+        credentials: { apiKey, apiHost },
+      });
+
+      if (result.message) {
+        modal.setCommitMessage(result.message);
+      } else {
+        modal.setCommitError(
+          "No changes detected to generate a commit message.",
+        );
+      }
+    } catch (error) {
+      log.error("Failed to generate commit message", error);
+      modal.setCommitError(
+        error instanceof Error
+          ? error.message
+          : "Failed to generate commit message.",
+      );
+    } finally {
+      modal.setIsGeneratingCommitMessage(false);
+    }
+  };
+
   return {
     state: {
       primaryAction: computed.primaryAction,
@@ -327,6 +421,7 @@ export function useGitInteraction(
       runCommit,
       runPush,
       runPr,
+      generateCommitMessage,
     },
   };
 }

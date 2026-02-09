@@ -12,7 +12,9 @@ import {
   getFileAtHead,
   getLatestCommit,
   getRemoteUrl,
+  getStagedDiff,
   getSyncStatus,
+  getUnstagedDiff,
   fetch as gitFetch,
   isGitRepository,
 } from "@twig/git/queries";
@@ -23,8 +25,12 @@ import { DiscardFileChangesSaga } from "@twig/git/sagas/discard";
 import { PullSaga } from "@twig/git/sagas/pull";
 import { PushSaga } from "@twig/git/sagas/push";
 import { parseGitHubUrl } from "@twig/git/utils";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
+import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { LlmCredentials } from "../llm-gateway/schemas.js";
+import type { LlmGatewayService } from "../llm-gateway/service.js";
 import type {
   ChangedFile,
   CloneProgressPayload,
@@ -57,11 +63,22 @@ export interface GitServiceEvents {
   [GitServiceEvent.CloneProgress]: CloneProgressPayload;
 }
 
+const log = logger.scope("git-service");
+
 const FETCH_THROTTLE_MS = 5 * 60 * 1000;
+const MAX_DIFF_LENGTH = 8000;
 
 @injectable()
 export class GitService extends TypedEventEmitter<GitServiceEvents> {
   private lastFetchTime = new Map<string, number>();
+  private llmGateway: LlmGatewayService;
+
+  constructor(
+    @inject(MAIN_TOKENS.LlmGatewayService) llmGateway: LlmGatewayService,
+  ) {
+    super();
+    this.llmGateway = llmGateway;
+  }
 
   public async detectRepo(
     directoryPath: string,
@@ -546,5 +563,72 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     const data = JSON.parse(result.stdout) as { url?: string };
     const prUrl = data.url ?? null;
     return { success: !!prUrl, message: prUrl ? "OK" : "No PR found", prUrl };
+  }
+
+  public async generateCommitMessage(
+    directoryPath: string,
+    credentials: LlmCredentials,
+  ): Promise<{ message: string }> {
+    const [stagedDiff, unstagedDiff, conventions, changedFiles] =
+      await Promise.all([
+        getStagedDiff(directoryPath),
+        getUnstagedDiff(directoryPath),
+        getCommitConventions(directoryPath),
+        this.getChangedFilesHead(directoryPath),
+      ]);
+
+    const diff = stagedDiff || unstagedDiff;
+    if (!diff && changedFiles.length === 0) {
+      return { message: "" };
+    }
+
+    const truncatedDiff =
+      diff.length > MAX_DIFF_LENGTH
+        ? `${diff.slice(0, MAX_DIFF_LENGTH)}\n... (diff truncated)`
+        : diff;
+
+    const filesSummary = changedFiles
+      .map((f) => `${f.status}: ${f.path}`)
+      .join("\n");
+
+    const conventionHint = conventions.conventionalCommits
+      ? `This repository uses conventional commits. Common prefixes: ${conventions.commonPrefixes.join(", ") || "feat, fix, docs, chore"}.
+Example messages from this repo:
+${conventions.sampleMessages.slice(0, 3).join("\n")}`
+      : `Example messages from this repo:
+${conventions.sampleMessages.slice(0, 3).join("\n")}`;
+
+    const system = `You are a git commit message generator. Generate a concise, descriptive commit message for the given changes.
+
+${conventionHint}
+
+Rules:
+- First line should be a short summary (max 72 chars)
+- Use imperative mood ("Add feature" not "Added feature")
+- Be specific about what changed
+- If using conventional commits, include the appropriate prefix
+- Do not include any explanation, just output the commit message`;
+
+    const userMessage = `Generate a commit message for these changes:
+
+Changed files:
+${filesSummary}
+
+Diff:
+${truncatedDiff}`;
+
+    log.debug("Generating commit message", {
+      fileCount: changedFiles.length,
+      diffLength: diff.length,
+      conventionalCommits: conventions.conventionalCommits,
+    });
+
+    const response = await this.llmGateway.prompt(
+      credentials,
+      [{ role: "user", content: userMessage }],
+      { system },
+    );
+
+    return { message: response.content.trim() };
   }
 }

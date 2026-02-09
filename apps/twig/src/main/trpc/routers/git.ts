@@ -11,6 +11,8 @@ import {
   detectRepoInput,
   detectRepoOutput,
   discardFileChangesInput,
+  generateCommitMessageInput,
+  generateCommitMessageOutput,
   getAllBranchesInput,
   getAllBranchesOutput,
   getChangedFilesHeadInput,
@@ -239,5 +241,15 @@ export const gitRouter = router({
     .output(getCommitConventionsOutput)
     .query(({ input }) =>
       getService().getCommitConventions(input.directoryPath, input.sampleSize),
+    ),
+
+  generateCommitMessage: publicProcedure
+    .input(generateCommitMessageInput)
+    .output(generateCommitMessageOutput)
+    .mutation(({ input }) =>
+      getService().generateCommitMessage(
+        input.directoryPath,
+        input.credentials,
+      ),
     ),
 });

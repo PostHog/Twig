@@ -323,3 +323,15 @@ export const getCommitConventionsOutput = z.object({
 export type GetCommitConventionsOutput = z.infer<
   typeof getCommitConventionsOutput
 >;
+
+export const generateCommitMessageInput = z.object({
+  directoryPath: z.string(),
+  credentials: z.object({
+    apiKey: z.string(),
+    apiHost: z.string(),
+  }),
+});
+
+export const generateCommitMessageOutput = z.object({
+  message: z.string(),
+});

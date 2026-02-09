@@ -34,6 +34,8 @@ export const CommitDefault: StoryObj<typeof GitCommitDialog> = {
       onContinue={() => {}}
       isSubmitting={false}
       error={null}
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={false}
     />
   ),
 };
@@ -54,6 +56,8 @@ export const CommitWithMessage: StoryObj<typeof GitCommitDialog> = {
       onContinue={() => {}}
       isSubmitting={false}
       error={null}
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={false}
     />
   ),
 };
@@ -74,6 +78,8 @@ export const CommitPrDisabled: StoryObj<typeof GitCommitDialog> = {
       onContinue={() => {}}
       isSubmitting={false}
       error={null}
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={false}
     />
   ),
 };
@@ -94,6 +100,8 @@ export const CommitSubmitting: StoryObj<typeof GitCommitDialog> = {
       onContinue={() => {}}
       isSubmitting={true}
       error={null}
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={false}
     />
   ),
 };
@@ -114,6 +122,30 @@ export const CommitWithError: StoryObj<typeof GitCommitDialog> = {
       onContinue={() => {}}
       isSubmitting={false}
       error="Failed to commit: pre-commit hook failed"
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={false}
+    />
+  ),
+};
+
+export const CommitGenerating: StoryObj<typeof GitCommitDialog> = {
+  render: () => (
+    <GitCommitDialog
+      open={true}
+      onOpenChange={() => {}}
+      branchName="feature/add-auth"
+      diffStats={{ filesChanged: 3, linesAdded: 42, linesRemoved: 12 }}
+      commitMessage=""
+      onCommitMessageChange={() => {}}
+      nextStep="commit"
+      onNextStepChange={() => {}}
+      createPrDisabledReason={null}
+      pushDisabledReason={null}
+      onContinue={() => {}}
+      isSubmitting={false}
+      error={null}
+      onGenerateMessage={() => {}}
+      isGeneratingMessage={true}
     />
   ),
 };
