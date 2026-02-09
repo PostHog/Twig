@@ -1147,10 +1147,12 @@ export class SessionService {
             stored.notification?.method?.endsWith("posthog/sdk_session")
           ) {
             const params = stored.notification.params as {
+              sessionId?: string;
               sdkSessionId?: string;
               adapter?: Adapter;
             };
-            if (params?.sdkSessionId) sessionId = params.sdkSessionId;
+            if (params?.sessionId) sessionId = params.sessionId;
+            else if (params?.sdkSessionId) sessionId = params.sdkSessionId;
             if (params?.adapter) adapter = params.adapter;
           }
         } catch {
