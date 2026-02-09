@@ -824,9 +824,7 @@ export async function getFileAtRef(
  * causes all of the default branch's changes to appear in diffs. This helper
  * detects that case and returns HEAD instead.
  */
-async function resolveEffectiveMergeBase(
-  git: GitClient,
-): Promise<string> {
+async function resolveEffectiveMergeBase(git: GitClient): Promise<string> {
   const defaultBranch = await detectDefaultBranchWithFallback(git);
   const mergeBase = await git.raw(["merge-base", defaultBranch, "HEAD"]);
   let mergeBaseSha = mergeBase.trim();
@@ -840,9 +838,7 @@ async function resolveEffectiveMergeBase(
       .then(() => true)
       .catch(() => false);
     if (isAncestor) {
-      mergeBaseSha = await git
-        .raw(["rev-parse", "HEAD"])
-        .then((s) => s.trim());
+      mergeBaseSha = await git.raw(["rev-parse", "HEAD"]).then((s) => s.trim());
     }
   }
 
