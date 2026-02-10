@@ -1,5 +1,5 @@
-import { useHasFileChanges } from "@features/right-sidebar/hooks/useHasFileChanges";
 import { RightSidebarTrigger } from "@features/right-sidebar/components/RightSidebarTrigger";
+import { useHasFileChanges } from "@features/right-sidebar/hooks/useHasFileChanges";
 import { useRightSidebarStore } from "@features/right-sidebar/stores/rightSidebarStore";
 import { SidebarTrigger } from "@features/sidebar/components/SidebarTrigger";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
@@ -48,9 +48,7 @@ function RightSidebarHeaderSection({ taskId }: { taskId: string }) {
         minWidth: `${COLLAPSED_WIDTH}px`,
         height: "100%",
         borderLeft: "1px solid var(--gray-6)",
-        transition: rightSidebarIsResizing
-          ? "none"
-          : "width 0.2s ease-in-out",
+        transition: rightSidebarIsResizing ? "none" : "width 0.2s ease-in-out",
         position: "relative",
       }}
     >
