@@ -71,6 +71,7 @@ export default defineConfig({
   splitting: false,
   outDir: "dist",
   target: "node20",
+  noExternal: ["@posthog/shared", "@twig/git"],
   external: [
     ...builtinModules,
     ...builtinModules.map((m) => `node:${m}`),
