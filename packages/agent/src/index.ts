@@ -23,6 +23,10 @@ export type {
   InProcessAcpConnection,
 } from "./adapters/acp-connection.js";
 export { createAcpConnection } from "./adapters/acp-connection.js";
+export {
+  fetchMcpToolMetadata,
+  isMcpToolReadOnly,
+} from "./adapters/claude/mcp/tool-metadata.js";
 export type { CodexProcessOptions } from "./adapters/codex/spawn.js";
 export { Agent } from "./agent.js";
 export {

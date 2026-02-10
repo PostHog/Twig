@@ -6,6 +6,7 @@ export {
 } from "../../execution-mode.js";
 
 import type { TwigExecutionMode } from "../../execution-mode.js";
+import { isMcpToolReadOnly } from "./mcp/tool-metadata.js";
 
 export const READ_TOOLS: Set<string> = new Set(["Read", "NotebookRead"]);
 
@@ -44,8 +45,14 @@ export function isToolAllowedForMode(
   toolName: string,
   mode: TwigExecutionMode,
 ): boolean {
-  return (
-    mode === "bypassPermissions" ||
-    AUTO_ALLOWED_TOOLS[mode]?.has(toolName) === true
-  );
+  if (mode === "bypassPermissions") {
+    return true;
+  }
+  if (AUTO_ALLOWED_TOOLS[mode]?.has(toolName) === true) {
+    return true;
+  }
+  if (isMcpToolReadOnly(toolName)) {
+    return true;
+  }
+  return false;
 }

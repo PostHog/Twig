@@ -11,6 +11,7 @@ import {
   type RequestPermissionResponse,
   type SessionConfigOption,
 } from "@agentclientprotocol/sdk";
+import { isMcpToolReadOnly } from "@posthog/agent";
 import { Agent } from "@posthog/agent/agent";
 import {
   fetchGatewayModels,
@@ -1054,6 +1055,22 @@ For git operations while detached:
           title: params.toolCall?.title,
           optionCount: params.options.length,
         });
+
+        if (toolName && isMcpToolReadOnly(toolName)) {
+          log.info("Auto-approving read-only MCP tool", {
+            taskRunId,
+            toolName,
+          });
+          const allowOption = params.options.find(
+            (o) => o.kind === "allow_once" || o.kind === "allow_always",
+          );
+          return {
+            outcome: {
+              outcome: "selected",
+              optionId: allowOption?.optionId ?? params.options[0].optionId,
+            },
+          };
+        }
 
         // If we have a toolCallId, always prompt the user for permission.
         // The claude.ts adapter only calls requestPermission when user input is needed.
