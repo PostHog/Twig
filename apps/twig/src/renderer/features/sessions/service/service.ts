@@ -214,6 +214,7 @@ export class SessionService {
           executionMode,
           adapter,
           model,
+          latestRun?.id,
         );
       }
     } catch (error) {
@@ -372,19 +373,24 @@ export class SessionService {
     executionMode?: ExecutionMode,
     adapter?: "claude" | "codex",
     model?: string,
+    existingTaskRunId?: string,
   ): Promise<void> {
     if (!auth.client) {
       throw new Error("Unable to reach server. Please check your connection.");
     }
 
-    const taskRun = await auth.client.createTaskRun(taskId);
-    if (!taskRun?.id) {
-      throw new Error("Failed to create task run. Please try again.");
+    let taskRunId = existingTaskRunId;
+    if (!taskRunId) {
+      const taskRun = await auth.client.createTaskRun(taskId);
+      if (!taskRun?.id) {
+        throw new Error("Failed to create task run. Please try again.");
+      }
+      taskRunId = taskRun.id;
     }
 
     const result = await trpcVanilla.agent.start.mutate({
       taskId,
-      taskRunId: taskRun.id,
+      taskRunId,
       repoPath,
       apiKey: auth.apiKey,
       apiHost: auth.apiHost,
@@ -393,7 +399,7 @@ export class SessionService {
       adapter,
     });
 
-    const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
+    const session = this.createBaseSession(taskRunId, taskId, taskTitle);
     session.channel = result.channel;
     session.status = "connected";
     session.adapter = adapter;
@@ -404,16 +410,16 @@ export class SessionService {
 
     // Persist the config options
     if (configOptions) {
-      setPersistedConfigOptions(taskRun.id, configOptions);
+      setPersistedConfigOptions(taskRunId, configOptions);
     }
 
     // Persist the adapter
     if (adapter) {
-      useSessionAdapterStore.getState().setAdapter(taskRun.id, adapter);
+      useSessionAdapterStore.getState().setAdapter(taskRunId, adapter);
     }
 
     sessionStoreSetters.setSession(session);
-    this.subscribeToChannel(taskRun.id);
+    this.subscribeToChannel(taskRunId);
 
     track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
       task_id: taskId,
