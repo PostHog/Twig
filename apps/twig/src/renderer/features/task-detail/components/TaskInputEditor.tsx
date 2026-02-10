@@ -2,10 +2,8 @@ import "@features/message-editor/components/message-editor.css";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
-import { ModelSelector } from "@features/sessions/components/ModelSelector";
-import { ReasoningLevelSelector } from "@features/sessions/components/ReasoningLevelSelector";
 import { useConnectivity } from "@hooks/useConnectivity";
-import { ArrowUp, Spinner } from "@phosphor-icons/react";
+import { ArrowUp } from "@phosphor-icons/react";
 import { Box, Flex, IconButton, Text, Tooltip } from "@radix-ui/themes";
 import { EditorContent } from "@tiptap/react";
 import { forwardRef, useImperativeHandle } from "react";
@@ -22,9 +20,6 @@ interface TaskInputEditorProps {
   hasDirectory: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
   adapter?: "claude" | "codex";
-  previewTaskId?: string;
-  onCycleMode?: () => void;
-  isPreviewConnecting?: boolean;
 }
 
 export const TaskInputEditor = forwardRef<
@@ -41,9 +36,6 @@ export const TaskInputEditor = forwardRef<
       hasDirectory,
       onEmptyChange,
       adapter,
-      previewTaskId,
-      onCycleMode,
-      isPreviewConnecting,
     },
     ref,
   ) => {
@@ -137,13 +129,6 @@ export const TaskInputEditor = forwardRef<
               focus();
             }
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Tab" && e.shiftKey && onCycleMode) {
-              e.preventDefault();
-              e.stopPropagation();
-              onCycleMode();
-            }
-          }}
         >
           <Flex
             align="start"
@@ -196,42 +181,13 @@ export const TaskInputEditor = forwardRef<
         </Flex>
 
         <Flex justify="between" align="center" px="3" pb="3">
-          <Flex align="center" gap="1">
-            <EditorToolbar
-              disabled={isCreatingTask}
-              adapter={adapter}
-              onInsertChip={insertChip}
-              attachTooltip="Attach files from anywhere"
-              iconSize={16}
-              hideSelectors
-            />
-            {isPreviewConnecting ? (
-              <Flex align="center" gap="1" px="1">
-                <Spinner size={12} className="animate-spin text-gray-9" />
-                <Text
-                  size="1"
-                  style={{
-                    color: "var(--gray-9)",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  Loading options...
-                </Text>
-              </Flex>
-            ) : (
-              <>
-                <ModelSelector
-                  taskId={previewTaskId}
-                  adapter={adapter}
-                  disabled={isCreatingTask}
-                />
-                <ReasoningLevelSelector
-                  taskId={previewTaskId}
-                  disabled={isCreatingTask}
-                />
-              </>
-            )}
-          </Flex>
+          <EditorToolbar
+            disabled={isCreatingTask}
+            adapter={adapter}
+            onInsertChip={insertChip}
+            attachTooltip="Attach files from anywhere"
+            iconSize={16}
+          />
 
           <Flex align="center" gap="4">
             <Tooltip content={getSubmitTooltip()}>

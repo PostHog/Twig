@@ -55,8 +55,7 @@ const DEFAULT_STYLE: ModeStyle = {
 };
 
 interface ModeIndicatorInputProps {
-  modeOption: SessionConfigOption | undefined;
-  onCycleMode?: () => void;
+  modeOption: SessionConfigOption;
 }
 
 function flattenOptions(
@@ -71,12 +70,7 @@ function flattenOptions(
   return options as SessionConfigSelectOption[];
 }
 
-export function ModeIndicatorInput({
-  modeOption,
-  onCycleMode,
-}: ModeIndicatorInputProps) {
-  if (!modeOption) return null;
-
+export function ModeIndicatorInput({ modeOption }: ModeIndicatorInputProps) {
   const id = modeOption.currentValue;
 
   const style = MODE_STYLES[id] ?? DEFAULT_STYLE;
@@ -86,13 +80,7 @@ export function ModeIndicatorInput({
   const label = option?.name ?? id;
 
   return (
-    <Flex
-      align="center"
-      justify="between"
-      py="1"
-      style={onCycleMode ? { cursor: "pointer" } : undefined}
-      onClick={onCycleMode}
-    >
+    <Flex align="center" justify="between" py="1">
       <Flex align="center" gap="1">
         <Text
           size="1"
