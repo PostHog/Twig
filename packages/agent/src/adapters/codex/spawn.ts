@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
 import type { ProcessSpawnedCallback } from "../../types.js";
 import { Logger } from "../../utils/logger.js";
+import { installPostHogSkillsForCodex } from "../../utils/posthog-skills.js";
 
 export interface CodexProcessOptions {
   cwd?: string;
@@ -70,6 +71,9 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
   if (options.apiKey) {
     env.POSTHOG_GATEWAY_API_KEY = options.apiKey;
   }
+
+  // Install PostHog skills into ~/.agents/skills/ for Codex to discover
+  installPostHogSkillsForCodex(logger);
 
   const { command, args } = findCodexBinary(options);
 
