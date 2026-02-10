@@ -1,7 +1,12 @@
 import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import { useModelsStore } from "@features/sessions/stores/modelsStore";
+import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
+import { getSessionService } from "@features/sessions/service/service";
+import {
+  cycleModeOption,
+  getCurrentModeFromConfigOptions,
+} from "@features/sessions/stores/sessionStore";
 import type { AgentAdapter } from "@features/settings/stores/settingsStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
@@ -9,12 +14,11 @@ import { Flex } from "@radix-ui/themes";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePreviewSession } from "../hooks/usePreviewSession";
 import { useTaskCreation } from "../hooks/useTaskCreation";
 import { AdapterSelect } from "./AdapterSelect";
-import { SuggestedTasks } from "./SuggestedTasks";
 import { TaskInputEditor } from "./TaskInputEditor";
-import { TaskInputModelSelector } from "./TaskInputModelSelector";
 import { type WorkspaceMode, WorkspaceModeSelect } from "./WorkspaceModeSelect";
 
 const DOT_FILL = "var(--gray-6)";
@@ -27,10 +31,8 @@ export function TaskInput() {
     setLastUsedLocalWorkspaceMode,
     lastUsedAdapter,
     setLastUsedAdapter,
-    lastUsedModel,
-    setLastUsedModel,
+    allowBypassPermissions,
   } = useSettingsStore();
-  const { getEffectiveModel } = useModelsStore();
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,7 +43,6 @@ export function TaskInput() {
   const selectedDirectory = lastUsedDirectory || "";
   const workspaceMode = lastUsedLocalWorkspaceMode || "worktree";
   const adapter = lastUsedAdapter;
-  const selectedModel = lastUsedModel ?? getEffectiveModel();
 
   const setSelectedDirectory = (path: string) =>
     setLastUsedDirectory(path || null);
@@ -49,9 +50,17 @@ export function TaskInput() {
     setLastUsedLocalWorkspaceMode(mode as "worktree" | "local");
   const setAdapter = (newAdapter: AgentAdapter) =>
     setLastUsedAdapter(newAdapter);
-  const setSelectedModel = (model: string) => setLastUsedModel(model);
 
   const { githubIntegration } = useRepositoryIntegration();
+
+  // Preview session provides adapter-specific config options
+  const {
+    modeOption,
+    modelOption,
+    thoughtOption,
+    previewTaskId,
+    isConnecting,
+  } = usePreviewSession(adapter, selectedDirectory || undefined);
 
   useEffect(() => {
     if (view.folderId) {
@@ -63,32 +72,14 @@ export function TaskInput() {
     }
   }, [view.folderId, setLastUsedDirectory]);
 
-  // When adapter changes, validate that selected model is compatible
-  useEffect(() => {
-    const { groupedModels } = useModelsStore.getState();
-    if (groupedModels.length === 0) return;
-
-    // Filter models by current adapter
-    const compatibleModels =
-      adapter === "claude"
-        ? groupedModels.filter((g) => g.provider === "Anthropic")
-        : groupedModels.filter((g) => g.provider !== "Anthropic");
-
-    const allCompatibleModelIds = compatibleModels.flatMap((g) =>
-      g.models.map((m) => m.modelId),
-    );
-
-    // If current model is not compatible with adapter, select first available model
-    if (!selectedModel || !allCompatibleModelIds.includes(selectedModel)) {
-      // Get first available model for this adapter
-      const firstCompatibleModel = compatibleModels[0]?.models[0]?.modelId;
-      if (firstCompatibleModel) {
-        setLastUsedModel(firstCompatibleModel);
-      }
-    }
-  }, [adapter, selectedModel, setLastUsedModel]);
-
   const effectiveWorkspaceMode = workspaceMode;
+
+  // Get current values from preview session config options for task creation
+  const currentModel = modelOption?.currentValue;
+  const currentExecutionMode = getCurrentModeFromConfigOptions(
+    modeOption ? [modeOption] : undefined,
+  );
+  const currentReasoningLevel = thoughtOption?.currentValue;
 
   const { isCreatingTask, canSubmit, handleSubmit } = useTaskCreation({
     editorRef,
@@ -98,8 +89,21 @@ export function TaskInput() {
     branch: null,
     editorIsEmpty,
     adapter,
-    model: selectedModel,
+    executionMode: currentExecutionMode,
+    model: currentModel,
+    reasoningLevel: currentReasoningLevel,
   });
+
+  const handleCycleMode = useCallback(() => {
+    const nextValue = cycleModeOption(modeOption, allowBypassPermissions);
+    if (nextValue && modeOption) {
+      getSessionService().setSessionConfigOption(
+        previewTaskId,
+        modeOption.id,
+        nextValue,
+      );
+    }
+  }, [modeOption, allowBypassPermissions, previewTaskId]);
 
   return (
     <div
@@ -179,12 +183,6 @@ export function TaskInput() {
               size="1"
             />
             <AdapterSelect value={adapter} onChange={setAdapter} size="1" />
-            <TaskInputModelSelector
-              value={selectedModel}
-              onChange={setSelectedModel}
-              adapter={adapter}
-              size="1"
-            />
           </Flex>
 
           <TaskInputEditor
@@ -198,9 +196,15 @@ export function TaskInput() {
             hasDirectory={!!selectedDirectory}
             onEmptyChange={setEditorIsEmpty}
             adapter={adapter}
+            previewTaskId={previewTaskId}
+            onCycleMode={handleCycleMode}
+            isPreviewConnecting={isConnecting}
           />
 
-          <SuggestedTasks editorRef={editorRef} />
+          <ModeIndicatorInput
+            modeOption={modeOption}
+            onCycleMode={handleCycleMode}
+          />
         </Flex>
       </Flex>
     </div>

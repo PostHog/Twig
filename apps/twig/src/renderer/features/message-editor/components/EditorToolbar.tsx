@@ -13,6 +13,8 @@ interface EditorToolbarProps {
   onAttachFiles?: (files: File[]) => void;
   attachTooltip?: string;
   iconSize?: number;
+  /** Hide model and reasoning selectors (when rendered separately) */
+  hideSelectors?: boolean;
 }
 
 export function EditorToolbar({
@@ -23,6 +25,7 @@ export function EditorToolbar({
   onAttachFiles,
   attachTooltip = "Attach file",
   iconSize = 14,
+  hideSelectors = false,
 }: EditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,8 +71,16 @@ export function EditorToolbar({
           <Paperclip size={iconSize} weight="bold" />
         </IconButton>
       </Tooltip>
-      <ModelSelector taskId={taskId} adapter={adapter} disabled={disabled} />
-      <ReasoningLevelSelector taskId={taskId} disabled={disabled} />
+      {!hideSelectors && (
+        <>
+          <ModelSelector
+            taskId={taskId}
+            adapter={adapter}
+            disabled={disabled}
+          />
+          <ReasoningLevelSelector taskId={taskId} disabled={disabled} />
+        </>
+      )}
     </Flex>
   );
 }
