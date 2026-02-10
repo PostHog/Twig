@@ -1,9 +1,10 @@
-import { createGitClient } from "./client.js";
+import { createGitClient, type GitClient } from "./client.js";
 import { removeLock, waitForUnlock } from "./lock-detector.js";
 import { AsyncReaderWriterLock } from "./rw-lock.js";
 
 interface RepoState {
   lock: AsyncReaderWriterLock;
+  client: GitClient;
   lastAccess: number;
 }
 
@@ -29,7 +30,11 @@ class GitOperationManagerImpl {
   private getRepoState(repoPath: string): RepoState {
     let state = this.repoStates.get(repoPath);
     if (!state) {
-      state = { lock: new AsyncReaderWriterLock(), lastAccess: Date.now() };
+      state = {
+        lock: new AsyncReaderWriterLock(),
+        client: createGitClient(repoPath),
+        lastAccess: Date.now(),
+      };
       this.repoStates.set(repoPath, state);
     }
     state.lastAccess = Date.now();
@@ -47,18 +52,25 @@ class GitOperationManagerImpl {
 
   async executeRead<T>(
     repoPath: string,
-    operation: (git: ReturnType<typeof createGitClient>) => Promise<T>,
+    operation: (git: GitClient) => Promise<T>,
     options?: ExecuteOptions,
   ): Promise<T> {
-    const git = createGitClient(repoPath, {
-      abortSignal: options?.signal,
-    }).env({ GIT_OPTIONAL_LOCKS: "0" });
+    const state = this.getRepoState(repoPath);
+
+    if (options?.signal) {
+      const scopedGit = createGitClient(repoPath, {
+        abortSignal: options.signal,
+      });
+      return operation(scopedGit.env({ GIT_OPTIONAL_LOCKS: "0" }));
+    }
+
+    const git = state.client.env({ GIT_OPTIONAL_LOCKS: "0" });
     return operation(git);
   }
 
   async executeWrite<T>(
     repoPath: string,
-    operation: (git: ReturnType<typeof createGitClient>) => Promise<T>,
+    operation: (git: GitClient) => Promise<T>,
     options?: ExecuteOptions,
   ): Promise<T> {
     const state = this.getRepoState(repoPath);
@@ -75,8 +87,14 @@ class GitOperationManagerImpl {
 
     await state.lock.acquireWrite();
     try {
-      const git = createGitClient(repoPath, { abortSignal: options?.signal });
-      return await operation(git);
+      if (options?.signal) {
+        const scopedGit = createGitClient(repoPath, {
+          abortSignal: options.signal,
+        });
+        return await operation(scopedGit);
+      }
+
+      return await operation(state.client);
     } catch (error) {
       if (options?.signal?.aborted) {
         await removeLock(repoPath).catch(() => {});
