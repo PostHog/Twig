@@ -205,6 +205,15 @@ export function createAgentChunk(text: string): StoredNotification {
   });
 }
 
+export function createAgentMessage(text: string): StoredNotification {
+  return createNotification("session/update", {
+    update: {
+      sessionUpdate: "agent_message",
+      content: { type: "text", text },
+    },
+  });
+}
+
 export function createToolCall(
   toolCallId: string,
   toolName: string,
