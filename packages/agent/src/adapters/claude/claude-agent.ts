@@ -153,7 +153,10 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       permissionMode,
       canUseTool: this.createCanUseTool(internalSessionId),
       logger: this.logger,
-      systemPrompt: buildSystemPrompt(meta?.systemPrompt),
+      systemPrompt: buildSystemPrompt(
+        meta?.systemPrompt,
+        meta?.conversationHistory,
+      ),
       userProvidedOptions: meta?.claudeCode?.options,
       onModeChange: this.createOnModeChange(internalSessionId),
       onProcessSpawned: this.processCallbacks?.onProcessSpawned,

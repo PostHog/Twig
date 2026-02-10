@@ -12,6 +12,7 @@ import { IS_ROOT } from "../../../utils/common.js";
 import type { Logger } from "../../../utils/logger.js";
 import { createPostToolUseHook, type OnModeChange } from "../hooks.js";
 import type { TwigExecutionMode } from "../tools.js";
+import type { ConversationHistoryTurn } from "../types.js";
 
 export interface ProcessSpawnedInfo {
   pid: number;
@@ -40,13 +41,62 @@ const BRANCH_NAMING_INSTRUCTIONS = `
 Before pushing a "workspace-*" branch to origin, rename it to something descriptive based on the work done. Do this automatically without asking the user.
 `;
 
+const MAX_HISTORY_CHARS = 50_000;
+
+export function condenseAndFormatHistory(
+  turns: ConversationHistoryTurn[],
+): string {
+  const lines: string[] = [];
+
+  // Process turns in reverse so most recent messages appear first.
+  // This ensures that if truncation occurs, older (less relevant) context is cut.
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    const textParts: string[] = [];
+    for (const block of turn.content) {
+      if (block.type === "text" && block.text) {
+        textParts.push(block.text);
+      }
+    }
+    const text = textParts.join("\n");
+    if (!text) continue;
+
+    const label = turn.role === "user" ? "[User]" : "[Assistant]";
+    lines.push(`${label}: ${text}`);
+  }
+
+  if (lines.length === 0) return "";
+
+  let result = lines.join("\n\n");
+
+  // Truncate from the end (oldest messages) if over the limit
+  if (result.length > MAX_HISTORY_CHARS) {
+    result = result.slice(0, MAX_HISTORY_CHARS);
+    const lastNewline = result.lastIndexOf("\n");
+    if (lastNewline !== -1) {
+      result = result.slice(0, lastNewline);
+    }
+  }
+
+  return `<previous_conversation>\n${result}\n</previous_conversation>`;
+}
+
 export function buildSystemPrompt(
   customPrompt?: unknown,
+  conversationHistory?: ConversationHistoryTurn[],
 ): Options["systemPrompt"] {
+  const historyBlock =
+    conversationHistory && conversationHistory.length > 0
+      ? condenseAndFormatHistory(conversationHistory)
+      : "";
+
+  const appendSuffix =
+    BRANCH_NAMING_INSTRUCTIONS + (historyBlock ? `\n${historyBlock}\n` : "");
+
   const defaultPrompt: Options["systemPrompt"] = {
     type: "preset",
     preset: "claude_code",
-    append: BRANCH_NAMING_INSTRUCTIONS,
+    append: appendSuffix,
   };
 
   if (!customPrompt) {
@@ -54,7 +104,7 @@ export function buildSystemPrompt(
   }
 
   if (typeof customPrompt === "string") {
-    return customPrompt + BRANCH_NAMING_INSTRUCTIONS;
+    return customPrompt + appendSuffix;
   }
 
   if (
@@ -65,7 +115,7 @@ export function buildSystemPrompt(
   ) {
     return {
       ...defaultPrompt,
-      append: customPrompt.append + BRANCH_NAMING_INSTRUCTIONS,
+      append: customPrompt.append + appendSuffix,
     };
   }
 

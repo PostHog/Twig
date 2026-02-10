@@ -50,12 +50,18 @@ export type ToolUpdateMeta = {
   };
 };
 
+export type ConversationHistoryTurn = {
+  role: "user" | "assistant";
+  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
+};
+
 export type NewSessionMeta = {
   taskRunId?: string;
   disableBuiltInTools?: boolean;
   systemPrompt?: unknown;
   sessionId?: string;
   permissionMode?: string;
+  conversationHistory?: ConversationHistoryTurn[];
   claudeCode?: {
     options?: Options;
   };

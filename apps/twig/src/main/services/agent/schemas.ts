@@ -13,6 +13,24 @@ export const credentialsSchema = z.object({
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 
+// Content block schema (shared across prompt input and conversation history)
+export const contentBlockSchema = z
+  .object({
+    type: z.string(),
+    text: z.string().optional(),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .passthrough();
+
+export const conversationHistoryTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.array(contentBlockSchema),
+});
+
+export type ConversationHistoryTurn = z.infer<
+  typeof conversationHistoryTurnSchema
+>;
+
 // Session config schema
 export const sessionConfigSchema = z.object({
   taskId: z.string(),
@@ -27,6 +45,8 @@ export const sessionConfigSchema = z.object({
   additionalDirectories: z.array(z.string()).optional(),
   /** Permission mode to use for the session (e.g. "default", "acceptEdits", "plan", "bypassPermissions") */
   permissionMode: z.string().optional(),
+  /** Conversation history to inject into the system prompt for new sessions */
+  conversationHistory: z.array(conversationHistoryTurnSchema).optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
@@ -45,6 +65,7 @@ export const startSessionInput = z.object({
   runMode: z.enum(["local", "cloud"]).optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
   additionalDirectories: z.array(z.string()).optional(),
+  conversationHistory: z.array(conversationHistoryTurnSchema).optional(),
 });
 
 export type StartSessionInput = z.infer<typeof startSessionInput>;
@@ -102,14 +123,6 @@ export const sessionResponseSchema = z.object({
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 
 // Prompt input/output
-export const contentBlockSchema = z
-  .object({
-    type: z.string(),
-    text: z.string().optional(),
-    _meta: z.record(z.string(), z.unknown()).nullish(),
-  })
-  .passthrough();
-
 export const promptInput = z.object({
   sessionId: z.string(),
   prompt: z.array(contentBlockSchema),
@@ -160,6 +173,7 @@ export const reconnectSessionInput = z.object({
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
   permissionMode: z.string().optional(),
+  conversationHistory: z.array(conversationHistoryTurnSchema).optional(),
 });
 
 export type ReconnectSessionInput = z.infer<typeof reconnectSessionInput>;

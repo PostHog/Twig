@@ -33,6 +33,7 @@ import type { SleepService } from "../sleep/service.js";
 import {
   AgentServiceEvent,
   type AgentServiceEvents,
+  type ConversationHistoryTurn,
   type Credentials,
   type InterruptReason,
   type PromptOutput,
@@ -178,6 +179,8 @@ interface SessionConfig {
   additionalDirectories?: string[];
   /** Permission mode to use for the session */
   permissionMode?: string;
+  /** Conversation history to inject into the system prompt for new sessions */
+  conversationHistory?: ConversationHistoryTurn[];
 }
 
 interface ManagedSession {
@@ -423,6 +426,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       adapter,
       additionalDirectories,
       permissionMode,
+      conversationHistory,
     } = config;
 
     if (!isRetry) {
@@ -599,6 +603,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               taskRunId,
               systemPrompt,
               ...(permissionMode && { permissionMode }),
+              ...(conversationHistory?.length && { conversationHistory }),
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -1320,6 +1325,10 @@ For git operations while detached:
           : undefined,
       permissionMode:
         "permissionMode" in params ? params.permissionMode : undefined,
+      conversationHistory:
+        "conversationHistory" in params
+          ? params.conversationHistory
+          : undefined,
     };
   }
 
