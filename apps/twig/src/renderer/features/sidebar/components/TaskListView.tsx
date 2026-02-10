@@ -26,13 +26,17 @@ interface TaskListViewProps {
   flatTasks: TaskData[];
   groupedTasks: TaskGroup[];
   activeTaskId: string | null;
+  editingTaskId: string | null;
   onTaskClick: (taskId: string) => void;
+  onTaskDoubleClick: (taskId: string) => void;
   onTaskContextMenu: (
     taskId: string,
     e: React.MouseEvent,
     isPinned: boolean,
   ) => void;
   onTaskDelete: (taskId: string) => void;
+  onTaskEditSubmit: (taskId: string, newTitle: string) => void;
+  onTaskEditCancel: () => void;
   hasMore: boolean;
 }
 
@@ -56,17 +60,25 @@ function SectionLabel({
 function TaskRow({
   task,
   isActive,
+  isEditing,
   onClick,
+  onDoubleClick,
   onContextMenu,
   onDelete,
+  onEditSubmit,
+  onEditCancel,
   timestamp,
   depth = 0,
 }: {
   task: TaskData;
   isActive: boolean;
+  isEditing: boolean;
   onClick: () => void;
+  onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent, isPinned: boolean) => void;
   onDelete: () => void;
+  onEditSubmit: (newTitle: string) => void;
+  onEditCancel: () => void;
   timestamp: number;
   depth?: number;
 }) {
@@ -77,6 +89,7 @@ function TaskRow({
       depth={depth}
       label={task.title}
       isActive={isActive}
+      isEditing={isEditing}
       workspaceMode={workspace?.mode}
       worktreePath={workspace?.worktreePath ?? undefined}
       isGenerating={task.isGenerating}
@@ -85,8 +98,11 @@ function TaskRow({
       needsPermission={task.needsPermission}
       timestamp={timestamp}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={(e) => onContextMenu(e, task.isPinned)}
       onDelete={onDelete}
+      onEditSubmit={onEditSubmit}
+      onEditCancel={onEditCancel}
     />
   );
 }
@@ -208,9 +224,13 @@ export function TaskListView({
   flatTasks,
   groupedTasks,
   activeTaskId,
+  editingTaskId,
   onTaskClick,
+  onTaskDoubleClick,
   onTaskContextMenu,
   onTaskDelete,
+  onTaskEditSubmit,
+  onTaskEditCancel,
   hasMore,
 }: TaskListViewProps) {
   const organizeMode = useSidebarStore((state) => state.organizeMode);
@@ -264,11 +284,15 @@ export function TaskListView({
               key={task.id}
               task={task}
               isActive={activeTaskId === task.id}
+              isEditing={editingTaskId === task.id}
               onClick={() => onTaskClick(task.id)}
+              onDoubleClick={() => onTaskDoubleClick(task.id)}
               onContextMenu={(e, isPinned) =>
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
+              onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}
             />
           ))}
@@ -322,11 +346,17 @@ export function TaskListView({
                         key={task.id}
                         task={task}
                         isActive={activeTaskId === task.id}
+                        isEditing={editingTaskId === task.id}
                         onClick={() => onTaskClick(task.id)}
+                        onDoubleClick={() => onTaskDoubleClick(task.id)}
                         onContextMenu={(e, isPinned) =>
                           onTaskContextMenu(task.id, e, isPinned)
                         }
                         onDelete={() => onTaskDelete(task.id)}
+                        onEditSubmit={(newTitle) =>
+                          onTaskEditSubmit(task.id, newTitle)
+                        }
+                        onEditCancel={onTaskEditCancel}
                         timestamp={task[timestampKey]}
                         depth={1}
                       />
@@ -344,11 +374,15 @@ export function TaskListView({
               key={task.id}
               task={task}
               isActive={activeTaskId === task.id}
+              isEditing={editingTaskId === task.id}
               onClick={() => onTaskClick(task.id)}
+              onDoubleClick={() => onTaskDoubleClick(task.id)}
               onContextMenu={(e, isPinned) =>
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
+              onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}
             />
           ))}

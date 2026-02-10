@@ -9,8 +9,7 @@ import { useCallback, useState } from "react";
 const log = logger.scope("context-menu");
 
 export function useTaskContextMenu() {
-  const [renameTask, setRenameTask] = useState<Task | null>(null);
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const { deleteWithConfirm } = useDeleteTask();
 
   const showContextMenu = useCallback(
@@ -41,8 +40,7 @@ export function useTaskContextMenu() {
 
         switch (result.action.type) {
           case "rename":
-            setRenameTask(task);
-            setRenameDialogOpen(true);
+            setEditingTaskId(task.id);
             break;
           case "pin":
             onTogglePin?.();
@@ -79,8 +77,7 @@ export function useTaskContextMenu() {
 
   return {
     showContextMenu,
-    renameTask,
-    renameDialogOpen,
-    setRenameDialogOpen,
+    editingTaskId,
+    setEditingTaskId,
   };
 }

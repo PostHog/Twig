@@ -79,53 +79,57 @@ export function createUserMessageEvent(text: string, ts: number): AcpMessage {
 
 /**
  * Create a user shell execute event.
+ * When id is provided, it's used to track async execution (start/complete).
+ * When result is undefined, it represents a command that's still running.
  */
 export function createUserShellExecuteEvent(
   command: string,
   cwd: string,
-  result: { stdout: string; stderr: string; exitCode: number },
+  result?: { stdout: string; stderr: string; exitCode: number },
+  id?: string,
 ): AcpMessage {
   return {
     type: "acp_message",
     ts: Date.now(),
     message: {
       jsonrpc: "2.0",
-      // TODO: Migrate to twig
       method: "_array/user_shell_execute",
-      params: { command, cwd, result },
+      params: { id, command, cwd, result },
     },
   };
 }
 
 /**
- * Collects user shell executes that occurred after the last prompt request.
+ * Collects completed user shell executes that occurred after the last prompt request.
  * These are included as hidden context in the next prompt so the agent
  * knows what commands the user ran between turns.
  *
  * Scans backwards from the end of events, stopping at the most recent
  * session/prompt request (not response), collecting any _array/user_shell_execute
- * notifications found along the way.
+ * notifications found along the way. Deduplicates by ID, keeping only completed executes.
  */
 export function getUserShellExecutesSinceLastPrompt(
   events: AcpMessage[],
 ): UserShellExecuteParams[] {
-  const results: UserShellExecuteParams[] = [];
+  const execMap = new Map<string, UserShellExecuteParams>();
 
   for (let i = events.length - 1; i >= 0; i--) {
     const msg = events[i].message;
 
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") break;
 
-    // TODO: Migrate to twig
     if (
       isJsonRpcNotification(msg) &&
       msg.method === "_array/user_shell_execute"
     ) {
-      results.unshift(msg.params as UserShellExecuteParams);
+      const params = msg.params as UserShellExecuteParams;
+      if (params.result && params.id && !execMap.has(params.id)) {
+        execMap.set(params.id, params);
+      }
     }
   }
 
-  return results;
+  return Array.from(execMap.values()).reverse();
 }
 
 /**
@@ -134,13 +138,15 @@ export function getUserShellExecutesSinceLastPrompt(
 export function shellExecutesToContextBlocks(
   shellExecutes: UserShellExecuteParams[],
 ): ContentBlock[] {
-  return shellExecutes.map((cmd) => ({
-    type: "text" as const,
-    text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${
-      cmd.result.stdout || cmd.result.stderr || "(no output)"
-    }`,
-    _meta: { ui: { hidden: true } },
-  }));
+  return shellExecutes
+    .filter((cmd) => cmd.result)
+    .map((cmd) => ({
+      type: "text" as const,
+      text: `[User executed command in ${cmd.cwd}]\n$ ${cmd.command}\n${
+        cmd.result?.stdout || cmd.result?.stderr || "(no output)"
+      }`,
+      _meta: { ui: { hidden: true } },
+    }));
 }
 
 /**

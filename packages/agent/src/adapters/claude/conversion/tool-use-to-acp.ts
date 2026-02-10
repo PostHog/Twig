@@ -515,7 +515,12 @@ export function toolUpdateFromToolResult(
       }
       return {};
 
-    case "Bash":
+    case "Bash": {
+      return toAcpContentUpdate(
+        toolResult.content,
+        "is_error" in toolResult ? toolResult.is_error : false,
+      );
+    }
     case "Edit":
     case "Write": {
       if (
