@@ -138,7 +138,11 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     const meta = params._meta as NewSessionMeta | undefined;
     const internalSessionId = uuidv7();
-    const permissionMode: TwigExecutionMode = "default";
+    const permissionMode: TwigExecutionMode =
+      meta?.permissionMode &&
+      TWIG_EXECUTION_MODES.includes(meta.permissionMode as TwigExecutionMode)
+        ? (meta.permissionMode as TwigExecutionMode)
+        : "default";
 
     const mcpServers = parseMcpServers(params);
     await fetchMcpToolMetadata(mcpServers, this.logger);
@@ -203,10 +207,16 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     const mcpServers = parseMcpServers(params);
     await fetchMcpToolMetadata(mcpServers, this.logger);
 
+    const permissionMode: TwigExecutionMode =
+      meta?.permissionMode &&
+      TWIG_EXECUTION_MODES.includes(meta.permissionMode as TwigExecutionMode)
+        ? (meta.permissionMode as TwigExecutionMode)
+        : "default";
+
     const { query: q, session } = await this.initializeQuery({
       internalSessionId,
       cwd: params.cwd,
-      permissionMode: "default",
+      permissionMode,
       mcpServers,
       systemPrompt: buildSystemPrompt(meta?.systemPrompt),
       userProvidedOptions: meta?.claudeCode?.options,

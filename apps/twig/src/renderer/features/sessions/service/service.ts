@@ -275,6 +275,11 @@ export class SessionService {
     this.subscribeToChannel(taskRunId);
 
     try {
+      const persistedMode = getConfigOptionByCategory(
+        persistedConfigOptions,
+        "mode",
+      )?.currentValue;
+
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -285,6 +290,7 @@ export class SessionService {
         logUrl,
         sessionId,
         adapter: resolvedAdapter,
+        permissionMode: persistedMode,
       });
 
       if (result) {
