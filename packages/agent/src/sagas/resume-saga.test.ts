@@ -5,6 +5,7 @@ import type { PostHogAPIClient } from "../posthog-api.js";
 import { ResumeSaga } from "./resume-saga.js";
 import {
   createAgentChunk,
+  createAgentMessage,
   createArchiveBuffer,
   createMockApiClient,
   createMockLogger,
@@ -139,6 +140,149 @@ describe("ResumeSaga", () => {
       expect(result.data.conversation).toHaveLength(1);
       const content = result.data.conversation[0].content[0];
       expect(content).toEqual({ type: "text", text: "Hello world!" });
+    });
+
+    it("rebuilds from coalesced agent_message events", async () => {
+      (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createTaskRun(),
+      );
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
+        createUserMessage("Hello"),
+        createAgentMessage("Hi there! Let me help."),
+        createUserMessage("Thanks"),
+        createAgentMessage("Sure thing."),
+      ]);
+
+      const saga = new ResumeSaga(mockLogger);
+      const result = await saga.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.data.conversation).toHaveLength(4);
+      expect(result.data.conversation[0].role).toBe("user");
+      expect(result.data.conversation[1].role).toBe("assistant");
+      expect(result.data.conversation[1].content[0]).toEqual({
+        type: "text",
+        text: "Hi there! Let me help.",
+      });
+      expect(result.data.conversation[3].content[0]).toEqual({
+        type: "text",
+        text: "Sure thing.",
+      });
+    });
+
+    it("merges multiple agent_message events within a single turn", async () => {
+      (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createTaskRun(),
+      );
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
+        createUserMessage("Fix the bug"),
+        createAgentMessage("I'll look into this."),
+        createToolCall("call-1", "ReadFile", { path: "/bug.ts" }),
+        createToolResult("call-1", "buggy code"),
+        createAgentMessage(" Here's the fix."),
+        createToolCall("call-2", "Edit", { path: "/bug.ts" }),
+        createToolResult("call-2", "done"),
+        createAgentMessage(" All fixed now."),
+      ]);
+
+      const saga = new ResumeSaga(mockLogger);
+      const result = await saga.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.data.conversation).toHaveLength(2);
+      const assistantTurn = result.data.conversation[1];
+      expect(assistantTurn.role).toBe("assistant");
+      // All text segments should merge into one block
+      expect(assistantTurn.content).toHaveLength(1);
+      expect(assistantTurn.content[0]).toEqual({
+        type: "text",
+        text: "I'll look into this. Here's the fix. All fixed now.",
+      });
+      expect(assistantTurn.toolCalls).toHaveLength(2);
+    });
+
+    it("produces same result from chunks and coalesced messages", async () => {
+      const chunkEntries = [
+        createUserMessage("Hello"),
+        createAgentChunk("First "),
+        createAgentChunk("part."),
+        createToolCall("call-1", "Read", { path: "/a" }),
+        createToolResult("call-1", "content"),
+        createAgentChunk("Second "),
+        createAgentChunk("part."),
+      ];
+
+      const coalescedEntries = [
+        createUserMessage("Hello"),
+        createAgentMessage("First part."),
+        createToolCall("call-1", "Read", { path: "/a" }),
+        createToolResult("call-1", "content"),
+        createAgentMessage("Second part."),
+      ];
+
+      // Run with chunks (old format)
+      (mockApiClient.getTaskRun as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createTaskRun(),
+      );
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(chunkEntries);
+
+      const saga1 = new ResumeSaga(mockLogger);
+      const result1 = await saga1.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      // Run with coalesced (new format)
+      (
+        mockApiClient.fetchTaskRunLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(coalescedEntries);
+
+      const saga2 = new ResumeSaga(mockLogger);
+      const result2 = await saga2.run({
+        taskId: "task-1",
+        runId: "run-1",
+        repositoryPath: repo.path,
+        apiClient: mockApiClient,
+      });
+
+      expect(result1.success).toBe(true);
+      expect(result2.success).toBe(true);
+      if (!result1.success || !result2.success) return;
+
+      // Conversation structure should be identical
+      expect(result1.data.conversation.length).toBe(
+        result2.data.conversation.length,
+      );
+      for (let i = 0; i < result1.data.conversation.length; i++) {
+        expect(result1.data.conversation[i].role).toBe(
+          result2.data.conversation[i].role,
+        );
+        expect(result1.data.conversation[i].content).toEqual(
+          result2.data.conversation[i].content,
+        );
+      }
     });
 
     it("tracks tool calls with results", async () => {
