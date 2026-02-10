@@ -46,7 +46,12 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings" | "folder-settings";
+  type:
+    | "task-detail"
+    | "task-input"
+    | "settings"
+    | "folder-settings"
+    | "autonomy-onboarding";
   data?: Task;
 }
 

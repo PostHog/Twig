@@ -13,7 +13,11 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "folder-settings";
+type ViewType =
+  | "task-detail"
+  | "task-input"
+  | "folder-settings"
+  | "autonomy-onboarding";
 
 interface ViewState {
   type: ViewType;
@@ -29,6 +33,7 @@ interface NavigationStore {
   navigateToTask: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToFolderSettings: (folderId: string) => void;
+  navigateToAutonomyOnboarding: () => void;
   goBack: () => void;
   goForward: () => void;
   canGoBack: () => boolean;
@@ -136,6 +141,10 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
+        },
+
+        navigateToAutonomyOnboarding: () => {
+          navigate({ type: "autonomy-onboarding" });
         },
 
         goBack: () => {

@@ -2,6 +2,7 @@ import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { UpdatePrompt } from "@components/UpdatePrompt";
+import { AutonomyOnboarding } from "@features/autonomy/components/AutonomyOnboarding";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
@@ -58,6 +59,8 @@ export function MainLayout() {
           )}
 
           {view.type === "folder-settings" && <FolderSettingsView />}
+
+          {view.type === "autonomy-onboarding" && <AutonomyOnboarding />}
         </Box>
 
         {view.type === "task-detail" && view.data && (
