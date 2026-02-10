@@ -141,8 +141,6 @@ export interface AgentConfig {
   posthog?: PostHogAPIConfig;
   /** OTEL transport config for shipping logs to PostHog Logs */
   otelTransport?: OtelTransportConfig;
-  /** Skip session log persistence (e.g. for preview sessions with no real task) */
-  skipLogPersistence?: boolean;
   debug?: boolean;
   onLog?: OnLogCallback;
 }

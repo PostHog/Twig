@@ -46,8 +46,6 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("session-service");
 
-export const PREVIEW_TASK_ID = "__preview__";
-
 interface AuthCredentials {
   apiKey: string;
   apiHost: string;
@@ -62,7 +60,6 @@ interface ConnectParams {
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
   model?: string;
-  reasoningLevel?: string;
 }
 
 // --- Singleton Service Instance ---
@@ -98,8 +95,6 @@ export class SessionService {
       permission?: { unsubscribe: () => void };
     }
   >();
-  /** Version counter to discard stale preview session results */
-  private previewVersion = 0;
 
   /**
    * Connect to a task session.
@@ -141,15 +136,8 @@ export class SessionService {
   }
 
   private async doConnect(params: ConnectParams): Promise<void> {
-    const {
-      task,
-      repoPath,
-      initialPrompt,
-      executionMode,
-      adapter,
-      model,
-      reasoningLevel,
-    } = params;
+    const { task, repoPath, initialPrompt, executionMode, adapter, model } =
+      params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
 
@@ -226,7 +214,6 @@ export class SessionService {
           executionMode,
           adapter,
           model,
-          reasoningLevel,
         );
       }
     } catch (error) {
@@ -373,7 +360,6 @@ export class SessionService {
     executionMode?: ExecutionMode,
     adapter?: "claude" | "codex",
     model?: string,
-    reasoningLevel?: string,
   ): Promise<void> {
     if (!auth.client) {
       throw new Error("Unable to reach server. Please check your connection.");
@@ -433,15 +419,6 @@ export class SessionService {
       );
     }
 
-    // Set reasoning level if provided (e.g., from Codex adapter's preview session)
-    if (reasoningLevel) {
-      await this.setSessionConfigOptionByCategory(
-        taskId,
-        "thought_level",
-        reasoningLevel,
-      );
-    }
-
     if (initialPrompt?.length) {
       await this.sendPrompt(taskId, initialPrompt);
     }
@@ -463,127 +440,6 @@ export class SessionService {
     }
     this.unsubscribeFromChannel(session.taskRunId);
     sessionStoreSetters.removeSession(session.taskRunId);
-  }
-
-  // --- Preview Session Management ---
-
-  /**
-   * Start a lightweight preview session for the task input page.
-   * This session is used solely to retrieve adapter-specific config options
-   * (models, modes, reasoning levels) without creating a real PostHog task.
-   *
-   * Uses a version counter to prevent race conditions when rapidly switching
-   * adapters — stale results from a previous start are discarded.
-   */
-  async startPreviewSession(params: {
-    adapter: "claude" | "codex";
-    repoPath?: string;
-  }): Promise<void> {
-    // Increment version to invalidate any in-flight start
-    const version = ++this.previewVersion;
-
-    // Cancel any existing preview session first
-    await this.cancelPreviewSession();
-
-    // Check if a newer start was requested while we were cancelling
-    if (version !== this.previewVersion) {
-      log.info("Preview session start superseded, skipping", { version });
-      return;
-    }
-
-    const auth = this.getAuthCredentials();
-    if (!auth) {
-      log.info("Skipping preview session - not authenticated");
-      return;
-    }
-
-    const taskRunId = `preview-${crypto.randomUUID()}`;
-    const session = this.createBaseSession(
-      taskRunId,
-      PREVIEW_TASK_ID,
-      "Preview",
-    );
-    session.adapter = params.adapter;
-    sessionStoreSetters.setSession(session);
-
-    try {
-      const result = await trpcVanilla.agent.start.mutate({
-        taskId: PREVIEW_TASK_ID,
-        taskRunId,
-        repoPath: params.repoPath || "~",
-        apiKey: auth.apiKey,
-        apiHost: auth.apiHost,
-        projectId: auth.projectId,
-        adapter: params.adapter,
-      });
-
-      // Check again after the async start — a newer call may have superseded us
-      if (version !== this.previewVersion) {
-        log.info(
-          "Preview session start superseded after agent.start, cleaning up stale session",
-          { taskRunId, version },
-        );
-        // Clean up the session we just started but is now stale
-        trpcVanilla.agent.cancel
-          .mutate({ sessionId: taskRunId })
-          .catch((err) => {
-            log.warn("Failed to cancel stale preview session", {
-              taskRunId,
-              error: err,
-            });
-          });
-        sessionStoreSetters.removeSession(taskRunId);
-        return;
-      }
-
-      const configOptions = result.configOptions as
-        | SessionConfigOption[]
-        | undefined;
-
-      sessionStoreSetters.updateSession(taskRunId, {
-        status: "connected",
-        channel: result.channel,
-        configOptions,
-      });
-
-      this.subscribeToChannel(taskRunId);
-
-      log.info("Preview session started", {
-        taskRunId,
-        adapter: params.adapter,
-        configOptionsCount: configOptions?.length ?? 0,
-      });
-    } catch (error) {
-      // Only clean up if we're still the current version
-      if (version === this.previewVersion) {
-        log.error("Failed to start preview session", { error });
-        sessionStoreSetters.removeSession(taskRunId);
-      }
-    }
-  }
-
-  /**
-   * Cancel and clean up the preview session.
-   * Unsubscribes and removes from store first (so nothing writes to the old
-   * session), then awaits the cancel on the main process.
-   */
-  async cancelPreviewSession(): Promise<void> {
-    const session = sessionStoreSetters.getSessionByTaskId(PREVIEW_TASK_ID);
-    if (!session) return;
-
-    const { taskRunId } = session;
-
-    // Unsubscribe and remove from store first so nothing writes to the old session
-    this.unsubscribeFromChannel(taskRunId);
-    sessionStoreSetters.removeSession(taskRunId);
-
-    try {
-      await trpcVanilla.agent.cancel.mutate({ sessionId: taskRunId });
-    } catch (error) {
-      log.warn("Failed to cancel preview session", { taskRunId, error });
-    }
-
-    log.info("Preview session cancelled", { taskRunId });
   }
 
   // --- Subscription Management ---
@@ -655,7 +511,6 @@ export class SessionService {
     }
 
     this.connectingTasks.clear();
-    this.previewVersion = 0;
   }
 
   private handleSessionEvent(taskRunId: string, acpMsg: AcpMessage): void {
