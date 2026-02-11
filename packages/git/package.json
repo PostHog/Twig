@@ -12,10 +12,12 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/tar": "^6.1.13",
+    "vitest": "^2.1.8",
     "typescript": "^5.5.0"
   },
   "files": [
