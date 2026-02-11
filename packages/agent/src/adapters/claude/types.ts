@@ -55,6 +55,7 @@ export type NewSessionMeta = {
   disableBuiltInTools?: boolean;
   systemPrompt?: unknown;
   sessionId?: string;
+  permissionMode?: string;
   claudeCode?: {
     options?: Options;
   };
