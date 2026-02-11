@@ -79,12 +79,29 @@ vi.mock("@features/sessions/stores/modelsStore", () => ({
 const mockSessionConfigStore = vi.hoisted(() => ({
   getPersistedConfigOptions: vi.fn(() => undefined),
   setPersistedConfigOptions: vi.fn(),
+  removePersistedConfigOptions: vi.fn(),
   updatePersistedConfigOptionValue: vi.fn(),
 }));
 
 vi.mock(
   "@features/sessions/stores/sessionConfigStore",
   () => mockSessionConfigStore,
+);
+
+const mockSessionAdapterStore = vi.hoisted(() => ({
+  useSessionAdapterStore: {
+    getState: vi.fn(() => ({
+      adaptersByRunId: {},
+      setAdapter: vi.fn(),
+      getAdapter: vi.fn(),
+      removeAdapter: vi.fn(),
+    })),
+  },
+}));
+
+vi.mock(
+  "@features/sessions/stores/sessionAdapterStore",
+  () => mockSessionAdapterStore,
 );
 
 const mockGetIsOnline = vi.hoisted(() => vi.fn(() => true));
