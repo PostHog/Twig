@@ -118,7 +118,10 @@ export function KeyboardShortcutsList() {
                       </Text>
                     )}
                   </Flex>
-                  <ShortcutKeys keys={shortcut.keys} />
+                  <ShortcutKeys
+                    keys={shortcut.keys}
+                    alternateKeys={shortcut.alternateKeys}
+                  />
                 </Flex>
               ))}
             </Box>
@@ -129,7 +132,7 @@ export function KeyboardShortcutsList() {
   );
 }
 
-function ShortcutKeys({ keys }: { keys: string }) {
+function SingleShortcutKeys({ keys }: { keys: string }) {
   const formatted = formatHotkey(keys);
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
@@ -150,6 +153,28 @@ function ShortcutKeys({ keys }: { keys: string }) {
           {part}
         </Kbd>
       ))}
+    </Flex>
+  );
+}
+
+function ShortcutKeys({
+  keys,
+  alternateKeys,
+}: {
+  keys: string;
+  alternateKeys?: string;
+}) {
+  if (!alternateKeys) {
+    return <SingleShortcutKeys keys={keys} />;
+  }
+
+  return (
+    <Flex gap="1" align="center">
+      <SingleShortcutKeys keys={keys} />
+      <Text size="1" color="gray">
+        or
+      </Text>
+      <SingleShortcutKeys keys={alternateKeys} />
     </Flex>
   );
 }
