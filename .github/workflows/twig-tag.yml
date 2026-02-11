@@ -1,4 +1,4 @@
-name: Tag Release
+name: Tag Twig Release
 
 on:
   push:
@@ -11,11 +11,11 @@ on:
       - "pnpm-lock.yaml"
       - "package.json"
       - "turbo.json"
-      - ".github/workflows/tag.yml"
+      - ".github/workflows/twig-tag.yml"
       - ".github/workflows/twig-release.yml"
 
 concurrency:
-  group: tag
+  group: twig-tag
   cancel-in-progress: false
 
 jobs:
