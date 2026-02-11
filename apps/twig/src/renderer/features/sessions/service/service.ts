@@ -390,6 +390,11 @@ export class SessionService {
       throw new Error("Failed to create task run. Please try again.");
     }
 
+    // Signal that the local run is now in progress
+    auth.client
+      .updateTaskRun(taskId, taskRun.id, { status: "in_progress" })
+      .catch((err) => log.warn("Failed to update task run status", { err }));
+
     const result = await trpcVanilla.agent.start.mutate({
       taskId,
       taskRunId: taskRun.id,
@@ -895,6 +900,16 @@ export class SessionService {
       isPromptPending: true,
       promptStartedAt: Date.now(),
     });
+
+    // Ensure task run status reflects active work
+    const auth = useAuthStore.getState();
+    if (auth.client) {
+      auth.client
+        .updateTaskRun(session.taskId, session.taskRunId, {
+          status: "in_progress",
+        })
+        .catch((err) => log.warn("Failed to update task run status", { err }));
+    }
 
     try {
       const result = await trpcVanilla.agent.prompt.mutate({

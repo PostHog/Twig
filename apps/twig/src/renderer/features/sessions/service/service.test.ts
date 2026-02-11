@@ -61,6 +61,7 @@ const mockAuthStore = vi.hoisted(() => ({
       client: {
         createTaskRun: vi.fn(),
         appendTaskRunLog: vi.fn(),
+        updateTaskRun: vi.fn().mockResolvedValue(undefined),
       },
     })),
   },
@@ -237,6 +238,7 @@ describe("SessionService", () => {
         client: {
           createTaskRun: createTaskRunMock,
           appendTaskRunLog: vi.fn(),
+          updateTaskRun: vi.fn().mockResolvedValue(undefined),
         },
       });
 
@@ -373,6 +375,7 @@ describe("SessionService", () => {
         client: {
           createTaskRun: createTaskRunMock,
           appendTaskRunLog: vi.fn(),
+          updateTaskRun: vi.fn().mockResolvedValue(undefined),
         },
       });
       mockTrpcAgent.start.mutate.mockResolvedValue({

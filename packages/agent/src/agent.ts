@@ -9,13 +9,18 @@ import {
 } from "./gateway-models.js";
 import { PostHogAPIClient } from "./posthog-api.js";
 import { SessionLogWriter } from "./session-log-writer.js";
-import type { AgentConfig, TaskExecutionOptions } from "./types.js";
+import type {
+  AgentConfig,
+  TaskExecutionOptions,
+  TaskRunStatus,
+} from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export class Agent {
   private posthogAPI?: PostHogAPIClient;
   private logger: Logger;
   private acpConnection?: InProcessAcpConnection;
+  private taskId?: string;
   private taskRunId?: string;
   private sessionLogWriter?: SessionLogWriter;
   public debug: boolean;
@@ -84,6 +89,7 @@ export class Agent {
   ): Promise<InProcessAcpConnection> {
     const gatewayConfig = this._configureLlmGateway(options.adapter);
 
+    this.taskId = taskId;
     this.taskRunId = taskRunId;
 
     let allowedModelIds: Set<string> | undefined;
@@ -173,6 +179,25 @@ export class Agent {
 
   async flushAllLogs(): Promise<void> {
     await this.sessionLogWriter?.flushAll();
+  }
+
+  async signalComplete(status: TaskRunStatus = "completed"): Promise<void> {
+    if (!this.posthogAPI || !this.taskId || !this.taskRunId) {
+      return;
+    }
+
+    try {
+      await this.posthogAPI.updateTaskRun(this.taskId, this.taskRunId, {
+        status,
+      });
+      this.logger.info("Task completion signaled", {
+        taskId: this.taskId,
+        taskRunId: this.taskRunId,
+        status,
+      });
+    } catch (error) {
+      this.logger.error("Failed to signal task completion", error);
+    }
   }
 
   async cleanup(): Promise<void> {
