@@ -2,7 +2,9 @@ import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { UpdatePrompt } from "@components/UpdatePrompt";
+import { useAutonomy } from "@features/autonomy/hooks/useAutonomy";
 import { CommandMenu } from "@features/command/components/CommandMenu";
+import { InboxView } from "@features/inbox/components/InboxView";
 import { RightSidebar, RightSidebarContent } from "@features/right-sidebar";
 import { FolderSettingsView } from "@features/settings/components/FolderSettingsView";
 import { SettingsDialog } from "@features/settings/components/SettingsDialog";
@@ -21,7 +23,7 @@ import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
 export function MainLayout() {
-  const { view, hydrateTask } = useNavigationStore();
+  const { view, hydrateTask, navigateToTaskInput } = useNavigationStore();
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
   const {
     isOpen: shortcutsSheetOpen,
@@ -30,6 +32,7 @@ export function MainLayout() {
   } = useShortcutsSheetStore();
   const { data: tasks } = useTasks();
   const { showPrompt, isChecking, check, dismiss } = useConnectivity();
+  const inboxEnabled = useAutonomy();
 
   useIntegrations();
   useTaskDeepLink();
@@ -39,6 +42,12 @@ export function MainLayout() {
       hydrateTask(tasks);
     }
   }, [tasks, hydrateTask]);
+
+  useEffect(() => {
+    if (view.type === "inbox" && !inboxEnabled) {
+      navigateToTaskInput();
+    }
+  }, [view.type, inboxEnabled, navigateToTaskInput]);
 
   const handleToggleCommandMenu = useCallback(() => {
     setCommandMenuOpen((prev) => !prev);
@@ -58,6 +67,10 @@ export function MainLayout() {
           )}
 
           {view.type === "folder-settings" && <FolderSettingsView />}
+
+          {view.type === "inbox" && inboxEnabled && <InboxView />}
+
+          {view.type === "inbox" && !inboxEnabled && <TaskInput />}
         </Box>
 
         {view.type === "task-detail" && view.data && (
