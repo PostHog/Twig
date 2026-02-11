@@ -1,4 +1,6 @@
 import { DotsCircleSpinner } from "@components/DotsCircleSpinner";
+import { useAutonomy } from "@features/autonomy/hooks/useAutonomy";
+import { useInboxReports } from "@features/inbox/hooks/useInboxReports";
 import {
   useDeleteTask,
   useTasks,
@@ -15,12 +17,13 @@ import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspac
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";
-import { NewTaskItem } from "./items/HomeItem";
+import { InboxItem, NewTaskItem } from "./items/HomeItem";
 import { SidebarItem } from "./SidebarItem";
 import { TaskListView } from "./TaskListView";
 
 function SidebarMenuComponent() {
-  const { view, navigateToTask, navigateToTaskInput } = useNavigationStore();
+  const { view, navigateToTask, navigateToTaskInput, navigateToInbox } =
+    useNavigationStore();
 
   const { data: allTasks = [] } = useTasks();
 
@@ -35,6 +38,10 @@ function SidebarMenuComponent() {
   const sidebarData = useSidebarData({
     activeView: view,
   });
+  const inboxEnabled = useAutonomy();
+  const { data: inboxSignals } = useInboxReports({ enabled: inboxEnabled });
+  const inboxSignalCount =
+    inboxSignals?.count ?? inboxSignals?.results?.length ?? 0;
 
   const previousTaskIdRef = useRef<string | null>(null);
 
@@ -59,6 +66,10 @@ function SidebarMenuComponent() {
 
   const handleNewTaskClick = () => {
     navigateToTaskInput();
+  };
+
+  const handleInboxClick = () => {
+    navigateToInbox();
   };
 
   const handleTaskClick = (taskId: string) => {
@@ -157,6 +168,16 @@ function SidebarMenuComponent() {
               onClick={handleNewTaskClick}
             />
           </Box>
+
+          {inboxEnabled && (
+            <Box mb="2">
+              <InboxItem
+                isActive={sidebarData.isInboxActive}
+                onClick={handleInboxClick}
+                signalCount={inboxSignalCount}
+              />
+            </Box>
+          )}
 
           {sidebarData.isLoading ? (
             <SidebarItem
