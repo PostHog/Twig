@@ -50,24 +50,8 @@ function copyAssets() {
   }
 }
 
-export default defineConfig({
-  entry: [
-    "src/index.ts",
-    "src/agent.ts",
-    "src/gateway-models.ts",
-    "src/posthog-api.ts",
-    "src/types.ts",
-    "src/adapters/claude/questions/utils.ts",
-    "src/adapters/claude/permissions/permission-options.ts",
-    "src/adapters/claude/tools.ts",
-    "src/adapters/claude/conversion/tool-use-to-acp.ts",
-    "src/server/agent-server.ts",
-    "src/server/bin.ts",
-  ],
-  format: ["esm"],
-  dts: true,
+const sharedOptions = {
   sourcemap: true,
-  clean: true,
   splitting: false,
   outDir: "dist",
   target: "node20",
@@ -82,20 +66,51 @@ export default defineConfig({
     "tar",
     "zod",
   ],
-  onSuccess: async () => {
-    copyAssets();
-    console.log("Assets copied successfully");
+};
 
-    // Touch a trigger file to signal electron-forge to restart
-    // This file is watched by Vite, triggering main process rebuild
-    // Skip in Docker/CI environments where the twig app doesn't exist
-    const triggerFile = resolve(
-      import.meta.dirname,
-      "../../apps/twig/src/main/.agent-trigger",
-    );
-    const triggerDir = resolve(import.meta.dirname, "../../apps/twig/src/main");
-    if (existsSync(triggerDir)) {
-      writeFileSync(triggerFile, `${Date.now()}`);
-    }
+export default defineConfig([
+  {
+    entry: [
+      "src/index.ts",
+      "src/agent.ts",
+      "src/gateway-models.ts",
+      "src/posthog-api.ts",
+      "src/types.ts",
+      "src/adapters/claude/questions/utils.ts",
+      "src/adapters/claude/permissions/permission-options.ts",
+      "src/adapters/claude/tools.ts",
+      "src/adapters/claude/conversion/tool-use-to-acp.ts",
+      "src/server/agent-server.ts",
+    ],
+    format: ["esm"],
+    dts: true,
+    clean: true,
+    ...sharedOptions,
+    onSuccess: async () => {
+      copyAssets();
+      console.log("Assets copied successfully");
+
+      // Touch a trigger file to signal electron-forge to restart
+      // This file is watched by Vite, triggering main process rebuild
+      // Skip in Docker/CI environments where the twig app doesn't exist
+      const triggerFile = resolve(
+        import.meta.dirname,
+        "../../apps/twig/src/main/.agent-trigger",
+      );
+      const triggerDir = resolve(
+        import.meta.dirname,
+        "../../apps/twig/src/main",
+      );
+      if (existsSync(triggerDir)) {
+        writeFileSync(triggerFile, `${Date.now()}`);
+      }
+    },
   },
-});
+  {
+    entry: { "server/bin": "src/server/bin.ts" },
+    format: ["cjs"],
+    dts: false,
+    clean: false,
+    ...sharedOptions,
+  },
+]);
