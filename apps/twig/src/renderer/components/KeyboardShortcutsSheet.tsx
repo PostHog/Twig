@@ -160,7 +160,10 @@ function SingleShortcutKeys({ keys }: { keys: string }) {
 function ShortcutKeys({
   keys,
   alternateKeys,
-}: { keys: string; alternateKeys?: string }) {
+}: {
+  keys: string;
+  alternateKeys?: string;
+}) {
   if (!alternateKeys) {
     return <SingleShortcutKeys keys={keys} />;
   }
