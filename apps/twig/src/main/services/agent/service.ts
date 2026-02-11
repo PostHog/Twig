@@ -176,6 +176,8 @@ interface SessionConfig {
   adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
+  /** Permission mode to use for the session */
+  permissionMode?: string;
 }
 
 interface ManagedSession {
@@ -420,6 +422,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sessionId: existingSessionId,
       adapter,
       additionalDirectories,
+      permissionMode,
     } = config;
 
     if (!isRetry) {
@@ -542,6 +545,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               taskRunId,
               ...(existingSessionId && { sessionId: existingSessionId }),
               systemPrompt,
+              ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -565,6 +569,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           _meta: {
             taskRunId,
             systemPrompt,
+            ...(permissionMode && { permissionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
                 options: { additionalDirectories },
@@ -1283,6 +1288,8 @@ For git operations while detached:
         "additionalDirectories" in params
           ? params.additionalDirectories
           : undefined,
+      permissionMode:
+        "permissionMode" in params ? params.permissionMode : undefined,
     };
   }
 
