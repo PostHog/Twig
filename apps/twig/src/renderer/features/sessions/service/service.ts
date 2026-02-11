@@ -366,7 +366,13 @@ export class SessionService {
           taskId,
           taskRunId,
         });
-        await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
+        await this.recreateSession(
+          taskRunId,
+          taskId,
+          taskTitle,
+          repoPath,
+          auth,
+        );
       }
     } catch (error) {
       const errorMessage =
