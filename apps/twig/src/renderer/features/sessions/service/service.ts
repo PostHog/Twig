@@ -11,6 +11,7 @@ import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
   getPersistedConfigOptions,
+  removePersistedConfigOptions,
   setPersistedConfigOptions,
   updatePersistedConfigOptionValue,
 } from "@features/sessions/stores/sessionConfigStore";
@@ -361,30 +362,45 @@ export class SessionService {
           }
         }
       } else {
-        // Reconnect returned null — agent process likely exited because the
-        // local Claude Code session no longer exists on disk.
-        // Fall back to starting a fresh session.
         log.warn("Reconnect returned null, falling back to new session", {
           taskId,
           taskRunId,
         });
-        this.unsubscribeFromChannel(taskRunId);
-        sessionStoreSetters.removeSession(taskRunId);
-        await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
+        await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
       }
     } catch (error) {
-      // Reconnect failed (e.g. agent process exited unexpectedly).
-      // Fall back to starting a fresh session.
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       log.warn("Reconnect failed, falling back to new session", {
         taskId,
         error: errorMessage,
       });
-      this.unsubscribeFromChannel(taskRunId);
-      sessionStoreSetters.removeSession(taskRunId);
-      await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
+      await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
     }
+  }
+
+  private async teardownSession(taskRunId: string): Promise<void> {
+    try {
+      await trpcVanilla.agent.cancel.mutate({ sessionId: taskRunId });
+    } catch {
+      // Best-effort — session may already be gone on the main process
+    }
+
+    this.unsubscribeFromChannel(taskRunId);
+    sessionStoreSetters.removeSession(taskRunId);
+    useSessionAdapterStore.getState().removeAdapter(taskRunId);
+    removePersistedConfigOptions(taskRunId);
+  }
+
+  private async recreateSession(
+    oldTaskRunId: string,
+    taskId: string,
+    taskTitle: string,
+    repoPath: string,
+    auth: AuthCredentials,
+  ): Promise<void> {
+    await this.teardownSession(oldTaskRunId);
+    await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
   }
 
   private async createNewLocalSession(
@@ -474,18 +490,7 @@ export class SessionService {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
-    try {
-      await trpcVanilla.agent.cancel.mutate({
-        sessionId: session.taskRunId,
-      });
-    } catch (error) {
-      log.error("Failed to cancel agent session", {
-        taskRunId: session.taskRunId,
-        error,
-      });
-    }
-    this.unsubscribeFromChannel(session.taskRunId);
-    sessionStoreSetters.removeSession(session.taskRunId);
+    await this.teardownSession(session.taskRunId);
   }
 
   // --- Preview Session Management ---
@@ -1244,28 +1249,7 @@ export class SessionService {
   async clearSessionError(taskId: string): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (session) {
-      // Cancel the agent session on the main process
-      try {
-        await trpcVanilla.agent.cancel.mutate({
-          sessionId: session.taskRunId,
-        });
-        log.info("Cancelled agent session for retry", {
-          taskId,
-          taskRunId: session.taskRunId,
-        });
-      } catch (error) {
-        log.warn("Failed to cancel agent session during error clear", {
-          taskId,
-          error,
-        });
-      }
-      this.unsubscribeFromChannel(session.taskRunId);
-      // Clear error state but keep the session and its events so the
-      // conversation remains visible while we reconnect.
-      sessionStoreSetters.updateSession(session.taskRunId, {
-        status: "disconnected",
-        errorMessage: undefined,
-      });
+      await this.teardownSession(session.taskRunId);
     }
     // Clear from connecting tasks as well
     this.connectingTasks.delete(taskId);
