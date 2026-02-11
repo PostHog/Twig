@@ -14,6 +14,7 @@ export type GitActionType =
   | "create-pr"
   | "view-pr"
   | "update-pr";
+export type FeedbackType = "good" | "bad" | "general";
 export type FileOpenSource = "sidebar" | "agent-suggestion" | "search" | "diff";
 export type FileChangeType = "added" | "modified" | "deleted";
 export type StopReason = "user_cancelled" | "completed" | "error" | "timeout";
@@ -160,6 +161,16 @@ export interface FirstTaskCompletedProperties {
   duration_seconds: number;
 }
 
+// Feedback events
+export interface TaskFeedbackProperties {
+  task_id: string;
+  task_run_id?: string;
+  log_url?: string;
+  event_count: number;
+  feedback_type: FeedbackType;
+  feedback_comment?: string;
+}
+
 // Event names as constants
 export const ANALYTICS_EVENTS = {
   // App lifecycle
@@ -203,6 +214,9 @@ export const ANALYTICS_EVENTS = {
 
   // Settings events
   SETTING_CHANGED: "Setting changed",
+
+  // Feedback events
+  TASK_FEEDBACK: "Task feedback",
 
   // Error events
   TASK_CREATION_FAILED: "Task creation failed",
@@ -248,6 +262,9 @@ export type EventPropertyMap = {
 
   // Settings events
   [ANALYTICS_EVENTS.SETTING_CHANGED]: SettingChangedProperties;
+
+  // Feedback events
+  [ANALYTICS_EVENTS.TASK_FEEDBACK]: TaskFeedbackProperties;
 
   // Error events
   [ANALYTICS_EVENTS.TASK_CREATION_FAILED]: TaskCreationFailedProperties;

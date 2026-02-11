@@ -11,7 +11,9 @@ interface SettingsSchema {
 }
 
 function getDefaultWorktreeLocation(): string {
-  return path.join(os.homedir(), WORKSPACES_DIR);
+  const isDev = !app.isPackaged;
+  const dir = isDev ? `${WORKSPACES_DIR}-dev` : WORKSPACES_DIR;
+  return path.join(os.homedir(), dir);
 }
 
 function getLegacyWorktreeLocations(): string[] {
@@ -73,6 +75,16 @@ export const settingsStore = new Store<SettingsSchema>({
 function migrateWorktreeSetting(): void {
   const stored = settingsStore.get("worktreeLocation");
   const newDefault = getDefaultWorktreeLocation();
+
+  // If dev still points to the shared prod workspaces path, update to dev-specific path
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    const sharedPath = path.join(os.homedir(), WORKSPACES_DIR);
+    if (stored === sharedPath) {
+      settingsStore.set("worktreeLocation", newDefault);
+      return;
+    }
+  }
 
   // If user had a legacy default, update to new default
   for (const legacyPath of getLegacyWorktreeLocations()) {

@@ -16,9 +16,15 @@ export interface SessionLogWriterOptions {
   logger?: Logger;
 }
 
+interface ChunkBuffer {
+  text: string;
+  firstTimestamp: string;
+}
+
 interface SessionState {
   context: SessionContext;
   otelWriter?: OtelLogWriter;
+  chunkBuffer?: ChunkBuffer;
 }
 
 export class SessionLogWriter {
@@ -75,9 +81,28 @@ export class SessionLogWriter {
 
     try {
       const message = JSON.parse(line);
+      const timestamp = new Date().toISOString();
+
+      // Check if this is an agent_message_chunk event
+      if (this.isAgentMessageChunk(message)) {
+        const text = this.extractChunkText(message);
+        if (text) {
+          if (!session.chunkBuffer) {
+            session.chunkBuffer = { text, firstTimestamp: timestamp };
+          } else {
+            session.chunkBuffer.text += text;
+          }
+        }
+        // Don't emit chunk events
+        return;
+      }
+
+      // Non-chunk event: flush any buffered chunks first
+      this.emitCoalescedMessage(sessionId, session);
+
       const entry: StoredNotification = {
         type: "notification",
-        timestamp: new Date().toISOString(),
+        timestamp,
         notification: message,
       };
 
@@ -103,6 +128,9 @@ export class SessionLogWriter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
+    // Emit any buffered chunks before flushing
+    this.emitCoalescedMessage(sessionId, session);
+
     if (session.otelWriter) {
       await session.otelWriter.flush();
     }
@@ -125,6 +153,58 @@ export class SessionLogWriter {
       );
     } catch (error) {
       this.logger.error("Failed to persist session logs:", error);
+    }
+  }
+
+  private isAgentMessageChunk(message: Record<string, unknown>): boolean {
+    if (message.method !== "session/update") return false;
+    const params = message.params as Record<string, unknown> | undefined;
+    const update = params?.update as Record<string, unknown> | undefined;
+    return update?.sessionUpdate === "agent_message_chunk";
+  }
+
+  private extractChunkText(message: Record<string, unknown>): string {
+    const params = message.params as Record<string, unknown> | undefined;
+    const update = params?.update as Record<string, unknown> | undefined;
+    const content = update?.content as
+      | { type: string; text?: string }
+      | undefined;
+    if (content?.type === "text" && content.text) {
+      return content.text;
+    }
+    return "";
+  }
+
+  private emitCoalescedMessage(sessionId: string, session: SessionState): void {
+    if (!session.chunkBuffer) return;
+
+    const { text, firstTimestamp } = session.chunkBuffer;
+    session.chunkBuffer = undefined;
+
+    const entry: StoredNotification = {
+      type: "notification",
+      timestamp: firstTimestamp,
+      notification: {
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "agent_message",
+            content: { type: "text", text },
+          },
+        },
+      },
+    };
+
+    if (session.otelWriter) {
+      session.otelWriter.emit({ notification: entry });
+    }
+
+    if (this.posthogAPI) {
+      const pending = this.pendingEntries.get(sessionId) ?? [];
+      pending.push(entry);
+      this.pendingEntries.set(sessionId, pending);
+      this.scheduleFlush(sessionId);
     }
   }
 

@@ -11,6 +11,7 @@ import {
   type RequestPermissionResponse,
   type SessionConfigOption,
 } from "@agentclientprotocol/sdk";
+import { isMcpToolReadOnly } from "@posthog/agent";
 import { Agent } from "@posthog/agent/agent";
 import {
   fetchGatewayModels,
@@ -175,6 +176,8 @@ interface SessionConfig {
   adapter?: "claude" | "codex";
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories?: string[];
+  /** Permission mode to use for the session */
+  permissionMode?: string;
 }
 
 interface ManagedSession {
@@ -419,6 +422,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       sessionId: existingSessionId,
       adapter,
       additionalDirectories,
+      permissionMode,
     } = config;
 
     if (!isRetry) {
@@ -537,6 +541,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               taskRunId,
               ...(existingSessionId && { sessionId: existingSessionId }),
               systemPrompt,
+              ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
                 claudeCode: {
                   options: { additionalDirectories },
@@ -560,6 +565,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           _meta: {
             taskRunId,
             systemPrompt,
+            ...(permissionMode && { permissionMode }),
             ...(additionalDirectories?.length && {
               claudeCode: {
                 options: { additionalDirectories },
@@ -1055,6 +1061,22 @@ For git operations while detached:
           optionCount: params.options.length,
         });
 
+        if (toolName && isMcpToolReadOnly(toolName)) {
+          log.info("Auto-approving read-only MCP tool", {
+            taskRunId,
+            toolName,
+          });
+          const allowOption = params.options.find(
+            (o) => o.kind === "allow_once" || o.kind === "allow_always",
+          );
+          return {
+            outcome: {
+              outcome: "selected",
+              optionId: allowOption?.optionId ?? params.options[0].optionId,
+            },
+          };
+        }
+
         // If we have a toolCallId, always prompt the user for permission.
         // The claude.ts adapter only calls requestPermission when user input is needed.
         // (It handles auto-approve internally for acceptEdits/bypassPermissions modes)
@@ -1262,6 +1284,8 @@ For git operations while detached:
         "additionalDirectories" in params
           ? params.additionalDirectories
           : undefined,
+      permissionMode:
+        "permissionMode" in params ? params.permissionMode : undefined,
     };
   }
 

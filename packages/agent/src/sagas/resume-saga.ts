@@ -244,7 +244,30 @@ export class ResumeSaga extends Saga<ResumeInput, ResumeOutput> {
             break;
           }
 
+          case "agent_message": {
+            const content = update.content as ContentBlock | undefined;
+            if (content) {
+              if (
+                content.type === "text" &&
+                currentAssistantContent.length > 0 &&
+                currentAssistantContent[currentAssistantContent.length - 1]
+                  .type === "text"
+              ) {
+                const lastBlock = currentAssistantContent[
+                  currentAssistantContent.length - 1
+                ] as { type: "text"; text: string };
+                lastBlock.text += (
+                  content as { type: "text"; text: string }
+                ).text;
+              } else {
+                currentAssistantContent.push(content);
+              }
+            }
+            break;
+          }
+
           case "agent_message_chunk": {
+            // Backward compatibility with older logs that have individual chunks
             const content = update.content as ContentBlock | undefined;
             if (content) {
               if (

@@ -1,6 +1,6 @@
 {
   "name": "@posthog/agent",
-  "version": "2.0.0",
+  "version": "0.0.0-dev",
   "repository": "https://github.com/PostHog/twig",
   "description": "TypeScript agent framework wrapping Claude Agent SDK with Git-based task execution for PostHog",
   "exports": {
@@ -46,7 +46,7 @@
     }
   },
   "bin": {
-    "agent-server": "./dist/server/bin.js"
+    "agent-server": "./dist/server/bin.cjs"
   },
   "type": "module",
   "keywords": [
@@ -75,6 +75,8 @@
     "@types/bun": "latest",
     "@types/tar": "^6.1.13",
     "minimatch": "^10.0.3",
+    "@posthog/shared": "workspace:*",
+    "@twig/git": "workspace:*",
     "msw": "^2.12.7",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
@@ -92,8 +94,6 @@
     "@anthropic-ai/sdk": "^0.71.0",
     "@hono/node-server": "^1.19.9",
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "@posthog/shared": "workspace:*",
-    "@twig/git": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "commander": "^14.0.2",
     "diff": "^8.0.2",

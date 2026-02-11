@@ -136,7 +136,8 @@ export class SessionService {
   }
 
   private async doConnect(params: ConnectParams): Promise<void> {
-    const { task, repoPath, initialPrompt, executionMode, adapter } = params;
+    const { task, repoPath, initialPrompt, executionMode, adapter, model } =
+      params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
 
@@ -212,6 +213,7 @@ export class SessionService {
           initialPrompt,
           executionMode,
           adapter,
+          model,
         );
       }
     } catch (error) {
@@ -273,6 +275,11 @@ export class SessionService {
     this.subscribeToChannel(taskRunId);
 
     try {
+      const persistedMode = getConfigOptionByCategory(
+        persistedConfigOptions,
+        "mode",
+      )?.currentValue;
+
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -283,6 +290,7 @@ export class SessionService {
         logUrl,
         sessionId,
         adapter: resolvedAdapter,
+        permissionMode: persistedMode,
       });
 
       if (result) {
@@ -357,6 +365,7 @@ export class SessionService {
     initialPrompt?: ContentBlock[],
     executionMode?: ExecutionMode,
     adapter?: "claude" | "codex",
+    model?: string,
   ): Promise<void> {
     if (!auth.client) {
       throw new Error("Unable to reach server. Please check your connection.");
@@ -405,8 +414,9 @@ export class SessionService {
       execution_type: "local",
     });
 
-    // Set the user's preferred model if available
-    const preferredModel = useModelsStore.getState().getEffectiveModel();
+    // Set the model - use passed model if provided, otherwise use store's effective model
+    const preferredModel =
+      model ?? useModelsStore.getState().getEffectiveModel();
     if (preferredModel) {
       await this.setSessionConfigOptionByCategory(
         taskId,

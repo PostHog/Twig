@@ -77,6 +77,42 @@ export function GlobalEventHandlers({
     [visualTaskOrder, taskById, navigateToTask, navigateToTaskInput],
   );
 
+  const handlePrevTask = useCallback(() => {
+    if (visualTaskOrder.length === 0) return;
+    if (view.type !== "task-detail" || !view.data) {
+      const lastTaskData = visualTaskOrder[visualTaskOrder.length - 1];
+      const task = lastTaskData ? taskById.get(lastTaskData.id) : undefined;
+      if (task) navigateToTask(task);
+      return;
+    }
+    const currentIndex = visualTaskOrder.findIndex(
+      (t) => t.id === view.data?.id,
+    );
+    const prevIndex =
+      currentIndex <= 0 ? visualTaskOrder.length - 1 : currentIndex - 1;
+    const prevTaskData = visualTaskOrder[prevIndex];
+    const task = prevTaskData ? taskById.get(prevTaskData.id) : undefined;
+    if (task) navigateToTask(task);
+  }, [visualTaskOrder, taskById, navigateToTask, view]);
+
+  const handleNextTask = useCallback(() => {
+    if (visualTaskOrder.length === 0) return;
+    if (view.type !== "task-detail" || !view.data) {
+      const firstTaskData = visualTaskOrder[0];
+      const task = firstTaskData ? taskById.get(firstTaskData.id) : undefined;
+      if (task) navigateToTask(task);
+      return;
+    }
+    const currentIndex = visualTaskOrder.findIndex(
+      (t) => t.id === view.data?.id,
+    );
+    const nextIndex =
+      currentIndex >= visualTaskOrder.length - 1 ? 0 : currentIndex + 1;
+    const nextTaskData = visualTaskOrder[nextIndex];
+    const task = nextTaskData ? taskById.get(nextTaskData.id) : undefined;
+    if (task) navigateToTask(task);
+  }, [visualTaskOrder, taskById, navigateToTask, view]);
+
   const handleOpenSettings = useCallback(() => {
     openSettingsDialog();
   }, [openSettingsDialog]);
@@ -120,6 +156,12 @@ export function GlobalEventHandlers({
   useHotkeys(SHORTCUTS.TOGGLE_LEFT_SIDEBAR, toggleLeftSidebar, globalOptions);
   useHotkeys(SHORTCUTS.TOGGLE_RIGHT_SIDEBAR, toggleRightSidebar, globalOptions);
   useHotkeys(SHORTCUTS.SHORTCUTS_SHEET, onToggleShortcutsSheet, globalOptions);
+  useHotkeys(SHORTCUTS.PREV_TASK, handlePrevTask, globalOptions, [
+    handlePrevTask,
+  ]);
+  useHotkeys(SHORTCUTS.NEXT_TASK, handleNextTask, globalOptions, [
+    handleNextTask,
+  ]);
 
   useHotkeys(
     SHORTCUTS.TOGGLE_FOCUS,

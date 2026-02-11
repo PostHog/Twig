@@ -13,12 +13,14 @@ import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { Box } from "@radix-ui/themes";
+import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
+import { ANALYTICS_EVENTS, type FeedbackType } from "@/types/analytics";
 
 const log = logger.scope("task-logs-panel");
 
@@ -108,6 +110,30 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
+      const feedbackMatch = text.match(/^\/(good|bad|feedback)(?:\s+(.*))?$/);
+      if (feedbackMatch) {
+        const rawType = feedbackMatch[1];
+        const feedbackType: FeedbackType =
+          rawType === "feedback" ? "general" : (rawType as FeedbackType);
+        const comment = feedbackMatch[2]?.trim() || undefined;
+        track(ANALYTICS_EVENTS.TASK_FEEDBACK, {
+          task_id: taskId,
+          task_run_id: session?.taskRunId ?? task.latest_run?.id,
+          log_url: session?.logUrl ?? task.latest_run?.log_url,
+          event_count: events.length,
+          feedback_type: feedbackType,
+          feedback_comment: comment,
+        });
+        const label =
+          feedbackType === "good"
+            ? "Positive"
+            : feedbackType === "bad"
+              ? "Negative"
+              : "General";
+        toast.success(`${label} feedback captured`);
+        return;
+      }
+
       try {
         markAsViewed(taskId);
 
@@ -129,7 +155,16 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
         log.error("Failed to send prompt", error);
       }
     },
-    [taskId, markActivity, markAsViewed],
+    [
+      taskId,
+      markActivity,
+      markAsViewed,
+      events.length,
+      session?.logUrl,
+      session?.taskRunId,
+      task.latest_run?.id,
+      task.latest_run?.log_url,
+    ],
   );
 
   const handleCancelPrompt = useCallback(async () => {
