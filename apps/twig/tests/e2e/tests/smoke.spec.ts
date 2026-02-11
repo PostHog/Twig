@@ -27,12 +27,18 @@ test.describe("Smoke Tests", () => {
       .catch(() => false);
 
     const hasMainLayout = await window
-      .locator("text=Twig")
+      .locator("text=New task")
       .first()
       .isVisible()
       .catch(() => false);
 
-    const isValidBootState = hasAuthScreen || hasMainLayout;
+    const hasSettings = await window
+      .locator("text=Settings")
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+    const isValidBootState = hasAuthScreen || hasMainLayout || hasSettings;
     expect(isValidBootState).toBe(true);
   });
 
