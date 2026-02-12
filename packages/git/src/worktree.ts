@@ -8,6 +8,7 @@ import {
   getDefaultBranch,
   listWorktrees as listWorktreesRaw,
 } from "./queries.js";
+import { safeSymlink } from "./utils.js";
 
 export interface WorktreeInfo {
   worktreePath: string;
@@ -370,32 +371,26 @@ export class WorktreeManager {
     const sourceClaudeDir = path.join(this.mainRepoPath, ".claude");
     const targetClaudeDir = path.join(worktreePath, ".claude");
 
-    try {
-      await fs.access(sourceClaudeDir);
-      try {
-        await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
-        await addToLocalExclude(worktreePath, ".claude");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-          throw error;
-        }
-      }
-    } catch {}
+    const linkedDir = await safeSymlink(
+      sourceClaudeDir,
+      targetClaudeDir,
+      "dir",
+    );
+    if (linkedDir) {
+      await addToLocalExclude(worktreePath, ".claude");
+    }
 
     const sourceClaudeLocalMd = path.join(this.mainRepoPath, "CLAUDE.local.md");
     const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
 
-    try {
-      await fs.access(sourceClaudeLocalMd);
-      try {
-        await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
-        await addToLocalExclude(worktreePath, "CLAUDE.local.md");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-          throw error;
-        }
-      }
-    } catch {}
+    const linkedFile = await safeSymlink(
+      sourceClaudeLocalMd,
+      targetClaudeLocalMd,
+      "file",
+    );
+    if (linkedFile) {
+      await addToLocalExclude(worktreePath, "CLAUDE.local.md");
+    }
   }
 
   async cleanupOrphanedWorktrees(associatedWorktreePaths: string[]): Promise<{
