@@ -36,6 +36,7 @@ export interface TaskGroup {
 
 export interface SidebarData {
   isHomeActive: boolean;
+  isInboxActive: boolean;
   isLoading: boolean;
   activeTaskId: string | null;
   pinnedTasks: TaskData[];
@@ -46,7 +47,7 @@ export interface SidebarData {
 }
 
 interface ViewState {
-  type: "task-detail" | "task-input" | "settings" | "folder-settings";
+  type: "task-detail" | "task-input" | "settings" | "folder-settings" | "inbox";
   data?: Task;
 }
 
@@ -126,6 +127,7 @@ export function useSidebarData({
   const folderOrder = useSidebarStore((state) => state.folderOrder);
 
   const isHomeActive = activeView.type === "task-input";
+  const isInboxActive = activeView.type === "inbox";
 
   const activeTaskId =
     activeView.type === "task-detail" && activeView.data
@@ -210,6 +212,7 @@ export function useSidebarData({
 
   return {
     isHomeActive,
+    isInboxActive,
     isLoading,
     activeTaskId,
     pinnedTasks,

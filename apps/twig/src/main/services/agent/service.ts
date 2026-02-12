@@ -442,13 +442,16 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
     this.setupEnvironment(credentials, mockNodeDir);
 
+    // Preview sessions don't persist logs — no real task exists
+    const isPreview = taskId === "__preview__";
+
     // OTEL log pipeline or legacy S3 writer if FF false
-    const useOtelPipeline = await this.isFeatureFlagEnabled(
-      "twig-agent-logs-pipeline",
-    );
+    const useOtelPipeline = isPreview
+      ? false
+      : await this.isFeatureFlagEnabled("twig-agent-logs-pipeline");
 
     log.info("Agent log transport", {
-      transport: useOtelPipeline ? "otel" : "s3",
+      transport: isPreview ? "none" : useOtelPipeline ? "otel" : "s3",
       taskId,
       taskRunId,
     });
@@ -466,6 +469,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             logsPath: "/i/v1/agent-logs",
           }
         : undefined,
+      skipLogPersistence: isPreview,
       debug: !app.isPackaged,
       onLog: onAgentLog,
     });

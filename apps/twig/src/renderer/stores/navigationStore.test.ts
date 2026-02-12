@@ -95,6 +95,13 @@ describe("navigationStore", () => {
         folderId: "folder-123",
       });
     });
+
+    it("navigates to inbox", () => {
+      getStore().navigateToInbox();
+      expect(getView()).toMatchObject({
+        type: "inbox",
+      });
+    });
   });
 
   describe("history", () => {
