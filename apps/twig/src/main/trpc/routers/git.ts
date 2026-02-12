@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
@@ -11,6 +12,7 @@ import {
   detectRepoInput,
   detectRepoOutput,
   discardFileChangesInput,
+  discardFileChangesOutput,
   generateCommitMessageInput,
   generateCommitMessageOutput,
   generatePrTitleAndBodyInput,
@@ -31,7 +33,6 @@ import {
   getFileAtHeadOutput,
   getGitRepoInfoInput,
   getGitRepoInfoOutput,
-  getGitSyncStatusInput,
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
@@ -137,6 +138,7 @@ export const gitRouter = router({
 
   discardFileChanges: publicProcedure
     .input(discardFileChangesInput)
+    .output(discardFileChangesOutput)
     .mutation(({ input }) =>
       getService().discardFileChanges(
         input.directoryPath,
@@ -147,9 +149,16 @@ export const gitRouter = router({
 
   // Sync status operations
   getGitSyncStatus: publicProcedure
-    .input(getGitSyncStatusInput)
+    .input(
+      z.object({
+        directoryPath: z.string(),
+        forceRefresh: z.boolean().optional(),
+      }),
+    )
     .output(getGitSyncStatusOutput)
-    .query(({ input }) => getService().getGitSyncStatus(input.directoryPath)),
+    .query(({ input }) =>
+      getService().getGitSyncStatus(input.directoryPath, input.forceRefresh),
+    ),
 
   // Commit/repo info operations
   getLatestCommit: publicProcedure

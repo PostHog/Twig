@@ -39,12 +39,14 @@ import type {
   CreatePrOutput,
   DetectRepoResult,
   DiffStats,
+  DiscardFileChangesOutput,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
   GhStatusOutput,
   GitCommitInfo,
   GitFileStatus,
   GitRepoInfo,
+  GitStateSnapshot,
   GitSyncStatus,
   OpenPrOutput,
   PrStatusOutput,
@@ -79,6 +81,70 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
   ) {
     super();
     this.llmGateway = llmGateway;
+  }
+
+  private async getStateSnapshot(
+    directoryPath: string,
+    options?: {
+      includeChangedFiles?: boolean;
+      includeDiffStats?: boolean;
+      includeSyncStatus?: boolean;
+      includeLatestCommit?: boolean;
+      includePrStatus?: boolean;
+      forceRefresh?: boolean;
+    },
+  ): Promise<GitStateSnapshot> {
+    const {
+      includeChangedFiles = true,
+      includeDiffStats = true,
+      includeSyncStatus = true,
+      includeLatestCommit = true,
+      includePrStatus = false,
+    } = options ?? {};
+
+    const results = await Promise.allSettled([
+      includeChangedFiles ? this.getChangedFilesHead(directoryPath) : null,
+      includeDiffStats ? this.getDiffStats(directoryPath) : null,
+      includeSyncStatus
+        ? this.getGitSyncStatusInternal(directoryPath, true)
+        : null,
+      includeLatestCommit ? this.getLatestCommit(directoryPath) : null,
+      includePrStatus ? this.getPrStatus(directoryPath) : null,
+    ]);
+
+    const getValue = <T>(r: PromiseSettledResult<T | null>): T | undefined =>
+      r.status === "fulfilled" && r.value !== null ? r.value : undefined;
+
+    return {
+      changedFiles: getValue(results[0]),
+      diffStats: getValue(results[1]),
+      syncStatus: getValue(results[2]),
+      latestCommit: getValue(results[3]),
+      prStatus: getValue(results[4]),
+    };
+  }
+
+  private async getGitSyncStatusInternal(
+    directoryPath: string,
+    forceRefresh = false,
+  ): Promise<GitSyncStatus> {
+    const now = Date.now();
+    const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
+    if (forceRefresh || now - lastFetch > FETCH_THROTTLE_MS) {
+      try {
+        await gitFetch(directoryPath);
+        this.lastFetchTime.set(directoryPath, now);
+      } catch {}
+    }
+
+    const status = await getSyncStatus(directoryPath);
+    return {
+      ahead: status.ahead,
+      behind: status.behind,
+      hasRemote: status.hasRemote,
+      currentBranch: status.currentBranch,
+      isFeatureBranch: status.isFeatureBranch,
+    };
   }
 
   public async detectRepo(
@@ -203,34 +269,30 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     directoryPath: string,
     filePath: string,
     fileStatus: GitFileStatus,
-  ): Promise<void> {
+  ): Promise<DiscardFileChangesOutput> {
     const saga = new DiscardFileChangesSaga();
     const result = await saga.run({
       baseDir: directoryPath,
       filePath,
       fileStatus,
     });
-    if (!result.success) throw new Error(result.error);
-  }
-
-  public async getGitSyncStatus(directoryPath: string): Promise<GitSyncStatus> {
-    const now = Date.now();
-    const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
-    if (now - lastFetch > FETCH_THROTTLE_MS) {
-      try {
-        await gitFetch(directoryPath);
-        this.lastFetchTime.set(directoryPath, now);
-      } catch {}
+    if (!result.success) {
+      return { success: false };
     }
 
-    const status = await getSyncStatus(directoryPath);
-    return {
-      ahead: status.ahead,
-      behind: status.behind,
-      hasRemote: status.hasRemote,
-      currentBranch: status.currentBranch,
-      isFeatureBranch: status.isFeatureBranch,
-    };
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeSyncStatus: false,
+      includeLatestCommit: false,
+    });
+
+    return { success: true, state };
+  }
+
+  public async getGitSyncStatus(
+    directoryPath: string,
+    forceRefresh = false,
+  ): Promise<GitSyncStatus> {
+    return this.getGitSyncStatusInternal(directoryPath, forceRefresh);
   }
 
   public async getLatestCommit(
@@ -293,9 +355,17 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     if (!result.success) {
       return { success: false, message: result.error };
     }
+
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeChangedFiles: false,
+      includeDiffStats: false,
+      includeLatestCommit: false,
+    });
+
     return {
       success: true,
       message: `Pushed ${result.data.branch} to ${result.data.remote}`,
+      state,
     };
   }
 
@@ -313,10 +383,14 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     if (!result.success) {
       return { success: false, message: result.error };
     }
+
+    const state = await this.getStateSnapshot(directoryPath);
+
     return {
       success: true,
       message: `${result.data.changes} files changed`,
       updatedFiles: result.data.changes,
+      state,
     };
   }
 
@@ -329,8 +403,18 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       return { success: false, message: "No branch to publish", branch: "" };
     }
 
-    const result = await this.push(directoryPath, remote, currentBranch, true);
-    return { ...result, branch: currentBranch };
+    const pushResult = await this.push(
+      directoryPath,
+      remote,
+      currentBranch,
+      true,
+    );
+    return {
+      success: pushResult.success,
+      message: pushResult.message,
+      branch: currentBranch,
+      state: pushResult.state,
+    };
   }
 
   public async sync(
@@ -347,10 +431,14 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     }
 
     const pushResult = await this.push(directoryPath, remote);
+
+    const state = await this.getStateSnapshot(directoryPath);
+
     return {
       success: pushResult.success,
       pullMessage: pullResult.message,
       pushMessage: pushResult.message,
+      state,
     };
   }
 
@@ -408,11 +496,14 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
 
     if (!result.success) return fail(result.error);
 
+    const state = await this.getStateSnapshot(directoryPath);
+
     return {
       success: true,
       message: `Committed ${result.data.commitSha.slice(0, 7)}`,
       commitSha: result.data.commitSha,
       branch: result.data.branch,
+      state,
     };
   }
 
@@ -541,10 +632,20 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     }
 
     const prUrlMatch = result.stdout.match(/https:\/\/github\.com\/[^\s]+/);
+    const prUrl = prUrlMatch?.[0] ?? null;
+
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeChangedFiles: false,
+      includeDiffStats: false,
+      includeLatestCommit: false,
+      includePrStatus: true,
+    });
+
     return {
       success: true,
       message: "Pull request created",
-      prUrl: prUrlMatch?.[0] ?? null,
+      prUrl,
+      state,
     };
   }
 

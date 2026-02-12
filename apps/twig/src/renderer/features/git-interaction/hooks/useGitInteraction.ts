@@ -10,6 +10,7 @@ import type {
   GitMenuAction,
   GitMenuActionId,
 } from "@features/git-interaction/types";
+import { updateGitCacheFromSnapshot } from "@features/git-interaction/utils/updateGitCache";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
@@ -115,13 +116,6 @@ export function useGitInteraction(
       git.prStatus,
     ],
   );
-
-  const invalidate = (...keys: string[]) =>
-    Promise.all(
-      keys.map((k) =>
-        queryClient.invalidateQueries({ queryKey: [k, repoPath] }),
-      ),
-    );
 
   const openCreatePr = async () => {
     modal.openPr("", "");
@@ -259,7 +253,10 @@ export function useGitInteraction(
       }
 
       trackGitAction(taskId, "commit", true);
-      await invalidate("changed-files-head", "git-sync-status");
+
+      if (result.state) {
+        updateGitCacheFromSnapshot(queryClient, repoPath, result.state);
+      }
 
       modal.setCommitMessage("");
       modal.closeCommit();
@@ -306,7 +303,11 @@ export function useGitInteraction(
       }
 
       trackGitAction(taskId, store.pushMode, true);
-      await invalidate("git-sync-status");
+
+      if (result.state) {
+        updateGitCacheFromSnapshot(queryClient, repoPath, result.state);
+      }
+
       modal.setPushState("success");
 
       if (store.openPrAfterPush) {
@@ -347,7 +348,10 @@ export function useGitInteraction(
           );
           return;
         }
-        await invalidate("git-sync-status");
+
+        if (pushResult.state) {
+          updateGitCacheFromSnapshot(queryClient, repoPath, pushResult.state);
+        }
       }
 
       const result = await trpcVanilla.git.createPr.mutate({
@@ -364,7 +368,11 @@ export function useGitInteraction(
 
       trackGitAction(taskId, "create-pr", true);
       track(ANALYTICS_EVENTS.PR_CREATED, { task_id: taskId, success: true });
-      await invalidate("git-pr-status");
+
+      if (result.state) {
+        updateGitCacheFromSnapshot(queryClient, repoPath, result.state);
+      }
+
       await trpcVanilla.os.openExternal.mutate({ url: result.prUrl });
       modal.closePr();
     } finally {

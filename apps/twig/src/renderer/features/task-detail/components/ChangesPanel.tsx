@@ -2,6 +2,7 @@ import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
 import { useGitQueries } from "@features/git-interaction/hooks/useGitQueries";
+import { updateGitCacheFromSnapshot } from "@features/git-interaction/utils/updateGitCache";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -186,7 +187,7 @@ function ChangedFileItem({
 
     const { message, action } = getDiscardInfo(file, fileName);
 
-    const result = await showMessageBox({
+    const dialogResult = await showMessageBox({
       type: "warning",
       title: "Discard changes",
       message,
@@ -195,19 +196,19 @@ function ChangedFileItem({
       cancelId: 0,
     });
 
-    if (result.response !== 1) return;
+    if (dialogResult.response !== 1) return;
 
-    await trpcVanilla.git.discardFileChanges.mutate({
+    const discardResult = await trpcVanilla.git.discardFileChanges.mutate({
       directoryPath: repoPath,
-      filePath: file.originalPath ?? file.path, // For renames, use the original path
+      filePath: file.originalPath ?? file.path,
       fileStatus: file.status,
     });
 
     closeDiffTabsForFile(taskId, file.path);
 
-    queryClient.invalidateQueries({
-      queryKey: ["changed-files-head", repoPath],
-    });
+    if (discardResult.state) {
+      updateGitCacheFromSnapshot(queryClient, repoPath, discardResult.state);
+    }
   };
 
   const hasLineStats =

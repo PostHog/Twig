@@ -168,13 +168,7 @@ export const pushInput = z.object({
   setUpstream: z.boolean().default(false),
 });
 
-export const pushOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-});
-
 export type PushInput = z.infer<typeof pushInput>;
-export type PushOutput = z.infer<typeof pushOutput>;
 
 // Pull operation
 export const pullInput = z.object({
@@ -183,14 +177,7 @@ export const pullInput = z.object({
   branch: z.string().optional(),
 });
 
-export const pullOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  updatedFiles: z.number().optional(),
-});
-
 export type PullInput = z.infer<typeof pullInput>;
-export type PullOutput = z.infer<typeof pullOutput>;
 
 // Commit operation
 export const commitInput = z.object({
@@ -200,15 +187,7 @@ export const commitInput = z.object({
   allowEmpty: z.boolean().optional(),
 });
 
-export const commitOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  commitSha: z.string().nullable(),
-  branch: z.string().nullable(),
-});
-
 export type CommitInput = z.infer<typeof commitInput>;
-export type CommitOutput = z.infer<typeof commitOutput>;
 
 // GitHub CLI status
 export const ghStatusOutput = z.object({
@@ -248,14 +227,7 @@ export const createPrInput = z.object({
   draft: z.boolean().optional(),
 });
 
-export const createPrOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  prUrl: z.string().nullable(),
-});
-
 export type CreatePrInput = z.infer<typeof createPrInput>;
-export type CreatePrOutput = z.infer<typeof createPrOutput>;
 
 // Open PR operation
 export const openPrInput = directoryPathInput;
@@ -274,14 +246,7 @@ export const publishInput = z.object({
   remote: z.string().default("origin"),
 });
 
-export const publishOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  branch: z.string(),
-});
-
 export type PublishInput = z.infer<typeof publishInput>;
-export type PublishOutput = z.infer<typeof publishOutput>;
 
 // Sync (pull then push) operation
 export const syncInput = z.object({
@@ -289,14 +254,7 @@ export const syncInput = z.object({
   remote: z.string().default("origin"),
 });
 
-export const syncOutput = z.object({
-  success: z.boolean(),
-  pullMessage: z.string(),
-  pushMessage: z.string(),
-});
-
 export type SyncInput = z.infer<typeof syncInput>;
-export type SyncOutput = z.infer<typeof syncOutput>;
 
 // PR Template lookup
 export const getPrTemplateInput = directoryPathInput;
@@ -348,3 +306,74 @@ export const generatePrTitleAndBodyOutput = z.object({
   title: z.string(),
   body: z.string(),
 });
+
+export const gitStateSnapshotSchema = z.object({
+  changedFiles: z.array(changedFileSchema).optional(),
+  diffStats: diffStatsSchema.optional(),
+  syncStatus: gitSyncStatusSchema.optional(),
+  latestCommit: gitCommitInfoSchema.nullable().optional(),
+  prStatus: prStatusOutput.optional(),
+});
+
+export type GitStateSnapshot = z.infer<typeof gitStateSnapshotSchema>;
+
+export const commitOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  commitSha: z.string().nullable(),
+  branch: z.string().nullable(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type CommitOutput = z.infer<typeof commitOutput>;
+
+export const pushOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PushOutput = z.infer<typeof pushOutput>;
+
+export const pullOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  updatedFiles: z.number().optional(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PullOutput = z.infer<typeof pullOutput>;
+
+export const publishOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  branch: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PublishOutput = z.infer<typeof publishOutput>;
+
+export const syncOutput = z.object({
+  success: z.boolean(),
+  pullMessage: z.string(),
+  pushMessage: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type SyncOutput = z.infer<typeof syncOutput>;
+
+export const createPrOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  prUrl: z.string().nullable(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type CreatePrOutput = z.infer<typeof createPrOutput>;
+
+export const discardFileChangesOutput = z.object({
+  success: z.boolean(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type DiscardFileChangesOutput = z.infer<typeof discardFileChangesOutput>;

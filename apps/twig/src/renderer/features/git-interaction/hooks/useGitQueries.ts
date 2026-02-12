@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 
 const EMPTY_DIFF_STATS = { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
 
+const GIT_QUERY_DEFAULTS = {
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+} as const;
+
 export function useGitQueries(repoPath?: string) {
   const enabled = !!repoPath;
 
@@ -11,6 +16,7 @@ export function useGitQueries(repoPath?: string) {
     queryFn: () =>
       trpcVanilla.git.validateRepo.query({ directoryPath: repoPath as string }),
     enabled,
+    ...GIT_QUERY_DEFAULTS,
   });
 
   const repoEnabled = enabled && isRepo;
@@ -22,8 +28,8 @@ export function useGitQueries(repoPath?: string) {
         directoryPath: repoPath as string,
       }),
     enabled: repoEnabled,
+    ...GIT_QUERY_DEFAULTS,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
     placeholderData: (prev) => prev,
   });
 
@@ -34,6 +40,7 @@ export function useGitQueries(repoPath?: string) {
         directoryPath: repoPath as string,
       }),
     enabled: repoEnabled,
+    ...GIT_QUERY_DEFAULTS,
     placeholderData: (prev) => prev ?? EMPTY_DIFF_STATS,
   });
 
@@ -44,8 +51,8 @@ export function useGitQueries(repoPath?: string) {
         directoryPath: repoPath as string,
       }),
     enabled: repoEnabled,
-    staleTime: 60000,
-    refetchInterval: 120000,
+    ...GIT_QUERY_DEFAULTS,
+    refetchInterval: 60_000,
   });
 
   const { data: repoInfo } = useQuery({
@@ -55,13 +62,16 @@ export function useGitQueries(repoPath?: string) {
         directoryPath: repoPath as string,
       }),
     enabled: repoEnabled,
+    ...GIT_QUERY_DEFAULTS,
+    staleTime: 60_000,
   });
 
   const { data: ghStatus } = useQuery({
     queryKey: ["git-gh-status"],
     queryFn: () => trpcVanilla.git.getGhStatus.query(),
     enabled,
-    staleTime: 300000,
+    ...GIT_QUERY_DEFAULTS,
+    staleTime: 60_000,
   });
 
   const currentBranch = syncStatus?.currentBranch ?? null;
@@ -71,7 +81,7 @@ export function useGitQueries(repoPath?: string) {
     queryFn: () =>
       trpcVanilla.git.getPrStatus.query({ directoryPath: repoPath as string }),
     enabled: repoEnabled && !!ghStatus?.installed && !!currentBranch,
-    staleTime: 60000,
+    ...GIT_QUERY_DEFAULTS,
   });
 
   const { data: latestCommit } = useQuery({
@@ -81,6 +91,7 @@ export function useGitQueries(repoPath?: string) {
         directoryPath: repoPath as string,
       }),
     enabled: repoEnabled,
+    ...GIT_QUERY_DEFAULTS,
   });
 
   const hasChanges = changedFiles.length > 0;
