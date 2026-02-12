@@ -518,7 +518,11 @@ export class AgentServer {
     await clientConnection.newSession({
       cwd: this.config.repositoryPath,
       mcpServers: [],
-      _meta: { sessionId: payload.run_id },
+      _meta: {
+        sessionId: payload.run_id,
+        taskRunId: payload.run_id,
+        systemPrompt: { append: this.buildCloudSystemPrompt() },
+      },
     });
 
     this.session = {
@@ -532,6 +536,15 @@ export class AgentServer {
     };
 
     this.logger.info("Session initialized successfully");
+
+    // Signal in_progress so the UI can start polling for updates
+    this.posthogAPI
+      .updateTaskRun(payload.task_id, payload.run_id, {
+        status: "in_progress",
+      })
+      .catch((err) =>
+        this.logger.warn("Failed to set task run to in_progress", err),
+      );
 
     await this.sendInitialTaskMessage(payload);
   }
@@ -577,6 +590,20 @@ export class AgentServer {
         await this.signalTaskComplete(payload, "error");
       }
     }
+  }
+
+  private buildCloudSystemPrompt(): string {
+    return `
+# Cloud Task Execution
+
+After completing the requested changes:
+1. Create a new branch with a descriptive name based on the work done
+2. Stage and commit all changes with a clear commit message
+3. Push the branch to origin
+4. Create a pull request using \`gh pr create\` with a descriptive title and body
+
+Important: Always create the PR. Do not ask for confirmation.
+`;
   }
 
   private async signalTaskComplete(
@@ -672,9 +699,95 @@ export class AgentServer {
           ) {
             await this.captureTreeState();
           }
+
+          if (
+            toolName &&
+            (toolName.includes("Bash") || toolName.includes("bash"))
+          ) {
+            this.detectAndAttachPrUrl(payload, params.update);
+          }
         }
       },
     };
+  }
+
+  private detectAndAttachPrUrl(
+    payload: JwtPayload,
+    update: Record<string, unknown>,
+  ): void {
+    try {
+      const meta = (update?._meta as Record<string, unknown>)?.claudeCode as
+        | Record<string, unknown>
+        | undefined;
+      const toolResponse = meta?.toolResponse;
+
+      // Extract text content from tool response
+      let textToSearch = "";
+
+      if (toolResponse) {
+        if (typeof toolResponse === "string") {
+          textToSearch = toolResponse;
+        } else if (typeof toolResponse === "object" && toolResponse !== null) {
+          const respObj = toolResponse as Record<string, unknown>;
+          textToSearch =
+            String(respObj.stdout || "") + String(respObj.stderr || "");
+          if (!textToSearch && respObj.output) {
+            textToSearch = String(respObj.output);
+          }
+        }
+      }
+
+      // Also check content array
+      const content = update?.content;
+      if (Array.isArray(content)) {
+        for (const item of content) {
+          if (item.type === "text" && item.text) {
+            textToSearch += ` ${item.text}`;
+          }
+        }
+      }
+
+      if (!textToSearch) return;
+
+      // Match GitHub PR URLs
+      const prUrlMatch = textToSearch.match(
+        /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/,
+      );
+      if (!prUrlMatch) return;
+
+      const prUrl = prUrlMatch[0];
+      this.logger.info("Detected PR URL in bash output", {
+        runId: payload.run_id,
+        prUrl,
+      });
+
+      // Fire-and-forget: attach PR URL to the task run
+      this.posthogAPI
+        .updateTaskRun(payload.task_id, payload.run_id, {
+          output: { pr_url: prUrl },
+        })
+        .then(() => {
+          this.logger.info("PR URL attached to task run", {
+            taskId: payload.task_id,
+            runId: payload.run_id,
+            prUrl,
+          });
+        })
+        .catch((err) => {
+          this.logger.error("Failed to attach PR URL to task run", {
+            taskId: payload.task_id,
+            runId: payload.run_id,
+            prUrl,
+            error: err,
+          });
+        });
+    } catch (err) {
+      // Never let detection errors break message flow
+      this.logger.debug("Error in PR URL detection", {
+        runId: payload.run_id,
+        error: err,
+      });
+    }
   }
 
   private async cleanupSession(): Promise<void> {

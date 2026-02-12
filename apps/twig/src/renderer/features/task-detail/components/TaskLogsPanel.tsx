@@ -72,6 +72,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (isConnecting.current) return;
     if (!isOnline) return;
 
+    // Cloud tasks are handled by the sandbox
+    if (workspace?.mode === "cloud") return;
+
     if (
       session?.status === "connected" ||
       session?.status === "connecting" ||
@@ -106,7 +109,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       .finally(() => {
         isConnecting.current = false;
       });
-  }, [task, repoPath, session, markActivity, isOnline]);
+  }, [task, repoPath, session, markActivity, isOnline, workspace?.mode]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -201,7 +204,9 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     async (command: string) => {
       if (!repoPath) return;
 
-      const execId = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const execId = `user-shell-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 9)}`;
       await getSessionService().startUserShellExecute(
         taskId,
         execId,
