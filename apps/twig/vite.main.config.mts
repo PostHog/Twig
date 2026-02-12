@@ -1,5 +1,12 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -121,6 +128,41 @@ function copyClaudeExecutable(): Plugin {
   };
 }
 
+function getFilesRecursive(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const fullPath = join(dir, entry);
+    if (statSync(fullPath).isDirectory()) {
+      files.push(...getFilesRecursive(fullPath));
+    } else {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function copyClaudeCodePlugin(): Plugin {
+  const sourceDir = join(__dirname, "../../plugins/claude-code");
+
+  return {
+    name: "copy-claude-code-posthog-plugin",
+    buildStart() {
+      if (existsSync(sourceDir)) {
+        for (const file of getFilesRecursive(sourceDir)) {
+          this.addWatchFile(file);
+        }
+      }
+    },
+    writeBundle() {
+      // Keep the name of the directory "posthog" as it is used as the plugin name.
+      const destDir = join(__dirname, ".vite/build/claude-code/posthog");
+      if (existsSync(sourceDir)) {
+        cpSync(sourceDir, destDir, { recursive: true });
+      }
+    },
+  };
+}
+
 function copyCodexAcpBinaries(): Plugin {
   return {
     name: "copy-codex-acp-binaries",
@@ -178,6 +220,7 @@ export default defineConfig(({ mode }) => {
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
       copyCodexAcpBinaries(),
+      copyClaudeCodePlugin(),
       createPosthogPlugin(env),
     ].filter(Boolean),
     define: {
