@@ -5,26 +5,18 @@ import {
   useInboxReports,
 } from "@features/inbox/hooks/useInboxReports";
 import { useInboxSignalsSidebarStore } from "@features/inbox/stores/inboxSignalsSidebarStore";
+import { buildSignalTaskPrompt } from "@features/inbox/utils/buildSignalTaskPrompt";
+import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   ArrowSquareOutIcon,
   ClockIcon,
   SparkleIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { ChevronDownIcon } from "@radix-ui/react-icons";
-import {
-  Badge,
-  Box,
-  Button,
-  DropdownMenu,
-  Flex,
-  ScrollArea,
-  Text,
-  TextField,
-} from "@radix-ui/themes";
+import { Badge, Box, Button, Flex, ScrollArea, Text } from "@radix-ui/themes";
 import type { SignalReport } from "@shared/types";
+import { useNavigationStore } from "@stores/navigationStore";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
 
 interface InboxSignalsTabProps {
@@ -121,8 +113,6 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
   const { data, isLoading, error } = useInboxReports();
   const reports = data?.results ?? [];
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  const [showRunWithContext, setShowRunWithContext] = useState(false);
-  const [manualRunContext, setManualRunContext] = useState("");
   const sidebarOpen = useInboxSignalsSidebarStore((state) => state.open);
   const sidebarWidth = useInboxSignalsSidebarStore((state) => state.width);
   const sidebarIsResizing = useInboxSignalsSidebarStore(
@@ -170,27 +160,22 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
       ? `${getCloudUrlFromRegion(cloudRegion)}/project/${projectId}/replay`
       : null;
 
-  useEffect(() => {
-    setShowRunWithContext(false);
-    setManualRunContext("");
-  }, []);
+  const { navigateToTaskInput } = useNavigationStore();
+  const draftActions = useDraftStore((s) => s.actions);
 
-  const handleRunSignal = (context?: string) => {
+  const handleCreateTask = () => {
     if (!selectedReport) return;
 
-    const trimmedContext = context?.trim();
-    if (trimmedContext) {
-      toast.success(
-        `Started signal run for "${selectedReport.title ?? "Untitled signal"}" with context (stub).`,
-      );
-    } else {
-      toast.success(
-        `Started signal run for "${selectedReport.title ?? "Untitled signal"}" (stub).`,
-      );
-    }
+    const prompt = buildSignalTaskPrompt({
+      report: selectedReport,
+      artefacts: visibleArtefacts,
+      replayBaseUrl,
+    });
 
-    setShowRunWithContext(false);
-    setManualRunContext("");
+    draftActions.setPendingContent("task-input", {
+      segments: [{ type: "text", text: prompt }],
+    });
+    navigateToTaskInput();
   };
 
   if (isLoading) {
@@ -305,30 +290,11 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
                 <Button
                   size="1"
                   variant="solid"
-                  onClick={() => handleRunSignal()}
+                  onClick={handleCreateTask}
                   className="font-mono text-[11px]"
                 >
-                  Run
+                  Create task
                 </Button>
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger>
-                    <Button
-                      size="1"
-                      variant="outline"
-                      color="gray"
-                      className="font-mono text-[11px]"
-                    >
-                      <ChevronDownIcon />
-                    </Button>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Content align="end" size="1">
-                    <DropdownMenu.Item
-                      onSelect={() => setShowRunWithContext(true)}
-                    >
-                      Run with context
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Root>
                 <Button
                   size="1"
                   variant="ghost"
@@ -345,45 +311,6 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
             </Flex>
             <ScrollArea type="auto" style={{ height: "calc(100% - 41px)" }}>
               <Flex direction="column" gap="2" p="2">
-                {showRunWithContext && (
-                  <Box className="rounded border border-gray-6 bg-gray-2 p-2">
-                    <Flex direction="column" gap="2">
-                      <Text size="1" className="font-mono text-[11px]">
-                        Additional context
-                      </Text>
-                      <TextField.Root
-                        size="1"
-                        value={manualRunContext}
-                        onChange={(event) =>
-                          setManualRunContext(event.target.value)
-                        }
-                        placeholder="Add instructions for this signal run"
-                      />
-                      <Flex align="center" gap="1">
-                        <Button
-                          size="1"
-                          variant="solid"
-                          className="font-mono text-[11px]"
-                          disabled={!manualRunContext.trim()}
-                          onClick={() => handleRunSignal(manualRunContext)}
-                        >
-                          Run with context
-                        </Button>
-                        <Button
-                          size="1"
-                          variant="ghost"
-                          className="font-mono text-[11px]"
-                          onClick={() => {
-                            setShowRunWithContext(false);
-                            setManualRunContext("");
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </Flex>
-                    </Flex>
-                  </Box>
-                )}
                 <Text
                   size="1"
                   color="gray"
