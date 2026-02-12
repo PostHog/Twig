@@ -34,9 +34,8 @@ interface GitInteractionState {
   prHeadBranch: string | null;
   diffStats: { filesChanged: number; linesAdded: number; linesRemoved: number };
   prUrl: string | null;
-  createPrDisabledReason: string | null;
-  commitPrDisabledReason: string | null;
-  commitPushDisabledReason: string | null;
+  pushDisabledReason: string | null;
+  prDisabledReason: string | null;
   isLoading: boolean;
 }
 
@@ -173,19 +172,13 @@ export function useGitInteraction(
   const runCommit = async () => {
     if (!repoPath) return;
 
-    if (
-      store.commitNextStep === "commit-pr" &&
-      computed.commitPrDisabledReason
-    ) {
-      modal.setCommitError(computed.commitPrDisabledReason);
+    if (store.commitNextStep === "commit-pr" && computed.prDisabledReason) {
+      modal.setCommitError(computed.prDisabledReason);
       return;
     }
 
-    if (
-      store.commitNextStep === "commit-push" &&
-      computed.commitPushDisabledReason
-    ) {
-      modal.setCommitError(computed.commitPushDisabledReason);
+    if (store.commitNextStep === "commit-push" && computed.pushDisabledReason) {
+      modal.setCommitError(computed.pushDisabledReason);
       return;
     }
 
@@ -484,9 +477,8 @@ export function useGitInteraction(
       prHeadBranch: computed.prHeadBranch,
       diffStats: git.diffStats,
       prUrl: computed.prUrl,
-      createPrDisabledReason: computed.createPrDisabledReason,
-      commitPrDisabledReason: computed.commitPrDisabledReason,
-      commitPushDisabledReason: computed.commitPushDisabledReason,
+      pushDisabledReason: computed.pushDisabledReason,
+      prDisabledReason: computed.prDisabledReason,
       isLoading: git.isLoading,
     },
     modals: store,

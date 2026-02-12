@@ -48,8 +48,8 @@ export function GitInteractionHeader({ taskId }: GitInteractionHeaderProps) {
         onCommitMessageChange={actions.setCommitMessage}
         nextStep={modals.commitNextStep}
         onNextStepChange={actions.setCommitNextStep}
-        createPrDisabledReason={state.commitPrDisabledReason}
-        pushDisabledReason={state.commitPushDisabledReason}
+        prDisabledReason={state.prDisabledReason}
+        pushDisabledReason={state.pushDisabledReason}
         onContinue={actions.runCommit}
         isSubmitting={modals.isSubmitting}
         error={modals.commitError}

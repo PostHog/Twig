@@ -29,7 +29,7 @@ export const CommitDefault: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit"
       onNextStepChange={() => {}}
-      createPrDisabledReason={null}
+      prDisabledReason={null}
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={false}
@@ -51,7 +51,7 @@ export const CommitWithMessage: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit-push"
       onNextStepChange={() => {}}
-      createPrDisabledReason={null}
+      prDisabledReason={null}
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={false}
@@ -73,7 +73,7 @@ export const CommitPrDisabled: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit"
       onNextStepChange={() => {}}
-      createPrDisabledReason="Checkout a feature branch to create PRs."
+      prDisabledReason="Checkout a feature branch to create PRs."
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={false}
@@ -95,7 +95,7 @@ export const CommitSubmitting: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit"
       onNextStepChange={() => {}}
-      createPrDisabledReason={null}
+      prDisabledReason={null}
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={true}
@@ -117,7 +117,7 @@ export const CommitWithError: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit"
       onNextStepChange={() => {}}
-      createPrDisabledReason={null}
+      prDisabledReason={null}
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={false}
@@ -139,7 +139,7 @@ export const CommitGenerating: StoryObj<typeof GitCommitDialog> = {
       onCommitMessageChange={() => {}}
       nextStep="commit"
       onNextStepChange={() => {}}
-      createPrDisabledReason={null}
+      prDisabledReason={null}
       pushDisabledReason={null}
       onContinue={() => {}}
       isSubmitting={false}

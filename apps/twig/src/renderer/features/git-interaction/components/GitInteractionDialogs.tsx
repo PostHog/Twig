@@ -171,7 +171,7 @@ interface GitCommitDialogProps {
   onCommitMessageChange: (value: string) => void;
   nextStep: "commit" | "commit-push" | "commit-pr";
   onNextStepChange: (value: "commit" | "commit-push" | "commit-pr") => void;
-  createPrDisabledReason: string | null;
+  prDisabledReason: string | null;
   pushDisabledReason: string | null;
   onContinue: () => void;
   isSubmitting: boolean;
@@ -189,7 +189,7 @@ export function GitCommitDialog({
   onCommitMessageChange,
   nextStep,
   onNextStepChange,
-  createPrDisabledReason,
+  prDisabledReason,
   pushDisabledReason,
   onContinue,
   isSubmitting,
@@ -213,7 +213,7 @@ export function GitCommitDialog({
       id: "commit-pr" as const,
       label: "Commit and create PR",
       icon: <GitPullRequest size={ICON_SIZE} />,
-      disabledReason: createPrDisabledReason,
+      disabledReason: prDisabledReason,
     },
   ];
 

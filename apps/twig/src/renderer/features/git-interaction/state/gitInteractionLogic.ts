@@ -26,9 +26,8 @@ interface GitState {
 interface GitComputed {
   actions: GitMenuAction[];
   primaryAction: GitMenuAction;
-  createPrDisabledReason: string | null;
-  commitPrDisabledReason: string | null;
-  commitPushDisabledReason: string | null;
+  pushDisabledReason: string | null;
+  prDisabledReason: string | null;
   prBaseBranch: string | null;
   prHeadBranch: string | null;
   prUrl: string | null;
@@ -61,21 +60,64 @@ function getRepoReason(s: GitState): string | null {
   ]);
 }
 
-function getGhReason(s: GitState): string | null {
+function getPushDisabledReason(
+  s: GitState,
+  repoReason: string | null,
+  opts?: { assumeWillHaveCommits?: boolean },
+): string | null {
+  if (repoReason) return repoReason;
+
+  const isWorkspaceBranch = s.currentBranch?.startsWith("workspace-");
+
+  if (!s.hasRemote && isWorkspaceBranch) {
+    return "Rename branch before publishing.";
+  }
+
+  if (s.behind > 0) {
+    return "Sync branch with remote first.";
+  }
+
+  if (!opts?.assumeWillHaveCommits) {
+    if (s.hasRemote && s.ahead === 0) {
+      return "Branch is up to date.";
+    }
+    if (!s.hasRemote && s.ahead === 0) {
+      return "No commits to publish.";
+    }
+  }
+
+  return null;
+}
+
+function getPrDisabledReason(
+  s: GitState,
+  repoReason: string | null,
+  opts?: { assumeWillHaveCommits?: boolean },
+): string | null {
+  if (repoReason) return repoReason;
+
+  if (!s.ghStatus) return "Checking GitHub CLI status...";
+  if (!s.ghStatus.installed) return "Install GitHub CLI: `brew install gh`";
+  if (!s.ghStatus.authenticated)
+    return "Authenticate GitHub CLI with `gh auth login`";
+  if (!s.repoInfo) return "No GitHub remote detected.";
+
   const isOnDefaultBranch =
     s.defaultBranch && s.currentBranch === s.defaultBranch;
+  if (isOnDefaultBranch) return "Checkout a feature branch to create PRs.";
+
   const isWorkspaceBranch = s.currentBranch?.startsWith("workspace-");
-  return firstFailingCheck([
-    [!s.ghStatus, "Checking GitHub CLI status..."],
-    [!s.ghStatus?.installed, "Install GitHub CLI: `brew install gh`"],
-    [
-      !s.ghStatus?.authenticated,
-      "Authenticate GitHub CLI with `gh auth login`",
-    ],
-    [!s.repoInfo, "No GitHub remote detected."],
-    [!!isOnDefaultBranch, "Checkout a feature branch to create PRs."],
-    [!!isWorkspaceBranch, "Rename branch before creating PR."],
-  ]);
+  if (isWorkspaceBranch) return "Rename branch before creating PR.";
+
+  if (s.behind > 0) return "Sync branch with remote first.";
+
+  if (s.prStatus?.prExists) return "PR already exists. Use commit and push.";
+
+  if (!opts?.assumeWillHaveCommits && s.ahead === 0) {
+    return "No commits to create PR.";
+  }
+
+  return null;
 }
 
 function getCommitAction(
@@ -86,28 +128,25 @@ function getCommitAction(
   return makeAction("commit", "Commit", reason);
 }
 
-function getPushAction(s: GitState, repoReason: string | null): GitMenuAction {
-  if (repoReason) return makeAction("push", "Push", repoReason);
-  const isWorkspaceBranch = s.currentBranch?.startsWith("workspace-");
+function getPushAction(
+  s: GitState,
+  pushDisabledReason: string | null,
+): GitMenuAction {
   if (!s.hasRemote) {
-    const reason = isWorkspaceBranch
-      ? "Rename branch before publishing."
-      : null;
-    return makeAction("publish", "Publish Branch", reason);
+    return makeAction("publish", "Publish Branch", pushDisabledReason);
   }
-  if (s.behind > 0) return makeAction("sync", "Sync", null);
-  if (s.ahead > 0) return makeAction("push", "Push", null);
-  return makeAction("push", "Push", "Branch is up to date.");
+  if (s.behind > 0) {
+    return makeAction("sync", "Sync", pushDisabledReason);
+  }
+  return makeAction("push", "Push", pushDisabledReason);
 }
 
 function getPrAction(
   s: GitState,
-  disabledReason: string | null,
+  prDisabledReason: string | null,
 ): GitMenuAction {
   if (s.prStatus?.prExists) return makeAction("view-pr", "View PR", null);
-  if (disabledReason)
-    return makeAction("create-pr", "Create PR", disabledReason);
-  return makeAction("create-pr", "Create PR", null);
+  return makeAction("create-pr", "Create PR", prDisabledReason);
 }
 
 function getPrimaryAction(
@@ -126,26 +165,13 @@ function getPrimaryAction(
 
 export function computeGitInteractionState(input: GitState): GitComputed {
   const repoReason = getRepoReason(input);
-  const ghReason = getGhReason(input);
-  const isWorkspaceBranch = input.currentBranch?.startsWith("workspace-");
 
-  const prExists = input.prStatus?.prExists;
-  const commitPrDisabledReason =
-    repoReason ??
-    ghReason ??
-    (prExists ? "PR already exists. Use commit and push." : null);
-  const createPrDisabledReason =
-    repoReason ??
-    ghReason ??
-    (input.behind > 0 ? "Sync branch with remote first." : null);
-  const commitPushDisabledReason =
-    isWorkspaceBranch && !input.hasRemote
-      ? "Rename branch before pushing."
-      : null;
+  const pushDisabledReason = getPushDisabledReason(input, repoReason);
+  const prDisabledReason = getPrDisabledReason(input, repoReason);
 
   const commitAction = getCommitAction(input, repoReason);
-  const pushAction = getPushAction(input, repoReason);
-  const prAction = getPrAction(input, createPrDisabledReason);
+  const pushAction = getPushAction(input, pushDisabledReason);
+  const prAction = getPrAction(input, prDisabledReason);
   const primaryAction = getPrimaryAction(
     input,
     commitAction,
@@ -156,9 +182,12 @@ export function computeGitInteractionState(input: GitState): GitComputed {
   return {
     actions: [commitAction, pushAction, prAction],
     primaryAction,
-    createPrDisabledReason,
-    commitPrDisabledReason,
-    commitPushDisabledReason,
+    pushDisabledReason: getPushDisabledReason(input, repoReason, {
+      assumeWillHaveCommits: true,
+    }),
+    prDisabledReason: getPrDisabledReason(input, repoReason, {
+      assumeWillHaveCommits: true,
+    }),
     prBaseBranch: input.prStatus?.baseBranch ?? input.defaultBranch,
     prHeadBranch: input.prStatus?.headBranch ?? input.currentBranch,
     prUrl: input.prStatus?.prUrl ?? null,
