@@ -528,9 +528,7 @@ export async function getSyncStatus(
 
         const defaultBranch = await detectDefaultBranchWithFallback(git);
         const hasRemote = status.tracking !== null;
-        const isWorkspaceBranch = currentBranch?.startsWith("workspace-");
-        const isFeatureBranch =
-          currentBranch !== defaultBranch && !isWorkspaceBranch;
+        const isFeatureBranch = currentBranch !== defaultBranch;
 
         return {
           ahead: status.ahead,

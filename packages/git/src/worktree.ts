@@ -164,11 +164,7 @@ export class WorktreeManager {
     let attempts = 0;
     const maxAttempts = 100;
 
-    while (
-      ((await this.worktreeExists(name)) ||
-        (await branchExists(this.mainRepoPath, name))) &&
-      attempts < maxAttempts
-    ) {
+    while ((await this.worktreeExists(name)) && attempts < maxAttempts) {
       name = this.generateWorktreeName();
       attempts++;
     }
@@ -207,7 +203,6 @@ export class WorktreeManager {
     const worktreeName = await worktreeNamePromise;
     const baseBranch = await baseBranchPromise;
     const worktreePath = this.getWorktreePath(worktreeName);
-    const branchName = worktreeName;
 
     await manager.executeWrite(this.mainRepoPath, async (git) => {
       if (this.usesExternalPath()) {
@@ -215,8 +210,7 @@ export class WorktreeManager {
           "worktree",
           "add",
           "--quiet",
-          "-b",
-          branchName,
+          "--detach",
           worktreePath,
           baseBranch,
         ]);
@@ -226,8 +220,7 @@ export class WorktreeManager {
           "worktree",
           "add",
           "--quiet",
-          "-b",
-          branchName,
+          "--detach",
           relativePath,
           baseBranch,
         ]);
@@ -239,7 +232,7 @@ export class WorktreeManager {
     return {
       worktreePath,
       worktreeName,
-      branchName,
+      branchName: "",
       baseBranch,
       createdAt: new Date().toISOString(),
     };

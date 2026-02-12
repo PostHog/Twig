@@ -67,12 +67,6 @@ function getPushDisabledReason(
 ): string | null {
   if (repoReason) return repoReason;
 
-  const isWorkspaceBranch = s.currentBranch?.startsWith("workspace-");
-
-  if (!s.hasRemote && isWorkspaceBranch) {
-    return "Rename branch before publishing.";
-  }
-
   if (s.behind > 0) {
     return "Sync branch with remote first.";
   }
@@ -105,9 +99,6 @@ function getPrDisabledReason(
   const isOnDefaultBranch =
     s.defaultBranch && s.currentBranch === s.defaultBranch;
   if (isOnDefaultBranch) return "Checkout a feature branch to create PRs.";
-
-  const isWorkspaceBranch = s.currentBranch?.startsWith("workspace-");
-  if (isWorkspaceBranch) return "Rename branch before creating PR.";
 
   if (s.behind > 0) return "Sync branch with remote first.";
 
