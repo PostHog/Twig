@@ -393,6 +393,8 @@ interface GitPrDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   error: string | null;
+  onGenerate: () => void;
+  isGenerating: boolean;
 }
 
 export function GitPrDialog({
@@ -407,6 +409,8 @@ export function GitPrDialog({
   onConfirm,
   isSubmitting,
   error,
+  onGenerate,
+  isGenerating,
 }: GitPrDialogProps) {
   return (
     <GitDialog
@@ -416,7 +420,7 @@ export function GitPrDialog({
       title="Create PR"
       error={error}
       buttonLabel="Create PR"
-      buttonDisabled={!title.trim()}
+      buttonDisabled={!title.trim() || isGenerating}
       isSubmitting={isSubmitting}
       onSubmit={onConfirm}
       maxWidth="500px"
@@ -431,15 +435,29 @@ export function GitPrDialog({
       </Flex>
 
       <Flex direction="column" gap="1">
-        <Text size="1" color="gray">
-          Title
-        </Text>
+        <Flex align="center" justify="between">
+          <Text size="1" color="gray">
+            Title
+          </Text>
+          <Tooltip content="Generate title and description with AI">
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={onGenerate}
+              disabled={isGenerating || isSubmitting}
+            >
+              {isGenerating ? <Spinner size="1" /> : <Sparkle size={14} />}
+            </IconButton>
+          </Tooltip>
+        </Flex>
         <TextField.Root
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="PR title"
+          placeholder={isGenerating ? "Generating..." : "PR title"}
           size="1"
           autoFocus
+          disabled={isGenerating}
         />
       </Flex>
 
@@ -450,9 +468,10 @@ export function GitPrDialog({
         <TextArea
           value={body}
           onChange={(e) => onBodyChange(e.target.value)}
-          placeholder="Describe your changes"
+          placeholder={isGenerating ? "Generating..." : "Describe your changes"}
           size="1"
           rows={6}
+          disabled={isGenerating}
         />
       </Flex>
     </GitDialog>

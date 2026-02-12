@@ -589,6 +589,38 @@ export async function getLatestCommit(
   );
 }
 
+export async function getCommitsBetweenBranches(
+  baseDir: string,
+  baseBranch: string,
+  headBranch?: string,
+  maxCount = 50,
+  options?: CreateGitClientOptions,
+): Promise<CommitInfo[]> {
+  const manager = getGitOperationManager();
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        const log = await git.log({
+          from: `origin/${baseBranch}`,
+          to: headBranch ?? "HEAD",
+          maxCount,
+        });
+        return log.all.map((c) => ({
+          sha: c.hash,
+          shortSha: c.hash.slice(0, 7),
+          message: c.message,
+          author: c.author_name,
+          date: c.date,
+        }));
+      } catch {
+        return [];
+      }
+    },
+    { signal: options?.abortSignal },
+  );
+}
+
 export interface CommitConventions {
   conventionalCommits: boolean;
   commonPrefixes: string[];

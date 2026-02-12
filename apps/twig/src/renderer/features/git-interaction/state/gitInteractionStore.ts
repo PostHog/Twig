@@ -24,6 +24,7 @@ interface GitInteractionState {
   isSubmitting: boolean;
   openPrAfterPush: boolean;
   isGeneratingCommitMessage: boolean;
+  isGeneratingPr: boolean;
 }
 
 interface GitInteractionActions {
@@ -42,6 +43,7 @@ interface GitInteractionActions {
   setIsSubmitting: (value: boolean) => void;
   setOpenPrAfterPush: (value: boolean) => void;
   setIsGeneratingCommitMessage: (value: boolean) => void;
+  setIsGeneratingPr: (value: boolean) => void;
 
   openCommit: (nextStep: CommitNextStep) => void;
   openPush: (mode: PushMode) => void;
@@ -71,6 +73,7 @@ const initialState: GitInteractionState = {
   isSubmitting: false,
   openPrAfterPush: false,
   isGeneratingCommitMessage: false,
+  isGeneratingPr: false,
 };
 
 export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
@@ -92,6 +95,7 @@ export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
     setOpenPrAfterPush: (value) => set({ openPrAfterPush: value }),
     setIsGeneratingCommitMessage: (value) =>
       set({ isGeneratingCommitMessage: value }),
+    setIsGeneratingPr: (value) => set({ isGeneratingPr: value }),
 
     openCommit: (nextStep) =>
       set({ commitNextStep: nextStep, commitError: null, commitOpen: true }),

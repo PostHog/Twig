@@ -85,6 +85,8 @@ export function GitInteractionHeader({ taskId }: GitInteractionHeaderProps) {
         onConfirm={actions.runPr}
         isSubmitting={modals.isSubmitting}
         error={modals.prError}
+        onGenerate={actions.generatePrTitleAndBody}
+        isGenerating={modals.isGeneratingPr}
       />
     </>
   );

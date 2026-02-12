@@ -6,6 +6,7 @@ import {
   getAllBranches,
   getChangedFilesDetailed,
   getCommitConventions,
+  getCommitsBetweenBranches,
   getCurrentBranch,
   getDefaultBranch,
   getDiffStats,
@@ -630,5 +631,92 @@ ${truncatedDiff}`;
     );
 
     return { message: response.content.trim() };
+  }
+
+  public async generatePrTitleAndBody(
+    directoryPath: string,
+    credentials: LlmCredentials,
+  ): Promise<{ title: string; body: string }> {
+    const [defaultBranch, currentBranch, changedFiles, prTemplate] =
+      await Promise.all([
+        getDefaultBranch(directoryPath),
+        getCurrentBranch(directoryPath),
+        this.getChangedFilesHead(directoryPath),
+        this.getPrTemplate(directoryPath),
+      ]);
+
+    const commits = await getCommitsBetweenBranches(
+      directoryPath,
+      defaultBranch,
+      currentBranch ?? undefined,
+      30,
+    );
+
+    if (commits.length === 0 && changedFiles.length === 0) {
+      return { title: "", body: "" };
+    }
+
+    const commitsSummary = commits.map((c) => `- ${c.message}`).join("\n");
+
+    const filesSummary = changedFiles
+      .map((f) => `${f.status}: ${f.path}`)
+      .join("\n");
+
+    const templateHint = prTemplate.template
+      ? `The repository has a PR template. Use it as a guide for structure but adapt the content to match the actual changes:\n${prTemplate.template.slice(0, 2000)}`
+      : "";
+
+    const system = `You are a PR description generator. Generate a title and detailed description for a pull request.
+
+Output format (use exactly this format):
+TITLE: <short descriptive title, max 72 chars>
+
+BODY:
+<detailed description>
+
+Rules for the title:
+- Short and descriptive (max 72 chars)
+- Use imperative mood ("Add feature" not "Added feature")
+- Be specific about what the PR accomplishes
+
+Rules for the body:
+- Start with a TL;DR section (1-2 sentences summarizing the change)
+- Include a "What changed?" section with bullet points describing the key changes
+- Be thorough but concise
+- Use markdown formatting
+${templateHint}
+
+Do not include any explanation outside the TITLE and BODY sections.`;
+
+    const userMessage = `Generate a PR title and description for these changes:
+
+Branch: ${currentBranch ?? "unknown"} -> ${defaultBranch}
+
+Commits in this PR:
+${commitsSummary || "(no commits yet - changes are uncommitted)"}
+
+Changed files:
+${filesSummary || "(no file changes detected)"}`;
+
+    log.debug("Generating PR title and body", {
+      commitCount: commits.length,
+      fileCount: changedFiles.length,
+      hasTemplate: !!prTemplate.template,
+    });
+
+    const response = await this.llmGateway.prompt(
+      credentials,
+      [{ role: "user", content: userMessage }],
+      { system, maxTokens: 2000 },
+    );
+
+    const content = response.content.trim();
+    const titleMatch = content.match(/^TITLE:\s*(.+?)(?:\n|$)/m);
+    const bodyMatch = content.match(/BODY:\s*([\s\S]+)$/m);
+
+    return {
+      title: titleMatch?.[1]?.trim() ?? "",
+      body: bodyMatch?.[1]?.trim() ?? "",
+    };
   }
 }

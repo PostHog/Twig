@@ -13,6 +13,8 @@ import {
   discardFileChangesInput,
   generateCommitMessageInput,
   generateCommitMessageOutput,
+  generatePrTitleAndBodyInput,
+  generatePrTitleAndBodyOutput,
   getAllBranchesInput,
   getAllBranchesOutput,
   getChangedFilesHeadInput,
@@ -248,6 +250,16 @@ export const gitRouter = router({
     .output(generateCommitMessageOutput)
     .mutation(({ input }) =>
       getService().generateCommitMessage(
+        input.directoryPath,
+        input.credentials,
+      ),
+    ),
+
+  generatePrTitleAndBody: publicProcedure
+    .input(generatePrTitleAndBodyInput)
+    .output(generatePrTitleAndBodyOutput)
+    .mutation(({ input }) =>
+      getService().generatePrTitleAndBody(
         input.directoryPath,
         input.credentials,
       ),

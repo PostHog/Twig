@@ -1,5 +1,4 @@
 import { PostHogAPIClient } from "@api/posthogClient";
-import { resetSessionService } from "@features/sessions/service/service";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
@@ -20,6 +19,13 @@ const log = logger.scope("auth-store");
 
 let refreshPromise: Promise<void> | null = null;
 let initializePromise: Promise<boolean> | null = null;
+
+// Callback for session cleanup - injected by session service to break circular dependency
+let sessionResetCallback: (() => void) | null = null;
+
+export function setSessionResetCallback(callback: () => void) {
+  sessionResetCallback = callback;
+}
 
 const REFRESH_MAX_RETRIES = 3;
 const REFRESH_INITIAL_DELAY_MS = 1000;
@@ -644,7 +650,7 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Clean up all existing sessions before switching projects
-          resetSessionService();
+          sessionResetCallback?.();
 
           const apiHost = getCloudUrlFromRegion(cloudRegion);
 
@@ -706,7 +712,7 @@ export const useAuthStore = create<AuthState>()(
           resetUser();
 
           // Clean up session service subscriptions before clearing auth state
-          resetSessionService();
+          sessionResetCallback?.();
 
           trpcVanilla.analytics.resetUser.mutate();
 

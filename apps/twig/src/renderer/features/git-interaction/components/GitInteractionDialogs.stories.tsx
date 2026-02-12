@@ -292,6 +292,8 @@ export const PrCreate: StoryObj<typeof GitPrDialog> = {
       onConfirm={() => {}}
       isSubmitting={false}
       error={null}
+      onGenerate={() => {}}
+      isGenerating={false}
     />
   ),
 };
@@ -310,6 +312,28 @@ export const PrCreateEmpty: StoryObj<typeof GitPrDialog> = {
       onConfirm={() => {}}
       isSubmitting={false}
       error={null}
+      onGenerate={() => {}}
+      isGenerating={false}
+    />
+  ),
+};
+
+export const PrGenerating: StoryObj<typeof GitPrDialog> = {
+  render: () => (
+    <GitPrDialog
+      open={true}
+      onOpenChange={() => {}}
+      baseBranch="main"
+      headBranch="feature/add-auth"
+      title=""
+      onTitleChange={() => {}}
+      body=""
+      onBodyChange={() => {}}
+      onConfirm={() => {}}
+      isSubmitting={false}
+      error={null}
+      onGenerate={() => {}}
+      isGenerating={true}
     />
   ),
 };
@@ -328,6 +352,8 @@ export const PrSubmitting: StoryObj<typeof GitPrDialog> = {
       onConfirm={() => {}}
       isSubmitting={true}
       error={null}
+      onGenerate={() => {}}
+      isGenerating={false}
     />
   ),
 };
@@ -346,6 +372,8 @@ export const PrWithError: StoryObj<typeof GitPrDialog> = {
       onConfirm={() => {}}
       isSubmitting={false}
       error="Failed to create PR: no commits between main and feature/add-auth"
+      onGenerate={() => {}}
+      isGenerating={false}
     />
   ),
 };

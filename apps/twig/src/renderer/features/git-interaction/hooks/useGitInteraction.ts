@@ -52,6 +52,7 @@ interface GitInteractionActions {
   runPush: () => Promise<void>;
   runPr: () => Promise<void>;
   generateCommitMessage: () => Promise<void>;
+  generatePrTitleAndBody: () => Promise<void>;
 }
 
 function trackGitAction(taskId: string, actionType: string, success: boolean) {
@@ -122,8 +123,36 @@ export function useGitInteraction(
       ),
     );
 
-  const getDefaultPrTitle = () => "";
-  const getDefaultPrBody = () => "";
+  const openCreatePr = async () => {
+    modal.openPr("", "");
+    if (!repoPath) return;
+
+    const authState = useAuthStore.getState();
+    const apiKey = authState.oauthAccessToken;
+    const cloudRegion = authState.cloudRegion;
+    if (!apiKey || !cloudRegion) return;
+
+    const apiHost =
+      cloudRegion === "eu"
+        ? "https://eu.posthog.com"
+        : "https://us.posthog.com";
+
+    modal.setIsGeneratingPr(true);
+    try {
+      const result = await trpcVanilla.git.generatePrTitleAndBody.mutate({
+        directoryPath: repoPath,
+        credentials: { apiKey, apiHost },
+      });
+      if (result.title || result.body) {
+        modal.setPrTitle(result.title);
+        modal.setPrBody(result.body);
+      }
+    } catch (error) {
+      log.error("Failed to auto-generate PR title and body", error);
+    } finally {
+      modal.setIsGeneratingPr(false);
+    }
+  };
 
   const openAction = (id: GitMenuActionId) => {
     const actionMap: Record<GitMenuActionId, () => void> = {
@@ -132,7 +161,7 @@ export function useGitInteraction(
       sync: () => modal.openPush("sync"),
       publish: () => modal.openPush("publish"),
       "view-pr": () => viewPr(),
-      "create-pr": () => modal.openPr(getDefaultPrTitle(), getDefaultPrBody()),
+      "create-pr": () => openCreatePr(),
     };
     actionMap[id]();
   };
@@ -282,8 +311,8 @@ export function useGitInteraction(
 
       if (store.openPrAfterPush) {
         modal.closePush();
-        modal.openPr(getDefaultPrTitle(), getDefaultPrBody());
         modal.setOpenPrAfterPush(false);
+        openCreatePr();
       }
     } finally {
       modal.setIsSubmitting(false);
@@ -390,6 +419,50 @@ export function useGitInteraction(
     }
   };
 
+  const generatePrTitleAndBody = async () => {
+    if (!repoPath) return;
+
+    const authState = useAuthStore.getState();
+    const apiKey = authState.oauthAccessToken;
+    const cloudRegion = authState.cloudRegion;
+
+    if (!apiKey || !cloudRegion) {
+      modal.setPrError("Authentication required to generate PR description.");
+      return;
+    }
+
+    const apiHost =
+      cloudRegion === "eu"
+        ? "https://eu.posthog.com"
+        : "https://us.posthog.com";
+
+    modal.setIsGeneratingPr(true);
+    modal.setPrError(null);
+
+    try {
+      const result = await trpcVanilla.git.generatePrTitleAndBody.mutate({
+        directoryPath: repoPath,
+        credentials: { apiKey, apiHost },
+      });
+
+      if (result.title || result.body) {
+        modal.setPrTitle(result.title);
+        modal.setPrBody(result.body);
+      } else {
+        modal.setPrError("No changes detected to generate PR description.");
+      }
+    } catch (error) {
+      log.error("Failed to generate PR title and body", error);
+      modal.setPrError(
+        error instanceof Error
+          ? error.message
+          : "Failed to generate PR description.",
+      );
+    } finally {
+      modal.setIsGeneratingPr(false);
+    }
+  };
+
   return {
     state: {
       primaryAction: computed.primaryAction,
@@ -422,6 +495,7 @@ export function useGitInteraction(
       runPush,
       runPr,
       generateCommitMessage,
+      generatePrTitleAndBody,
     },
   };
 }

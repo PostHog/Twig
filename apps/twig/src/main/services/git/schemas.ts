@@ -335,3 +335,16 @@ export const generateCommitMessageInput = z.object({
 export const generateCommitMessageOutput = z.object({
   message: z.string(),
 });
+
+export const generatePrTitleAndBodyInput = z.object({
+  directoryPath: z.string(),
+  credentials: z.object({
+    apiKey: z.string(),
+    apiHost: z.string(),
+  }),
+});
+
+export const generatePrTitleAndBodyOutput = z.object({
+  title: z.string(),
+  body: z.string(),
+});

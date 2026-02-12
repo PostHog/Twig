@@ -3,7 +3,10 @@ import type {
   RequestPermissionRequest,
   SessionConfigOption,
 } from "@agentclientprotocol/sdk";
-import { useAuthStore } from "@features/auth/stores/authStore";
+import {
+  setSessionResetCallback,
+  useAuthStore,
+} from "@features/auth/stores/authStore";
 import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
@@ -1216,4 +1219,12 @@ export class SessionService {
       }
     }
   }
+}
+
+// Register callback when module loads (not during tests)
+if (typeof window !== "undefined" && !import.meta.env?.VITEST) {
+  setSessionResetCallback(() => {
+    log.info("Auth triggered session reset");
+    resetSessionService();
+  });
 }
