@@ -92,6 +92,8 @@ export function resetSessionService(): void {
   });
 }
 
+setSessionResetCallback(resetSessionService);
+
 export class SessionService {
   private connectingTasks = new Map<string, Promise<void>>();
   private subscriptions = new Map<

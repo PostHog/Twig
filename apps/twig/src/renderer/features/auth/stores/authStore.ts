@@ -20,7 +20,6 @@ const log = logger.scope("auth-store");
 let refreshPromise: Promise<void> | null = null;
 let initializePromise: Promise<boolean> | null = null;
 
-// Callback for session cleanup - injected by session service to break circular dependency
 let sessionResetCallback: (() => void) | null = null;
 
 export function setSessionResetCallback(callback: () => void) {

@@ -64,6 +64,7 @@ const mockAuthStore = vi.hoisted(() => ({
       },
     })),
   },
+  setSessionResetCallback: vi.fn(),
 }));
 
 vi.mock("@features/auth/stores/authStore", () => mockAuthStore);
