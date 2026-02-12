@@ -1,4 +1,5 @@
 import { useCwd } from "@features/sidebar/hooks/useCwd";
+import { useChangesModeStore } from "@features/task-detail/stores/changesModeStore";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
 import type { Task } from "@shared/types";
@@ -11,12 +12,14 @@ interface ChangesTabBadgeProps {
 
 export function ChangesTabBadge({ taskId, task: _task }: ChangesTabBadgeProps) {
   const repoPath = useCwd(taskId);
+  const mode = useChangesModeStore((s) => s.mode);
 
   const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats", repoPath],
+    queryKey: ["diff-stats-mode", repoPath, mode],
     queryFn: () =>
-      trpcVanilla.git.getDiffStats.query({
+      trpcVanilla.git.getDiffStatsByMode.query({
         directoryPath: repoPath as string,
+        mode: mode === "lastTurn" ? "uncommitted" : mode,
       }),
     enabled: !!repoPath,
     refetchOnMount: "always",
