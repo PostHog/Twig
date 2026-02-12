@@ -1,39 +1,55 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isTwigBranch } from "@shared/constants";
+import { execGh } from "@twig/git/gh";
 import {
   getAllBranches,
   getChangedFilesDetailed,
   getCommitConventions,
+  getCommitsBetweenBranches,
   getCurrentBranch,
   getDefaultBranch,
   getDiffStats,
   getFileAtHead,
   getLatestCommit,
   getRemoteUrl,
+  getStagedDiff,
   getSyncStatus,
+  getUnstagedDiff,
   fetch as gitFetch,
   isGitRepository,
 } from "@twig/git/queries";
 import { CreateBranchSaga } from "@twig/git/sagas/branch";
 import { CloneSaga } from "@twig/git/sagas/clone";
+import { CommitSaga } from "@twig/git/sagas/commit";
 import { DiscardFileChangesSaga } from "@twig/git/sagas/discard";
 import { PullSaga } from "@twig/git/sagas/pull";
 import { PushSaga } from "@twig/git/sagas/push";
 import { parseGitHubUrl } from "@twig/git/utils";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
+import { MAIN_TOKENS } from "../../di/tokens.js";
+import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import type { LlmCredentials } from "../llm-gateway/schemas.js";
+import type { LlmGatewayService } from "../llm-gateway/service.js";
 import type {
   ChangedFile,
   CloneProgressPayload,
+  CommitOutput,
+  CreatePrOutput,
   DetectRepoResult,
   DiffStats,
+  DiscardFileChangesOutput,
   GetCommitConventionsOutput,
   GetPrTemplateOutput,
+  GhStatusOutput,
   GitCommitInfo,
   GitFileStatus,
   GitRepoInfo,
+  GitStateSnapshot,
   GitSyncStatus,
+  OpenPrOutput,
+  PrStatusOutput,
   PublishOutput,
   PullOutput,
   PushOutput,
@@ -50,11 +66,86 @@ export interface GitServiceEvents {
   [GitServiceEvent.CloneProgress]: CloneProgressPayload;
 }
 
+const log = logger.scope("git-service");
+
 const FETCH_THROTTLE_MS = 5 * 60 * 1000;
+const MAX_DIFF_LENGTH = 8000;
 
 @injectable()
 export class GitService extends TypedEventEmitter<GitServiceEvents> {
   private lastFetchTime = new Map<string, number>();
+  private llmGateway: LlmGatewayService;
+
+  constructor(
+    @inject(MAIN_TOKENS.LlmGatewayService) llmGateway: LlmGatewayService,
+  ) {
+    super();
+    this.llmGateway = llmGateway;
+  }
+
+  private async getStateSnapshot(
+    directoryPath: string,
+    options?: {
+      includeChangedFiles?: boolean;
+      includeDiffStats?: boolean;
+      includeSyncStatus?: boolean;
+      includeLatestCommit?: boolean;
+      includePrStatus?: boolean;
+      forceRefresh?: boolean;
+    },
+  ): Promise<GitStateSnapshot> {
+    const {
+      includeChangedFiles = true,
+      includeDiffStats = true,
+      includeSyncStatus = true,
+      includeLatestCommit = true,
+      includePrStatus = false,
+    } = options ?? {};
+
+    const results = await Promise.allSettled([
+      includeChangedFiles ? this.getChangedFilesHead(directoryPath) : null,
+      includeDiffStats ? this.getDiffStats(directoryPath) : null,
+      includeSyncStatus
+        ? this.getGitSyncStatusInternal(directoryPath, true)
+        : null,
+      includeLatestCommit ? this.getLatestCommit(directoryPath) : null,
+      includePrStatus ? this.getPrStatus(directoryPath) : null,
+    ]);
+
+    const getValue = <T>(r: PromiseSettledResult<T | null>): T | undefined =>
+      r.status === "fulfilled" && r.value !== null ? r.value : undefined;
+
+    return {
+      changedFiles: getValue(results[0]),
+      diffStats: getValue(results[1]),
+      syncStatus: getValue(results[2]),
+      latestCommit: getValue(results[3]),
+      prStatus: getValue(results[4]),
+    };
+  }
+
+  private async getGitSyncStatusInternal(
+    directoryPath: string,
+    forceRefresh = false,
+  ): Promise<GitSyncStatus> {
+    const now = Date.now();
+    const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
+    if (forceRefresh || now - lastFetch > FETCH_THROTTLE_MS) {
+      try {
+        await gitFetch(directoryPath);
+        this.lastFetchTime.set(directoryPath, now);
+      } catch {}
+    }
+
+    const status = await getSyncStatus(directoryPath);
+    return {
+      ahead: status.ahead,
+      behind: status.behind,
+      hasRemote: status.hasRemote,
+      currentBranch: status.currentBranch,
+      isFeatureBranch: status.isFeatureBranch,
+    };
+  }
 
   public async detectRepo(
     directoryPath: string,
@@ -178,34 +269,30 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     directoryPath: string,
     filePath: string,
     fileStatus: GitFileStatus,
-  ): Promise<void> {
+  ): Promise<DiscardFileChangesOutput> {
     const saga = new DiscardFileChangesSaga();
     const result = await saga.run({
       baseDir: directoryPath,
       filePath,
       fileStatus,
     });
-    if (!result.success) throw new Error(result.error);
-  }
-
-  public async getGitSyncStatus(directoryPath: string): Promise<GitSyncStatus> {
-    const now = Date.now();
-    const lastFetch = this.lastFetchTime.get(directoryPath) ?? 0;
-    if (now - lastFetch > FETCH_THROTTLE_MS) {
-      try {
-        await gitFetch(directoryPath);
-        this.lastFetchTime.set(directoryPath, now);
-      } catch {}
+    if (!result.success) {
+      return { success: false };
     }
 
-    const status = await getSyncStatus(directoryPath);
-    return {
-      ahead: status.ahead,
-      behind: status.behind,
-      hasRemote: status.hasRemote,
-      currentBranch: status.currentBranch,
-      isFeatureBranch: status.isFeatureBranch,
-    };
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeSyncStatus: false,
+      includeLatestCommit: false,
+    });
+
+    return { success: true, state };
+  }
+
+  public async getGitSyncStatus(
+    directoryPath: string,
+    forceRefresh = false,
+  ): Promise<GitSyncStatus> {
+    return this.getGitSyncStatusInternal(directoryPath, forceRefresh);
   }
 
   public async getLatestCommit(
@@ -268,9 +355,17 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     if (!result.success) {
       return { success: false, message: result.error };
     }
+
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeChangedFiles: false,
+      includeDiffStats: false,
+      includeLatestCommit: false,
+    });
+
     return {
       success: true,
       message: `Pushed ${result.data.branch} to ${result.data.remote}`,
+      state,
     };
   }
 
@@ -288,10 +383,14 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     if (!result.success) {
       return { success: false, message: result.error };
     }
+
+    const state = await this.getStateSnapshot(directoryPath);
+
     return {
       success: true,
       message: `${result.data.changes} files changed`,
       updatedFiles: result.data.changes,
+      state,
     };
   }
 
@@ -304,8 +403,18 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       return { success: false, message: "No branch to publish", branch: "" };
     }
 
-    const result = await this.push(directoryPath, remote, currentBranch, true);
-    return { ...result, branch: currentBranch };
+    const pushResult = await this.push(
+      directoryPath,
+      remote,
+      currentBranch,
+      true,
+    );
+    return {
+      success: pushResult.success,
+      message: pushResult.message,
+      branch: currentBranch,
+      state: pushResult.state,
+    };
   }
 
   public async sync(
@@ -322,10 +431,14 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     }
 
     const pushResult = await this.push(directoryPath, remote);
+
+    const state = await this.getStateSnapshot(directoryPath);
+
     return {
       success: pushResult.success,
       pullMessage: pullResult.message,
       pushMessage: pushResult.message,
+      state,
     };
   }
 
@@ -356,5 +469,355 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     sampleSize = 20,
   ): Promise<GetCommitConventionsOutput> {
     return getCommitConventions(directoryPath, sampleSize);
+  }
+
+  public async commit(
+    directoryPath: string,
+    message: string,
+    paths?: string[],
+    allowEmpty?: boolean,
+  ): Promise<CommitOutput> {
+    const fail = (msg: string): CommitOutput => ({
+      success: false,
+      message: msg,
+      commitSha: null,
+      branch: null,
+    });
+
+    if (!message.trim()) return fail("Commit message is required");
+
+    const saga = new CommitSaga();
+    const result = await saga.run({
+      baseDir: directoryPath,
+      message: message.trim(),
+      paths,
+      allowEmpty,
+    });
+
+    if (!result.success) return fail(result.error);
+
+    const state = await this.getStateSnapshot(directoryPath);
+
+    return {
+      success: true,
+      message: `Committed ${result.data.commitSha.slice(0, 7)}`,
+      commitSha: result.data.commitSha,
+      branch: result.data.branch,
+      state,
+    };
+  }
+
+  public async getGhStatus(): Promise<GhStatusOutput> {
+    const versionResult = await execGh(["--version"]);
+    if (versionResult.exitCode !== 0) {
+      return {
+        installed: false,
+        version: null,
+        authenticated: false,
+        username: null,
+        error: versionResult.error ?? versionResult.stderr ?? null,
+      };
+    }
+
+    const version = versionResult.stdout.split("\n")[0]?.trim() ?? null;
+    const authResult = await execGh(["auth", "status"]);
+    const authenticated = authResult.exitCode === 0;
+    const authOutput = `${authResult.stdout}\n${authResult.stderr}`;
+    const usernameMatch = authOutput.match(/Logged in to github.com as (\S+)/);
+
+    return {
+      installed: true,
+      version,
+      authenticated,
+      username: usernameMatch?.[1] ?? null,
+      error: authenticated
+        ? null
+        : authResult.stderr || authResult.error || null,
+    };
+  }
+
+  public async getPrStatus(directoryPath: string): Promise<PrStatusOutput> {
+    const base: PrStatusOutput = {
+      hasRemote: false,
+      isGitHubRepo: false,
+      currentBranch: null,
+      defaultBranch: null,
+      prExists: false,
+      prUrl: null,
+      prState: null,
+      baseBranch: null,
+      headBranch: null,
+      isDraft: null,
+      error: null,
+    };
+
+    try {
+      const remoteUrl = await getRemoteUrl(directoryPath);
+      const isGitHubRepo = !!(remoteUrl && parseGitHubUrl(remoteUrl));
+      const currentBranch = await getCurrentBranch(directoryPath);
+      const defaultBranch = await getDefaultBranch(directoryPath).catch(
+        () => null,
+      );
+
+      if (!isGitHubRepo || !currentBranch) {
+        return {
+          ...base,
+          hasRemote: !!remoteUrl,
+          isGitHubRepo,
+          currentBranch,
+          defaultBranch,
+        };
+      }
+
+      const prResult = await execGh(
+        ["pr", "view", "--json", "url,state,baseRefName,headRefName,isDraft"],
+        { cwd: directoryPath },
+      );
+
+      const shared = {
+        hasRemote: true,
+        isGitHubRepo: true,
+        currentBranch,
+        defaultBranch,
+      };
+
+      if (prResult.exitCode !== 0) {
+        return { ...base, ...shared };
+      }
+
+      const data = JSON.parse(prResult.stdout) as {
+        url?: string;
+        state?: string;
+        baseRefName?: string;
+        headRefName?: string;
+        isDraft?: boolean;
+      };
+
+      return {
+        ...base,
+        ...shared,
+        prExists: !!data.url,
+        prUrl: data.url ?? null,
+        prState: data.state ?? null,
+        baseBranch: data.baseRefName ?? null,
+        headBranch: data.headRefName ?? null,
+        isDraft: data.isDraft ?? null,
+      };
+    } catch (error) {
+      return {
+        ...base,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  public async createPr(
+    directoryPath: string,
+    title?: string,
+    body?: string,
+    draft?: boolean,
+  ): Promise<CreatePrOutput> {
+    const args = ["pr", "create"];
+    if (title) args.push("--title", title);
+    if (body) args.push("--body", body);
+    if (draft) args.push("--draft");
+
+    const result = await execGh(args, { cwd: directoryPath });
+    if (result.exitCode !== 0) {
+      return {
+        success: false,
+        message: result.stderr || result.error || "Failed to create PR",
+        prUrl: null,
+      };
+    }
+
+    const prUrlMatch = result.stdout.match(/https:\/\/github\.com\/[^\s]+/);
+    const prUrl = prUrlMatch?.[0] ?? null;
+
+    const state = await this.getStateSnapshot(directoryPath, {
+      includeChangedFiles: false,
+      includeDiffStats: false,
+      includeLatestCommit: false,
+      includePrStatus: true,
+    });
+
+    return {
+      success: true,
+      message: "Pull request created",
+      prUrl,
+      state,
+    };
+  }
+
+  public async openPr(directoryPath: string): Promise<OpenPrOutput> {
+    const result = await execGh(["pr", "view", "--json", "url"], {
+      cwd: directoryPath,
+    });
+
+    if (result.exitCode !== 0) {
+      return {
+        success: false,
+        message: result.stderr || result.error || "Failed to fetch PR",
+        prUrl: null,
+      };
+    }
+
+    const data = JSON.parse(result.stdout) as { url?: string };
+    const prUrl = data.url ?? null;
+    return { success: !!prUrl, message: prUrl ? "OK" : "No PR found", prUrl };
+  }
+
+  public async generateCommitMessage(
+    directoryPath: string,
+    credentials: LlmCredentials,
+  ): Promise<{ message: string }> {
+    const [stagedDiff, unstagedDiff, conventions, changedFiles] =
+      await Promise.all([
+        getStagedDiff(directoryPath),
+        getUnstagedDiff(directoryPath),
+        getCommitConventions(directoryPath),
+        this.getChangedFilesHead(directoryPath),
+      ]);
+
+    const diff = stagedDiff || unstagedDiff;
+    if (!diff && changedFiles.length === 0) {
+      return { message: "" };
+    }
+
+    const truncatedDiff =
+      diff.length > MAX_DIFF_LENGTH
+        ? `${diff.slice(0, MAX_DIFF_LENGTH)}\n... (diff truncated)`
+        : diff;
+
+    const filesSummary = changedFiles
+      .map((f) => `${f.status}: ${f.path}`)
+      .join("\n");
+
+    const conventionHint = conventions.conventionalCommits
+      ? `This repository uses conventional commits. Common prefixes: ${conventions.commonPrefixes.join(", ") || "feat, fix, docs, chore"}.
+Example messages from this repo:
+${conventions.sampleMessages.slice(0, 3).join("\n")}`
+      : `Example messages from this repo:
+${conventions.sampleMessages.slice(0, 3).join("\n")}`;
+
+    const system = `You are a git commit message generator. Generate a concise, descriptive commit message for the given changes.
+
+${conventionHint}
+
+Rules:
+- First line should be a short summary (max 72 chars)
+- Use imperative mood ("Add feature" not "Added feature")
+- Be specific about what changed
+- If using conventional commits, include the appropriate prefix
+- Do not include any explanation, just output the commit message`;
+
+    const userMessage = `Generate a commit message for these changes:
+
+Changed files:
+${filesSummary}
+
+Diff:
+${truncatedDiff}`;
+
+    log.debug("Generating commit message", {
+      fileCount: changedFiles.length,
+      diffLength: diff.length,
+      conventionalCommits: conventions.conventionalCommits,
+    });
+
+    const response = await this.llmGateway.prompt(
+      credentials,
+      [{ role: "user", content: userMessage }],
+      { system },
+    );
+
+    return { message: response.content.trim() };
+  }
+
+  public async generatePrTitleAndBody(
+    directoryPath: string,
+    credentials: LlmCredentials,
+  ): Promise<{ title: string; body: string }> {
+    const [defaultBranch, currentBranch, changedFiles, prTemplate] =
+      await Promise.all([
+        getDefaultBranch(directoryPath),
+        getCurrentBranch(directoryPath),
+        this.getChangedFilesHead(directoryPath),
+        this.getPrTemplate(directoryPath),
+      ]);
+
+    const commits = await getCommitsBetweenBranches(
+      directoryPath,
+      defaultBranch,
+      currentBranch ?? undefined,
+      30,
+    );
+
+    if (commits.length === 0 && changedFiles.length === 0) {
+      return { title: "", body: "" };
+    }
+
+    const commitsSummary = commits.map((c) => `- ${c.message}`).join("\n");
+
+    const filesSummary = changedFiles
+      .map((f) => `${f.status}: ${f.path}`)
+      .join("\n");
+
+    const templateHint = prTemplate.template
+      ? `The repository has a PR template. Use it as a guide for structure but adapt the content to match the actual changes:\n${prTemplate.template.slice(0, 2000)}`
+      : "";
+
+    const system = `You are a PR description generator. Generate a title and detailed description for a pull request.
+
+Output format (use exactly this format):
+TITLE: <short descriptive title, max 72 chars>
+
+BODY:
+<detailed description>
+
+Rules for the title:
+- Short and descriptive (max 72 chars)
+- Use imperative mood ("Add feature" not "Added feature")
+- Be specific about what the PR accomplishes
+
+Rules for the body:
+- Start with a TL;DR section (1-2 sentences summarizing the change)
+- Include a "What changed?" section with bullet points describing the key changes
+- Be thorough but concise
+- Use markdown formatting
+${templateHint}
+
+Do not include any explanation outside the TITLE and BODY sections.`;
+
+    const userMessage = `Generate a PR title and description for these changes:
+
+Branch: ${currentBranch ?? "unknown"} -> ${defaultBranch}
+
+Commits in this PR:
+${commitsSummary || "(no commits yet - changes are uncommitted)"}
+
+Changed files:
+${filesSummary || "(no file changes detected)"}`;
+
+    log.debug("Generating PR title and body", {
+      commitCount: commits.length,
+      fileCount: changedFiles.length,
+      hasTemplate: !!prTemplate.template,
+    });
+
+    const response = await this.llmGateway.prompt(
+      credentials,
+      [{ role: "user", content: userMessage }],
+      { system, maxTokens: 2000 },
+    );
+
+    const content = response.content.trim();
+    const titleMatch = content.match(/^TITLE:\s*(.+?)(?:\n|$)/m);
+    const bodyMatch = content.match(/BODY:\s*([\s\S]+)$/m);
+
+    return {
+      title: titleMatch?.[1]?.trim() ?? "",
+      body: bodyMatch?.[1]?.trim() ?? "",
+    };
   }
 }

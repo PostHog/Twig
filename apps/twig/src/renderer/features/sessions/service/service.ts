@@ -1345,3 +1345,11 @@ export class SessionService {
     }
   }
 }
+
+// Register callback when module loads (not during tests)
+if (typeof window !== "undefined" && !import.meta.env?.VITEST) {
+  setSessionResetCallback(() => {
+    log.info("Auth triggered session reset");
+    resetSessionService();
+  });
+}

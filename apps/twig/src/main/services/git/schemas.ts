@@ -168,13 +168,7 @@ export const pushInput = z.object({
   setUpstream: z.boolean().default(false),
 });
 
-export const pushOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-});
-
 export type PushInput = z.infer<typeof pushInput>;
-export type PushOutput = z.infer<typeof pushOutput>;
 
 // Pull operation
 export const pullInput = z.object({
@@ -183,14 +177,68 @@ export const pullInput = z.object({
   branch: z.string().optional(),
 });
 
-export const pullOutput = z.object({
-  success: z.boolean(),
+export type PullInput = z.infer<typeof pullInput>;
+
+// Commit operation
+export const commitInput = z.object({
+  directoryPath: z.string(),
   message: z.string(),
-  updatedFiles: z.number().optional(),
+  paths: z.array(z.string()).optional(),
+  allowEmpty: z.boolean().optional(),
 });
 
-export type PullInput = z.infer<typeof pullInput>;
-export type PullOutput = z.infer<typeof pullOutput>;
+export type CommitInput = z.infer<typeof commitInput>;
+
+// GitHub CLI status
+export const ghStatusOutput = z.object({
+  installed: z.boolean(),
+  version: z.string().nullable(),
+  authenticated: z.boolean(),
+  username: z.string().nullable(),
+  error: z.string().nullable(),
+});
+
+export type GhStatusOutput = z.infer<typeof ghStatusOutput>;
+
+// Pull request status
+export const prStatusInput = directoryPathInput;
+export const prStatusOutput = z.object({
+  hasRemote: z.boolean(),
+  isGitHubRepo: z.boolean(),
+  currentBranch: z.string().nullable(),
+  defaultBranch: z.string().nullable(),
+  prExists: z.boolean(),
+  prUrl: z.string().nullable(),
+  prState: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+  headBranch: z.string().nullable(),
+  isDraft: z.boolean().nullable(),
+  error: z.string().nullable(),
+});
+
+export type PrStatusInput = z.infer<typeof prStatusInput>;
+export type PrStatusOutput = z.infer<typeof prStatusOutput>;
+
+// Create PR operation
+export const createPrInput = z.object({
+  directoryPath: z.string(),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  draft: z.boolean().optional(),
+});
+
+export type CreatePrInput = z.infer<typeof createPrInput>;
+
+// Open PR operation
+export const openPrInput = directoryPathInput;
+export const openPrOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  prUrl: z.string().nullable(),
+});
+
+export type OpenPrInput = z.infer<typeof openPrInput>;
+export type OpenPrOutput = z.infer<typeof openPrOutput>;
 
 // Publish (push with upstream) operation
 export const publishInput = z.object({
@@ -198,14 +246,7 @@ export const publishInput = z.object({
   remote: z.string().default("origin"),
 });
 
-export const publishOutput = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  branch: z.string(),
-});
-
 export type PublishInput = z.infer<typeof publishInput>;
-export type PublishOutput = z.infer<typeof publishOutput>;
 
 // Sync (pull then push) operation
 export const syncInput = z.object({
@@ -213,14 +254,7 @@ export const syncInput = z.object({
   remote: z.string().default("origin"),
 });
 
-export const syncOutput = z.object({
-  success: z.boolean(),
-  pullMessage: z.string(),
-  pushMessage: z.string(),
-});
-
 export type SyncInput = z.infer<typeof syncInput>;
-export type SyncOutput = z.infer<typeof syncOutput>;
 
 // PR Template lookup
 export const getPrTemplateInput = directoryPathInput;
@@ -247,3 +281,99 @@ export const getCommitConventionsOutput = z.object({
 export type GetCommitConventionsOutput = z.infer<
   typeof getCommitConventionsOutput
 >;
+
+export const generateCommitMessageInput = z.object({
+  directoryPath: z.string(),
+  credentials: z.object({
+    apiKey: z.string(),
+    apiHost: z.string(),
+  }),
+});
+
+export const generateCommitMessageOutput = z.object({
+  message: z.string(),
+});
+
+export const generatePrTitleAndBodyInput = z.object({
+  directoryPath: z.string(),
+  credentials: z.object({
+    apiKey: z.string(),
+    apiHost: z.string(),
+  }),
+});
+
+export const generatePrTitleAndBodyOutput = z.object({
+  title: z.string(),
+  body: z.string(),
+});
+
+export const gitStateSnapshotSchema = z.object({
+  changedFiles: z.array(changedFileSchema).optional(),
+  diffStats: diffStatsSchema.optional(),
+  syncStatus: gitSyncStatusSchema.optional(),
+  latestCommit: gitCommitInfoSchema.nullable().optional(),
+  prStatus: prStatusOutput.optional(),
+});
+
+export type GitStateSnapshot = z.infer<typeof gitStateSnapshotSchema>;
+
+export const commitOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  commitSha: z.string().nullable(),
+  branch: z.string().nullable(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type CommitOutput = z.infer<typeof commitOutput>;
+
+export const pushOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PushOutput = z.infer<typeof pushOutput>;
+
+export const pullOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  updatedFiles: z.number().optional(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PullOutput = z.infer<typeof pullOutput>;
+
+export const publishOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  branch: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type PublishOutput = z.infer<typeof publishOutput>;
+
+export const syncOutput = z.object({
+  success: z.boolean(),
+  pullMessage: z.string(),
+  pushMessage: z.string(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type SyncOutput = z.infer<typeof syncOutput>;
+
+export const createPrOutput = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  prUrl: z.string().nullable(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type CreatePrOutput = z.infer<typeof createPrOutput>;
+
+export const discardFileChangesOutput = z.object({
+  success: z.boolean(),
+  state: gitStateSnapshotSchema.optional(),
+});
+
+export type DiscardFileChangesOutput = z.infer<typeof discardFileChangesOutput>;

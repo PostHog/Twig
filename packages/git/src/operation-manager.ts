@@ -61,10 +61,12 @@ class GitOperationManagerImpl {
       const scopedGit = createGitClient(repoPath, {
         abortSignal: options.signal,
       });
-      return operation(scopedGit.env({ GIT_OPTIONAL_LOCKS: "0" }));
+      return operation(
+        scopedGit.env({ ...process.env, GIT_OPTIONAL_LOCKS: "0" }),
+      );
     }
 
-    const git = state.client.env({ GIT_OPTIONAL_LOCKS: "0" });
+    const git = state.client.env({ ...process.env, GIT_OPTIONAL_LOCKS: "0" });
     return operation(git);
   }
 
@@ -91,10 +93,10 @@ class GitOperationManagerImpl {
         const scopedGit = createGitClient(repoPath, {
           abortSignal: options.signal,
         });
-        return await operation(scopedGit);
+        return await operation(scopedGit.env(process.env));
       }
 
-      return await operation(state.client);
+      return await operation(state.client.env(process.env));
     } catch (error) {
       if (options?.signal?.aborted) {
         await removeLock(repoPath).catch(() => {});
