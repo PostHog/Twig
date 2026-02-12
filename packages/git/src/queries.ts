@@ -514,7 +514,8 @@ export async function getSyncStatus(
     async (git) => {
       try {
         const status = await git.status();
-        const currentBranch = status.current || null;
+        const isDetached = status.detached || status.current === "HEAD";
+        const currentBranch = isDetached ? null : status.current || null;
 
         if (!currentBranch) {
           return {

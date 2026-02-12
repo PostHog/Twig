@@ -1,4 +1,5 @@
 import {
+  GitBranchDialog,
   GitCommitDialog,
   GitPrDialog,
   GitPushDialog,
@@ -87,6 +88,19 @@ export function GitInteractionHeader({ taskId }: GitInteractionHeaderProps) {
         error={modals.prError}
         onGenerate={actions.generatePrTitleAndBody}
         isGenerating={modals.isGeneratingPr}
+      />
+
+      <GitBranchDialog
+        open={modals.branchOpen}
+        onOpenChange={(open) => {
+          if (!open) actions.closeBranch();
+        }}
+        branchName={modals.branchName}
+        onBranchNameChange={actions.setBranchName}
+        branchPrefix={null}
+        onConfirm={actions.runBranch}
+        isSubmitting={modals.isSubmitting}
+        error={modals.branchError}
       />
     </>
   );

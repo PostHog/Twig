@@ -4,7 +4,8 @@ export type GitMenuActionId =
   | "sync"
   | "publish"
   | "create-pr"
-  | "view-pr";
+  | "view-pr"
+  | "branch-here";
 
 export interface GitMenuAction {
   id: GitMenuActionId;

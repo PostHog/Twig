@@ -44,13 +44,16 @@ interface GitInteractionActions {
   closeCommit: () => void;
   closePush: () => void;
   closePr: () => void;
+  closeBranch: () => void;
   setCommitMessage: (value: string) => void;
   setCommitNextStep: (value: CommitNextStep) => void;
   setPrTitle: (value: string) => void;
   setPrBody: (value: string) => void;
+  setBranchName: (value: string) => void;
   runCommit: () => Promise<void>;
   runPush: () => Promise<void>;
   runPr: () => Promise<void>;
+  runBranch: () => Promise<void>;
   generateCommitMessage: () => Promise<void>;
   generatePrTitleAndBody: () => Promise<void>;
 }
@@ -155,6 +158,7 @@ export function useGitInteraction(
       publish: () => modal.openPush("publish"),
       "view-pr": () => viewPr(),
       "create-pr": () => openCreatePr(),
+      "branch-here": () => modal.openBranch(),
     };
     actionMap[id]();
   };
@@ -464,6 +468,42 @@ export function useGitInteraction(
     }
   };
 
+  const runBranch = async () => {
+    if (!repoPath) return;
+
+    const branchName = store.branchName.trim();
+    if (!branchName) {
+      modal.setBranchError("Branch name is required.");
+      return;
+    }
+
+    modal.setIsSubmitting(true);
+    modal.setBranchError(null);
+
+    try {
+      await trpcVanilla.git.createBranch.mutate({
+        directoryPath: repoPath,
+        branchName,
+      });
+
+      trackGitAction(taskId, "branch-here", true);
+
+      await queryClient.invalidateQueries({
+        queryKey: ["git-sync-status", repoPath],
+      });
+
+      modal.closeBranch();
+    } catch (error) {
+      log.error("Failed to create branch", error);
+      trackGitAction(taskId, "branch-here", false);
+      modal.setBranchError(
+        error instanceof Error ? error.message : "Failed to create branch.",
+      );
+    } finally {
+      modal.setIsSubmitting(false);
+    }
+  };
+
   return {
     state: {
       primaryAction: computed.primaryAction,
@@ -487,13 +527,16 @@ export function useGitInteraction(
       closeCommit: modal.closeCommit,
       closePush: modal.closePush,
       closePr: modal.closePr,
+      closeBranch: modal.closeBranch,
       setCommitMessage: modal.setCommitMessage,
       setCommitNextStep: modal.setCommitNextStep,
       setPrTitle: modal.setPrTitle,
       setPrBody: modal.setPrBody,
+      setBranchName: modal.setBranchName,
       runCommit,
       runPush,
       runPr,
+      runBranch,
       generateCommitMessage,
       generatePrTitleAndBody,
     },

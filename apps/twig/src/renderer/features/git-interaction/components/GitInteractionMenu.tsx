@@ -9,6 +9,7 @@ import {
   Eye,
   GitBranch,
   GitCommit,
+  GitFork,
   GitPullRequest,
 } from "@phosphor-icons/react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
@@ -81,6 +82,8 @@ function getActionIcon(actionId: GitMenuActionId) {
       return <GitPullRequest size={12} weight="bold" />;
     case "view-pr":
       return <Eye size={12} weight="bold" />;
+    case "branch-here":
+      return <GitFork size={12} weight="bold" />;
     default:
       return <CloudArrowUp size={12} weight="bold" />;
   }
@@ -94,63 +97,70 @@ export function GitInteractionMenu({
   onSelect,
 }: GitInteractionMenuProps) {
   const allDisabled = actions.every((a) => !a.enabled);
+  const showDropdown = actions.length > 1;
 
   return (
     <Flex align="center" gap="0">
       <ActionButton
         action={primaryAction}
-        isPrimary
+        isPrimary={showDropdown}
         isBusy={isBusy}
         allDisabled={allDisabled}
         onClick={() => onPrimary(primaryAction.id)}
       />
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          <Button
-            size="1"
-            variant={allDisabled ? "soft" : "solid"}
-            color={allDisabled ? "gray" : undefined}
-            disabled={isBusy}
-            style={{
-              borderTopLeftRadius: 0,
-              borderBottomLeftRadius: 0,
-              borderLeft: allDisabled ? undefined : "1px solid var(--accent-8)",
-              paddingLeft: "6px",
-              paddingRight: "6px",
-            }}
-          >
-            <ChevronDownIcon />
-          </Button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content size="1" align="end">
-          {actions.map((action) => {
-            const icon = getActionIcon(action.id);
-            const itemContent = (
-              <Flex align="center" gap="2">
-                {icon}
-                <Text size="1">{action.label}</Text>
-              </Flex>
-            );
-
-            if (!action.enabled && action.disabledReason) {
-              return (
-                <Tooltip key={action.id} content={action.disabledReason}>
-                  <DropdownMenu.Item disabled>{itemContent}</DropdownMenu.Item>
-                </Tooltip>
+      {showDropdown && (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <Button
+              size="1"
+              variant={allDisabled ? "soft" : "solid"}
+              color={allDisabled ? "gray" : undefined}
+              disabled={isBusy}
+              style={{
+                borderTopLeftRadius: 0,
+                borderBottomLeftRadius: 0,
+                borderLeft: allDisabled
+                  ? undefined
+                  : "1px solid var(--accent-8)",
+                paddingLeft: "6px",
+                paddingRight: "6px",
+              }}
+            >
+              <ChevronDownIcon />
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content size="1" align="end">
+            {actions.map((action) => {
+              const icon = getActionIcon(action.id);
+              const itemContent = (
+                <Flex align="center" gap="2">
+                  {icon}
+                  <Text size="1">{action.label}</Text>
+                </Flex>
               );
-            }
 
-            return (
-              <DropdownMenu.Item
-                key={action.id}
-                onSelect={() => onSelect(action.id)}
-              >
-                {itemContent}
-              </DropdownMenu.Item>
-            );
-          })}
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+              if (!action.enabled && action.disabledReason) {
+                return (
+                  <Tooltip key={action.id} content={action.disabledReason}>
+                    <DropdownMenu.Item disabled>
+                      {itemContent}
+                    </DropdownMenu.Item>
+                  </Tooltip>
+                );
+              }
+
+              return (
+                <DropdownMenu.Item
+                  key={action.id}
+                  onSelect={() => onSelect(action.id)}
+                >
+                  {itemContent}
+                </DropdownMenu.Item>
+              );
+            })}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+      )}
     </Flex>
   );
 }

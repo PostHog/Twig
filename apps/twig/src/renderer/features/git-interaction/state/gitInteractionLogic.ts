@@ -32,6 +32,7 @@ interface GitComputed {
   prHeadBranch: string | null;
   prUrl: string | null;
   baseReason: string | null;
+  isDetachedHead: boolean;
 }
 
 type Check = [boolean, string];
@@ -56,8 +57,11 @@ function getRepoReason(s: GitState): string | null {
     [!s.repoPath, "Select a repository folder first."],
     [s.isRepoLoading, "Checking repository status..."],
     [!s.isRepo, "Not a git repository."],
-    [!s.currentBranch, "Checkout a branch to continue."],
   ]);
+}
+
+function isDetachedHead(s: GitState): boolean {
+  return s.isRepo && !s.isRepoLoading && !s.currentBranch;
 }
 
 function getPushDisabledReason(
@@ -156,6 +160,22 @@ function getPrimaryAction(
 
 export function computeGitInteractionState(input: GitState): GitComputed {
   const repoReason = getRepoReason(input);
+  const detachedHead = isDetachedHead(input);
+
+  if (detachedHead) {
+    const branchAction = makeAction("branch-here", "Branch here", repoReason);
+    return {
+      actions: [branchAction],
+      primaryAction: branchAction,
+      pushDisabledReason: "Create a branch first.",
+      prDisabledReason: "Create a branch first.",
+      prBaseBranch: input.defaultBranch,
+      prHeadBranch: null,
+      prUrl: null,
+      baseReason: repoReason,
+      isDetachedHead: true,
+    };
+  }
 
   const pushDisabledReason = getPushDisabledReason(input, repoReason);
   const prDisabledReason = getPrDisabledReason(input, repoReason);
@@ -183,5 +203,6 @@ export function computeGitInteractionState(input: GitState): GitComputed {
     prHeadBranch: input.prStatus?.headBranch ?? input.currentBranch,
     prUrl: input.prStatus?.prUrl ?? null,
     baseReason: repoReason,
+    isDetachedHead: false,
   };
 }

@@ -4,6 +4,7 @@ import {
   CloudArrowUp,
   GitBranch,
   GitCommit,
+  GitFork,
   GitPullRequest,
   Sparkle,
 } from "@phosphor-icons/react";
@@ -14,6 +15,7 @@ import {
   Dialog,
   Flex,
   IconButton,
+  Link,
   Spinner,
   Text,
   TextArea,
@@ -472,6 +474,85 @@ export function GitPrDialog({
           size="1"
           rows={6}
           disabled={isGenerating}
+        />
+      </Flex>
+    </GitDialog>
+  );
+}
+
+interface GitBranchDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  branchName: string;
+  onBranchNameChange: (value: string) => void;
+  branchPrefix: string | null;
+  onConfirm: () => void;
+  isSubmitting: boolean;
+  error: string | null;
+}
+
+export function GitBranchDialog({
+  open,
+  onOpenChange,
+  branchName,
+  onBranchNameChange,
+  branchPrefix,
+  onConfirm,
+  isSubmitting,
+  error,
+}: GitBranchDialogProps) {
+  const displayName = branchPrefix
+    ? `${branchPrefix}${branchName}`
+    : branchName;
+
+  return (
+    <GitDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={<GitFork size={ICON_SIZE} />}
+      title="Work here"
+      error={error}
+      buttonLabel="Create"
+      buttonDisabled={!branchName.trim()}
+      isSubmitting={isSubmitting}
+      onSubmit={onConfirm}
+    >
+      <Text size="1" color="gray">
+        Create a branch to commit changes, push, and create a PR from this
+        worktree.{" "}
+        <Link href="#" size="1">
+          Learn more
+        </Link>
+      </Text>
+
+      <Flex direction="column" gap="1">
+        <Flex align="center" justify="between">
+          <Text size="1" color="gray">
+            Branch name
+          </Text>
+          <Text size="1" color="gray">
+            Set prefix
+          </Text>
+        </Flex>
+        <TextField.Root
+          value={branchPrefix ? displayName : branchName}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (branchPrefix && value.startsWith(branchPrefix)) {
+              onBranchNameChange(value.slice(branchPrefix.length));
+            } else if (!branchPrefix) {
+              onBranchNameChange(value);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && branchName.trim() && !isSubmitting) {
+              e.preventDefault();
+              onConfirm();
+            }
+          }}
+          placeholder="feature-name"
+          size="1"
+          autoFocus
         />
       </Flex>
     </GitDialog>

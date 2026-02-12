@@ -12,6 +12,7 @@ interface GitInteractionState {
   commitOpen: boolean;
   pushOpen: boolean;
   prOpen: boolean;
+  branchOpen: boolean;
   commitMessage: string;
   commitNextStep: CommitNextStep;
   pushMode: PushMode;
@@ -21,6 +22,8 @@ interface GitInteractionState {
   prBody: string;
   prError: string | null;
   commitError: string | null;
+  branchName: string;
+  branchError: string | null;
   isSubmitting: boolean;
   openPrAfterPush: boolean;
   isGeneratingCommitMessage: boolean;
@@ -31,6 +34,7 @@ interface GitInteractionActions {
   setCommitOpen: (open: boolean) => void;
   setPushOpen: (open: boolean) => void;
   setPrOpen: (open: boolean) => void;
+  setBranchOpen: (open: boolean) => void;
   setCommitMessage: (value: string) => void;
   setCommitNextStep: (value: CommitNextStep) => void;
   setPushMode: (value: PushMode) => void;
@@ -40,6 +44,8 @@ interface GitInteractionActions {
   setPrBody: (value: string) => void;
   setPrError: (value: string | null) => void;
   setCommitError: (value: string | null) => void;
+  setBranchName: (value: string) => void;
+  setBranchError: (value: string | null) => void;
   setIsSubmitting: (value: boolean) => void;
   setOpenPrAfterPush: (value: boolean) => void;
   setIsGeneratingCommitMessage: (value: boolean) => void;
@@ -48,9 +54,11 @@ interface GitInteractionActions {
   openCommit: (nextStep: CommitNextStep) => void;
   openPush: (mode: PushMode) => void;
   openPr: (defaultTitle?: string, defaultBody?: string) => void;
+  openBranch: () => void;
   closeCommit: () => void;
   closePush: () => void;
   closePr: () => void;
+  closeBranch: () => void;
 }
 
 export interface GitInteractionStore extends GitInteractionState {
@@ -61,6 +69,7 @@ const initialState: GitInteractionState = {
   commitOpen: false,
   pushOpen: false,
   prOpen: false,
+  branchOpen: false,
   commitMessage: "",
   commitNextStep: "commit",
   pushMode: "push",
@@ -70,6 +79,8 @@ const initialState: GitInteractionState = {
   prBody: "",
   prError: null,
   commitError: null,
+  branchName: "",
+  branchError: null,
   isSubmitting: false,
   openPrAfterPush: false,
   isGeneratingCommitMessage: false,
@@ -82,6 +93,7 @@ export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
     setCommitOpen: (open) => set({ commitOpen: open }),
     setPushOpen: (open) => set({ pushOpen: open }),
     setPrOpen: (open) => set({ prOpen: open }),
+    setBranchOpen: (open) => set({ branchOpen: open }),
     setCommitMessage: (value) => set({ commitMessage: value }),
     setCommitNextStep: (value) => set({ commitNextStep: value }),
     setPushMode: (value) => set({ pushMode: value }),
@@ -91,6 +103,8 @@ export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
     setPrBody: (value) => set({ prBody: value }),
     setPrError: (value) => set({ prError: value }),
     setCommitError: (value) => set({ commitError: value }),
+    setBranchName: (value) => set({ branchName: value }),
+    setBranchError: (value) => set({ branchError: value }),
     setIsSubmitting: (value) => set({ isSubmitting: value }),
     setOpenPrAfterPush: (value) => set({ openPrAfterPush: value }),
     setIsGeneratingCommitMessage: (value) =>
@@ -113,6 +127,8 @@ export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
         prError: null,
         prOpen: true,
       }),
+    openBranch: () =>
+      set({ branchName: "", branchError: null, branchOpen: true }),
     closeCommit: () => set({ commitOpen: false, commitError: null }),
     closePush: () =>
       set({
@@ -123,6 +139,8 @@ export const useGitInteractionStore = create<GitInteractionStore>((set) => ({
       }),
     closePr: () =>
       set({ prOpen: false, prError: null, prTitle: "", prBody: "" }),
+    closeBranch: () =>
+      set({ branchOpen: false, branchError: null, branchName: "" }),
   },
 }));
 
@@ -142,6 +160,8 @@ export function getGitInteractionActionLabel(
       return "Create PR";
     case "view-pr":
       return "View PR";
+    case "branch-here":
+      return "Branch here";
     default:
       return "Git Action";
   }
