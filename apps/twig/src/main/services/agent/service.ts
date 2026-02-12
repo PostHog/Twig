@@ -207,6 +207,13 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
+function getClaudeCodePluginPath(): string {
+  const appPath = app.getAppPath();
+  return app.isPackaged
+    ? join(`${appPath}.unpacked`, ".vite/build/claude-code/posthog")
+    : join(appPath, ".vite/build/claude-code/posthog");
+}
+
 function getCodexBinaryPath(): string {
   const appPath = app.getAppPath();
   return app.isPackaged
@@ -358,7 +365,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       name: "posthog",
       type: "http",
       url: mcpUrl,
-      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+      headers: [
+        { name: "Authorization", value: `Bearer ${token}` },
+        { name: "x-posthog-mcp-version", value: "2" },
+      ],
     });
 
     return servers;
@@ -546,11 +556,16 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               ...(existingSessionId && { sessionId: existingSessionId }),
               systemPrompt,
               ...(permissionMode && { permissionMode }),
-              ...(additionalDirectories?.length && {
-                claudeCode: {
-                  options: { additionalDirectories },
+              claudeCode: {
+                options: {
+                  ...(additionalDirectories?.length && {
+                    additionalDirectories,
+                  }),
+                  plugins: [
+                    { type: "local" as const, path: getClaudeCodePluginPath() },
+                  ],
                 },
-              }),
+              },
             },
           },
         );
@@ -570,11 +585,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             taskRunId,
             systemPrompt,
             ...(permissionMode && { permissionMode }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
+            claudeCode: {
+              options: {
+                ...(additionalDirectories?.length && { additionalDirectories }),
+                plugins: [
+                  { type: "local" as const, path: getClaudeCodePluginPath() },
+                ],
               },
-            }),
+            },
           },
         });
         configOptions = newSessionResponse.configOptions ?? undefined;
