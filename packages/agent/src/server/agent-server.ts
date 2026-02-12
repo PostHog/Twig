@@ -464,18 +464,14 @@ export class AgentServer {
       logger: new Logger({ debug: true, prefix: "[TreeTracker]" }),
     });
 
-    const _posthogAPI = new PostHogAPIClient({
+    const posthogAPI = new PostHogAPIClient({
       apiUrl: this.config.apiUrl,
       projectId: this.config.projectId,
       getApiKey: () => this.config.apiKey,
     });
 
     const logWriter = new SessionLogWriter({
-      otelConfig: {
-        posthogHost: this.config.apiUrl,
-        apiKey: this.config.apiKey,
-        logsPath: "/i/v1/agent-logs",
-      },
+      posthogAPI,
       logger: new Logger({ debug: true, prefix: "[SessionLogWriter]" }),
     });
 
