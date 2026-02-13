@@ -245,6 +245,11 @@ export interface SignalReportsResponse {
 export interface SignalReportArtefactsResponse {
   results: SignalReportArtefact[];
   count: number;
+  unavailableReason?:
+    | "forbidden"
+    | "not_found"
+    | "invalid_payload"
+    | "request_failed";
 }
 
 export type AutonomyCapabilityState =

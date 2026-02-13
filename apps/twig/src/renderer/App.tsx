@@ -34,6 +34,19 @@ function App() {
     return initializeConnectivityStore();
   }, []);
 
+  // Dev-only inbox demo command for local QA from the renderer console.
+  useEffect(() => {
+    if (import.meta.env.PROD) {
+      return;
+    }
+
+    void import("@features/inbox/devtools/inboxDemoConsole").then(
+      ({ registerInboxDemoConsoleCommand }) => {
+        registerInboxDemoConsoleCommand();
+      },
+    );
+  }, []);
+
   // Global workspace error listener for toasts
   useEffect(() => {
     const subscription = trpcVanilla.workspace.onError.subscribe(undefined, {
