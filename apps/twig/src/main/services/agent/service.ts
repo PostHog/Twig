@@ -28,6 +28,7 @@ import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
 import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
+import type { PosthogPluginService } from "../posthog-plugin/service.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -206,13 +207,6 @@ function getClaudeCliPath(): string {
     : join(appPath, ".vite/build/claude-cli/cli.js");
 }
 
-function getClaudeCodePluginPath(): string {
-  const appPath = app.getAppPath();
-  return app.isPackaged
-    ? join(`${appPath}.unpacked`, ".vite/build/claude-code/posthog")
-    : join(appPath, ".vite/build/claude-code/posthog");
-}
-
 function getCodexBinaryPath(): string {
   const appPath = app.getAppPath();
   return app.isPackaged
@@ -235,6 +229,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private processTracking: ProcessTrackingService;
   private sleepService: SleepService;
   private fsService: FsService;
+  private posthogPluginService: PosthogPluginService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
@@ -243,11 +238,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     sleepService: SleepService,
     @inject(MAIN_TOKENS.FsService)
     fsService: FsService,
+    @inject(MAIN_TOKENS.PosthogPluginService)
+    posthogPluginService: PosthogPluginService,
   ) {
     super();
     this.processTracking = processTracking;
     this.sleepService = sleepService;
     this.fsService = fsService;
+    this.posthogPluginService = posthogPluginService;
   }
 
   public updateToken(newToken: string): void {
@@ -570,7 +568,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                     additionalDirectories,
                   }),
                   plugins: [
-                    { type: "local" as const, path: getClaudeCodePluginPath() },
+                    {
+                      type: "local" as const,
+                      path: this.posthogPluginService.getPluginPath(),
+                    },
                   ],
                 },
               },
@@ -597,7 +598,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               options: {
                 ...(additionalDirectories?.length && { additionalDirectories }),
                 plugins: [
-                  { type: "local" as const, path: getClaudeCodePluginPath() },
+                  {
+                    type: "local" as const,
+                    path: this.posthogPluginService.getPluginPath(),
+                  },
                 ],
               },
             },
