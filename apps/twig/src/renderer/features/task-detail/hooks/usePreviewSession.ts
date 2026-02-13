@@ -24,21 +24,20 @@ interface PreviewSessionResult {
  * Manages a lightweight preview session that provides adapter-specific
  * config options (models, modes, reasoning levels) for the task input page.
  *
- * Starts a new preview session when adapter or repoPath change,
+ * Starts a new preview session when adapter changes,
  * and cleans up on unmount or when inputs change.
  */
 export function usePreviewSession(
   adapter: "claude" | "codex",
-  repoPath: string | undefined,
 ): PreviewSessionResult {
   useEffect(() => {
     const service = getSessionService();
-    service.startPreviewSession({ adapter, repoPath });
+    service.startPreviewSession({ adapter });
 
     return () => {
       service.cancelPreviewSession();
     };
-  }, [adapter, repoPath]);
+  }, [adapter]);
 
   const session = useSessionForTask(PREVIEW_TASK_ID);
   const modeOption = useModeConfigOptionForTask(PREVIEW_TASK_ID);
