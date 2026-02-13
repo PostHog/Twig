@@ -9,18 +9,143 @@ import { buildSignalTaskPrompt } from "@features/inbox/utils/buildSignalTaskProm
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
 import {
   ArrowSquareOutIcon,
+  ArrowsClockwiseIcon,
+  CircleNotchIcon,
   ClockIcon,
   SparkleIcon,
+  WarningIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { Badge, Box, Button, Flex, ScrollArea, Text } from "@radix-ui/themes";
-import type { SignalReport } from "@shared/types";
+import type {
+  SignalReport,
+  SignalReportArtefactsResponse,
+} from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useEffect, useMemo, useState } from "react";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
 
 interface InboxSignalsTabProps {
   onGoToSetup: () => void;
+}
+
+function SignalsLoadingState() {
+  return (
+    <Flex height="100%" style={{ minHeight: 0 }}>
+      <Box flexGrow="1" style={{ minWidth: 0 }}>
+        <Flex direction="column" height="100%">
+          <Flex
+            align="center"
+            justify="between"
+            px="3"
+            py="2"
+            style={{ borderBottom: "1px solid var(--gray-5)" }}
+          >
+            <Flex align="center" gap="2">
+              <CircleNotchIcon
+                size={12}
+                className="animate-spin text-gray-10"
+              />
+              <Text size="1" color="gray" className="font-mono text-[11px]">
+                Loading signals
+              </Text>
+            </Flex>
+          </Flex>
+          <Flex direction="column">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Flex
+                // biome-ignore lint/suspicious/noArrayIndexKey: static local loading placeholders
+                key={index}
+                direction="column"
+                gap="2"
+                px="3"
+                py="3"
+                className="border-gray-5 border-b"
+              >
+                <Box className="h-[12px] w-[44%] animate-pulse rounded bg-gray-4" />
+                <Box className="h-[11px] w-[82%] animate-pulse rounded bg-gray-3" />
+              </Flex>
+            ))}
+          </Flex>
+        </Flex>
+      </Box>
+    </Flex>
+  );
+}
+
+function SignalsErrorState({
+  onRetry,
+  onGoToSetup,
+  isRetrying,
+}: {
+  onRetry: () => void;
+  onGoToSetup: () => void;
+  isRetrying: boolean;
+}) {
+  return (
+    <Flex align="center" justify="center" height="100%" p="4">
+      <Flex
+        direction="column"
+        align="center"
+        gap="3"
+        px="4"
+        py="4"
+        className="w-full max-w-[460px] rounded border border-gray-6 bg-gray-2 text-center"
+      >
+        <WarningIcon size={20} className="text-amber-10" weight="bold" />
+        <Flex direction="column" gap="2" align="center">
+          <Text size="2" weight="medium" className="font-mono text-[12px]">
+            Could not load signals
+          </Text>
+          <Text size="1" color="gray" className="font-mono text-[11px]">
+            Check your connection or permissions, then retry. You can still use
+            Setup while this is unavailable.
+          </Text>
+        </Flex>
+        <Flex align="center" gap="2" wrap="wrap" justify="center">
+          <Button
+            size="1"
+            variant="soft"
+            onClick={onRetry}
+            className="font-mono text-[11px]"
+            disabled={isRetrying}
+          >
+            {isRetrying ? (
+              <CircleNotchIcon size={12} className="animate-spin" />
+            ) : (
+              <ArrowsClockwiseIcon size={12} />
+            )}
+            Retry
+          </Button>
+          <Button
+            size="1"
+            variant="ghost"
+            onClick={onGoToSetup}
+            className="font-mono text-[11px]"
+          >
+            Go to Setup
+          </Button>
+        </Flex>
+      </Flex>
+    </Flex>
+  );
+}
+
+function getArtefactsUnavailableMessage(
+  reason: SignalReportArtefactsResponse["unavailableReason"],
+): string {
+  switch (reason) {
+    case "forbidden":
+      return "Evidence could not be loaded with the current API permissions.";
+    case "not_found":
+      return "Evidence endpoint is unavailable for this signal in this environment.";
+    case "invalid_payload":
+      return "Evidence format was unexpected, so no artefacts could be shown.";
+    case "request_failed":
+      return "Evidence is temporarily unavailable. You can still create a task from this report.";
+    default:
+      return "Evidence is currently unavailable for this signal.";
+  }
 }
 
 function ReportCard({
@@ -80,7 +205,7 @@ function ReportCard({
             <Text
               size="1"
               weight="medium"
-              className="truncate font-mono text-[12px]"
+              className="block truncate font-mono text-[12px]"
             >
               {report.title ?? "Untitled signal"}
             </Text>
@@ -88,7 +213,7 @@ function ReportCard({
           <Text
             size="1"
             color="gray"
-            className="truncate font-mono text-[11px]"
+            className="block truncate font-mono text-[11px]"
           >
             {report.summary ?? "No summary available yet."}
           </Text>
@@ -110,7 +235,7 @@ function ReportCard({
 }
 
 export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
-  const { data, isLoading, error } = useInboxReports();
+  const { data, isLoading, isFetching, error, refetch } = useInboxReports();
   const reports = data?.results ?? [];
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const sidebarOpen = useInboxSignalsSidebarStore((state) => state.open);
@@ -152,6 +277,13 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
     enabled: !!selectedReport,
   });
   const visibleArtefacts = artefactsQuery.data?.results ?? [];
+  const artefactsUnavailableReason = artefactsQuery.data?.unavailableReason;
+  const showArtefactsUnavailable =
+    !artefactsQuery.isLoading &&
+    (!!artefactsQuery.error || !!artefactsUnavailableReason);
+  const artefactsUnavailableMessage = artefactsQuery.error
+    ? "Evidence could not be loaded right now. You can still create a task from this report."
+    : getArtefactsUnavailableMessage(artefactsUnavailableReason);
 
   const cloudRegion = useAuthStore((state) => state.cloudRegion);
   const projectId = useAuthStore((state) => state.projectId);
@@ -179,20 +311,18 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
   };
 
   if (isLoading) {
-    return (
-      <Flex direction="column" gap="3">
-        <Text size="1" color="gray" className="font-mono text-[11px]">
-          Loading signals...
-        </Text>
-      </Flex>
-    );
+    return <SignalsLoadingState />;
   }
 
   if (error) {
     return (
-      <Text size="1" color="red" className="font-mono text-[11px]">
-        Failed to load Inbox signals.
-      </Text>
+      <SignalsErrorState
+        onRetry={() => {
+          void refetch();
+        }}
+        isRetrying={isFetching}
+        onGoToSetup={onGoToSetup}
+      />
     );
   }
 
@@ -282,7 +412,7 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
               <Text
                 size="1"
                 weight="medium"
-                className="truncate font-mono text-[12px]"
+                className="block truncate font-mono text-[12px]"
               >
                 {selectedReport.title ?? "Untitled signal"}
               </Text>
@@ -331,7 +461,7 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
                   <Text
                     size="1"
                     weight="medium"
-                    className="font-mono text-[12px]"
+                    className="block font-mono text-[12px]"
                     mb="2"
                   >
                     Evidence
@@ -340,27 +470,27 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
                     <Text
                       size="1"
                       color="gray"
-                      className="font-mono text-[11px]"
+                      className="block font-mono text-[11px]"
                     >
                       Loading evidence...
                     </Text>
                   )}
-                  {artefactsQuery.error && (
+                  {showArtefactsUnavailable && (
                     <Text
                       size="1"
-                      color="red"
-                      className="font-mono text-[11px]"
+                      color="gray"
+                      className="block font-mono text-[11px]"
                     >
-                      Failed to load signal artefacts.
+                      {artefactsUnavailableMessage}
                     </Text>
                   )}
                   {!artefactsQuery.isLoading &&
-                    !artefactsQuery.error &&
+                    !showArtefactsUnavailable &&
                     visibleArtefacts.length === 0 && (
                       <Text
                         size="1"
                         color="gray"
-                        className="font-mono text-[11px]"
+                        className="block font-mono text-[11px]"
                       >
                         No artefacts were returned for this signal.
                       </Text>
@@ -386,12 +516,14 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
                               color="gray"
                               className="font-mono text-[11px]"
                             >
-                              {new Date(
-                                artefact.content.start_time,
-                              ).toLocaleString()}
+                              {artefact.content.start_time
+                                ? new Date(
+                                    artefact.content.start_time,
+                                  ).toLocaleString()
+                                : "Unknown time"}
                             </Text>
                           </Flex>
-                          {replayBaseUrl && (
+                          {replayBaseUrl && artefact.content.session_id && (
                             <a
                               href={`${replayBaseUrl}/${artefact.content.session_id}`}
                               target="_blank"
