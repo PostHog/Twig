@@ -53,3 +53,6 @@ storybook-static
 
 # Downloaded binaries
 apps/twig/resources/codex-acp/
+
+# Local dev skills (override shipped + remote skills in dev mode)
+plugins/claude-code/local-skills/

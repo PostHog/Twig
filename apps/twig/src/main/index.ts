@@ -19,6 +19,7 @@ import {
   trackAppEvent,
   withTeamContext,
 } from "./services/posthog-analytics.js";
+import type { PosthogPluginService } from "./services/posthog-plugin/service.js";
 import type { TaskLinkService } from "./services/task-link/service";
 import type { UpdatesService } from "./services/updates/service.js";
 import type { WorkspaceService } from "./services/workspace/service.js";
@@ -55,6 +56,7 @@ function initializeServices(): void {
   container.get<UpdatesService>(MAIN_TOKENS.UpdatesService);
   container.get<TaskLinkService>(MAIN_TOKENS.TaskLinkService);
   container.get<ExternalAppsService>(MAIN_TOKENS.ExternalAppsService);
+  container.get<PosthogPluginService>(MAIN_TOKENS.PosthogPluginService);
 
   // Initialize PostHog analytics
   initializePostHog();

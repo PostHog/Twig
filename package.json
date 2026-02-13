@@ -27,6 +27,7 @@
     "clean": "pnpm -r clean",
     "knip": "knip",
     "prepare": "husky",
+    "skills:pull": "node scripts/pull-skills.mjs",
     "mobile:start": "pnpm --filter @posthog/mobile exec expo start",
     "mobile:start:clear": "pnpm --filter @posthog/mobile exec expo start --clear",
     "mobile:run:ios": "pnpm --filter @posthog/mobile exec expo run:ios",
