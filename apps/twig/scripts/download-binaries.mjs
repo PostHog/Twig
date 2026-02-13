@@ -28,11 +28,18 @@ const BINARIES = [
       const { platform, arch } = process;
       const targets = {
         darwin: { arm64: "aarch64-apple-darwin", x64: "x86_64-apple-darwin" },
-        linux: { arm64: "aarch64-unknown-linux-gnu", x64: "x86_64-unknown-linux-gnu" },
-        win32: { arm64: "aarch64-pc-windows-msvc", x64: "x86_64-pc-windows-msvc" },
+        linux: {
+          arm64: "aarch64-unknown-linux-gnu",
+          x64: "x86_64-unknown-linux-gnu",
+        },
+        win32: {
+          arm64: "aarch64-pc-windows-msvc",
+          x64: "x86_64-pc-windows-msvc",
+        },
       };
       const platformTargets = targets[platform];
-      if (!platformTargets) throw new Error(`Unsupported platform: ${platform}`);
+      if (!platformTargets)
+        throw new Error(`Unsupported platform: ${platform}`);
       const target = platformTargets[arch];
       if (!target) throw new Error(`Unsupported arch: ${arch}`);
       return target;
@@ -49,11 +56,18 @@ const BINARIES = [
       const { platform, arch } = process;
       const targets = {
         darwin: { arm64: "aarch64-apple-darwin", x64: "x86_64-apple-darwin" },
-        linux: { arm64: "aarch64-unknown-linux-musl", x64: "x86_64-unknown-linux-musl" },
-        win32: { arm64: "aarch64-pc-windows-msvc", x64: "x86_64-pc-windows-msvc" },
+        linux: {
+          arm64: "aarch64-unknown-linux-musl",
+          x64: "x86_64-unknown-linux-musl",
+        },
+        win32: {
+          arm64: "aarch64-pc-windows-msvc",
+          x64: "x86_64-pc-windows-msvc",
+        },
       };
       const platformTargets = targets[platform];
-      if (!platformTargets) throw new Error(`Unsupported platform: ${platform}`);
+      if (!platformTargets)
+        throw new Error(`Unsupported platform: ${platform}`);
       const target = platformTargets[arch];
       if (!target) throw new Error(`Unsupported arch: ${arch}`);
       return target;
@@ -90,7 +104,8 @@ function signForMacOS(binaryPath) {
 }
 
 async function downloadBinary(binary) {
-  const binaryName = process.platform === "win32" ? `${binary.name}.exe` : binary.name;
+  const binaryName =
+    process.platform === "win32" ? `${binary.name}.exe` : binary.name;
   const binaryPath = join(DEST_DIR, binaryName);
 
   console.log(`\n[${binary.name}] v${binary.version}`);
