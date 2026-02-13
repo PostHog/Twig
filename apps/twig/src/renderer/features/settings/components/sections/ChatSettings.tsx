@@ -14,12 +14,14 @@ export function ChatSettings() {
   const {
     desktopNotifications,
     dockBadgeNotifications,
+    dockBounceNotifications,
     completionSound,
     completionVolume,
     autoConvertLongText,
     sendMessagesWith,
     setDesktopNotifications,
     setDockBadgeNotifications,
+    setDockBounceNotifications,
     setCompletionSound,
     setCompletionVolume,
     setAutoConvertLongText,
@@ -86,6 +88,17 @@ export function ChatSettings() {
         <Switch
           checked={dockBadgeNotifications}
           onCheckedChange={setDockBadgeNotifications}
+          size="1"
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="Bounce dock icon"
+        description="Bounce the dock icon when the agent finishes a task or needs your input"
+      >
+        <Switch
+          checked={dockBounceNotifications}
+          onCheckedChange={setDockBounceNotifications}
           size="1"
         />
       </SettingRow>
