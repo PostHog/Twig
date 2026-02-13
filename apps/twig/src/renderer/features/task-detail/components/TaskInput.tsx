@@ -60,7 +60,7 @@ export function TaskInput() {
     thoughtOption,
     previewTaskId,
     isConnecting,
-  } = usePreviewSession(adapter, selectedDirectory || undefined);
+  } = usePreviewSession(adapter);
 
   useEffect(() => {
     if (view.folderId) {
