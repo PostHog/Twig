@@ -63,7 +63,6 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
 
   const env: NodeJS.ProcessEnv = { ...process.env };
 
-  // Prevent Electron's GPU/Chromium processes from interfering with child
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ASAR;
 
@@ -72,6 +71,11 @@ export function spawnCodexProcess(options: CodexProcessOptions): CodexProcess {
   }
 
   const { command, args } = findCodexBinary(options);
+
+  if (options.binaryPath && existsSync(options.binaryPath)) {
+    const binDir = options.binaryPath.replace(/\/[^/]+$/, "");
+    env.PATH = `${binDir}:${env.PATH ?? ""}`;
+  }
 
   logger.info("Spawning codex-acp process", {
     command,
