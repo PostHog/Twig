@@ -11,7 +11,8 @@ test.describe("Visual Stability", () => {
       .waitFor({ state: "hidden", timeout: 30000 })
       .catch(() => {});
 
-    await window.waitForTimeout(1000);
+    // Wait for the app to fully settle (animations, data loading, spinners)
+    await window.waitForTimeout(5000);
 
     const screenshot1 = await window.screenshot();
     const screenshot1Hash = (await Jimp.read(screenshot1)).hash();

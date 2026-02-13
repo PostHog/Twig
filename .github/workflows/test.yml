@@ -88,6 +88,8 @@ jobs:
 
       - name: Package Electron app
         run: pnpm --filter twig run package
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Install Playwright
         if: steps.playwright-cache.outputs.cache-hit != 'true'

@@ -13,7 +13,7 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 
-type ViewType = "task-detail" | "task-input" | "folder-settings";
+type ViewType = "task-detail" | "task-input" | "folder-settings" | "inbox";
 
 interface ViewState {
   type: ViewType;
@@ -29,6 +29,7 @@ interface NavigationStore {
   navigateToTask: (task: Task) => void;
   navigateToTaskInput: (folderId?: string) => void;
   navigateToFolderSettings: (folderId: string) => void;
+  navigateToInbox: () => void;
   goBack: () => void;
   goForward: () => void;
   canGoBack: () => boolean;
@@ -46,6 +47,9 @@ const isSameView = (view1: ViewState, view2: ViewState): boolean => {
   }
   if (view1.type === "folder-settings" && view2.type === "folder-settings") {
     return view1.folderId === view2.folderId;
+  }
+  if (view1.type === "inbox" && view2.type === "inbox") {
+    return true;
   }
   return true;
 };
@@ -136,6 +140,13 @@ export const useNavigationStore = create<NavigationStore>()(
 
         navigateToFolderSettings: (folderId: string) => {
           navigate({ type: "folder-settings", folderId });
+        },
+
+        navigateToInbox: () => {
+          navigate({ type: "inbox" });
+          track(ANALYTICS_EVENTS.TASK_VIEWED, {
+            task_id: "inbox",
+          });
         },
 
         goBack: () => {

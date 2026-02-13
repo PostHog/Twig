@@ -37,7 +37,7 @@ export interface BuildOptionsParams {
 const BRANCH_NAMING_INSTRUCTIONS = `
 # Branch Naming
 
-Before pushing a "workspace-*" branch to origin, rename it to something descriptive based on the work done. Do this automatically without asking the user.
+When working in a detached HEAD state, create a descriptive branch name based on the work being done before committing. Do this automatically without asking the user.
 `;
 
 export function buildSystemPrompt(

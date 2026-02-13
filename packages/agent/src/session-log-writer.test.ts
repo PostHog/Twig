@@ -1,39 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OtelLogWriter } from "./otel-log-writer.js";
+import type { PostHogAPIClient } from "./posthog-api.js";
 import { SessionLogWriter } from "./session-log-writer.js";
+import type { StoredNotification } from "./types.js";
 
-// Mock the OtelLogWriter
-vi.mock("./otel-log-writer.js", () => ({
-  OtelLogWriter: vi.fn(),
-}));
+function makeSessionUpdate(
+  sessionUpdate: string,
+  extra: Record<string, unknown> = {},
+): string {
+  return JSON.stringify({
+    jsonrpc: "2.0",
+    method: "session/update",
+    params: { update: { sessionUpdate, ...extra } },
+  });
+}
 
 describe("SessionLogWriter", () => {
   let logWriter: SessionLogWriter;
-  let mockEmit: ReturnType<typeof vi.fn>;
-  let mockFlush: ReturnType<typeof vi.fn>;
-  let mockShutdown: ReturnType<typeof vi.fn>;
+  let mockAppendLog: ReturnType<typeof vi.fn>;
+  let mockPosthogAPI: PostHogAPIClient;
 
   beforeEach(() => {
-    mockEmit = vi.fn();
-    mockFlush = vi.fn().mockResolvedValue(undefined);
-    mockShutdown = vi.fn().mockResolvedValue(undefined);
+    mockAppendLog = vi.fn().mockResolvedValue(undefined);
+    mockPosthogAPI = {
+      appendTaskRunLog: mockAppendLog,
+    } as unknown as PostHogAPIClient;
 
-    vi.mocked(OtelLogWriter).mockImplementation(
-      () =>
-        ({
-          emit: mockEmit,
-          flush: mockFlush,
-          shutdown: mockShutdown,
-        }) as unknown as OtelLogWriter,
-    );
-
-    logWriter = new SessionLogWriter({
-      otelConfig: {
-        posthogHost: "http://localhost:8000",
-        apiKey: "test-api-key",
-        logsPath: "/i/v1/agent-logs",
-      },
-    });
+    logWriter = new SessionLogWriter({ posthogAPI: mockPosthogAPI });
   });
 
   afterEach(() => {
@@ -41,100 +33,79 @@ describe("SessionLogWriter", () => {
   });
 
   describe("appendRawLine", () => {
-    it("emits entries immediately via OtelLogWriter", () => {
-      const sessionId = "test-session";
-      logWriter.register(sessionId, { taskId: "task-1", runId: sessionId });
+    it("queues entries for flush", async () => {
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
 
-      logWriter.appendRawLine(
-        sessionId,
-        JSON.stringify({ method: "test", params: {} }),
-      );
-      logWriter.appendRawLine(
-        sessionId,
-        JSON.stringify({ method: "test2", params: {} }),
-      );
+      logWriter.appendRawLine(sessionId, JSON.stringify({ method: "test" }));
+      logWriter.appendRawLine(sessionId, JSON.stringify({ method: "test2" }));
 
-      expect(mockEmit).toHaveBeenCalledTimes(2);
+      await logWriter.flush(sessionId);
+
+      expect(mockAppendLog).toHaveBeenCalledTimes(1);
+      const entries: StoredNotification[] = mockAppendLog.mock.calls[0][2];
+      expect(entries).toHaveLength(2);
     });
 
-    it("wraps raw messages in StoredNotification format", () => {
-      const sessionId = "test-session";
-      logWriter.register(sessionId, { taskId: "task-1", runId: sessionId });
-
-      const message = {
-        jsonrpc: "2.0",
-        method: "session/update",
-        params: { foo: "bar" },
-      };
-      logWriter.appendRawLine(sessionId, JSON.stringify(message));
-
-      expect(mockEmit).toHaveBeenCalledTimes(1);
-      const emitArg = mockEmit.mock.calls[0][0];
-      expect(emitArg.notification.type).toBe("notification");
-      expect(emitArg.notification.timestamp).toBeDefined();
-      expect(emitArg.notification.notification).toEqual(message);
+    it("ignores unregistered sessions", async () => {
+      logWriter.appendRawLine("unknown", JSON.stringify({ method: "test" }));
+      await logWriter.flush("unknown");
+      expect(mockAppendLog).not.toHaveBeenCalled();
     });
 
-    it("ignores unregistered sessions", () => {
-      logWriter.appendRawLine(
-        "unknown-session",
-        JSON.stringify({ method: "test" }),
-      );
-
-      expect(mockEmit).not.toHaveBeenCalled();
-    });
-
-    it("ignores invalid JSON", () => {
-      const sessionId = "test-session";
-      logWriter.register(sessionId, { taskId: "task-1", runId: sessionId });
+    it("ignores invalid JSON", async () => {
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
 
       logWriter.appendRawLine(sessionId, "not valid json {{{");
-
-      expect(mockEmit).not.toHaveBeenCalled();
+      await logWriter.flush(sessionId);
+      expect(mockAppendLog).not.toHaveBeenCalled();
     });
   });
 
-  describe("flush", () => {
-    it("calls flush on OtelLogWriter", async () => {
-      const sessionId = "test-session";
-      logWriter.register(sessionId, { taskId: "task-1", runId: sessionId });
+  describe("agent_message_chunk coalescing", () => {
+    it("coalesces consecutive chunks into a single agent_message", async () => {
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
 
-      logWriter.appendRawLine(sessionId, JSON.stringify({ method: "test" }));
+      logWriter.appendRawLine(
+        sessionId,
+        makeSessionUpdate("agent_message_chunk", {
+          content: { type: "text", text: "Hello " },
+        }),
+      );
+      logWriter.appendRawLine(
+        sessionId,
+        makeSessionUpdate("agent_message_chunk", {
+          content: { type: "text", text: "world" },
+        }),
+      );
+      // Non-chunk event triggers flush of chunks
+      logWriter.appendRawLine(
+        sessionId,
+        makeSessionUpdate("tool_call", { toolCallId: "tc1" }),
+      );
+
       await logWriter.flush(sessionId);
 
-      expect(mockFlush).toHaveBeenCalledTimes(1);
-    });
+      const entries: StoredNotification[] = mockAppendLog.mock.calls[0][2];
+      expect(entries).toHaveLength(2); // coalesced message + tool_call
 
-    it("does nothing for unregistered sessions", async () => {
-      await logWriter.flush("unknown-session");
-
-      expect(mockFlush).not.toHaveBeenCalled();
+      const coalesced = entries[0].notification;
+      expect(coalesced.params?.update).toEqual({
+        sessionUpdate: "agent_message",
+        content: { type: "text", text: "Hello world" },
+      });
     });
   });
 
   describe("register", () => {
-    it("creates OtelLogWriter with session context", () => {
-      const sessionId = "test-session";
-      const context = { taskId: "task-1", runId: sessionId };
-
-      logWriter.register(sessionId, context);
-
-      expect(OtelLogWriter).toHaveBeenCalledWith(
-        expect.objectContaining({
-          posthogHost: "http://localhost:8000",
-          apiKey: "test-api-key",
-        }),
-        context,
-        expect.anything(),
-      );
-    });
-
     it("does not re-register existing sessions", () => {
-      const sessionId = "test-session";
-      logWriter.register(sessionId, { taskId: "task-1", runId: sessionId });
-      logWriter.register(sessionId, { taskId: "task-2", runId: sessionId });
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
+      logWriter.register(sessionId, { taskId: "t2", runId: sessionId });
 
-      expect(OtelLogWriter).toHaveBeenCalledTimes(1);
+      expect(logWriter.isRegistered(sessionId)).toBe(true);
     });
   });
 });

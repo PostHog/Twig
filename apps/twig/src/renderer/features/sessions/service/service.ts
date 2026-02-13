@@ -3,7 +3,10 @@ import type {
   RequestPermissionRequest,
   SessionConfigOption,
 } from "@agentclientprotocol/sdk";
-import { useAuthStore } from "@features/auth/stores/authStore";
+import {
+  setSessionResetCallback,
+  useAuthStore,
+} from "@features/auth/stores/authStore";
 import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
@@ -46,6 +49,8 @@ import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("session-service");
 
+export const PREVIEW_TASK_ID = "__preview__";
+
 interface AuthCredentials {
   apiKey: string;
   apiHost: string;
@@ -60,6 +65,7 @@ interface ConnectParams {
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
   model?: string;
+  reasoningLevel?: string;
 }
 
 // --- Singleton Service Instance ---
@@ -86,6 +92,8 @@ export function resetSessionService(): void {
   });
 }
 
+setSessionResetCallback(resetSessionService);
+
 export class SessionService {
   private connectingTasks = new Map<string, Promise<void>>();
   private subscriptions = new Map<
@@ -95,6 +103,8 @@ export class SessionService {
       permission?: { unsubscribe: () => void };
     }
   >();
+  /** AbortController for the current in-flight preview session start */
+  private previewAbort: AbortController | null = null;
 
   /**
    * Connect to a task session.
@@ -136,8 +146,15 @@ export class SessionService {
   }
 
   private async doConnect(params: ConnectParams): Promise<void> {
-    const { task, repoPath, initialPrompt, executionMode, adapter, model } =
-      params;
+    const {
+      task,
+      repoPath,
+      initialPrompt,
+      executionMode,
+      adapter,
+      model,
+      reasoningLevel,
+    } = params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
 
@@ -214,6 +231,7 @@ export class SessionService {
           executionMode,
           adapter,
           model,
+          reasoningLevel,
         );
       }
     } catch (error) {
@@ -275,6 +293,11 @@ export class SessionService {
     this.subscribeToChannel(taskRunId);
 
     try {
+      const persistedMode = getConfigOptionByCategory(
+        persistedConfigOptions,
+        "mode",
+      )?.currentValue;
+
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -285,6 +308,7 @@ export class SessionService {
         logUrl,
         sessionId,
         adapter: resolvedAdapter,
+        permissionMode: persistedMode,
       });
 
       if (result) {
@@ -360,6 +384,7 @@ export class SessionService {
     executionMode?: ExecutionMode,
     adapter?: "claude" | "codex",
     model?: string,
+    reasoningLevel?: string,
   ): Promise<void> {
     if (!auth.client) {
       throw new Error("Unable to reach server. Please check your connection.");
@@ -419,6 +444,15 @@ export class SessionService {
       );
     }
 
+    // Set reasoning level if provided (e.g., from Codex adapter's preview session)
+    if (reasoningLevel) {
+      await this.setSessionConfigOptionByCategory(
+        taskId,
+        "thought_level",
+        reasoningLevel,
+      );
+    }
+
     if (initialPrompt?.length) {
       await this.sendPrompt(taskId, initialPrompt);
     }
@@ -440,6 +474,104 @@ export class SessionService {
     }
     this.unsubscribeFromChannel(session.taskRunId);
     sessionStoreSetters.removeSession(session.taskRunId);
+  }
+
+  // --- Preview Session Management ---
+
+  async startPreviewSession(params: {
+    adapter: "claude" | "codex";
+    repoPath?: string;
+  }): Promise<void> {
+    this.previewAbort?.abort();
+    const abort = new AbortController();
+    this.previewAbort = abort;
+
+    await this.cleanupPreviewSession();
+    if (abort.signal.aborted) return;
+
+    const auth = this.getAuthCredentials();
+    if (!auth) {
+      log.info("Skipping preview session - not authenticated");
+      return;
+    }
+
+    const taskRunId = `preview-${crypto.randomUUID()}`;
+    const session = this.createBaseSession(
+      taskRunId,
+      PREVIEW_TASK_ID,
+      "Preview",
+    );
+    session.adapter = params.adapter;
+    sessionStoreSetters.setSession(session);
+
+    try {
+      const result = await trpcVanilla.agent.start.mutate({
+        taskId: PREVIEW_TASK_ID,
+        taskRunId,
+        repoPath: params.repoPath || "~",
+        apiKey: auth.apiKey,
+        apiHost: auth.apiHost,
+        projectId: auth.projectId,
+        adapter: params.adapter,
+      });
+
+      if (abort.signal.aborted) {
+        trpcVanilla.agent.cancel
+          .mutate({ sessionId: taskRunId })
+          .catch((err) => {
+            log.warn("Failed to cancel stale preview session", {
+              taskRunId,
+              error: err,
+            });
+          });
+        sessionStoreSetters.removeSession(taskRunId);
+        return;
+      }
+
+      const configOptions = result.configOptions as
+        | SessionConfigOption[]
+        | undefined;
+
+      sessionStoreSetters.updateSession(taskRunId, {
+        status: "connected",
+        channel: result.channel,
+        configOptions,
+      });
+
+      this.subscribeToChannel(taskRunId);
+
+      log.info("Preview session started", {
+        taskRunId,
+        adapter: params.adapter,
+        configOptionsCount: configOptions?.length ?? 0,
+      });
+    } catch (error) {
+      if (abort.signal.aborted) return;
+      log.error("Failed to start preview session", { error });
+      sessionStoreSetters.removeSession(taskRunId);
+    }
+  }
+
+  async cancelPreviewSession(): Promise<void> {
+    this.previewAbort?.abort();
+    this.previewAbort = null;
+    await this.cleanupPreviewSession();
+  }
+
+  private async cleanupPreviewSession(): Promise<void> {
+    const session = sessionStoreSetters.getSessionByTaskId(PREVIEW_TASK_ID);
+    if (!session) return;
+
+    const { taskRunId } = session;
+
+    this.unsubscribeFromChannel(taskRunId);
+    sessionStoreSetters.removeSession(taskRunId);
+
+    try {
+      await trpcVanilla.agent.cancel.mutate({ sessionId: taskRunId });
+    } catch (error) {
+      log.warn("Failed to cancel preview session", { taskRunId, error });
+    }
   }
 
   // --- Subscription Management ---
@@ -511,6 +643,8 @@ export class SessionService {
     }
 
     this.connectingTasks.clear();
+    this.previewAbort?.abort();
+    this.previewAbort = null;
   }
 
   private handleSessionEvent(taskRunId: string, acpMsg: AcpMessage): void {
@@ -1210,4 +1344,12 @@ export class SessionService {
       }
     }
   }
+}
+
+// Register callback when module loads (not during tests)
+if (typeof window !== "undefined" && !import.meta.env?.VITEST) {
+  setSessionResetCallback(() => {
+    log.info("Auth triggered session reset");
+    resetSessionService();
+  });
 }

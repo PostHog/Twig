@@ -5,6 +5,24 @@ import Fuse, { type IFuseOptions } from "fuse.js";
 import { useDraftStore } from "../stores/draftStore";
 import type { CommandSuggestionItem, FileSuggestionItem } from "../types";
 
+const TWIG_COMMANDS: AvailableCommand[] = [
+  {
+    name: "good",
+    description: "Capture positive feedback",
+    input: { hint: "optional comment" },
+  },
+  {
+    name: "bad",
+    description: "Capture negative feedback",
+    input: { hint: "optional comment" },
+  },
+  {
+    name: "feedback",
+    description: "Capture general feedback",
+    input: { hint: "optional comment" },
+  },
+];
+
 const COMMAND_LIMIT = 5;
 
 const COMMAND_FUSE_OPTIONS: IFuseOptions<AvailableCommand> = {
@@ -67,7 +85,7 @@ export function getCommandSuggestions(
   query: string,
 ): CommandSuggestionItem[] {
   const taskId = useDraftStore.getState().contexts[sessionId]?.taskId;
-  const commands = getAvailableCommandsForTask(taskId);
+  const commands = [...TWIG_COMMANDS, ...getAvailableCommandsForTask(taskId)];
   const filtered = searchCommands(commands, query);
 
   return filtered.map((cmd) => ({

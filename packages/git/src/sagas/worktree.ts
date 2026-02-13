@@ -6,6 +6,7 @@ import {
   branchExists,
   getDefaultBranch,
 } from "../queries.js";
+import { safeSymlink } from "../utils.js";
 
 export interface CreateWorktreeInput extends GitSagaInput {
   worktreePath: string;
@@ -63,23 +64,29 @@ export class CreateWorktreeSaga extends GitSaga<
       execute: async () => {
         const sourceClaudeDir = path.join(baseDir, ".claude");
         const targetClaudeDir = path.join(worktreePath, ".claude");
-        try {
-          await fs.access(sourceClaudeDir);
-          await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+        const linkedDir = await safeSymlink(
+          sourceClaudeDir,
+          targetClaudeDir,
+          "dir",
+        );
+        if (linkedDir) {
           await addToLocalExclude(worktreePath, ".claude", {
             abortSignal: signal,
           });
-        } catch {}
+        }
 
         const sourceClaudeLocalMd = path.join(baseDir, "CLAUDE.local.md");
         const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
-        try {
-          await fs.access(sourceClaudeLocalMd);
-          await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
+        const linkedFile = await safeSymlink(
+          sourceClaudeLocalMd,
+          targetClaudeLocalMd,
+          "file",
+        );
+        if (linkedFile) {
           await addToLocalExclude(worktreePath, "CLAUDE.local.md", {
             abortSignal: signal,
           });
-        } catch {}
+        }
       },
       rollback: async () => {
         const targetClaudeDir = path.join(worktreePath, ".claude");
@@ -140,23 +147,29 @@ export class CreateWorktreeForBranchSaga extends GitSaga<
       execute: async () => {
         const sourceClaudeDir = path.join(baseDir, ".claude");
         const targetClaudeDir = path.join(worktreePath, ".claude");
-        try {
-          await fs.access(sourceClaudeDir);
-          await fs.symlink(sourceClaudeDir, targetClaudeDir, "dir");
+        const linkedDir = await safeSymlink(
+          sourceClaudeDir,
+          targetClaudeDir,
+          "dir",
+        );
+        if (linkedDir) {
           await addToLocalExclude(worktreePath, ".claude", {
             abortSignal: signal,
           });
-        } catch {}
+        }
 
         const sourceClaudeLocalMd = path.join(baseDir, "CLAUDE.local.md");
         const targetClaudeLocalMd = path.join(worktreePath, "CLAUDE.local.md");
-        try {
-          await fs.access(sourceClaudeLocalMd);
-          await fs.symlink(sourceClaudeLocalMd, targetClaudeLocalMd, "file");
+        const linkedFile = await safeSymlink(
+          sourceClaudeLocalMd,
+          targetClaudeLocalMd,
+          "file",
+        );
+        if (linkedFile) {
           await addToLocalExclude(worktreePath, "CLAUDE.local.md", {
             abortSignal: signal,
           });
-        } catch {}
+        }
       },
       rollback: async () => {
         const targetClaudeDir = path.join(worktreePath, ".claude");

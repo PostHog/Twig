@@ -1,5 +1,11 @@
 import { logger } from "@renderer/lib/logger";
-import type { Task, TaskRun } from "@shared/types";
+import type {
+  RepoAutonomyStatus,
+  SignalReportArtefactsResponse,
+  SignalReportsResponse,
+  Task,
+  TaskRun,
+} from "@shared/types";
 import type { StoredLogEntry } from "@shared/types/session-events";
 import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
@@ -61,7 +67,41 @@ export class PostHogAPIClient {
     return data as Schemas.Team;
   }
 
-  async getTasks(options?: { repository?: string; createdBy?: number }) {
+  async getProjectAutonomySettings(projectId: number): Promise<{
+    proactive_tasks_enabled?: boolean;
+  }> {
+    try {
+      const urlPath = `/api/environments/${projectId}/`;
+      const url = new URL(`${this.api.baseUrl}${urlPath}`);
+      const response = await this.api.fetcher.fetch({
+        method: "get",
+        url,
+        path: urlPath,
+      });
+      const data = (await response.json()) as {
+        proactive_tasks_enabled?: boolean;
+      };
+
+      return {
+        proactive_tasks_enabled:
+          typeof data.proactive_tasks_enabled === "boolean"
+            ? data.proactive_tasks_enabled
+            : false,
+      };
+    } catch (error) {
+      log.warn("Failed to resolve autonomy settings; defaulting to disabled", {
+        projectId,
+        error,
+      });
+      return { proactive_tasks_enabled: false };
+    }
+  }
+
+  async getTasks(options?: {
+    repository?: string;
+    createdBy?: number;
+    originProduct?: string;
+  }) {
     const teamId = await this.getTeamId();
     const params: Record<string, string | number> = {
       limit: 500,
@@ -73,6 +113,10 @@ export class PostHogAPIClient {
 
     if (options?.createdBy) {
       params.created_by = options.createdBy;
+    }
+
+    if (options?.originProduct) {
+      params.origin_product = options.originProduct;
     }
 
     const data = await this.api.get(`/api/projects/{project_id}/tasks/`, {
@@ -374,6 +418,52 @@ export class PostHogAPIClient {
     return data.results ?? [];
   }
 
+  async updateTeam(updates: {
+    session_recording_opt_in?: boolean;
+    autocapture_exceptions_opt_in?: boolean;
+  }): Promise<Schemas.Team> {
+    const teamId = await this.getTeamId();
+    const url = new URL(`${this.api.baseUrl}/api/projects/${teamId}/`);
+    const response = await this.api.fetcher.fetch({
+      method: "patch",
+      url,
+      path: `/api/projects/${teamId}/`,
+      overrides: {
+        body: JSON.stringify(updates),
+      },
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      let detail = responseText;
+      try {
+        const parsed = JSON.parse(responseText) as
+          | { detail?: string }
+          | Record<string, unknown>;
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "detail" in parsed &&
+          typeof parsed.detail === "string"
+        ) {
+          detail = parsed.detail;
+        } else if (typeof parsed === "object" && parsed !== null) {
+          detail = Object.entries(parsed)
+            .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+            .join(", ");
+        }
+      } catch {
+        // keep plain text fallback
+      }
+
+      throw new Error(
+        `Failed to update team: ${detail || response.statusText}`,
+      );
+    }
+
+    return await response.json();
+  }
+
   /**
    * Get details for multiple projects by their IDs.
    * Returns project info including organization details.
@@ -430,6 +520,99 @@ export class PostHogAPIClient {
       name: org.name,
       slug: org.slug ?? org.id,
     }));
+  }
+
+  async getSignalReports(): Promise<SignalReportsResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signal_reports/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signal reports: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      results: data.results ?? data ?? [],
+      count: data.count ?? data.results?.length ?? data?.length ?? 0,
+    };
+  }
+
+  async getSignalReportArtefacts(
+    reportId: string,
+  ): Promise<SignalReportArtefactsResponse> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
+    );
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch signal report artefacts: ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    return {
+      results: data.results ?? data ?? [],
+      count: data.count ?? data.results?.length ?? data?.length ?? 0,
+    };
+  }
+
+  async getRepositoryReadiness(
+    repository: string,
+    options?: { refresh?: boolean; windowDays?: number },
+  ): Promise<RepoAutonomyStatus> {
+    const teamId = await this.getTeamId();
+    const url = new URL(
+      `${this.api.baseUrl}/api/projects/${teamId}/tasks/repository_readiness/`,
+    );
+    url.searchParams.set("repository", repository.toLowerCase());
+    if (options?.refresh) {
+      url.searchParams.set("refresh", "true");
+    }
+    if (typeof options?.windowDays === "number") {
+      url.searchParams.set("window_days", String(options.windowDays));
+    }
+
+    const response = await this.api.fetcher.fetch({
+      method: "get",
+      url,
+      path: `/api/projects/${teamId}/tasks/repository_readiness/`,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch repository readiness: ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    return {
+      repository: data.repository,
+      classification: data.classification,
+      excluded: data.excluded,
+      coreSuggestions: data.coreSuggestions,
+      replayInsights: data.replayInsights,
+      errorInsights: data.errorInsights,
+      overall: data.overall,
+      evidenceTaskCount: data.evidenceTaskCount ?? 0,
+      windowDays: data.windowDays,
+      generatedAt: data.generatedAt,
+      cacheAgeSeconds: data.cacheAgeSeconds,
+      scan: data.scan,
+    } as RepoAutonomyStatus;
   }
 
   /**

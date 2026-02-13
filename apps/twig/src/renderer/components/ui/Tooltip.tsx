@@ -27,6 +27,9 @@ export function Tooltip({
   defaultOpen,
   onOpenChange,
 }: TooltipProps) {
+  const isSimpleContent =
+    typeof content === "string" || typeof content === "number";
+
   return (
     <TooltipPrimitive.Provider delayDuration={delayDuration}>
       <TooltipPrimitive.Root
@@ -51,7 +54,7 @@ export function Tooltip({
               borderRadius: "6px",
               fontSize: "12px",
               lineHeight: "1.4",
-              whiteSpace: "nowrap",
+              whiteSpace: isSimpleContent ? "nowrap" : "normal",
               border: "1px solid var(--gray-4)",
               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
               zIndex: 9999,
@@ -60,7 +63,7 @@ export function Tooltip({
               willChange: "transform, opacity",
             }}
           >
-            <span>{content}</span>
+            {isSimpleContent ? <span>{content}</span> : content}
             {shortcut && (
               <KeyHint style={{ fontSize: "12px" }}>{shortcut}</KeyHint>
             )}

@@ -1,12 +1,14 @@
 export const SHORTCUTS = {
   COMMAND_MENU: "mod+k",
-  NEW_TASK: "mod+n",
+  NEW_TASK: "mod+n,mod+t",
   SETTINGS: "mod+,",
   SHORTCUTS_SHEET: "mod+/",
   GO_BACK: "mod+[",
   GO_FORWARD: "mod+]",
   TOGGLE_LEFT_SIDEBAR: "mod+b",
   TOGGLE_RIGHT_SIDEBAR: "mod+shift+b",
+  PREV_TASK: "mod+shift+[,ctrl+shift+tab",
+  NEXT_TASK: "mod+shift+],ctrl+tab",
   CLOSE_TAB: "mod+w",
   SWITCH_TAB: "ctrl+1,ctrl+2,ctrl+3,ctrl+4,ctrl+5,ctrl+6,ctrl+7,ctrl+8,ctrl+9",
   SWITCH_TASK: "mod+0,mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9",
@@ -25,14 +27,16 @@ export interface KeyboardShortcut {
   description: string;
   category: ShortcutCategory;
   context?: string;
+  alternateKeys?: string;
 }
 
 export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   {
     id: "new-task",
-    keys: SHORTCUTS.NEW_TASK,
+    keys: "mod+n",
     description: "New task",
     category: "general",
+    alternateKeys: "mod+t",
   },
   {
     id: "command-menu",
@@ -64,6 +68,20 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
     keys: "mod+0-9",
     description: "Switch to task 1-9 (0 = home)",
     category: "navigation",
+  },
+  {
+    id: "prev-task",
+    keys: "mod+shift+[",
+    description: "Previous task",
+    category: "navigation",
+    alternateKeys: "ctrl+shift+tab",
+  },
+  {
+    id: "next-task",
+    keys: "mod+shift+]",
+    description: "Next task",
+    category: "navigation",
+    alternateKeys: "ctrl+tab",
   },
   {
     id: "go-back",
@@ -194,6 +212,9 @@ export function formatHotkey(keys: string): string {
       if (k === "up" || k === "arrowup") return "↑";
       if (k === "down" || k === "arrowdown") return "↓";
       if (k === ",") return ",";
+      if (k === "[") return "[";
+      if (k === "]") return "]";
+      if (k === "tab") return "Tab";
       return k.toUpperCase();
     })
     .join(isMac ? "" : "+");

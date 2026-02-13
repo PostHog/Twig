@@ -1,12 +1,22 @@
+import { z } from "zod";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   cloneRepositoryInput,
   cloneRepositoryOutput,
+  commitInput,
+  commitOutput,
   createBranchInput,
+  createPrInput,
+  createPrOutput,
   detectRepoInput,
   detectRepoOutput,
   discardFileChangesInput,
+  discardFileChangesOutput,
+  generateCommitMessageInput,
+  generateCommitMessageOutput,
+  generatePrTitleAndBodyInput,
+  generatePrTitleAndBodyOutput,
   getAllBranchesInput,
   getAllBranchesOutput,
   getChangedFilesHeadInput,
@@ -23,12 +33,16 @@ import {
   getFileAtHeadOutput,
   getGitRepoInfoInput,
   getGitRepoInfoOutput,
-  getGitSyncStatusInput,
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
   getPrTemplateInput,
   getPrTemplateOutput,
+  ghStatusOutput,
+  openPrInput,
+  openPrOutput,
+  prStatusInput,
+  prStatusOutput,
   publishInput,
   publishOutput,
   pullInput,
@@ -124,6 +138,7 @@ export const gitRouter = router({
 
   discardFileChanges: publicProcedure
     .input(discardFileChangesInput)
+    .output(discardFileChangesOutput)
     .mutation(({ input }) =>
       getService().discardFileChanges(
         input.directoryPath,
@@ -134,9 +149,16 @@ export const gitRouter = router({
 
   // Sync status operations
   getGitSyncStatus: publicProcedure
-    .input(getGitSyncStatusInput)
+    .input(
+      z.object({
+        directoryPath: z.string(),
+        forceRefresh: z.boolean().optional(),
+      }),
+    )
     .output(getGitSyncStatusOutput)
-    .query(({ input }) => getService().getGitSyncStatus(input.directoryPath)),
+    .query(({ input }) =>
+      getService().getGitSyncStatus(input.directoryPath, input.forceRefresh),
+    ),
 
   // Commit/repo info operations
   getLatestCommit: publicProcedure
@@ -148,6 +170,18 @@ export const gitRouter = router({
     .input(getGitRepoInfoInput)
     .output(getGitRepoInfoOutput)
     .query(({ input }) => getService().getGitRepoInfo(input.directoryPath)),
+
+  commit: publicProcedure
+    .input(commitInput)
+    .output(commitOutput)
+    .mutation(({ input }) =>
+      getService().commit(
+        input.directoryPath,
+        input.message,
+        input.paths,
+        input.allowEmpty,
+      ),
+    ),
 
   push: publicProcedure
     .input(pushInput)
@@ -182,6 +216,32 @@ export const gitRouter = router({
       getService().sync(input.directoryPath, input.remote),
     ),
 
+  getGhStatus: publicProcedure
+    .output(ghStatusOutput)
+    .query(() => getService().getGhStatus()),
+
+  getPrStatus: publicProcedure
+    .input(prStatusInput)
+    .output(prStatusOutput)
+    .query(({ input }) => getService().getPrStatus(input.directoryPath)),
+
+  createPr: publicProcedure
+    .input(createPrInput)
+    .output(createPrOutput)
+    .mutation(({ input }) =>
+      getService().createPr(
+        input.directoryPath,
+        input.title,
+        input.body,
+        input.draft,
+      ),
+    ),
+
+  openPr: publicProcedure
+    .input(openPrInput)
+    .output(openPrOutput)
+    .mutation(({ input }) => getService().openPr(input.directoryPath)),
+
   getPrTemplate: publicProcedure
     .input(getPrTemplateInput)
     .output(getPrTemplateOutput)
@@ -192,5 +252,25 @@ export const gitRouter = router({
     .output(getCommitConventionsOutput)
     .query(({ input }) =>
       getService().getCommitConventions(input.directoryPath, input.sampleSize),
+    ),
+
+  generateCommitMessage: publicProcedure
+    .input(generateCommitMessageInput)
+    .output(generateCommitMessageOutput)
+    .mutation(({ input }) =>
+      getService().generateCommitMessage(
+        input.directoryPath,
+        input.credentials,
+      ),
+    ),
+
+  generatePrTitleAndBody: publicProcedure
+    .input(generatePrTitleAndBodyInput)
+    .output(generatePrTitleAndBodyOutput)
+    .mutation(({ input }) =>
+      getService().generatePrTitleAndBody(
+        input.directoryPath,
+        input.credentials,
+      ),
     ),
 });

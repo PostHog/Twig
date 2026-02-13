@@ -25,6 +25,7 @@ interface UseTaskCreationOptions {
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
   model?: string;
+  reasoningLevel?: string;
 }
 
 interface UseTaskCreationReturn {
@@ -81,6 +82,7 @@ function prepareTaskInput(
     executionMode?: ExecutionMode;
     adapter?: "claude" | "codex";
     model?: string;
+    reasoningLevel?: string;
   },
 ): TaskCreationInput {
   return {
@@ -94,6 +96,7 @@ function prepareTaskInput(
     executionMode: options.executionMode,
     adapter: options.adapter,
     model: options.model,
+    reasoningLevel: options.reasoningLevel,
   };
 }
 
@@ -120,6 +123,7 @@ export function useTaskCreation({
   executionMode,
   adapter,
   model,
+  reasoningLevel,
 }: UseTaskCreationOptions): UseTaskCreationReturn {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { navigateToTask } = useNavigationStore();
@@ -157,6 +161,7 @@ export function useTaskCreation({
         executionMode,
         adapter,
         model,
+        reasoningLevel,
       });
 
       const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
@@ -201,6 +206,7 @@ export function useTaskCreation({
     executionMode,
     adapter,
     model,
+    reasoningLevel,
     invalidateTasks,
     navigateToTask,
   ]);

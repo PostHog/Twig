@@ -1,4 +1,3 @@
-import { useAuthStore } from "@features/auth/stores/authStore";
 import { DEFAULT_GATEWAY_MODEL } from "@posthog/agent/gateway-models";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { create } from "zustand";
@@ -57,6 +56,11 @@ interface ModelsState {
   getEffectiveModel: () => string;
 }
 
+async function getAuthStore() {
+  const authModule = await import("@features/auth/stores/authStore");
+  return authModule.useAuthStore;
+}
+
 export const useModelsStore = create<ModelsState>()(
   persist(
     (set, get) => ({
@@ -67,7 +71,9 @@ export const useModelsStore = create<ModelsState>()(
       error: null,
 
       fetchModels: async () => {
-        const authState = useAuthStore.getState();
+        const authStore = await getAuthStore();
+        const authState = authStore.getState();
+
         if (
           !authState.isAuthenticated ||
           !authState.cloudRegion ||
@@ -123,14 +129,27 @@ export const useModelsStore = create<ModelsState>()(
   ),
 );
 
-useAuthStore.subscribe(
-  (state) => state.isAuthenticated,
-  (isAuthenticated) => {
-    if (isAuthenticated) {
-      useModelsStore.getState().fetchModels();
-    } else {
-      useModelsStore.setState({ models: [], groupedModels: [], error: null });
-    }
-  },
-  { fireImmediately: true },
-);
+let authSubscriptionInitialized = false;
+
+async function initializeModelsAuthSubscription() {
+  if (authSubscriptionInitialized) {
+    return;
+  }
+
+  const authStore = await getAuthStore();
+  authSubscriptionInitialized = true;
+
+  authStore.subscribe(
+    (state) => state.isAuthenticated,
+    (isAuthenticated) => {
+      if (isAuthenticated) {
+        void useModelsStore.getState().fetchModels();
+      } else {
+        useModelsStore.setState({ models: [], groupedModels: [], error: null });
+      }
+    },
+    { fireImmediately: true },
+  );
+}
+
+void initializeModelsAuthSubscription();

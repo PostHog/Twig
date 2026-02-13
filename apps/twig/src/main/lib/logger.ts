@@ -1,8 +1,10 @@
 import { app } from "electron";
 import log from "electron-log/main";
 
-// Initialize IPC transport to forward main process logs to renderer dev tools
-log.initialize();
+// Initialize electron-log:
+// - spyRendererConsole captures all renderer console output via webContents
+//   console-message events and writes them to the main log file
+log.initialize({ spyRendererConsole: true });
 
 // Set levels - use debug in dev (check NODE_ENV since app.isPackaged may not be ready)
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;

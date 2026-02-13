@@ -207,3 +207,95 @@ export interface DetectedApplication {
 export interface ExternalAppsPreferences {
   lastUsedApp?: string;
 }
+
+export interface SignalReport {
+  id: string;
+  title: string | null;
+  summary: string | null;
+  status: "potential" | "candidate" | "in_progress" | "ready" | "failed";
+  total_weight: number;
+  signal_count: number;
+  relevant_user_count: number | null;
+  created_at: string;
+  updated_at: string;
+  artefact_count: number;
+}
+
+export interface SignalReportArtefactContent {
+  session_id: string;
+  start_time: string;
+  end_time: string;
+  distinct_id: string;
+  content: string;
+  distance_to_centroid: number | null;
+}
+
+export interface SignalReportArtefact {
+  id: string;
+  type: string;
+  content: SignalReportArtefactContent;
+  created_at: string;
+}
+
+export interface SignalReportsResponse {
+  results: SignalReport[];
+  count: number;
+}
+
+export interface SignalReportArtefactsResponse {
+  results: SignalReportArtefact[];
+  count: number;
+}
+
+export type AutonomyCapabilityState =
+  | "ready"
+  | "needs_setup"
+  | "detected"
+  | "waiting_for_data"
+  | "unknown"
+  | "not_applicable";
+
+export interface AutonomyCapabilityStatus {
+  state: AutonomyCapabilityState;
+  estimated: boolean;
+  reason: string;
+  evidence?: Record<string, unknown>;
+}
+
+export type RepoAutonomyOverallStatus =
+  | "ready"
+  | "needs_setup"
+  | "detected"
+  | "partial"
+  | "unknown";
+
+export interface RepoAutonomyScanStatus {
+  filesScanned: number;
+  detectedFilesCount: number;
+  eventNameCount: number;
+  foundPosthogInit: boolean;
+  foundPosthogCapture: boolean;
+  foundErrorSignal: boolean;
+}
+
+export type RepoAutonomyClassification =
+  | "frontend_js"
+  | "backend_service"
+  | "sdk_or_library"
+  | "test_or_sandbox"
+  | "unknown";
+
+export interface RepoAutonomyStatus {
+  repository: string;
+  classification?: RepoAutonomyClassification;
+  excluded?: boolean;
+  coreSuggestions: AutonomyCapabilityStatus;
+  replayInsights: AutonomyCapabilityStatus;
+  errorInsights: AutonomyCapabilityStatus;
+  overall: RepoAutonomyOverallStatus;
+  evidenceTaskCount: number;
+  windowDays?: number;
+  generatedAt?: string;
+  cacheAgeSeconds?: number;
+  scan?: RepoAutonomyScanStatus;
+}

@@ -3,6 +3,7 @@ import { Tooltip } from "@components/ui/Tooltip";
 import {
   ArrowsClockwise,
   BellRinging,
+  Cloud as CloudIcon,
   GitBranch as GitBranchIcon,
   Laptop as LaptopIcon,
   PushPin,
@@ -139,6 +140,12 @@ export function TaskItem({
         </span>
       </Tooltip>
     )
+  ) : workspaceMode === "cloud" ? (
+    <Tooltip content="Cloud" side="right">
+      <span className="flex items-center justify-center">
+        <CloudIcon size={ICON_SIZE} />
+      </span>
+    </Tooltip>
   ) : (
     <Tooltip content="Local" side="right">
       <span className="flex items-center justify-center">

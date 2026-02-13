@@ -1,6 +1,8 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
+import { useGitQueries } from "@features/git-interaction/hooks/useGitQueries";
+import { updateGitCacheFromSnapshot } from "@features/git-interaction/utils/updateGitCache";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
@@ -27,7 +29,7 @@ import {
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useState } from "react";
@@ -185,7 +187,7 @@ function ChangedFileItem({
 
     const { message, action } = getDiscardInfo(file, fileName);
 
-    const result = await showMessageBox({
+    const dialogResult = await showMessageBox({
       type: "warning",
       title: "Discard changes",
       message,
@@ -194,19 +196,19 @@ function ChangedFileItem({
       cancelId: 0,
     });
 
-    if (result.response !== 1) return;
+    if (dialogResult.response !== 1) return;
 
-    await trpcVanilla.git.discardFileChanges.mutate({
+    const discardResult = await trpcVanilla.git.discardFileChanges.mutate({
       directoryPath: repoPath,
-      filePath: file.originalPath ?? file.path, // For renames, use the original path
+      filePath: file.originalPath ?? file.path,
       fileStatus: file.status,
     });
 
     closeDiffTabsForFile(taskId, file.path);
 
-    queryClient.invalidateQueries({
-      queryKey: ["changed-files-head", repoPath],
-    });
+    if (discardResult.state) {
+      updateGitCacheFromSnapshot(queryClient, repoPath, discardResult.state);
+    }
   };
 
   const hasLineStats =
@@ -389,17 +391,7 @@ export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const pendingPermissions = usePendingPermissionsForTask(taskId);
   const hasPendingPermissions = pendingPermissions.size > 0;
 
-  const { data: changedFiles = [], isLoading } = useQuery({
-    queryKey: ["changed-files-head", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getChangedFilesHead.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    placeholderData: (prev) => prev,
-  });
+  const { changedFiles, changesLoading: isLoading } = useGitQueries(repoPath);
 
   const getActiveIndex = useCallback((): number => {
     if (!layout) return -1;

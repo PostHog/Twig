@@ -1,16 +1,10 @@
-import {
-  type OtelLogConfig,
-  OtelLogWriter,
-  type SessionContext,
-} from "./otel-log-writer.js";
+import type { SessionContext } from "./otel-log-writer.js";
 import type { PostHogAPIClient } from "./posthog-api.js";
 import type { StoredNotification } from "./types.js";
 import { Logger } from "./utils/logger.js";
 
 export interface SessionLogWriterOptions {
-  /** OTEL config for creating writers per session */
-  otelConfig?: OtelLogConfig;
-  /** PostHog API client for S3 log persistence */
+  /** PostHog API client for log persistence */
   posthogAPI?: PostHogAPIClient;
   /** Logger instance */
   logger?: Logger;
@@ -23,13 +17,11 @@ interface ChunkBuffer {
 
 interface SessionState {
   context: SessionContext;
-  otelWriter?: OtelLogWriter;
   chunkBuffer?: ChunkBuffer;
 }
 
 export class SessionLogWriter {
   private posthogAPI?: PostHogAPIClient;
-  private otelConfig?: OtelLogConfig;
   private pendingEntries: Map<string, StoredNotification[]> = new Map();
   private flushTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private sessions: Map<string, SessionState> = new Map();
@@ -37,7 +29,6 @@ export class SessionLogWriter {
 
   constructor(options: SessionLogWriterOptions = {}) {
     this.posthogAPI = options.posthogAPI;
-    this.otelConfig = options.otelConfig;
     this.logger =
       options.logger ??
       new Logger({ debug: false, prefix: "[SessionLogWriter]" });
@@ -56,17 +47,7 @@ export class SessionLogWriter {
       return;
     }
 
-    let otelWriter: OtelLogWriter | undefined;
-    if (this.otelConfig) {
-      // Create a dedicated OtelLogWriter for this session with resource attributes
-      otelWriter = new OtelLogWriter(
-        this.otelConfig,
-        context,
-        this.logger.child(`OtelWriter:${sessionId}`),
-      );
-    }
-
-    this.sessions.set(sessionId, { context, otelWriter });
+    this.sessions.set(sessionId, { context });
   }
 
   isRegistered(sessionId: string): boolean {
@@ -106,10 +87,6 @@ export class SessionLogWriter {
         notification: message,
       };
 
-      if (session.otelWriter) {
-        session.otelWriter.emit({ notification: entry });
-      }
-
       if (this.posthogAPI) {
         const pending = this.pendingEntries.get(sessionId) ?? [];
         pending.push(entry);
@@ -130,10 +107,6 @@ export class SessionLogWriter {
 
     // Emit any buffered chunks before flushing
     this.emitCoalescedMessage(sessionId, session);
-
-    if (session.otelWriter) {
-      await session.otelWriter.flush();
-    }
 
     const pending = this.pendingEntries.get(sessionId);
     if (!this.posthogAPI || !pending?.length) return;
@@ -195,10 +168,6 @@ export class SessionLogWriter {
         },
       },
     };
-
-    if (session.otelWriter) {
-      session.otelWriter.emit({ notification: entry });
-    }
 
     if (this.posthogAPI) {
       const pending = this.pendingEntries.get(sessionId) ?? [];

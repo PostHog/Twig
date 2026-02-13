@@ -25,6 +25,8 @@ export const sessionConfigSchema = z.object({
   adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
+  /** Permission mode to use for the session (e.g. "default", "acceptEdits", "plan", "bypassPermissions") */
+  permissionMode: z.string().optional(),
 });
 
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
@@ -157,6 +159,7 @@ export const reconnectSessionInput = z.object({
   adapter: z.enum(["claude", "codex"]).optional(),
   /** Additional directories Claude can access beyond cwd (for worktree support) */
   additionalDirectories: z.array(z.string()).optional(),
+  permissionMode: z.string().optional(),
 });
 
 export type ReconnectSessionInput = z.infer<typeof reconnectSessionInput>;

@@ -38,6 +38,7 @@ export interface TaskCreationInput {
   executionMode?: ExecutionMode;
   adapter?: "claude" | "codex";
   model?: string;
+  reasoningLevel?: string;
 }
 
 export interface TaskCreationOutput {
@@ -172,12 +173,14 @@ export class TaskCreationSaga extends Saga<
     }
 
     // Step 6: Connect to session
+    // Cloud create: skip local session — the sandbox handles execution
     const agentCwd =
       workspace?.worktreePath ?? workspace?.folderPath ?? repoPath;
+    const isCloudCreate = !input.taskId && workspaceMode === "cloud";
     const shouldConnect =
-      !!input.taskId || // Open: always connect to load chat history
-      workspaceMode === "cloud" || // Cloud create: always connect
-      !!agentCwd; // Local create: always connect if we have a cwd
+      !isCloudCreate &&
+      (!!input.taskId || // Open: always connect to load chat history
+        !!agentCwd); // Local create: always connect if we have a cwd
 
     if (shouldConnect) {
       const initialPrompt =
@@ -210,6 +213,7 @@ export class TaskCreationSaga extends Saga<
               executionMode: input.executionMode,
               adapter: input.adapter,
               model: input.model,
+              reasoningLevel: input.reasoningLevel,
             });
           }
           return { taskId: task.id };
