@@ -3,9 +3,9 @@ import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
 import { useEditor } from "@tiptap/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePromptHistoryStore } from "../stores/promptHistoryStore";
-import type { MentionChip } from "../utils/content";
+import type { FileAttachment, MentionChip } from "../utils/content";
 import { contentToXml, isContentEmpty } from "../utils/content";
 import { getEditorExtensions } from "./extensions";
 import { type DraftContext, useDraftSync } from "./useDraftSync";
@@ -90,6 +90,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
   const historyActions = usePromptHistoryStore.getState();
   const [isEmptyState, setIsEmptyState] = useState(true);
   const [isReady, setIsReady] = useState(false);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const attachmentsRef = useRef<FileAttachment[]>([]);
 
   const handleCommandSubmit = useCallback((text: string) => {
     callbackRefs.current.onSubmit?.(text);
@@ -195,56 +197,36 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
 
           return false;
         },
-        handleDrop: (view, event, _slice, moved) => {
+        handleDrop: (_view, event, _slice, moved) => {
           if (moved) return false;
 
           const files = event.dataTransfer?.files;
           if (!files || files.length === 0) return false;
 
-          const paths: { path: string; name: string }[] = [];
+          const newAttachments: FileAttachment[] = [];
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             // In Electron, File objects have a 'path' property
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const path = (file as any).path;
             if (path) {
-              paths.push({ path, name: file.name });
+              newAttachments.push({ id: path, label: file.name });
             }
           }
 
-          if (paths.length > 0) {
+          if (newAttachments.length > 0) {
             event.preventDefault();
-
-            // Insert file mention chips for each dropped file
-            const { tr } = view.state;
-            const coordinates = view.posAtCoords({
-              left: event.clientX,
-              top: event.clientY,
+            setAttachments((prev) => {
+              const existing = new Set(prev.map((a) => a.id));
+              const unique = newAttachments.filter((a) => !existing.has(a.id));
+              return unique.length > 0 ? [...prev, ...unique] : prev;
             });
-            let pos = coordinates ? coordinates.pos : view.state.selection.from;
-
-            for (const { path, name } of paths) {
-              const chipNode = view.state.schema.nodes.mentionChip?.create({
-                type: "file",
-                id: path,
-                label: name,
-              });
-              if (chipNode) {
-                tr.insert(pos, chipNode);
-                pos += chipNode.nodeSize;
-                // Add space after chip
-                tr.insertText(" ", pos);
-                pos += 1;
-              }
-            }
-
-            view.dispatch(tr);
             return true;
           }
 
           return false;
         },
-        handlePaste: (view, event) => {
+        handlePaste: (_view, event) => {
           const items = event.clipboardData?.items;
           if (!items) return false;
 
@@ -280,19 +262,10 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
                   originalName: file.name,
                 });
 
-                const chipNode = view.state.schema.nodes.mentionChip?.create({
-                  type: "file",
-                  id: result.path,
-                  label: result.name,
+                setAttachments((prev) => {
+                  if (prev.some((a) => a.id === result.path)) return prev;
+                  return [...prev, { id: result.path, label: result.name }];
                 });
-
-                if (chipNode) {
-                  const { tr } = view.state;
-                  const pos = view.state.selection.from;
-                  tr.insert(pos, chipNode);
-                  tr.insertText(" ", pos + chipNode.nodeSize);
-                  view.dispatch(tr);
-                }
               } catch (_error) {
                 toast.error("Failed to paste image");
               }
@@ -319,8 +292,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
           callbackRefs.current.onBashModeChange?.(newBashMode);
         }
 
-        draftRef.current?.saveDraft(e);
-        const content = draftRef.current?.getContent();
+        draftRef.current?.saveDraft(e, attachmentsRef.current);
+        const content = draftRef.current?.getContent(attachmentsRef.current);
         const newIsEmpty = isContentEmpty(content ?? null);
         setIsEmptyState(newIsEmpty);
 
@@ -344,11 +317,30 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
   const draft = useDraftSync(editor, sessionId, context);
   draftRef.current = draft;
 
+  // Keep attachmentsRef in sync with state (synchronous, no effect needed)
+  attachmentsRef.current = attachments;
+
+  // Re-save draft when attachments change so persistence stays up to date
+  useEffect(() => {
+    if (editor) {
+      draftRef.current?.saveDraft(editor, attachments);
+    }
+  }, [attachments, editor]);
+
+  // Restore attachments from draft on mount
+  useEffect(() => {
+    if (draft.restoredAttachments.length > 0) {
+      setAttachments(draft.restoredAttachments);
+    }
+    // Only run on mount / session change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
   const submit = useCallback(() => {
     if (!editor) return;
     if (disabled || submitDisabled) return;
 
-    const content = draft.getContent();
+    const content = draft.getContent(attachments);
     if (isContentEmpty(content)) return;
 
     const text = editor.getText().trim();
@@ -369,9 +361,10 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     if (clearOnSubmit) {
       editor.commands.clearContent();
       prevBashModeRef.current = false;
+      setAttachments([]);
       draft.clearDraft();
     }
-  }, [editor, disabled, submitDisabled, isLoading, draft, clearOnSubmit]);
+  }, [editor, disabled, submitDisabled, isLoading, draft, clearOnSubmit, attachments]);
 
   submitRef.current = submit;
 
@@ -384,6 +377,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
   const clear = useCallback(() => {
     editor?.commands.clearContent();
     prevBashModeRef.current = false;
+    setAttachments([]);
     draft.clearDraft();
   }, [editor, draft]);
   const getText = useCallback(() => editor?.getText() ?? "", [editor]);
@@ -392,9 +386,9 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       if (!editor) return;
       editor.commands.setContent(text);
       editor.commands.focus("end");
-      draft.saveDraft(editor);
+      draft.saveDraft(editor, attachments);
     },
-    [editor, draft],
+    [editor, draft, attachments],
   );
   const insertChip = useCallback(
     (chip: MentionChip) => {
@@ -404,12 +398,23 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
         id: chip.id,
         label: chip.label,
       });
-      draft.saveDraft(editor);
+      draft.saveDraft(editor, attachments);
     },
-    [editor, draft],
+    [editor, draft, attachments],
   );
 
-  const isEmpty = !editor || isEmptyState;
+  const addAttachment = useCallback((attachment: FileAttachment) => {
+    setAttachments((prev) => {
+      if (prev.some((a) => a.id === attachment.id)) return prev;
+      return [...prev, attachment];
+    });
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const isEmpty = !editor || (isEmptyState && attachments.length === 0);
   const isBashMode =
     enableBashMode && (editor?.getText().trimStart().startsWith("!") ?? false);
 
@@ -426,5 +431,8 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     getContent: draft.getContent,
     setContent,
     insertChip,
+    attachments,
+    addAttachment,
+    removeAttachment,
   };
 }

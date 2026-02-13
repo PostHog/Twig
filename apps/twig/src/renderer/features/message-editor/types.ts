@@ -1,5 +1,5 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
-import type { EditorContent, MentionChip } from "./utils/content";
+import type { EditorContent, FileAttachment, MentionChip } from "./utils/content";
 
 export interface EditorHandle {
   focus: () => void;
@@ -10,6 +10,8 @@ export interface EditorHandle {
   getText: () => string;
   setContent: (text: string) => void;
   insertChip: (chip: MentionChip) => void;
+  addAttachment: (attachment: FileAttachment) => void;
+  removeAttachment: (id: string) => void;
 }
 
 export interface SuggestionItem {

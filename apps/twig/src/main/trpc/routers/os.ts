@@ -151,6 +151,44 @@ export const osRouter = router({
   getWorktreeLocation: publicProcedure.query(() => getWorktreeLocation()),
 
   /**
+   * Read a file and return it as a base64 data URL
+   * Used for image thumbnails in the editor
+   */
+  readFileAsDataUrl: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        maxSizeBytes: z.number().optional().default(10 * 1024 * 1024),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        const stat = await fsPromises.stat(input.filePath);
+        if (stat.size > input.maxSizeBytes) return null;
+
+        const ext = path.extname(input.filePath).toLowerCase().slice(1);
+        const mimeMap: Record<string, string> = {
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          bmp: "image/bmp",
+          ico: "image/x-icon",
+          svg: "image/svg+xml",
+          tiff: "image/tiff",
+          tif: "image/tiff",
+        };
+        const mime = mimeMap[ext] ?? "application/octet-stream";
+
+        const buffer = await fsPromises.readFile(input.filePath);
+        return `data:${mime};base64,${buffer.toString("base64")}`;
+      } catch {
+        return null;
+      }
+    }),
+
+  /**
    * Save clipboard image data to a temp file
    * Returns the file path for use as a file attachment
    */

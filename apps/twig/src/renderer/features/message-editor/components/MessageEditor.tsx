@@ -11,6 +11,7 @@ import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
 import { AdapterIndicator } from "./AdapterIndicator";
+import { AttachmentsBar } from "./ImageAttachmentsBar";
 import { DiffStatsIndicator } from "./DiffStatsIndicator";
 import { EditorToolbar } from "./EditorToolbar";
 import { ModeIndicatorInput } from "./ModeIndicatorInput";
@@ -76,6 +77,9 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
       getContent,
       setContent,
       insertChip,
+      attachments,
+      addAttachment,
+      removeAttachment,
     } = useTiptapEditor({
       sessionId,
       taskId,
@@ -103,6 +107,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         getText,
         setContent,
         insertChip,
+        addAttachment,
+        removeAttachment,
       }),
       [
         focus,
@@ -113,6 +119,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         getText,
         setContent,
         insertChip,
+        addAttachment,
+        removeAttachment,
       ],
     );
 
@@ -151,6 +159,8 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
         onClick={handleContainerClick}
         style={{ cursor: "text" }}
       >
+        <AttachmentsBar attachments={attachments} onRemove={removeAttachment} />
+
         <div className="max-h-[200px] min-h-[50px] flex-1 overflow-y-auto font-mono text-sm">
           <EditorContent editor={editor} />
         </div>
@@ -160,7 +170,7 @@ export const MessageEditor = forwardRef<EditorHandle, MessageEditorProps>(
             <EditorToolbar
               disabled={disabled}
               taskId={taskId}
-              onInsertChip={insertChip}
+              onAddAttachment={addAttachment}
               onAttachFiles={onAttachFiles}
             />
             {isBashMode && (

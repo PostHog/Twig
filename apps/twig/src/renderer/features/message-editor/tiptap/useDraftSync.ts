@@ -1,7 +1,11 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useDraftStore } from "../stores/draftStore";
-import { type EditorContent, isContentEmpty } from "../utils/content";
+import {
+  type EditorContent,
+  type FileAttachment,
+  isContentEmpty,
+} from "../utils/content";
 
 function tiptapJsonToEditorContent(json: JSONContent): EditorContent {
   const segments: EditorContent["segments"] = [];
@@ -161,30 +165,60 @@ export function useDraftSync(
     draftActions.clearPendingContent(sessionId);
   }, [editor, pendingContent, sessionId, draftActions]);
 
+  // Extract restored attachments from draft on first restore
+  const restoredAttachmentsRef = useRef<FileAttachment[]>([]);
+  useLayoutEffect(() => {
+    if (!draft || typeof draft === "string") return;
+    if (draft.attachments && draft.attachments.length > 0) {
+      restoredAttachmentsRef.current = draft.attachments;
+    }
+  }, [draft]);
+
+  const attachmentsRef = useRef<FileAttachment[]>([]);
+
   const saveDraft = useCallback(
-    (e: Editor) => {
+    (e: Editor, attachments?: FileAttachment[]) => {
       // Don't save until store has hydrated from storage
       // This prevents overwriting stored drafts with empty content before restoration
       if (!hasHydrated) return;
 
+      if (attachments !== undefined) {
+        attachmentsRef.current = attachments;
+      }
+
       const json = e.getJSON();
       const content = tiptapJsonToEditorContent(json);
+      const withAttachments: EditorContent =
+        attachmentsRef.current.length > 0
+          ? { ...content, attachments: attachmentsRef.current }
+          : content;
       draftActions.setDraft(
         sessionId,
-        isContentEmpty(content) ? null : content,
+        isContentEmpty(withAttachments) ? null : withAttachments,
       );
     },
     [sessionId, draftActions, hasHydrated],
   );
 
   const clearDraft = useCallback(() => {
+    attachmentsRef.current = [];
     draftActions.setDraft(sessionId, null);
   }, [sessionId, draftActions]);
 
-  const getContent = useCallback((): EditorContent => {
-    if (!editorRef.current) return { segments: [] };
-    return tiptapJsonToEditorContent(editorRef.current.getJSON());
-  }, []);
+  const getContent = useCallback(
+    (attachments?: FileAttachment[]): EditorContent => {
+      if (!editorRef.current) return { segments: [] };
+      const content = tiptapJsonToEditorContent(editorRef.current.getJSON());
+      const atts = attachments ?? attachmentsRef.current;
+      return atts.length > 0 ? { ...content, attachments: atts } : content;
+    },
+    [],
+  );
 
-  return { saveDraft, clearDraft, getContent };
+  return {
+    saveDraft,
+    clearDraft,
+    getContent,
+    restoredAttachments: restoredAttachmentsRef.current,
+  };
 }

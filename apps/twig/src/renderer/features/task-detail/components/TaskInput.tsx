@@ -2,6 +2,7 @@ import { TorchGlow } from "@components/TorchGlow";
 import { FolderPicker } from "@features/folder-picker/components/FolderPicker";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { ModeIndicatorInput } from "@features/message-editor/components/ModeIndicatorInput";
+import { DropZoneOverlay } from "@features/sessions/components/DropZoneOverlay";
 import { getSessionService } from "@features/sessions/service/service";
 import {
   cycleModeOption,
@@ -36,9 +37,11 @@ export function TaskInput() {
 
   const editorRef = useRef<MessageEditorHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dragCounterRef = useRef(0);
 
   const runMode = "local";
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const selectedDirectory = lastUsedDirectory || "";
   const workspaceMode = lastUsedLocalWorkspaceMode || "worktree";
@@ -105,6 +108,55 @@ export function TaskInput() {
     }
   }, [modeOption, allowBypassPermissions, previewTaskId]);
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDraggingFile(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+
+    // If dropped on the editor, Tiptap's handleDrop already handled it
+    if ((e.target as HTMLElement).closest(".ProseMirror")) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const filePath = (file as File & { path?: string }).path;
+      if (filePath) {
+        editorRef.current?.addAttachment({
+          id: filePath,
+          label: file.name,
+        });
+      }
+    }
+
+    editorRef.current?.focus();
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -114,7 +166,12 @@ export function TaskInput() {
         width: "100%",
         overflow: "hidden",
       }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
     >
+      <DropZoneOverlay isVisible={isDraggingFile} />
       <TorchGlow containerRef={containerRef} />
       <Flex
         align="center"
