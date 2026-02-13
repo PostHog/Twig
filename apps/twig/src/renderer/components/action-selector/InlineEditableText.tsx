@@ -97,6 +97,7 @@ export function InlineEditableText({
         tabIndex={0}
         contentEditable
         suppressContentEditableWarning
+        onClick={(e) => e.stopPropagation()}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         style={{
