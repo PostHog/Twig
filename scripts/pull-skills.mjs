@@ -5,7 +5,7 @@
  *
  * Usage: pnpm pull-skills
  *
- * The downloaded skills land in plugins/claude-code/local-skills/ which is
+ * The downloaded skills land in plugins/posthog/local-skills/ which is
  * gitignored and overlaid on top of shipped + remote skills by the Vite dev build.
  */
 
@@ -21,7 +21,13 @@ const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILLS_ZIP_URL =
   "https://github.com/PostHog/posthog/releases/download/agent-skills-latest/skills.zip";
-const LOCAL_SKILLS_DIR = join(__dirname, "..", "plugins", "claude-code", "local-skills");
+const LOCAL_SKILLS_DIR = join(
+  __dirname,
+  "..",
+  "plugins",
+  "posthog",
+  "local-skills",
+);
 
 const tempDir = join(tmpdir(), `twig-pull-skills-${Date.now()}`);
 await mkdir(tempDir, { recursive: true });
@@ -79,9 +85,7 @@ try {
   await cp(skillsSource, LOCAL_SKILLS_DIR, { recursive: true });
 
   console.log(`Skills extracted to ${LOCAL_SKILLS_DIR}`);
-  console.log(
-    "Edit skills locally — Vite will hot-reload them in dev mode.",
-  );
+  console.log("Edit skills locally — Vite will hot-reload them in dev mode.");
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }
