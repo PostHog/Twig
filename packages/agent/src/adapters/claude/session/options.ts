@@ -175,7 +175,22 @@ function buildSpawnWrapper(
   };
 }
 
+function ensureLocalSettings(cwd: string): void {
+  const claudeDir = path.join(cwd, ".claude");
+  const localSettingsPath = path.join(claudeDir, "settings.local.json");
+  try {
+    if (!fs.existsSync(localSettingsPath)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+      fs.writeFileSync(localSettingsPath, "{}\n", { flag: "wx" });
+    }
+  } catch {
+    // Best-effort — don't fail session creation if we can't write
+  }
+}
+
 export function buildSessionOptions(params: BuildOptionsParams): Options {
+  ensureLocalSettings(params.cwd);
+
   const options: Options = {
     ...params.userProvidedOptions,
     systemPrompt: params.systemPrompt ?? buildSystemPrompt(),
