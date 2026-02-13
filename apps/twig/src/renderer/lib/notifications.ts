@@ -28,6 +28,12 @@ function showDockBadge(): void {
   });
 }
 
+function bounceDock(): void {
+  trpcVanilla.notification.bounceDock.mutate().catch((err) => {
+    log.error("Failed to bounce dock", err);
+  });
+}
+
 export function notifyPromptComplete(
   taskTitle: string,
   stopReason: string,
@@ -39,6 +45,7 @@ export function notifyPromptComplete(
     completionVolume,
     desktopNotifications,
     dockBadgeNotifications,
+    dockBounceNotifications,
   } = useSettingsStore.getState();
 
   const isWindowFocused = document.hasFocus();
@@ -57,6 +64,9 @@ export function notifyPromptComplete(
   if (dockBadgeNotifications) {
     showDockBadge();
   }
+  if (dockBounceNotifications) {
+    bounceDock();
+  }
 }
 
 export function notifyPermissionRequest(taskTitle: string): void {
@@ -65,6 +75,7 @@ export function notifyPermissionRequest(taskTitle: string): void {
     completionVolume,
     desktopNotifications,
     dockBadgeNotifications,
+    dockBounceNotifications,
   } = useSettingsStore.getState();
   const isWindowFocused = document.hasFocus();
 
@@ -81,6 +92,9 @@ export function notifyPermissionRequest(taskTitle: string): void {
     }
     if (dockBadgeNotifications) {
       showDockBadge();
+    }
+    if (dockBounceNotifications) {
+      bounceDock();
     }
   }
 }

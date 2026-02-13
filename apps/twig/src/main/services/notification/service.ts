@@ -35,6 +35,13 @@ export class NotificationService {
     log.info("Dock badge shown");
   }
 
+  bounceDock(): void {
+    if (process.platform === "darwin") {
+      app.dock?.bounce("informational");
+      log.info("Dock bounce triggered");
+    }
+  }
+
   private clearDockBadge(): void {
     if (!this.hasBadge) return;
 
