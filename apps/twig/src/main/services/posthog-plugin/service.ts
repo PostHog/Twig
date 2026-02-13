@@ -8,6 +8,7 @@ import { app, net } from "electron";
 import { injectable, postConstruct, preDestroy } from "inversify";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
+import { captureException } from "../posthog-analytics.js";
 
 const log = logger.scope("posthog-plugin");
 
@@ -16,19 +17,19 @@ const SKILLS_ZIP_URL = process.env.SKILLS_ZIP_URL!;
 const UPDATE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const CODEX_SKILLS_DIR = join(homedir(), ".agents", "skills");
 
-interface SkillsEvents {
-  updated: boolean;
+interface PosthogPluginEvents {
+  skillsUpdated: true;
 }
 
 @injectable()
-export class PosthogPluginService extends TypedEventEmitter<SkillsEvents> {
+export class PosthogPluginService extends TypedEventEmitter<PosthogPluginEvents> {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private lastCheckAt = 0;
   private updating = false;
 
   /** Runtime plugin dir under userData */
   private get runtimePluginDir(): string {
-    return join(app.getPath("userData"), "claude-code-plugin", "posthog");
+    return join(app.getPath("userData"), "plugins", "posthog");
   }
 
   /** Runtime skills cache (downloaded zips extracted here) */
@@ -40,14 +41,18 @@ export class PosthogPluginService extends TypedEventEmitter<SkillsEvents> {
   private get bundledPluginDir(): string {
     const appPath = app.getAppPath();
     return app.isPackaged
-      ? join(`${appPath}.unpacked`, ".vite/build/claude-code/posthog")
-      : join(appPath, ".vite/build/claude-code/posthog");
+      ? join(`${appPath}.unpacked`, ".vite/build/plugins/posthog")
+      : join(appPath, ".vite/build/plugins/posthog");
   }
 
   @postConstruct()
   init(): void {
     this.initialize().catch((err) => {
       log.error("Skills initialization failed", err);
+      captureException(err, {
+        source: "posthog-plugin",
+        operation: "initialize",
+      });
     });
   }
 
@@ -143,12 +148,16 @@ export class PosthogPluginService extends TypedEventEmitter<SkillsEvents> {
         await this.syncCodexSkills();
 
         log.info("Skills updated successfully");
-        this.emit("updated", true);
+        this.emit("skillsUpdated", true);
       } finally {
         await rm(tempDir, { recursive: true, force: true });
       }
     } catch (err) {
       log.warn("Failed to update skills, will retry next interval", err);
+      captureException(err, {
+        source: "posthog-plugin",
+        operation: "updateSkills",
+      });
     } finally {
       this.updating = false;
     }
@@ -173,6 +182,10 @@ export class PosthogPluginService extends TypedEventEmitter<SkillsEvents> {
       log.info("Bundled plugin copied to runtime dir");
     } catch (err) {
       log.warn("Failed to copy bundled plugin", err);
+      captureException(err, {
+        source: "posthog-plugin",
+        operation: "copyBundledPlugin",
+      });
     }
   }
 

@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  rmSync,
   statSync,
 } from "node:fs";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
@@ -176,7 +175,7 @@ async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
       const skillsSource = await findSkillsDirInExtract(extractDir);
       if (!skillsSource) {
         console.warn(
-          "[copy-claude-code-plugin] No skills directory found in downloaded archive",
+          "[copy-posthog-plugin] No skills directory found in downloaded archive",
         );
         return false;
       }
@@ -192,13 +191,16 @@ async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
         }
       }
 
-      console.log("[copy-claude-code-plugin] Remote skills downloaded and merged");
+      console.log("[copy-posthog-plugin] Remote skills downloaded and merged");
       return true;
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   } catch (err) {
-    console.warn("[copy-claude-code-plugin] Failed to download remote skills (non-fatal):", err);
+    console.warn(
+      "[copy-posthog-plugin] Failed to download remote skills (non-fatal):",
+      err,
+    );
     return false;
   }
 }
@@ -207,7 +209,9 @@ async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
  * Finds the skills directory inside an extracted zip.
  * Handles: skills/ at root, nested (e.g. posthog/skills/), or skill dirs directly at root.
  */
-async function findSkillsDirInExtract(extractDir: string): Promise<string | null> {
+async function findSkillsDirInExtract(
+  extractDir: string,
+): Promise<string | null> {
   const direct = join(extractDir, "skills");
   if (existsSync(direct)) return direct;
 
@@ -228,12 +232,22 @@ async function findSkillsDirInExtract(extractDir: string): Promise<string | null
   return null;
 }
 
-function copyClaudeCodePlugin(isDev: boolean): Plugin {
-  const sourceDir = join(__dirname, "../../plugins/claude-code");
+const PLUGIN_ALLOW_LIST = [
+  "plugin.json",
+  ".mcp.json",
+  ".lsp.json",
+  "commands",
+  "agents",
+  "skills",
+  "hooks",
+];
+
+function copyPosthogPlugin(isDev: boolean): Plugin {
+  const sourceDir = join(__dirname, "../../plugins/posthog");
   const localSkillsDir = join(sourceDir, "local-skills");
 
   return {
-    name: "copy-claude-code-posthog-plugin",
+    name: "copy-posthog-plugin",
     buildStart() {
       if (existsSync(sourceDir)) {
         for (const file of getFilesRecursive(sourceDir)) {
@@ -251,37 +265,38 @@ function copyClaudeCodePlugin(isDev: boolean): Plugin {
       }
     },
     async writeBundle() {
-      // Keep the name of the directory "posthog" as it is used as the plugin name.
-      const destDir = join(__dirname, ".vite/build/claude-code/posthog");
+      const destDir = join(__dirname, ".vite/build/plugins/posthog");
       const destSkillsDir = join(destDir, "skills");
 
-      // 1. Copy plugin.json
-      const pluginJson = join(sourceDir, "plugin.json");
-      if (existsSync(pluginJson)) {
-        await mkdir(destDir, { recursive: true });
-        await cp(pluginJson, join(destDir, "plugin.json"));
+      // 1. Copy allowed plugin entries
+      await mkdir(destDir, { recursive: true });
+      for (const entry of PLUGIN_ALLOW_LIST) {
+        const src = join(sourceDir, entry);
+        if (!existsSync(src)) continue;
+        const dest = join(destDir, entry);
+        if (statSync(src).isDirectory()) {
+          await cp(src, dest, { recursive: true });
+        } else {
+          await cp(src, dest);
+        }
       }
 
-      // 2. Copy shipped skills
-      const shippedSkillsDir = join(sourceDir, "skills");
-      if (existsSync(shippedSkillsDir)) {
-        await cp(shippedSkillsDir, destSkillsDir, { recursive: true });
-      }
-
-      // 3. Download and overlay remote skills (overrides same-named shipped skills)
+      // 2. Download and overlay remote skills (overrides same-named shipped skills)
       await downloadAndExtractSkills(destSkillsDir);
 
-      // 4. In dev mode: overlay local-skills (overrides both shipped and remote)
+      // 3. In dev mode: overlay local-skills (overrides both shipped and remote)
       if (isDev && existsSync(localSkillsDir)) {
         const entries = await readdir(localSkillsDir, { withFileTypes: true });
         for (const entry of entries) {
           if (entry.isDirectory()) {
             const dest = join(destSkillsDir, entry.name);
             await rm(dest, { recursive: true, force: true });
-            await cp(join(localSkillsDir, entry.name), dest, { recursive: true });
+            await cp(join(localSkillsDir, entry.name), dest, {
+              recursive: true,
+            });
           }
         }
-        console.log("[copy-claude-code-plugin] Local dev skills overlaid");
+        console.log("[copy-posthog-plugin] Local dev skills overlaid");
       }
     },
   };
@@ -344,8 +359,8 @@ export default defineConfig(({ mode }) => {
       autoServicesPlugin(join(__dirname, "src/main/services")),
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
+      copyPosthogPlugin(isDev),
       copyCodexAcpBinaries(),
-      copyClaudeCodePlugin(isDev),
       createPosthogPlugin(env),
     ].filter(Boolean),
     define: {
