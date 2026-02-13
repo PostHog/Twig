@@ -330,17 +330,14 @@ export function useActionSelectorState({
     [showSubmitButton, selectedOption],
   );
 
-  const ensureChecked = useCallback(
-    (optionId: string) => {
-      setCheckedOptions((prev) => {
-        if (prev.has(optionId)) return prev;
-        const next = new Set(prev);
-        next.add(optionId);
-        return next;
-      });
-    },
-    [],
-  );
+  const ensureChecked = useCallback((optionId: string) => {
+    setCheckedOptions((prev) => {
+      if (prev.has(optionId)) return prev;
+      const next = new Set(prev);
+      next.add(optionId);
+      return next;
+    });
+  }, []);
 
   const handleInlineSubmit = useCallback(() => {
     if (!selectedOption) return;
@@ -351,7 +348,14 @@ export function useActionSelectorState({
     } else if (customInput.trim()) {
       onSelect(selectedOption.id, customInput.trim());
     }
-  }, [showSubmitButton, ensureChecked, selectedOption, customInput, onSelect, moveDown]);
+  }, [
+    showSubmitButton,
+    ensureChecked,
+    selectedOption,
+    customInput,
+    onSelect,
+    moveDown,
+  ]);
 
   const handleNavigateUp = useCallback(() => {
     if (
