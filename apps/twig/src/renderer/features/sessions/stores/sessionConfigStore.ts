@@ -80,6 +80,11 @@ export function setPersistedConfigOptions(
   useSessionConfigStore.getState().setConfigOptions(taskRunId, options);
 }
 
+/** Non-hook accessor for removing persisted config options */
+export function removePersistedConfigOptions(taskRunId: string): void {
+  useSessionConfigStore.getState().removeConfigOptions(taskRunId);
+}
+
 /** Non-hook accessor for updating a single config option value */
 export function updatePersistedConfigOptionValue(
   taskRunId: string,
