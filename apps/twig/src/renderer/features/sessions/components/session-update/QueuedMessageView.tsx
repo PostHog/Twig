@@ -8,7 +8,10 @@ interface QueuedMessageViewProps {
   onRemove?: () => void;
 }
 
-export function QueuedMessageView({ message, onRemove }: QueuedMessageViewProps) {
+export function QueuedMessageView({
+  message,
+  onRemove,
+}: QueuedMessageViewProps) {
   return (
     <Box
       className="group relative border-l-2 border-dashed bg-gray-2 py-2 pr-2 pl-3 opacity-70"
