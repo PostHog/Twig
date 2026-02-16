@@ -1,4 +1,4 @@
-import { Text } from "@radix-ui/themes";
+import { Box, Text } from "@radix-ui/themes";
 import { useCallback, useEffect } from "react";
 
 interface InlineEditableTextProps {
@@ -24,7 +24,7 @@ export function InlineEditableText({
 }: InlineEditableTextProps) {
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current.textContent = value || placeholder;
+      inputRef.current.textContent = value || "";
       inputRef.current.focus();
       if (value) {
         const range = document.createRange();
@@ -35,23 +35,14 @@ export function InlineEditableText({
         sel?.addRange(range);
       }
     }
-  }, [inputRef, placeholder, value]);
+  }, [inputRef, value]);
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLSpanElement>) => {
       const text = e.currentTarget.textContent ?? "";
       onChange(text);
-      if (!text && inputRef.current) {
-        inputRef.current.textContent = placeholder;
-        const range = document.createRange();
-        range.setStart(inputRef.current, 0);
-        range.collapse(true);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      }
     },
-    [onChange, placeholder, inputRef],
+    [onChange],
   );
 
   const handleKeyDown = useCallback(
@@ -68,45 +59,60 @@ export function InlineEditableText({
       } else if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         onSubmit();
-      } else if (!value && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        e.currentTarget.textContent = e.key;
-        onChange(e.key);
-        const range = document.createRange();
-        range.selectNodeContents(e.currentTarget);
-        range.collapse(false);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
       }
     },
-    [value, onChange, onNavigateUp, onNavigateDown, onEscape, onSubmit],
+    [onNavigateUp, onNavigateDown, onEscape, onSubmit],
   );
 
   return (
-    <Text
-      asChild
-      size="1"
-      weight="medium"
-      className={value ? "text-gray-12" : "text-gray-10"}
+    <Box
+      style={{
+        display: "inline-grid",
+        minWidth: "200px",
+      }}
     >
-      {/* biome-ignore lint/a11y/useSemanticElements: contentEditable span needed for inline editing UX */}
-      <span
-        ref={inputRef}
-        role="textbox"
-        tabIndex={0}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-        style={{
-          outline: "none",
-          minWidth: "200px",
-          display: "inline-block",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      />
-    </Text>
+      {!value && (
+        <Text
+          size="1"
+          weight="medium"
+          className="text-gray-10"
+          style={{
+            gridRow: 1,
+            gridColumn: 1,
+            pointerEvents: "none",
+            userSelect: "none",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {placeholder}
+        </Text>
+      )}
+      <Text
+        asChild
+        size="1"
+        weight="medium"
+        className={value ? "text-gray-12" : ""}
+      >
+        {/* biome-ignore lint/a11y/useSemanticElements: contentEditable span needed for inline editing UX */}
+        <span
+          ref={inputRef}
+          role="textbox"
+          tabIndex={0}
+          contentEditable
+          suppressContentEditableWarning
+          onClick={(e) => e.stopPropagation()}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          style={{
+            gridRow: 1,
+            gridColumn: 1,
+            outline: "none",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        />
+      </Text>
+    </Box>
   );
 }

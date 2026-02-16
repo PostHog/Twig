@@ -310,31 +310,85 @@ export function useActionSelectorState({
     containerRef.current?.focus();
   }, []);
 
+  const handleCustomInputChange = useCallback(
+    (value: string) => {
+      setCustomInput(value);
+      if (
+        value.trim() &&
+        showSubmitButton &&
+        selectedOption &&
+        needsCustomInput(selectedOption)
+      ) {
+        setCheckedOptions((prev) => {
+          if (prev.has(selectedOption.id)) return prev;
+          const next = new Set(prev);
+          next.add(selectedOption.id);
+          return next;
+        });
+      }
+    },
+    [showSubmitButton, selectedOption],
+  );
+
+  const ensureChecked = useCallback((optionId: string) => {
+    setCheckedOptions((prev) => {
+      if (prev.has(optionId)) return prev;
+      const next = new Set(prev);
+      next.add(optionId);
+      return next;
+    });
+  }, []);
+
   const handleInlineSubmit = useCallback(() => {
     if (!selectedOption) return;
     if (showSubmitButton) {
-      toggleCheck(selectedOption.id);
+      ensureChecked(selectedOption.id);
+      containerRef.current?.focus();
+      moveDown();
     } else if (customInput.trim()) {
       onSelect(selectedOption.id, customInput.trim());
     }
-  }, [showSubmitButton, toggleCheck, selectedOption, customInput, onSelect]);
+  }, [
+    showSubmitButton,
+    ensureChecked,
+    selectedOption,
+    customInput,
+    onSelect,
+    moveDown,
+  ]);
 
   const handleNavigateUp = useCallback(() => {
+    if (
+      selectedOption &&
+      needsCustomInput(selectedOption) &&
+      customInput.trim() &&
+      showSubmitButton
+    ) {
+      ensureChecked(selectedOption.id);
+    }
     containerRef.current?.focus();
     moveUp();
-  }, [moveUp]);
+  }, [moveUp, selectedOption, customInput, showSubmitButton, ensureChecked]);
 
   const handleNavigateDown = useCallback(() => {
+    if (
+      selectedOption &&
+      needsCustomInput(selectedOption) &&
+      customInput.trim() &&
+      showSubmitButton
+    ) {
+      ensureChecked(selectedOption.id);
+    }
     containerRef.current?.focus();
     moveDown();
-  }, [moveDown]);
+  }, [moveDown, selectedOption, customInput, showSubmitButton, ensureChecked]);
 
   return {
     selectedIndex,
     setSelectedIndex,
     checkedOptions,
     customInput,
-    setCustomInput,
+    setCustomInput: handleCustomInputChange,
     isEditing,
     activeStep,
     stepAnswers,
