@@ -416,7 +416,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     const {
       taskId,
       taskRunId,
-      repoPath,
+      repoPath: rawRepoPath,
       credentials,
       logUrl,
       sessionId: existingSessionId,
@@ -424,6 +424,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       additionalDirectories,
       permissionMode,
     } = config;
+
+    // Preview sessions don't need a real repo — use a temp directory
+    const repoPath = taskId === "__preview__" ? tmpdir() : rawRepoPath;
 
     if (!isRetry) {
       const existing = this.sessions.get(taskRunId);

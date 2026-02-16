@@ -485,7 +485,6 @@ export class SessionService {
 
   async startPreviewSession(params: {
     adapter: "claude" | "codex";
-    repoPath?: string;
   }): Promise<void> {
     this.previewAbort?.abort();
     const abort = new AbortController();
@@ -513,7 +512,7 @@ export class SessionService {
       const result = await trpcVanilla.agent.start.mutate({
         taskId: PREVIEW_TASK_ID,
         taskRunId,
-        repoPath: params.repoPath || "~",
+        repoPath: "__preview__",
         apiKey: auth.apiKey,
         apiHost: auth.apiHost,
         projectId: auth.projectId,

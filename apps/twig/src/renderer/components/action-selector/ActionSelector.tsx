@@ -1,15 +1,10 @@
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { compactHomePath } from "@utils/path";
 import { useCallback, useEffect, useRef } from "react";
-import { isOtherOption } from "./constants";
 import { OptionRow } from "./OptionRow";
 import { StepTabs } from "./StepTabs";
-import type { ActionSelectorProps, SelectorOption } from "./types";
+import type { ActionSelectorProps } from "./types";
 import { useActionSelectorState } from "./useActionSelectorState";
-
-function needsCustomInput(option: SelectorOption): boolean {
-  return option.customInput === true || isOtherOption(option.id);
-}
 
 export function ActionSelector({
   title,
@@ -199,7 +194,15 @@ export function ActionSelector({
       ref={containerRef}
       tabIndex={0}
       p="3"
-      onClick={() => containerRef.current?.focus()}
+      onClick={(e) => {
+        if (
+          e.target instanceof HTMLElement &&
+          e.target.closest("[contenteditable]")
+        ) {
+          return;
+        }
+        containerRef.current?.focus();
+      }}
       style={{
         outline: "none",
         border: "1px solid var(--blue-11)",
@@ -233,10 +236,7 @@ export function ActionSelector({
           <Flex direction="column" gap="1">
             {allOptions.map((option, index) => {
               const isSelected = selectedIndex === index;
-              const hasCustomContent =
-                needsCustomInput(option) && customInput.trim() !== "";
-              const isChecked =
-                checkedOptions.has(option.id) || hasCustomContent;
+              const isChecked = checkedOptions.has(option.id);
 
               return (
                 <OptionRow

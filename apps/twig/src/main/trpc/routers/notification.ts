@@ -20,4 +20,5 @@ export const notificationRouter = router({
       getService().send(input.title, input.body, input.silent),
     ),
   showDockBadge: publicProcedure.mutation(() => getService().showDockBadge()),
+  bounceDock: publicProcedure.mutation(() => getService().bounceDock()),
 });
