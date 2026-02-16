@@ -742,8 +742,9 @@ describe("SessionService", () => {
       expect(mockTrpcAgent.cancel.mutate).toHaveBeenCalledWith({
         sessionId: "run-123",
       });
-      expect(mockSessionStoreSetters.removeSession).toHaveBeenCalledWith(
+      expect(mockSessionStoreSetters.updateSession).toHaveBeenCalledWith(
         "run-123",
+        { status: "disconnected", errorMessage: undefined },
       );
     });
 
