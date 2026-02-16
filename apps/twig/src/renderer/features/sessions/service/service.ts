@@ -1233,6 +1233,7 @@ export class SessionService {
 
   /**
    * Clear session error and allow retry.
+   * Preserves session events so the conversation stays visible during reconnect.
    */
   async clearSessionError(taskId: string): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
@@ -1253,7 +1254,12 @@ export class SessionService {
         });
       }
       this.unsubscribeFromChannel(session.taskRunId);
-      sessionStoreSetters.removeSession(session.taskRunId);
+      // Clear error state but keep the session and its events so the
+      // conversation remains visible while we reconnect.
+      sessionStoreSetters.updateSession(session.taskRunId, {
+        status: "disconnected",
+        errorMessage: undefined,
+      });
     }
     // Clear from connecting tasks as well
     this.connectingTasks.delete(taskId);

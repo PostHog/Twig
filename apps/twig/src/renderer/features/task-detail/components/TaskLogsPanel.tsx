@@ -72,7 +72,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isInitializing = isCloud
     ? !session || (events.length === 0 && isCloudRunNotTerminal)
     : !session ||
-      session.status === "connecting" ||
+      (session.status === "connecting" && events.length === 0) ||
       (session.status === "connected" &&
         events.length === 0 &&
         (isPromptPending ||
