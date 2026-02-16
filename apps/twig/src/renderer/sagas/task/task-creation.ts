@@ -173,12 +173,14 @@ export class TaskCreationSaga extends Saga<
     }
 
     // Step 6: Connect to session
+    // Cloud create: skip local session — the sandbox handles execution
     const agentCwd =
       workspace?.worktreePath ?? workspace?.folderPath ?? repoPath;
+    const isCloudCreate = !input.taskId && workspaceMode === "cloud";
     const shouldConnect =
-      !!input.taskId || // Open: always connect to load chat history
-      workspaceMode === "cloud" || // Cloud create: always connect
-      !!agentCwd; // Local create: always connect if we have a cwd
+      !isCloudCreate &&
+      (!!input.taskId || // Open: always connect to load chat history
+        !!agentCwd); // Local create: always connect if we have a cwd
 
     if (shouldConnect) {
       const initialPrompt =

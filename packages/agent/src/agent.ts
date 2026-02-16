@@ -37,24 +37,11 @@ export class Agent {
       this.posthogAPI = new PostHogAPIClient(config.posthog);
     }
 
-    if (!config.skipLogPersistence) {
-      if (config.otelTransport) {
-        // OTEL pipeline: use OtelLogWriter only (no S3 writer)
-        this.sessionLogWriter = new SessionLogWriter({
-          otelConfig: {
-            posthogHost: config.otelTransport.host,
-            apiKey: config.otelTransport.apiKey,
-            logsPath: config.otelTransport.logsPath,
-          },
-          logger: this.logger.child("SessionLogWriter"),
-        });
-      } else if (config.posthog) {
-        // Legacy: use S3 writer via PostHog API
-        this.sessionLogWriter = new SessionLogWriter({
-          posthogAPI: this.posthogAPI,
-          logger: this.logger.child("SessionLogWriter"),
-        });
-      }
+    if (config.posthog && !config.skipLogPersistence) {
+      this.sessionLogWriter = new SessionLogWriter({
+        posthogAPI: this.posthogAPI,
+        logger: this.logger.child("SessionLogWriter"),
+      });
     }
   }
 

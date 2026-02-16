@@ -3,7 +3,10 @@ import type {
   RequestPermissionRequest,
   SessionConfigOption,
 } from "@agentclientprotocol/sdk";
-import { useAuthStore } from "@features/auth/stores/authStore";
+import {
+  setSessionResetCallback,
+  useAuthStore,
+} from "@features/auth/stores/authStore";
 import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
@@ -88,6 +91,8 @@ export function resetSessionService(): void {
     log.error("Failed to reset all sessions on main process", err);
   });
 }
+
+setSessionResetCallback(resetSessionService);
 
 export class SessionService {
   private connectingTasks = new Map<string, Promise<void>>();
@@ -1354,4 +1359,12 @@ export class SessionService {
       }
     }
   }
+}
+
+// Register callback when module loads (not during tests)
+if (typeof window !== "undefined" && !import.meta.env?.VITEST) {
+  setSessionResetCallback(() => {
+    log.info("Auth triggered session reset");
+    resetSessionService();
+  });
 }

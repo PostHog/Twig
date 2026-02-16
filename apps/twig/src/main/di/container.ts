@@ -13,6 +13,7 @@ import { FocusSyncService } from "../services/focus/sync-service.js";
 import { FoldersService } from "../services/folders/service.js";
 import { FsService } from "../services/fs/service.js";
 import { GitService } from "../services/git/service.js";
+import { LlmGatewayService } from "../services/llm-gateway/service.js";
 import { NotificationService } from "../services/notification/service.js";
 import { OAuthService } from "../services/oauth/service.js";
 import { ProcessTrackingService } from "../services/process-tracking/service.js";
@@ -36,6 +37,7 @@ container.bind(MAIN_TOKENS.ContextMenuService).to(ContextMenuService);
 container.bind(MAIN_TOKENS.DeepLinkService).to(DeepLinkService);
 
 container.bind(MAIN_TOKENS.ExternalAppsService).to(ExternalAppsService);
+container.bind(MAIN_TOKENS.LlmGatewayService).to(LlmGatewayService);
 container.bind(MAIN_TOKENS.FileWatcherService).to(FileWatcherService);
 container.bind(MAIN_TOKENS.FocusService).to(FocusService);
 container.bind(MAIN_TOKENS.FocusSyncService).to(FocusSyncService);

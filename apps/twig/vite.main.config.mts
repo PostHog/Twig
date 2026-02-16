@@ -121,9 +121,9 @@ function copyClaudeExecutable(): Plugin {
   };
 }
 
-function copyCodexAcpBinary(): Plugin {
+function copyCodexAcpBinaries(): Plugin {
   return {
-    name: "copy-codex-acp-binary",
+    name: "copy-codex-acp-binaries",
     writeBundle() {
       const destDir = join(__dirname, ".vite/build/codex-acp");
 
@@ -131,31 +131,38 @@ function copyCodexAcpBinary(): Plugin {
         mkdirSync(destDir, { recursive: true });
       }
 
-      const binaryName =
-        process.platform === "win32" ? "codex-acp.exe" : "codex-acp";
       const sourceDir = join(__dirname, "resources/codex-acp");
-      const sourcePath = join(sourceDir, binaryName);
+      const binaries = [
+        { name: "codex-acp", winName: "codex-acp.exe" },
+        { name: "rg", winName: "rg.exe" },
+      ];
 
-      if (existsSync(sourcePath)) {
-        const destPath = join(destDir, binaryName);
-        copyFileSync(sourcePath, destPath);
-        console.log(`Copied codex-acp binary to ${destDir}`);
+      for (const binary of binaries) {
+        const binaryName =
+          process.platform === "win32" ? binary.winName : binary.name;
+        const sourcePath = join(sourceDir, binaryName);
 
-        if (process.platform === "darwin") {
-          try {
-            execSync(`xattr -cr "${destPath}"`, { stdio: "inherit" });
-            execSync(`codesign --force --sign - "${destPath}"`, {
-              stdio: "inherit",
-            });
-            console.log("Ad-hoc signed codex-acp binary");
-          } catch (err) {
-            console.warn("Failed to sign codex-acp binary:", err);
+        if (existsSync(sourcePath)) {
+          const destPath = join(destDir, binaryName);
+          copyFileSync(sourcePath, destPath);
+          console.log(`Copied ${binary.name} binary to ${destDir}`);
+
+          if (process.platform === "darwin") {
+            try {
+              execSync(`xattr -cr "${destPath}"`, { stdio: "inherit" });
+              execSync(`codesign --force --sign - "${destPath}"`, {
+                stdio: "inherit",
+              });
+              console.log(`Ad-hoc signed ${binary.name} binary`);
+            } catch (err) {
+              console.warn(`Failed to sign ${binary.name} binary:`, err);
+            }
           }
+        } else {
+          console.warn(
+            `[copy-codex-acp-binaries] ${binary.name} not found at ${sourcePath}. Run 'node scripts/download-binaries.mjs' first.`,
+          );
         }
-      } else {
-        console.warn(
-          `[copy-codex-acp-binary] Binary not found at ${sourcePath}. Run 'node scripts/download-codex-acp.mjs' first.`,
-        );
       }
     },
   };
@@ -170,7 +177,7 @@ export default defineConfig(({ mode }) => {
       autoServicesPlugin(join(__dirname, "src/main/services")),
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
-      copyCodexAcpBinary(),
+      copyCodexAcpBinaries(),
       createPosthogPlugin(env),
     ].filter(Boolean),
     define: {

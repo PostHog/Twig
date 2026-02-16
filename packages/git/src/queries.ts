@@ -374,6 +374,16 @@ function matchesExcludePattern(filePath: string, patterns: string[]): boolean {
   });
 }
 
+async function countFileLines(filePath: string): Promise<number> {
+  try {
+    const content = await fs.readFile(filePath, "utf-8");
+    if (!content) return 0;
+    return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function getChangedFilesDetailed(
   baseDir: string,
   options?: GetChangedFilesDetailedOptions,
@@ -433,7 +443,13 @@ export async function getChangedFilesDetailed(
             ) {
               continue;
             }
-            files.push({ path: file, status: "untracked" });
+            const lineCount = await countFileLines(path.join(baseDir, file));
+            files.push({
+              path: file,
+              status: "untracked",
+              linesAdded: lineCount,
+              linesRemoved: 0,
+            });
           }
         }
 
@@ -498,7 +514,8 @@ export async function getSyncStatus(
     async (git) => {
       try {
         const status = await git.status();
-        const currentBranch = status.current || null;
+        const isDetached = status.detached || status.current === "HEAD";
+        const currentBranch = isDetached ? null : status.current || null;
 
         if (!currentBranch) {
           return {
@@ -512,13 +529,14 @@ export async function getSyncStatus(
 
         const defaultBranch = await detectDefaultBranchWithFallback(git);
         const hasRemote = status.tracking !== null;
+        const isFeatureBranch = currentBranch !== defaultBranch;
 
         return {
           ahead: status.ahead,
           behind: status.behind,
           hasRemote,
           currentBranch,
-          isFeatureBranch: currentBranch !== defaultBranch,
+          isFeatureBranch,
         };
       } catch {
         return {
@@ -564,6 +582,38 @@ export async function getLatestCommit(
         };
       } catch {
         return null;
+      }
+    },
+    { signal: options?.abortSignal },
+  );
+}
+
+export async function getCommitsBetweenBranches(
+  baseDir: string,
+  baseBranch: string,
+  headBranch?: string,
+  maxCount = 50,
+  options?: CreateGitClientOptions,
+): Promise<CommitInfo[]> {
+  const manager = getGitOperationManager();
+  return manager.executeRead(
+    baseDir,
+    async (git) => {
+      try {
+        const log = await git.log({
+          from: `origin/${baseBranch}`,
+          to: headBranch ?? "HEAD",
+          maxCount,
+        });
+        return log.all.map((c) => ({
+          sha: c.hash,
+          shortSha: c.hash.slice(0, 7),
+          message: c.message,
+          author: c.author_name,
+          date: c.date,
+        }));
+      } catch {
+        return [];
       }
     },
     { signal: options?.abortSignal },

@@ -94,11 +94,13 @@ export function truncateText(
   maxLength: number,
   ellipsis = "…",
 ): string {
+  if (typeof text !== "string") return String(text);
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}${ellipsis}`;
 }
 
 export function getFilename(path: string): string {
+  if (typeof path !== "string") return String(path);
   return path.split("/").pop() ?? path;
 }
 

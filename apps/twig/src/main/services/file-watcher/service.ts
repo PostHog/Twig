@@ -29,7 +29,7 @@ interface PendingChanges {
 
 interface RepoWatcher {
   filesId: string;
-  gitId: string | null;
+  gitIds: string[];
   pending: PendingChanges;
 }
 
@@ -81,19 +81,23 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     };
 
     const filesId = `file-watcher:files:${repoPath}`;
-    const gitId = `file-watcher:git:${repoPath}`;
 
     const filesSub = await this.watchFiles(repoPath, pending);
     this.watcherRegistry.register(filesId, filesSub);
 
-    const gitSub = await this.watchGit(repoPath);
-    if (gitSub) {
-      this.watcherRegistry.register(gitId, gitSub);
+    const gitIds: string[] = [];
+    const gitSubs = await this.watchGit(repoPath);
+    if (gitSubs) {
+      for (let i = 0; i < gitSubs.length; i++) {
+        const gitId = `file-watcher:git:${repoPath}:${i}`;
+        this.watcherRegistry.register(gitId, gitSubs[i]);
+        gitIds.push(gitId);
+      }
     }
 
     this.watchers.set(repoPath, {
       filesId,
-      gitId: gitSub ? gitId : null,
+      gitIds,
       pending,
     });
   }
@@ -105,8 +109,8 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
     if (w.pending.timer) clearTimeout(w.pending.timer);
     await this.saveSnapshot(repoPath);
     await this.watcherRegistry.unregister(w.filesId);
-    if (w.gitId) {
-      await this.watcherRegistry.unregister(w.gitId);
+    for (const gitId of w.gitIds) {
+      await this.watcherRegistry.unregister(gitId);
     }
     this.watchers.delete(repoPath);
   }
@@ -231,10 +235,12 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
 
   private async watchGit(
     repoPath: string,
-  ): Promise<watcher.AsyncSubscription | null> {
+  ): Promise<watcher.AsyncSubscription[] | null> {
     try {
       const gitDir = await this.resolveGitDir(repoPath);
-      return watcher.subscribe(gitDir, (err, events) => {
+      const subscriptions: watcher.AsyncSubscription[] = [];
+
+      const handleEvents = (err: Error | null, events: watcher.Event[]) => {
         if (this.watcherRegistry.isShutdown) return;
         if (err) {
           log.error("Git watcher error:", err);
@@ -249,9 +255,28 @@ export class FileWatcherService extends TypedEventEmitter<FileWatcherEvents> {
         if (isRelevant) {
           this.emit(FileWatcherEvent.GitStateChanged, { repoPath });
         }
-      });
+      };
+
+      subscriptions.push(await watcher.subscribe(gitDir, handleEvents));
+
+      const commonDir = await this.resolveCommonDir(gitDir);
+      if (commonDir && commonDir !== gitDir) {
+        subscriptions.push(await watcher.subscribe(commonDir, handleEvents));
+      }
+
+      return subscriptions;
     } catch (error) {
       log.warn("Failed to set up git watcher:", error);
+      return null;
+    }
+  }
+
+  private async resolveCommonDir(gitDir: string): Promise<string | null> {
+    try {
+      const commonDirFile = path.join(gitDir, "commondir");
+      const content = await fs.readFile(commonDirFile, "utf-8");
+      return path.resolve(gitDir, content.trim());
+    } catch {
       return null;
     }
   }
