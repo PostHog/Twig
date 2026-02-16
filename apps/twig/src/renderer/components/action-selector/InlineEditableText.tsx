@@ -35,7 +35,7 @@ export function InlineEditableText({
         sel?.addRange(range);
       }
     }
-  }, [inputRef, placeholder, value]);
+  }, [inputRef, value]);
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLSpanElement>) => {
