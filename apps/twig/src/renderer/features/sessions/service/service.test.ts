@@ -40,6 +40,7 @@ const mockSessionStoreSetters = vi.hoisted(() => ({
   updateSession: vi.fn(),
   appendEvents: vi.fn(),
   enqueueMessage: vi.fn(),
+  removeQueuedMessage: vi.fn(),
   clearMessageQueue: vi.fn(),
   dequeueMessagesAsText: vi.fn(() => null),
   setPendingPermissions: vi.fn(),
