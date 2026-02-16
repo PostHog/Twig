@@ -1,6 +1,7 @@
 import { logger } from "@renderer/lib/logger";
 import type {
   RepoAutonomyStatus,
+  SignalReportArtefact,
   SignalReportArtefactsResponse,
   SignalReportsResponse,
   Task,
@@ -11,6 +12,87 @@ import { buildApiFetcher } from "./fetcher";
 import { createApiClient, type Schemas } from "./generated";
 
 const log = logger.scope("posthog-client");
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function normalizeSignalReportArtefact(
+  value: unknown,
+): SignalReportArtefact | null {
+  if (!isObjectRecord(value)) {
+    return null;
+  }
+
+  const id = optionalString(value.id);
+  if (!id) {
+    return null;
+  }
+
+  const contentValue = isObjectRecord(value.content) ? value.content : null;
+  if (!contentValue) {
+    return null;
+  }
+
+  const content = optionalString(contentValue.content);
+  const sessionId = optionalString(contentValue.session_id);
+
+  // The backend may return empty content objects when binary decode fails.
+  if (!content && !sessionId) {
+    return null;
+  }
+
+  return {
+    id,
+    type: optionalString(value.type) ?? "unknown",
+    created_at: optionalString(value.created_at) ?? new Date(0).toISOString(),
+    content: {
+      session_id: sessionId ?? "",
+      start_time: optionalString(contentValue.start_time) ?? "",
+      end_time: optionalString(contentValue.end_time) ?? "",
+      distinct_id: optionalString(contentValue.distinct_id) ?? "",
+      content: content ?? "",
+      distance_to_centroid:
+        typeof contentValue.distance_to_centroid === "number"
+          ? contentValue.distance_to_centroid
+          : null,
+    },
+  };
+}
+
+function parseSignalReportArtefactsPayload(
+  value: unknown,
+): SignalReportArtefactsResponse {
+  const payload = isObjectRecord(value) ? value : null;
+  const rawResults = Array.isArray(payload?.results)
+    ? payload.results
+    : Array.isArray(value)
+      ? value
+      : [];
+
+  const results = rawResults
+    .map(normalizeSignalReportArtefact)
+    .filter((artefact): artefact is SignalReportArtefact => artefact !== null);
+  const count =
+    typeof payload?.count === "number" ? payload.count : results.length;
+
+  if (rawResults.length > 0 && results.length === 0) {
+    return {
+      results: [],
+      count: 0,
+      unavailableReason: "invalid_payload",
+    };
+  }
+
+  return {
+    results,
+    count,
+  };
+}
 
 export class PostHogAPIClient {
   private api: ReturnType<typeof createApiClient>;
@@ -551,23 +633,58 @@ export class PostHogAPIClient {
     const url = new URL(
       `${this.api.baseUrl}/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
     );
-    const response = await this.api.fetcher.fetch({
-      method: "get",
-      url,
-      path: `/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`,
-    });
+    const path = `/api/projects/${teamId}/signal_reports/${reportId}/artefacts/`;
 
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch signal report artefacts: ${response.statusText}`,
-      );
+    try {
+      const response = await this.api.fetcher.fetch({
+        method: "get",
+        url,
+        path,
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        const unavailableReason =
+          response.status === 403
+            ? "forbidden"
+            : response.status === 404
+              ? "not_found"
+              : "request_failed";
+
+        log.warn("Signal report artefacts unavailable", {
+          teamId,
+          reportId,
+          status: response.status,
+          statusText: response.statusText,
+          body: responseText || undefined,
+        });
+
+        return { results: [], count: 0, unavailableReason };
+      }
+
+      const data = (await response.json()) as unknown;
+      const parsed = parseSignalReportArtefactsPayload(data);
+
+      if (parsed.unavailableReason) {
+        log.warn("Signal report artefacts payload did not match schema", {
+          teamId,
+          reportId,
+        });
+      }
+
+      return parsed;
+    } catch (error) {
+      log.warn("Failed to fetch signal report artefacts", {
+        teamId,
+        reportId,
+        error,
+      });
+      return {
+        results: [],
+        count: 0,
+        unavailableReason: "request_failed",
+      };
     }
-
-    const data = await response.json();
-    return {
-      results: data.results ?? data ?? [],
-      count: data.count ?? data.results?.length ?? data?.length ?? 0,
-    };
   }
 
   async getRepositoryReadiness(
