@@ -8,6 +8,7 @@ import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersSto
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import type { Task } from "@shared/types";
 import { getTaskRepository } from "@utils/repository";
+import { toast } from "@utils/toast";
 import { useCallback, useState } from "react";
 
 const log = logger.scope("workspace-setup-prompt");
@@ -45,7 +46,9 @@ export function WorkspaceSetupPrompt({
 
         log.info("Workspace setup complete", { taskId, path });
       } catch (error) {
-        log.error("Failed to set up workspace", error);
+        log.error("Failed to set up workspace", { error });
+        toast.error("Failed to set up workspace. Please try again.");
+        setSelectedPath("");
         setIsSettingUp(false);
       }
     },

@@ -1250,7 +1250,7 @@ export class SessionService {
 
   /**
    * Clear session error and allow retry.
-   * Preserves session events so the conversation stays visible during reconnect.
+   * Tears down the old session; events are re-fetched from logs during reconnect.
    */
   async clearSessionError(taskId: string): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);

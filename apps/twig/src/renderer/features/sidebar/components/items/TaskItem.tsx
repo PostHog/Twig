@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import type { WorkspaceMode } from "@shared/types";
 import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 interface TaskItemProps {
@@ -238,31 +238,28 @@ export function TaskItem({
     </Tooltip>
   );
 
-  const endContent = useMemo(() => {
-    const timestampNode = timestamp ? (
-      <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
-        {formatRelativeTime(timestamp)}
-      </span>
+  const timestampNode = timestamp ? (
+    <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
+      {formatRelativeTime(timestamp)}
+    </span>
+  ) : null;
+
+  const toolbar =
+    onDelete || onTogglePin ? (
+      <TaskHoverToolbar
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+        onDelete={onDelete}
+      />
     ) : null;
 
-    const toolbar =
-      onDelete || onTogglePin ? (
-        <TaskHoverToolbar
-          isPinned={isPinned}
-          onTogglePin={onTogglePin}
-          onDelete={onDelete}
-        />
-      ) : null;
-
-    if (!timestampNode && !toolbar) return null;
-
-    return (
+  const endContent =
+    timestampNode || toolbar ? (
       <>
         {timestampNode}
         {toolbar}
       </>
-    );
-  }, [timestamp, onDelete, onTogglePin, isPinned]);
+    ) : null;
 
   if (isEditing) {
     return (

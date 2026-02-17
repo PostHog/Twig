@@ -388,7 +388,7 @@ export function SessionView({
                     color="red"
                     className="max-w-md px-4"
                   >
-                    {errorMessage || DEFAULT_ERROR_MESSAGE}
+                    {errorMessage}
                   </Text>
                   <Flex gap="2" mt="2">
                     {onRetry && (
