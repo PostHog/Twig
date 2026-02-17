@@ -57,8 +57,8 @@ function formatRelativeTime(timestamp: number): string {
 
 interface TaskHoverToolbarProps {
   isPinned: boolean;
-  onTogglePin: () => void;
-  onDelete: () => void;
+  onTogglePin?: () => void;
+  onDelete?: () => void;
 }
 
 function TaskHoverToolbar({
@@ -68,44 +68,50 @@ function TaskHoverToolbar({
 }: TaskHoverToolbarProps) {
   return (
     <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
-      <span
-        role="button"
-        tabIndex={0}
-        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+      {onTogglePin && (
+        // biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem)
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+          onClick={(e) => {
             e.stopPropagation();
             onTogglePin();
-          }
-        }}
-        title={isPinned ? "Unpin task" : "Pin task"}
-      >
-        <PushPin size={12} weight={isPinned ? "fill" : "regular"} />
-      </span>
-      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
-      <span
-        role="button"
-        tabIndex={0}
-        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onTogglePin();
+            }
+          }}
+          title={isPinned ? "Unpin task" : "Pin task"}
+        >
+          <PushPin size={12} weight={isPinned ? "fill" : "regular"} />
+        </span>
+      )}
+      {onDelete && (
+        // biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem)
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
+          onClick={(e) => {
             e.stopPropagation();
             onDelete();
-          }
-        }}
-        title="Delete task"
-      >
-        <Trash size={12} />
-      </span>
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }
+          }}
+          title="Delete task"
+        >
+          <Trash size={12} />
+        </span>
+      )}
     </span>
   );
 }
@@ -189,7 +195,7 @@ export function TaskItem({
     ) : null;
 
     const toolbar =
-      onDelete && onTogglePin ? (
+      onDelete || onTogglePin ? (
         <TaskHoverToolbar
           isPinned={isPinned}
           onTogglePin={onTogglePin}
