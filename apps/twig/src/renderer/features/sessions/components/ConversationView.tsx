@@ -93,15 +93,15 @@ export function ConversationView({
   const hasRestoredScrollRef = useRef(false);
   const prevItemCountRef = useRef(0);
 
-  const virtualizedItems = useMemo<VirtualizedItem[]>(() => {
-    const items: VirtualizedItem[] = [...conversationItems];
+  const queuedItems = useMemo<QueuedItem[]>(
+    () => queuedMessages.map((msg) => ({ type: "queued" as const, id: msg.id, message: msg })),
+    [queuedMessages],
+  );
 
-    for (const msg of queuedMessages) {
-      items.push({ type: "queued", id: msg.id, message: msg });
-    }
-
-    return items;
-  }, [conversationItems, queuedMessages]);
+  const virtualizedItems = useMemo<VirtualizedItem[]>(
+    () => (queuedItems.length > 0 ? [...conversationItems, ...queuedItems] : conversationItems),
+    [conversationItems, queuedItems],
+  );
 
   useEffect(() => {
     if (!taskId || hasRestoredScrollRef.current) return;
