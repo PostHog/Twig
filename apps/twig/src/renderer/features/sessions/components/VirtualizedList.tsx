@@ -1,7 +1,6 @@
 import {
   type ScrollToOptions,
   useVirtualizer,
-  type Virtualizer,
   type VirtualizerOptions,
 } from "@tanstack/react-virtual";
 import {
@@ -37,9 +36,9 @@ interface VirtualizedListProps<T> {
 
 export interface VirtualizedListHandle {
   scrollToIndex: (index: number, options?: ScrollToOptions) => void;
+  scrollToOffset: (offset: number, options?: ScrollToOptions) => void;
   scrollToBottom: () => void;
   measure: () => void;
-  getVirtualizer: () => Virtualizer<HTMLDivElement, Element>;
 }
 
 function VirtualizedListInner<T>(
@@ -75,18 +74,22 @@ function VirtualizedListInner<T>(
       : undefined,
   });
 
-  useImperativeHandle(ref, () => ({
-    scrollToIndex: (index, options) =>
-      virtualizer.scrollToIndex(index, options),
-    scrollToBottom: () => {
-      const el = scrollRef.current;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    },
-    measure: () => virtualizer.measure(),
-    getVirtualizer: () => virtualizer,
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToIndex: (index, options) =>
+        virtualizer.scrollToIndex(index, options),
+      scrollToOffset: (offset, options) =>
+        virtualizer.scrollToOffset(offset, options),
+      scrollToBottom: () => {
+        if (items.length > 0) {
+          virtualizer.scrollToIndex(items.length - 1, { align: "end" });
+        }
+      },
+      measure: () => virtualizer.measure(),
+    }),
+    [virtualizer, items.length],
+  );
 
   useEffect(() => {
     if (autoScrollToBottom && items.length > 0) {
