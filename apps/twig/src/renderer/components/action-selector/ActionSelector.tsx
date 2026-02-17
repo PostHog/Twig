@@ -196,8 +196,7 @@ export function ActionSelector({
       p="3"
       onClick={(e) => {
         if (
-          e.target instanceof HTMLInputElement ||
-          (e.target instanceof HTMLElement && e.target.closest("input"))
+          e.target instanceof HTMLInputElement
         ) {
           return;
         }

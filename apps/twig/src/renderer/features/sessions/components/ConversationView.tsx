@@ -174,8 +174,11 @@ export function ConversationView({
           return (
             <QueuedMessageView
               message={item.message}
-              onRemove={() =>
-                taskId && sessionStoreSetters.removeQueuedMessage(taskId, item.message.id)
+              onRemove={
+                taskId
+                  ? () =>
+                      sessionStoreSetters.removeQueuedMessage(taskId, item.message.id)
+                  : undefined
               }
             />
           );
