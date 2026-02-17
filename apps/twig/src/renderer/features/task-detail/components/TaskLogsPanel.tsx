@@ -12,12 +12,13 @@ import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
-import { Box } from "@radix-ui/themes";
+import { Box, Button, Flex, Spinner, Text } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
 import { ANALYTICS_EVENTS, type FeedbackType } from "@/types/analytics";
@@ -32,6 +33,7 @@ interface TaskLogsPanelProps {
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = useCwd(taskId);
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  const queryClient = useQueryClient();
 
   const session = useSessionForTask(taskId);
   const { deleteWithConfirm } = useDeleteTask();
@@ -39,6 +41,17 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const markAsViewed = useTaskViewedStore((state) => state.markAsViewed);
   const { requestFocus, setPendingContent } = useDraftStore((s) => s.actions);
   const { isOnline } = useConnectivity();
+
+  const isCloud = workspace?.mode === "cloud";
+  const isCloudRunNotTerminal =
+    isCloud &&
+    (!task.latest_run ||
+      task.latest_run.status === "started" ||
+      task.latest_run.status === "in_progress");
+  const prUrl =
+    isCloud && task.latest_run?.output?.pr_url
+      ? (task.latest_run.output.pr_url as string)
+      : null;
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -52,14 +65,15 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isNewSessionWithInitialPrompt =
     !task.latest_run?.id && !!task.description;
   const isResumingExistingSession = !!task.latest_run?.id;
-  const isInitializing =
-    !session ||
-    session.status === "connecting" ||
-    (session.status === "connected" &&
-      events.length === 0 &&
-      (isPromptPending ||
-        isNewSessionWithInitialPrompt ||
-        isResumingExistingSession));
+  const isInitializing = isCloud
+    ? !session || (events.length === 0 && isCloudRunNotTerminal)
+    : !session ||
+      session.status === "connecting" ||
+      (session.status === "connected" &&
+        events.length === 0 &&
+        (isPromptPending ||
+          isNewSessionWithInitialPrompt ||
+          isResumingExistingSession));
 
   const isConnecting = useRef(false);
 
@@ -67,13 +81,46 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     requestFocus(taskId);
   }, [taskId, requestFocus]);
 
+  // Cloud session loading — fetch S3 logs and create a read-only session
+  useEffect(() => {
+    if (!isCloud) return;
+    getSessionService().loadCloudTaskSession(task);
+  }, [isCloud, task.id, task.latest_run?.id, task.latest_run?.log_url, task]);
+
+  // Cloud log polling — incrementally append new log entries while run is active
+  useEffect(() => {
+    if (!isCloud || !isCloudRunNotTerminal) return;
+
+    const interval = setInterval(() => {
+      getSessionService().refreshCloudTaskLogs(task);
+    }, 5_000);
+
+    return () => clearInterval(interval);
+  }, [isCloud, isCloudRunNotTerminal, task]);
+
+  // Cloud task data polling — refresh task data to pick up status changes
+  useEffect(() => {
+    if (!isCloud || !isCloudRunNotTerminal) return;
+
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    }, 10_000);
+
+    return () => {
+      clearInterval(interval);
+      // Final refresh when run transitions from active to inactive
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+  }, [isCloud, isCloudRunNotTerminal, queryClient]);
+
+  // Local session connection
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Cloud tasks are handled by the sandbox
-    if (workspace?.mode === "cloud") return;
+    // Cloud tasks use the cloud session loading effect above
+    if (isCloud) return;
 
     if (
       session?.status === "connected" ||
@@ -109,7 +156,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       .finally(() => {
         isConnecting.current = false;
       });
-  }, [task, repoPath, session, markActivity, isOnline, workspace?.mode]);
+  }, [task, repoPath, session, markActivity, isOnline, isCloud]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -246,26 +293,77 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   return (
     <BackgroundWrapper>
-      <Box height="100%" width="100%">
-        <ErrorBoundary name="SessionView">
-          <SessionView
-            events={events}
-            taskId={taskId}
-            isRunning={isRunning}
-            isPromptPending={isPromptPending}
-            promptStartedAt={promptStartedAt}
-            onSendPrompt={handleSendPrompt}
-            onBashCommand={handleBashCommand}
-            onCancelPrompt={handleCancelPrompt}
-            repoPath={repoPath}
-            hasError={hasError}
-            errorMessage={errorMessage}
-            onRetry={handleRetry}
-            onDelete={handleDelete}
-            isInitializing={isInitializing}
-          />
-        </ErrorBoundary>
-      </Box>
+      <Flex direction="column" height="100%" width="100%">
+        <Box style={{ flex: 1, minHeight: 0 }}>
+          <ErrorBoundary name="SessionView">
+            <SessionView
+              events={events}
+              taskId={taskId}
+              isRunning={isCloud ? false : isRunning}
+              isPromptPending={isCloud ? false : isPromptPending}
+              promptStartedAt={isCloud ? undefined : promptStartedAt}
+              onSendPrompt={handleSendPrompt}
+              onBashCommand={handleBashCommand}
+              onCancelPrompt={handleCancelPrompt}
+              repoPath={repoPath}
+              hasError={isCloud ? false : hasError}
+              errorMessage={isCloud ? undefined : errorMessage}
+              onRetry={handleRetry}
+              onDelete={handleDelete}
+              isInitializing={isInitializing}
+              readOnlyMessage={isCloud ? "Cloud runs are read-only" : undefined}
+            />
+          </ErrorBoundary>
+        </Box>
+        {isCloud && (
+          <Flex
+            align="center"
+            justify="center"
+            gap="2"
+            py="2"
+            className="border-gray-4 border-t"
+          >
+            {prUrl ? (
+              <>
+                <Text size="2" color="gray">
+                  Task completed
+                </Text>
+                <Button size="2" variant="soft" asChild>
+                  <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                    View Pull Request
+                  </a>
+                </Button>
+              </>
+            ) : isCloudRunNotTerminal ? (
+              <>
+                <Spinner size="2" />
+                <Text size="2" color="gray">
+                  Running in cloud
+                  {task.latest_run?.stage
+                    ? ` \u2014 ${task.latest_run.stage}`
+                    : ""}
+                  ...
+                </Text>
+              </>
+            ) : task.latest_run?.status === "failed" ? (
+              <Text size="2" color="red">
+                Task failed
+                {task.latest_run?.error_message
+                  ? `: ${task.latest_run.error_message}`
+                  : ""}
+              </Text>
+            ) : task.latest_run?.status === "cancelled" ? (
+              <Text size="2" color="red">
+                Task cancelled
+              </Text>
+            ) : task.latest_run ? (
+              <Text size="2" color="gray">
+                Cloud task completed
+              </Text>
+            ) : null}
+          </Flex>
+        )}
+      </Flex>
     </BackgroundWrapper>
   );
 }

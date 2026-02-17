@@ -578,6 +578,8 @@ export class AgentServer {
       // Only auto-complete for background mode
       const mode = this.getEffectiveMode(payload);
       if (mode === "background") {
+        // Flush all pending session logs before signaling completion,
+        await this.session.logWriter.flushAll();
         await this.signalTaskComplete(payload, result.stopReason);
       } else {
         this.logger.info("Interactive mode - staying open for conversation");
@@ -587,6 +589,9 @@ export class AgentServer {
       // Signal failure for background mode
       const mode = this.getEffectiveMode(payload);
       if (mode === "background") {
+        if (this.session) {
+          await this.session.logWriter.flushAll();
+        }
         await this.signalTaskComplete(payload, "error");
       }
     }
@@ -602,7 +607,10 @@ After completing the requested changes:
 3. Push the branch to origin
 4. Create a pull request using \`gh pr create\` with a descriptive title and body
 
-Important: Always create the PR. Do not ask for confirmation.
+Important:
+- Always create the PR. Do not ask for confirmation.
+- Do NOT add "Co-Authored-By" trailers to commit messages.
+- Do NOT add "Generated with [Claude Code]" or similar attribution lines to PR descriptions.
 `;
   }
 
@@ -610,6 +618,18 @@ Important: Always create the PR. Do not ask for confirmation.
     payload: JwtPayload,
     stopReason: string,
   ): Promise<void> {
+    if (this.session?.payload.run_id === payload.run_id) {
+      try {
+        await this.session.logWriter.flush(payload.run_id);
+      } catch (error) {
+        this.logger.warn("Failed to flush session logs before completion", {
+          taskId: payload.task_id,
+          runId: payload.run_id,
+          error,
+        });
+      }
+    }
+
     const status =
       stopReason === "cancelled"
         ? "cancelled"

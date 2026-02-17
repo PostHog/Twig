@@ -667,6 +667,64 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
     return { success: !!prUrl, message: prUrl ? "OK" : "No PR found", prUrl };
   }
 
+  public async getPrChangedFiles(prUrl: string): Promise<ChangedFile[]> {
+    const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (!match) return [];
+
+    const [, owner, repo, number] = match;
+
+    try {
+      const result = await execGh([
+        "api",
+        `repos/${owner}/${repo}/pulls/${number}/files`,
+        "--paginate",
+        "--slurp",
+      ]);
+
+      if (result.exitCode !== 0) return [];
+
+      const pages = JSON.parse(result.stdout) as Array<
+        Array<{
+          filename: string;
+          status: string;
+          previous_filename?: string;
+          additions: number;
+          deletions: number;
+        }>
+      >;
+      const files = pages.flat();
+
+      return files.map((f) => {
+        let status: ChangedFile["status"];
+        switch (f.status) {
+          case "added":
+            status = "added";
+            break;
+          case "removed":
+            status = "deleted";
+            break;
+          case "renamed":
+            status = "renamed";
+            break;
+          default:
+            status = "modified";
+            break;
+        }
+
+        return {
+          path: f.filename,
+          status,
+          originalPath: f.previous_filename,
+          linesAdded: f.additions,
+          linesRemoved: f.deletions,
+        };
+      });
+    } catch (error) {
+      log.warn("Failed to fetch PR changed files", { prUrl, error });
+      return [];
+    }
+  }
+
   public async generateCommitMessage(
     directoryPath: string,
     credentials: LlmCredentials,

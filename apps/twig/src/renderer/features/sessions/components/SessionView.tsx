@@ -47,6 +47,7 @@ interface SessionViewProps {
   onRetry?: () => void;
   onDelete?: () => void;
   isInitializing?: boolean;
+  readOnlyMessage?: string;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -67,6 +68,7 @@ export function SessionView({
   onRetry,
   onDelete,
   isInitializing = false,
+  readOnlyMessage,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -416,6 +418,22 @@ export function SessionView({
                       onSelect={handlePermissionSelect}
                       onCancel={handlePermissionCancel}
                     />
+                  </Box>
+                </Box>
+              ) : readOnlyMessage ? (
+                <Box className="border-gray-4 border-t">
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <Flex align="center" justify="center" py="3">
+                      <Text
+                        size="2"
+                        style={{
+                          color: "var(--gray-9)",
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        {readOnlyMessage}
+                      </Text>
+                    </Flex>
                   </Box>
                 </Box>
               ) : (

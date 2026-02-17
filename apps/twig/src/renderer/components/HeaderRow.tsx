@@ -3,6 +3,7 @@ import { RightSidebarTrigger } from "@features/right-sidebar/components/RightSid
 import { useRightSidebarStore } from "@features/right-sidebar/stores/rightSidebarStore";
 import { SidebarTrigger } from "@features/sidebar/components/SidebarTrigger";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
+import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Box, Flex } from "@radix-ui/themes";
 import { useHeaderStore } from "@stores/headerStore";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -28,6 +29,11 @@ export function HeaderRow() {
     (state) => state.setIsResizing,
   );
 
+  const activeTaskId = view.type === "task-detail" ? view.data?.id : undefined;
+  const activeWorkspace = useWorkspaceStore((s) =>
+    activeTaskId ? s.workspaces[activeTaskId] : undefined,
+  );
+  const isCloudTask = activeWorkspace?.mode === "cloud";
   const showRightSidebarSection = view.type === "task-detail";
 
   const handleLeftSidebarMouseDown = (e: React.MouseEvent) => {
@@ -119,7 +125,7 @@ export function HeaderRow() {
           }}
         >
           <RightSidebarTrigger />
-          <GitInteractionHeader taskId={view.data.id} />
+          {!isCloudTask && <GitInteractionHeader taskId={view.data.id} />}
           {rightSidebarOpen && (
             <Box
               onMouseDown={handleRightSidebarMouseDown}

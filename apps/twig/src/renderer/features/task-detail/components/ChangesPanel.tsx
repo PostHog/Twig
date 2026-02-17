@@ -1,11 +1,15 @@
 import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
-import { useGitQueries } from "@features/git-interaction/hooks/useGitQueries";
+import {
+  useCloudPrChangedFiles,
+  useGitQueries,
+} from "@features/git-interaction/hooks/useGitQueries";
 import { updateGitCacheFromSnapshot } from "@features/git-interaction/utils/updateGitCache";
 import { isDiffTabActiveInTree, usePanelLayoutStore } from "@features/panels";
 import { usePendingPermissionsForTask } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
+import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useFocusWorkspace } from "@features/workspace/hooks/useFocusWorkspace";
 import {
   ArrowCounterClockwiseIcon,
@@ -32,7 +36,7 @@ import { useExternalAppsStore } from "@stores/externalAppsStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
@@ -381,7 +385,149 @@ function ChangedFileItem({
   );
 }
 
-export function ChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
+function CloudChangedFileItem({
+  file,
+  prUrl,
+}: {
+  file: ChangedFile;
+  prUrl: string;
+}) {
+  const fileName = file.path.split("/").pop() || file.path;
+  const indicator = getStatusIndicator(file.status);
+  const hasLineStats =
+    file.linesAdded !== undefined || file.linesRemoved !== undefined;
+
+  const handleClick = () => {
+    trpcVanilla.os.openExternal.mutate({ url: `${prUrl}/files` });
+  };
+
+  return (
+    <Tooltip
+      content={`${file.path} - ${indicator.fullLabel}`}
+      side="top"
+      delayDuration={500}
+    >
+      <Flex
+        align="center"
+        gap="1"
+        onClick={handleClick}
+        className="border-transparent border-y hover:bg-gray-3"
+        style={{
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          height: "26px",
+          paddingLeft: "8px",
+          paddingRight: "8px",
+        }}
+      >
+        <FileIcon filename={fileName} size={14} />
+        <Text
+          size="1"
+          style={{
+            userSelect: "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            marginLeft: "2px",
+            flexShrink: 1,
+            minWidth: 0,
+          }}
+        >
+          {fileName}
+        </Text>
+        <Text
+          size="1"
+          color="gray"
+          style={{
+            userSelect: "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+            marginLeft: "4px",
+            minWidth: 0,
+          }}
+        >
+          {file.originalPath
+            ? `${file.originalPath} → ${file.path}`
+            : file.path}
+        </Text>
+
+        {hasLineStats && (
+          <Flex
+            align="center"
+            gap="1"
+            style={{ flexShrink: 0, fontSize: "10px", fontFamily: "monospace" }}
+          >
+            {(file.linesAdded ?? 0) > 0 && (
+              <Text style={{ color: "var(--green-9)" }}>
+                +{file.linesAdded}
+              </Text>
+            )}
+            {(file.linesRemoved ?? 0) > 0 && (
+              <Text style={{ color: "var(--red-9)" }}>
+                -{file.linesRemoved}
+              </Text>
+            )}
+          </Flex>
+        )}
+
+        <Badge
+          size="1"
+          color={indicator.color}
+          style={{ flexShrink: 0, fontSize: "10px", padding: "0 4px" }}
+        >
+          {indicator.label}
+        </Badge>
+      </Flex>
+    </Tooltip>
+  );
+}
+
+function CloudChangesPanel({ taskId, task }: ChangesPanelProps) {
+  // Resolve freshest task data — the prop may be stale (e.g. right sidebar
+  // receives the initial navigation snapshot before output.pr_url is set).
+  const { data: tasks = [] } = useTasks();
+  const freshTask = useMemo(
+    () => tasks.find((t) => t.id === taskId) ?? task,
+    [tasks, taskId, task],
+  );
+  const prUrl = (freshTask.latest_run?.output?.pr_url as string) ?? null;
+  const { data: changedFiles = [], isLoading } = useCloudPrChangedFiles(prUrl);
+
+  if (!prUrl) {
+    return <PanelMessage>No pull request created yet</PanelMessage>;
+  }
+
+  if (isLoading) {
+    return <PanelMessage>Loading changes...</PanelMessage>;
+  }
+
+  if (changedFiles.length === 0) {
+    return <PanelMessage>No file changes in pull request</PanelMessage>;
+  }
+
+  return (
+    <Box height="100%" overflowY="auto" py="2">
+      <Flex direction="column">
+        {changedFiles.map((file) => (
+          <CloudChangedFileItem key={file.path} file={file} prUrl={prUrl} />
+        ))}
+      </Flex>
+    </Box>
+  );
+}
+
+export function ChangesPanel({ taskId, task }: ChangesPanelProps) {
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+
+  if (workspace?.mode === "cloud") {
+    return <CloudChangesPanel taskId={taskId} task={task} />;
+  }
+
+  return <LocalChangesPanel taskId={taskId} task={task} />;
+}
+
+function LocalChangesPanel({ taskId, task: _task }: ChangesPanelProps) {
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
   const { isFocused, isFocusLoading, handleToggleFocus, handleUnfocus } =
     useFocusWorkspace(taskId);

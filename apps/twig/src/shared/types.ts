@@ -138,7 +138,7 @@ export interface TaskRun {
   branch: string | null;
   stage?: string | null; // Current stage (e.g., 'research', 'plan', 'build')
   environment?: "local" | "cloud";
-  status: "started" | "in_progress" | "completed" | "failed";
+  status: "started" | "in_progress" | "completed" | "failed" | "cancelled";
   log_url: string;
   error_message: string | null;
   output: Record<string, unknown> | null; // Structured output (PR URL, commit SHA, etc.)

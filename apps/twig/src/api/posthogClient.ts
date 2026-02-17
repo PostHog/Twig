@@ -354,7 +354,7 @@ export class PostHogAPIClient {
           task_id: taskId,
           id: runId,
         },
-        body: updates,
+        body: updates as Record<string, unknown>,
       },
     );
     return data as unknown as TaskRun;
@@ -380,6 +380,40 @@ export class PostHogAPIClient {
     });
     if (!response.ok) {
       throw new Error(`Failed to append log: ${response.statusText}`);
+    }
+  }
+
+  async getTaskRunSessionLogs(
+    taskId: string,
+    runId: string,
+    options?: { limit?: number; after?: string },
+  ): Promise<StoredLogEntry[]> {
+    try {
+      const teamId = await this.getTeamId();
+      const url = new URL(
+        `${this.api.baseUrl}/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/session_logs/`,
+      );
+      url.searchParams.set("limit", String(options?.limit ?? 5000));
+      if (options?.after) {
+        url.searchParams.set("after", options.after);
+      }
+      const response = await this.api.fetcher.fetch({
+        method: "get",
+        url,
+        path: `/api/projects/${teamId}/tasks/${taskId}/runs/${runId}/session_logs/`,
+      });
+
+      if (!response.ok) {
+        log.warn(
+          `Failed to fetch session logs: ${response.status} ${response.statusText}`,
+        );
+        return [];
+      }
+
+      return (await response.json()) as StoredLogEntry[];
+    } catch (err) {
+      log.warn("Failed to fetch task run session logs", err);
+      return [];
     }
   }
 

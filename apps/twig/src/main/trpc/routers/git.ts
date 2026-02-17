@@ -36,6 +36,8 @@ import {
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
+  getPrChangedFilesInput,
+  getPrChangedFilesOutput,
   getPrTemplateInput,
   getPrTemplateOutput,
   ghStatusOutput,
@@ -253,6 +255,11 @@ export const gitRouter = router({
     .query(({ input }) =>
       getService().getCommitConventions(input.directoryPath, input.sampleSize),
     ),
+
+  getPrChangedFiles: publicProcedure
+    .input(getPrChangedFilesInput)
+    .output(getPrChangedFilesOutput)
+    .query(({ input }) => getService().getPrChangedFiles(input.prUrl)),
 
   generateCommitMessage: publicProcedure
     .input(generateCommitMessageInput)

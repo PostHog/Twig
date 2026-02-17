@@ -1198,7 +1198,9 @@ export class SessionService {
     cwd: string,
     result: { stdout: string; stderr: string; exitCode: number },
   ): Promise<void> {
-    const id = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const id = `user-shell-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 9)}`;
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
@@ -1244,6 +1246,108 @@ export class SessionService {
     this.connectingTasks.delete(taskId);
   }
 
+  /**
+   * Load a session for a cloud task from S3 logs.
+   * Creates a disconnected session populated with historical log events.
+   * Falls back to the session_logs API when presigned URL is unavailable.
+   */
+  async loadCloudTaskSession(task: Task): Promise<void> {
+    const taskId = task.id;
+    const latestRun = task.latest_run;
+    const taskTitle = task.title || task.description || "Task";
+    const taskRunId = latestRun?.id ?? `cloud-${taskId}`;
+
+    // If already have a session for this exact task run with events, skip.
+    // Re-load if the session exists but is empty and a log source is available.
+    const hasLogSource = !!latestRun?.log_url || !!latestRun?.id;
+    const existing = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (
+      existing &&
+      existing.taskRunId === taskRunId &&
+      (existing.events.length > 0 || !hasLogSource)
+    ) {
+      return;
+    }
+
+    const session = this.createBaseSession(taskRunId, taskId, taskTitle);
+    session.status = "disconnected";
+
+    if (latestRun?.log_url) {
+      try {
+        const { rawEntries } = await this.fetchSessionLogs(latestRun.log_url);
+        session.events = convertStoredEntriesToEvents(rawEntries);
+        session.logUrl = latestRun.log_url;
+        session.processedLineCount = rawEntries.length;
+      } catch (error) {
+        log.warn("Failed to fetch cloud task logs via presigned URL", {
+          taskId,
+          error,
+        });
+      }
+    }
+
+    // Fallback: use session_logs API when presigned URL is missing or returned no data
+    if (session.events.length === 0 && latestRun?.id) {
+      try {
+        const rawEntries = await this.fetchSessionLogsViaApi(
+          taskId,
+          latestRun.id,
+        );
+        if (rawEntries.length > 0) {
+          session.events = convertStoredEntriesToEvents(rawEntries);
+          session.processedLineCount = rawEntries.length;
+        }
+      } catch (error) {
+        log.warn("Failed to fetch cloud task logs via API", {
+          taskId,
+          error,
+        });
+      }
+    }
+
+    sessionStoreSetters.setSession(session);
+  }
+
+  /**
+   * Incrementally refresh cloud task logs by fetching new entries.
+   * Only appends entries beyond what was previously processed.
+   * Falls back to session_logs API when presigned URL is unavailable.
+   */
+  async refreshCloudTaskLogs(task: Task): Promise<void> {
+    const taskId = task.id;
+    const latestRun = task.latest_run;
+    if (!latestRun?.id) return;
+
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) return;
+
+    try {
+      let rawEntries: StoredLogEntry[];
+
+      if (latestRun.log_url) {
+        // Primary path: fetch via presigned S3 URL
+        const result = await this.fetchSessionLogs(latestRun.log_url);
+        rawEntries = result.rawEntries;
+      } else {
+        // Fallback: fetch via session_logs API
+        rawEntries = await this.fetchSessionLogsViaApi(taskId, latestRun.id);
+      }
+
+      const previousCount = session.processedLineCount ?? 0;
+      if (rawEntries.length > previousCount) {
+        const newEntries = rawEntries.slice(previousCount);
+        const newEvents = convertStoredEntriesToEvents(newEntries);
+        sessionStoreSetters.appendEvents(
+          session.taskRunId,
+          newEvents,
+          rawEntries.length,
+        );
+      }
+    } catch {
+      log.warn("Failed to refresh cloud task logs", { taskId });
+    }
+  }
+
   // --- Helper Methods ---
 
   private getAuthCredentials(): AuthCredentials | null {
@@ -1257,6 +1361,22 @@ export class SessionService {
 
     if (!apiKey || !apiHost || !projectId) return null;
     return { apiKey, apiHost, projectId, client };
+  }
+
+  /**
+   * Fetch session logs via the authenticated PostHog API (session_logs endpoint).
+   * Used as fallback when the presigned S3 URL is unavailable.
+   */
+  private async fetchSessionLogsViaApi(
+    taskId: string,
+    runId: string,
+  ): Promise<StoredLogEntry[]> {
+    const auth = useAuthStore.getState();
+    if (!auth.client) {
+      log.warn("No auth client available for session_logs API fallback");
+      return [];
+    }
+    return auth.client.getTaskRunSessionLogs(taskId, runId);
   }
 
   private async fetchSessionLogs(logUrl: string): Promise<{

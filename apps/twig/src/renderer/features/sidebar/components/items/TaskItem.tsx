@@ -24,6 +24,12 @@ interface TaskItemProps {
   isUnread?: boolean;
   isPinned?: boolean;
   needsPermission?: boolean;
+  taskRunStatus?:
+    | "started"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "cancelled";
   timestamp?: number;
   isEditing?: boolean;
   onClick: () => void;
@@ -119,6 +125,53 @@ function TaskHoverToolbar({
 const ICON_SIZE = 12;
 const INDENT_SIZE = 8;
 
+function CloudStatusIcon({
+  taskRunStatus,
+}: {
+  taskRunStatus?: TaskItemProps["taskRunStatus"];
+}) {
+  if (taskRunStatus === "started" || taskRunStatus === "in_progress") {
+    return (
+      <Tooltip content="Cloud (running)" side="right">
+        <span className="relative flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} className="text-accent-11" />
+          <DotsCircleSpinner
+            size={8}
+            className="-right-0.5 -bottom-0.5 absolute text-accent-11"
+          />
+        </span>
+      </Tooltip>
+    );
+  }
+  if (taskRunStatus === "completed") {
+    return (
+      <Tooltip content="Cloud (completed)" side="right">
+        <span className="flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} weight="fill" className="text-green-11" />
+        </span>
+      </Tooltip>
+    );
+  }
+  if (taskRunStatus === "failed" || taskRunStatus === "cancelled") {
+    const label =
+      taskRunStatus === "cancelled" ? "Cloud (cancelled)" : "Cloud (failed)";
+    return (
+      <Tooltip content={label} side="right">
+        <span className="flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} weight="fill" className="text-red-11" />
+        </span>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip content="Cloud" side="right">
+      <span className="flex items-center justify-center">
+        <CloudIcon size={ICON_SIZE} />
+      </span>
+    </Tooltip>
+  );
+}
+
 export function TaskItem({
   depth = 0,
   label,
@@ -129,6 +182,7 @@ export function TaskItem({
   isUnread,
   isPinned = false,
   needsPermission = false,
+  taskRunStatus,
   timestamp,
   isEditing = false,
   onClick,
@@ -144,6 +198,7 @@ export function TaskItem({
   );
 
   const isWorktreeTask = workspaceMode === "worktree";
+  const isCloudTask = workspaceMode === "cloud";
 
   const icon = needsPermission ? (
     <BellRinging size={ICON_SIZE} className="text-blue-11" />
@@ -155,6 +210,8 @@ export function TaskItem({
     </span>
   ) : isPinned ? (
     <PushPin size={ICON_SIZE} className="text-accent-11" />
+  ) : isCloudTask ? (
+    <CloudStatusIcon taskRunStatus={taskRunStatus} />
   ) : isWorktreeTask ? (
     isFocused ? (
       <Tooltip content="Worktree (syncing)" side="right">
@@ -173,12 +230,6 @@ export function TaskItem({
         </span>
       </Tooltip>
     )
-  ) : workspaceMode === "cloud" ? (
-    <Tooltip content="Cloud" side="right">
-      <span className="flex items-center justify-center">
-        <CloudIcon size={ICON_SIZE} />
-      </span>
-    </Tooltip>
   ) : (
     <Tooltip content="Local" side="right">
       <span className="flex items-center justify-center">
