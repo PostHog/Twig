@@ -197,7 +197,6 @@ interface ManagedSession {
   promptPending: boolean;
   pendingContext?: string;
   configOptions?: SessionConfigOption[];
-  sessionId: string;
 }
 
 function getClaudeCliPath(): string {
@@ -602,7 +601,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         needsRecreation: false,
         promptPending: false,
         configOptions,
-        sessionId: agentSessionId,
       };
 
       this.sessions.set(taskRunId, session);
@@ -708,7 +706,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const result = await session.clientSideConnection.prompt({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         prompt: finalPrompt,
       });
       return {
@@ -720,7 +718,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
         const result = await session.clientSideConnection.prompt({
-          sessionId: session.sessionId,
+          sessionId: session.config.sessionId!,
           prompt: finalPrompt,
         });
         return {
@@ -764,7 +762,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       await session.clientSideConnection.cancel({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         _meta: reason ? { interruptReason: reason } : undefined,
       });
       if (reason) {
@@ -794,7 +792,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const result = await session.clientSideConnection.setSessionConfigOption({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         configId,
         value,
       });

@@ -174,7 +174,6 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       options.abortController as AbortController,
     );
     session.taskRunId = meta?.taskRunId;
-    session.sessionId = sessionId;
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
 
     if (meta?.taskRunId) {
@@ -237,7 +236,6 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     });
 
     session.taskRunId = meta?.taskRunId;
-    session.sessionId = sessionId;
 
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
     this.sendAvailableCommandsUpdate(
