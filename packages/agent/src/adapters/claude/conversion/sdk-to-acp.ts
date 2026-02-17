@@ -328,20 +328,10 @@ export async function handleSystemMessage(
   message: any,
   context: MessageHandlerContext,
 ): Promise<void> {
-  const { session, sessionId, client, logger } = context;
+  const { sessionId, client, logger } = context;
 
   switch (message.subtype) {
     case "init":
-      if (message.session_id && session && !session.sessionId) {
-        session.sessionId = message.session_id;
-        if (session.taskRunId) {
-          await client.extNotification("_posthog/sdk_session", {
-            taskRunId: session.taskRunId,
-            sessionId: message.session_id,
-            adapter: "claude",
-          });
-        }
-      }
       break;
     case "compact_boundary":
       await client.extNotification("_posthog/compact_boundary", {

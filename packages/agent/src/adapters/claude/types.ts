@@ -29,7 +29,6 @@ export type Session = BaseSession & {
   modelId?: string;
   cwd: string;
   taskRunId?: string;
-  sessionId?: string;
   lastPlanFilePath?: string;
   lastPlanContent?: string;
 };
