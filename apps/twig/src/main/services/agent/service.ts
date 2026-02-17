@@ -471,6 +471,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           }
         : undefined,
       skipLogPersistence: isPreview,
+      localCachePath: join(app.getPath("home"), ".twig"),
       debug: !app.isPackaged,
       onLog: onAgentLog,
     });

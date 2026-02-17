@@ -54,7 +54,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const isResumingExistingSession = !!task.latest_run?.id;
   const isInitializing =
     !session ||
-    session.status === "connecting" ||
+    (session.status === "connecting" && events.length === 0) ||
     (session.status === "connected" &&
       events.length === 0 &&
       (isPromptPending ||
