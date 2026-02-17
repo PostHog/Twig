@@ -27,7 +27,8 @@ export interface BuildOptionsParams {
   logger: Logger;
   systemPrompt?: Options["systemPrompt"];
   userProvidedOptions?: Options;
-  sessionId?: string;
+  sessionId: string;
+  isResume: boolean;
   additionalDirectories?: string[];
   onModeChange?: OnModeChange;
   onProcessSpawned?: (info: ProcessSpawnedInfo) => void;
@@ -213,7 +214,7 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     ),
     ...(params.onProcessSpawned && {
       spawnClaudeCodeProcess: buildSpawnWrapper(
-        params.sessionId ?? "unknown",
+        params.sessionId,
         params.onProcessSpawned,
         params.onProcessExited,
       ),
@@ -224,8 +225,11 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     options.pathToClaudeCodeExecutable = process.env.CLAUDE_CODE_EXECUTABLE;
   }
 
-  if (params.sessionId) {
+  if (params.isResume) {
     options.resume = params.sessionId;
+    options.forkSession = false;
+  } else {
+    options.sessionId = params.sessionId;
   }
 
   if (params.additionalDirectories) {

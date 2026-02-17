@@ -312,7 +312,7 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
 
       currentTurn = {
         type: "turn",
-        id: `turn-${msg.id}`,
+        id: `turn-${event.ts}-${msg.id}`,
         promptId: msg.id,
         userContent,
         items: [],
@@ -496,16 +496,22 @@ function processSessionUpdate(turn: Turn, update: SessionUpdate) {
       turn.items.push(update);
       break;
 
-    // Handle custom session updates
     default: {
-      // Check for our custom session update types
       const customUpdate = update as unknown as {
         sessionUpdate: string;
+        content?: { type: string; text?: string };
         status?: string;
         errorType?: string;
         message?: string;
       };
-      if (
+      if (customUpdate.sessionUpdate === "agent_message") {
+        if (customUpdate.content?.type === "text") {
+          appendTextChunk(turn, {
+            sessionUpdate: "agent_message_chunk" as const,
+            content: customUpdate.content as { type: "text"; text: string },
+          });
+        }
+      } else if (
         customUpdate.sessionUpdate === "status" ||
         customUpdate.sessionUpdate === "error"
       ) {
