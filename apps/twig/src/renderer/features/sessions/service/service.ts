@@ -366,13 +366,28 @@ export class SessionService {
           taskId,
           taskRunId,
         });
-        await this.recreateSession(
-          taskRunId,
-          taskId,
-          taskTitle,
-          repoPath,
-          auth,
-        );
+        try {
+          await this.recreateSession(
+            taskRunId,
+            taskId,
+            taskTitle,
+            repoPath,
+            auth,
+          );
+        } catch (recreateError) {
+          log.error("Failed to recreate session after null reconnect", {
+            taskId,
+            error:
+              recreateError instanceof Error
+                ? recreateError.message
+                : String(recreateError),
+          });
+          this.setErrorSession(
+            taskId,
+            taskRunId,
+            "Failed to start a new session. Please try again.",
+          );
+        }
       }
     } catch (error) {
       const errorMessage =
@@ -381,21 +396,56 @@ export class SessionService {
         taskId,
         error: errorMessage,
       });
-      await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
+      try {
+        await this.recreateSession(
+          taskRunId,
+          taskId,
+          taskTitle,
+          repoPath,
+          auth,
+        );
+      } catch (recreateError) {
+        log.error("Failed to recreate session after reconnect error", {
+          taskId,
+          error:
+            recreateError instanceof Error
+              ? recreateError.message
+              : String(recreateError),
+        });
+        this.setErrorSession(
+          taskId,
+          taskRunId,
+          errorMessage || "Failed to reconnect. Please try again.",
+        );
+      }
     }
   }
 
   private async teardownSession(taskRunId: string): Promise<void> {
     try {
       await trpcVanilla.agent.cancel.mutate({ sessionId: taskRunId });
-    } catch {
-      // Best-effort — session may already be gone on the main process
+    } catch (error) {
+      log.debug("Cancel during teardown failed (session may already be gone)", {
+        taskRunId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     this.unsubscribeFromChannel(taskRunId);
     sessionStoreSetters.removeSession(taskRunId);
     useSessionAdapterStore.getState().removeAdapter(taskRunId);
     removePersistedConfigOptions(taskRunId);
+  }
+
+  private setErrorSession(
+    taskId: string,
+    taskRunId: string,
+    errorMessage: string,
+  ): void {
+    const session = this.createBaseSession(taskRunId, taskId, "");
+    session.status = "error";
+    session.errorMessage = errorMessage;
+    sessionStoreSetters.setSession(session);
   }
 
   private async recreateSession(

@@ -48,6 +48,7 @@ export function WorkspaceSetupPrompt({
       } catch (error) {
         log.error("Failed to set up workspace", { error });
         toast.error("Failed to set up workspace. Please try again.");
+      } finally {
         setSelectedPath("");
         setIsSettingUp(false);
       }

@@ -90,13 +90,17 @@ vi.mock(
   () => mockSessionConfigStore,
 );
 
+const mockAdapterFns = vi.hoisted(() => ({
+  setAdapter: vi.fn(),
+  getAdapter: vi.fn(),
+  removeAdapter: vi.fn(),
+}));
+
 const mockSessionAdapterStore = vi.hoisted(() => ({
   useSessionAdapterStore: {
     getState: vi.fn(() => ({
       adaptersByRunId: {},
-      setAdapter: vi.fn(),
-      getAdapter: vi.fn(),
-      removeAdapter: vi.fn(),
+      ...mockAdapterFns,
     })),
   },
 }));
