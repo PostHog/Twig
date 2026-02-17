@@ -35,6 +35,7 @@ interface TaskListViewProps {
     isPinned: boolean,
   ) => void;
   onTaskDelete: (taskId: string) => void;
+  onTaskTogglePin: (taskId: string) => void;
   onTaskEditSubmit: (taskId: string, newTitle: string) => void;
   onTaskEditCancel: () => void;
   hasMore: boolean;
@@ -65,6 +66,7 @@ function TaskRow({
   onDoubleClick,
   onContextMenu,
   onDelete,
+  onTogglePin,
   onEditSubmit,
   onEditCancel,
   timestamp,
@@ -77,6 +79,7 @@ function TaskRow({
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent, isPinned: boolean) => void;
   onDelete: () => void;
+  onTogglePin: () => void;
   onEditSubmit: (newTitle: string) => void;
   onEditCancel: () => void;
   timestamp: number;
@@ -101,6 +104,7 @@ function TaskRow({
       onDoubleClick={onDoubleClick}
       onContextMenu={(e) => onContextMenu(e, task.isPinned)}
       onDelete={onDelete}
+      onTogglePin={onTogglePin}
       onEditSubmit={onEditSubmit}
       onEditCancel={onEditCancel}
     />
@@ -229,6 +233,7 @@ export function TaskListView({
   onTaskDoubleClick,
   onTaskContextMenu,
   onTaskDelete,
+  onTaskTogglePin,
   onTaskEditSubmit,
   onTaskEditCancel,
   hasMore,
@@ -291,6 +296,7 @@ export function TaskListView({
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onTogglePin={() => onTaskTogglePin(task.id)}
               onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
               onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}
@@ -353,6 +359,7 @@ export function TaskListView({
                           onTaskContextMenu(task.id, e, isPinned)
                         }
                         onDelete={() => onTaskDelete(task.id)}
+                        onTogglePin={() => onTaskTogglePin(task.id)}
                         onEditSubmit={(newTitle) =>
                           onTaskEditSubmit(task.id, newTitle)
                         }
@@ -381,6 +388,7 @@ export function TaskListView({
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onTogglePin={() => onTaskTogglePin(task.id)}
               onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
               onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}

@@ -196,6 +196,7 @@ function SidebarMenuComponent() {
               onTaskDoubleClick={handleTaskDoubleClick}
               onTaskContextMenu={handleTaskContextMenu}
               onTaskDelete={handleTaskDelete}
+              onTaskTogglePin={(taskId) => togglePin(taskId)}
               onTaskEditSubmit={handleTaskEditSubmit}
               onTaskEditCancel={handleTaskEditCancel}
               hasMore={sidebarData.hasMore}

@@ -30,6 +30,7 @@ interface TaskItemProps {
   onDoubleClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
+  onTogglePin?: () => void;
   onEditSubmit?: (newTitle: string) => void;
   onEditCancel?: () => void;
 }
@@ -55,12 +56,37 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 interface TaskHoverToolbarProps {
+  isPinned: boolean;
+  onTogglePin: () => void;
   onDelete: () => void;
 }
 
-function TaskHoverToolbar({ onDelete }: TaskHoverToolbarProps) {
+function TaskHoverToolbar({
+  isPinned,
+  onTogglePin,
+  onDelete,
+}: TaskHoverToolbarProps) {
   return (
     <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePin();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+            onTogglePin();
+          }
+        }}
+        title={isPinned ? "Unpin task" : "Pin task"}
+      >
+        <PushPin size={12} weight={isPinned ? "fill" : "regular"} />
+      </span>
       {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
       <span
         role="button"
@@ -103,6 +129,7 @@ export function TaskItem({
   onDoubleClick,
   onContextMenu,
   onDelete,
+  onTogglePin,
   onEditSubmit,
   onEditCancel,
 }: TaskItemProps) {
@@ -161,7 +188,14 @@ export function TaskItem({
       </span>
     ) : null;
 
-    const toolbar = onDelete ? <TaskHoverToolbar onDelete={onDelete} /> : null;
+    const toolbar =
+      onDelete && onTogglePin ? (
+        <TaskHoverToolbar
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+          onDelete={onDelete}
+        />
+      ) : null;
 
     if (!timestampNode && !toolbar) return null;
 
@@ -171,7 +205,7 @@ export function TaskItem({
         {toolbar}
       </>
     );
-  }, [timestamp, onDelete]);
+  }, [timestamp, onDelete, onTogglePin, isPinned]);
 
   if (isEditing) {
     return (
