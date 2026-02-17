@@ -753,7 +753,7 @@ describe("SessionService", () => {
   });
 
   describe("clearSessionError", () => {
-    it("cancels agent and removes session", async () => {
+    it("cancels agent and tears down session fully", async () => {
       const service = getSessionService();
       const mockSession = createMockSession({ status: "error" });
       mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(mockSession);
@@ -766,6 +766,10 @@ describe("SessionService", () => {
       expect(mockSessionStoreSetters.removeSession).toHaveBeenCalledWith(
         "run-123",
       );
+      expect(mockAdapterFns.removeAdapter).toHaveBeenCalledWith("run-123");
+      expect(
+        mockSessionConfigStore.removePersistedConfigOptions,
+      ).toHaveBeenCalledWith("run-123");
     });
 
     it("handles missing session gracefully", async () => {

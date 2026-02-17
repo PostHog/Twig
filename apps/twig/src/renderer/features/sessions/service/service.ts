@@ -366,28 +366,14 @@ export class SessionService {
           taskId,
           taskRunId,
         });
-        try {
-          await this.recreateSession(
-            taskRunId,
-            taskId,
-            taskTitle,
-            repoPath,
-            auth,
-          );
-        } catch (recreateError) {
-          log.error("Failed to recreate session after null reconnect", {
-            taskId,
-            error:
-              recreateError instanceof Error
-                ? recreateError.message
-                : String(recreateError),
-          });
-          this.setErrorSession(
-            taskId,
-            taskRunId,
-            "Failed to start a new session. Please try again.",
-          );
-        }
+        await this.recreateOrError(
+          taskRunId,
+          taskId,
+          taskTitle,
+          repoPath,
+          auth,
+          "Failed to start a new session. Please try again.",
+        );
       }
     } catch (error) {
       const errorMessage =
@@ -396,28 +382,14 @@ export class SessionService {
         taskId,
         error: errorMessage,
       });
-      try {
-        await this.recreateSession(
-          taskRunId,
-          taskId,
-          taskTitle,
-          repoPath,
-          auth,
-        );
-      } catch (recreateError) {
-        log.error("Failed to recreate session after reconnect error", {
-          taskId,
-          error:
-            recreateError instanceof Error
-              ? recreateError.message
-              : String(recreateError),
-        });
-        this.setErrorSession(
-          taskId,
-          taskRunId,
-          errorMessage || "Failed to reconnect. Please try again.",
-        );
-      }
+      await this.recreateOrError(
+        taskRunId,
+        taskId,
+        taskTitle,
+        repoPath,
+        auth,
+        errorMessage || "Failed to reconnect. Please try again.",
+      );
     }
   }
 
@@ -437,12 +409,35 @@ export class SessionService {
     removePersistedConfigOptions(taskRunId);
   }
 
+  private async recreateOrError(
+    taskRunId: string,
+    taskId: string,
+    taskTitle: string,
+    repoPath: string,
+    auth: AuthCredentials,
+    fallbackMessage: string,
+  ): Promise<void> {
+    try {
+      await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
+    } catch (recreateError) {
+      log.error("Failed to recreate session", {
+        taskId,
+        error:
+          recreateError instanceof Error
+            ? recreateError.message
+            : String(recreateError),
+      });
+      this.setErrorSession(taskId, taskRunId, taskTitle, fallbackMessage);
+    }
+  }
+
   private setErrorSession(
     taskId: string,
     taskRunId: string,
+    taskTitle: string,
     errorMessage: string,
   ): void {
-    const session = this.createBaseSession(taskRunId, taskId, "");
+    const session = this.createBaseSession(taskRunId, taskId, taskTitle);
     session.status = "error";
     session.errorMessage = errorMessage;
     sessionStoreSetters.setSession(session);
