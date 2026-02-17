@@ -419,7 +419,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       repoPath: rawRepoPath,
       credentials,
       logUrl,
-      sessionId: existingSessionId,
       adapter,
       additionalDirectories,
       permissionMode,
@@ -534,11 +533,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         configOptions = loadResponse.configOptions ?? undefined;
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
+        if (!config.sessionId) {
+          throw new Error("Cannot resume session without sessionId");
+        }
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
-            sessionId: taskRunId,
+            sessionId: config.sessionId,
             cwd: repoPath,
             mcpServers,
             _meta: {
@@ -546,7 +548,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               taskRunId,
-              ...(existingSessionId && { sessionId: existingSessionId }),
+              sessionId: config.sessionId,
               systemPrompt,
               ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
@@ -563,7 +565,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             }
           | undefined;
         configOptions = resumeMeta?.configOptions;
-        agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
+        agentSessionId = config.sessionId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
