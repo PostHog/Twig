@@ -197,7 +197,6 @@ interface ManagedSession {
   promptPending: boolean;
   pendingContext?: string;
   configOptions?: SessionConfigOption[];
-  sessionId: string;
 }
 
 function getClaudeCliPath(): string {
@@ -419,7 +418,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       repoPath: rawRepoPath,
       credentials,
       logUrl,
-      sessionId: existingSessionId,
       adapter,
       additionalDirectories,
       permissionMode,
@@ -534,11 +532,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         configOptions = loadResponse.configOptions ?? undefined;
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
+        if (!config.sessionId) {
+          throw new Error("Cannot resume session without sessionId");
+        }
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
-            sessionId: taskRunId,
+            sessionId: config.sessionId,
             cwd: repoPath,
             mcpServers,
             _meta: {
@@ -546,7 +547,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               taskRunId,
-              ...(existingSessionId && { sessionId: existingSessionId }),
+              sessionId: config.sessionId,
               systemPrompt,
               ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
@@ -563,7 +564,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             }
           | undefined;
         configOptions = resumeMeta?.configOptions;
-        agentSessionId = (resumeResponse?.sessionId as string) ?? taskRunId;
+        agentSessionId = config.sessionId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
         const newSessionResponse = await connection.newSession({
@@ -600,7 +601,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         needsRecreation: false,
         promptPending: false,
         configOptions,
-        sessionId: agentSessionId,
       };
 
       this.sessions.set(taskRunId, session);
@@ -706,7 +706,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const result = await session.clientSideConnection.prompt({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         prompt: finalPrompt,
       });
       return {
@@ -718,7 +718,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         log.warn("Auth error during prompt, recreating session", { sessionId });
         session = await this.recreateSession(sessionId);
         const result = await session.clientSideConnection.prompt({
-          sessionId: session.sessionId,
+          sessionId: session.config.sessionId!,
           prompt: finalPrompt,
         });
         return {
@@ -762,7 +762,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       await session.clientSideConnection.cancel({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         _meta: reason ? { interruptReason: reason } : undefined,
       });
       if (reason) {
@@ -792,7 +792,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
     try {
       const result = await session.clientSideConnection.setSessionConfigOption({
-        sessionId: session.sessionId,
+        sessionId: session.config.sessionId!,
         configId,
         value,
       });

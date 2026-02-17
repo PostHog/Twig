@@ -95,6 +95,11 @@ export function createMockQuery(
       .fn()
       .mockResolvedValue({ added: [], removed: [], errors: {} }),
     streamInput: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn(),
+    initializationResult: vi.fn().mockResolvedValue({}),
+    reconnectMcpServer: vi.fn().mockResolvedValue(undefined),
+    toggleMcpServer: vi.fn().mockResolvedValue(undefined),
+    stopTask: vi.fn().mockResolvedValue(undefined),
     [Symbol.asyncDispose]: vi.fn().mockResolvedValue(undefined),
     _abortController: abortController,
     _mockHelpers: {
@@ -158,6 +163,7 @@ export function createSuccessResult(
     is_error: false,
     num_turns: 1,
     result: "Done",
+    stop_reason: null,
     total_cost_usd: 0.01,
     usage: {
       input_tokens: 100,
@@ -190,6 +196,7 @@ export function createErrorResult(
     duration_ms: 100,
     duration_api_ms: 50,
     num_turns: 1,
+    stop_reason: null,
     total_cost_usd: 0.01,
     usage: {
       input_tokens: 100,
