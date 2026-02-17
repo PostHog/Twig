@@ -114,7 +114,7 @@ function VirtualizedListInner<T>(
   return (
     <div
       ref={scrollRef}
-      className={`${className ?? ""} scrollbar-hide`}
+      className={className ?? ""}
       style={{
         height: "100%",
         overflow: "auto",
