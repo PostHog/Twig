@@ -31,7 +31,11 @@ import {
 } from "@renderer/lib/notifications";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
-import type { ExecutionMode, Task } from "@shared/types";
+import type {
+  CloudTaskUpdatePayload,
+  ExecutionMode,
+  Task,
+} from "@shared/types";
 import type { AcpMessage, StoredLogEntry } from "@shared/types/session-events";
 import { isJsonRpcRequest } from "@shared/types/session-events";
 import {
@@ -105,6 +109,8 @@ export class SessionService {
   >();
   /** AbortController for the current in-flight preview session start */
   private previewAbort: AbortController | null = null;
+  /** Cleanup functions for cloud task watchers, keyed by `${taskId}:${runId}` */
+  private cloudTaskCleanups = new Map<string, () => void>();
 
   /**
    * Connect to a task session.
@@ -634,12 +640,19 @@ export class SessionService {
     log.info("Resetting session service", {
       subscriptionCount: this.subscriptions.size,
       connectingCount: this.connectingTasks.size,
+      cloudWatcherCount: this.cloudTaskCleanups.size,
     });
 
     // Unsubscribe from all active subscriptions
     for (const taskRunId of this.subscriptions.keys()) {
       this.unsubscribeFromChannel(taskRunId);
     }
+
+    // Clean up all cloud task watchers
+    for (const cleanup of this.cloudTaskCleanups.values()) {
+      cleanup();
+    }
+    this.cloudTaskCleanups.clear();
 
     this.connectingTasks.clear();
     this.previewAbort?.abort();
@@ -1247,104 +1260,144 @@ export class SessionService {
   }
 
   /**
-   * Load a session for a cloud task from S3 logs.
-   * Creates a disconnected session populated with historical log events.
-   * Falls back to the session_logs API when presigned URL is unavailable.
+   * Start watching a cloud task via main-process CloudTaskService.
+   * Creates an initial session, subscribes to log/status updates, and
+   * returns a cleanup function to unsubscribe and stop the watcher.
+   *
+   * @param onStatusChange Optional callback fired when task run status changes
+   *   (e.g. to invalidate task query cache). Keeps SessionService framework-agnostic.
    */
-  async loadCloudTaskSession(task: Task): Promise<void> {
-    const taskId = task.id;
-    const latestRun = task.latest_run;
-    const taskTitle = task.title || task.description || "Task";
-    const taskRunId = latestRun?.id ?? `cloud-${taskId}`;
+  watchCloudTask(
+    taskId: string,
+    runId: string,
+    onStatusChange?: () => void,
+  ): () => void {
+    const watcherKey = `${taskId}:${runId}`;
+    const taskRunId = runId;
 
-    // If already have a session for this exact task run with events, skip.
-    // Re-load if the session exists but is empty and a log source is available.
-    const hasLogSource = !!latestRun?.log_url || !!latestRun?.id;
+    // Create initial session in store (disconnected, read-only)
     const existing = sessionStoreSetters.getSessionByTaskId(taskId);
-    if (
-      existing &&
-      existing.taskRunId === taskRunId &&
-      (existing.events.length > 0 || !hasLogSource)
-    ) {
-      return;
+    if (!existing || existing.taskRunId !== taskRunId) {
+      const taskTitle = existing?.taskTitle ?? "Cloud Task";
+      const session = this.createBaseSession(taskRunId, taskId, taskTitle);
+      session.status = "disconnected";
+      sessionStoreSetters.setSession(session);
     }
 
-    const session = this.createBaseSession(taskRunId, taskId, taskTitle);
-    session.status = "disconnected";
-
-    if (latestRun?.log_url) {
-      try {
-        const { rawEntries } = await this.fetchSessionLogs(latestRun.log_url);
-        session.events = convertStoredEntriesToEvents(rawEntries);
-        session.logUrl = latestRun.log_url;
-        session.processedLineCount = rawEntries.length;
-      } catch (error) {
-        log.warn("Failed to fetch cloud task logs via presigned URL", {
-          taskId,
-          error,
-        });
-      }
+    // If already watching this exact run, return existing cleanup
+    if (this.cloudTaskCleanups.has(watcherKey)) {
+      return this.cloudTaskCleanups.get(watcherKey)!;
     }
 
-    // Fallback: use session_logs API when presigned URL is missing or returned no data
-    if (session.events.length === 0 && latestRun?.id) {
-      try {
-        const rawEntries = await this.fetchSessionLogsViaApi(
-          taskId,
-          latestRun.id,
+    // Get auth for initial token + host info
+    const auth = useAuthStore.getState();
+    if (!auth.oauthAccessToken || !auth.projectId || !auth.cloudRegion) {
+      log.warn("No auth for cloud task watcher", { taskId });
+      return () => {};
+    }
+
+    // Ensure main-process service has current token
+    trpcVanilla.cloudTask.updateToken
+      .mutate({ token: auth.oauthAccessToken })
+      .catch(() => {});
+
+    // Start main-process watcher
+    trpcVanilla.cloudTask.watch
+      .mutate({
+        taskId,
+        runId,
+        apiHost: getCloudUrlFromRegion(auth.cloudRegion),
+        teamId: auth.projectId,
+      })
+      .catch((err: unknown) =>
+        log.warn("Failed to start cloud task watcher", { taskId, err }),
+      );
+
+    // Subscribe to updates (filtered by taskId AND runId on the server)
+    const subscription = trpcVanilla.cloudTask.onUpdate.subscribe(
+      { taskId, runId },
+      {
+        onData: (update: CloudTaskUpdatePayload) => {
+          this.handleCloudTaskUpdate(taskRunId, update);
+          if (
+            (update.kind === "status" || update.kind === "snapshot") &&
+            onStatusChange
+          ) {
+            onStatusChange();
+          }
+        },
+        onError: (err: unknown) =>
+          log.error("Cloud task subscription error", { taskId, err }),
+      },
+    );
+
+    const cleanup = () => {
+      subscription.unsubscribe();
+      this.cloudTaskCleanups.delete(watcherKey);
+      trpcVanilla.cloudTask.unwatch
+        .mutate({ taskId, runId })
+        .catch((err: unknown) =>
+          log.warn("Failed to unwatch cloud task", { taskId, err }),
         );
-        if (rawEntries.length > 0) {
-          session.events = convertStoredEntriesToEvents(rawEntries);
-          session.processedLineCount = rawEntries.length;
-        }
-      } catch (error) {
-        log.warn("Failed to fetch cloud task logs via API", {
-          taskId,
-          error,
-        });
-      }
-    }
+    };
 
-    sessionStoreSetters.setSession(session);
+    this.cloudTaskCleanups.set(watcherKey, cleanup);
+    return cleanup;
   }
 
-  /**
-   * Incrementally refresh cloud task logs by fetching new entries.
-   * Only appends entries beyond what was previously processed.
-   * Falls back to session_logs API when presigned URL is unavailable.
-   */
-  async refreshCloudTaskLogs(task: Task): Promise<void> {
-    const taskId = task.id;
-    const latestRun = task.latest_run;
-    if (!latestRun?.id) return;
-
+  public updateCloudTaskTitle(taskId: string, taskTitle: string): void {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
-    try {
-      let rawEntries: StoredLogEntry[];
+    if (session.taskTitle === taskTitle) return;
 
-      if (latestRun.log_url) {
-        // Primary path: fetch via presigned S3 URL
-        const result = await this.fetchSessionLogs(latestRun.log_url);
-        rawEntries = result.rawEntries;
+    sessionStoreSetters.updateSession(session.taskRunId, { taskTitle });
+  }
+
+  private handleCloudTaskUpdate(
+    taskRunId: string,
+    update: CloudTaskUpdatePayload,
+  ): void {
+    // Append new log entries with dedup guard
+    if (update.newEntries && update.newEntries.length > 0) {
+      const session = sessionStoreSetters.getSessions()[taskRunId];
+      const currentCount = session?.processedLineCount ?? 0;
+      const expectedCount =
+        update.totalEntryCount ?? currentCount + update.newEntries.length;
+      const delta = expectedCount - currentCount;
+
+      if (delta <= 0) {
+        // Already caught up — skip duplicate entries
+      } else if (delta <= update.newEntries.length) {
+        // Normal case: append only the tail (last `delta` entries)
+        const entriesToAppend = update.newEntries.slice(-delta);
+        const newEvents = convertStoredEntriesToEvents(entriesToAppend);
+        sessionStoreSetters.appendEvents(taskRunId, newEvents, expectedCount);
       } else {
-        // Fallback: fetch via session_logs API
-        rawEntries = await this.fetchSessionLogsViaApi(taskId, latestRun.id);
-      }
-
-      const previousCount = session.processedLineCount ?? 0;
-      if (rawEntries.length > previousCount) {
-        const newEntries = rawEntries.slice(previousCount);
-        const newEvents = convertStoredEntriesToEvents(newEntries);
+        // Gap in data — append everything we have but don't jump processedLineCount
+        log.warn("Cloud task log count inconsistency", {
+          taskRunId,
+          currentCount,
+          expectedCount,
+          entriesReceived: update.newEntries.length,
+        });
+        const newEvents = convertStoredEntriesToEvents(update.newEntries);
         sessionStoreSetters.appendEvents(
-          session.taskRunId,
+          taskRunId,
           newEvents,
-          rawEntries.length,
+          currentCount + update.newEntries.length,
         );
       }
-    } catch {
-      log.warn("Failed to refresh cloud task logs", { taskId });
+    }
+    // Update cloud status fields if present
+    if (update.kind === "status" || update.kind === "snapshot") {
+      sessionStoreSetters.updateCloudStatus(taskRunId, {
+        status: update.status,
+        stage: update.stage,
+        output: update.output,
+        errorMessage: update.errorMessage,
+        branch: update.branch,
+      });
     }
   }
 
@@ -1361,22 +1414,6 @@ export class SessionService {
 
     if (!apiKey || !apiHost || !projectId) return null;
     return { apiKey, apiHost, projectId, client };
-  }
-
-  /**
-   * Fetch session logs via the authenticated PostHog API (session_logs endpoint).
-   * Used as fallback when the presigned S3 URL is unavailable.
-   */
-  private async fetchSessionLogsViaApi(
-    taskId: string,
-    runId: string,
-  ): Promise<StoredLogEntry[]> {
-    const auth = useAuthStore.getState();
-    if (!auth.client) {
-      log.warn("No auth client available for session_logs API fallback");
-      return [];
-    }
-    return auth.client.getTaskRunSessionLogs(taskId, runId);
   }
 
   private async fetchSessionLogs(logUrl: string): Promise<{

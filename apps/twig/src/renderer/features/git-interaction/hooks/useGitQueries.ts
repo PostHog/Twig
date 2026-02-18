@@ -1,5 +1,4 @@
 import { trpcVanilla } from "@renderer/trpc";
-import type { ChangedFile } from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 
 const EMPTY_DIFF_STATS = { filesChanged: 0, linesAdded: 0, linesRemoved: 0 };
@@ -123,8 +122,6 @@ export function useGitQueries(repoPath?: string) {
   };
 }
 
-const EMPTY_FILES: ChangedFile[] = [];
-
 export function useCloudPrChangedFiles(prUrl: string | null) {
   return useQuery({
     queryKey: ["pr-changed-files", prUrl],
@@ -132,6 +129,24 @@ export function useCloudPrChangedFiles(prUrl: string | null) {
       trpcVanilla.git.getPrChangedFiles.query({ prUrl: prUrl as string }),
     enabled: !!prUrl,
     staleTime: 5 * 60_000,
-    placeholderData: EMPTY_FILES,
+    retry: 1,
+  });
+}
+
+export function useCloudBranchChangedFiles(
+  repo: string | null,
+  branch: string | null,
+) {
+  return useQuery({
+    queryKey: ["branch-changed-files", repo, branch],
+    queryFn: () =>
+      trpcVanilla.git.getBranchChangedFiles.query({
+        repo: repo as string,
+        branch: branch as string,
+      }),
+    enabled: !!repo && !!branch,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    retry: 1,
   });
 }

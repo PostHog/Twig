@@ -681,7 +681,11 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
         "--slurp",
       ]);
 
-      if (result.exitCode !== 0) return [];
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Failed to fetch PR files: ${result.stderr || result.error || "Unknown error"}`,
+        );
+      }
 
       const pages = JSON.parse(result.stdout) as Array<
         Array<{
@@ -721,7 +725,87 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       });
     } catch (error) {
       log.warn("Failed to fetch PR changed files", { prUrl, error });
-      return [];
+      throw error;
+    }
+  }
+
+  public async getBranchChangedFiles(
+    repo: string,
+    branch: string,
+  ): Promise<ChangedFile[]> {
+    const parts = repo.split("/");
+    if (parts.length !== 2) return [];
+
+    const [owner, repoName] = parts;
+
+    try {
+      const repoResult = await execGh([
+        "api",
+        `repos/${owner}/${repoName}`,
+        "--jq",
+        ".default_branch",
+      ]);
+
+      const defaultBranch =
+        repoResult.exitCode === 0 && repoResult.stdout.trim()
+          ? repoResult.stdout.trim()
+          : "main";
+
+      const result = await execGh([
+        "api",
+        `repos/${owner}/${repoName}/compare/${defaultBranch}...${branch}`,
+        "--jq",
+        ".files",
+      ]);
+
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Failed to fetch branch files: ${result.stderr || result.error || "Unknown error"}`,
+        );
+      }
+
+      const files = JSON.parse(result.stdout) as Array<{
+        filename: string;
+        status: string;
+        previous_filename?: string;
+        additions: number;
+        deletions: number;
+      }> | null;
+
+      if (!files) return [];
+
+      return files.map((f) => {
+        let status: ChangedFile["status"];
+        switch (f.status) {
+          case "added":
+            status = "added";
+            break;
+          case "removed":
+            status = "deleted";
+            break;
+          case "renamed":
+            status = "renamed";
+            break;
+          default:
+            status = "modified";
+            break;
+        }
+
+        return {
+          path: f.filename,
+          status,
+          originalPath: f.previous_filename,
+          linesAdded: f.additions,
+          linesRemoved: f.deletions,
+        };
+      });
+    } catch (error) {
+      log.warn("Failed to fetch branch changed files", {
+        repo,
+        branch,
+        error,
+      });
+      throw error;
     }
   }
 
@@ -752,7 +836,9 @@ export class GitService extends TypedEventEmitter<GitServiceEvents> {
       .join("\n");
 
     const conventionHint = conventions.conventionalCommits
-      ? `This repository uses conventional commits. Common prefixes: ${conventions.commonPrefixes.join(", ") || "feat, fix, docs, chore"}.
+      ? `This repository uses conventional commits. Common prefixes: ${
+          conventions.commonPrefixes.join(", ") || "feat, fix, docs, chore"
+        }.
 Example messages from this repo:
 ${conventions.sampleMessages.slice(0, 3).join("\n")}`
       : `Example messages from this repo:
@@ -822,7 +908,10 @@ ${truncatedDiff}`;
       .join("\n");
 
     const templateHint = prTemplate.template
-      ? `The repository has a PR template. Use it as a guide for structure but adapt the content to match the actual changes:\n${prTemplate.template.slice(0, 2000)}`
+      ? `The repository has a PR template. Use it as a guide for structure but adapt the content to match the actual changes:\n${prTemplate.template.slice(
+          0,
+          2000,
+        )}`
       : "";
 
     const system = `You are a PR description generator. Generate a title and detailed description for a pull request.

@@ -2,6 +2,7 @@ import { FileIcon } from "@components/ui/FileIcon";
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { Tooltip } from "@components/ui/Tooltip";
 import {
+  useCloudBranchChangedFiles,
   useCloudPrChangedFiles,
   useGitQueries,
 } from "@features/git-interaction/hooks/useGitQueries";
@@ -491,11 +492,31 @@ function CloudChangesPanel({ taskId, task }: ChangesPanelProps) {
     () => tasks.find((t) => t.id === taskId) ?? task,
     [tasks, taskId, task],
   );
-  const prUrl = (freshTask.latest_run?.output?.pr_url as string) ?? null;
-  const { data: changedFiles = [], isLoading } = useCloudPrChangedFiles(prUrl);
 
-  if (!prUrl) {
-    return <PanelMessage>No pull request created yet</PanelMessage>;
+  const prUrl = (freshTask.latest_run?.output?.pr_url as string) ?? null;
+  const branch = freshTask.latest_run?.branch ?? null;
+  const repo = freshTask.repository ?? null;
+
+  // PR-based files (preferred when PR exists, to avoid possible state weirdness)
+  const {
+    data: prFiles,
+    isPending: prPending,
+    isError: prError,
+  } = useCloudPrChangedFiles(prUrl);
+
+  // Branch-based files (no PR)
+  const {
+    data: branchFiles,
+    isPending: branchPending,
+    isError: branchError,
+  } = useCloudBranchChangedFiles(!prUrl ? repo : null, !prUrl ? branch : null);
+
+  const changedFiles = prUrl ? (prFiles ?? []) : (branchFiles ?? []);
+  const isLoading = prUrl ? prPending : branchPending;
+  const hasError = prUrl ? prError : branchError;
+
+  if (!prUrl && !branch) {
+    return <PanelMessage>No file changes yet</PanelMessage>;
   }
 
   if (isLoading) {
@@ -503,14 +524,35 @@ function CloudChangesPanel({ taskId, task }: ChangesPanelProps) {
   }
 
   if (changedFiles.length === 0) {
-    return <PanelMessage>No file changes in pull request</PanelMessage>;
+    if (hasError && prUrl) {
+      return (
+        <PanelMessage>
+          <Flex direction="column" align="center" gap="2">
+            <Text>Could not load file changes</Text>
+            <Button size="1" variant="soft" asChild>
+              <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                View on GitHub
+              </a>
+            </Button>
+          </Flex>
+        </PanelMessage>
+      );
+    }
+    if (prUrl) {
+      return <PanelMessage>No file changes in pull request</PanelMessage>;
+    }
+    return <PanelMessage>No file changes yet</PanelMessage>;
   }
 
   return (
     <Box height="100%" overflowY="auto" py="2">
       <Flex direction="column">
         {changedFiles.map((file) => (
-          <CloudChangedFileItem key={file.path} file={file} prUrl={prUrl} />
+          <CloudChangedFileItem
+            key={file.path}
+            file={file}
+            prUrl={prUrl ?? `https://github.com/${repo}/tree/${branch}`}
+          />
         ))}
       </Flex>
     </Box>

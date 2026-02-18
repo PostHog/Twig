@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { StoredLogEntry } from "./types/session-events";
 
 // Execution mode schema and type - shared between main and renderer
 export const executionModeSchema = z.enum([
@@ -146,6 +147,23 @@ export interface TaskRun {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+export type CloudTaskUpdateKind = "logs" | "status" | "snapshot";
+
+export interface CloudTaskUpdatePayload {
+  taskId: string;
+  runId: string;
+  kind: CloudTaskUpdateKind;
+  // Log fields (present when kind is "logs" or "snapshot")
+  newEntries?: StoredLogEntry[];
+  totalEntryCount?: number;
+  // Status fields (present when kind is "status" or "snapshot")
+  status?: TaskRun["status"];
+  stage?: string | null;
+  output?: Record<string, unknown> | null;
+  errorMessage?: string | null;
+  branch?: string | null;
 }
 
 // Mention types for editors

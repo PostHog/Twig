@@ -23,11 +23,14 @@ interface SessionState {
 export class SessionLogWriter {
   private static readonly FLUSH_DEBOUNCE_MS = 500;
   private static readonly FLUSH_MAX_INTERVAL_MS = 5000;
+  private static readonly MAX_FLUSH_RETRIES = 10;
+  private static readonly MAX_RETRY_DELAY_MS = 30_000;
 
   private posthogAPI?: PostHogAPIClient;
   private pendingEntries: Map<string, StoredNotification[]> = new Map();
   private flushTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private lastFlushAttemptTime: Map<string, number> = new Map();
+  private retryCounts: Map<string, number> = new Map();
   private sessions: Map<string, SessionState> = new Map();
   private messageCounts: Map<string, number> = new Map();
   private logger: Logger;
@@ -166,16 +169,30 @@ export class SessionLogWriter {
         session.context.runId,
         pending,
       );
+      this.retryCounts.set(sessionId, 0);
       this.logger.info("Flushed session logs", {
         sessionId,
         entryCount: pending.length,
       });
     } catch (error) {
-      this.logger.error("Failed to persist session logs:", error);
+      const retryCount = (this.retryCounts.get(sessionId) ?? 0) + 1;
+      this.retryCounts.set(sessionId, retryCount);
 
-      const currentPending = this.pendingEntries.get(sessionId) ?? [];
-      this.pendingEntries.set(sessionId, [...pending, ...currentPending]);
-      this.scheduleFlush(sessionId);
+      if (retryCount >= SessionLogWriter.MAX_FLUSH_RETRIES) {
+        this.logger.error(
+          `Dropping ${pending.length} session log entries after ${retryCount} failed flush attempts`,
+          { sessionId, error },
+        );
+        this.retryCounts.set(sessionId, 0);
+      } else {
+        this.logger.error(
+          `Failed to persist session logs (attempt ${retryCount}/${SessionLogWriter.MAX_FLUSH_RETRIES}):`,
+          error,
+        );
+        const currentPending = this.pendingEntries.get(sessionId) ?? [];
+        this.pendingEntries.set(sessionId, [...pending, ...currentPending]);
+        this.scheduleFlush(sessionId);
+      }
     }
   }
 
@@ -231,13 +248,23 @@ export class SessionLogWriter {
     const existing = this.flushTimeouts.get(sessionId);
     if (existing) clearTimeout(existing);
 
+    const retryCount = this.retryCounts.get(sessionId) ?? 0;
     const lastAttempt = this.lastFlushAttemptTime.get(sessionId) ?? 0;
     const elapsed = Date.now() - lastAttempt;
-    // If we've been accumulating for longer than the max interval, flush immediately
-    const delay =
-      elapsed >= SessionLogWriter.FLUSH_MAX_INTERVAL_MS
-        ? 0
-        : SessionLogWriter.FLUSH_DEBOUNCE_MS;
+
+    let delay: number;
+    if (retryCount > 0) {
+      // Exponential backoff on retries: FLUSH_DEBOUNCE_MS * 2^retryCount, capped
+      delay = Math.min(
+        SessionLogWriter.FLUSH_DEBOUNCE_MS * 2 ** retryCount,
+        SessionLogWriter.MAX_RETRY_DELAY_MS,
+      );
+    } else if (elapsed >= SessionLogWriter.FLUSH_MAX_INTERVAL_MS) {
+      // If we've been accumulating for longer than the max interval, flush immediately
+      delay = 0;
+    } else {
+      delay = SessionLogWriter.FLUSH_DEBOUNCE_MS;
+    }
 
     const timeout = setTimeout(() => this.flush(sessionId), delay);
     this.flushTimeouts.set(sessionId, timeout);

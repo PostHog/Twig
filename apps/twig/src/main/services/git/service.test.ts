@@ -115,13 +115,15 @@ describe("GitService.getPrChangedFiles", () => {
     expect(mockExecGh).not.toHaveBeenCalled();
   });
 
-  it("returns empty array when gh command fails", async () => {
-    mockExecGh.mockResolvedValue({ exitCode: 1, stdout: "" });
+  it("throws when gh command fails", async () => {
+    mockExecGh.mockResolvedValue({
+      exitCode: 1,
+      stdout: "",
+      stderr: "auth required",
+    });
 
-    const result = await service.getPrChangedFiles(
-      "https://github.com/posthog/twig/pull/123",
-    );
-
-    expect(result).toEqual([]);
+    await expect(
+      service.getPrChangedFiles("https://github.com/posthog/twig/pull/123"),
+    ).rejects.toThrow("Failed to fetch PR files");
   });
 });

@@ -43,15 +43,19 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { isOnline } = useConnectivity();
 
   const isCloud = workspace?.mode === "cloud";
+
+  // Cloud status is read from the session store (populated via CloudTaskService subscription)
+  const cloudStatus = session?.cloudStatus ?? null;
+  const cloudStage = session?.cloudStage ?? null;
+  const cloudOutput = session?.cloudOutput ?? null;
+  const cloudErrorMessage = session?.cloudErrorMessage ?? null;
   const isCloudRunNotTerminal =
     isCloud &&
-    (!task.latest_run ||
-      task.latest_run.status === "started" ||
-      task.latest_run.status === "in_progress");
+    (!cloudStatus ||
+      cloudStatus === "started" ||
+      cloudStatus === "in_progress");
   const prUrl =
-    isCloud && task.latest_run?.output?.pr_url
-      ? (task.latest_run.output.pr_url as string)
-      : null;
+    isCloud && cloudOutput?.pr_url ? (cloudOutput.pr_url as string) : null;
 
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
@@ -81,37 +85,26 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     requestFocus(taskId);
   }, [taskId, requestFocus]);
 
-  // Cloud session loading — fetch S3 logs and create a read-only session
+  // Keep cloud session title aligned with latest task metadata.
   useEffect(() => {
     if (!isCloud) return;
-    getSessionService().loadCloudTaskSession(task);
-  }, [isCloud, task.id, task.latest_run?.id, task.latest_run?.log_url, task]);
+    getSessionService().updateCloudTaskTitle(
+      task.id,
+      task.title || task.description || "Cloud Task",
+    );
+  }, [isCloud, task.id, task.title, task.description]);
 
-  // Cloud log polling — incrementally append new log entries while run is active
+  // Cloud task watching — logs + status via main-process CloudTaskService subscription
   useEffect(() => {
-    if (!isCloud || !isCloudRunNotTerminal) return;
-
-    const interval = setInterval(() => {
-      getSessionService().refreshCloudTaskLogs(task);
-    }, 5_000);
-
-    return () => clearInterval(interval);
-  }, [isCloud, isCloudRunNotTerminal, task]);
-
-  // Cloud task data polling — refresh task data to pick up status changes
-  useEffect(() => {
-    if (!isCloud || !isCloudRunNotTerminal) return;
-
-    const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    }, 10_000);
-
-    return () => {
-      clearInterval(interval);
-      // Final refresh when run transitions from active to inactive
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    };
-  }, [isCloud, isCloudRunNotTerminal, queryClient]);
+    if (!isCloud || !task.latest_run?.id) return;
+    return getSessionService().watchCloudTask(
+      task.id,
+      task.latest_run.id,
+      () => {
+        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      },
+    );
+  }, [isCloud, task.id, task.latest_run?.id, queryClient]);
 
   // Local session connection
   useEffect(() => {
@@ -119,7 +112,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Cloud tasks use the cloud session loading effect above
+    // Cloud tasks use the cloud watcher effect above
     if (isCloud) return;
 
     if (
@@ -339,24 +332,20 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
                 <Spinner size="2" />
                 <Text size="2" color="gray">
                   Running in cloud
-                  {task.latest_run?.stage
-                    ? ` \u2014 ${task.latest_run.stage}`
-                    : ""}
+                  {cloudStage ? ` \u2014 ${cloudStage}` : ""}
                   ...
                 </Text>
               </>
-            ) : task.latest_run?.status === "failed" ? (
+            ) : cloudStatus === "failed" ? (
               <Text size="2" color="red">
                 Task failed
-                {task.latest_run?.error_message
-                  ? `: ${task.latest_run.error_message}`
-                  : ""}
+                {cloudErrorMessage ? `: ${cloudErrorMessage}` : ""}
               </Text>
-            ) : task.latest_run?.status === "cancelled" ? (
+            ) : cloudStatus === "cancelled" ? (
               <Text size="2" color="red">
                 Task cancelled
               </Text>
-            ) : task.latest_run ? (
+            ) : cloudStatus ? (
               <Text size="2" color="gray">
                 Cloud task completed
               </Text>
