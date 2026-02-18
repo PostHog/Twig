@@ -6,3 +6,8 @@
   float: left;
   height: 0;
 }
+
+/* Ensure Tiptap NodeView wrappers render inline for mention chips */
+.cli-editor [data-node-view-wrapper] {
+  display: inline;
+}

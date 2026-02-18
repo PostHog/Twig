@@ -9,6 +9,19 @@ import { publicProcedure, router } from "../trpc.js";
 
 const fsPromises = fs.promises;
 
+const IMAGE_MIME_MAP: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  svg: "image/svg+xml",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+};
+
 const messageBoxOptionsSchema = z.object({
   type: z.enum(["none", "info", "error", "question", "warning"]).optional(),
   title: z.string().optional(),
@@ -149,6 +162,57 @@ export const osRouter = router({
    * Get the worktree base location (e.g., ~/.twig)
    */
   getWorktreeLocation: publicProcedure.query(() => getWorktreeLocation()),
+
+  /**
+   * Read a file and return it as a base64 data URL
+   * Used for image thumbnails in the editor
+   */
+  readFileAsDataUrl: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        maxSizeBytes: z
+          .number()
+          .optional()
+          .default(10 * 1024 * 1024),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        const stat = await fsPromises.stat(input.filePath);
+        if (stat.size > input.maxSizeBytes) return null;
+
+        const ext = path.extname(input.filePath).toLowerCase().slice(1);
+        const mime = IMAGE_MIME_MAP[ext] ?? "application/octet-stream";
+
+        const buffer = await fsPromises.readFile(input.filePath);
+        return `data:${mime};base64,${buffer.toString("base64")}`;
+      } catch {
+        return null;
+      }
+    }),
+
+  /**
+   * Save pasted text to a temp file
+   * Returns the file path for use as a file attachment
+   */
+  saveClipboardText: publicProcedure
+    .input(
+      z.object({
+        text: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const filename = `pasted-text-${Date.now()}.txt`;
+      const tempDir = path.join(os.tmpdir(), "twig-clipboard");
+
+      await fsPromises.mkdir(tempDir, { recursive: true });
+      const filePath = path.join(tempDir, filename);
+
+      await fsPromises.writeFile(filePath, input.text, "utf-8");
+
+      return { path: filePath, name: "pasted-text.txt" };
+    }),
 
   /**
    * Save clipboard image data to a temp file

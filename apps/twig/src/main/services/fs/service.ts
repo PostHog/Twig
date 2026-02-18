@@ -97,6 +97,17 @@ export class FsService {
     }
   }
 
+  async readAbsoluteFile(filePath: string): Promise<string | null> {
+    try {
+      return await fs.promises.readFile(path.resolve(filePath), "utf-8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.error(`Failed to read file ${filePath}:`, error);
+      }
+      return null;
+    }
+  }
+
   async writeRepoFile(
     repoPath: string,
     filePath: string,

@@ -299,6 +299,9 @@ export function SessionView({
     dragCounterRef.current = 0;
     setIsDraggingFile(false);
 
+    // If dropped on the editor, Tiptap's handleDrop already handled it
+    if ((e.target as HTMLElement).closest(".ProseMirror")) return;
+
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
@@ -306,8 +309,7 @@ export function SessionView({
       const file = files[i];
       const filePath = (file as File & { path?: string }).path;
       if (filePath) {
-        editorRef.current?.insertChip({
-          type: "file",
+        editorRef.current?.addAttachment({
           id: filePath,
           label: file.name,
         });
