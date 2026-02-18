@@ -8,28 +8,29 @@ Provides the PostHog plugin to agent sessions (Claude Code and Codex). The plugi
 
 Skills are the main content of the plugin. Each skill is a directory containing a `SKILL.md` and optional `references/` folder with supporting docs. For example, the `query-data` skill teaches agents how to write HogQL queries against PostHog's API.
 
-Skills are published independently from Twig at a stable GitHub releases URL (`skills.zip`). This service ensures agents always have the latest skills without requiring a Twig update.
+Skills are published independently from Twig at stable GitHub releases URLs. This service ensures agents always have the latest skills without requiring a Twig update.
 
 ### Skill Sources
 
-The plugin directory is assembled from three skill sources, merged in priority order (later overrides earlier for same-named skills):
+The plugin directory is assembled from four skill sources, merged in priority order (later overrides earlier for same-named skills):
 
 | Source | Location | When used |
 |---|---|---|
 | **Shipped** | `plugins/posthog/skills/` | Always — committed to the repo |
-| **Remote** | GitHub releases `skills.zip` | Downloaded at build time and every 30 min at runtime |
+| **Context Mill** | `posthog/context-mill` releases `skills-mcp-resources.zip` | Downloaded at build time and every 30 min at runtime |
+| **Remote** | `posthog/posthog` releases `skills.zip` | Downloaded at build time and every 30 min at runtime |
 | **Local dev** | `plugins/posthog/local-skills/` | Dev mode only — gitignored |
 
-A "skill name" is its directory name. If remote and shipped both have `query-data/`, the remote version wins. If local-dev also has `query-data/`, that wins over both.
+A "skill name" is its directory name. If context-mill and shipped both have `query-data/`, the context-mill version wins. If the posthog remote also has `query-data/`, that wins over both. If local-dev also has it, that wins over everything.
 
 ## Build Time
 
 `copyPosthogPlugin()` in `vite.main.config.mts` assembles the plugin during `writeBundle`:
 
 1. Copies allowed plugin entries into `.vite/build/plugins/posthog/`
-2. Downloads `skills.zip` via `curl`, extracts with `unzip`, overlays into the build output
+2. Downloads `skills-mcp-resources.zip` (a bundle of nested zips, one per skill) from context-mill and `skills.zip` from posthog via `curl`, extracts with `unzip`, overlays into the build output (posthog overrides context-mill for same-named skills)
 3. In dev mode only: overlays `plugins/posthog/local-skills/` on top
-4. Download failure is non-fatal — build continues with shipped skills only
+4. Download failures are non-fatal — build continues with whatever sources succeeded
 
 Vite watches `plugins/posthog/` (and `local-skills/` in dev) for hot-reload.
 
@@ -45,12 +46,12 @@ Vite watches `plugins/posthog/` (and `local-skills/` in dev) for hot-reload.
 5. Kicks off the first async download
 
 **Every 30 minutes (`updateSkills`):**
-1. Downloads `skills.zip` using `net.fetch` (Electron's network stack, respects proxy)
-2. Extracts to a temp dir via `unzip`
-3. Atomically swaps into `{userData}/skills/`
+1. Downloads `skills-mcp-resources.zip` (context-mill) and `skills.zip` (posthog) using `net.fetch` (Electron's network stack, respects proxy)
+2. Extracts both to temp dirs via `unzip`, merges skill directories (posthog overrides context-mill for same-named skills)
+3. Atomically swaps merged skills into `{userData}/skills/`
 4. Re-assembles the runtime plugin dir
 5. Re-syncs to Codex
-6. On failure: logs a warning, keeps existing skills, retries next interval
+6. On failure: logs a warning per source, keeps existing skills, retries next interval
 
 **`getPluginPath()`** — called by `AgentService` when starting sessions:
 - Dev mode → bundled path (Vite already merged everything)
@@ -78,4 +79,4 @@ After every assembly, skills are copied to `$HOME/.agents/skills/` so that Codex
 pnpm pull-skills
 ```
 
-Downloads the latest `skills.zip` into `plugins/posthog/local-skills/`. You can then edit them locally and Vite will pick up changes.
+Downloads the latest skills from both context-mill (`skills-mcp-resources.zip`) and posthog (`skills.zip`) into `plugins/posthog/local-skills/`. You can then edit them locally and Vite will pick up changes.
