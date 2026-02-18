@@ -1,4 +1,5 @@
 import { sessionStoreSetters } from "@features/sessions/stores/sessionStore";
+import { useSettingsStore as useFeatureSettingsStore } from "@features/settings/stores/settingsStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
 import { useSettingsStore } from "@stores/settingsStore";
@@ -238,28 +239,57 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
             }
           }
 
-          if (imageItems.length === 0) return false;
+          if (imageItems.length > 0) {
+            event.preventDefault();
 
-          event.preventDefault();
+            (async () => {
+              for (const item of imageItems) {
+                const file = item.getAsFile();
+                if (!file) continue;
 
-          (async () => {
-            for (const item of imageItems) {
-              const file = item.getAsFile();
-              if (!file) continue;
+                try {
+                  const arrayBuffer = await file.arrayBuffer();
+                  const base64 = btoa(
+                    new Uint8Array(arrayBuffer).reduce(
+                      (data, byte) => data + String.fromCharCode(byte),
+                      "",
+                    ),
+                  );
 
+                  const result = await trpcVanilla.os.saveClipboardImage.mutate(
+                    {
+                      base64Data: base64,
+                      mimeType: file.type,
+                      originalName: file.name,
+                    },
+                  );
+
+                  setAttachments((prev) => {
+                    if (prev.some((a) => a.id === result.path)) return prev;
+                    return [...prev, { id: result.path, label: result.name }];
+                  });
+                } catch (_error) {
+                  toast.error("Failed to paste image");
+                }
+              }
+            })();
+
+            return true;
+          }
+
+          // Auto-convert long pasted text into a file attachment
+          const pastedText = event.clipboardData?.getData("text/plain");
+          if (
+            pastedText &&
+            pastedText.length > 500 &&
+            useFeatureSettingsStore.getState().autoConvertLongText
+          ) {
+            event.preventDefault();
+
+            (async () => {
               try {
-                const arrayBuffer = await file.arrayBuffer();
-                const base64 = btoa(
-                  new Uint8Array(arrayBuffer).reduce(
-                    (data, byte) => data + String.fromCharCode(byte),
-                    "",
-                  ),
-                );
-
-                const result = await trpcVanilla.os.saveClipboardImage.mutate({
-                  base64Data: base64,
-                  mimeType: file.type,
-                  originalName: file.name,
+                const result = await trpcVanilla.os.saveClipboardText.mutate({
+                  text: pastedText,
                 });
 
                 setAttachments((prev) => {
@@ -267,12 +297,14 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
                   return [...prev, { id: result.path, label: result.name }];
                 });
               } catch (_error) {
-                toast.error("Failed to paste image");
+                toast.error("Failed to convert pasted text to attachment");
               }
-            }
-          })();
+            })();
 
-          return true;
+            return true;
+          }
+
+          return false;
         },
       },
       onCreate: () => {

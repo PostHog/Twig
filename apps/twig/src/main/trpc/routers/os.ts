@@ -193,6 +193,28 @@ export const osRouter = router({
     }),
 
   /**
+   * Save pasted text to a temp file
+   * Returns the file path for use as a file attachment
+   */
+  saveClipboardText: publicProcedure
+    .input(
+      z.object({
+        text: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const filename = `pasted-text-${Date.now()}.txt`;
+      const tempDir = path.join(os.tmpdir(), "twig-clipboard");
+
+      await fsPromises.mkdir(tempDir, { recursive: true });
+      const filePath = path.join(tempDir, filename);
+
+      await fsPromises.writeFile(filePath, input.text, "utf-8");
+
+      return { path: filePath, name: "pasted-text.txt" };
+    }),
+
+  /**
    * Save clipboard image data to a temp file
    * Returns the file path for use as a file attachment
    */
