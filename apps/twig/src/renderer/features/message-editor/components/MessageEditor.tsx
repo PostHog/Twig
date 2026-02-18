@@ -11,9 +11,9 @@ import { useTiptapEditor } from "../tiptap/useTiptapEditor";
 import type { EditorHandle } from "../types";
 import type { EditorContent as EditorContentType } from "../utils/content";
 import { AdapterIndicator } from "./AdapterIndicator";
+import { AttachmentsBar } from "./AttachmentsBar";
 import { DiffStatsIndicator } from "./DiffStatsIndicator";
 import { EditorToolbar } from "./EditorToolbar";
-import { AttachmentsBar } from "./ImageAttachmentsBar";
 import { ModeIndicatorInput } from "./ModeIndicatorInput";
 
 export type { EditorHandle as MessageEditorHandle };

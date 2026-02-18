@@ -1,6 +1,6 @@
 import "@features/message-editor/components/message-editor.css";
+import { AttachmentsBar } from "@features/message-editor/components/AttachmentsBar";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
-import { AttachmentsBar } from "@features/message-editor/components/ImageAttachmentsBar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
 import { ModelSelector } from "@features/sessions/components/ModelSelector";

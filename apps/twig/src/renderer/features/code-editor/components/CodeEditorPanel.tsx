@@ -1,26 +1,11 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
+import { isImageFile } from "@features/message-editor/utils/imageUtils";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Box, Flex } from "@radix-ui/themes";
 import { trpcReact } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
-
-const IMAGE_EXTENSIONS = new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "webp",
-  "svg",
-  "bmp",
-  "ico",
-]);
-
-function isImageFile(filePath: string): boolean {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_EXTENSIONS.has(ext);
-}
 
 interface CodeEditorPanelProps {
   taskId: string;
@@ -70,10 +55,6 @@ export function CodeEditorPanel({
         />
       </Flex>
     );
-  }
-
-  if (!repoPath) {
-    return <PanelMessage>No repository path available</PanelMessage>;
   }
 
   if (isLoading) {

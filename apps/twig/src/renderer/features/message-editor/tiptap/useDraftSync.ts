@@ -1,5 +1,5 @@
 import type { Editor, JSONContent } from "@tiptap/core";
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useDraftStore } from "../stores/draftStore";
 import {
   type EditorContent,
@@ -166,11 +166,13 @@ export function useDraftSync(
   }, [editor, pendingContent, sessionId, draftActions]);
 
   // Extract restored attachments from draft on first restore
-  const restoredAttachmentsRef = useRef<FileAttachment[]>([]);
+  const [restoredAttachments, setRestoredAttachments] = useState<
+    FileAttachment[]
+  >([]);
   useLayoutEffect(() => {
     if (!draft || typeof draft === "string") return;
     if (draft.attachments && draft.attachments.length > 0) {
-      restoredAttachmentsRef.current = draft.attachments;
+      setRestoredAttachments(draft.attachments);
     }
   }, [draft]);
 
@@ -219,6 +221,6 @@ export function useDraftSync(
     saveDraft,
     clearDraft,
     getContent,
-    restoredAttachments: restoredAttachmentsRef.current,
+    restoredAttachments,
   };
 }

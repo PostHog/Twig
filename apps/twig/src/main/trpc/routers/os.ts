@@ -9,6 +9,19 @@ import { publicProcedure, router } from "../trpc.js";
 
 const fsPromises = fs.promises;
 
+const IMAGE_MIME_MAP: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  svg: "image/svg+xml",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+};
+
 const messageBoxOptionsSchema = z.object({
   type: z.enum(["none", "info", "error", "question", "warning"]).optional(),
   title: z.string().optional(),
@@ -170,19 +183,7 @@ export const osRouter = router({
         if (stat.size > input.maxSizeBytes) return null;
 
         const ext = path.extname(input.filePath).toLowerCase().slice(1);
-        const mimeMap: Record<string, string> = {
-          png: "image/png",
-          jpg: "image/jpeg",
-          jpeg: "image/jpeg",
-          gif: "image/gif",
-          webp: "image/webp",
-          bmp: "image/bmp",
-          ico: "image/x-icon",
-          svg: "image/svg+xml",
-          tiff: "image/tiff",
-          tif: "image/tiff",
-        };
-        const mime = mimeMap[ext] ?? "application/octet-stream";
+        const mime = IMAGE_MIME_MAP[ext] ?? "application/octet-stream";
 
         const buffer = await fsPromises.readFile(input.filePath);
         return `data:${mime};base64,${buffer.toString("base64")}`;

@@ -1,28 +1,8 @@
 import { File, X } from "@phosphor-icons/react";
 import { Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
-import { trpcVanilla } from "@renderer/trpc/client";
-import { useEffect, useState } from "react";
+import { trpcReact } from "@renderer/trpc/client";
 import type { FileAttachment } from "../utils/content";
 import { isImageFile } from "../utils/imageUtils";
-
-function useDataUrl(filePath: string) {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    trpcVanilla.os.readFileAsDataUrl
-      .query({ filePath })
-      .then((url) => {
-        if (!cancelled) setDataUrl(url);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [filePath]);
-
-  return dataUrl;
-}
 
 function ImageThumbnail({
   attachment,
@@ -31,7 +11,10 @@ function ImageThumbnail({
   attachment: FileAttachment;
   onRemove: () => void;
 }) {
-  const dataUrl = useDataUrl(attachment.id);
+  const { data: dataUrl } = trpcReact.os.readFileAsDataUrl.useQuery(
+    { filePath: attachment.id },
+    { staleTime: Infinity },
+  );
 
   return (
     <Dialog.Root>

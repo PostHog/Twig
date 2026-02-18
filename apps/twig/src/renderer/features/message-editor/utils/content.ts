@@ -34,25 +34,34 @@ export function contentToPlainText(content: EditorContent): string {
     .join("");
 }
 
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export function contentToXml(content: EditorContent): string {
   const inlineFilePaths = new Set<string>();
   const parts = content.segments.map((seg) => {
     if (seg.type === "text") return seg.text;
     const chip = seg.chip;
+    const escapedId = escapeXmlAttr(chip.id);
     switch (chip.type) {
       case "file":
         inlineFilePaths.add(chip.id);
-        return `<file path="${chip.id}" />`;
+        return `<file path="${escapedId}" />`;
       case "command":
         return `/${chip.label}`;
       case "error":
-        return `<error id="${chip.id}" />`;
+        return `<error id="${escapedId}" />`;
       case "experiment":
-        return `<experiment id="${chip.id}" />`;
+        return `<experiment id="${escapedId}" />`;
       case "insight":
-        return `<insight id="${chip.id}" />`;
+        return `<insight id="${escapedId}" />`;
       case "feature_flag":
-        return `<feature_flag id="${chip.id}" />`;
+        return `<feature_flag id="${escapedId}" />`;
       default:
         return `@${chip.label}`;
     }
@@ -62,7 +71,7 @@ export function contentToXml(content: EditorContent): string {
   if (content.attachments) {
     for (const att of content.attachments) {
       if (!inlineFilePaths.has(att.id)) {
-        parts.push(`<file path="${att.id}" />`);
+        parts.push(`<file path="${escapeXmlAttr(att.id)}" />`);
       }
     }
   }
