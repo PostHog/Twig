@@ -11,6 +11,7 @@ import { useModelsStore } from "@features/sessions/stores/modelsStore";
 import { useSessionAdapterStore } from "@features/sessions/stores/sessionAdapterStore";
 import {
   getPersistedConfigOptions,
+  removePersistedConfigOptions,
   setPersistedConfigOptions,
   updatePersistedConfigOptionValue,
 } from "@features/sessions/stores/sessionConfigStore";
@@ -361,24 +362,96 @@ export class SessionService {
           }
         }
       } else {
-        this.unsubscribeFromChannel(taskRunId);
-        sessionStoreSetters.updateSession(taskRunId, {
-          status: "error",
-          errorMessage:
-            "Failed to reconnect to the agent. Please restart the task.",
+        log.warn("Reconnect returned null, falling back to new session", {
+          taskId,
+          taskRunId,
         });
+        await this.recreateOrError(
+          taskRunId,
+          taskId,
+          taskTitle,
+          repoPath,
+          auth,
+          "Failed to start a new session. Please try again.",
+        );
       }
     } catch (error) {
-      this.unsubscribeFromChannel(taskRunId);
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      log.error("Failed to reconnect to session", { taskId, error });
-      sessionStoreSetters.updateSession(taskRunId, {
-        status: "error",
-        errorMessage:
-          errorMessage || "Failed to reconnect to the agent. Please try again.",
+      log.warn("Reconnect failed, falling back to new session", {
+        taskId,
+        error: errorMessage,
+      });
+      await this.recreateOrError(
+        taskRunId,
+        taskId,
+        taskTitle,
+        repoPath,
+        auth,
+        errorMessage || "Failed to reconnect. Please try again.",
+      );
+    }
+  }
+
+  private async teardownSession(taskRunId: string): Promise<void> {
+    try {
+      await trpcVanilla.agent.cancel.mutate({ sessionId: taskRunId });
+    } catch (error) {
+      log.debug("Cancel during teardown failed (session may already be gone)", {
+        taskRunId,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
+
+    this.unsubscribeFromChannel(taskRunId);
+    sessionStoreSetters.removeSession(taskRunId);
+    useSessionAdapterStore.getState().removeAdapter(taskRunId);
+    removePersistedConfigOptions(taskRunId);
+  }
+
+  private async recreateOrError(
+    taskRunId: string,
+    taskId: string,
+    taskTitle: string,
+    repoPath: string,
+    auth: AuthCredentials,
+    fallbackMessage: string,
+  ): Promise<void> {
+    try {
+      await this.recreateSession(taskRunId, taskId, taskTitle, repoPath, auth);
+    } catch (recreateError) {
+      log.error("Failed to recreate session", {
+        taskId,
+        error:
+          recreateError instanceof Error
+            ? recreateError.message
+            : String(recreateError),
+      });
+      this.setErrorSession(taskId, taskRunId, taskTitle, fallbackMessage);
+    }
+  }
+
+  private setErrorSession(
+    taskId: string,
+    taskRunId: string,
+    taskTitle: string,
+    errorMessage: string,
+  ): void {
+    const session = this.createBaseSession(taskRunId, taskId, taskTitle);
+    session.status = "error";
+    session.errorMessage = errorMessage;
+    sessionStoreSetters.setSession(session);
+  }
+
+  private async recreateSession(
+    oldTaskRunId: string,
+    taskId: string,
+    taskTitle: string,
+    repoPath: string,
+    auth: AuthCredentials,
+  ): Promise<void> {
+    await this.teardownSession(oldTaskRunId);
+    await this.createNewLocalSession(taskId, taskTitle, repoPath, auth);
   }
 
   private async createNewLocalSession(
@@ -468,18 +541,7 @@ export class SessionService {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
-    try {
-      await trpcVanilla.agent.cancel.mutate({
-        sessionId: session.taskRunId,
-      });
-    } catch (error) {
-      log.error("Failed to cancel agent session", {
-        taskRunId: session.taskRunId,
-        error,
-      });
-    }
-    this.unsubscribeFromChannel(session.taskRunId);
-    sessionStoreSetters.removeSession(session.taskRunId);
+    await this.teardownSession(session.taskRunId);
   }
 
   // --- Preview Session Management ---
@@ -1233,27 +1295,12 @@ export class SessionService {
 
   /**
    * Clear session error and allow retry.
+   * Tears down the old session; events are re-fetched from logs during reconnect.
    */
   async clearSessionError(taskId: string): Promise<void> {
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (session) {
-      // Cancel the agent session on the main process
-      try {
-        await trpcVanilla.agent.cancel.mutate({
-          sessionId: session.taskRunId,
-        });
-        log.info("Cancelled agent session for retry", {
-          taskId,
-          taskRunId: session.taskRunId,
-        });
-      } catch (error) {
-        log.warn("Failed to cancel agent session during error clear", {
-          taskId,
-          error,
-        });
-      }
-      this.unsubscribeFromChannel(session.taskRunId);
-      sessionStoreSetters.removeSession(session.taskRunId);
+      await this.teardownSession(session.taskRunId);
     }
     // Clear from connecting tasks as well
     this.connectingTasks.delete(taskId);
