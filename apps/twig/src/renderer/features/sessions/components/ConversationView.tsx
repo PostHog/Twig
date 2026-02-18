@@ -77,8 +77,8 @@ export function ConversationView({
 }: ConversationViewProps) {
   const listRef = useRef<VirtualizedListHandle>(null);
   const conversationItems = useMemo(
-    () => buildConversationItems(events),
-    [events],
+    () => buildConversationItems(events, isPromptPending),
+    [events, isPromptPending],
   );
   const lastTurn = conversationItems
     .filter((i): i is Turn => i.type === "turn")
@@ -314,7 +314,10 @@ const TurnView = memo(function TurnView({ turn, repoPath }: TurnViewProps) {
 
 // --- Event Processing ---
 
-function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
+function buildConversationItems(
+  events: AcpMessage[],
+  isPromptPending: boolean,
+): ConversationItem[] {
   const items: ConversationItem[] = [];
   let currentTurn: Turn | null = null;
   const pendingPrompts = new Map<number, Turn>();
@@ -467,6 +470,15 @@ function buildConversationItems(events: AcpMessage[]): ConversationItem[] {
         summary: params.summary,
         outputFile: params.outputFile,
       });
+    }
+  }
+
+  // If no prompt is pending, mark any unfinished turns as cancelled.
+  // This handles sessions that ended while tool calls were in flight.
+  if (!isPromptPending) {
+    for (const turn of pendingPrompts.values()) {
+      turn.isComplete = true;
+      turn.stopReason = "cancelled";
     }
   }
 
