@@ -3,6 +3,7 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 import {
+  type QueuedMessage,
   usePendingPermissionsForTask,
   useQueuedMessagesForTask,
 } from "@features/sessions/stores/sessionStore";
@@ -17,15 +18,7 @@ import {
   isJsonRpcResponse,
   type UserShellExecuteParams,
 } from "@shared/types/session-events";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitActionMessage, parseGitActionMessage } from "./GitActionMessage";
 import { GitActionResult } from "./GitActionResult";
 import { SessionFooter } from "./SessionFooter";
@@ -39,6 +32,7 @@ import {
   type UserShellExecute,
   UserShellExecuteView,
 } from "./session-update/UserShellExecuteView";
+import { VirtualizedList, type VirtualizedListHandle } from "./VirtualizedList";
 
 interface Turn {
   type: "turn";
@@ -53,7 +47,14 @@ interface Turn {
   toolCalls: Map<string, ToolCall>;
 }
 
+interface QueuedItem {
+  type: "queued";
+  id: string;
+  message: QueuedMessage;
+}
+
 type ConversationItem = Turn | UserShellExecute;
+type VirtualizedItem = ConversationItem | QueuedItem;
 
 interface ConversationViewProps {
   events: AcpMessage[];
@@ -63,8 +64,8 @@ interface ConversationViewProps {
   taskId?: string;
 }
 
-const SCROLL_THRESHOLD = 100;
 const SHOW_BUTTON_THRESHOLD = 300;
+const ESTIMATE_SIZE = 200;
 
 export function ConversationView({
   events,
@@ -73,9 +74,14 @@ export function ConversationView({
   repoPath,
   taskId,
 }: ConversationViewProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const items = useMemo(() => buildConversationItems(events), [events]);
-  const lastTurn = items.filter((i): i is Turn => i.type === "turn").pop();
+  const listRef = useRef<VirtualizedListHandle>(null);
+  const conversationItems = useMemo(
+    () => buildConversationItems(events),
+    [events],
+  );
+  const lastTurn = conversationItems
+    .filter((i): i is Turn => i.type === "turn")
+    .pop();
 
   const pendingPermissions = usePendingPermissionsForTask(taskId ?? "");
   const pendingPermissionsCount = pendingPermissions.size;
@@ -83,100 +89,110 @@ export function ConversationView({
   const queuedMessages = useQueuedMessagesForTask(taskId);
   const { saveScrollPosition, getScrollPosition } = useSessionViewActions();
 
-  const prevItemsLengthRef = useRef(0);
-  const prevPendingCountRef = useRef(0);
-  const prevScrollHeightRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const hasRestoredScrollRef = useRef(false);
+  const prevItemCountRef = useRef(0);
+
+  const virtualizedItems = useMemo<VirtualizedItem[]>(() => {
+    const items: VirtualizedItem[] = [...conversationItems];
+
+    for (const msg of queuedMessages) {
+      items.push({ type: "queued", id: msg.id, message: msg });
+    }
+
+    return items;
+  }, [conversationItems, queuedMessages]);
 
   useEffect(() => {
-    hasRestoredScrollRef.current = false;
-  }, []);
+    if (!taskId || hasRestoredScrollRef.current) return;
 
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !taskId) return;
-
-    const handleScroll = () => {
-      const distanceFromBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight;
-      setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
-      saveScrollPosition(taskId, el.scrollTop);
-    };
-
-    el.addEventListener("scroll", handleScroll);
-    return () => {
-      el.removeEventListener("scroll", handleScroll);
-      saveScrollPosition(taskId, el.scrollTop);
-    };
-  }, [taskId, saveScrollPosition]);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !taskId) return;
-
-    if (!hasRestoredScrollRef.current) {
-      const savedPosition = getScrollPosition(taskId);
-      if (savedPosition > 0) {
-        el.scrollTop = savedPosition;
+    const savedPosition = getScrollPosition(taskId);
+    if (savedPosition > 0) {
+      const virtualizer = listRef.current?.getVirtualizer();
+      if (virtualizer) {
+        virtualizer.scrollOffset = savedPosition;
         hasRestoredScrollRef.current = true;
-        return;
       }
     }
+  }, [taskId, getScrollPosition]);
 
-    const isNewContent = items.length > prevItemsLengthRef.current;
-    const isNewPending = pendingPermissionsCount > prevPendingCountRef.current;
-    prevItemsLengthRef.current = items.length;
-    prevPendingCountRef.current = pendingPermissionsCount;
+  const isStreaming = lastTurn && !lastTurn.isComplete;
 
-    const prevScrollHeight = prevScrollHeightRef.current || el.scrollHeight;
-    const wasNearBottom =
-      prevScrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
-    prevScrollHeightRef.current = el.scrollHeight;
+  useEffect(() => {
+    const isNewContent = virtualizedItems.length > prevItemCountRef.current;
+    prevItemCountRef.current = virtualizedItems.length;
 
-    if (wasNearBottom || isNewContent || isNewPending) {
-      el.scrollTop = el.scrollHeight;
+    if (isNewContent && !showScrollButton) {
+      listRef.current?.scrollToBottom();
     }
-  }, [items, pendingPermissionsCount, taskId, getScrollPosition]);
+  }, [virtualizedItems.length, showScrollButton]);
+
+  useEffect(() => {
+    if (isStreaming && !showScrollButton) {
+      listRef.current?.scrollToBottom();
+    }
+  }, [isStreaming, showScrollButton]);
+
+  const handleScroll = useCallback(
+    (scrollOffset: number, scrollHeight: number, clientHeight: number) => {
+      const distanceFromBottom = scrollHeight - scrollOffset - clientHeight;
+      setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
+
+      if (taskId) {
+        saveScrollPosition(taskId, scrollOffset);
+      }
+    },
+    [taskId, saveScrollPosition],
+  );
 
   const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }
+    listRef.current?.scrollToBottom();
   }, []);
+
+  const renderItem = useCallback(
+    (item: VirtualizedItem) => {
+      switch (item.type) {
+        case "turn":
+          return <TurnView turn={item} repoPath={repoPath} />;
+        case "user_shell_execute":
+          return <UserShellExecuteView item={item} />;
+        case "queued":
+          return <QueuedMessageView message={item.message} />;
+      }
+    },
+    [repoPath],
+  );
+
+  const getItemKey = useCallback((item: VirtualizedItem) => item.id, []);
 
   return (
     <div className="relative flex-1">
-      <div
-        ref={scrollRef}
-        className="absolute inset-0 overflow-auto bg-gray-1 p-2 pb-16"
-      >
-        <div className="mx-auto max-w-[750px]">
-          <div className="flex flex-col gap-3">
-            {items.map((item) =>
-              item.type === "turn" ? (
-                <TurnView key={item.id} turn={item} repoPath={repoPath} />
-              ) : (
-                <UserShellExecuteView key={item.id} item={item} />
-              ),
-            )}
-            {queuedMessages.map((msg) => (
-              <QueuedMessageView key={msg.id} message={msg} />
-            ))}
+      <VirtualizedList
+        ref={listRef}
+        items={virtualizedItems}
+        estimateSize={ESTIMATE_SIZE}
+        gap={12}
+        overscan={5}
+        getItemKey={getItemKey}
+        renderItem={renderItem}
+        onScroll={handleScroll}
+        className="absolute inset-0 bg-gray-1 p-2"
+        innerClassName="mx-auto max-w-[750px]"
+        footer={
+          <div className="pb-16">
+            <SessionFooter
+              isPromptPending={isPromptPending}
+              promptStartedAt={promptStartedAt}
+              lastGenerationDuration={
+                lastTurn?.isComplete ? lastTurn.durationMs : null
+              }
+              lastStopReason={lastTurn?.stopReason}
+              queuedCount={queuedMessages.length}
+              hasPendingPermission={pendingPermissionsCount > 0}
+            />
           </div>
-          <SessionFooter
-            isPromptPending={isPromptPending}
-            promptStartedAt={promptStartedAt}
-            lastGenerationDuration={
-              lastTurn?.isComplete ? lastTurn.durationMs : null
-            }
-            lastStopReason={lastTurn?.stopReason}
-            queuedCount={queuedMessages.length}
-            hasPendingPermission={pendingPermissionsCount > 0}
-          />
-        </div>
-      </div>
+        }
+      />
       {showScrollButton && (
         <Box className="absolute right-4 bottom-4 z-10">
           <Button size="1" variant="solid" onClick={scrollToBottom}>
