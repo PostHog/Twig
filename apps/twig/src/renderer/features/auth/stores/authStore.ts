@@ -29,6 +29,15 @@ export function setSessionResetCallback(callback: () => void) {
 const REFRESH_MAX_RETRIES = 3;
 const REFRESH_INITIAL_DELAY_MS = 1000;
 
+function updateServiceTokens(token: string): void {
+  trpcVanilla.agent.updateToken
+    .mutate({ token })
+    .catch((err) => log.warn("Failed to update agent token", err));
+  trpcVanilla.cloudTask.updateToken
+    .mutate({ token })
+    .catch((err) => log.warn("Failed to update cloud task token", err));
+}
+
 interface StoredTokens {
   accessToken: string;
   refreshToken: string;
@@ -164,14 +173,7 @@ export const useAuthStore = create<AuthState>()(
               needsProjectSelection: false,
             });
 
-            trpcVanilla.agent.updateToken
-              .mutate({ token: tokenResponse.access_token })
-              .catch((err) => log.warn("Failed to update agent token", err));
-            trpcVanilla.cloudTask.updateToken
-              .mutate({ token: tokenResponse.access_token })
-              .catch((err) =>
-                log.warn("Failed to update cloud task token", err),
-              );
+            updateServiceTokens(tokenResponse.access_token);
 
             // Clear any cached data from previous sessions AFTER setting new auth
             queryClient.clear();
@@ -307,16 +309,7 @@ export const useAuthStore = create<AuthState>()(
                       : state.availableProjectIds,
                 });
 
-                trpcVanilla.agent.updateToken
-                  .mutate({ token: tokenResponse.access_token })
-                  .catch((err) =>
-                    log.warn("Failed to update agent token", err),
-                  );
-                trpcVanilla.cloudTask.updateToken
-                  .mutate({ token: tokenResponse.access_token })
-                  .catch((err) =>
-                    log.warn("Failed to update cloud task token", err),
-                  );
+                updateServiceTokens(tokenResponse.access_token);
 
                 get().scheduleTokenRefresh();
                 return; // Success
@@ -477,16 +470,7 @@ export const useAuthStore = create<AuthState>()(
                   needsProjectSelection: false,
                 });
 
-                trpcVanilla.agent.updateToken
-                  .mutate({ token: currentTokens.accessToken })
-                  .catch((err) =>
-                    log.warn("Failed to update agent token", err),
-                  );
-                trpcVanilla.cloudTask.updateToken
-                  .mutate({ token: currentTokens.accessToken })
-                  .catch((err) =>
-                    log.warn("Failed to update cloud task token", err),
-                  );
+                updateServiceTokens(currentTokens.accessToken);
 
                 get().scheduleTokenRefresh();
 
@@ -609,14 +593,7 @@ export const useAuthStore = create<AuthState>()(
               needsProjectSelection: false,
             });
 
-            trpcVanilla.agent.updateToken
-              .mutate({ token: tokenResponse.access_token })
-              .catch((err) => log.warn("Failed to update agent token", err));
-            trpcVanilla.cloudTask.updateToken
-              .mutate({ token: tokenResponse.access_token })
-              .catch((err) =>
-                log.warn("Failed to update cloud task token", err),
-              );
+            updateServiceTokens(tokenResponse.access_token);
 
             queryClient.clear();
 
@@ -714,12 +691,7 @@ export const useAuthStore = create<AuthState>()(
           useNavigationStore.getState().navigateToTaskInput();
 
           // Update analytics with the selected project
-          trpcVanilla.agent.updateToken
-            .mutate({ token: accessToken })
-            .catch((err) => log.warn("Failed to update agent token", err));
-          trpcVanilla.cloudTask.updateToken
-            .mutate({ token: accessToken })
-            .catch((err) => log.warn("Failed to update cloud task token", err));
+          updateServiceTokens(accessToken);
 
           track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
             project_id: projectId.toString(),
