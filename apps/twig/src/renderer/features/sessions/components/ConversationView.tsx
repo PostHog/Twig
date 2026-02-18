@@ -90,53 +90,66 @@ export function ConversationView({
   const { saveScrollPosition, getScrollPosition } = useSessionViewActions();
 
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const showScrollButtonRef = useRef(false);
   const hasRestoredScrollRef = useRef(false);
   const prevItemCountRef = useRef(0);
+  const prevPendingCountRef = useRef(0);
+  const prevEventsLengthRef = useRef(events.length);
 
-  const virtualizedItems = useMemo<VirtualizedItem[]>(() => {
-    const items: VirtualizedItem[] = [...conversationItems];
+  const queuedItems = useMemo<QueuedItem[]>(
+    () =>
+      queuedMessages.map((msg) => ({
+        type: "queued" as const,
+        id: msg.id,
+        message: msg,
+      })),
+    [queuedMessages],
+  );
 
-    for (const msg of queuedMessages) {
-      items.push({ type: "queued", id: msg.id, message: msg });
-    }
-
-    return items;
-  }, [conversationItems, queuedMessages]);
+  const virtualizedItems = useMemo<VirtualizedItem[]>(
+    () =>
+      queuedItems.length > 0
+        ? [...conversationItems, ...queuedItems]
+        : conversationItems,
+    [conversationItems, queuedItems],
+  );
 
   useEffect(() => {
     if (!taskId || hasRestoredScrollRef.current) return;
 
     const savedPosition = getScrollPosition(taskId);
     if (savedPosition > 0) {
-      const virtualizer = listRef.current?.getVirtualizer();
-      if (virtualizer) {
-        virtualizer.scrollOffset = savedPosition;
-        hasRestoredScrollRef.current = true;
-      }
+      listRef.current?.scrollToOffset(savedPosition);
+      hasRestoredScrollRef.current = true;
     }
   }, [taskId, getScrollPosition]);
 
-  const isStreaming = lastTurn && !lastTurn.isComplete;
-
   useEffect(() => {
     const isNewContent = virtualizedItems.length > prevItemCountRef.current;
+    const isNewPending = pendingPermissionsCount > prevPendingCountRef.current;
+    const isNewEvents = events.length > prevEventsLengthRef.current;
     prevItemCountRef.current = virtualizedItems.length;
+    prevPendingCountRef.current = pendingPermissionsCount;
+    prevEventsLengthRef.current = events.length;
 
-    if (isNewContent && !showScrollButton) {
+    // Always force-scroll for new items or new permissions (needs attention)
+    if (isNewContent || isNewPending) {
+      listRef.current?.scrollToBottom();
+      return;
+    }
+
+    // For streaming content growth, only scroll if user hasn't scrolled up
+    if (isNewEvents && !showScrollButtonRef.current) {
       listRef.current?.scrollToBottom();
     }
-  }, [virtualizedItems.length, showScrollButton]);
-
-  useEffect(() => {
-    if (isStreaming && !showScrollButton) {
-      listRef.current?.scrollToBottom();
-    }
-  }, [isStreaming, showScrollButton]);
+  }, [events.length, virtualizedItems.length, pendingPermissionsCount]);
 
   const handleScroll = useCallback(
     (scrollOffset: number, scrollHeight: number, clientHeight: number) => {
       const distanceFromBottom = scrollHeight - scrollOffset - clientHeight;
-      setShowScrollButton(distanceFromBottom > SHOW_BUTTON_THRESHOLD);
+      const isScrolledUp = distanceFromBottom > SHOW_BUTTON_THRESHOLD;
+      showScrollButtonRef.current = isScrolledUp;
+      setShowScrollButton(isScrolledUp);
 
       if (taskId) {
         saveScrollPosition(taskId, scrollOffset);
