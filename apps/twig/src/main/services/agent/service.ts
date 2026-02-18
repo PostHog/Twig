@@ -357,7 +357,13 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       name: "posthog",
       type: "http",
       url: mcpUrl,
-      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+      headers: [
+        { name: "Authorization", value: `Bearer ${token}` },
+        {
+          name: "x-posthog-project-id",
+          value: String(credentials.projectId),
+        },
+      ],
     });
 
     return servers;
