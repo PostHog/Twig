@@ -1,6 +1,46 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-guton), system-ui, sans-serif;
+  --font-mono: "TX-02", var(--font-jetbrains-mono), monospace;
+
+  --text-display: 3.5rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 700;
+
+  --text-heading-1: 2.5rem;
+  --text-heading-1--line-height: 1.2;
+  --text-heading-1--letter-spacing: -0.02em;
+  --text-heading-1--font-weight: 700;
+
+  --text-heading-2: 1.875rem;
+  --text-heading-2--line-height: 1.25;
+  --text-heading-2--letter-spacing: -0.01em;
+  --text-heading-2--font-weight: 600;
+
+  --text-heading-3: 1.5rem;
+  --text-heading-3--line-height: 1.3;
+  --text-heading-3--letter-spacing: -0.01em;
+  --text-heading-3--font-weight: 600;
+
+  --text-heading-4: 1.25rem;
+  --text-heading-4--line-height: 1.4;
+  --text-heading-4--font-weight: 500;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-body--font-weight: 400;
+
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.5;
+  --text-body-sm--font-weight: 400;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --text-caption--font-weight: 500;
+
+  --text-code: 0.875rem;
+  --text-code--line-height: 1.6;
+  --text-code--font-weight: 400;
 }
