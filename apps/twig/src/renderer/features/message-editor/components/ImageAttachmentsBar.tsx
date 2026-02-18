@@ -1,4 +1,4 @@
-import { X } from "@phosphor-icons/react";
+import { File, X } from "@phosphor-icons/react";
 import { Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { useEffect, useState } from "react";
@@ -100,7 +100,8 @@ function FileChip({
   return (
     <div className="group relative flex-shrink-0">
       <span className="inline-flex items-center gap-1 rounded-[var(--radius-1)] bg-[var(--gray-a3)] p-1 font-medium text-[10px] text-[var(--gray-11)] leading-tight">
-        <span className="max-w-[120px] truncate">@{attachment.label}</span>
+        <File size={14} weight="duotone" className="shrink-0" />
+        <span className="max-w-[120px] truncate">{attachment.label}</span>
       </span>
       <IconButton
         size="1"
