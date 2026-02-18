@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-guton), system-ui, sans-serif;
-  --font-mono: "TX-02", var(--font-jetbrains-mono), monospace;
+  --font-heading: var(--font-guton);
+
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-primary: #F66521;
 
   --text-display: 3.5rem;
   --text-display--line-height: 1.1;
@@ -43,4 +46,26 @@
   --text-code: 0.875rem;
   --text-code--line-height: 1.6;
   --text-code--font-weight: 400;
+}
+
+:root {
+  --bg: #FAEEDE;
+  --fg: #1A1815;
+  --default-font-family: "TX-02", var(--font-jetbrains-mono), monospace;
+}
+
+.dark {
+  --bg: #051121;
+  --fg: #FAEEDE;
+}
+
+@layer base {
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+  }
 }

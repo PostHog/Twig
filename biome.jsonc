@@ -117,6 +117,16 @@
       }
     },
     {
+      "includes": ["apps/web/app/layout.tsx"],
+      "linter": {
+        "rules": {
+          "security": {
+            "noDangerouslySetInnerHtml": "off"
+          }
+        }
+      }
+    },
+    {
       // Renderer code should use path aliases
       "includes": [
         "apps/twig/src/renderer/**/*.ts",
