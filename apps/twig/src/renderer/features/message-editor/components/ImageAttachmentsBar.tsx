@@ -39,7 +39,7 @@ function ImageThumbnail({
         <Dialog.Trigger>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-[var(--radius-1)] bg-[var(--gray-a3)] p-1 text-[10px] leading-tight font-medium text-[var(--gray-11)] hover:bg-[var(--gray-a4)]"
+            className="inline-flex items-center gap-1 rounded-[var(--radius-1)] bg-[var(--gray-a3)] p-1 font-medium text-[10px] text-[var(--gray-11)] leading-tight hover:bg-[var(--gray-a4)]"
           >
             {dataUrl ? (
               <img
@@ -99,7 +99,7 @@ function FileChip({
 }) {
   return (
     <div className="group relative flex-shrink-0">
-      <span className="inline-flex items-center gap-1 rounded-[var(--radius-1)] bg-[var(--gray-a3)] p-1 text-[10px] leading-tight font-medium text-[var(--gray-11)]">
+      <span className="inline-flex items-center gap-1 rounded-[var(--radius-1)] bg-[var(--gray-a3)] p-1 font-medium text-[10px] text-[var(--gray-11)] leading-tight">
         <span className="max-w-[120px] truncate">@{attachment.label}</span>
       </span>
       <IconButton

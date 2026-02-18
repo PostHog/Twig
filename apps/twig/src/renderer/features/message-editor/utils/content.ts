@@ -87,7 +87,11 @@ export function extractFilePaths(content: EditorContent): string[] {
   const seen = new Set<string>();
 
   for (const seg of content.segments) {
-    if (seg.type === "chip" && seg.chip.type === "file" && !seen.has(seg.chip.id)) {
+    if (
+      seg.type === "chip" &&
+      seg.chip.type === "file" &&
+      !seen.has(seg.chip.id)
+    ) {
       seen.add(seg.chip.id);
       filePaths.push(seg.chip.id);
     }

@@ -158,7 +158,10 @@ export const osRouter = router({
     .input(
       z.object({
         filePath: z.string(),
-        maxSizeBytes: z.number().optional().default(10 * 1024 * 1024),
+        maxSizeBytes: z
+          .number()
+          .optional()
+          .default(10 * 1024 * 1024),
       }),
     )
     .query(async ({ input }) => {

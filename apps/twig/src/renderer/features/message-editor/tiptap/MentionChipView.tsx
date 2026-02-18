@@ -1,19 +1,13 @@
 import { type NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import type { MentionChipAttrs } from "./MentionChipNode";
 
-function DefaultChip({
-  type,
-  label,
-}: {
-  type: string;
-  label: string;
-}) {
+function DefaultChip({ type, label }: { type: string; label: string }) {
   const isCommand = type === "command";
   const prefix = isCommand ? "/" : "@";
 
   return (
     <span
-      className={`${isCommand ? "cli-slash-command" : "cli-file-mention"} inline select-all cursor-default rounded-[var(--radius-1)] bg-[var(--accent-a3)] px-1 py-px text-xs font-medium text-[var(--accent-11)]`}
+      className={`${isCommand ? "cli-slash-command" : "cli-file-mention"} inline cursor-default select-all rounded-[var(--radius-1)] bg-[var(--accent-a3)] px-1 py-px font-medium text-[var(--accent-11)] text-xs`}
       contentEditable={false}
     >
       {prefix}

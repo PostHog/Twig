@@ -153,7 +153,10 @@ export const TaskInputEditor = forwardRef<
             }
           }}
         >
-          <AttachmentsBar attachments={attachments} onRemove={removeAttachment} />
+          <AttachmentsBar
+            attachments={attachments}
+            onRemove={removeAttachment}
+          />
 
           <Flex
             align="start"

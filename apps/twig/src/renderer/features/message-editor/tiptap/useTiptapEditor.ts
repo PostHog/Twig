@@ -334,7 +334,7 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
     }
     // Only run on mount / session change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [draft.restoredAttachments]);
 
   const submit = useCallback(() => {
     if (!editor) return;
@@ -364,7 +364,15 @@ export function useTiptapEditor(options: UseTiptapEditorOptions) {
       setAttachments([]);
       draft.clearDraft();
     }
-  }, [editor, disabled, submitDisabled, isLoading, draft, clearOnSubmit, attachments]);
+  }, [
+    editor,
+    disabled,
+    submitDisabled,
+    isLoading,
+    draft,
+    clearOnSubmit,
+    attachments,
+  ]);
 
   submitRef.current = submit;
 

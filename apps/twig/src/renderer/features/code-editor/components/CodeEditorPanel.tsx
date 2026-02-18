@@ -48,9 +48,11 @@ export function CodeEditorPanel({
     { enabled: !isInsideRepo && !isImage, staleTime: Infinity },
   );
 
-  const { data: fileContent, isLoading, error } = isInsideRepo
-    ? repoQuery
-    : absoluteQuery;
+  const {
+    data: fileContent,
+    isLoading,
+    error,
+  } = isInsideRepo ? repoQuery : absoluteQuery;
 
   if (isImage) {
     return (

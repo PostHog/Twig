@@ -1,5 +1,9 @@
 import type { AvailableCommand } from "@agentclientprotocol/sdk";
-import type { EditorContent, FileAttachment, MentionChip } from "./utils/content";
+import type {
+  EditorContent,
+  FileAttachment,
+  MentionChip,
+} from "./utils/content";
 
 export interface EditorHandle {
   focus: () => void;

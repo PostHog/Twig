@@ -158,6 +158,7 @@ export function TaskInput() {
   }, []);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop container
     <div
       ref={containerRef}
       style={{
