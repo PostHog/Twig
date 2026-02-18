@@ -88,6 +88,7 @@ function buildEnvironment(): Record<string, string> {
     ...process.env,
     ELECTRON_RUN_AS_NODE: "1",
     CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: "true",
+    ENABLE_EXPERIMENTAL_MCP_CLI: "true",
   };
 }
 

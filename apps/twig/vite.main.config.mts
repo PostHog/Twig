@@ -1,7 +1,17 @@
-import { execSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
+import { execFile, execSync } from "node:child_process";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
+import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import {
@@ -121,6 +131,177 @@ function copyClaudeExecutable(): Plugin {
   };
 }
 
+function getFilesRecursive(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const fullPath = join(dir, entry);
+    if (statSync(fullPath).isDirectory()) {
+      files.push(...getFilesRecursive(fullPath));
+    } else {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+const SKILLS_ZIP_URL =
+  "https://github.com/PostHog/posthog/releases/download/agent-skills-latest/skills.zip";
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Downloads skills.zip from GitHub releases and extracts into targetDir.
+ * Returns true on success, false on failure (non-fatal).
+ */
+async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
+  try {
+    const tempDir = join(tmpdir(), `twig-vite-skills-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    try {
+      const zipPath = join(tempDir, "skills.zip");
+
+      // Download using curl (available on macOS/Linux, works in Node without extra deps)
+      await execFileAsync("curl", ["-fsSL", "-o", zipPath, SKILLS_ZIP_URL], {
+        timeout: 30_000,
+      });
+
+      // Extract
+      const extractDir = join(tempDir, "extracted");
+      await mkdir(extractDir, { recursive: true });
+      await execFileAsync("unzip", ["-o", zipPath, "-d", extractDir]);
+
+      // Find skills directory in extracted content
+      const skillsSource = await findSkillsDirInExtract(extractDir);
+      if (!skillsSource) {
+        console.warn(
+          "[copy-posthog-plugin] No skills directory found in downloaded archive",
+        );
+        return false;
+      }
+
+      // Overlay skill directories into target
+      await mkdir(targetDir, { recursive: true });
+      const entries = await readdir(skillsSource, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const dest = join(targetDir, entry.name);
+          await rm(dest, { recursive: true, force: true });
+          await cp(join(skillsSource, entry.name), dest, { recursive: true });
+        }
+      }
+
+      console.log("[copy-posthog-plugin] Remote skills downloaded and merged");
+      return true;
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.warn(
+      "[copy-posthog-plugin] Failed to download remote skills (non-fatal):",
+      err,
+    );
+    return false;
+  }
+}
+
+/**
+ * Finds the skills directory inside an extracted zip.
+ * Handles: skills/ at root, nested (e.g. posthog/skills/), or skill dirs directly at root.
+ */
+async function findSkillsDirInExtract(
+  extractDir: string,
+): Promise<string | null> {
+  const direct = join(extractDir, "skills");
+  if (existsSync(direct)) return direct;
+
+  const entries = await readdir(extractDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const nested = join(extractDir, entry.name, "skills");
+      if (existsSync(nested)) return nested;
+    }
+  }
+
+  // Check if extracted dir itself contains skill directories (dirs with SKILL.md)
+  const hasSkillDirs = entries.some(
+    (e) => e.isDirectory() && existsSync(join(extractDir, e.name, "SKILL.md")),
+  );
+  if (hasSkillDirs) return extractDir;
+
+  return null;
+}
+
+const PLUGIN_ALLOW_LIST = [
+  "plugin.json",
+  ".mcp.json",
+  ".lsp.json",
+  "commands",
+  "agents",
+  "skills",
+  "hooks",
+];
+
+function copyPosthogPlugin(isDev: boolean): Plugin {
+  const sourceDir = join(__dirname, "../../plugins/posthog");
+  const localSkillsDir = join(sourceDir, "local-skills");
+
+  return {
+    name: "copy-posthog-plugin",
+    buildStart() {
+      if (existsSync(sourceDir)) {
+        for (const file of getFilesRecursive(sourceDir)) {
+          // Don't watch local-skills in production builds
+          if (!isDev && file.startsWith(localSkillsDir)) continue;
+          this.addWatchFile(file);
+        }
+      }
+
+      // Watch local-skills dir in dev mode
+      if (isDev && existsSync(localSkillsDir)) {
+        for (const file of getFilesRecursive(localSkillsDir)) {
+          this.addWatchFile(file);
+        }
+      }
+    },
+    async writeBundle() {
+      const destDir = join(__dirname, ".vite/build/plugins/posthog");
+      const destSkillsDir = join(destDir, "skills");
+
+      // 1. Copy allowed plugin entries
+      await mkdir(destDir, { recursive: true });
+      for (const entry of PLUGIN_ALLOW_LIST) {
+        const src = join(sourceDir, entry);
+        if (!existsSync(src)) continue;
+        const dest = join(destDir, entry);
+        if (statSync(src).isDirectory()) {
+          await cp(src, dest, { recursive: true });
+        } else {
+          await cp(src, dest);
+        }
+      }
+
+      // 2. Download and overlay remote skills (overrides same-named shipped skills)
+      await downloadAndExtractSkills(destSkillsDir);
+
+      // 3. In dev mode: overlay local-skills (overrides both shipped and remote)
+      if (isDev && existsSync(localSkillsDir)) {
+        const entries = await readdir(localSkillsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const dest = join(destSkillsDir, entry.name);
+            await rm(dest, { recursive: true, force: true });
+            await cp(join(localSkillsDir, entry.name), dest, {
+              recursive: true,
+            });
+          }
+        }
+        console.log("[copy-posthog-plugin] Local dev skills overlaid");
+      }
+    },
+  };
+}
+
 function copyCodexAcpBinaries(): Plugin {
   return {
     name: "copy-codex-acp-binaries",
@@ -170,6 +351,7 @@ function copyCodexAcpBinaries(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, "../.."), "");
+  const isDev = mode === "development";
 
   return {
     plugins: [
@@ -177,6 +359,7 @@ export default defineConfig(({ mode }) => {
       autoServicesPlugin(join(__dirname, "src/main/services")),
       fixFilenameCircularRef(),
       copyClaudeExecutable(),
+      copyPosthogPlugin(isDev),
       copyCodexAcpBinaries(),
       createPosthogPlugin(env),
     ].filter(Boolean),
@@ -189,6 +372,7 @@ export default defineConfig(({ mode }) => {
       "process.env.VITE_POSTHOG_API_HOST": JSON.stringify(
         env.VITE_POSTHOG_API_HOST || "",
       ),
+      "process.env.SKILLS_ZIP_URL": JSON.stringify(SKILLS_ZIP_URL),
       ...createForceDevModeDefine(),
     },
     resolve: {

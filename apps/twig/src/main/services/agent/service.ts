@@ -28,6 +28,7 @@ import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
 import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
+import type { PosthogPluginService } from "../posthog-plugin/service.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -228,6 +229,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
   private processTracking: ProcessTrackingService;
   private sleepService: SleepService;
   private fsService: FsService;
+  private posthogPluginService: PosthogPluginService;
 
   constructor(
     @inject(MAIN_TOKENS.ProcessTrackingService)
@@ -236,11 +238,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     sleepService: SleepService,
     @inject(MAIN_TOKENS.FsService)
     fsService: FsService,
+    @inject(MAIN_TOKENS.PosthogPluginService)
+    posthogPluginService: PosthogPluginService,
   ) {
     super();
     this.processTracking = processTracking;
     this.sleepService = sleepService;
     this.fsService = fsService;
+    this.posthogPluginService = posthogPluginService;
   }
 
   public updateToken(newToken: string): void {
@@ -363,6 +368,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           name: "x-posthog-project-id",
           value: String(credentials.projectId),
         },
+        { name: "x-posthog-mcp-version", value: "2" },
       ],
     });
 
@@ -556,11 +562,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
               sessionId: config.sessionId,
               systemPrompt,
               ...(permissionMode && { permissionMode }),
-              ...(additionalDirectories?.length && {
-                claudeCode: {
-                  options: { additionalDirectories },
+              claudeCode: {
+                options: {
+                  ...(additionalDirectories?.length && {
+                    additionalDirectories,
+                  }),
+                  plugins: [
+                    {
+                      type: "local" as const,
+                      path: this.posthogPluginService.getPluginPath(),
+                    },
+                  ],
                 },
-              }),
+              },
             },
           },
         );
@@ -580,11 +594,17 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             taskRunId,
             systemPrompt,
             ...(permissionMode && { permissionMode }),
-            ...(additionalDirectories?.length && {
-              claudeCode: {
-                options: { additionalDirectories },
+            claudeCode: {
+              options: {
+                ...(additionalDirectories?.length && { additionalDirectories }),
+                plugins: [
+                  {
+                    type: "local" as const,
+                    path: this.posthogPluginService.getPluginPath(),
+                  },
+                ],
               },
-            }),
+            },
           },
         });
         configOptions = newSessionResponse.configOptions ?? undefined;

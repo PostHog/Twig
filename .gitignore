@@ -50,3 +50,6 @@ test-results/
 
 # Downloaded binaries
 apps/twig/resources/codex-acp/
+
+# Local dev skills (override shipped + remote skills in dev mode)
+plugins/posthog/local-skills/
