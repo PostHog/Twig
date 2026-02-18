@@ -14,8 +14,42 @@ const log = logger.scope("posthog-plugin");
 
 const execFileAsync = promisify(execFile);
 const SKILLS_ZIP_URL = process.env.SKILLS_ZIP_URL!;
+const CONTEXT_MILL_ZIP_URL = process.env.CONTEXT_MILL_ZIP_URL;
 const UPDATE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const CODEX_SKILLS_DIR = join(homedir(), ".agents", "skills");
+
+/** Known topic prefixes in context-mill skill names. Skills sharing a prefix are grouped. */
+const CONTEXT_MILL_GROUP_PREFIXES = [
+  "feature-flags",
+  "integration",
+  "logs",
+  "tools-and-features",
+  "llm-analytics",
+];
+
+function generateGroupSkillMd(groupName: string, variants: string[]): string {
+  const title = groupName
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  const variantList = variants.map((v) => `- \`${v}\``).join("\n");
+
+  return [
+    "---",
+    `name: ${groupName}`,
+    `description: PostHog ${title.toLowerCase()} guides`,
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    "Each subdirectory in `references/` contains a framework-specific guide.",
+    "",
+    "## Available",
+    "",
+    variantList,
+    "",
+  ].join("\n");
+}
 
 interface PosthogPluginEvents {
   skillsUpdated: true;
@@ -116,24 +150,35 @@ export class PosthogPluginService extends TypedEventEmitter<PosthogPluginEvents>
       await mkdir(tempDir, { recursive: true });
 
       try {
-        const zipPath = join(tempDir, "skills.zip");
-        await this.downloadFile(SKILLS_ZIP_URL, zipPath);
+        const newSkillsDir = `${this.runtimeSkillsDir}.new`;
+        await rm(newSkillsDir, { recursive: true, force: true });
+        await mkdir(newSkillsDir, { recursive: true });
 
-        const extractDir = join(tempDir, "extracted");
-        await mkdir(extractDir, { recursive: true });
-        await execFileAsync("unzip", ["-o", zipPath, "-d", extractDir]);
+        // Download from both sources, merging into newSkillsDir.
+        // Context-mill first (base), then posthog skills on top (override for same-named skills).
+        if (CONTEXT_MILL_ZIP_URL) {
+          await this.downloadAndMergeContextMillSkills(
+            CONTEXT_MILL_ZIP_URL,
+            tempDir,
+            newSkillsDir,
+          );
+        }
+        await this.downloadAndMergeSkills(
+          SKILLS_ZIP_URL,
+          tempDir,
+          "posthog",
+          newSkillsDir,
+        );
 
-        const skillsSource = await this.findSkillsDir(extractDir);
-        if (!skillsSource) {
-          log.warn("No skills directory found in downloaded archive");
+        // If neither source produced any skills, skip the swap
+        const entries = await readdir(newSkillsDir);
+        if (entries.length === 0) {
+          log.warn("No skills found from any source");
+          await rm(newSkillsDir, { recursive: true, force: true });
           return;
         }
 
         // Atomic swap into runtime skills cache
-        const newSkillsDir = `${this.runtimeSkillsDir}.new`;
-        await rm(newSkillsDir, { recursive: true, force: true });
-        await cp(skillsSource, newSkillsDir, { recursive: true });
-
         const oldSkillsDir = `${this.runtimeSkillsDir}.old`;
         await rm(oldSkillsDir, { recursive: true, force: true });
         if (existsSync(this.runtimeSkillsDir)) {
@@ -160,6 +205,157 @@ export class PosthogPluginService extends TypedEventEmitter<PosthogPluginEvents>
       });
     } finally {
       this.updating = false;
+    }
+  }
+
+  /**
+   * Downloads a skills zip from `url`, extracts it, and merges skill directories into `destDir`.
+   * Failures are non-fatal — logged and skipped so other sources can still contribute.
+   */
+  private async downloadAndMergeSkills(
+    url: string,
+    tempDir: string,
+    label: string,
+    destDir: string,
+  ): Promise<void> {
+    try {
+      const zipPath = join(tempDir, `${label}.zip`);
+      await this.downloadFile(url, zipPath);
+
+      const extractDir = join(tempDir, `${label}-extracted`);
+      await mkdir(extractDir, { recursive: true });
+      await execFileAsync("unzip", ["-o", zipPath, "-d", extractDir]);
+
+      const skillsSource = await this.findSkillsDir(extractDir);
+      if (!skillsSource) {
+        log.warn(`No skills directory found in ${label} archive`);
+        return;
+      }
+
+      const entries = await readdir(skillsSource, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const src = join(skillsSource, entry.name);
+          const dest = join(destDir, entry.name);
+          await rm(dest, { recursive: true, force: true });
+          await cp(src, dest, { recursive: true });
+        }
+      }
+
+      log.info(`Skills from ${label} merged`);
+    } catch (err) {
+      log.warn(`Failed to download ${label} skills`, err);
+    }
+  }
+
+  /**
+   * Downloads context-mill's bundle zip, which contains nested .zip files — one per skill.
+   * Each inner zip extracts to a skill directory (SKILL.md + references/).
+   * Related skills (e.g. feature-flags-react, feature-flags-nodejs) are grouped into a
+   * single skill with a generated SKILL.md entry point and variants under references/.
+   * Failures are non-fatal.
+   */
+  private async downloadAndMergeContextMillSkills(
+    url: string,
+    tempDir: string,
+    destDir: string,
+  ): Promise<void> {
+    try {
+      const zipPath = join(tempDir, "context-mill.zip");
+      await this.downloadFile(url, zipPath);
+
+      const extractDir = join(tempDir, "context-mill-extracted");
+      await mkdir(extractDir, { recursive: true });
+      await execFileAsync("unzip", ["-o", zipPath, "-d", extractDir]);
+
+      // Extract each inner zip into a flat staging directory
+      const flatDir = join(tempDir, "context-mill-flat");
+      await mkdir(flatDir, { recursive: true });
+
+      const outerEntries = await readdir(extractDir);
+      for (const entry of outerEntries) {
+        if (!entry.endsWith(".zip")) continue;
+
+        const skillName = entry.replace(/\.zip$/, "");
+        const skillDir = join(flatDir, skillName);
+        await mkdir(skillDir, { recursive: true });
+        await execFileAsync("unzip", [
+          "-o",
+          join(extractDir, entry),
+          "-d",
+          skillDir,
+        ]);
+      }
+
+      // Group related skills by topic prefix, then copy to destDir
+      await this.groupAndCopyContextMillSkills(flatDir, destDir);
+
+      log.info("Skills from context-mill merged");
+    } catch (err) {
+      log.warn("Failed to download context-mill skills", err);
+    }
+  }
+
+  /**
+   * Groups extracted context-mill skills by topic prefix and copies to destDir.
+   * Skills sharing a prefix (e.g. feature-flags-react, feature-flags-nodejs) are merged
+   * into a single skill directory with a generated SKILL.md and variants under references/.
+   * Ungrouped skills are copied as-is.
+   */
+  private async groupAndCopyContextMillSkills(
+    flatDir: string,
+    destDir: string,
+  ): Promise<void> {
+    const entries = await readdir(flatDir, { withFileTypes: true });
+    const skillNames = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+
+    // Partition into groups and ungrouped
+    const groups = new Map<string, string[]>();
+    const ungrouped: string[] = [];
+
+    for (const name of skillNames) {
+      const prefix = CONTEXT_MILL_GROUP_PREFIXES.find((p) =>
+        name.startsWith(`${p}-`),
+      );
+      if (prefix) {
+        if (!groups.has(prefix)) groups.set(prefix, []);
+        groups.get(prefix)?.push(name);
+      } else {
+        ungrouped.push(name);
+      }
+    }
+
+    // Create grouped skill directories
+    for (const [prefix, variants] of groups) {
+      const groupDir = join(destDir, prefix);
+      const refsDir = join(groupDir, "references");
+      await mkdir(refsDir, { recursive: true });
+
+      // Generate entry-point SKILL.md listing all variants
+      const variantNames = variants
+        .map((v) => v.slice(prefix.length + 1))
+        .sort();
+      await writeFile(
+        join(groupDir, "SKILL.md"),
+        generateGroupSkillMd(prefix, variantNames),
+      );
+
+      // Copy each variant into references/{variant}/
+      for (const name of variants) {
+        const variant = name.slice(prefix.length + 1);
+        const dest = join(refsDir, variant);
+        await rm(dest, { recursive: true, force: true });
+        await cp(join(flatDir, name), dest, { recursive: true });
+      }
+    }
+
+    // Copy ungrouped skills as-is
+    for (const name of ungrouped) {
+      const dest = join(destDir, name);
+      await rm(dest, { recursive: true, force: true });
+      await cp(join(flatDir, name), dest, { recursive: true });
     }
   }
 

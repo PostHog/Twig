@@ -1,9 +1,10 @@
 import { vol } from "memfs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Set env before module loads (SKILLS_ZIP_URL is captured at module level)
+// Set env before module loads (URLs are captured at module level)
 vi.hoisted(() => {
   process.env.SKILLS_ZIP_URL = "https://example.com/skills.zip";
+  process.env.CONTEXT_MILL_ZIP_URL = "https://example.com/context-mill.zip";
 });
 
 const mockApp = vi.hoisted(() => ({
@@ -81,15 +82,31 @@ function mockFetchResponse(ok: boolean, status = 200) {
   };
 }
 
-/** Simulate unzip by creating skill files in the extracted dir */
+/**
+ * Simulate unzip by creating skill files in the extracted dir.
+ * Handles both posthog format (skills/X/SKILL.md) and context-mill format (nested zips).
+ * Context-mill creates two feature-flags-* skills to test grouping.
+ */
 function simulateUnzip() {
   mockExecFileAsync.mockImplementation(async (_cmd: string, args: string[]) => {
     const dIdx = args.indexOf("-d");
-    if (dIdx >= 0) {
-      const extractDir = args[dIdx + 1];
-      vol.mkdirSync(`${extractDir}/skills/remote-skill`, {
-        recursive: true,
-      });
+    if (dIdx < 0) return;
+    const zipPath = args[1];
+    const extractDir = args[dIdx + 1];
+
+    if (zipPath.endsWith("/context-mill.zip")) {
+      // Outer context-mill zip → create inner .zip file entries
+      vol.mkdirSync(extractDir, { recursive: true });
+      vol.writeFileSync(`${extractDir}/manifest.json`, "{}");
+      vol.writeFileSync(`${extractDir}/feature-flags-react.zip`, "fake");
+      vol.writeFileSync(`${extractDir}/feature-flags-nodejs.zip`, "fake");
+    } else if (zipPath.includes("context-mill-extracted/")) {
+      // Inner context-mill skill zip → create SKILL.md
+      vol.mkdirSync(extractDir, { recursive: true });
+      vol.writeFileSync(`${extractDir}/SKILL.md`, "# CM Skill");
+    } else {
+      // Posthog skills zip → create skills/remote-skill/
+      vol.mkdirSync(`${extractDir}/skills/remote-skill`, { recursive: true });
       vol.writeFileSync(
         `${extractDir}/skills/remote-skill/SKILL.md`,
         "# Remote",
@@ -201,22 +218,35 @@ describe("PosthogPluginService", () => {
   });
 
   describe("updateSkills", () => {
-    it("downloads, extracts, and installs skills", async () => {
+    it("downloads, extracts, and installs skills from both sources", async () => {
       setupBundledPlugin();
       simulateUnzip();
 
       await service.updateSkills();
 
-      // Skills should be in the runtime cache
+      // Posthog skills should be in the runtime cache
       expect(
         vol.existsSync(`${RUNTIME_SKILLS_DIR}/remote-skill/SKILL.md`),
+      ).toBe(true);
+      // Context-mill skills should be grouped by topic prefix
+      expect(
+        vol.existsSync(`${RUNTIME_SKILLS_DIR}/feature-flags/SKILL.md`),
+      ).toBe(true);
+      expect(
+        vol.existsSync(
+          `${RUNTIME_SKILLS_DIR}/feature-flags/references/react/SKILL.md`,
+        ),
+      ).toBe(true);
+      expect(
+        vol.existsSync(
+          `${RUNTIME_SKILLS_DIR}/feature-flags/references/nodejs/SKILL.md`,
+        ),
       ).toBe(true);
       expect(mockNet.fetch).toHaveBeenCalledWith(
         "https://example.com/skills.zip",
       );
-      expect(mockExecFileAsync).toHaveBeenCalledWith(
-        "unzip",
-        expect.arrayContaining(["-o"]),
+      expect(mockNet.fetch).toHaveBeenCalledWith(
+        "https://example.com/context-mill.zip",
       );
     });
 
@@ -317,8 +347,8 @@ describe("PosthogPluginService", () => {
       await expect(service.updateSkills()).resolves.toBeUndefined();
     });
 
-    it("handles missing skills dir in archive", async () => {
-      // Unzip creates no skills directory
+    it("handles missing skills dir in all archives", async () => {
+      // Unzip creates no skills directory in either source
       mockExecFileAsync.mockImplementation(
         async (_cmd: string, args: string[]) => {
           const dIdx = args.indexOf("-d");

@@ -7,7 +7,7 @@ import {
   readdirSync,
   statSync,
 } from "node:fs";
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -146,23 +146,29 @@ function getFilesRecursive(dir: string): string[] {
 
 const SKILLS_ZIP_URL =
   "https://github.com/PostHog/posthog/releases/download/agent-skills-latest/skills.zip";
+const CONTEXT_MILL_ZIP_URL =
+  "https://github.com/PostHog/context-mill/releases/latest/download/skills-mcp-resources.zip";
 
 const execFileAsync = promisify(execFile);
 
 /**
- * Downloads skills.zip from GitHub releases and extracts into targetDir.
+ * Downloads a skills zip from `url` and extracts skill directories into `targetDir`.
  * Returns true on success, false on failure (non-fatal).
  */
-async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
+async function downloadAndExtractSkills(
+  url: string,
+  targetDir: string,
+  label: string,
+): Promise<boolean> {
   try {
-    const tempDir = join(tmpdir(), `twig-vite-skills-${Date.now()}`);
+    const tempDir = join(tmpdir(), `twig-vite-skills-${label}-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
 
     try {
-      const zipPath = join(tempDir, "skills.zip");
+      const zipPath = join(tempDir, `${label}.zip`);
 
       // Download using curl (available on macOS/Linux, works in Node without extra deps)
-      await execFileAsync("curl", ["-fsSL", "-o", zipPath, SKILLS_ZIP_URL], {
+      await execFileAsync("curl", ["-fsSL", "-o", zipPath, url], {
         timeout: 30_000,
       });
 
@@ -191,14 +197,14 @@ async function downloadAndExtractSkills(targetDir: string): Promise<boolean> {
         }
       }
 
-      console.log("[copy-posthog-plugin] Remote skills downloaded and merged");
+      console.log(`[copy-posthog-plugin] ${label} skills downloaded and merged`);
       return true;
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   } catch (err) {
     console.warn(
-      "[copy-posthog-plugin] Failed to download remote skills (non-fatal):",
+      `[copy-posthog-plugin] Failed to download ${label} skills (non-fatal):`,
       err,
     );
     return false;
@@ -230,6 +236,163 @@ async function findSkillsDirInExtract(
   if (hasSkillDirs) return extractDir;
 
   return null;
+}
+
+/** Known topic prefixes in context-mill skill names. Skills sharing a prefix are grouped. */
+const CONTEXT_MILL_GROUP_PREFIXES = [
+  "feature-flags",
+  "integration",
+  "logs",
+  "tools-and-features",
+  "llm-analytics",
+];
+
+function generateGroupSkillMd(
+  groupName: string,
+  variants: string[],
+): string {
+  const title = groupName
+    .split("-")
+    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  const variantList = variants.map((v: string) => `- \`${v}\``).join("\n");
+
+  return [
+    "---",
+    `name: ${groupName}`,
+    `description: PostHog ${title.toLowerCase()} guides`,
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    "Each subdirectory in `references/` contains a framework-specific guide.",
+    "",
+    "## Available",
+    "",
+    variantList,
+    "",
+  ].join("\n");
+}
+
+/**
+ * Groups extracted context-mill skills by topic prefix.
+ * Skills sharing a prefix (e.g. feature-flags-react, feature-flags-nodejs) are merged
+ * into a single skill directory with a generated SKILL.md and variants under references/.
+ */
+async function groupAndCopyContextMillSkills(
+  flatDir: string,
+  destDir: string,
+): Promise<void> {
+  const entries = await readdir(flatDir, { withFileTypes: true });
+  const skillNames = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  const groups = new Map<string, string[]>();
+  const ungrouped: string[] = [];
+
+  for (const name of skillNames) {
+    const prefix = CONTEXT_MILL_GROUP_PREFIXES.find((p) =>
+      name.startsWith(`${p}-`),
+    );
+    if (prefix) {
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix)!.push(name);
+    } else {
+      ungrouped.push(name);
+    }
+  }
+
+  for (const [prefix, variants] of groups) {
+    const groupDir = join(destDir, prefix);
+    const refsDir = join(groupDir, "references");
+    await mkdir(refsDir, { recursive: true });
+
+    const variantNames = variants
+      .map((v) => v.slice(prefix.length + 1))
+      .sort();
+    await writeFile(
+      join(groupDir, "SKILL.md"),
+      generateGroupSkillMd(prefix, variantNames),
+    );
+
+    for (const name of variants) {
+      const variant = name.slice(prefix.length + 1);
+      const dest = join(refsDir, variant);
+      await rm(dest, { recursive: true, force: true });
+      await cp(join(flatDir, name), dest, { recursive: true });
+    }
+  }
+
+  for (const name of ungrouped) {
+    const dest = join(destDir, name);
+    await rm(dest, { recursive: true, force: true });
+    await cp(join(flatDir, name), dest, { recursive: true });
+  }
+}
+
+/**
+ * Downloads context-mill's bundle zip (nested .zip files — one per skill) and extracts into targetDir.
+ * Related skills are grouped by topic prefix into single skill directories.
+ * Returns true on success, false on failure (non-fatal).
+ */
+async function downloadAndExtractContextMill(
+  url: string,
+  targetDir: string,
+): Promise<boolean> {
+  try {
+    const tempDir = join(
+      tmpdir(),
+      `twig-vite-context-mill-${Date.now()}`,
+    );
+    await mkdir(tempDir, { recursive: true });
+
+    try {
+      const zipPath = join(tempDir, "context-mill.zip");
+      await execFileAsync("curl", ["-fsSL", "-o", zipPath, url], {
+        timeout: 60_000,
+      });
+
+      const extractDir = join(tempDir, "extracted");
+      await mkdir(extractDir, { recursive: true });
+      await execFileAsync("unzip", ["-o", zipPath, "-d", extractDir]);
+
+      // Extract each inner zip into a flat staging directory
+      const flatDir = join(tempDir, "flat");
+      await mkdir(flatDir, { recursive: true });
+
+      const outerEntries = await readdir(extractDir);
+      for (const entry of outerEntries) {
+        if (!entry.endsWith(".zip")) continue;
+
+        const skillName = entry.replace(/\.zip$/, "");
+        const dest = join(flatDir, skillName);
+        await mkdir(dest, { recursive: true });
+        await execFileAsync("unzip", [
+          "-o",
+          join(extractDir, entry),
+          "-d",
+          dest,
+        ]);
+      }
+
+      // Group related skills by topic prefix, then copy to targetDir
+      await groupAndCopyContextMillSkills(flatDir, targetDir);
+
+      console.log(
+        "[copy-posthog-plugin] context-mill skills downloaded and merged",
+      );
+      return true;
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.warn(
+      "[copy-posthog-plugin] Failed to download context-mill skills (non-fatal):",
+      err,
+    );
+    return false;
+  }
 }
 
 const PLUGIN_ALLOW_LIST = [
@@ -281,8 +444,10 @@ function copyPosthogPlugin(isDev: boolean): Plugin {
         }
       }
 
-      // 2. Download and overlay remote skills (overrides same-named shipped skills)
-      await downloadAndExtractSkills(destSkillsDir);
+      // 2. Download and overlay remote skills (overrides same-named shipped skills).
+      //    Context-mill first (base), then posthog skills on top (override for same-named skills).
+      await downloadAndExtractContextMill(CONTEXT_MILL_ZIP_URL, destSkillsDir);
+      await downloadAndExtractSkills(SKILLS_ZIP_URL, destSkillsDir, "posthog");
 
       // 3. In dev mode: overlay local-skills (overrides both shipped and remote)
       if (isDev && existsSync(localSkillsDir)) {
@@ -373,6 +538,7 @@ export default defineConfig(({ mode }) => {
         env.VITE_POSTHOG_API_HOST || "",
       ),
       "process.env.SKILLS_ZIP_URL": JSON.stringify(SKILLS_ZIP_URL),
+      "process.env.CONTEXT_MILL_ZIP_URL": JSON.stringify(CONTEXT_MILL_ZIP_URL),
       ...createForceDevModeDefine(),
     },
     resolve: {
