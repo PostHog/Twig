@@ -18,6 +18,20 @@ function getMimeType(filePath: string): string {
   return mimeTypes[ext ?? ""] ?? "text/plain";
 }
 
+function isAbsolutePath(filePath: string): boolean {
+  return filePath.startsWith("/") || /^[a-zA-Z]:\\/.test(filePath);
+}
+
+async function readFileContent(
+  filePath: string,
+  repoPath: string,
+): Promise<string | null> {
+  if (isAbsolutePath(filePath)) {
+    return trpcVanilla.fs.readAbsoluteFile.query({ filePath });
+  }
+  return trpcVanilla.fs.readRepoFile.query({ repoPath, filePath });
+}
+
 export async function buildPromptBlocks(
   textContent: string,
   filePaths: string[],
@@ -41,18 +55,18 @@ export async function buildPromptBlocks(
 
   blocks.push({ type: "text", text: textContent });
 
-  for (const relativePath of filePaths) {
+  for (const filePath of filePaths) {
     try {
-      const fileContent = await trpcVanilla.fs.readRepoFile.query({
-        repoPath,
-        filePath: relativePath,
-      });
+      const fileContent = await readFileContent(filePath, repoPath);
       if (fileContent) {
+        const uri = isAbsolutePath(filePath)
+          ? `file://${filePath}`
+          : `file://${repoPath}/${filePath}`;
         blocks.push({
           type: "resource",
           resource: {
-            uri: `file://${repoPath}/${relativePath}`,
-            mimeType: getMimeType(relativePath),
+            uri,
+            mimeType: getMimeType(filePath),
             text: fileContent,
           },
         });
