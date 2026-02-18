@@ -195,10 +195,7 @@ export function ActionSelector({
       tabIndex={0}
       p="3"
       onClick={(e) => {
-        if (
-          e.target instanceof HTMLElement &&
-          e.target.closest("[contenteditable]")
-        ) {
+        if (e.target instanceof HTMLInputElement) {
           return;
         }
         containerRef.current?.focus();

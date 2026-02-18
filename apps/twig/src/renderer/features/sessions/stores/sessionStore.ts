@@ -251,6 +251,19 @@ export const sessionStoreSetters = {
     });
   },
 
+  removeQueuedMessage: (taskId: string, messageId: string) => {
+    useSessionStore.setState((state) => {
+      const taskRunId = state.taskIdIndex[taskId];
+      if (!taskRunId) return;
+      const session = state.sessions[taskRunId];
+      if (session) {
+        session.messageQueue = session.messageQueue.filter(
+          (msg) => msg.id !== messageId,
+        );
+      }
+    });
+  },
+
   clearMessageQueue: (taskId: string) => {
     useSessionStore.setState((state) => {
       const taskRunId = state.taskIdIndex[taskId];

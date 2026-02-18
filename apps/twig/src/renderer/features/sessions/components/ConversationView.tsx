@@ -4,6 +4,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import {
   type QueuedMessage,
+  sessionStoreSetters,
   usePendingPermissionsForTask,
   useQueuedMessagesForTask,
 } from "@features/sessions/stores/sessionStore";
@@ -170,10 +171,23 @@ export function ConversationView({
         case "user_shell_execute":
           return <UserShellExecuteView item={item} />;
         case "queued":
-          return <QueuedMessageView message={item.message} />;
+          return (
+            <QueuedMessageView
+              message={item.message}
+              onRemove={
+                taskId
+                  ? () =>
+                      sessionStoreSetters.removeQueuedMessage(
+                        taskId,
+                        item.message.id,
+                      )
+                  : undefined
+              }
+            />
+          );
       }
     },
-    [repoPath],
+    [repoPath, taskId],
   );
 
   const getItemKey = useCallback((item: VirtualizedItem) => item.id, []);
