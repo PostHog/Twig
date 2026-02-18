@@ -177,7 +177,10 @@ export function ConversationView({
               onRemove={
                 taskId
                   ? () =>
-                      sessionStoreSetters.removeQueuedMessage(taskId, item.message.id)
+                      sessionStoreSetters.removeQueuedMessage(
+                        taskId,
+                        item.message.id,
+                      )
                   : undefined
               }
             />
