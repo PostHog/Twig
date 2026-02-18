@@ -26,6 +26,12 @@ export interface TaskData {
   isPinned: boolean;
   needsPermission: boolean;
   repository: TaskRepositoryInfo | null;
+  taskRunStatus?:
+    | "started"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "cancelled";
 }
 
 export interface TaskGroup {
@@ -168,6 +174,7 @@ export function useSidebarData({
         isPinned: pinnedTaskIds.has(task.id),
         needsPermission: (session?.pendingPermissions?.size ?? 0) > 0,
         repository: getRepositoryInfo(task),
+        taskRunStatus: task.latest_run?.status,
       };
     });
   }, [allTasks, lastViewedAt, localActivityAt, pinnedTaskIds, sessionByTaskId]);

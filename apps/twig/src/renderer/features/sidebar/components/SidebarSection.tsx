@@ -77,17 +77,26 @@ export function SidebarSection({
           <span className="flex shrink-0 items-center gap-1 text-gray-10">
             {onNewTask && isHovered && (
               <Tooltip content={newTaskTooltip ?? "Start new task"} side="left">
-                <button
-                  type="button"
+                {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (Collapsible.Trigger) */}
+                <span
+                  role="button"
+                  tabIndex={0}
                   className="flex h-[18px] w-[18px] items-center justify-center rounded-sm border-0 bg-transparent p-0 hover:bg-gray-3"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     onNewTask();
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onNewTask();
+                    }
+                  }}
                 >
                   <Plus size={12} />
-                </button>
+                </span>
               </Tooltip>
             )}
           </span>

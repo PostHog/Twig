@@ -99,6 +99,7 @@ function TaskRow({
       isUnread={task.isUnread}
       isPinned={task.isPinned}
       needsPermission={task.needsPermission}
+      taskRunStatus={task.taskRunStatus}
       timestamp={timestamp}
       onClick={onClick}
       onDoubleClick={onDoubleClick}

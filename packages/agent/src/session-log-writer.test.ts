@@ -61,6 +61,47 @@ describe("SessionLogWriter", () => {
       await logWriter.flush(sessionId);
       expect(mockAppendLog).not.toHaveBeenCalled();
     });
+
+    it("re-queues entries when persistence fails and retries", async () => {
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
+
+      mockAppendLog
+        .mockRejectedValueOnce(new Error("network error"))
+        .mockResolvedValueOnce(undefined);
+
+      logWriter.appendRawLine(sessionId, JSON.stringify({ method: "test" }));
+
+      await logWriter.flush(sessionId);
+      await logWriter.flush(sessionId);
+
+      expect(mockAppendLog).toHaveBeenCalledTimes(2);
+      const retriedEntries: StoredNotification[] =
+        mockAppendLog.mock.calls[1][2];
+      expect(retriedEntries).toHaveLength(1);
+      expect(retriedEntries[0].notification.method).toBe("test");
+    });
+
+    it("drops entries after max retries", async () => {
+      const sessionId = "s1";
+      logWriter.register(sessionId, { taskId: "t1", runId: sessionId });
+
+      mockAppendLog.mockRejectedValue(new Error("persistent failure"));
+
+      logWriter.appendRawLine(sessionId, JSON.stringify({ method: "test" }));
+
+      // Flush 10 times (MAX_FLUSH_RETRIES) — entries should be dropped on the 10th
+      for (let i = 0; i < 10; i++) {
+        await logWriter.flush(sessionId);
+      }
+
+      expect(mockAppendLog).toHaveBeenCalledTimes(10);
+
+      // After max retries the entries are dropped, so an 11th flush has nothing
+      mockAppendLog.mockClear();
+      await logWriter.flush(sessionId);
+      expect(mockAppendLog).not.toHaveBeenCalled();
+    });
   });
 
   describe("agent_message_chunk coalescing", () => {

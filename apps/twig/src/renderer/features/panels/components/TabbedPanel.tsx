@@ -61,6 +61,7 @@ interface TabbedPanelProps {
   onAddTerminal?: () => void;
   onSplitPanel?: (direction: SplitDirection) => void;
   rightContent?: React.ReactNode;
+  emptyState?: React.ReactNode;
 }
 
 export const TabbedPanel: React.FC<TabbedPanelProps> = ({
@@ -76,6 +77,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onAddTerminal,
   onSplitPanel,
   rightContent,
+  emptyState,
 }) => {
   const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
 
@@ -246,6 +248,8 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
       >
         {activeTab ? (
           activeTab.component
+        ) : emptyState ? (
+          emptyState
         ) : (
           <Flex
             align="center"

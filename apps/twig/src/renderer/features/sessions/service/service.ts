@@ -31,7 +31,11 @@ import {
 } from "@renderer/lib/notifications";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
-import type { ExecutionMode, Task } from "@shared/types";
+import type {
+  CloudTaskUpdatePayload,
+  ExecutionMode,
+  Task,
+} from "@shared/types";
 import type { AcpMessage, StoredLogEntry } from "@shared/types/session-events";
 import { isJsonRpcRequest } from "@shared/types/session-events";
 import {
@@ -105,6 +109,8 @@ export class SessionService {
   >();
   /** AbortController for the current in-flight preview session start */
   private previewAbort: AbortController | null = null;
+  /** Cleanup functions for cloud task watchers, keyed by `${taskId}:${runId}` */
+  private cloudTaskCleanups = new Map<string, () => void>();
 
   /**
    * Connect to a task session.
@@ -634,12 +640,19 @@ export class SessionService {
     log.info("Resetting session service", {
       subscriptionCount: this.subscriptions.size,
       connectingCount: this.connectingTasks.size,
+      cloudWatcherCount: this.cloudTaskCleanups.size,
     });
 
     // Unsubscribe from all active subscriptions
     for (const taskRunId of this.subscriptions.keys()) {
       this.unsubscribeFromChannel(taskRunId);
     }
+
+    // Clean up all cloud task watchers
+    for (const cleanup of this.cloudTaskCleanups.values()) {
+      cleanup();
+    }
+    this.cloudTaskCleanups.clear();
 
     this.connectingTasks.clear();
     this.previewAbort?.abort();
@@ -1198,7 +1211,9 @@ export class SessionService {
     cwd: string,
     result: { stdout: string; stderr: string; exitCode: number },
   ): Promise<void> {
-    const id = `user-shell-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const id = `user-shell-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 9)}`;
     const session = sessionStoreSetters.getSessionByTaskId(taskId);
     if (!session) return;
 
@@ -1242,6 +1257,148 @@ export class SessionService {
     }
     // Clear from connecting tasks as well
     this.connectingTasks.delete(taskId);
+  }
+
+  /**
+   * Start watching a cloud task via main-process CloudTaskService.
+   * Creates an initial session, subscribes to log/status updates, and
+   * returns a cleanup function to unsubscribe and stop the watcher.
+   *
+   * @param onStatusChange Optional callback fired when task run status changes
+   *   (e.g. to invalidate task query cache). Keeps SessionService framework-agnostic.
+   */
+  watchCloudTask(
+    taskId: string,
+    runId: string,
+    onStatusChange?: () => void,
+  ): () => void {
+    const watcherKey = `${taskId}:${runId}`;
+    const taskRunId = runId;
+
+    // Create initial session in store (disconnected, read-only)
+    const existing = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!existing || existing.taskRunId !== taskRunId) {
+      const taskTitle = existing?.taskTitle ?? "Cloud Task";
+      const session = this.createBaseSession(taskRunId, taskId, taskTitle);
+      session.status = "disconnected";
+      sessionStoreSetters.setSession(session);
+    }
+
+    // If already watching this exact run, return existing cleanup
+    if (this.cloudTaskCleanups.has(watcherKey)) {
+      return this.cloudTaskCleanups.get(watcherKey)!;
+    }
+
+    // Get auth for initial token + host info
+    const auth = useAuthStore.getState();
+    if (!auth.oauthAccessToken || !auth.projectId || !auth.cloudRegion) {
+      log.warn("No auth for cloud task watcher", { taskId });
+      return () => {};
+    }
+
+    // Ensure main-process service has current token
+    trpcVanilla.cloudTask.updateToken
+      .mutate({ token: auth.oauthAccessToken })
+      .catch(() => {});
+
+    // Start main-process watcher
+    trpcVanilla.cloudTask.watch
+      .mutate({
+        taskId,
+        runId,
+        apiHost: getCloudUrlFromRegion(auth.cloudRegion),
+        teamId: auth.projectId,
+      })
+      .catch((err: unknown) =>
+        log.warn("Failed to start cloud task watcher", { taskId, err }),
+      );
+
+    // Subscribe to updates (filtered by taskId AND runId on the server)
+    const subscription = trpcVanilla.cloudTask.onUpdate.subscribe(
+      { taskId, runId },
+      {
+        onData: (update: CloudTaskUpdatePayload) => {
+          this.handleCloudTaskUpdate(taskRunId, update);
+          if (
+            (update.kind === "status" || update.kind === "snapshot") &&
+            onStatusChange
+          ) {
+            onStatusChange();
+          }
+        },
+        onError: (err: unknown) =>
+          log.error("Cloud task subscription error", { taskId, err }),
+      },
+    );
+
+    const cleanup = () => {
+      subscription.unsubscribe();
+      this.cloudTaskCleanups.delete(watcherKey);
+      trpcVanilla.cloudTask.unwatch
+        .mutate({ taskId, runId })
+        .catch((err: unknown) =>
+          log.warn("Failed to unwatch cloud task", { taskId, err }),
+        );
+    };
+
+    this.cloudTaskCleanups.set(watcherKey, cleanup);
+    return cleanup;
+  }
+
+  public updateCloudTaskTitle(taskId: string, taskTitle: string): void {
+    const session = sessionStoreSetters.getSessionByTaskId(taskId);
+    if (!session) return;
+
+    if (session.taskTitle === taskTitle) return;
+
+    sessionStoreSetters.updateSession(session.taskRunId, { taskTitle });
+  }
+
+  private handleCloudTaskUpdate(
+    taskRunId: string,
+    update: CloudTaskUpdatePayload,
+  ): void {
+    // Append new log entries with dedup guard
+    if (update.newEntries && update.newEntries.length > 0) {
+      const session = sessionStoreSetters.getSessions()[taskRunId];
+      const currentCount = session?.processedLineCount ?? 0;
+      const expectedCount =
+        update.totalEntryCount ?? currentCount + update.newEntries.length;
+      const delta = expectedCount - currentCount;
+
+      if (delta <= 0) {
+        // Already caught up — skip duplicate entries
+      } else if (delta <= update.newEntries.length) {
+        // Normal case: append only the tail (last `delta` entries)
+        const entriesToAppend = update.newEntries.slice(-delta);
+        const newEvents = convertStoredEntriesToEvents(entriesToAppend);
+        sessionStoreSetters.appendEvents(taskRunId, newEvents, expectedCount);
+      } else {
+        // Gap in data — append everything we have but don't jump processedLineCount
+        log.warn("Cloud task log count inconsistency", {
+          taskRunId,
+          currentCount,
+          expectedCount,
+          entriesReceived: update.newEntries.length,
+        });
+        const newEvents = convertStoredEntriesToEvents(update.newEntries);
+        sessionStoreSetters.appendEvents(
+          taskRunId,
+          newEvents,
+          currentCount + update.newEntries.length,
+        );
+      }
+    }
+    // Update cloud status fields if present
+    if (update.kind === "status" || update.kind === "snapshot") {
+      sessionStoreSetters.updateCloudStatus(taskRunId, {
+        status: update.status,
+        stage: update.stage,
+        output: update.output,
+        errorMessage: update.errorMessage,
+        branch: update.branch,
+      });
+    }
   }
 
   // --- Helper Methods ---

@@ -121,3 +121,32 @@ export function useGitQueries(repoPath?: string) {
     isLoading: isRepoLoading || changesLoading || syncLoading,
   };
 }
+
+export function useCloudPrChangedFiles(prUrl: string | null) {
+  return useQuery({
+    queryKey: ["pr-changed-files", prUrl],
+    queryFn: () =>
+      trpcVanilla.git.getPrChangedFiles.query({ prUrl: prUrl as string }),
+    enabled: !!prUrl,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+}
+
+export function useCloudBranchChangedFiles(
+  repo: string | null,
+  branch: string | null,
+) {
+  return useQuery({
+    queryKey: ["branch-changed-files", repo, branch],
+    queryFn: () =>
+      trpcVanilla.git.getBranchChangedFiles.query({
+        repo: repo as string,
+        branch: branch as string,
+      }),
+    enabled: !!repo && !!branch,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    retry: 1,
+  });
+}

@@ -167,6 +167,11 @@ export const useAuthStore = create<AuthState>()(
             trpcVanilla.agent.updateToken
               .mutate({ token: tokenResponse.access_token })
               .catch((err) => log.warn("Failed to update agent token", err));
+            trpcVanilla.cloudTask.updateToken
+              .mutate({ token: tokenResponse.access_token })
+              .catch((err) =>
+                log.warn("Failed to update cloud task token", err),
+              );
 
             // Clear any cached data from previous sessions AFTER setting new auth
             queryClient.clear();
@@ -306,6 +311,11 @@ export const useAuthStore = create<AuthState>()(
                   .mutate({ token: tokenResponse.access_token })
                   .catch((err) =>
                     log.warn("Failed to update agent token", err),
+                  );
+                trpcVanilla.cloudTask.updateToken
+                  .mutate({ token: tokenResponse.access_token })
+                  .catch((err) =>
+                    log.warn("Failed to update cloud task token", err),
                   );
 
                 get().scheduleTokenRefresh();
@@ -472,6 +482,11 @@ export const useAuthStore = create<AuthState>()(
                   .catch((err) =>
                     log.warn("Failed to update agent token", err),
                   );
+                trpcVanilla.cloudTask.updateToken
+                  .mutate({ token: currentTokens.accessToken })
+                  .catch((err) =>
+                    log.warn("Failed to update cloud task token", err),
+                  );
 
                 get().scheduleTokenRefresh();
 
@@ -597,6 +612,11 @@ export const useAuthStore = create<AuthState>()(
             trpcVanilla.agent.updateToken
               .mutate({ token: tokenResponse.access_token })
               .catch((err) => log.warn("Failed to update agent token", err));
+            trpcVanilla.cloudTask.updateToken
+              .mutate({ token: tokenResponse.access_token })
+              .catch((err) =>
+                log.warn("Failed to update cloud task token", err),
+              );
 
             queryClient.clear();
 
@@ -697,6 +717,9 @@ export const useAuthStore = create<AuthState>()(
           trpcVanilla.agent.updateToken
             .mutate({ token: accessToken })
             .catch((err) => log.warn("Failed to update agent token", err));
+          trpcVanilla.cloudTask.updateToken
+            .mutate({ token: accessToken })
+            .catch((err) => log.warn("Failed to update cloud task token", err));
 
           track(ANALYTICS_EVENTS.USER_LOGGED_IN, {
             project_id: projectId.toString(),

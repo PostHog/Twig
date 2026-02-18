@@ -19,6 +19,8 @@ import {
   generatePrTitleAndBodyOutput,
   getAllBranchesInput,
   getAllBranchesOutput,
+  getBranchChangedFilesInput,
+  getBranchChangedFilesOutput,
   getChangedFilesHeadInput,
   getChangedFilesHeadOutput,
   getCommitConventionsInput,
@@ -36,6 +38,8 @@ import {
   getGitSyncStatusOutput,
   getLatestCommitInput,
   getLatestCommitOutput,
+  getPrChangedFilesInput,
+  getPrChangedFilesOutput,
   getPrTemplateInput,
   getPrTemplateOutput,
   ghStatusOutput,
@@ -252,6 +256,18 @@ export const gitRouter = router({
     .output(getCommitConventionsOutput)
     .query(({ input }) =>
       getService().getCommitConventions(input.directoryPath, input.sampleSize),
+    ),
+
+  getPrChangedFiles: publicProcedure
+    .input(getPrChangedFilesInput)
+    .output(getPrChangedFilesOutput)
+    .query(({ input }) => getService().getPrChangedFiles(input.prUrl)),
+
+  getBranchChangedFiles: publicProcedure
+    .input(getBranchChangedFilesInput)
+    .output(getBranchChangedFilesOutput)
+    .query(({ input }) =>
+      getService().getBranchChangedFiles(input.repo, input.branch),
     ),
 
   generateCommitMessage: publicProcedure
