@@ -1,35 +1,54 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-heading: var(--font-guton);
+  --font-family-heading: var(--font-guton);
+  --font-family-sans: "TX-02", var(--font-jetbrains-mono), monospace;
 
   --color-bg: var(--bg);
   --color-fg: var(--fg);
   --color-primary: #F66521;
+  --color-border: #1A1A1A;
+  --color-subtle: light-dark(#F5E5D1, #0A1A2E);
 
-  --text-display: 3.5rem;
-  --text-display--line-height: 1.1;
-  --text-display--letter-spacing: -0.02em;
-  --text-display--font-weight: 700;
+  --text-heading-1: 72px;
+  --text-heading-1--line-height: 1.1;
+  --text-heading-1--font-weight: 500;
 
-  --text-heading-1: 2.5rem;
-  --text-heading-1--line-height: 1.2;
-  --text-heading-1--letter-spacing: -0.02em;
-  --text-heading-1--font-weight: 700;
+  --text-heading-2: 64px;
+  --text-heading-2--line-height: 1.1;
+  --text-heading-2--font-weight: 500;
 
-  --text-heading-2: 1.875rem;
-  --text-heading-2--line-height: 1.25;
-  --text-heading-2--letter-spacing: -0.01em;
-  --text-heading-2--font-weight: 600;
+  --text-heading-3: 56px;
+  --text-heading-3--line-height: 1.2;
+  --text-heading-3--font-weight: 500;
 
-  --text-heading-3: 1.5rem;
-  --text-heading-3--line-height: 1.3;
-  --text-heading-3--letter-spacing: -0.01em;
-  --text-heading-3--font-weight: 600;
-
-  --text-heading-4: 1.25rem;
-  --text-heading-4--line-height: 1.4;
+  --text-heading-4: 48px;
+  --text-heading-4--line-height: 1.2;
   --text-heading-4--font-weight: 500;
+
+  --text-heading-5: 40px;
+  --text-heading-5--line-height: 1.2;
+  --text-heading-5--font-weight: 500;
+
+  --text-heading-6: 32px;
+  --text-heading-6--line-height: 1.3;
+  --text-heading-6--font-weight: 500;
+
+  --text-heading-7: 24px;
+  --text-heading-7--line-height: 1.3;
+  --text-heading-7--font-weight: 500;
+
+  --text-heading-8: 20px;
+  --text-heading-8--line-height: 1.4;
+  --text-heading-8--font-weight: 500;
+
+  --text-heading-9: 16px;
+  --text-heading-9--line-height: 1.4;
+  --text-heading-9--font-weight: 500;
+
+  --text-heading-10: 14px;
+  --text-heading-10--line-height: 1.5;
+  --text-heading-10--font-weight: 500;
 
   --text-body: 1rem;
   --text-body--line-height: 1.6;
@@ -50,22 +69,34 @@
 
 :root {
   --bg: #FAEEDE;
+  --bg-subtle: #F5E5D1;
   --fg: #1A1815;
   --default-font-family: "TX-02", var(--font-jetbrains-mono), monospace;
 }
 
 .dark {
   --bg: #051121;
+  --bg-subtle: #0A1A2E;
   --fg: #FAEEDE;
 }
 
 @layer base {
   html {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   body {
     background-color: var(--bg);
     color: var(--fg);
+    font-family: "TX-02", var(--font-jetbrains-mono), monospace;
+    background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='%231A1815' opacity='0.08'/%3E%3Crect width='1' height='1' x='2' y='2' fill='%231A1815' opacity='0.08'/%3E%3C/svg%3E");
+  }
+
+  .dark body {
+    background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='%23FAEEDE' opacity='0.08'/%3E%3Crect width='1' height='1' x='2' y='2' fill='%23FAEEDE' opacity='0.08'/%3E%3C/svg%3E");
+  }
+
+  * {
+    font-family: inherit;
   }
 }
