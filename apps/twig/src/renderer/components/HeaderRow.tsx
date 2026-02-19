@@ -125,7 +125,9 @@ export function HeaderRow() {
           }}
         >
           <RightSidebarTrigger />
-          {!isCloudTask && <GitInteractionHeader taskId={view.data.id} />}
+          {!isCloudTask && rightSidebarOpen && (
+            <GitInteractionHeader taskId={view.data.id} />
+          )}
           {rightSidebarOpen && (
             <Box
               onMouseDown={handleRightSidebarMouseDown}
