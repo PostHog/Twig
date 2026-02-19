@@ -160,7 +160,7 @@ export class TaskService {
 
     // Derive values from input or output
     const workspaceMode =
-      input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
+      input?.workspaceMode ?? output.workspace?.mode ?? "local";
     const repoPath = input?.repoPath ?? output.workspace?.folderPath;
 
     // Save workspace mode for this task

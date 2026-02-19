@@ -44,7 +44,7 @@ export function TaskInput() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const selectedDirectory = lastUsedDirectory || "";
-  const workspaceMode = lastUsedLocalWorkspaceMode || "worktree";
+  const workspaceMode = lastUsedLocalWorkspaceMode || "local";
   const adapter = lastUsedAdapter;
 
   const setSelectedDirectory = (path: string) =>
