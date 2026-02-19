@@ -1,5 +1,4 @@
 import { CampfireToggle } from "@components/CampfireToggle";
-import { FeedbackToggle } from "@components/FeedbackToggle";
 import { SettingsToggle } from "@components/SettingsToggle";
 import { StatusBarMenu } from "@components/StatusBarMenu";
 import { KeyHint } from "@components/ui/KeyHint";
@@ -40,7 +39,6 @@ export function StatusBar() {
 
       <Flex align="center" gap="2">
         <CampfireToggle />
-        <FeedbackToggle />
         <SettingsToggle />
         {IS_DEV && (
           <Badge size="1">

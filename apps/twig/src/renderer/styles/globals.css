@@ -946,10 +946,11 @@ body {
   border-radius: 4px 10px 6px 12px;
 }
 
-/* Buttons should have pointer cursor */
+/* Buttons and menu items should have pointer cursor */
 button,
 [type="button"],
-[role="button"] {
+[role="button"],
+[role="menuitem"] {
   cursor: pointer;
 }
 
