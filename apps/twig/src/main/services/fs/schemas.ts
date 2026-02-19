@@ -21,6 +21,11 @@ export const writeRepoFileInput = z.object({
   content: z.string(),
 });
 
+export const getFileStatsInput = z.object({
+  repoPath: z.string(),
+  filePath: z.string(),
+});
+
 const fileEntry = z.object({
   path: z.string(),
   name: z.string(),
@@ -29,8 +34,10 @@ const fileEntry = z.object({
 
 export const listRepoFilesOutput = z.array(fileEntry);
 export const readRepoFileOutput = z.string().nullable();
+export const getFileStatsOutput = z.object({ mtime: z.number() }).nullable();
 
 export type ListRepoFilesInput = z.infer<typeof listRepoFilesInput>;
 export type ReadRepoFileInput = z.infer<typeof readRepoFileInput>;
 export type WriteRepoFileInput = z.infer<typeof writeRepoFileInput>;
+export type GetFileStatsInput = z.infer<typeof getFileStatsInput>;
 export type FileEntry = z.infer<typeof fileEntry>;

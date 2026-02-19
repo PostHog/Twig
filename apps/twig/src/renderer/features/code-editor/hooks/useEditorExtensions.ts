@@ -5,12 +5,22 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { useThemeStore } from "@stores/themeStore";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { dirtyTracking } from "../extensions/dirtyTracking";
 import { mergeViewTheme, oneDark, oneLight } from "../theme/editorTheme";
 import { getLanguageExtension } from "../utils/languages";
 
-export function useEditorExtensions(filePath?: string, readOnly = false) {
+export function useEditorExtensions(
+  filePath?: string,
+  readOnly = false,
+  onDirtyChange?: (isDirty: boolean) => void,
+) {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange;
+  }, [onDirtyChange]);
 
   return useMemo(() => {
     const languageExtension = filePath ? getLanguageExtension(filePath) : null;
@@ -24,6 +34,7 @@ export function useEditorExtensions(filePath?: string, readOnly = false) {
       EditorView.editable.of(!readOnly),
       ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ...(languageExtension ? [languageExtension] : []),
+      dirtyTracking((isDirty) => onDirtyChangeRef.current?.(isDirty)),
     ];
   }, [filePath, isDarkMode, readOnly]);
 }

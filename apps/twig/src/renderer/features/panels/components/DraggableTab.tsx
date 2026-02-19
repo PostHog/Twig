@@ -6,7 +6,7 @@ import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import type React from "react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 interface DraggableTabProps {
   tabId: string;
@@ -47,6 +47,8 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
   badge,
   hasUnsavedChanges,
 }) => {
+  const [closeHovered, setCloseHovered] = useState(false);
+
   const { ref, isDragging } = useSortable({
     id: tabId,
     index,
@@ -171,11 +173,6 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
         {label}
       </Text>
       {badge}
-      {hasUnsavedChanges && (
-        <Text size="1" style={{ color: "var(--amber-9)", marginLeft: "2px" }}>
-          •
-        </Text>
-      )}
 
       {onClose && (
         <Box
@@ -185,19 +182,32 @@ export const DraggableTab: React.FC<DraggableTabProps> = ({
             alignItems: "center",
             justifyContent: "center",
           }}
+          onMouseEnter={() => setCloseHovered(true)}
+          onMouseLeave={() => setCloseHovered(false)}
         >
           <IconButton
             size="1"
             variant="ghost"
             color={isActive ? undefined : "gray"}
-            className={`transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-            aria-label="Close tab"
+            className={`transition-opacity ${hasUnsavedChanges || isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+            aria-label={hasUnsavedChanges ? "Unsaved changes" : "Close tab"}
             onClick={(e) => {
               e.stopPropagation();
               onClose();
             }}
           >
-            <Cross2Icon width={12} height={12} />
+            {hasUnsavedChanges && !closeHovered ? (
+              <Box
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: "currentColor",
+                }}
+              />
+            ) : (
+              <Cross2Icon width={12} height={12} />
+            )}
           </IconButton>
         </Box>
       )}

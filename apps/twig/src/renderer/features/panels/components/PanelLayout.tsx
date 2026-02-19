@@ -9,6 +9,10 @@ import {
   usePanelLayoutState,
   usePanelSizeSync,
 } from "../hooks/usePanelLayoutHooks";
+import {
+  requestCloseOtherTabs,
+  requestCloseTabsToRight,
+} from "../panelCloseHandlers";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode } from "../store/panelTypes";
@@ -39,16 +43,16 @@ const PanelLayoutRenderer: React.FC<{
 
   const handleCloseOtherTabs = useCallback(
     (panelId: string, tabId: string) => {
-      layoutState.closeOtherTabs(taskId, panelId, tabId);
+      requestCloseOtherTabs(taskId, panelId, tabId);
     },
-    [layoutState, taskId],
+    [taskId],
   );
 
   const handleCloseTabsToRight = useCallback(
     (panelId: string, tabId: string) => {
-      layoutState.closeTabsToRight(taskId, panelId, tabId);
+      requestCloseTabsToRight(taskId, panelId, tabId);
     },
-    [layoutState, taskId],
+    [taskId],
   );
 
   const handleKeepTab = useCallback(
@@ -119,7 +123,6 @@ const PanelLayoutRenderer: React.FC<{
             node={currentNode}
             taskId={taskId}
             task={task}
-            closeTab={layoutState.closeTab}
             closeOtherTabs={handleCloseOtherTabs}
             closeTabsToRight={handleCloseTabsToRight}
             keepTab={handleKeepTab}
