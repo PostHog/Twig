@@ -1,20 +1,18 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
 import type { EditorViewRef } from "@features/code-editor/components/CodeMirrorEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
-import {
-  isDirty,
-  programmaticUpdate,
-  resetBaseline,
-} from "@features/code-editor/extensions/dirtyTracking";
+import { isDirty } from "@features/code-editor/extensions/dirtyTracking";
+import { useFileChangeDetection } from "@features/code-editor/hooks/useFileChangeDetection";
+import { useSaveHandler } from "@features/code-editor/hooks/useSaveHandler";
+import type { EditorState } from "@features/code-editor/types/editorState";
 import { registerUnsavedContent } from "@features/code-editor/unsavedContentRegistry";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { isImageFile } from "@features/message-editor/utils/imageUtils";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Box, Flex } from "@radix-ui/themes";
-import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
+import { trpcReact } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface CodeEditorPanelProps {
@@ -35,11 +33,13 @@ export function CodeEditorPanel({
   const filePath = getRelativePath(absolutePath, repoPath);
   const isImage = isImageFile(absolutePath);
 
-  const queryClient = useQueryClient();
   const updateTabMetadata = usePanelLayoutStore((s) => s.updateTabMetadata);
   const editorRef = useRef<EditorViewRef>(null);
-  const [fileChangedExternally, setFileChangedExternally] = useState(false);
-  const frozenContentRef = useRef<string | null>(null);
+  const fileContentRef = useRef<string | null>(null);
+  const initialMtimeRef = useRef<number | null>(null);
+  const [editorState, setEditorState] = useState<EditorState>({
+    type: "clean",
+  });
 
   const repoQuery = trpcReact.fs.readRepoFile.useQuery(
     { repoPath: repoPath ?? "", filePath },
@@ -57,138 +57,42 @@ export function CodeEditorPanel({
     error,
   } = isInsideRepo ? repoQuery : absoluteQuery;
 
-  const effectiveContent =
-    fileChangedExternally && frozenContentRef.current !== null
-      ? frozenContentRef.current
-      : fileContent;
-
   useEffect(() => {
-    if (!repoPath || !filePath) return;
+    fileContentRef.current = fileContent ?? null;
+  }, [fileContent]);
 
-    const subscription = trpcVanilla.fileWatcher.onFileChanged.subscribe(
-      undefined,
-      {
-        onData: (data) => {
-          const absoluteFilePath = `${repoPath}/${filePath}`;
-          if (data.filePath === absoluteFilePath) {
-            const view = editorRef.current?.getView();
-            const dirty = view ? isDirty(view) : false;
-
-            if (dirty && view) {
-              if (frozenContentRef.current === null) {
-                frozenContentRef.current = view.state.doc.toString();
-                setFileChangedExternally(true);
-              }
-            } else {
-              queryClient.invalidateQueries({
-                queryKey: [
-                  ["fs", "readRepoFile"],
-                  { input: { repoPath, filePath }, type: "query" },
-                ],
-              });
-            }
-          }
-        },
-      },
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [repoPath, filePath, queryClient]);
-
-  const save = useCallback(async () => {
-    const view = editorRef.current?.getView();
-    if (!repoPath || !view) return;
-
-    const dirty = isDirty(view);
-
-    const currentDiskContent = await trpcVanilla.fs.readRepoFile.query({
-      repoPath,
-      filePath,
-    });
-
-    const hasChangedExternally =
-      currentDiskContent !== null && currentDiskContent !== fileContent;
-
-    if (dirty && (fileChangedExternally || hasChangedExternally)) {
-      const response = await trpcVanilla.os.showMessageBox.mutate({
-        options: {
-          message: "This file has been modified outside of the editor.",
-          detail:
-            "Do you want to save anyway and overwrite the file on disk with your changes?",
-          type: "warning",
-          buttons: ["Overwrite", "Discard", "Cancel"],
-          defaultId: 2,
-          cancelId: 2,
-        },
-      });
-
-      if (response.response === 1) {
-        const latestContent = await trpcVanilla.fs.readRepoFile.query({
-          repoPath,
-          filePath,
-        });
-        if (latestContent !== null) {
-          view.dispatch({
-            changes: {
-              from: 0,
-              to: view.state.doc.length,
-              insert: latestContent,
-            },
-            annotations: programmaticUpdate.of(true),
-          });
-          resetBaseline(view);
-          updateTabMetadata(taskId, tabId, { hasUnsavedChanges: false });
-          frozenContentRef.current = null;
-          setFileChangedExternally(false);
-        }
-        return;
-      } else if (response.response === 2) {
-        return;
-      }
-    }
-
-    const content = view.state.doc.toString();
-
-    await trpcVanilla.fs.writeRepoFile.mutate({
-      repoPath,
-      filePath,
-      content,
-    });
-
-    resetBaseline(view);
-    updateTabMetadata(taskId, tabId, { hasUnsavedChanges: false });
-    frozenContentRef.current = null;
-    setFileChangedExternally(false);
-
-    queryClient.invalidateQueries({
-      queryKey: ["changed-files-head", repoPath],
-    });
-  }, [
+  useFileChangeDetection({
     repoPath,
     filePath,
-    queryClient,
+    editorViewRef: editorRef,
+    initialMtimeRef,
+    onExternalChange: () => {
+      const view = editorRef.current?.getView();
+      if (view && isDirty(view)) {
+        setEditorState({
+          type: "conflict",
+          frozenContent: view.state.doc.toString(),
+          diskMtime: Date.now(),
+        });
+      }
+    },
+  });
+
+  const { save, discard } = useSaveHandler({
+    repoPath,
+    filePath,
     taskId,
     tabId,
+    editorViewRef: editorRef,
+    initialMtimeRef,
+    editorState,
+    setEditorState,
     updateTabMetadata,
-    fileChangedExternally,
-    fileContent,
-  ]);
+    fileContentRef,
+  });
 
-  const discard = useCallback(() => {
-    const view = editorRef.current?.getView();
-    if (!view || !fileContent) return;
-
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: fileContent },
-      annotations: programmaticUpdate.of(true),
-    });
-    resetBaseline(view);
-    updateTabMetadata(taskId, tabId, { hasUnsavedChanges: false });
-    frozenContentRef.current = null;
-    setFileChangedExternally(false);
-  }, [taskId, tabId, updateTabMetadata, fileContent]);
+  const effectiveContent =
+    editorState.type === "conflict" ? editorState.frozenContent : fileContent;
 
   useEffect(() => {
     return registerUnsavedContent(tabId, {
