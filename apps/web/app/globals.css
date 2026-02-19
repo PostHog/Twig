@@ -6,9 +6,9 @@
 
   --color-bg: var(--bg);
   --color-fg: var(--fg);
-  --color-primary: #F66521;
-  --color-border: #1A1A1A;
-  --color-subtle: light-dark(#F5E5D1, #0A1A2E);
+  --color-primary: #f66521;
+  --color-border: #1a1a1a;
+  --color-subtle: light-dark(#f5e5d1, #0a1a2e);
 
   --text-heading-1: 72px;
   --text-heading-1--line-height: 1.1;
@@ -68,16 +68,16 @@
 }
 
 :root {
-  --bg: #FAEEDE;
-  --bg-subtle: #F5E5D1;
-  --fg: #1A1815;
+  --bg: #faeede;
+  --bg-subtle: #f5e5d1;
+  --fg: #1a1815;
   --default-font-family: "TX-02", var(--font-jetbrains-mono), monospace;
 }
 
 .dark {
   --bg: #051121;
-  --bg-subtle: #0A1A2E;
-  --fg: #FAEEDE;
+  --bg-subtle: #0a1a2e;
+  --fg: #faeede;
 }
 
 @utility container {

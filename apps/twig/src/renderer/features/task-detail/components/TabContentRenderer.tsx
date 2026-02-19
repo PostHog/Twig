@@ -45,6 +45,7 @@ export function TabContentRenderer({
           taskId={taskId}
           task={task}
           absolutePath={data.absolutePath}
+          tabId={tab.id}
         />
       );
 
@@ -54,6 +55,7 @@ export function TabContentRenderer({
           taskId={taskId}
           task={task}
           absolutePath={data.absolutePath}
+          tabId={tab.id}
         />
       );
 

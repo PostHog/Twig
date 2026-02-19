@@ -1,6 +1,8 @@
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
+  getFileStatsInput,
+  getFileStatsOutput,
   listRepoFilesInput,
   listRepoFilesOutput,
   readRepoFileInput,
@@ -31,5 +33,12 @@ export const fsRouter = router({
     .input(writeRepoFileInput)
     .mutation(({ input }) =>
       getService().writeRepoFile(input.repoPath, input.filePath, input.content),
+    ),
+
+  getFileStats: publicProcedure
+    .input(getFileStatsInput)
+    .output(getFileStatsOutput)
+    .query(({ input }) =>
+      getService().getFileStats(input.repoPath, input.filePath),
     ),
 });

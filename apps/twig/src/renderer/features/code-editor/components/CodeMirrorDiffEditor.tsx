@@ -1,5 +1,6 @@
+import type { EditorView } from "@codemirror/view";
 import { Box, Flex, SegmentedControl, Text } from "@radix-ui/themes";
-import { useMemo } from "react";
+import { forwardRef, useImperativeHandle, useMemo } from "react";
 import { useCodeMirror } from "../hooks/useCodeMirror";
 import { useEditorExtensions } from "../hooks/useEditorExtensions";
 import { useDiffViewerStore, type ViewMode } from "../stores/diffViewerStore";
@@ -9,37 +10,58 @@ interface CodeMirrorDiffEditorProps {
   modifiedContent: string;
   filePath?: string;
   relativePath?: string;
-  onContentChange?: (content: string) => void;
+  readOnly?: boolean;
+  onContentChange?: () => void;
 }
 
-export function CodeMirrorDiffEditor({
-  originalContent,
-  modifiedContent,
-  filePath,
-  relativePath,
-  onContentChange,
-}: CodeMirrorDiffEditorProps) {
+export interface DiffEditorViewRef {
+  getView: () => EditorView | null;
+}
+
+export const CodeMirrorDiffEditor = forwardRef<
+  DiffEditorViewRef,
+  CodeMirrorDiffEditorProps
+>(function CodeMirrorDiffEditor(
+  {
+    originalContent,
+    modifiedContent,
+    filePath,
+    relativePath,
+    readOnly = false,
+    onContentChange,
+  },
+  ref,
+) {
   const { viewMode, setViewMode } = useDiffViewerStore();
-  const extensions = useEditorExtensions(filePath, true);
+  const extensions = useEditorExtensions(filePath, readOnly, onContentChange);
+  const readOnlyExtensions = useEditorExtensions(filePath, true);
   const options = useMemo(
     () => ({
       original: originalContent,
       modified: modifiedContent,
       extensions,
+      readOnlyExtensions,
       mode: viewMode,
       filePath,
-      onContentChange,
     }),
     [
       originalContent,
       modifiedContent,
       extensions,
+      readOnlyExtensions,
       viewMode,
       filePath,
-      onContentChange,
     ],
   );
-  const containerRef = useCodeMirror(options);
+  const { containerRef, getEditorView } = useCodeMirror(options);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getView: getEditorView,
+    }),
+    [getEditorView],
+  );
 
   return (
     <Flex direction="column" height="100%">
@@ -73,4 +95,4 @@ export function CodeMirrorDiffEditor({
       </Box>
     </Flex>
   );
-}
+});

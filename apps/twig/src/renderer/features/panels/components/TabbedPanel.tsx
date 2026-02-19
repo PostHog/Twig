@@ -77,8 +77,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   onSplitPanel,
   rightContent,
 }) => {
-  const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
-
   const handleSplitClick = async () => {
     const result = await trpcVanilla.contextMenu.showSplitContextMenu.mutate();
     if (result.direction) {
@@ -244,8 +242,18 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         position="relative"
         onClick={() => onPanelFocus?.(panelId)}
       >
-        {activeTab ? (
-          activeTab.component
+        {content.tabs.length > 0 ? (
+          content.tabs.map((tab) => (
+            <Box
+              key={tab.id}
+              height="100%"
+              style={{
+                display: tab.id === content.activeTabId ? "block" : "none",
+              }}
+            >
+              {tab.component}
+            </Box>
+          ))
         ) : (
           <Flex
             align="center"

@@ -1,5 +1,6 @@
+import type { EditorView } from "@codemirror/view";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { useMemo } from "react";
+import { forwardRef, useImperativeHandle, useMemo } from "react";
 import { useCodeMirror } from "../hooks/useCodeMirror";
 import { useEditorExtensions } from "../hooks/useEditorExtensions";
 
@@ -8,20 +9,34 @@ interface CodeMirrorEditorProps {
   filePath?: string;
   relativePath?: string;
   readOnly?: boolean;
+  onContentChange?: () => void;
 }
 
-export function CodeMirrorEditor({
-  content,
-  filePath,
-  relativePath,
-  readOnly = false,
-}: CodeMirrorEditorProps) {
-  const extensions = useEditorExtensions(filePath, readOnly);
+export interface EditorViewRef {
+  getView: () => EditorView | null;
+}
+
+export const CodeMirrorEditor = forwardRef<
+  EditorViewRef,
+  CodeMirrorEditorProps
+>(function CodeMirrorEditor(
+  { content, filePath, relativePath, readOnly = false, onContentChange },
+  ref,
+) {
+  const extensions = useEditorExtensions(filePath, readOnly, onContentChange);
   const options = useMemo(
     () => ({ doc: content, extensions, filePath }),
     [content, extensions, filePath],
   );
-  const containerRef = useCodeMirror(options);
+  const { containerRef, getEditorView } = useCodeMirror(options);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getView: getEditorView,
+    }),
+    [getEditorView],
+  );
 
   if (!relativePath) {
     return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
@@ -47,4 +62,4 @@ export function CodeMirrorEditor({
       </Box>
     </Flex>
   );
-}
+});

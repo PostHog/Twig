@@ -9,7 +9,6 @@ interface LeafNodeRendererProps {
   node: LeafPanel;
   taskId: string;
   task: Task;
-  closeTab: (taskId: string, panelId: string, tabId: string) => void;
   closeOtherTabs: (panelId: string, tabId: string) => void;
   closeTabsToRight: (panelId: string, tabId: string) => void;
   keepTab: (panelId: string, tabId: string) => void;
@@ -25,7 +24,6 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   node,
   taskId,
   task,
-  closeTab,
   closeOtherTabs,
   closeTabsToRight,
   keepTab,
@@ -36,13 +34,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
   onAddTerminal,
   onSplitPanel,
 }) => {
-  const tabs = useTabInjection(
-    node.content.tabs,
-    node.id,
-    taskId,
-    task,
-    closeTab,
-  );
+  const tabs = useTabInjection(node.content.tabs, node.id, taskId, task);
 
   const contentWithComponents = {
     ...node.content,

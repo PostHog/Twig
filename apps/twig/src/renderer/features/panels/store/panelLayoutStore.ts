@@ -107,7 +107,7 @@ export interface PanelLayoutStore {
   updateTabMetadata: (
     taskId: string,
     tabId: string,
-    metadata: Partial<Pick<Tab, "hasUnsavedChanges">>,
+    metadata: Partial<Pick<Tab, "hasUnsavedChanges" | "isPreview">>,
   ) => void;
   updateTabLabel: (taskId: string, tabId: string, label: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;

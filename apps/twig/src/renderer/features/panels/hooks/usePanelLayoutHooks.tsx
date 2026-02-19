@@ -5,6 +5,7 @@ import { ChatCenteredText, Terminal } from "@phosphor-icons/react";
 import type { Task } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import { requestCloseTab } from "../panelCloseHandlers";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import type { PanelNode, Tab } from "../store/panelTypes";
@@ -13,9 +14,6 @@ import { shouldUpdateSizes } from "../utils/panelLayoutUtils";
 export interface PanelLayoutState {
   updateSizes: (taskId: string, groupId: string, sizes: number[]) => void;
   setActiveTab: (taskId: string, panelId: string, tabId: string) => void;
-  closeTab: (taskId: string, panelId: string, tabId: string) => void;
-  closeOtherTabs: (taskId: string, panelId: string, tabId: string) => void;
-  closeTabsToRight: (taskId: string, panelId: string, tabId: string) => void;
   keepTab: (taskId: string, panelId: string, tabId: string) => void;
   setFocusedPanel: (taskId: string, panelId: string) => void;
   addTerminalTab: (taskId: string, panelId: string) => void;
@@ -37,9 +35,6 @@ export function usePanelLayoutState(taskId: string): PanelLayoutState {
       (state) => ({
         updateSizes: state.updateSizes,
         setActiveTab: state.setActiveTab,
-        closeTab: state.closeTab,
-        closeOtherTabs: state.closeOtherTabs,
-        closeTabsToRight: state.closeTabsToRight,
         keepTab: state.keepTab,
         setFocusedPanel: state.setFocusedPanel,
         addTerminalTab: state.addTerminalTab,
@@ -75,7 +70,6 @@ export function useTabInjection(
   panelId: string,
   taskId: string,
   task: Task,
-  closeTab: (taskId: string, panelId: string, tabId: string) => void,
 ): Tab[] {
   const repoPath = useCwd(taskId) ?? "";
 
@@ -119,13 +113,11 @@ export function useTabInjection(
             <TabContentRenderer tab={updatedTab} taskId={taskId} task={task} />
           ),
           onClose: tab.closeable
-            ? () => {
-                closeTab(taskId, panelId, tab.id);
-              }
+            ? () => requestCloseTab(taskId, panelId, tab.id)
             : undefined,
         };
       }),
-    [tabs, panelId, taskId, task, closeTab, repoPath],
+    [tabs, panelId, taskId, task, repoPath],
   );
 }
 

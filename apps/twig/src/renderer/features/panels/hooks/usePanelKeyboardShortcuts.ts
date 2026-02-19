@@ -1,5 +1,7 @@
+import { getUnsavedEntry } from "@features/code-editor/unsavedContentRegistry";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { useHotkeys } from "react-hotkeys-hook";
+import { requestCloseTab } from "../panelCloseHandlers";
 import { usePanelLayoutStore } from "../store/panelLayoutStore";
 import { getLeafPanel } from "../store/panelStoreHelpers";
 
@@ -61,7 +63,40 @@ export function usePanelKeyboardShortcuts(taskId: string): void {
       );
 
       if (activeTab && activeTab.closeable !== false) {
-        state.closeTab(taskId, currentFocusedPanelId, activeTab.id);
+        requestCloseTab(taskId, currentFocusedPanelId, activeTab.id);
+      }
+    },
+    {
+      enabled: !!layout,
+      enableOnFormTags: ["INPUT", "TEXTAREA", "SELECT"],
+      enableOnContentEditable: true,
+      scopes: ["taskDetail"],
+    },
+    [taskId],
+  );
+
+  useHotkeys(
+    SHORTCUTS.SAVE_FILE,
+    (event) => {
+      event.preventDefault();
+
+      const state = usePanelLayoutStore.getState();
+      const currentLayout = state.getLayout(taskId);
+      const currentFocusedPanelId = currentLayout?.focusedPanelId;
+      const panelTree = currentLayout?.panelTree;
+
+      if (!currentFocusedPanelId || !panelTree) return;
+
+      const panel = getLeafPanel(panelTree, currentFocusedPanelId);
+      if (!panel) return;
+
+      const activeTab = panel.content.tabs.find(
+        (t) => t.id === panel.content.activeTabId,
+      );
+
+      if (activeTab?.hasUnsavedChanges) {
+        const entry = getUnsavedEntry(activeTab.id);
+        entry?.save();
       }
     },
     {

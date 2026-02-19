@@ -4,8 +4,9 @@ import {
   rejectChunk,
   unifiedMergeView,
 } from "@codemirror/merge";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, type Extension, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { programmaticUpdate } from "@features/code-editor/extensions/dirtyTracking";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
@@ -26,10 +27,10 @@ interface DiffOptions extends UseCodeMirrorOptions {
   original: string;
   modified: string;
   mode: "split" | "unified";
-  onContentChange?: (content: string) => void;
+  readOnlyExtensions?: Extension[];
 }
 
-const createMergeControls = (onReject?: () => void) => {
+const createMergeControls = () => {
   return (type: "accept" | "reject", action: (e: MouseEvent) => void) => {
     if (type === "accept") {
       return document.createElement("span");
@@ -46,35 +47,52 @@ const createMergeControls = (onReject?: () => void) => {
     button.style.cursor = "pointer";
     button.style.fontSize = "11px";
 
-    button.onmousedown = (e) => {
-      action(e);
-      onReject?.();
-    };
+    button.onmousedown = action;
 
     return button;
   };
 };
 
-const getBaseDiffConfig = (
-  onReject?: () => void,
-): Partial<Parameters<typeof unifiedMergeView>[0]> => ({
+const getBaseDiffConfig = (): Partial<
+  Parameters<typeof unifiedMergeView>[0]
+> => ({
   collapseUnchanged: { margin: 3, minSize: 4 },
   highlightChanges: false,
   gutter: true,
-  mergeControls: createMergeControls(onReject),
+  mergeControls: createMergeControls(),
 });
 
 export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<EditorInstance | null>(null);
+  const optionsRef = useRef(options);
+  const prevDocRef = useRef<string>("");
+  const prevExtensionsRef = useRef(options.extensions);
+  const modeRef = useRef<"single" | "split" | "unified">(
+    "doc" in options ? "single" : options.mode,
+  );
+
+  const getEditorView = (): EditorView | null => {
+    const instance = instanceRef.current;
+    if (!instance) return null;
+    if (instance instanceof EditorView) return instance;
+    return instance.b;
+  };
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    instanceRef.current?.destroy();
-    instanceRef.current = null;
+    const options = optionsRef.current;
+    const currentMode = "doc" in options ? "single" : options.mode;
+    modeRef.current = currentMode;
 
     if ("doc" in options) {
+      prevDocRef.current = options.doc;
+      prevExtensionsRef.current = options.extensions;
       instanceRef.current = new EditorView({
         state: EditorState.create({
           doc: options.doc,
@@ -83,55 +101,22 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
         parent: containerRef.current,
       });
     } else if (options.mode === "split") {
-      const diffConfig = getBaseDiffConfig(
-        options.onContentChange
-          ? () => {
-              if (instanceRef.current instanceof MergeView) {
-                const content = instanceRef.current.b.state.doc.toString();
-                options.onContentChange?.(content);
-              }
-            }
-          : undefined,
-      );
+      const diffConfig = getBaseDiffConfig();
 
-      const updateListener = options.onContentChange
-        ? EditorView.updateListener.of((update) => {
-            if (
-              update.docChanged &&
-              update.transactions.some((tr) => tr.isUserEvent("revert"))
-            ) {
-              const content = update.state.doc.toString();
-              options.onContentChange?.(content);
-            }
-          })
-        : [];
+      const aExtensions = options.readOnlyExtensions ?? options.extensions;
 
       instanceRef.current = new MergeView({
-        a: { doc: options.original, extensions: options.extensions },
+        a: { doc: options.original, extensions: aExtensions },
         b: {
           doc: options.modified,
-          extensions: [
-            ...options.extensions,
-            ...(Array.isArray(updateListener)
-              ? updateListener
-              : [updateListener]),
-          ],
+          extensions: options.extensions,
         },
         ...diffConfig,
         parent: containerRef.current,
         revertControls: "a-to-b",
       });
     } else {
-      const diffConfig = getBaseDiffConfig(
-        options.onContentChange
-          ? () => {
-              if (instanceRef.current instanceof EditorView) {
-                const content = instanceRef.current.state.doc.toString();
-                options.onContentChange?.(content);
-              }
-            }
-          : undefined,
-      );
+      const diffConfig = getBaseDiffConfig();
 
       instanceRef.current = new EditorView({
         doc: options.modified,
@@ -150,6 +135,90 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance) return;
+
+    const currentMode = "doc" in options ? "single" : options.mode;
+
+    if (currentMode !== modeRef.current) {
+      instanceRef.current?.destroy();
+      instanceRef.current = null;
+      if (!containerRef.current) return;
+
+      modeRef.current = currentMode;
+      const options = optionsRef.current;
+
+      if ("doc" in options) {
+        prevDocRef.current = options.doc;
+        prevExtensionsRef.current = options.extensions;
+        instanceRef.current = new EditorView({
+          state: EditorState.create({
+            doc: options.doc,
+            extensions: options.extensions,
+          }),
+          parent: containerRef.current,
+        });
+      } else if (options.mode === "split") {
+        const diffConfig = getBaseDiffConfig();
+
+        const aExtensions = options.readOnlyExtensions ?? options.extensions;
+
+        instanceRef.current = new MergeView({
+          a: { doc: options.original, extensions: aExtensions },
+          b: {
+            doc: options.modified,
+            extensions: options.extensions,
+          },
+          ...diffConfig,
+          parent: containerRef.current,
+          revertControls: "a-to-b",
+        });
+      } else {
+        const diffConfig = getBaseDiffConfig();
+
+        instanceRef.current = new EditorView({
+          doc: options.modified,
+          extensions: [
+            ...options.extensions,
+            unifiedMergeView({
+              original: options.original,
+              ...diffConfig,
+            }),
+          ],
+          parent: containerRef.current,
+        });
+      }
+      return;
+    }
+
+    if ("doc" in options) {
+      if (instance instanceof EditorView) {
+        if (prevDocRef.current !== options.doc) {
+          prevDocRef.current = options.doc;
+          const currentDoc = instance.state.doc.toString();
+          if (currentDoc !== options.doc) {
+            instance.dispatch({
+              changes: {
+                from: 0,
+                to: instance.state.doc.length,
+                insert: options.doc,
+              },
+              annotations: programmaticUpdate.of(true),
+            });
+          }
+        }
+
+        if (prevExtensionsRef.current !== options.extensions) {
+          prevExtensionsRef.current = options.extensions;
+          instance.dispatch({
+            effects: StateEffect.reconfigure.of(options.extensions),
+          });
+        }
+      }
+    }
   }, [options]);
 
   useEffect(() => {
@@ -200,7 +269,7 @@ export function useCodeMirror(options: SingleDocOptions | DiffOptions) {
     };
   }, [options.filePath]);
 
-  return containerRef;
+  return { containerRef, getEditorView };
 }
 
 export { acceptChunk, rejectChunk };
