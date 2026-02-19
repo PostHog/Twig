@@ -4,6 +4,7 @@ import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import {
+  DesktopIcon,
   FileTextIcon,
   GearIcon,
   HomeIcon,
@@ -15,7 +16,7 @@ import { Flex, Text } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
-import { useThemeStore } from "@stores/themeStore";
+import { THEME_CYCLE_LABELS, useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { ANALYTICS_EVENTS, type CommandMenuAction } from "@/types/analytics";
@@ -29,7 +30,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const { navigateToTaskInput } = useNavigationStore();
   const openSettingsDialog = useSettingsDialogStore((state) => state.open);
   const { folders } = useRegisteredFoldersStore();
-  const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { theme, cycleTheme } = useThemeStore();
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
   const commandRef = useRef<HTMLDivElement>(null);
@@ -143,15 +144,19 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
             <Command.Group heading="Actions">
               <Command.Item
-                value="Toggle theme dark light mode"
-                onSelect={runAndClose(toggleDarkMode, "toggle-theme")}
+                value="Toggle theme dark light system mode"
+                onSelect={runAndClose(cycleTheme, "toggle-theme")}
               >
-                {isDarkMode ? (
+                {theme === "dark" && (
                   <SunIcon className="mr-3 h-3 w-3 text-gray-11" />
-                ) : (
+                )}
+                {theme === "light" && (
+                  <DesktopIcon className="mr-3 h-3 w-3 text-gray-11" />
+                )}
+                {theme === "system" && (
                   <MoonIcon className="mr-3 h-3 w-3 text-gray-11" />
                 )}
-                <Text size="1">Toggle theme</Text>
+                <Text size="1">{THEME_CYCLE_LABELS[theme]}</Text>
               </Command.Item>
               <Command.Item
                 value="Toggle left sidebar"

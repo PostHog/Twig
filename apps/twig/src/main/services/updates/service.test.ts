@@ -451,7 +451,7 @@ describe("UpdatesService", () => {
         downloadedHandler({}, "Release notes here", "v2.0.0");
       }
 
-      expect(readyHandler).toHaveBeenCalledWith(true);
+      expect(readyHandler).toHaveBeenCalledWith({ version: "v2.0.0" });
     });
 
     it("handles error event and emits status with error", () => {

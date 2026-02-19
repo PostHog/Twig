@@ -5,6 +5,7 @@ import {
   getShortcutsByCategory,
   type ShortcutCategory,
 } from "@renderer/constants/keyboard-shortcuts";
+import { isMac } from "@utils/platform";
 import { useMemo } from "react";
 
 interface KeyboardShortcutsSheetProps {
@@ -134,8 +135,6 @@ export function KeyboardShortcutsList() {
 
 function SingleShortcutKeys({ keys }: { keys: string }) {
   const formatted = formatHotkey(keys);
-  const isMac =
-    typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
   if (isMac) {
     return (

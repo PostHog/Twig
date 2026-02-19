@@ -154,19 +154,6 @@ export function getPostHog() {
 }
 
 // ============================================================================
-// Surveys
-// ============================================================================
-
-export function displaySurvey(surveyId: string) {
-  if (!isInitialized) {
-    log.warn("PostHog not initialized, cannot display survey");
-    return;
-  }
-
-  posthog.displaySurvey(surveyId);
-}
-
-// ============================================================================
 // Feature Flags
 // ============================================================================
 
