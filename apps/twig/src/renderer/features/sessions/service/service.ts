@@ -581,6 +581,11 @@ export class SessionService {
     }
 
     if (initialPrompt?.length) {
+      if (submittedAt) {
+        sessionStoreSetters.updateSession(taskRun.id, {
+          promptStartedAt: submittedAt,
+        });
+      }
       await tc.time("sendPrompt", () => this.sendPrompt(taskId, initialPrompt));
     }
 
@@ -795,9 +800,10 @@ export class SessionService {
     const msg = acpMsg.message;
 
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
+      // Preserve existing promptStartedAt if already set (e.g., submittedAt for initial prompts)
       sessionStoreSetters.updateSession(taskRunId, {
         isPromptPending: true,
-        promptStartedAt: acpMsg.ts,
+        promptStartedAt: session.promptStartedAt ?? acpMsg.ts,
       });
     }
 
@@ -1058,9 +1064,11 @@ export class SessionService {
     session: AgentSession,
     blocks: ContentBlock[],
   ): Promise<{ stopReason: string }> {
+    // Preserve existing promptStartedAt if set (e.g., from submittedAt for initial prompts)
+    const currentSession = sessionStoreSetters.getSessions()[session.taskRunId];
     sessionStoreSetters.updateSession(session.taskRunId, {
       isPromptPending: true,
-      promptStartedAt: Date.now(),
+      promptStartedAt: currentSession?.promptStartedAt ?? Date.now(),
     });
 
     try {

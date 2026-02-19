@@ -1,3 +1,4 @@
+import { useAuthStore } from "@features/auth/stores/authStore";
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
 import {
   type ConnectParams,
@@ -7,9 +8,11 @@ import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import type { PostHogAPIClient } from "@renderer/api/posthogClient";
 import { logger } from "@renderer/lib/logger";
+import { queryClient } from "@renderer/lib/queryClient";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc";
 import { getTaskRepository } from "@renderer/utils/repository";
+import { getCloudUrlFromRegion } from "@shared/constants/oauth";
 import type {
   ExecutionMode,
   Task,
@@ -18,6 +21,81 @@ import type {
 } from "@shared/types";
 
 const log = logger.scope("task-creation-saga");
+
+function truncateToTitle(content: string): string {
+  // Strip XML/HTML tags
+  const stripped = content.replace(/<[^>]*>/g, "").trim();
+  if (!stripped) return "Untitled";
+  if (stripped.length <= 80) return stripped;
+  // Truncate at word boundary
+  const truncated = stripped.slice(0, 80);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > 20
+    ? `${truncated.slice(0, lastSpace)}...`
+    : `${truncated}...`;
+}
+
+const TITLE_SYSTEM_PROMPT = `You are a title generator. You output ONLY a task title. Nothing else.
+
+Convert the task description into a concise task title.
+- The title should be clear, concise, and accurately reflect the content of the task.
+- You should keep it short and simple, ideally no more than 6 words.
+- Avoid using jargon or overly technical terms unless absolutely necessary.
+- The title should be easy to understand for anyone reading it.
+- Use sentence case (capitalize only first word and proper nouns)
+-Remove: the, this, my, a, an
+- If possible, start with action verbs (Fix, Implement, Analyze, Debug, Update, Research, Review)
+- Keep exact: technical terms, numbers, filenames, HTTP codes, PR numbers
+- Never assume tech stack
+- Only output "Untitled" if the input is completely null/missing, not just unclear
+
+Examples:
+- "Fix the login bug in the authentication system" → Fix authentication login bug
+- "Schedule a meeting with stakeholders to discuss Q4 budget planning" → Schedule Q4 budget meeting
+- "Update user documentation for new API endpoints" → Update API documentation
+- "Research competitor pricing strategies for our product" → Research competitor pricing
+- "Review pull request #123" → Review pull request #123
+- "debug 500 errors in production" → Debug production 500 errors
+- "why is the payment flow failing" → Analyze payment flow failure
+- "So how about that weather huh" → "Weather chat"
+- "dsfkj sdkfj help me code" → "Coding help request"
+- "👋😊" → "Friendly greeting"
+- "aaaaaaaaaa" → "Repeated letters"
+- "   " → "Empty message"
+- "What's the best restaurant in NYC?" → "NYC restaurant recommendations"`;
+
+async function generateTaskTitle(
+  taskId: string,
+  description: string,
+  posthogClient: PostHogAPIClient,
+): Promise<void> {
+  try {
+    const authState = useAuthStore.getState();
+    const apiKey = authState.oauthAccessToken;
+    const cloudRegion = authState.cloudRegion;
+    if (!apiKey || !cloudRegion) return;
+
+    const apiHost = getCloudUrlFromRegion(cloudRegion);
+
+    const result = await trpcVanilla.llmGateway.prompt.mutate({
+      credentials: { apiKey, apiHost },
+      system: TITLE_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: description }],
+    });
+
+    const title = result.content.trim();
+    if (!title) return;
+
+    await posthogClient.updateTask(taskId, { title });
+
+    // Update all cached task lists so the sidebar reflects the new title instantly
+    queryClient.setQueriesData<Task[]>({ queryKey: ["tasks", "list"] }, (old) =>
+      old?.map((task) => (task.id === taskId ? { ...task, title } : task)),
+    );
+  } catch (error) {
+    log.error("Failed to generate task title", { taskId, error });
+  }
+}
 
 // Adapt our logger to SagaLogger interface
 const sagaLogger: SagaLogger = {
@@ -80,6 +158,11 @@ export class TaskCreationSaga extends Saga<
           this.deps.posthogClient.getTask(taskId),
         )
       : await this.createTask(input);
+
+    // Fire-and-forget: generate a proper LLM title for new tasks
+    if (!taskId) {
+      generateTaskTitle(task.id, input.content ?? "", this.deps.posthogClient);
+    }
 
     // Step 2: Resolve repoPath - input takes precedence, then stored mappings
     // Wait for workspace store to load first (it loads async on init)
@@ -285,6 +368,7 @@ export class TaskCreationSaga extends Saga<
       name: "task_creation",
       execute: async () => {
         const result = await this.deps.posthogClient.createTask({
+          title: truncateToTitle(input.content ?? ""),
           description: input.content ?? "",
           repository: repository ?? undefined,
           github_integration:

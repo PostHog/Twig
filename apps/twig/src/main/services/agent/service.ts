@@ -28,7 +28,6 @@ import { logger } from "../../lib/logger.js";
 import { createMainTimingCollector } from "../../lib/timing.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
-import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -468,32 +467,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     // Preview sessions don't persist logs — no real task exists
     const isPreview = taskId === "__preview__";
 
-    // OTEL log pipeline or legacy S3 writer if FF false
-    const useOtelPipeline = isPreview
-      ? false
-      : await tc.time("featureFlag", () =>
-          this.isFeatureFlagEnabled("twig-agent-logs-pipeline"),
-        );
-
-    log.info("Agent log transport", {
-      transport: isPreview ? "none" : useOtelPipeline ? "otel" : "s3",
-      taskId,
-      taskRunId,
-    });
-
     const agent = new Agent({
       posthog: {
         apiUrl: credentials.apiHost,
         getApiKey: () => this.getToken(credentials.apiKey),
         projectId: credentials.projectId,
       },
-      otelTransport: useOtelPipeline
-        ? {
-            host: credentials.apiHost,
-            apiKey: this.getToken(credentials.apiKey),
-            logsPath: "/i/v1/agent-logs",
-          }
-        : undefined,
       skipLogPersistence: isPreview,
       debug: !app.isPackaged,
       onLog: onAgentLog,
@@ -1009,20 +988,6 @@ For git operations while detached:
       log.warn("Failed to setup mock node environment", err);
     }
     return mockNodeDir;
-  }
-
-  private async isFeatureFlagEnabled(flagKey: string): Promise<boolean> {
-    try {
-      const client = getPostHogClient();
-      const userId = getCurrentUserId();
-      if (!client || !userId) {
-        return false;
-      }
-      return (await client.isFeatureEnabled(flagKey, userId)) ?? false;
-    } catch (error) {
-      log.warn(`Error checking feature flag "${flagKey}":`, error);
-      return false;
-    }
   }
 
   private cleanupMockNodeEnvironment(mockNodeDir: string): void {
