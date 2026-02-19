@@ -35,8 +35,12 @@ export type UpdatesStatusPayload = {
   error?: string;
 };
 
+export type UpdateReadyPayload = {
+  version: string | null;
+};
+
 export interface UpdatesEvents {
-  [UpdatesEvent.Ready]: true;
+  [UpdatesEvent.Ready]: UpdateReadyPayload;
   [UpdatesEvent.Status]: UpdatesStatusPayload;
   [UpdatesEvent.CheckFromMenu]: true;
 }

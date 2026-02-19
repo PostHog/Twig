@@ -237,7 +237,7 @@ export class UpdatesService extends TypedEventEmitter<UpdatesEvents> {
       log.info("Notifying user that update is ready", {
         downloadedVersion: this.downloadedVersion,
       });
-      this.emit(UpdatesEvent.Ready, true);
+      this.emit(UpdatesEvent.Ready, { version: this.downloadedVersion });
       this.pendingNotification = false;
     }
   }
