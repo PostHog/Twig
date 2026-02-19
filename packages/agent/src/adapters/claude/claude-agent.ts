@@ -216,9 +216,9 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     // Run model config, slash commands, and MCP metadata fetch in parallel
     const [modelOptions, slashCommands] = await timeAsync("parallelFetch", () =>
       Promise.all([
-        this.getModelConfigOptions(),
-        getAvailableSlashCommands(q),
-        mcpMetadataPromise,
+        timeAsync("fetchModels", () => this.getModelConfigOptions()),
+        timeAsync("slashCommands", () => getAvailableSlashCommands(q)),
+        timeAsync("mcpMetadata", () => mcpMetadataPromise),
       ]),
     );
 
