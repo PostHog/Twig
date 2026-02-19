@@ -213,19 +213,28 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       );
     }
 
-    // Run model config, slash commands, and MCP metadata fetch in parallel
-    const [modelOptions, slashCommands] = await timeAsync("parallelFetch", () =>
-      Promise.all([
-        timeAsync("fetchModels", () => this.getModelConfigOptions()),
-        timeAsync("slashCommands", () => getAvailableSlashCommands(q)),
-        timeAsync("mcpMetadata", () => mcpMetadataPromise),
-      ]),
+    // Only await model config — slash commands and MCP metadata are deferred
+    // since they're not needed to return configOptions to the client.
+    const modelOptions = await timeAsync("fetchModels", () =>
+      this.getModelConfigOptions(),
     );
+
+    // Slash commands: send update to client when ready (not blocking)
+    getAvailableSlashCommands(q)
+      .then((slashCommands) => {
+        this.sendAvailableCommandsUpdate(sessionId, slashCommands);
+      })
+      .catch((err) => {
+        this.logger.warn("Failed to fetch slash commands", { err });
+      });
+
+    // MCP metadata: already running, just ensure errors are handled
+    mcpMetadataPromise.catch((err) => {
+      this.logger.warn("Failed to fetch MCP tool metadata", { err });
+    });
 
     session.modelId = modelOptions.currentModelId;
     await this.trySetModel(q, modelOptions.currentModelId);
-
-    this.sendAvailableCommandsUpdate(sessionId, slashCommands);
 
     const configOptions = await timeAsync("buildConfigOptions", () =>
       this.buildConfigOptions(modelOptions),
@@ -284,13 +293,18 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
 
-    // Run slash commands fetch and MCP metadata in parallel
-    const [slashCommands] = await Promise.all([
-      getAvailableSlashCommands(q),
-      mcpMetadataPromise,
-    ]);
+    // Defer slash commands and MCP metadata — not needed to return configOptions
+    getAvailableSlashCommands(q)
+      .then((slashCommands) => {
+        this.sendAvailableCommandsUpdate(sessionId, slashCommands);
+      })
+      .catch((err) => {
+        this.logger.warn("Failed to fetch slash commands on resume", { err });
+      });
 
-    this.sendAvailableCommandsUpdate(sessionId, slashCommands);
+    mcpMetadataPromise.catch((err) => {
+      this.logger.warn("Failed to fetch MCP tool metadata on resume", { err });
+    });
 
     return {
       configOptions: await this.buildConfigOptions(),
