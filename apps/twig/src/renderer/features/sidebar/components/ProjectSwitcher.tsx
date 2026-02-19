@@ -230,17 +230,18 @@ export function ProjectSwitcher() {
 
               <DropdownMenu.Root open={learnMoreOpen} modal={false}>
                 <DropdownMenu.Trigger>
-                  <div
+                  <button
+                    type="button"
                     onMouseEnter={openLearnMore}
                     onMouseLeave={closeLearnMore}
-                    className="flex w-full cursor-pointer items-center justify-between bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
+                    className="flex w-full cursor-pointer items-center justify-between border-none bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
                   >
                     <Flex align="center" gap="2">
                       <Info size={14} className="text-gray-11" />
                       <Text size="1">Learn more</Text>
                     </Flex>
                     <CaretRight size={12} className="text-gray-9" />
-                  </div>
+                  </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content
                   side="right"
