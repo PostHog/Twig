@@ -4,10 +4,10 @@ import { useRightSidebarStore } from "@features/right-sidebar";
 import { useSettingsDialogStore } from "@features/settings/stores/settingsDialogStore";
 import { useSidebarStore } from "@features/sidebar/stores/sidebarStore";
 import {
+  DesktopIcon,
   FileTextIcon,
   GearIcon,
   HomeIcon,
-  DesktopIcon,
   MoonIcon,
   SunIcon,
   ViewVerticalIcon,

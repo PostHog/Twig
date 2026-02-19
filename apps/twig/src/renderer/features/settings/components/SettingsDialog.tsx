@@ -6,22 +6,20 @@ import {
   ArrowLeft,
   ArrowsClockwise,
   CaretRight,
-  ChatCircle,
   Code,
   Folder,
-  Gear,
+  GearSix,
   Keyboard,
-  Palette,
   User,
+  Wrench,
 } from "@phosphor-icons/react";
 import { Box, Flex, ScrollArea, Text } from "@radix-ui/themes";
 import { type ReactNode, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { AccountSettings } from "./sections/AccountSettings";
 import { AdvancedSettings } from "./sections/AdvancedSettings";
-import { AppearanceSettings } from "./sections/AppearanceSettings";
-import { ChatSettings } from "./sections/ChatSettings";
 import { ClaudeCodeSettings } from "./sections/ClaudeCodeSettings";
+import { GeneralSettings } from "./sections/GeneralSettings";
 import { ShortcutsSettings } from "./sections/ShortcutsSettings";
 import { UpdatesSettings } from "./sections/UpdatesSettings";
 import { WorkspacesSettings } from "./sections/WorkspacesSettings";
@@ -34,34 +32,31 @@ interface SidebarItem {
 }
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
-  { id: "chat", label: "Chat", icon: <ChatCircle size={16} /> },
-  { id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
-  { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
+  { id: "general", label: "General", icon: <GearSix size={16} /> },
+  { id: "account", label: "Account", icon: <User size={16} /> },
   { id: "workspaces", label: "Workspaces", icon: <Folder size={16} /> },
   { id: "claude-code", label: "Claude Code", icon: <Code size={16} /> },
-  { id: "account", label: "Account", icon: <User size={16} /> },
+  { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
   { id: "updates", label: "Updates", icon: <ArrowsClockwise size={16} /> },
-  { id: "advanced", label: "Advanced", icon: <Gear size={16} /> },
+  { id: "advanced", label: "Advanced", icon: <Wrench size={16} /> },
 ];
 
 const CATEGORY_TITLES: Record<SettingsCategory, string> = {
-  chat: "Chat",
-  appearance: "Appearance",
-  shortcuts: "Shortcuts",
+  general: "General",
+  account: "Account",
   workspaces: "Workspaces",
   "claude-code": "Claude Code",
-  account: "Account",
+  shortcuts: "Shortcuts",
   updates: "Updates",
   advanced: "Advanced",
 };
 
 const CATEGORY_COMPONENTS: Record<SettingsCategory, React.ComponentType> = {
-  chat: ChatSettings,
-  appearance: AppearanceSettings,
-  shortcuts: ShortcutsSettings,
+  general: GeneralSettings,
+  account: AccountSettings,
   workspaces: WorkspacesSettings,
   "claude-code": ClaudeCodeSettings,
-  account: AccountSettings,
+  shortcuts: ShortcutsSettings,
   updates: UpdatesSettings,
   advanced: AdvancedSettings,
 };
