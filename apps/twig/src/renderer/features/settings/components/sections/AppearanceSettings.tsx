@@ -1,6 +1,7 @@
 import { SettingRow } from "@features/settings/components/SettingRow";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { Flex, Select, Switch, Text, TextField } from "@radix-ui/themes";
+import type { ThemePreference } from "@stores/themeStore";
 import { track } from "@renderer/lib/analytics";
 import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
 import { useThemeStore } from "@stores/themeStore";
@@ -25,8 +26,9 @@ const TERMINAL_FONT_PRESETS = [
 ];
 
 export function AppearanceSettings() {
+  const theme = useThemeStore((state) => state.theme);
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
-  const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
+  const setTheme = useThemeStore((state) => state.setTheme);
   const { cursorGlow, setCursorGlow } = useSettingsStore();
   const terminalFontFamily = useTerminalSettingsStore(
     (state) => state.terminalFontFamily,
@@ -70,17 +72,20 @@ export function AppearanceSettings() {
     }
   }, [terminalFontFamily]);
 
-  const handleDarkModeChange = useCallback(() => {
-    track(ANALYTICS_EVENTS.SETTING_CHANGED, {
-      setting_name: "dark_mode",
-      new_value: !isDarkMode,
-      old_value: isDarkMode,
-    });
-    if (isDarkMode && cursorGlow) {
-      setCursorGlow(false);
-    }
-    toggleDarkMode();
-  }, [isDarkMode, toggleDarkMode, cursorGlow, setCursorGlow]);
+  const handleThemeChange = useCallback(
+    (value: ThemePreference) => {
+      track(ANALYTICS_EVENTS.SETTING_CHANGED, {
+        setting_name: "theme",
+        new_value: value,
+        old_value: theme,
+      });
+      if (value === "light" && cursorGlow) {
+        setCursorGlow(false);
+      }
+      setTheme(value);
+    },
+    [theme, setTheme, cursorGlow, setCursorGlow],
+  );
 
   const handleCursorGlowChange = useCallback(
     (checked: boolean) => {
@@ -188,14 +193,21 @@ export function AppearanceSettings() {
   return (
     <Flex direction="column">
       <SettingRow
-        label="Dark mode"
-        description="Use dark theme for the interface"
+        label="Theme"
+        description="Choose light, dark, or follow your system preference"
       >
-        <Switch
-          checked={isDarkMode}
-          onCheckedChange={handleDarkModeChange}
+        <Select.Root
+          value={theme}
+          onValueChange={(v) => handleThemeChange(v as ThemePreference)}
           size="1"
-        />
+        >
+          <Select.Trigger style={{ minWidth: "100px" }} />
+          <Select.Content>
+            <Select.Item value="light">Light</Select.Item>
+            <Select.Item value="dark">Dark</Select.Item>
+            <Select.Item value="system">System</Select.Item>
+          </Select.Content>
+        </Select.Root>
       </SettingRow>
 
       {isDarkMode && (

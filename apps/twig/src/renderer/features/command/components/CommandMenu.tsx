@@ -7,6 +7,7 @@ import {
   FileTextIcon,
   GearIcon,
   HomeIcon,
+  DesktopIcon,
   MoonIcon,
   SunIcon,
   ViewVerticalIcon,
@@ -29,7 +30,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const { navigateToTaskInput } = useNavigationStore();
   const openSettingsDialog = useSettingsDialogStore((state) => state.open);
   const { folders } = useRegisteredFoldersStore();
-  const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { theme, cycleTheme } = useThemeStore();
   const toggleLeftSidebar = useSidebarStore((state) => state.toggle);
   const toggleRightSidebar = useRightSidebarStore((state) => state.toggle);
   const commandRef = useRef<HTMLDivElement>(null);
@@ -143,15 +144,23 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
             <Command.Group heading="Actions">
               <Command.Item
-                value="Toggle theme dark light mode"
-                onSelect={runAndClose(toggleDarkMode, "toggle-theme")}
+                value="Toggle theme dark light system mode"
+                onSelect={runAndClose(cycleTheme, "toggle-theme")}
               >
-                {isDarkMode ? (
+                {theme === "dark" && (
                   <SunIcon className="mr-3 h-3 w-3 text-gray-11" />
-                ) : (
+                )}
+                {theme === "light" && (
+                  <DesktopIcon className="mr-3 h-3 w-3 text-gray-11" />
+                )}
+                {theme === "system" && (
                   <MoonIcon className="mr-3 h-3 w-3 text-gray-11" />
                 )}
-                <Text size="1">Toggle theme</Text>
+                <Text size="1">
+                  {theme === "dark" && "Switch to light mode"}
+                  {theme === "light" && "Switch to system theme"}
+                  {theme === "system" && "Switch to dark mode"}
+                </Text>
               </Command.Item>
               <Command.Item
                 value="Toggle left sidebar"
