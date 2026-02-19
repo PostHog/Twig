@@ -4,12 +4,14 @@ import {
   defaultRemarkPlugins,
   MarkdownRenderer,
 } from "@features/editor/components/MarkdownRenderer";
-import { Check, Copy, File } from "@phosphor-icons/react";
+import { CaretDown, CaretUp, Check, Copy, File } from "@phosphor-icons/react";
 import { Box, Code, IconButton, Text } from "@radix-ui/themes";
 import type { ReactNode } from "react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
+
+const COLLAPSED_MAX_HEIGHT = 160;
 
 interface UserMessageProps {
   content: string;
@@ -94,6 +96,16 @@ function parseFileMentions(content: string): ReactNode[] {
 export function UserMessage({ content }: UserMessageProps) {
   const hasFileMentions = /<file\s+path="[^"]+"\s*\/>/.test(content);
   const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (el) {
+      setIsOverflowing(el.scrollHeight > COLLAPSED_MAX_HEIGHT);
+    }
+  }, []);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content);
@@ -106,13 +118,48 @@ export function UserMessage({ content }: UserMessageProps) {
       className="group/msg relative border-l-2 bg-gray-2 py-2 pl-3"
       style={{ borderColor: "var(--accent-9)" }}
     >
-      <Box className="font-medium [&>*:last-child]:mb-0">
+      <Box
+        ref={contentRef}
+        className="relative overflow-hidden font-medium [&>*:last-child]:mb-0"
+        style={
+          !isExpanded && isOverflowing
+            ? { maxHeight: COLLAPSED_MAX_HEIGHT }
+            : undefined
+        }
+      >
         {hasFileMentions ? (
           parseFileMentions(content)
         ) : (
           <MarkdownRenderer content={content} />
         )}
+        {!isExpanded && isOverflowing && (
+          <Box
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-12"
+            style={{
+              background: "linear-gradient(transparent, var(--gray-2))",
+            }}
+          />
+        )}
       </Box>
+      {isOverflowing && (
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-accent-11 hover:text-accent-12"
+        >
+          {isExpanded ? (
+            <>
+              <CaretUp size={12} />
+              Show less
+            </>
+          ) : (
+            <>
+              <CaretDown size={12} />
+              Show more
+            </>
+          )}
+        </button>
+      )}
       <Box className="absolute top-1 right-1 opacity-0 transition-opacity group-hover/msg:opacity-100">
         <Tooltip content={copied ? "Copied!" : "Copy message"}>
           <IconButton
