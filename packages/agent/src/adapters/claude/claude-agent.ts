@@ -145,7 +145,10 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         : "default";
 
     const mcpServers = parseMcpServers(params);
-    await fetchMcpToolMetadata(mcpServers, this.logger);
+
+    // Fire off MCP metadata fetch early — it populates a module-level cache
+    // used later during permission checks, not needed by buildSessionOptions or query()
+    const mcpMetadataPromise = fetchMcpToolMetadata(mcpServers, this.logger);
 
     const options = buildSessionOptions({
       cwd: params.cwd,
@@ -184,14 +187,19 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       });
     }
 
-    const modelOptions = await this.getModelConfigOptions();
-    session.modelId = modelOptions.currentModelId;
-    await this.trySetModel(q, modelOptions.currentModelId);
+    // Run model config, slash commands, and MCP metadata fetch in parallel
+    const [modelOptions, slashCommands] = await Promise.all([
+      this.getModelConfigOptions(),
+      getAvailableSlashCommands(q),
+      mcpMetadataPromise,
+    ]);
 
-    this.sendAvailableCommandsUpdate(
-      sessionId,
-      await getAvailableSlashCommands(q),
-    );
+    session.modelId = modelOptions.currentModelId;
+
+    // Fire-and-forget — trySetModel already swallows errors
+    this.trySetModel(q, modelOptions.currentModelId);
+
+    this.sendAvailableCommandsUpdate(sessionId, slashCommands);
 
     return {
       sessionId,
@@ -216,7 +224,9 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     }
 
     const mcpServers = parseMcpServers(params);
-    await fetchMcpToolMetadata(mcpServers, this.logger);
+
+    // Fire off MCP metadata fetch early — populates cache for permission checks
+    const mcpMetadataPromise = fetchMcpToolMetadata(mcpServers, this.logger);
 
     const permissionMode: TwigExecutionMode =
       meta?.permissionMode &&
@@ -238,10 +248,14 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     session.taskRunId = meta?.taskRunId;
 
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
-    this.sendAvailableCommandsUpdate(
-      sessionId,
-      await getAvailableSlashCommands(q),
-    );
+
+    // Run slash commands fetch and MCP metadata in parallel
+    const [slashCommands] = await Promise.all([
+      getAvailableSlashCommands(q),
+      mcpMetadataPromise,
+    ]);
+
+    this.sendAvailableCommandsUpdate(sessionId, slashCommands);
 
     return {
       configOptions: await this.buildConfigOptions(),

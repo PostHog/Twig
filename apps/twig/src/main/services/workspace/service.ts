@@ -376,20 +376,18 @@ export class WorkspaceService extends TypedEventEmitter<WorkspaceServiceEvents> 
       }
       foldersStore.set("taskAssociations", associations);
 
-      // Load config and run scripts from main repo
-      const { config } = await loadConfig(
-        folderPath,
-        path.basename(folderPath),
-      );
+      // Load config and build env in parallel
+      const [{ config }, workspaceEnv] = await Promise.all([
+        loadConfig(folderPath, path.basename(folderPath)),
+        buildWorkspaceEnv({
+          taskId,
+          folderPath,
+          worktreePath: null,
+          worktreeName: null,
+          mode,
+        }),
+      ]);
       let terminalSessionIds: string[] = [];
-
-      const workspaceEnv = await buildWorkspaceEnv({
-        taskId,
-        folderPath,
-        worktreePath: null,
-        worktreeName: null,
-        mode,
-      });
 
       // Run init scripts
       const initScripts = normalizeScripts(config?.scripts?.init);

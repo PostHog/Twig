@@ -62,7 +62,14 @@ export class TaskCreationSaga extends Saga<
     input: TaskCreationInput,
   ): Promise<TaskCreationOutput> {
     // Step 1: Get or create task
+    // For new tasks, start folder registration in parallel with task creation
+    // since folder_registration only needs repoPath (from input), not task.id
     const taskId = input.taskId;
+    const folderPromise =
+      !taskId && input.repoPath
+        ? this.resolveFolder(input.repoPath)
+        : undefined;
+
     const task = taskId
       ? await this.readOnlyStep("fetch_task", () =>
           this.deps.posthogClient.getTask(taskId),
@@ -108,21 +115,12 @@ export class TaskCreationSaga extends Saga<
 
       const branch = input.branch ?? task.latest_run?.branch ?? null;
 
-      // Get or create folder registration first
-      const folder = await this.readOnlyStep(
-        "folder_registration",
-        async () => {
-          const folders = await trpcVanilla.folders.getFolders.query();
-          let existingFolder = folders.find((f) => f.path === repoPath);
-
-          if (!existingFolder) {
-            existingFolder = await trpcVanilla.folders.addFolder.mutate({
-              folderPath: repoPath,
-            });
-          }
-          return existingFolder;
-        },
-      );
+      // Use the pre-fetched folder if we started it in parallel, otherwise fetch now
+      const folder = folderPromise
+        ? await this.readOnlyStep("folder_registration", () => folderPromise)
+        : await this.readOnlyStep("folder_registration", () =>
+            this.resolveFolder(repoPath),
+          );
 
       const workspaceInfo = await this.step({
         name: "workspace_creation",
@@ -244,6 +242,18 @@ export class TaskCreationSaga extends Saga<
         }
       });
     });
+  }
+
+  private async resolveFolder(repoPath: string) {
+    const folders = await trpcVanilla.folders.getFolders.query();
+    let existingFolder = folders.find((f) => f.path === repoPath);
+
+    if (!existingFolder) {
+      existingFolder = await trpcVanilla.folders.addFolder.mutate({
+        folderPath: repoPath,
+      });
+    }
+    return existingFolder;
   }
 
   private async createTask(input: TaskCreationInput): Promise<Task> {

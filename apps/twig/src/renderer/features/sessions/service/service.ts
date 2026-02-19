@@ -340,26 +340,28 @@ export class SessionService {
           setPersistedConfigOptions(taskRunId, configOptions);
         }
 
-        // Restore persisted config options to server
+        // Restore persisted config options to server in parallel
         if (persistedConfigOptions) {
-          for (const opt of persistedConfigOptions) {
-            try {
-              await trpcVanilla.agent.setConfigOption.mutate({
-                sessionId: taskRunId,
-                configId: opt.id,
-                value: opt.currentValue,
-              });
-            } catch (error) {
-              log.warn(
-                "Failed to restore persisted config option after reconnect",
-                {
-                  taskId,
+          await Promise.allSettled(
+            persistedConfigOptions.map((opt) =>
+              trpcVanilla.agent.setConfigOption
+                .mutate({
+                  sessionId: taskRunId,
                   configId: opt.id,
-                  error,
-                },
-              );
-            }
-          }
+                  value: opt.currentValue,
+                })
+                .catch((error) => {
+                  log.warn(
+                    "Failed to restore persisted config option after reconnect",
+                    {
+                      taskId,
+                      configId: opt.id,
+                      error,
+                    },
+                  );
+                }),
+            ),
+          );
         }
       } else {
         log.warn("Reconnect returned null, falling back to new session", {
