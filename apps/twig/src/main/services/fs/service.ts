@@ -121,6 +121,23 @@ export class FsService {
     this.invalidateCache(repoPath);
   }
 
+  async getFileStats(
+    repoPath: string,
+    filePath: string,
+  ): Promise<{ mtime: number } | null> {
+    try {
+      const stats = await fs.promises.stat(
+        this.resolvePath(repoPath, filePath),
+      );
+      return { mtime: stats.mtimeMs };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.error(`Failed to stat file ${filePath}:`, error);
+      }
+      return null;
+    }
+  }
+
   private resolvePath(repoPath: string, filePath: string): string {
     const fullPath = path.join(repoPath, filePath);
     const resolved = path.resolve(fullPath);

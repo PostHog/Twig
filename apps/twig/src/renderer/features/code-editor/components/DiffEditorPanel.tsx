@@ -1,32 +1,48 @@
 import { PanelMessage } from "@components/ui/PanelMessage";
+import type { DiffEditorViewRef } from "@features/code-editor/components/CodeMirrorDiffEditor";
 import { CodeMirrorDiffEditor } from "@features/code-editor/components/CodeMirrorDiffEditor";
+import type { EditorViewRef } from "@features/code-editor/components/CodeMirrorEditor";
 import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEditor";
+import { isDirty } from "@features/code-editor/extensions/dirtyTracking";
+import { useFileChangeDetection } from "@features/code-editor/hooks/useFileChangeDetection";
+import { useSaveHandler } from "@features/code-editor/hooks/useSaveHandler";
+import type { EditorState } from "@features/code-editor/types/editorState";
+import { registerUnsavedContent } from "@features/code-editor/unsavedContentRegistry";
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { Box } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface DiffEditorPanelProps {
   taskId: string;
   task: Task;
   absolutePath: string;
+  tabId: string;
 }
 
 export function DiffEditorPanel({
   taskId,
   task: _task,
   absolutePath,
+  tabId,
 }: DiffEditorPanelProps) {
   const repoPath = useCwd(taskId);
   const filePath = getRelativePath(absolutePath, repoPath);
-  const queryClient = useQueryClient();
+  const updateTabMetadata = usePanelLayoutStore((s) => s.updateTabMetadata);
   const closeDiffTabsForFile = usePanelLayoutStore(
     (s) => s.closeDiffTabsForFile,
   );
+  const editorRef = useRef<EditorViewRef | DiffEditorViewRef>(null);
+  const modifiedContentRef = useRef<string | null>(null);
+  const originalContentRef = useRef<string | null>(null);
+  const initialMtimeRef = useRef<number | null>(null);
+  const [editorState, setEditorState] = useState<EditorState>({
+    type: "clean",
+  });
 
   const { data: changedFiles = [], isLoading: loadingChangelist } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -56,6 +72,32 @@ export function DiffEditorPanel({
     staleTime: Infinity,
   });
 
+  useEffect(() => {
+    modifiedContentRef.current = modifiedContent ?? null;
+  }, [modifiedContent]);
+
+  useFileChangeDetection({
+    repoPath: !isDeleted ? repoPath : null,
+    filePath: !isDeleted ? filePath : null,
+    editorViewRef: editorRef,
+    initialMtimeRef,
+    onExternalChange: () => {
+      const view = editorRef.current?.getView();
+      if (view && isDirty(view)) {
+        setEditorState({
+          type: "conflict",
+          frozenContent: view.state.doc.toString(),
+          diskMtime: Date.now(),
+        });
+      }
+    },
+  });
+
+  const effectiveModifiedContent =
+    editorState.type === "conflict"
+      ? editorState.frozenContent
+      : modifiedContent;
+
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
     queryKey: ["file-at-head", repoPath, originalPath],
     queryFn: () =>
@@ -67,27 +109,52 @@ export function DiffEditorPanel({
     staleTime: Infinity,
   });
 
-  const handleContentChange = useCallback(
-    async (newContent: string) => {
-      if (!repoPath) return;
+  useEffect(() => {
+    originalContentRef.current = originalContent ?? null;
+  }, [originalContent]);
 
-      try {
-        await trpcVanilla.fs.writeRepoFile.mutate({
-          repoPath,
-          filePath,
-          content: newContent,
-        });
+  const fileContentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sourceContent = isDeleted
+      ? (originalContent ?? null)
+      : (modifiedContent ?? null);
+    fileContentRef.current = sourceContent;
+  }, [isDeleted, originalContent, modifiedContent]);
 
-        queryClient.invalidateQueries({
-          queryKey: ["repo-file", repoPath, filePath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-head", repoPath],
-        });
-      } catch (_error) {}
-    },
-    [repoPath, filePath, queryClient],
-  );
+  const { save, discard } = useSaveHandler({
+    repoPath,
+    filePath,
+    taskId,
+    tabId,
+    editorViewRef: editorRef,
+    initialMtimeRef,
+    editorState,
+    setEditorState,
+    updateTabMetadata,
+    fileContentRef,
+  });
+
+  useEffect(() => {
+    return registerUnsavedContent(tabId, {
+      save,
+      discard,
+      hasUnsavedChanges: () => {
+        const view = editorRef.current?.getView();
+        return view ? isDirty(view) : false;
+      },
+    });
+  }, [tabId, save, discard]);
+
+  const handleContentChange = useCallback(() => {
+    const view = editorRef.current?.getView();
+    if (!view) return;
+
+    const dirty = isDirty(view);
+    updateTabMetadata(taskId, tabId, {
+      hasUnsavedChanges: dirty,
+      isPreview: dirty ? false : undefined,
+    });
+  }, [taskId, tabId, updateTabMetadata]);
 
   const isLoading =
     loadingChangelist ||
@@ -119,24 +186,27 @@ export function DiffEditorPanel({
   }
 
   const showDiff = !isDeleted && !isNew;
-  const content = isDeleted ? originalContent : modifiedContent;
+  const content = isDeleted ? originalContent : effectiveModifiedContent;
 
   return (
     <Box height="100%" style={{ overflow: "hidden" }}>
       {showDiff ? (
         <CodeMirrorDiffEditor
+          ref={editorRef as React.Ref<DiffEditorViewRef>}
           originalContent={originalContent ?? ""}
-          modifiedContent={modifiedContent ?? ""}
+          modifiedContent={effectiveModifiedContent ?? ""}
           filePath={absolutePath}
           relativePath={filePath}
           onContentChange={handleContentChange}
         />
       ) : (
         <CodeMirrorEditor
+          ref={editorRef as React.Ref<EditorViewRef>}
           content={content ?? ""}
           filePath={absolutePath}
           relativePath={filePath}
-          readOnly
+          readOnly={isDeleted}
+          onContentChange={isDeleted ? undefined : handleContentChange}
         />
       )}
     </Box>
