@@ -31,6 +31,7 @@ export const OAUTH_SCOPES = [
   "organization:read",
   "property_definition:read",
   "query:read",
+  "signal_report:read",
   "survey:read",
   "survey:write",
   "warehouse_table:read",
