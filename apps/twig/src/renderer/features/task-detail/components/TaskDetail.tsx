@@ -9,10 +9,10 @@ import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import type { Task } from "@shared/types";
 import { useEffect, useMemo, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { ExternalAppsOpener } from "./ExternalAppsOpener";
 
 interface TaskDetailProps {

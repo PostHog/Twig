@@ -1,13 +1,13 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import type { Socket } from "node:net";
-import { shell } from "electron";
-import { inject, injectable } from "inversify";
 import {
   getCloudUrlFromRegion,
   getOauthClientIdFromRegion,
   OAUTH_SCOPES,
-} from "../../../constants/oauth.js";
+} from "@shared/constants/oauth.js";
+import { shell } from "electron";
+import { inject, injectable } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import type { DeepLinkService } from "../deep-link/service.js";

@@ -20,9 +20,9 @@ import {
 } from "@posthog/agent/gateway-models";
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
+import type { AcpMessage } from "@shared/types/session-events.js";
 import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
-import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";

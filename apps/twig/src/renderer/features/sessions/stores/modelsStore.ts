@@ -1,8 +1,8 @@
 import { DEFAULT_GATEWAY_MODEL } from "@posthog/agent/gateway-models";
 import { trpcVanilla } from "@renderer/trpc/client";
+import { getCloudUrlFromRegion } from "@shared/constants/oauth";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { getCloudUrlFromRegion } from "@/constants/oauth";
 
 export interface ModelOption {
   modelId: string;

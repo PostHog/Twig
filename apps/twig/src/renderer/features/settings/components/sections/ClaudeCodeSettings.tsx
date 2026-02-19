@@ -14,8 +14,8 @@ import {
 import { Tooltip } from "@renderer/components/ui/Tooltip";
 import { track } from "@renderer/lib/analytics";
 import { trpcReact } from "@renderer/trpc";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { useCallback, useEffect, useState } from "react";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);

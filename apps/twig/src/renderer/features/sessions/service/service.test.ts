@@ -112,7 +112,7 @@ vi.mock(
 
 const mockGetIsOnline = vi.hoisted(() => vi.fn(() => true));
 
-vi.mock("@/renderer/stores/connectivityStore", () => ({
+vi.mock("@renderer/stores/connectivityStore", () => ({
   getIsOnline: () => mockGetIsOnline(),
 }));
 
@@ -134,7 +134,7 @@ vi.mock("@renderer/lib/notifications", () => ({
 vi.mock("@renderer/utils/toast", () => ({
   toast: { error: vi.fn() },
 }));
-vi.mock("@/constants/oauth", () => ({
+vi.mock("@shared/constants/oauth", () => ({
   getCloudUrlFromRegion: () => "https://api.anthropic.com",
 }));
 vi.mock("@utils/session", () => ({

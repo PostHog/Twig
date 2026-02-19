@@ -1,10 +1,10 @@
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { omitKey } from "@utils/object";
 import { expandTildePath } from "@utils/path";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface TaskDirectoryState {
   repoDirectories: Record<string, string>;

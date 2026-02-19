@@ -1,4 +1,4 @@
-import type { GitFileStatus } from "@/shared/types";
+import type { GitFileStatus } from "@shared/types";
 import { DEFAULT_TAB_IDS } from "../constants/panelConstants";
 import type { SplitDirection, TaskLayout } from "./panelLayoutStore";
 import type { GroupPanel, LeafPanel, PanelNode, Tab } from "./panelTypes";

@@ -34,11 +34,9 @@ export function createForceDevModeDefine(): Record<string, string> | undefined {
 }
 
 const baseAliases: Alias[] = [
-  { find: "@", replacement: path.resolve(__dirname, "./src") },
   { find: "@main", replacement: path.resolve(__dirname, "./src/main") },
   { find: "@renderer", replacement: path.resolve(__dirname, "./src/renderer") },
   { find: "@shared", replacement: path.resolve(__dirname, "./src/shared") },
-  { find: "@api", replacement: path.resolve(__dirname, "./src/api") },
 ];
 
 const agentAliases: Alias[] = [

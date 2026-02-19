@@ -3,16 +3,16 @@ import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutio
 import { useAuthenticatedMutation } from "@hooks/useAuthenticatedMutation";
 import { useAuthenticatedQuery } from "@hooks/useAuthenticatedQuery";
 import { useMeQuery } from "@hooks/useMeQuery";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { useFocusStore } from "@renderer/stores/focusStore";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("tasks");
 

@@ -1,16 +1,13 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import path from "node:path";
+import type { TaskFolderAssociation, WorktreeInfo } from "@shared/types";
 import { createGitClient } from "@twig/git/client";
 import { getCurrentBranch, hasTrackedFiles } from "@twig/git/queries";
 import { CreateOrSwitchBranchSaga } from "@twig/git/sagas/branch";
 import { DetachHeadSaga } from "@twig/git/sagas/head";
 import { WorktreeManager } from "@twig/git/worktree";
 import { inject, injectable } from "inversify";
-import type {
-  TaskFolderAssociation,
-  WorktreeInfo,
-} from "../../../shared/types";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger";

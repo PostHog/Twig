@@ -4,12 +4,12 @@ import { track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import type { Task, WorkspaceMode } from "@shared/types";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { getTaskRepository } from "@utils/repository";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("navigation-store");
 

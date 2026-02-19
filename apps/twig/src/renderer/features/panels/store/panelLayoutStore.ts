@@ -1,7 +1,7 @@
 import { track } from "@renderer/lib/analytics";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { persist } from "zustand/middleware";
 import { createWithEqualityFn } from "zustand/traditional";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 import {
   DEFAULT_PANEL_IDS,
   DEFAULT_TAB_IDS,

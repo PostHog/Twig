@@ -8,11 +8,11 @@ import {
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { CaretRight, FolderIcon, FolderOpenIcon } from "@phosphor-icons/react";
 import { Box, Flex } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { trpcReact, trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface FileTreePanelProps {
   taskId: string;

@@ -14,12 +14,15 @@ import {
 } from "@radix-ui/react-icons";
 import { Flex, Text } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
+import {
+  ANALYTICS_EVENTS,
+  type CommandMenuAction,
+} from "@shared/types/analytics";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
 import { THEME_CYCLE_LABELS, useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { ANALYTICS_EVENTS, type CommandMenuAction } from "@/types/analytics";
 
 interface CommandMenuProps {
   open: boolean;

@@ -4,10 +4,10 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Box, Button, Flex, Popover, Text, TextField } from "@radix-ui/themes";
 import { useRepositoryIntegration } from "@renderer/hooks/useIntegrations";
 import { track } from "@renderer/lib/analytics";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { cloneStore } from "@stores/cloneStore";
 import { useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 interface RepositoryPickerProps {
   value: string | null;

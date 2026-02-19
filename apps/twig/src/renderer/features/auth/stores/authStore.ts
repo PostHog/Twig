@@ -1,19 +1,19 @@
-import { PostHogAPIClient } from "@api/posthogClient";
+import { PostHogAPIClient } from "@renderer/api/posthogClient";
 import { identifyUser, resetUser, track } from "@renderer/lib/analytics";
 import { electronStorage } from "@renderer/lib/electronStorage";
 import { logger } from "@renderer/lib/logger";
 import { queryClient } from "@renderer/lib/queryClient";
 import { trpcVanilla } from "@renderer/trpc/client";
+import {
+  getCloudUrlFromRegion,
+  TOKEN_REFRESH_BUFFER_MS,
+} from "@shared/constants/oauth";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import type { CloudRegion } from "@shared/types/oauth";
 import { sleepWithBackoff } from "@shared/utils/backoff";
 import { useNavigationStore } from "@stores/navigationStore";
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
-import {
-  getCloudUrlFromRegion,
-  TOKEN_REFRESH_BUFFER_MS,
-} from "@/constants/oauth";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("auth-store");
 

@@ -1,4 +1,4 @@
-import type { ExternalAppType } from "../../../shared/types.js";
+import type { ExternalAppType } from "@shared/types.js";
 
 export interface AppDefinition {
   path: string;

@@ -15,11 +15,11 @@ import {
 } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { playCompletionSound } from "@renderer/lib/sounds";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
 import type { ThemePreference } from "@stores/themeStore";
 import { resolveIsDarkMode, useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const CUSTOM_TERMINAL_FONT_VALUE = "custom";
 const CUSTOM_TERMINAL_FONT_COMMIT_DELAY_MS = 400;

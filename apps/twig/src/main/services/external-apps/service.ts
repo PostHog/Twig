@@ -1,13 +1,10 @@
 import { exec } from "node:child_process";
 import fs from "node:fs/promises";
 import { promisify } from "node:util";
+import type { DetectedApplication, ExternalAppType } from "@shared/types.js";
 import { app, clipboard } from "electron";
 import Store from "electron-store";
 import { injectable } from "inversify";
-import type {
-  DetectedApplication,
-  ExternalAppType,
-} from "../../../shared/types.js";
 import type { AppDefinition, ExternalAppsSchema } from "./types.js";
 
 const execAsync = promisify(exec);

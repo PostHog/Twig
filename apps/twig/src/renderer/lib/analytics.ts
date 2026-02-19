@@ -6,7 +6,7 @@ import "posthog-js/dist/posthog-recorder";
 import type {
   EventPropertyMap,
   UserIdentifyProperties,
-} from "../../types/analytics";
+} from "@shared/types/analytics";
 import { logger } from "./logger";
 
 const log = logger.scope("analytics");

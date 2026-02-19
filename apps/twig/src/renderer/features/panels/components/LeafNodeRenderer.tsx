@@ -1,9 +1,9 @@
 import { Cloud as CloudIcon } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import type { Task } from "@shared/types";
 import type React from "react";
 import { useMemo } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useTabInjection } from "../hooks/usePanelLayoutHooks";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import type { LeafPanel } from "../store/panelTypes";
