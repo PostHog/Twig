@@ -210,7 +210,11 @@ export class SessionService {
 
         if (!getIsOnline()) {
           log.info("Skipping connection attempt - offline", { taskId });
-          const session = this.createBaseSession(latestRun.id, taskId, taskTitle);
+          const session = this.createBaseSession(
+            latestRun.id,
+            taskId,
+            taskTitle,
+          );
           session.status = "disconnected";
           session.errorMessage =
             "No internet connection. Connect when you're back online.";
@@ -281,10 +285,14 @@ export class SessionService {
     logUrl: string,
     repoPath: string,
     auth: AuthCredentials,
-    prefetchedLogs?: { rawEntries: StoredLogEntry[]; sessionId?: string; adapter?: Adapter },
+    prefetchedLogs?: {
+      rawEntries: StoredLogEntry[];
+      sessionId?: string;
+      adapter?: Adapter;
+    },
   ): Promise<void> {
     const { rawEntries, sessionId, adapter } =
-      prefetchedLogs ?? await this.fetchSessionLogs(logUrl);
+      prefetchedLogs ?? (await this.fetchSessionLogs(logUrl));
     const events = convertStoredEntriesToEvents(rawEntries);
 
     // Resolve adapter from logs or persisted store
@@ -531,14 +539,22 @@ export class SessionService {
     const configPromises: Promise<void>[] = [];
     if (preferredModel) {
       configPromises.push(
-        this.setSessionConfigOptionByCategory(taskId, "model", preferredModel)
-          .catch((err) => log.warn("Failed to set model", { taskId, err })),
+        this.setSessionConfigOptionByCategory(
+          taskId,
+          "model",
+          preferredModel,
+        ).catch((err) => log.warn("Failed to set model", { taskId, err })),
       );
     }
     if (reasoningLevel) {
       configPromises.push(
-        this.setSessionConfigOptionByCategory(taskId, "thought_level", reasoningLevel)
-          .catch((err) => log.warn("Failed to set reasoning level", { taskId, err })),
+        this.setSessionConfigOptionByCategory(
+          taskId,
+          "thought_level",
+          reasoningLevel,
+        ).catch((err) =>
+          log.warn("Failed to set reasoning level", { taskId, err }),
+        ),
       );
     }
     if (configPromises.length > 0) {

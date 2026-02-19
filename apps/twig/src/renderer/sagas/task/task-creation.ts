@@ -202,10 +202,14 @@ export class TaskCreationSaga extends Saga<
             task,
             repoPath: agentCwd ?? "",
             ...(initialPrompt ? { initialPrompt } : {}),
-            ...(input.executionMode ? { executionMode: input.executionMode } : {}),
+            ...(input.executionMode
+              ? { executionMode: input.executionMode }
+              : {}),
             ...(input.adapter ? { adapter: input.adapter } : {}),
             ...(input.model ? { model: input.model } : {}),
-            ...(input.reasoningLevel ? { reasoningLevel: input.reasoningLevel } : {}),
+            ...(input.reasoningLevel
+              ? { reasoningLevel: input.reasoningLevel }
+              : {}),
           });
           return { taskId: task.id };
         },
