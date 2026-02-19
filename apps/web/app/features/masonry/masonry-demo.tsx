@@ -14,8 +14,16 @@ export function MasonryDemo() {
 
   return (
     <div
-      className="relative w-full overflow-hidden"
-      style={{ height: "750px" }}
+      className="relative overflow-hidden"
+      style={{
+        height: "750px",
+        maskImage:
+          "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+        WebkitMaskImage:
+          "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+        maskComposite: "intersect",
+        WebkitMaskComposite: "destination-in",
+      }}
     >
       <div className="relative flex h-full items-center justify-center">
         <div

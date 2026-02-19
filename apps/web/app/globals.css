@@ -80,6 +80,25 @@
   --fg: #FAEEDE;
 }
 
+@utility container {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 120rem;
+  padding-inline: 1.5rem;
+
+  @media (width >= 640px) {
+    padding-inline: 2rem;
+  }
+
+  @media (width >= 1024px) {
+    padding-inline: 3rem;
+  }
+
+  @media (width >= 1280px) {
+    padding-inline: 4rem;
+  }
+}
+
 @layer base {
   html {
     font-size: 16px;
