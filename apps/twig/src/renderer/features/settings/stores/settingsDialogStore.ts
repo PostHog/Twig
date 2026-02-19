@@ -7,6 +7,7 @@ export type SettingsCategory =
   | "personalization"
   | "claude-code"
   | "shortcuts"
+  | "mcp-servers"
   | "updates"
   | "advanced";
 

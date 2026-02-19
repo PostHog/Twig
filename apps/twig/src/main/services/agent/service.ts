@@ -348,7 +348,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return this.currentToken || fallback;
   }
 
-  private buildMcpServers(credentials: Credentials): AcpMcpServer[] {
+  private async buildMcpServers(
+    credentials: Credentials,
+  ): Promise<AcpMcpServer[]> {
     const servers: AcpMcpServer[] = [];
 
     const mcpUrl = this.getPostHogMcpUrl(credentials.apiHost);
@@ -367,7 +369,92 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       ],
     });
 
+    // Fetch user-installed MCP servers from the PostHog backend
+    const installations = await this.fetchMcpInstallations(credentials);
+
+    for (const installation of installations) {
+      // Skip the PostHog MCP server since it's already included above
+      if (installation.url === mcpUrl) continue;
+
+      if (installation.auth_type === "none") {
+        servers.push({
+          name:
+            installation.name || installation.display_name || installation.url,
+          type: "http",
+          url: installation.url,
+          headers: [],
+        });
+      } else {
+        // Authenticated servers go through the PostHog proxy so credentials
+        // never leave the backend
+        servers.push({
+          name:
+            installation.name || installation.display_name || installation.url,
+          type: "http",
+          url: installation.proxy_url,
+          headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+        });
+      }
+    }
+
     return servers;
+  }
+
+  private async fetchMcpInstallations(credentials: Credentials): Promise<
+    Array<{
+      id: string;
+      url: string;
+      proxy_url: string;
+      name: string;
+      display_name: string;
+      auth_type: string;
+    }>
+  > {
+    const token = this.getToken(credentials.apiKey);
+    const baseUrl = this.getPostHogApiBaseUrl(credentials.apiHost);
+    const url = `${baseUrl}/api/environments/${credentials.projectId}/mcp_server_installations/`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        log.warn("Failed to fetch MCP installations", {
+          status: response.status,
+        });
+        return [];
+      }
+
+      const data = (await response.json()) as {
+        results?: Array<{
+          id: string;
+          url: string;
+          proxy_url?: string;
+          name: string;
+          display_name: string;
+          auth_type: string;
+          pending_oauth: boolean;
+          needs_reauth: boolean;
+        }>;
+      };
+      const installations = data.results ?? [];
+
+      return installations
+        .filter((i) => !i.pending_oauth && !i.needs_reauth)
+        .map((i) => ({
+          ...i,
+          proxy_url:
+            i.proxy_url ??
+            `${baseUrl}/api/environments/${credentials.projectId}/mcp_server_installations/${i.id}/proxy/`,
+        }));
+    } catch (err) {
+      log.warn("Error fetching MCP installations", { error: err });
+      return [];
+    }
   }
 
   private buildSystemPrompt(
@@ -394,6 +481,11 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       return "http://localhost:8787/mcp";
     }
     return "https://mcp.posthog.com/mcp";
+  }
+
+  private getPostHogApiBaseUrl(apiHost: string): string {
+    const host = process.env.POSTHOG_PROXY_BASE_URL || apiHost;
+    return host.endsWith("/") ? host.slice(0, -1) : host;
   }
 
   async startSession(params: StartSessionInput): Promise<SessionResponse> {
@@ -516,7 +608,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       });
 
       const mcpServers =
-        adapter === "codex" ? [] : this.buildMcpServers(credentials);
+        adapter === "codex" ? [] : await this.buildMcpServers(credentials);
 
       let configOptions: SessionConfigOption[] | undefined;
       let agentSessionId: string;
