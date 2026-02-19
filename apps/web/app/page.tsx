@@ -19,41 +19,41 @@ export default function Home() {
       />
       <div className="container pt-6">
         <header className="relative flex items-center justify-between border border-border bg-bg">
-        <div className="flex items-center gap-8">
-          <div className="p-4">
-            <Image
-              src="/assets/wordmark-dark.svg?v=3"
-              alt="Twig"
-              width={80}
-              height={28}
-              priority
-            />
+          <div className="flex items-center gap-8">
+            <div className="p-4">
+              <Image
+                src="/assets/wordmark-dark.svg?v=3"
+                alt="Twig"
+                width={80}
+                height={28}
+                priority
+              />
+            </div>
+            <nav className="flex h-full items-center gap-6">
+              <a
+                href="/blog"
+                className="text-body text-fg transition-colors hover:text-fg/60"
+              >
+                Blog
+              </a>
+              <a
+                href="/docs"
+                className="text-body text-fg transition-colors hover:text-fg/60"
+              >
+                Docs
+              </a>
+              <a
+                href="/changelog"
+                className="text-body text-fg transition-colors hover:text-fg/60"
+              >
+                Changelog
+              </a>
+            </nav>
           </div>
-          <nav className="flex h-full items-center gap-6">
-            <a
-              href="/blog"
-              className="text-body text-fg transition-colors hover:text-fg/60"
-            >
-              Blog
-            </a>
-            <a
-              href="/docs"
-              className="text-body text-fg transition-colors hover:text-fg/60"
-            >
-              Docs
-            </a>
-            <a
-              href="/changelog"
-              className="text-body text-fg transition-colors hover:text-fg/60"
-            >
-              Changelog
-            </a>
-          </nav>
-        </div>
-        <div className="relative flex items-center">
-          <ThemeToggle />
-        </div>
-      </header>
+          <div className="relative flex items-center">
+            <ThemeToggle />
+          </div>
+        </header>
       </div>
 
       <div className="container">
@@ -144,11 +144,12 @@ export default function Home() {
                 <Text size="body" className="text-fg/80">
                   You did not become an engineer to triage support tickets, or
                   break down marketing funnels. Context switching is your enemy.
-                  You became an engineer to build products that change the world.
+                  You became an engineer to build products that change the
+                  world.
                 </Text>
                 <Text size="body" className="text-fg/80">
-                  Twig is an agent orchestrator that runs your product for you. It
-                  autonomously identifies what needs to be done, executes the
+                  Twig is an agent orchestrator that runs your product for you.
+                  It autonomously identifies what needs to be done, executes the
                   work, and gives you the results to review.
                 </Text>
               </div>
@@ -169,84 +170,92 @@ export default function Home() {
 
       <section className="container mt-24">
         <div className="divide-y divide-border border border-border bg-bg">
-        <article className="grid grid-cols-2">
-          <div className="p-16">
-            <Heading size={4} className="mb-4">
-              announcing twig: an agentic code
-              <br />
-              editor that understands your users
-            </Heading>
-            <Text size="small" className="uppercase tracking-wider text-fg/40">
-              JAN 2026
-            </Text>
-          </div>
-          <div className="border-l border-border p-16">
-            <div className="space-y-6">
-              <Text size="body" className="text-fg/80">
-                at posthog, we've spent years building tools that help teams
-                understand their users. product analytics, session recordings,
-                feature flags, a/b testing - all designed to answer one
-                fundamental question: what do your users actually do?
-              </Text>
-              <Text size="body" className="text-fg/80">
-                then we looked at how software gets built, and something struck
-                us as deeply wrong.
-              </Text>
-              <Text size="body" className="font-medium text-fg">
-                code editors are stupid
-              </Text>
-              <Text size="body" className="text-fg/80">
-                not in the "they lack ai" sense. the latest generation of
-                ai-powered editors are remarkably capable at writing code. they
-              </Text>
-              <a
-                href="/blog/announcing-twig"
-                className="inline-block text-body text-primary hover:text-primary/80"
+          <article className="grid grid-cols-2">
+            <div className="p-16">
+              <Heading size={4} className="mb-4">
+                announcing twig: an agentic code
+                <br />
+                editor that understands your users
+              </Heading>
+              <Text
+                size="small"
+                className="uppercase tracking-wider text-fg/40"
               >
-                read more
-              </a>
+                JAN 2026
+              </Text>
             </div>
-          </div>
-        </article>
-        <article className="grid grid-cols-2">
-          <div className="p-16">
-            <Heading size={4} className="mb-4">
-              announcing twig: an agentic code
-              <br />
-              editor that understands your users
-            </Heading>
-            <Text size="small" className="uppercase tracking-wider text-fg/40">
-              JAN 2026
-            </Text>
-          </div>
-          <div className="border-l border-border p-16">
-            <div className="space-y-6">
-              <Text size="body" className="text-fg/80">
-                at posthog, we've spent years building tools that help teams
-                understand their users. product analytics, session recordings,
-                feature flags, a/b testing - all designed to answer one
-                fundamental question: what do your users actually do?
-              </Text>
-              <Text size="body" className="text-fg/80">
-                then we looked at how software gets built, and something struck
-                us as deeply wrong.
-              </Text>
-              <Text size="body" className="font-medium text-fg">
-                code editors are stupid
-              </Text>
-              <Text size="body" className="text-fg/80">
-                not in the "they lack ai" sense. the latest generation of
-                ai-powered editors are remarkably capable at writing code. they
-              </Text>
-              <a
-                href="/blog/announcing-twig"
-                className="inline-block text-body text-primary hover:text-primary/80"
+            <div className="border-l border-border p-16">
+              <div className="space-y-6">
+                <Text size="body" className="text-fg/80">
+                  at posthog, we've spent years building tools that help teams
+                  understand their users. product analytics, session recordings,
+                  feature flags, a/b testing - all designed to answer one
+                  fundamental question: what do your users actually do?
+                </Text>
+                <Text size="body" className="text-fg/80">
+                  then we looked at how software gets built, and something
+                  struck us as deeply wrong.
+                </Text>
+                <Text size="body" className="font-medium text-fg">
+                  code editors are stupid
+                </Text>
+                <Text size="body" className="text-fg/80">
+                  not in the "they lack ai" sense. the latest generation of
+                  ai-powered editors are remarkably capable at writing code.
+                  they
+                </Text>
+                <a
+                  href="/blog/announcing-twig"
+                  className="inline-block text-body text-primary hover:text-primary/80"
+                >
+                  read more
+                </a>
+              </div>
+            </div>
+          </article>
+          <article className="grid grid-cols-2">
+            <div className="p-16">
+              <Heading size={4} className="mb-4">
+                announcing twig: an agentic code
+                <br />
+                editor that understands your users
+              </Heading>
+              <Text
+                size="small"
+                className="uppercase tracking-wider text-fg/40"
               >
-                read more
-              </a>
+                JAN 2026
+              </Text>
             </div>
-          </div>
-        </article>
+            <div className="border-l border-border p-16">
+              <div className="space-y-6">
+                <Text size="body" className="text-fg/80">
+                  at posthog, we've spent years building tools that help teams
+                  understand their users. product analytics, session recordings,
+                  feature flags, a/b testing - all designed to answer one
+                  fundamental question: what do your users actually do?
+                </Text>
+                <Text size="body" className="text-fg/80">
+                  then we looked at how software gets built, and something
+                  struck us as deeply wrong.
+                </Text>
+                <Text size="body" className="font-medium text-fg">
+                  code editors are stupid
+                </Text>
+                <Text size="body" className="text-fg/80">
+                  not in the "they lack ai" sense. the latest generation of
+                  ai-powered editors are remarkably capable at writing code.
+                  they
+                </Text>
+                <a
+                  href="/blog/announcing-twig"
+                  className="inline-block text-body text-primary hover:text-primary/80"
+                >
+                  read more
+                </a>
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 
