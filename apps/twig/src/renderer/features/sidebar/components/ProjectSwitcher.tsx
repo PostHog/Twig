@@ -29,6 +29,7 @@ import { trpcVanilla } from "@renderer/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
+import { isMac } from "@utils/platform";
 import "./ProjectSwitcher.css";
 
 export function ProjectSwitcher() {
@@ -276,7 +277,7 @@ export function ProjectSwitcher() {
                     <Flex align="center" justify="between" style={{ flex: 1 }}>
                       <Text size="1">Keyboard Shortcuts</Text>
                       <Text size="1" className="ml-4 text-gray-9">
-                        {navigator.platform.includes("Mac") ? "⌘/" : "Ctrl+/"}
+                        {isMac ? "⌘/" : "Ctrl+/"}
                       </Text>
                     </Flex>
                   </DropdownMenu.Item>
@@ -293,7 +294,7 @@ export function ProjectSwitcher() {
                   <Text size="1">Settings</Text>
                 </Flex>
                 <Text size="1" className="text-gray-9">
-                  {navigator.platform.includes("Mac") ? "⌘," : "Ctrl+,"}
+                  {isMac ? "⌘," : "Ctrl+,"}
                 </Text>
               </button>
 

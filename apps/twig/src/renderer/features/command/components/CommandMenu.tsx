@@ -16,7 +16,7 @@ import { Flex, Text } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useRegisteredFoldersStore } from "@stores/registeredFoldersStore";
-import { useThemeStore } from "@stores/themeStore";
+import { THEME_CYCLE_LABELS, useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { ANALYTICS_EVENTS, type CommandMenuAction } from "@/types/analytics";
@@ -156,11 +156,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                 {theme === "system" && (
                   <MoonIcon className="mr-3 h-3 w-3 text-gray-11" />
                 )}
-                <Text size="1">
-                  {theme === "dark" && "Switch to light mode"}
-                  {theme === "light" && "Switch to system theme"}
-                  {theme === "system" && "Switch to dark mode"}
-                </Text>
+                <Text size="1">{THEME_CYCLE_LABELS[theme]}</Text>
               </Command.Item>
               <Command.Item
                 value="Toggle left sidebar"

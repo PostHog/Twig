@@ -16,6 +16,7 @@ import {
 import { track } from "@renderer/lib/analytics";
 import { playCompletionSound } from "@renderer/lib/sounds";
 import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
+import { resolveIsDarkMode } from "@stores/themeStore";
 import type { ThemePreference } from "@stores/themeStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -112,7 +113,7 @@ export function GeneralSettings() {
         new_value: value,
         old_value: theme,
       });
-      if (value === "light" && cursorGlow) {
+      if (!resolveIsDarkMode(value) && cursorGlow) {
         setCursorGlow(false);
       }
       setTheme(value);

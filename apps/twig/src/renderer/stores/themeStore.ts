@@ -17,7 +17,7 @@ type ThemeStore = ThemeStoreState & ThemeStoreActions;
 
 const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
-function resolveIsDarkMode(theme: ThemePreference): boolean {
+export function resolveIsDarkMode(theme: ThemePreference): boolean {
   if (theme === "system") {
     return mediaQuery.matches;
   }
@@ -25,6 +25,12 @@ function resolveIsDarkMode(theme: ThemePreference): boolean {
 }
 
 const THEME_CYCLE: ThemePreference[] = ["dark", "light", "system"];
+
+export const THEME_CYCLE_LABELS: Record<ThemePreference, string> = {
+  dark: "Switch to light mode",
+  light: "Switch to system theme",
+  system: "Switch to dark mode",
+};
 
 export const useThemeStore = create<ThemeStore>()(
   persist(
