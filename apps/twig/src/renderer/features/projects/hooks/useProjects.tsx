@@ -1,5 +1,6 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export interface ProjectInfo {
   id: number;
@@ -36,27 +37,52 @@ export function useProjects() {
   const client = useAuthStore((s) => s.client);
   const currentProjectId = useAuthStore((s) => s.projectId);
 
-  const query = useQuery({
-    queryKey: ["projects", availableProjectIds],
-    queryFn: async () => {
-      if (!client || availableProjectIds.length === 0) {
-        return [];
-      }
-      return client.getProjectDetails(availableProjectIds);
-    },
-    enabled: !!client && availableProjectIds.length > 0,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  const {
+    data: currentUser,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => client?.getCurrentUser(),
+    enabled: !!client,
+    staleTime: 5 * 60 * 1000,
   });
 
-  const currentProject = query.data?.find((p) => p.id === currentProjectId);
-  const groupedProjects = query.data ? groupProjectsByOrg(query.data) : [];
+  const projects = useMemo(() => {
+    if (!currentUser?.organization) return [];
+
+    const teams = (currentUser.organization.teams ?? []) as Array<{
+      id: number;
+      name?: string;
+    }>;
+    const orgName = currentUser.organization.name ?? "Unknown Organization";
+    const orgId = currentUser.organization.id ?? "";
+
+    const teamMap = new Map(teams.map((t) => [t.id, t]));
+
+    return availableProjectIds
+      .map((id) => {
+        const team = teamMap.get(id);
+        if (!team) return null;
+        return {
+          id,
+          name: team.name ?? `Project ${id}`,
+          organization: { id: orgId, name: orgName },
+        };
+      })
+      .filter((p): p is ProjectInfo => p !== null);
+  }, [currentUser, availableProjectIds]);
+
+  const currentProject = projects.find((p) => p.id === currentProjectId);
+  const groupedProjects = groupProjectsByOrg(projects);
 
   return {
-    projects: query.data ?? [],
+    projects,
     groupedProjects,
     currentProject,
     currentProjectId,
-    isLoading: query.isLoading,
-    error: query.error,
+    currentUser: currentUser ?? null,
+    isLoading,
+    error,
   };
 }

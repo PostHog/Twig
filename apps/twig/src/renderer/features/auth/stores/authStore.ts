@@ -177,6 +177,7 @@ export const useAuthStore = create<AuthState>()(
 
             // Clear any cached data from previous sessions AFTER setting new auth
             queryClient.clear();
+            queryClient.setQueryData(["currentUser"], user);
 
             get().scheduleTokenRefresh();
 
@@ -470,6 +471,8 @@ export const useAuthStore = create<AuthState>()(
                   needsProjectSelection: false,
                 });
 
+                queryClient.setQueryData(["currentUser"], user);
+
                 updateServiceTokens(currentTokens.accessToken);
 
                 get().scheduleTokenRefresh();
@@ -596,6 +599,7 @@ export const useAuthStore = create<AuthState>()(
             updateServiceTokens(tokenResponse.access_token);
 
             queryClient.clear();
+            queryClient.setQueryData(["currentUser"], user);
 
             get().scheduleTokenRefresh();
 
