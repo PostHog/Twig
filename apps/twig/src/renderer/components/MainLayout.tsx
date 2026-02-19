@@ -2,6 +2,8 @@ import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
 import { UpdatePrompt } from "@components/UpdatePrompt";
+import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTwigAuthStore } from "@features/auth/stores/twigAuthStore";
 import { useAutonomy } from "@features/autonomy/hooks/useAutonomy";
 import { CommandMenu } from "@features/command/components/CommandMenu";
 import { InboxView } from "@features/inbox/components/InboxView";
@@ -15,6 +17,7 @@ import { useTasks } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { useIntegrations } from "@hooks/useIntegrations";
 import { Box, Flex } from "@radix-ui/themes";
+import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useShortcutsSheetStore } from "@stores/shortcutsSheetStore";
 import { useCallback, useEffect, useState } from "react";
@@ -22,8 +25,21 @@ import { Toaster } from "sonner";
 import { useTaskDeepLink } from "../hooks/useTaskDeepLink";
 import { GlobalEventHandlers } from "./GlobalEventHandlers";
 
+const log = logger.scope("main-layout");
+
 export function MainLayout() {
   const { view, hydrateTask, navigateToTaskInput } = useNavigationStore();
+  const isPostHogConnected = useTwigAuthStore((s) => s.isPostHogConnected);
+  const { initializeOAuth } = useAuthStore();
+
+  // Lazily initialize PostHog OAuth when the user has connected PostHog
+  useEffect(() => {
+    if (isPostHogConnected) {
+      initializeOAuth().catch((err) => {
+        log.error("Failed to initialize PostHog OAuth", err);
+      });
+    }
+  }, [isPostHogConnected, initializeOAuth]);
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
   const {
     isOpen: shortcutsSheetOpen,

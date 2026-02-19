@@ -1,4 +1,5 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTwigAuthStore } from "@features/auth/stores/twigAuthStore";
 import { Command } from "@features/command/components/Command";
 import { useProjects } from "@features/projects/hooks/useProjects";
 import {
@@ -57,6 +58,7 @@ export function ProjectSwitcher() {
   const handleLogout = () => {
     setPopoverOpen(false);
     logout();
+    useTwigAuthStore.getState().logout();
   };
 
   return (

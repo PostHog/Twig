@@ -7,6 +7,7 @@ export type SettingsCategory =
   | "shortcuts"
   | "workspaces"
   | "claude-code"
+  | "integrations"
   | "updates"
   | "advanced";
 

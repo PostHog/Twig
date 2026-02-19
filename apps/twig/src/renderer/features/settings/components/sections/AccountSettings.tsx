@@ -1,45 +1,27 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
+import { useTwigAuthStore } from "@features/auth/stores/twigAuthStore";
 import { SettingRow } from "@features/settings/components/SettingRow";
-import { useMeQuery } from "@hooks/useMeQuery";
-import { useProjectQuery } from "@hooks/useProjectQuery";
 import { SignOut } from "@phosphor-icons/react";
-import { Avatar, Badge, Button, Flex, Spinner, Text } from "@radix-ui/themes";
-import type { CloudRegion } from "@shared/types/oauth";
-import { useMutation } from "@tanstack/react-query";
-import { trpcVanilla } from "@/renderer/trpc";
-
-const REGION_LABELS: Record<CloudRegion, string> = {
-  us: "US Cloud",
-  eu: "EU Cloud",
-  dev: "Development",
-};
+import { Avatar, Badge, Button, Flex, Text } from "@radix-ui/themes";
 
 export function AccountSettings() {
-  const { isAuthenticated, cloudRegion, loginWithOAuth, logout } =
+  const {
+    user,
+    isAuthenticated,
+    selectedPlan,
+    logout: twigLogout,
+  } = useTwigAuthStore();
+  const { logout: posthogLogout, isAuthenticated: isPostHogConnected } =
     useAuthStore();
-  const { data: currentUser } = useMeQuery();
-  const { data: project } = useProjectQuery();
-
-  const reauthMutation = useMutation({
-    mutationFn: async (region: CloudRegion) => {
-      await loginWithOAuth(region);
-    },
-  });
-
-  const handleReauthenticate = async () => {
-    if (reauthMutation.isPending) {
-      reauthMutation.reset();
-      await trpcVanilla.oauth.cancelFlow.mutate();
-    } else if (cloudRegion) {
-      reauthMutation.mutate(cloudRegion);
-    }
-  };
 
   const handleLogout = () => {
-    logout();
+    if (isPostHogConnected) {
+      posthogLogout();
+    }
+    twigLogout();
   };
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return (
       <Flex direction="column" gap="3" py="4">
         <Text size="2" color="gray">
@@ -50,9 +32,9 @@ export function AccountSettings() {
     );
   }
 
-  const initials = currentUser?.email
-    ? currentUser.email.substring(0, 2).toUpperCase()
-    : "?";
+  const initials = user.name
+    ? user.name.substring(0, 2).toUpperCase()
+    : user.email.substring(0, 2).toUpperCase();
 
   return (
     <Flex direction="column">
@@ -65,18 +47,20 @@ export function AccountSettings() {
         <Avatar size="4" fallback={initials} radius="full" color="amber" />
         <Flex direction="column" gap="1" style={{ flex: 1 }}>
           <Text size="3" weight="medium">
-            {currentUser?.email || "Unknown user"}
+            {user.name}
           </Text>
           <Flex align="center" gap="2">
-            {cloudRegion && (
-              <Badge size="1" variant="soft" color="gray">
-                {REGION_LABELS[cloudRegion as CloudRegion]}
+            <Text size="2" color="gray">
+              {user.email}
+            </Text>
+            {selectedPlan && (
+              <Badge
+                size="1"
+                variant="soft"
+                color={selectedPlan === "pro" ? "orange" : "gray"}
+              >
+                {selectedPlan === "pro" ? "Pro" : "Free"}
               </Badge>
-            )}
-            {project?.name && (
-              <Text size="1" color="gray">
-                {project.name}
-              </Text>
             )}
           </Flex>
         </Flex>
@@ -93,28 +77,18 @@ export function AccountSettings() {
       </Flex>
 
       <SettingRow
-        label="Re-authenticate"
-        description="Refresh your authentication token if you're experiencing issues"
+        label="Plan"
+        description="Your current subscription plan"
         noBorder
       >
-        <Button
-          variant="outline"
-          size="1"
-          onClick={handleReauthenticate}
-          disabled={reauthMutation.isPending}
+        <Badge
+          size="2"
+          variant="soft"
+          color={selectedPlan === "pro" ? "orange" : "gray"}
         >
-          {reauthMutation.isPending && <Spinner />}
-          {reauthMutation.isPending ? "Authenticating..." : "Re-authenticate"}
-        </Button>
+          {selectedPlan === "pro" ? "Pro — $200/mo" : "Free"}
+        </Badge>
       </SettingRow>
-
-      {reauthMutation.isError && (
-        <Text size="1" color="red" mt="2">
-          {reauthMutation.error instanceof Error
-            ? reauthMutation.error.message
-            : "Failed to re-authenticate"}
-        </Text>
-      )}
     </Flex>
   );
 }
