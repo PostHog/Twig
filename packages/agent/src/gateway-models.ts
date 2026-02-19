@@ -61,7 +61,11 @@ export async function fetchGatewayModels(
 
     const data = (await response.json()) as GatewayModelsResponse;
     const models = (data.data ?? []).filter((m) => !BLOCKED_MODELS.has(m.id));
-    gatewayModelsCache = { models, expiry: Date.now() + CACHE_TTL, url: gatewayUrl };
+    gatewayModelsCache = {
+      models,
+      expiry: Date.now() + CACHE_TTL,
+      url: gatewayUrl,
+    };
     return models;
   } catch {
     return [];
@@ -128,7 +132,11 @@ export async function fetchArrayModels(
       if (!id) continue;
       results.push({ id, owned_by: model?.owned_by });
     }
-    arrayModelsCache = { models: results, expiry: Date.now() + CACHE_TTL, url: gatewayUrl };
+    arrayModelsCache = {
+      models: results,
+      expiry: Date.now() + CACHE_TTL,
+      url: gatewayUrl,
+    };
     return results;
   } catch {
     return [];
