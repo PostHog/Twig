@@ -16,9 +16,8 @@ import {
 import { track } from "@renderer/lib/analytics";
 import { playCompletionSound } from "@renderer/lib/sounds";
 import { useSettingsStore as useTerminalSettingsStore } from "@stores/settingsStore";
-import { resolveIsDarkMode } from "@stores/themeStore";
 import type { ThemePreference } from "@stores/themeStore";
-import { useThemeStore } from "@stores/themeStore";
+import { resolveIsDarkMode, useThemeStore } from "@stores/themeStore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ANALYTICS_EVENTS } from "@/types/analytics";
 

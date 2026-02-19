@@ -1,9 +1,9 @@
 import { trpcVanilla } from "@renderer/trpc";
+import { isMac } from "@utils/platform";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal as XTerm } from "@xterm/xterm";
-import { isMac } from "@utils/platform";
 import { logger } from "@/renderer/lib/logger";
 
 const log = logger.scope("terminal-manager");

@@ -27,9 +27,9 @@ import {
 } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { useQuery } from "@tanstack/react-query";
+import { isMac } from "@utils/platform";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { isMac } from "@utils/platform";
 import "./ProjectSwitcher.css";
 
 export function ProjectSwitcher() {
