@@ -206,7 +206,7 @@ export function ProjectSwitcher() {
                 className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-1.5 text-left transition-colors hover:bg-gray-3"
               >
                 <FolderSimple size={14} className="text-gray-11" />
-                <Text size="1">All projects</Text>
+                <Text size="1">Change project</Text>
               </button>
 
               <button
