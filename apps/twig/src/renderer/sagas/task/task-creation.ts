@@ -195,25 +195,18 @@ export class TaskCreationSaga extends Saga<
       await this.step({
         name: "agent_session",
         execute: async () => {
-          // For opening existing tasks, await to ensure chat history loads
-          // For creating new tasks, we can proceed without waiting
-          if (input.taskId) {
-            await getSessionService().connectToTask({
-              task,
-              repoPath: agentCwd ?? "",
-            });
-          } else {
-            // Don't await for create - allows faster navigation to task page
-            getSessionService().connectToTask({
-              task,
-              repoPath: agentCwd ?? "",
-              initialPrompt,
-              executionMode: input.executionMode,
-              adapter: input.adapter,
-              model: input.model,
-              reasoningLevel: input.reasoningLevel,
-            });
-          }
+          // Fire-and-forget for both open and create paths.
+          // The UI handles "connecting" state with a spinner (TaskLogsPanel),
+          // so we don't need to block the saga on the full reconnect chain.
+          getSessionService().connectToTask({
+            task,
+            repoPath: agentCwd ?? "",
+            ...(initialPrompt ? { initialPrompt } : {}),
+            ...(input.executionMode ? { executionMode: input.executionMode } : {}),
+            ...(input.adapter ? { adapter: input.adapter } : {}),
+            ...(input.model ? { model: input.model } : {}),
+            ...(input.reasoningLevel ? { reasoningLevel: input.reasoningLevel } : {}),
+          });
           return { taskId: task.id };
         },
         rollback: async ({ taskId }) => {

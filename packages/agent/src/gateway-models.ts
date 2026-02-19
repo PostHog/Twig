@@ -26,12 +26,28 @@ type ArrayModelsResponse =
     }
   | Array<{ id?: string; owned_by?: string }>;
 
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+let gatewayModelsCache: {
+  models: GatewayModel[];
+  expiry: number;
+  url: string;
+} | null = null;
+
 export async function fetchGatewayModels(
   options?: FetchGatewayModelsOptions,
 ): Promise<GatewayModel[]> {
   const gatewayUrl = options?.gatewayUrl ?? process.env.ANTHROPIC_BASE_URL;
   if (!gatewayUrl) {
     return [];
+  }
+
+  if (
+    gatewayModelsCache &&
+    gatewayModelsCache.url === gatewayUrl &&
+    Date.now() < gatewayModelsCache.expiry
+  ) {
+    return gatewayModelsCache.models;
   }
 
   const modelsUrl = `${gatewayUrl}/v1/models`;
@@ -44,8 +60,9 @@ export async function fetchGatewayModels(
     }
 
     const data = (await response.json()) as GatewayModelsResponse;
-    const models = data.data ?? [];
-    return models.filter((m) => !BLOCKED_MODELS.has(m.id));
+    const models = (data.data ?? []).filter((m) => !BLOCKED_MODELS.has(m.id));
+    gatewayModelsCache = { models, expiry: Date.now() + CACHE_TTL, url: gatewayUrl };
+    return models;
   } catch {
     return [];
   }
@@ -70,12 +87,26 @@ export interface ArrayModelInfo {
   owned_by?: string;
 }
 
+let arrayModelsCache: {
+  models: ArrayModelInfo[];
+  expiry: number;
+  url: string;
+} | null = null;
+
 export async function fetchArrayModels(
   options?: FetchGatewayModelsOptions,
 ): Promise<ArrayModelInfo[]> {
   const gatewayUrl = options?.gatewayUrl ?? process.env.ANTHROPIC_BASE_URL;
   if (!gatewayUrl) {
     return [];
+  }
+
+  if (
+    arrayModelsCache &&
+    arrayModelsCache.url === gatewayUrl &&
+    Date.now() < arrayModelsCache.expiry
+  ) {
+    return arrayModelsCache.models;
   }
 
   try {
@@ -97,6 +128,7 @@ export async function fetchArrayModels(
       if (!id) continue;
       results.push({ id, owned_by: model?.owned_by });
     }
+    arrayModelsCache = { models: results, expiry: Date.now() + CACHE_TTL, url: gatewayUrl };
     return results;
   } catch {
     return [];
