@@ -70,7 +70,7 @@
     },
     {
       // API client generates a a lot of Any
-      "includes": ["apps/twig/src/api/generated.ts"],
+      "includes": ["apps/twig/src/renderer/api/generated.ts"],
       "linter": {
         "enabled": false
       }
@@ -107,7 +107,10 @@
     },
     {
       // Test files can use console for setup/debugging
-      "includes": ["apps/twig/src/test/**/*.ts"],
+      "includes": [
+        "apps/twig/src/test/**/*.ts",
+        "apps/twig/src/shared/test/**/*.ts"
+      ],
       "linter": {
         "rules": {
           "suspicious": {

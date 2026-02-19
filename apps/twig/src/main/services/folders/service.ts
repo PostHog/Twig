@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { generateId } from "@shared/utils/id.js";
 import { isGitRepository } from "@twig/git/queries";
 import { InitRepositorySaga } from "@twig/git/sagas/init";
 import { WorktreeManager } from "@twig/git/worktree";
 import { dialog } from "electron";
 import { injectable } from "inversify";
-import { generateId } from "../../../shared/utils/id.js";
 import { logger } from "../../lib/logger.js";
 import { getMainWindow } from "../../trpc/context.js";
 import { clearAllStoreData, foldersStore } from "../../utils/store.js";

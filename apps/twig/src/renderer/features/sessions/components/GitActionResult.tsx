@@ -5,8 +5,8 @@ import {
   GitPullRequest,
 } from "@phosphor-icons/react";
 import { Badge, Box, Button, Flex, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
 import { useQuery } from "@tanstack/react-query";
-import { trpcVanilla } from "@/renderer/trpc";
 import type { GitActionType } from "./GitActionMessage";
 
 interface GitActionResultProps {

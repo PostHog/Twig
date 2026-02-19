@@ -1,11 +1,8 @@
 import { useSessions } from "@features/sessions/stores/sessionStore";
 import { useTasks } from "@features/tasks/hooks/useTasks";
+import { getTaskRepository, parseRepository } from "@renderer/utils/repository";
 import type { Task } from "@shared/types";
 import { useMemo } from "react";
-import {
-  getTaskRepository,
-  parseRepository,
-} from "@/renderer/utils/repository";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";

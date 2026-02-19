@@ -6,8 +6,8 @@ import {
   type SessionConfigOption,
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
+import { trpcVanilla } from "@renderer/trpc";
 import type { StoredLogEntry as BaseStoredLogEntry } from "@shared/types/session-events";
-import { trpcVanilla } from "@/renderer/trpc";
 
 export interface StoredLogEntry extends BaseStoredLogEntry {
   direction?: "client" | "agent";

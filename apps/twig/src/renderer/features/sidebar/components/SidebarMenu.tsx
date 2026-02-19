@@ -8,12 +8,12 @@ import {
 } from "@features/tasks/hooks/useTasks";
 import { useTaskContextMenu } from "@hooks/useTaskContextMenu";
 import { Box, Flex } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { logger } from "@renderer/lib/logger";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useRef } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { usePinnedTasksStore } from "../stores/pinnedTasksStore";
 import { useTaskViewedStore } from "../stores/taskViewedStore";

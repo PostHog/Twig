@@ -1,6 +1,6 @@
 import { Button, Callout, Flex, Select, Spinner, Text } from "@radix-ui/themes";
+import { IS_DEV } from "@shared/constants/environment";
 import type { CloudRegion } from "@shared/types/oauth";
-import { IS_DEV } from "@/constants/environment";
 
 interface LoginFormProps {
   region: CloudRegion;

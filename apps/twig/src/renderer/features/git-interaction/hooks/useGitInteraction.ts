@@ -14,9 +14,9 @@ import { updateGitCacheFromSnapshot } from "@features/git-interaction/utils/upda
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { trpcVanilla } from "@renderer/trpc";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("git-interaction");
 

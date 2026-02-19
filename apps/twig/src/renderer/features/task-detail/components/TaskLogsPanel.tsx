@@ -20,11 +20,11 @@ import { useNavigationStore } from "@renderer/stores/navigationStore";
 import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { ANALYTICS_EVENTS, type FeedbackType } from "@shared/types/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 import { getTaskRepository } from "@utils/repository";
 import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
-import { ANALYTICS_EVENTS, type FeedbackType } from "@/types/analytics";
 
 const log = logger.scope("task-logs-panel");
 

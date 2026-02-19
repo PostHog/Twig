@@ -1,6 +1,6 @@
+import { decrypt, encrypt } from "@main/utils/encryption";
+import { rendererStore } from "@main/utils/store";
 import { z } from "zod";
-import { decrypt, encrypt } from "@/main/utils/encryption";
-import { rendererStore } from "@/main/utils/store";
 import { logger } from "../../lib/logger";
 import { publicProcedure, router } from "../trpc.js";
 

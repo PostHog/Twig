@@ -20,8 +20,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "@/*": ["./*"],
-      "@api/*": ["api/*"],
       "@main/*": ["main/*"],
       "@renderer/*": ["renderer/*"],
       "@shared/*": ["shared/*"],
@@ -30,8 +28,7 @@
       "@stores/*": ["renderer/stores/*"],
       "@hooks/*": ["renderer/hooks/*"],
       "@utils/*": ["renderer/utils/*"],
-      "@lib/*": ["renderer/lib/*"],
-      "@test/*": ["test/*"]
+      "@test/*": ["shared/test/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,

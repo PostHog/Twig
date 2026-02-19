@@ -1,4 +1,4 @@
-import type { Schemas } from "@api/generated";
+import type { Schemas } from "@renderer/api/generated";
 import { useUsersStore } from "@stores/usersStore";
 import { useEffect } from "react";
 import { useAuthenticatedQuery } from "./useAuthenticatedQuery";

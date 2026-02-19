@@ -30,13 +30,16 @@ import {
   notifyPermissionRequest,
   notifyPromptComplete,
 } from "@renderer/lib/notifications";
+import { getIsOnline } from "@renderer/stores/connectivityStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { toast } from "@renderer/utils/toast";
+import { getCloudUrlFromRegion } from "@shared/constants/oauth";
 import type {
   CloudTaskUpdatePayload,
   ExecutionMode,
   Task,
 } from "@shared/types";
+import { ANALYTICS_EVENTS } from "@shared/types/analytics";
 import type { AcpMessage, StoredLogEntry } from "@shared/types/session-events";
 import { isJsonRpcRequest } from "@shared/types/session-events";
 import {
@@ -48,9 +51,6 @@ import {
   normalizePromptToBlocks,
   shellExecutesToContextBlocks,
 } from "@utils/session";
-import { getCloudUrlFromRegion } from "@/constants/oauth";
-import { getIsOnline } from "@/renderer/stores/connectivityStore";
-import { ANALYTICS_EVENTS } from "@/types/analytics";
 
 const log = logger.scope("session-service");
 

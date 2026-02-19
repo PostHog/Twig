@@ -17,13 +17,13 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { Badge, Box, Button, Flex, ScrollArea, Text } from "@radix-ui/themes";
+import { getCloudUrlFromRegion } from "@shared/constants/oauth";
 import type {
   SignalReport,
   SignalReportArtefactsResponse,
 } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useEffect, useMemo, useState } from "react";
-import { getCloudUrlFromRegion } from "@/constants/oauth";
 
 interface InboxSignalsTabProps {
   onGoToSetup: () => void;

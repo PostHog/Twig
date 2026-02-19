@@ -10,11 +10,11 @@ import {
   FunnelSimple as FunnelSimpleIcon,
 } from "@phosphor-icons/react";
 import { Box, Flex, Popover, Text } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import type { TaskData, TaskGroup } from "../hooks/useSidebarData";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { DraggableFolder } from "./DraggableFolder";

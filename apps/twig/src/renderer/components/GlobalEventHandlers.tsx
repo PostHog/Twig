@@ -10,11 +10,11 @@ import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { SHORTCUTS } from "@renderer/constants/keyboard-shortcuts";
 import { clearApplicationStorage } from "@renderer/lib/clearStorage";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
+import { trpcReact } from "@renderer/trpc";
 import type { Task } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useCallback, useEffect, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { trpcReact } from "@/renderer/trpc";
 
 interface GlobalEventHandlersProps {
   onToggleCommandMenu: () => void;

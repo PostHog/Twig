@@ -31,6 +31,7 @@ import {
   Spinner,
   Text,
 } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { ChangedFile, GitFileStatus, Task } from "@shared/types";
 import { useExternalAppsStore } from "@stores/externalAppsStore";
@@ -39,7 +40,6 @@ import { showMessageBox } from "@utils/dialog";
 import { handleExternalAppAction } from "@utils/handleExternalAppAction";
 import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 
 interface ChangesPanelProps {
   taskId: string;

@@ -43,7 +43,7 @@ vi.mock("../../di/container.js", () => ({
   container: mockContainer,
 }));
 
-vi.mock("../../../types/analytics.js", () => ({
+vi.mock("../../../shared/types/analytics.js", () => ({
   ANALYTICS_EVENTS: {
     APP_QUIT: "app_quit",
   },

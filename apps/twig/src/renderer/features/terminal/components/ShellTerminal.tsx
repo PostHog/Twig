@@ -1,5 +1,5 @@
+import { secureRandomString } from "@renderer/utils/random";
 import { useMemo } from "react";
-import { secureRandomString } from "@/renderer/utils/random";
 import { useTerminalStore } from "../stores/terminalStore";
 import { Terminal } from "./Terminal";
 
