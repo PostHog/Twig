@@ -54,6 +54,40 @@ import {
 
 const log = logger.scope("session-service");
 
+/** Dev-only timing collector for renderer. No-op in production builds. */
+function createRendererTimingCollector() {
+  if (!import.meta.env.DEV) {
+    return {
+      time: <T>(_l: string, fn: () => Promise<T>) => fn(),
+      timeSync: <T>(_l: string, fn: () => T) => fn(),
+      record: (_l: string, _ms: number) => {},
+      summarize: (_l: string) => {},
+    };
+  }
+  const steps: Record<string, number> = {};
+  return {
+    async time<T>(label: string, fn: () => Promise<T>): Promise<T> {
+      const s = Date.now();
+      const r = await fn();
+      steps[label] = Date.now() - s;
+      return r;
+    },
+    timeSync<T>(label: string, fn: () => T): T {
+      const s = Date.now();
+      const r = fn();
+      steps[label] = Date.now() - s;
+      return r;
+    },
+    record(label: string, ms: number) {
+      steps[label] = ms;
+    },
+    summarize(label: string) {
+      const total = Object.values(steps).reduce((a, b) => a + b, 0);
+      log.info(`[timing] ${label}: ${total}ms`, steps);
+    },
+  };
+}
+
 export const PREVIEW_TASK_ID = "__preview__";
 
 interface AuthCredentials {
@@ -71,6 +105,8 @@ export interface ConnectParams {
   adapter?: "claude" | "codex";
   model?: string;
   reasoningLevel?: string;
+  /** Dev-only: timestamp from renderer when user submitted the task */
+  submittedAt?: number;
 }
 
 // --- Singleton Service Instance ---
@@ -112,6 +148,8 @@ export class SessionService {
   private previewAbort: AbortController | null = null;
   /** Cleanup functions for cloud task watchers, keyed by `${taskId}:${runId}` */
   private cloudTaskCleanups = new Map<string, () => void>();
+  /** Dev-only: tracks which prompt cycles have already logged first-response timing */
+  private firstResponseLogged = new Set<string>();
 
   /**
    * Connect to a task session.
@@ -161,6 +199,7 @@ export class SessionService {
       adapter,
       model,
       reasoningLevel,
+      submittedAt,
     } = params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
@@ -253,6 +292,7 @@ export class SessionService {
           adapter,
           model,
           reasoningLevel,
+          submittedAt,
         );
       }
     } catch (error) {
@@ -485,26 +525,35 @@ export class SessionService {
     adapter?: "claude" | "codex",
     model?: string,
     reasoningLevel?: string,
+    submittedAt?: number,
   ): Promise<void> {
-    if (!auth.client) {
+    const tc = createRendererTimingCollector();
+
+    const { client } = auth;
+    if (!client) {
       throw new Error("Unable to reach server. Please check your connection.");
     }
 
-    const taskRun = await auth.client.createTaskRun(taskId);
+    const taskRun = await tc.time("createTaskRun", () =>
+      client.createTaskRun(taskId),
+    );
     if (!taskRun?.id) {
       throw new Error("Failed to create task run. Please try again.");
     }
 
-    const result = await trpcVanilla.agent.start.mutate({
-      taskId,
-      taskRunId: taskRun.id,
-      repoPath,
-      apiKey: auth.apiKey,
-      apiHost: auth.apiHost,
-      projectId: auth.projectId,
-      permissionMode: executionMode,
-      adapter,
-    });
+    const result = await tc.time("agentStart", () =>
+      trpcVanilla.agent.start.mutate({
+        taskId,
+        taskRunId: taskRun.id,
+        repoPath,
+        apiKey: auth.apiKey,
+        apiHost: auth.apiHost,
+        projectId: auth.projectId,
+        permissionMode: executionMode,
+        adapter,
+        submittedAt,
+      }),
+    );
 
     const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
     session.channel = result.channel;
@@ -558,11 +607,19 @@ export class SessionService {
       );
     }
     if (configPromises.length > 0) {
-      await Promise.all(configPromises);
+      await tc.time("setConfigOptions", () => Promise.all(configPromises));
     }
 
     if (initialPrompt?.length) {
-      await this.sendPrompt(taskId, initialPrompt);
+      await tc.time("sendPrompt", () => this.sendPrompt(taskId, initialPrompt));
+    }
+
+    tc.summarize("createNewLocalSession");
+
+    if (submittedAt) {
+      log.info(
+        `[timing] end-to-end submit → session ready: ${Date.now() - submittedAt}ms`,
+      );
     }
   }
 
@@ -765,6 +822,22 @@ export class SessionService {
       });
     }
 
+    // Dev-only: log time from prompt start to first response event
+    if (
+      import.meta.env.DEV &&
+      session.isPromptPending &&
+      session.promptStartedAt
+    ) {
+      if ("method" in msg && msg.method === "session/update") {
+        const key = `${taskRunId}:${session.promptStartedAt}`;
+        if (!this.firstResponseLogged.has(key)) {
+          this.firstResponseLogged.add(key);
+          const delta = Date.now() - session.promptStartedAt;
+          log.info(`[timing] prompt → first response event: ${delta}ms`);
+        }
+      }
+    }
+
     if (
       "id" in msg &&
       "result" in msg &&
@@ -772,6 +845,13 @@ export class SessionService {
       msg.result !== null &&
       "stopReason" in msg.result
     ) {
+      // Clean up first-response tracking for this prompt cycle
+      if (session.promptStartedAt) {
+        this.firstResponseLogged.delete(
+          `${taskRunId}:${session.promptStartedAt}`,
+        );
+      }
+
       sessionStoreSetters.updateSession(taskRunId, {
         isPromptPending: false,
         promptStartedAt: null,

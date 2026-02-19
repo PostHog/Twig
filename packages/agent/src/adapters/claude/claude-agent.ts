@@ -136,6 +136,26 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   async newSession(params: NewSessionRequest): Promise<NewSessionResponse> {
     this.checkAuthStatus();
 
+    const enableTiming = this.logger !== undefined;
+    const steps: Record<string, number> = {};
+    const timeAsync = async <T>(
+      label: string,
+      fn: () => Promise<T>,
+    ): Promise<T> => {
+      if (!enableTiming) return fn();
+      const start = Date.now();
+      const result = await fn();
+      steps[label] = Date.now() - start;
+      return result;
+    };
+    const timeSync = <T>(label: string, fn: () => T): T => {
+      if (!enableTiming) return fn();
+      const start = Date.now();
+      const result = fn();
+      steps[label] = Date.now() - start;
+      return result;
+    };
+
     const meta = params._meta as NewSessionMeta | undefined;
     const sessionId = uuidv7();
     const permissionMode: TwigExecutionMode =
@@ -144,29 +164,33 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         ? (meta.permissionMode as TwigExecutionMode)
         : "default";
 
-    const mcpServers = parseMcpServers(params);
+    const mcpServers = timeSync("parseMcpServers", () =>
+      parseMcpServers(params),
+    );
 
     // Fire off MCP metadata fetch early — it populates a module-level cache
     // used later during permission checks, not needed by buildSessionOptions or query()
     const mcpMetadataPromise = fetchMcpToolMetadata(mcpServers, this.logger);
 
-    const options = buildSessionOptions({
-      cwd: params.cwd,
-      mcpServers,
-      permissionMode,
-      canUseTool: this.createCanUseTool(sessionId),
-      logger: this.logger,
-      systemPrompt: buildSystemPrompt(meta?.systemPrompt),
-      userProvidedOptions: meta?.claudeCode?.options,
-      sessionId,
-      isResume: false,
-      onModeChange: this.createOnModeChange(sessionId),
-      onProcessSpawned: this.processCallbacks?.onProcessSpawned,
-      onProcessExited: this.processCallbacks?.onProcessExited,
-    });
+    const options = timeSync("buildSessionOptions", () =>
+      buildSessionOptions({
+        cwd: params.cwd,
+        mcpServers,
+        permissionMode,
+        canUseTool: this.createCanUseTool(sessionId),
+        logger: this.logger,
+        systemPrompt: buildSystemPrompt(meta?.systemPrompt),
+        userProvidedOptions: meta?.claudeCode?.options,
+        sessionId,
+        isResume: false,
+        onModeChange: this.createOnModeChange(sessionId),
+        onProcessSpawned: this.processCallbacks?.onProcessSpawned,
+        onProcessExited: this.processCallbacks?.onProcessExited,
+      }),
+    );
 
     const input = new Pushable<SDKUserMessage>();
-    const q = query({ prompt: input, options });
+    const q = timeSync("sdkQuery", () => query({ prompt: input, options }));
 
     const session = this.createSession(
       sessionId,
@@ -180,28 +204,41 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
 
     if (meta?.taskRunId) {
-      await this.client.extNotification("_posthog/sdk_session", {
-        taskRunId: meta.taskRunId,
-        sessionId,
-        adapter: "claude",
-      });
+      await timeAsync("extNotification", () =>
+        this.client.extNotification("_posthog/sdk_session", {
+          taskRunId: meta.taskRunId!,
+          sessionId,
+          adapter: "claude",
+        }),
+      );
     }
 
     // Run model config, slash commands, and MCP metadata fetch in parallel
-    const [modelOptions, slashCommands] = await Promise.all([
-      this.getModelConfigOptions(),
-      getAvailableSlashCommands(q),
-      mcpMetadataPromise,
-    ]);
+    const [modelOptions, slashCommands] = await timeAsync("parallelFetch", () =>
+      Promise.all([
+        this.getModelConfigOptions(),
+        getAvailableSlashCommands(q),
+        mcpMetadataPromise,
+      ]),
+    );
 
     session.modelId = modelOptions.currentModelId;
     await this.trySetModel(q, modelOptions.currentModelId);
 
     this.sendAvailableCommandsUpdate(sessionId, slashCommands);
 
+    const configOptions = await timeAsync("buildConfigOptions", () =>
+      this.buildConfigOptions(modelOptions),
+    );
+
+    if (enableTiming) {
+      const total = Object.values(steps).reduce((a, b) => a + b, 0);
+      this.logger.info(`[timing] newSession: ${total}ms`, steps);
+    }
+
     return {
       sessionId,
-      configOptions: await this.buildConfigOptions(modelOptions),
+      configOptions,
     };
   }
 
