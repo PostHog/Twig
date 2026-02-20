@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import type {
   McpServerConfig,
@@ -235,5 +236,16 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
     options.additionalDirectories = params.additionalDirectories;
   }
 
+  clearStatsigCache();
   return options;
+}
+
+function clearStatsigCache(): void {
+  const statsigPath = path.join(
+    process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"),
+    "statsig",
+  );
+  fs.rm(statsigPath, { recursive: true, force: true }, () => {
+    // Best-effort, ignore errors
+  });
 }
