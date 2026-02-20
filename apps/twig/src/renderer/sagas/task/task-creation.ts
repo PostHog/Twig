@@ -1,5 +1,8 @@
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
-import { getSessionService } from "@features/sessions/service/service";
+import {
+  type ConnectParams,
+  getSessionService,
+} from "@features/sessions/service/service";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import type { PostHogAPIClient } from "@renderer/api/posthogClient";
@@ -62,7 +65,14 @@ export class TaskCreationSaga extends Saga<
     input: TaskCreationInput,
   ): Promise<TaskCreationOutput> {
     // Step 1: Get or create task
+    // For new tasks, start folder registration in parallel with task creation
+    // since folder_registration only needs repoPath (from input), not task.id
     const taskId = input.taskId;
+    const folderPromise =
+      !taskId && input.repoPath
+        ? this.resolveFolder(input.repoPath)
+        : undefined;
+
     const task = taskId
       ? await this.readOnlyStep("fetch_task", () =>
           this.deps.posthogClient.getTask(taskId),
@@ -108,21 +118,12 @@ export class TaskCreationSaga extends Saga<
 
       const branch = input.branch ?? task.latest_run?.branch ?? null;
 
-      // Get or create folder registration first
-      const folder = await this.readOnlyStep(
-        "folder_registration",
-        async () => {
-          const folders = await trpcVanilla.folders.getFolders.query();
-          let existingFolder = folders.find((f) => f.path === repoPath);
-
-          if (!existingFolder) {
-            existingFolder = await trpcVanilla.folders.addFolder.mutate({
-              folderPath: repoPath,
-            });
-          }
-          return existingFolder;
-        },
-      );
+      // Use the pre-fetched folder if we started it in parallel, otherwise fetch now
+      const folder = folderPromise
+        ? await this.readOnlyStep("folder_registration", () => folderPromise)
+        : await this.readOnlyStep("folder_registration", () =>
+            this.resolveFolder(repoPath),
+          );
 
       const workspaceInfo = await this.step({
         name: "workspace_creation",
@@ -197,25 +198,22 @@ export class TaskCreationSaga extends Saga<
       await this.step({
         name: "agent_session",
         execute: async () => {
-          // For opening existing tasks, await to ensure chat history loads
-          // For creating new tasks, we can proceed without waiting
-          if (input.taskId) {
-            await getSessionService().connectToTask({
-              task,
-              repoPath: agentCwd ?? "",
-            });
-          } else {
-            // Don't await for create - allows faster navigation to task page
-            getSessionService().connectToTask({
-              task,
-              repoPath: agentCwd ?? "",
-              initialPrompt,
-              executionMode: input.executionMode,
-              adapter: input.adapter,
-              model: input.model,
-              reasoningLevel: input.reasoningLevel,
-            });
-          }
+          // Fire-and-forget for both open and create paths.
+          // The UI handles "connecting" state with a spinner (TaskLogsPanel),
+          // so we don't need to block the saga on the full reconnect chain.
+          const connectParams: ConnectParams = {
+            task,
+            repoPath: agentCwd ?? "",
+          };
+          if (initialPrompt) connectParams.initialPrompt = initialPrompt;
+          if (input.executionMode)
+            connectParams.executionMode = input.executionMode;
+          if (input.adapter) connectParams.adapter = input.adapter;
+          if (input.model) connectParams.model = input.model;
+          if (input.reasoningLevel)
+            connectParams.reasoningLevel = input.reasoningLevel;
+
+          getSessionService().connectToTask(connectParams);
           return { taskId: task.id };
         },
         rollback: async ({ taskId }) => {
@@ -244,6 +242,18 @@ export class TaskCreationSaga extends Saga<
         }
       });
     });
+  }
+
+  private async resolveFolder(repoPath: string) {
+    const folders = await trpcVanilla.folders.getFolders.query();
+    let existingFolder = folders.find((f) => f.path === repoPath);
+
+    if (!existingFolder) {
+      existingFolder = await trpcVanilla.folders.addFolder.mutate({
+        folderPath: repoPath,
+      });
+    }
+    return existingFolder;
   }
 
   private async createTask(input: TaskCreationInput): Promise<Task> {

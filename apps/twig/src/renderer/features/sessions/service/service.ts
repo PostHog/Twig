@@ -63,7 +63,7 @@ interface AuthCredentials {
   client: ReturnType<typeof useAuthStore.getState>["client"];
 }
 
-interface ConnectParams {
+export interface ConnectParams {
   task: Task;
   repoPath: string;
   initialPrompt?: ContentBlock[];
@@ -179,17 +179,18 @@ export class SessionService {
       }
 
       if (latestRun?.id && latestRun?.log_url) {
-        const workspaceResult = await trpcVanilla.workspace.verify.query({
-          taskId,
-        });
+        // Start workspace verify and log fetch in parallel
+        const [workspaceResult, logResult] = await Promise.all([
+          trpcVanilla.workspace.verify.query({ taskId }),
+          this.fetchSessionLogs(latestRun.log_url),
+        ]);
 
         if (!workspaceResult.exists) {
           log.warn("Workspace no longer exists, showing error state", {
             taskId,
             missingPath: workspaceResult.missingPath,
           });
-          const { rawEntries } = await this.fetchSessionLogs(latestRun.log_url);
-          const events = convertStoredEntriesToEvents(rawEntries);
+          const events = convertStoredEntriesToEvents(logResult.rawEntries);
 
           const session = this.createBaseSession(
             latestRun.id,
@@ -206,20 +207,21 @@ export class SessionService {
           sessionStoreSetters.setSession(session);
           return;
         }
-      }
 
-      if (!getIsOnline()) {
-        log.info("Skipping connection attempt - offline", { taskId });
-        const taskRunId = latestRun?.id ?? `offline-${taskId}`;
-        const session = this.createBaseSession(taskRunId, taskId, taskTitle);
-        session.status = "disconnected";
-        session.errorMessage =
-          "No internet connection. Connect when you're back online.";
-        sessionStoreSetters.setSession(session);
-        return;
-      }
+        if (!getIsOnline()) {
+          log.info("Skipping connection attempt - offline", { taskId });
+          const session = this.createBaseSession(
+            latestRun.id,
+            taskId,
+            taskTitle,
+          );
+          session.status = "disconnected";
+          session.errorMessage =
+            "No internet connection. Connect when you're back online.";
+          sessionStoreSetters.setSession(session);
+          return;
+        }
 
-      if (latestRun?.id && latestRun?.log_url) {
         await this.reconnectToLocalSession(
           taskId,
           latestRun.id,
@@ -227,8 +229,20 @@ export class SessionService {
           latestRun.log_url,
           repoPath,
           auth,
+          logResult,
         );
       } else {
+        if (!getIsOnline()) {
+          log.info("Skipping connection attempt - offline", { taskId });
+          const taskRunId = latestRun?.id ?? `offline-${taskId}`;
+          const session = this.createBaseSession(taskRunId, taskId, taskTitle);
+          session.status = "disconnected";
+          session.errorMessage =
+            "No internet connection. Connect when you're back online.";
+          sessionStoreSetters.setSession(session);
+          return;
+        }
+
         await this.createNewLocalSession(
           taskId,
           taskTitle,
@@ -271,9 +285,14 @@ export class SessionService {
     logUrl: string,
     repoPath: string,
     auth: AuthCredentials,
+    prefetchedLogs?: {
+      rawEntries: StoredLogEntry[];
+      sessionId?: string;
+      adapter?: Adapter;
+    },
   ): Promise<void> {
     const { rawEntries, sessionId, adapter } =
-      await this.fetchSessionLogs(logUrl);
+      prefetchedLogs ?? (await this.fetchSessionLogs(logUrl));
     const events = convertStoredEntriesToEvents(rawEntries);
 
     // Resolve adapter from logs or persisted store
@@ -340,26 +359,28 @@ export class SessionService {
           setPersistedConfigOptions(taskRunId, configOptions);
         }
 
-        // Restore persisted config options to server
+        // Restore persisted config options to server in parallel
         if (persistedConfigOptions) {
-          for (const opt of persistedConfigOptions) {
-            try {
-              await trpcVanilla.agent.setConfigOption.mutate({
-                sessionId: taskRunId,
-                configId: opt.id,
-                value: opt.currentValue,
-              });
-            } catch (error) {
-              log.warn(
-                "Failed to restore persisted config option after reconnect",
-                {
-                  taskId,
+          await Promise.all(
+            persistedConfigOptions.map((opt) =>
+              trpcVanilla.agent.setConfigOption
+                .mutate({
+                  sessionId: taskRunId,
                   configId: opt.id,
-                  error,
-                },
-              );
-            }
-          }
+                  value: opt.currentValue,
+                })
+                .catch((error) => {
+                  log.warn(
+                    "Failed to restore persisted config option after reconnect",
+                    {
+                      taskId,
+                      configId: opt.id,
+                      error,
+                    },
+                  );
+                }),
+            ),
+          );
         }
       } else {
         log.warn("Reconnect returned null, falling back to new session", {
@@ -512,24 +533,32 @@ export class SessionService {
       execution_type: "local",
     });
 
-    // Set the model - use passed model if provided, otherwise use store's effective model
+    // Set model and reasoning level in parallel
     const preferredModel =
       model ?? useModelsStore.getState().getEffectiveModel();
+    const configPromises: Promise<void>[] = [];
     if (preferredModel) {
-      await this.setSessionConfigOptionByCategory(
-        taskId,
-        "model",
-        preferredModel,
+      configPromises.push(
+        this.setSessionConfigOptionByCategory(
+          taskId,
+          "model",
+          preferredModel,
+        ).catch((err) => log.warn("Failed to set model", { taskId, err })),
       );
     }
-
-    // Set reasoning level if provided (e.g., from Codex adapter's preview session)
     if (reasoningLevel) {
-      await this.setSessionConfigOptionByCategory(
-        taskId,
-        "thought_level",
-        reasoningLevel,
+      configPromises.push(
+        this.setSessionConfigOptionByCategory(
+          taskId,
+          "thought_level",
+          reasoningLevel,
+        ).catch((err) =>
+          log.warn("Failed to set reasoning level", { taskId, err }),
+        ),
       );
+    }
+    if (configPromises.length > 0) {
+      await Promise.all(configPromises);
     }
 
     if (initialPrompt?.length) {
