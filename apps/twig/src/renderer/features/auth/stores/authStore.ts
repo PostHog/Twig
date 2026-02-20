@@ -6,6 +6,8 @@ import { queryClient } from "@renderer/lib/queryClient";
 import { trpcVanilla } from "@renderer/trpc/client";
 import {
   getCloudUrlFromRegion,
+  OAUTH_SCOPE_VERSION,
+  OAUTH_SCOPES,
   TOKEN_REFRESH_BUFFER_MS,
 } from "@shared/constants/oauth";
 import { ANALYTICS_EVENTS } from "@shared/types/analytics";
@@ -44,6 +46,7 @@ interface StoredTokens {
   expiresAt: number;
   cloudRegion: CloudRegion;
   scopedTeams?: number[];
+  scopeVersion?: number;
 }
 
 interface AuthState {
@@ -64,6 +67,8 @@ interface AuthState {
   availableProjectIds: number[]; // All projects from scoped_teams
   availableOrgIds: string[]; // All orgs from scoped_organizations
   needsProjectSelection: boolean; // True when multiple projects and no selection stored
+
+  needsScopeReauth: boolean; // True when stored token scope version is stale
 
   // OAuth methods
   loginWithOAuth: (region: CloudRegion) => Promise<void>;
@@ -104,6 +109,8 @@ export const useAuthStore = create<AuthState>()(
         availableProjectIds: [],
         availableOrgIds: [],
         needsProjectSelection: false,
+        // Scope re-auth state
+        needsScopeReauth: false,
 
         loginWithOAuth: async (region: CloudRegion) => {
           const result = await trpcVanilla.oauth.startFlow.mutate({ region });
@@ -128,6 +135,7 @@ export const useAuthStore = create<AuthState>()(
             expiresAt,
             cloudRegion: region,
             scopedTeams,
+            scopeVersion: OAUTH_SCOPE_VERSION,
           };
 
           const apiHost = getCloudUrlFromRegion(region);
@@ -171,6 +179,7 @@ export const useAuthStore = create<AuthState>()(
               availableProjectIds: scopedTeams,
               availableOrgIds: scopedOrgs,
               needsProjectSelection: false,
+              needsScopeReauth: false,
             });
 
             updateServiceTokens(tokenResponse.access_token);
@@ -229,7 +238,9 @@ export const useAuthStore = create<AuthState>()(
               try {
                 if (attempt > 0) {
                   log.debug(
-                    `Retrying token refresh (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES})`,
+                    `Retrying token refresh (attempt ${
+                      attempt + 1
+                    }/${REFRESH_MAX_RETRIES})`,
                   );
                   await sleepWithBackoff(attempt - 1, {
                     initialDelayMs: REFRESH_INITIAL_DELAY_MS,
@@ -248,7 +259,9 @@ export const useAuthStore = create<AuthState>()(
                     result.errorCode === "server_error"
                   ) {
                     log.warn(
-                      `Token refresh ${result.errorCode} (attempt ${attempt + 1}/${REFRESH_MAX_RETRIES}): ${result.error}`,
+                      `Token refresh ${result.errorCode} (attempt ${
+                        attempt + 1
+                      }/${REFRESH_MAX_RETRIES}): ${result.error}`,
                     );
                     lastError = new Error(
                       result.error || "Token refresh failed",
@@ -273,6 +286,7 @@ export const useAuthStore = create<AuthState>()(
                   expiresAt,
                   cloudRegion: state.cloudRegion,
                   scopedTeams: tokenResponse.scoped_teams,
+                  scopeVersion: state.storedTokens?.scopeVersion ?? 0,
                 };
 
                 const apiHost = getCloudUrlFromRegion(state.cloudRegion);
@@ -325,14 +339,18 @@ export const useAuthStore = create<AuthState>()(
 
                 // tRPC exceptions are typically IPC failures - retry them
                 log.warn(
-                  `Token refresh exception (attempt ${attempt + 1}): ${lastError.message}`,
+                  `Token refresh exception (attempt ${attempt + 1}): ${
+                    lastError.message
+                  }`,
                 );
               }
             }
 
             // All retries exhausted
             log.error(
-              `Token refresh failed after all retries: ${lastError?.message || "Unknown error"}`,
+              `Token refresh failed after all retries: ${
+                lastError?.message || "Unknown error"
+              }`,
             );
             get().logout();
             throw lastError || new Error("Token refresh failed");
@@ -395,6 +413,16 @@ export const useAuthStore = create<AuthState>()(
             const state = get();
 
             if (state.storedTokens) {
+              const tokenScopeVersion = state.storedTokens.scopeVersion ?? 0;
+              if (tokenScopeVersion < OAUTH_SCOPE_VERSION) {
+                log.info("OAuth scopes updated, re-authentication required", {
+                  tokenVersion: tokenScopeVersion,
+                  requiredVersion: OAUTH_SCOPE_VERSION,
+                  requiredScopes: OAUTH_SCOPES,
+                });
+                set({ needsScopeReauth: true });
+              }
+
               const tokens = state.storedTokens;
               const now = Date.now();
               const isExpired = tokens.expiresAt <= now;
@@ -411,7 +439,11 @@ export const useAuthStore = create<AuthState>()(
                   await get().refreshAccessToken();
                 } catch (error) {
                   log.error("Failed to refresh expired token:", error);
-                  set({ storedTokens: null, isAuthenticated: false });
+                  set({
+                    storedTokens: null,
+                    isAuthenticated: false,
+                    needsScopeReauth: false,
+                  });
                   return false;
                 }
               }
@@ -520,7 +552,11 @@ export const useAuthStore = create<AuthState>()(
                 }
 
                 // For auth errors (401/403) or unknown errors, clear the session
-                set({ storedTokens: null, isAuthenticated: false });
+                set({
+                  storedTokens: null,
+                  isAuthenticated: false,
+                  needsScopeReauth: false,
+                });
                 return false;
               }
             }
@@ -560,6 +596,7 @@ export const useAuthStore = create<AuthState>()(
             expiresAt,
             cloudRegion: region,
             scopedTeams,
+            scopeVersion: OAUTH_SCOPE_VERSION,
           };
 
           const apiHost = getCloudUrlFromRegion(region);
@@ -594,6 +631,7 @@ export const useAuthStore = create<AuthState>()(
               availableProjectIds: scopedTeams,
               availableOrgIds: scopedOrgs,
               needsProjectSelection: false,
+              needsScopeReauth: false,
             });
 
             updateServiceTokens(tokenResponse.access_token);
@@ -738,6 +776,7 @@ export const useAuthStore = create<AuthState>()(
             availableProjectIds: [],
             availableOrgIds: [],
             needsProjectSelection: false,
+            needsScopeReauth: false,
           });
         },
       }),

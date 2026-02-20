@@ -1,6 +1,7 @@
 import { ConnectivityPrompt } from "@components/ConnectivityPrompt";
 import { HeaderRow } from "@components/HeaderRow";
 import { KeyboardShortcutsSheet } from "@components/KeyboardShortcutsSheet";
+import { ScopeReauthPrompt } from "@components/ScopeReauthPrompt";
 import { UpdatePrompt } from "@components/UpdatePrompt";
 import { useAutonomy } from "@features/autonomy/hooks/useAutonomy";
 import { CommandMenu } from "@features/command/components/CommandMenu";
@@ -86,6 +87,7 @@ export function MainLayout() {
         onOpenChange={(open) => (open ? null : closeShortcutsSheet())}
       />
       <UpdatePrompt />
+      <ScopeReauthPrompt />
       <ConnectivityPrompt
         open={showPrompt}
         isChecking={isChecking}
