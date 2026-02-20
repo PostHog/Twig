@@ -64,7 +64,7 @@ export class TaskCreationSaga extends Saga<
   protected async execute(
     input: TaskCreationInput,
   ): Promise<TaskCreationOutput> {
-    const submittedAt = Date.now();
+    const submittedAt = import.meta.env.DEV ? Date.now() : undefined;
 
     // Step 1: Get or create task
     // For new tasks, start folder registration in parallel with task creation

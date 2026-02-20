@@ -24,6 +24,7 @@ import {
   mergeConfigOptions,
   sessionStoreSetters,
 } from "@features/sessions/stores/sessionStore";
+import { createTimingCollector } from "@posthog/shared";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import {
@@ -53,40 +54,6 @@ import {
 } from "@utils/session";
 
 const log = logger.scope("session-service");
-
-/** Dev-only timing collector for renderer. No-op in production builds. */
-function createRendererTimingCollector() {
-  if (!import.meta.env.DEV) {
-    return {
-      time: <T>(_l: string, fn: () => Promise<T>) => fn(),
-      timeSync: <T>(_l: string, fn: () => T) => fn(),
-      record: (_l: string, _ms: number) => {},
-      summarize: (_l: string) => {},
-    };
-  }
-  const steps: Record<string, number> = {};
-  return {
-    async time<T>(label: string, fn: () => Promise<T>): Promise<T> {
-      const s = Date.now();
-      const r = await fn();
-      steps[label] = Date.now() - s;
-      return r;
-    },
-    timeSync<T>(label: string, fn: () => T): T {
-      const s = Date.now();
-      const r = fn();
-      steps[label] = Date.now() - s;
-      return r;
-    },
-    record(label: string, ms: number) {
-      steps[label] = ms;
-    },
-    summarize(label: string) {
-      const total = Object.values(steps).reduce((a, b) => a + b, 0);
-      log.info(`[timing] ${label}: ${total}ms`, steps);
-    },
-  };
-}
 
 export const PREVIEW_TASK_ID = "__preview__";
 
@@ -465,6 +432,7 @@ export class SessionService {
     }
 
     this.unsubscribeFromChannel(taskRunId);
+    this.clearFirstResponseTracking(taskRunId);
     sessionStoreSetters.removeSession(taskRunId);
     useSessionAdapterStore.getState().removeAdapter(taskRunId);
     removePersistedConfigOptions(taskRunId);
@@ -527,7 +495,9 @@ export class SessionService {
     reasoningLevel?: string,
     submittedAt?: number,
   ): Promise<void> {
-    const tc = createRendererTimingCollector();
+    const tc = createTimingCollector(import.meta.env.DEV, (msg, data) =>
+      log.info(msg, data),
+    );
 
     const { client } = auth;
     if (!client) {
@@ -780,6 +750,14 @@ export class SessionService {
     this.subscriptions.delete(taskRunId);
   }
 
+  private clearFirstResponseTracking(taskRunId: string): void {
+    for (const key of this.firstResponseLogged) {
+      if (key.startsWith(`${taskRunId}:`)) {
+        this.firstResponseLogged.delete(key);
+      }
+    }
+  }
+
   /**
    * Reset all service state and clean up subscriptions.
    * Called on logout or app reset.
@@ -803,6 +781,7 @@ export class SessionService {
     this.cloudTaskCleanups.clear();
 
     this.connectingTasks.clear();
+    this.firstResponseLogged.clear();
     this.previewAbort?.abort();
     this.previewAbort = null;
   }

@@ -25,7 +25,7 @@ import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import { createTimingCollector } from "../../lib/timing.js";
+import { createMainTimingCollector } from "../../lib/timing.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
 import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
@@ -421,7 +421,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     isReconnect: boolean,
     isRetry = false,
   ): Promise<ManagedSession | null> {
-    const tc = createTimingCollector(log);
+    const tc = createMainTimingCollector(log);
 
     const {
       taskId,

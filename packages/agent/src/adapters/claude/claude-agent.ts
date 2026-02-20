@@ -29,6 +29,7 @@ import {
   type SDKMessage,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { createTimingCollector } from "@posthog/shared";
 import { v7 as uuidv7 } from "uuid";
 import packageJson from "../../../package.json" with { type: "json" };
 import type { SessionContext } from "../../otel-log-writer.js";
@@ -69,6 +70,8 @@ import type {
 export interface ClaudeAcpAgentOptions {
   onProcessSpawned?: (info: ProcessSpawnedInfo) => void;
   onProcessExited?: (pid: number) => void;
+  /** Enable dev-only instrumentation (timing, verbose logging) */
+  debug?: boolean;
 }
 
 export class ClaudeAcpAgent extends BaseAcpAgent {
@@ -80,15 +83,17 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   private logWriter?: SessionLogWriter;
   private processCallbacks?: ClaudeAcpAgentOptions;
   private lastSentConfigOptions?: SessionConfigOption[];
+  private debug: boolean;
 
   constructor(
     client: AgentSideConnection,
     logWriter?: SessionLogWriter,
-    processCallbacks?: ClaudeAcpAgentOptions,
+    options?: ClaudeAcpAgentOptions,
   ) {
     super(client);
     this.logWriter = logWriter;
-    this.processCallbacks = processCallbacks;
+    this.processCallbacks = options;
+    this.debug = options?.debug ?? false;
     this.toolUseCache = {};
     this.logger = new Logger({ debug: true, prefix: "[ClaudeAcpAgent]" });
   }
@@ -136,25 +141,9 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   async newSession(params: NewSessionRequest): Promise<NewSessionResponse> {
     this.checkAuthStatus();
 
-    const enableTiming = this.logger !== undefined;
-    const steps: Record<string, number> = {};
-    const timeAsync = async <T>(
-      label: string,
-      fn: () => Promise<T>,
-    ): Promise<T> => {
-      if (!enableTiming) return fn();
-      const start = Date.now();
-      const result = await fn();
-      steps[label] = Date.now() - start;
-      return result;
-    };
-    const timeSync = <T>(label: string, fn: () => T): T => {
-      if (!enableTiming) return fn();
-      const start = Date.now();
-      const result = fn();
-      steps[label] = Date.now() - start;
-      return result;
-    };
+    const tc = createTimingCollector(this.debug, (msg, data) =>
+      this.logger.info(msg, data),
+    );
 
     const meta = params._meta as NewSessionMeta | undefined;
     const sessionId = uuidv7();
@@ -164,15 +153,11 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         ? (meta.permissionMode as TwigExecutionMode)
         : "default";
 
-    const mcpServers = timeSync("parseMcpServers", () =>
+    const mcpServers = tc.timeSync("parseMcpServers", () =>
       parseMcpServers(params),
     );
 
-    // Fire off MCP metadata fetch early — it populates a module-level cache
-    // used later during permission checks, not needed by buildSessionOptions or query()
-    const mcpMetadataPromise = fetchMcpToolMetadata(mcpServers, this.logger);
-
-    const options = timeSync("buildSessionOptions", () =>
+    const options = tc.timeSync("buildSessionOptions", () =>
       buildSessionOptions({
         cwd: params.cwd,
         mcpServers,
@@ -190,7 +175,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     );
 
     const input = new Pushable<SDKUserMessage>();
-    const q = timeSync("sdkQuery", () => query({ prompt: input, options }));
+    const q = tc.timeSync("sdkQuery", () => query({ prompt: input, options }));
 
     const session = this.createSession(
       sessionId,
@@ -204,7 +189,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
 
     if (meta?.taskRunId) {
-      await timeAsync("extNotification", () =>
+      await tc.time("extNotification", () =>
         this.client.extNotification("_posthog/sdk_session", {
           taskRunId: meta.taskRunId!,
           sessionId,
@@ -215,35 +200,21 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
 
     // Only await model config — slash commands and MCP metadata are deferred
     // since they're not needed to return configOptions to the client.
-    const modelOptions = await timeAsync("fetchModels", () =>
+    const modelOptions = await tc.time("fetchModels", () =>
       this.getModelConfigOptions(),
     );
 
-    // Slash commands: send update to client when ready (not blocking)
-    getAvailableSlashCommands(q)
-      .then((slashCommands) => {
-        this.sendAvailableCommandsUpdate(sessionId, slashCommands);
-      })
-      .catch((err) => {
-        this.logger.warn("Failed to fetch slash commands", { err });
-      });
-
-    // MCP metadata: already running, just ensure errors are handled
-    mcpMetadataPromise.catch((err) => {
-      this.logger.warn("Failed to fetch MCP tool metadata", { err });
-    });
+    // Deferred: slash commands + MCP metadata (not needed to return configOptions)
+    this.deferBackgroundFetches(tc, q, sessionId, mcpServers);
 
     session.modelId = modelOptions.currentModelId;
     await this.trySetModel(q, modelOptions.currentModelId);
 
-    const configOptions = await timeAsync("buildConfigOptions", () =>
+    const configOptions = await tc.time("buildConfigOptions", () =>
       this.buildConfigOptions(modelOptions),
     );
 
-    if (enableTiming) {
-      const total = Object.values(steps).reduce((a, b) => a + b, 0);
-      this.logger.info(`[timing] newSession: ${total}ms`, steps);
-    }
+    tc.summarize("newSession");
 
     return {
       sessionId,
@@ -258,6 +229,10 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   async resumeSession(
     params: LoadSessionRequest,
   ): Promise<LoadSessionResponse> {
+    const tc = createTimingCollector(this.debug, (msg, data) =>
+      this.logger.info(msg, data),
+    );
+
     const meta = params._meta as NewSessionMeta | undefined;
     const sessionId = meta?.sessionId;
     if (!sessionId) {
@@ -267,10 +242,9 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       return {};
     }
 
-    const mcpServers = parseMcpServers(params);
-
-    // Fire off MCP metadata fetch early — populates cache for permission checks
-    const mcpMetadataPromise = fetchMcpToolMetadata(mcpServers, this.logger);
+    const mcpServers = tc.timeSync("parseMcpServers", () =>
+      parseMcpServers(params),
+    );
 
     const permissionMode: TwigExecutionMode =
       meta?.permissionMode &&
@@ -278,37 +252,33 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         ? (meta.permissionMode as TwigExecutionMode)
         : "default";
 
-    const { query: q, session } = await this.initializeQuery({
-      cwd: params.cwd,
-      permissionMode,
-      mcpServers,
-      systemPrompt: buildSystemPrompt(meta?.systemPrompt),
-      userProvidedOptions: meta?.claudeCode?.options,
-      sessionId,
-      isResume: true,
-      additionalDirectories: meta?.claudeCode?.options?.additionalDirectories,
-    });
+    const { query: q, session } = await tc.time("initializeQuery", () =>
+      this.initializeQuery({
+        cwd: params.cwd,
+        permissionMode,
+        mcpServers,
+        systemPrompt: buildSystemPrompt(meta?.systemPrompt),
+        userProvidedOptions: meta?.claudeCode?.options,
+        sessionId,
+        isResume: true,
+        additionalDirectories: meta?.claudeCode?.options?.additionalDirectories,
+      }),
+    );
 
     session.taskRunId = meta?.taskRunId;
 
     this.registerPersistence(sessionId, meta as Record<string, unknown>);
 
-    // Defer slash commands and MCP metadata — not needed to return configOptions
-    getAvailableSlashCommands(q)
-      .then((slashCommands) => {
-        this.sendAvailableCommandsUpdate(sessionId, slashCommands);
-      })
-      .catch((err) => {
-        this.logger.warn("Failed to fetch slash commands on resume", { err });
-      });
+    // Deferred: slash commands + MCP metadata (not needed to return configOptions)
+    this.deferBackgroundFetches(tc, q, sessionId, mcpServers);
 
-    mcpMetadataPromise.catch((err) => {
-      this.logger.warn("Failed to fetch MCP tool metadata on resume", { err });
-    });
+    const configOptions = await tc.time("buildConfigOptions", () =>
+      this.buildConfigOptions(),
+    );
 
-    return {
-      configOptions: await this.buildConfigOptions(),
-    };
+    tc.summarize("resumeSession");
+
+    return { configOptions };
   }
 
   async prompt(params: PromptRequest): Promise<PromptResponse> {
@@ -552,6 +522,30 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       }
       await q.setModel(fallback);
     }
+  }
+
+  /**
+   * Fire-and-forget: fetch slash commands and MCP tool metadata in parallel.
+   * Both populate caches used later — neither is needed to return configOptions.
+   */
+  private deferBackgroundFetches(
+    tc: ReturnType<typeof createTimingCollector>,
+    q: Query,
+    sessionId: string,
+    mcpServers: ReturnType<typeof parseMcpServers>,
+  ): void {
+    Promise.all([
+      tc.time("slashCommands", () => getAvailableSlashCommands(q)),
+      tc.time("mcpMetadata", () =>
+        fetchMcpToolMetadata(mcpServers, this.logger),
+      ),
+    ])
+      .then(([slashCommands]) => {
+        this.sendAvailableCommandsUpdate(sessionId, slashCommands);
+      })
+      .catch((err) => {
+        this.logger.warn("Failed to fetch deferred session data", { err });
+      });
   }
 
   private registerPersistence(
