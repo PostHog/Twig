@@ -224,6 +224,7 @@ const SessionUpdateRow = memo(function SessionUpdateRow({
     <SessionUpdateView
       item={update}
       toolCalls={turnContext.toolCalls}
+      childItems={turnContext.childItems}
       turnCancelled={turnContext.turnCancelled}
       turnComplete={turnContext.turnComplete}
     />

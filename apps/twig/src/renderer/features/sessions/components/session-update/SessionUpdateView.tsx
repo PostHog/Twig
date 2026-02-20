@@ -1,3 +1,4 @@
+import type { ConversationItem } from "@features/sessions/components/buildConversationItems";
 import type { SessionUpdate, ToolCall } from "@features/sessions/types";
 import { memo } from "react";
 
@@ -44,6 +45,7 @@ export type RenderItem =
 interface SessionUpdateViewProps {
   item: RenderItem;
   toolCalls?: Map<string, ToolCall>;
+  childItems?: Map<string, ConversationItem[]>;
   turnCancelled?: boolean;
   turnComplete?: boolean;
 }
@@ -51,6 +53,7 @@ interface SessionUpdateViewProps {
 export const SessionUpdateView = memo(function SessionUpdateView({
   item,
   toolCalls,
+  childItems,
   turnCancelled,
   turnComplete,
 }: SessionUpdateViewProps) {
@@ -71,6 +74,8 @@ export const SessionUpdateView = memo(function SessionUpdateView({
           toolCall={toolCalls?.get(item.toolCallId) ?? item}
           turnCancelled={turnCancelled}
           turnComplete={turnComplete}
+          childItems={childItems?.get(item.toolCallId)}
+          childItemsMap={childItems}
         />
       );
     case "tool_call_update":

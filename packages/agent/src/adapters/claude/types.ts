@@ -46,6 +46,7 @@ export type ToolUpdateMeta = {
   claudeCode?: {
     toolName: string;
     toolResponse?: unknown;
+    parentToolCallId?: string;
   };
 };
 

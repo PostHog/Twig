@@ -1,3 +1,8 @@
+import type {
+  ConversationItem,
+  TurnContext,
+} from "@features/sessions/components/buildConversationItems";
+import type { ToolCall } from "@features/sessions/types";
 import { Box } from "@radix-ui/themes";
 import { DeleteToolView } from "./DeleteToolView";
 import { EditToolView } from "./EditToolView";
@@ -8,15 +13,23 @@ import { PlanApprovalView } from "./PlanApprovalView";
 import { QuestionToolView } from "./QuestionToolView";
 import { ReadToolView } from "./ReadToolView";
 import { SearchToolView } from "./SearchToolView";
+import { SubagentToolView } from "./SubagentToolView";
 import { ThinkToolView } from "./ThinkToolView";
 import { ToolCallView } from "./ToolCallView";
 import type { ToolViewProps } from "./toolCallUtils";
+
+interface ToolCallBlockProps extends ToolViewProps {
+  childItems?: ConversationItem[];
+  childItemsMap?: Map<string, ConversationItem[]>;
+}
 
 export function ToolCallBlock({
   toolCall,
   turnCancelled,
   turnComplete,
-}: ToolViewProps) {
+  childItems,
+  childItemsMap,
+}: ToolCallBlockProps) {
   const meta = toolCall._meta as
     | { claudeCode?: { toolName?: string } }
     | undefined;
@@ -27,6 +40,24 @@ export function ToolCallBlock({
   }
 
   const props = { toolCall, turnCancelled, turnComplete };
+
+  if (toolName === "Task" && childItems && childItems.length > 0) {
+    const turnContext: TurnContext = {
+      toolCalls: buildChildToolCallsMap(childItems),
+      childItems: childItemsMap ?? new Map(),
+      turnCancelled: turnCancelled ?? false,
+      turnComplete: turnComplete ?? false,
+    };
+    return (
+      <Box className="pl-3">
+        <SubagentToolView
+          {...props}
+          childItems={childItems}
+          turnContext={turnContext}
+        />
+      </Box>
+    );
+  }
 
   const content = (() => {
     switch (toolCall.kind) {
@@ -56,4 +87,22 @@ export function ToolCallBlock({
   })();
 
   return <Box className="pl-3">{content}</Box>;
+}
+
+function buildChildToolCallsMap(
+  childItems: ConversationItem[],
+): Map<string, ToolCall> {
+  const map = new Map<string, ToolCall>();
+  for (const item of childItems) {
+    if (
+      item.type === "session_update" &&
+      item.update.sessionUpdate === "tool_call"
+    ) {
+      const tc = item.update as unknown as ToolCall;
+      if (tc.toolCallId) {
+        map.set(tc.toolCallId, tc);
+      }
+    }
+  }
+  return map;
 }
