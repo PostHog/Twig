@@ -28,11 +28,9 @@ interface FocusState {
 
 function invalidateQueries() {
   queryClient.invalidateQueries({ queryKey: ["current-branch"] });
-  setTimeout(() => {
-    queryClient.invalidateQueries({ queryKey: ["diff-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["changed-files-head"] });
-    queryClient.invalidateQueries({ queryKey: ["git-sync-status"] });
-  }, 1000);
+  queryClient.invalidateQueries({ queryKey: ["diff-stats"] });
+  queryClient.invalidateQueries({ queryKey: ["changed-files-head"] });
+  queryClient.invalidateQueries({ queryKey: ["git-sync-status"] });
 }
 
 export const useFocusStore = create<FocusState>()((set, get) => ({
