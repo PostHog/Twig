@@ -26,7 +26,7 @@ export const SEARCH_TOOLS: Set<string> = new Set(["Glob", "Grep", "LS"]);
 
 export const WEB_TOOLS: Set<string> = new Set(["WebSearch", "WebFetch"]);
 
-export const AGENT_TOOLS: Set<string> = new Set(["Task", "TodoWrite"]);
+export const AGENT_TOOLS: Set<string> = new Set(["Task", "TodoWrite", "Skill"]);
 
 const BASE_ALLOWED_TOOLS = [
   ...READ_TOOLS,

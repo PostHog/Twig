@@ -282,6 +282,18 @@ export type GetCommitConventionsOutput = z.infer<
   typeof getCommitConventionsOutput
 >;
 
+// getPrChangedFiles schemas
+export const getPrChangedFilesInput = z.object({
+  prUrl: z.string(),
+});
+export const getPrChangedFilesOutput = z.array(changedFileSchema);
+
+export const getBranchChangedFilesInput = z.object({
+  repo: z.string(),
+  branch: z.string(),
+});
+export const getBranchChangedFilesOutput = z.array(changedFileSchema);
+
 export const generateCommitMessageInput = z.object({
   directoryPath: z.string(),
   credentials: z.object({

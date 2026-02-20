@@ -20479,7 +20479,7 @@ export class ApiClient {
     const withResponse = requestParams?.withResponse;
     const {
       withResponse: _,
-      throwOnStatusError = withResponse ? false : true,
+      throwOnStatusError = !withResponse,
       overrides,
       ...fetchParams
     } = requestParams || {};

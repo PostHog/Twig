@@ -6,7 +6,7 @@ import "posthog-js/dist/posthog-recorder";
 import type {
   EventPropertyMap,
   UserIdentifyProperties,
-} from "../../types/analytics";
+} from "@shared/types/analytics";
 import { logger } from "./logger";
 
 const log = logger.scope("analytics");
@@ -151,19 +151,6 @@ export function captureException(
  */
 export function getPostHog() {
   return isInitialized ? posthog : null;
-}
-
-// ============================================================================
-// Surveys
-// ============================================================================
-
-export function displaySurvey(surveyId: string) {
-  if (!isInitialized) {
-    log.warn("PostHog not initialized, cannot display survey");
-    return;
-  }
-
-  posthog.displaySurvey(surveyId);
 }
 
 // ============================================================================

@@ -1,5 +1,7 @@
+import { logger } from "@renderer/lib/logger";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { trpcVanilla } from "@renderer/trpc";
+import { omitKey } from "@renderer/utils/object";
 import type {
   CreateWorkspaceOptions,
   ScriptExecutionResult,
@@ -10,8 +12,6 @@ import type {
 } from "@shared/types";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { create } from "zustand";
-import { logger } from "@/renderer/lib/logger";
-import { omitKey } from "@/renderer/utils/object";
 
 const log = logger.scope("workspaceStore");
 

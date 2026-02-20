@@ -7,13 +7,7 @@
     "target": "ESNext",
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "exclude": ["src/main/**/*", "src/api/repoDetector.ts"],
+  "exclude": ["src/main/**/*"],
   "extends": "./tsconfig.json",
-  "include": [
-    "src/renderer/**/*",
-    "src/shared/**/*",
-    "src/api/**/*",
-    "src/test/**/*",
-    "src/vite-env.d.ts"
-  ]
+  "include": ["src/renderer/**/*", "src/shared/**/*", "src/vite-env.d.ts"]
 }

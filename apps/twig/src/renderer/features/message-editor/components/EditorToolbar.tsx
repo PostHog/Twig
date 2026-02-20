@@ -3,13 +3,13 @@ import { ReasoningLevelSelector } from "@features/sessions/components/ReasoningL
 import { Paperclip } from "@phosphor-icons/react";
 import { Flex, IconButton, Tooltip } from "@radix-ui/themes";
 import { useRef } from "react";
-import type { MentionChip } from "../utils/content";
+import type { FileAttachment } from "../utils/content";
 
 interface EditorToolbarProps {
   disabled?: boolean;
   taskId?: string;
   adapter?: "claude" | "codex";
-  onInsertChip: (chip: MentionChip) => void;
+  onAddAttachment: (attachment: FileAttachment) => void;
   onAttachFiles?: (files: File[]) => void;
   attachTooltip?: string;
   iconSize?: number;
@@ -21,7 +21,7 @@ export function EditorToolbar({
   disabled = false,
   taskId,
   adapter,
-  onInsertChip,
+  onAddAttachment,
   onAttachFiles,
   attachTooltip = "Attach file",
   iconSize = 14,
@@ -35,11 +35,7 @@ export function EditorToolbar({
       const fileArray = Array.from(files);
       for (const file of fileArray) {
         const filePath = (file as File & { path?: string }).path || file.name;
-        onInsertChip({
-          type: "file",
-          id: filePath,
-          label: file.name,
-        });
+        onAddAttachment({ id: filePath, label: file.name });
       }
       onAttachFiles?.(fileArray);
     }

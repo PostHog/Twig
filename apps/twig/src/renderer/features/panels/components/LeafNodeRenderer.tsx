@@ -1,5 +1,9 @@
+import { Cloud as CloudIcon } from "@phosphor-icons/react";
+import { Flex, Text } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import type { Task } from "@shared/types";
 import type React from "react";
+import { useMemo } from "react";
 import { useTabInjection } from "../hooks/usePanelLayoutHooks";
 import type { SplitDirection } from "../store/panelLayoutStore";
 import type { LeafPanel } from "../store/panelTypes";
@@ -44,6 +48,29 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
     closeTab,
   );
 
+  const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  const isCloud = workspace?.mode === "cloud";
+
+  const cloudEmptyState = useMemo(
+    () =>
+      isCloud ? (
+        <Flex
+          align="center"
+          justify="center"
+          height="100%"
+          style={{ backgroundColor: "var(--gray-2)" }}
+        >
+          <Flex direction="column" align="center" gap="2">
+            <CloudIcon size={24} className="text-gray-10" />
+            <Text size="2" color="gray">
+              Cloud runs are read-only
+            </Text>
+          </Flex>
+        </Flex>
+      ) : undefined,
+    [isCloud],
+  );
+
   const contentWithComponents = {
     ...node.content,
     tabs,
@@ -62,6 +89,7 @@ export const LeafNodeRenderer: React.FC<LeafNodeRendererProps> = ({
       draggingTabPanelId={draggingTabPanelId}
       onAddTerminal={() => onAddTerminal(node.id)}
       onSplitPanel={(direction) => onSplitPanel(node.id, direction)}
+      emptyState={cloudEmptyState}
     />
   );
 };

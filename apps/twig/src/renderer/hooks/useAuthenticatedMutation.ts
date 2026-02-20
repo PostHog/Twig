@@ -1,5 +1,5 @@
-import type { PostHogAPIClient } from "@api/posthogClient";
 import { useAuthStore } from "@features/auth/stores/authStore";
+import type { PostHogAPIClient } from "@renderer/api/posthogClient";
 import type {
   UseMutationOptions,
   UseMutationResult,

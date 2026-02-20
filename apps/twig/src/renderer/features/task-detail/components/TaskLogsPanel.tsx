@@ -9,18 +9,22 @@ import {
 } from "@features/sessions/stores/sessionStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
 import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
+import { WorkspaceSetupPrompt } from "@features/task-detail/components/WorkspaceSetupPrompt";
 import { useDeleteTask } from "@features/tasks/hooks/useTasks";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { useConnectivity } from "@hooks/useConnectivity";
-import { Box } from "@radix-ui/themes";
+import { Box, Button, Flex, Spinner, Text } from "@radix-ui/themes";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import { useNavigationStore } from "@renderer/stores/navigationStore";
+import { useTaskDirectoryStore } from "@renderer/stores/taskDirectoryStore";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
+import { ANALYTICS_EVENTS, type FeedbackType } from "@shared/types/analytics";
+import { useQueryClient } from "@tanstack/react-query";
+import { getTaskRepository } from "@utils/repository";
 import { toast } from "@utils/toast";
 import { useCallback, useEffect, useRef } from "react";
-import { ANALYTICS_EVENTS, type FeedbackType } from "@/types/analytics";
 
 const log = logger.scope("task-logs-panel");
 
@@ -32,6 +36,13 @@ interface TaskLogsPanelProps {
 export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const repoPath = useCwd(taskId);
   const workspace = useWorkspaceStore((s) => s.workspaces[taskId]);
+  const queryClient = useQueryClient();
+  const isWorkspaceLoaded = useWorkspaceStore((s) => s.isLoaded);
+  const isCreatingWorkspace = useWorkspaceStore((s) => !!s.isCreating[taskId]);
+  const repoKey = getTaskRepository(task);
+  const hasDirectoryMapping = useTaskDirectoryStore(
+    (s) => !!repoKey && repoKey in s.repoDirectories,
+  );
 
   const session = useSessionForTask(taskId);
   const { deleteWithConfirm } = useDeleteTask();
@@ -40,6 +51,21 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
   const { requestFocus, setPendingContent } = useDraftStore((s) => s.actions);
   const { isOnline } = useConnectivity();
 
+  const isCloud = workspace?.mode === "cloud";
+
+  // Cloud status is read from the session store (populated via CloudTaskService subscription)
+  const cloudStatus = session?.cloudStatus ?? null;
+  const cloudStage = session?.cloudStage ?? null;
+  const cloudOutput = session?.cloudOutput ?? null;
+  const cloudErrorMessage = session?.cloudErrorMessage ?? null;
+  const isCloudRunNotTerminal =
+    isCloud &&
+    (!cloudStatus ||
+      cloudStatus === "started" ||
+      cloudStatus === "in_progress");
+  const prUrl =
+    isCloud && cloudOutput?.pr_url ? (cloudOutput.pr_url as string) : null;
+
   const isRunning =
     session?.status === "connected" || session?.status === "connecting";
   const hasError = session?.status === "error";
@@ -47,19 +73,19 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
 
   const events = session?.events ?? [];
   const isPromptPending = session?.isPromptPending ?? false;
-  const promptStartedAt = session?.promptStartedAt;
 
   const isNewSessionWithInitialPrompt =
     !task.latest_run?.id && !!task.description;
   const isResumingExistingSession = !!task.latest_run?.id;
-  const isInitializing =
-    !session ||
-    (session.status === "connecting" && events.length === 0) ||
-    (session.status === "connected" &&
-      events.length === 0 &&
-      (isPromptPending ||
-        isNewSessionWithInitialPrompt ||
-        isResumingExistingSession));
+  const isInitializing = isCloud
+    ? !session || (events.length === 0 && isCloudRunNotTerminal)
+    : !session ||
+      (session.status === "connecting" && events.length === 0) ||
+      (session.status === "connected" &&
+        events.length === 0 &&
+        (isPromptPending ||
+          isNewSessionWithInitialPrompt ||
+          isResumingExistingSession));
 
   const isConnecting = useRef(false);
 
@@ -67,13 +93,35 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     requestFocus(taskId);
   }, [taskId, requestFocus]);
 
+  // Keep cloud session title aligned with latest task metadata.
+  useEffect(() => {
+    if (!isCloud) return;
+    getSessionService().updateCloudTaskTitle(
+      task.id,
+      task.title || task.description || "Cloud Task",
+    );
+  }, [isCloud, task.id, task.title, task.description]);
+
+  // Cloud task watching — logs + status via main-process CloudTaskService subscription
+  useEffect(() => {
+    if (!isCloud || !task.latest_run?.id) return;
+    return getSessionService().watchCloudTask(
+      task.id,
+      task.latest_run.id,
+      () => {
+        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      },
+    );
+  }, [isCloud, task.id, task.latest_run?.id, queryClient]);
+
+  // Local session connection
   useEffect(() => {
     if (!repoPath) return;
     if (isConnecting.current) return;
     if (!isOnline) return;
 
-    // Cloud tasks are handled by the sandbox
-    if (workspace?.mode === "cloud") return;
+    // Cloud tasks use the cloud watcher effect above
+    if (isCloud) return;
 
     if (
       session?.status === "connected" ||
@@ -109,7 +157,7 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
       .finally(() => {
         isConnecting.current = false;
       });
-  }, [task, repoPath, session, markActivity, isOnline, workspace?.mode]);
+  }, [task, repoPath, session, markActivity, isOnline, isCloud]);
 
   const handleSendPrompt = useCallback(
     async (text: string) => {
@@ -244,28 +292,89 @@ export function TaskLogsPanel({ taskId, task }: TaskLogsPanelProps) {
     [taskId, repoPath],
   );
 
+  if (
+    !repoPath &&
+    isWorkspaceLoaded &&
+    !hasDirectoryMapping &&
+    !isCreatingWorkspace
+  ) {
+    return (
+      <BackgroundWrapper>
+        <Box height="100%" width="100%">
+          <WorkspaceSetupPrompt taskId={taskId} task={task} />
+        </Box>
+      </BackgroundWrapper>
+    );
+  }
+
   return (
     <BackgroundWrapper>
-      <Box height="100%" width="100%">
-        <ErrorBoundary name="SessionView">
-          <SessionView
-            events={events}
-            taskId={taskId}
-            isRunning={isRunning}
-            isPromptPending={isPromptPending}
-            promptStartedAt={promptStartedAt}
-            onSendPrompt={handleSendPrompt}
-            onBashCommand={handleBashCommand}
-            onCancelPrompt={handleCancelPrompt}
-            repoPath={repoPath}
-            hasError={hasError}
-            errorMessage={errorMessage}
-            onRetry={handleRetry}
-            onDelete={handleDelete}
-            isInitializing={isInitializing}
-          />
-        </ErrorBoundary>
-      </Box>
+      <Flex direction="column" height="100%" width="100%">
+        <Box style={{ flex: 1, minHeight: 0 }}>
+          <ErrorBoundary name="SessionView">
+            <SessionView
+              events={events}
+              taskId={taskId}
+              isRunning={isCloud ? false : isRunning}
+              isPromptPending={isCloud ? false : isPromptPending}
+              onSendPrompt={handleSendPrompt}
+              onBashCommand={handleBashCommand}
+              onCancelPrompt={handleCancelPrompt}
+              repoPath={repoPath}
+              hasError={isCloud ? false : hasError}
+              errorMessage={isCloud ? undefined : errorMessage}
+              onRetry={handleRetry}
+              onDelete={handleDelete}
+              isInitializing={isInitializing}
+              readOnlyMessage={isCloud ? "Cloud runs are read-only" : undefined}
+            />
+          </ErrorBoundary>
+        </Box>
+        {isCloud && (
+          <Flex
+            align="center"
+            justify="center"
+            gap="2"
+            py="2"
+            className="border-gray-4 border-t"
+          >
+            {prUrl ? (
+              <>
+                <Text size="2" color="gray">
+                  Task completed
+                </Text>
+                <Button size="2" variant="soft" asChild>
+                  <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                    View Pull Request
+                  </a>
+                </Button>
+              </>
+            ) : isCloudRunNotTerminal ? (
+              <>
+                <Spinner size="2" />
+                <Text size="2" color="gray">
+                  Running in cloud
+                  {cloudStage ? ` \u2014 ${cloudStage}` : ""}
+                  ...
+                </Text>
+              </>
+            ) : cloudStatus === "failed" ? (
+              <Text size="2" color="red">
+                Task failed
+                {cloudErrorMessage ? `: ${cloudErrorMessage}` : ""}
+              </Text>
+            ) : cloudStatus === "cancelled" ? (
+              <Text size="2" color="red">
+                Task cancelled
+              </Text>
+            ) : cloudStatus ? (
+              <Text size="2" color="gray">
+                Cloud task completed
+              </Text>
+            ) : null}
+          </Flex>
+        )}
+      </Flex>
     </BackgroundWrapper>
   );
 }

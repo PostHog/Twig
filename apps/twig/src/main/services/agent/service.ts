@@ -20,14 +20,13 @@ import {
 } from "@posthog/agent/gateway-models";
 import { getLlmGatewayUrl } from "@posthog/agent/posthog-api";
 import type { OnLogCallback } from "@posthog/agent/types";
+import type { AcpMessage } from "@shared/types/session-events.js";
 import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
-import type { AcpMessage } from "../../../shared/types/session-events.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
-import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -178,6 +177,8 @@ interface SessionConfig {
   additionalDirectories?: string[];
   /** Permission mode to use for the session */
   permissionMode?: string;
+  /** Custom instructions injected into the system prompt */
+  customInstructions?: string;
 }
 
 interface ManagedSession {
@@ -357,18 +358,31 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       name: "posthog",
       type: "http",
       url: mcpUrl,
-      headers: [{ name: "Authorization", value: `Bearer ${token}` }],
+      headers: [
+        { name: "Authorization", value: `Bearer ${token}` },
+        {
+          name: "x-posthog-project-id",
+          value: String(credentials.projectId),
+        },
+      ],
     });
 
     return servers;
   }
 
-  private buildPostHogSystemPrompt(credentials: Credentials): {
+  private buildSystemPrompt(
+    credentials: Credentials,
+    customInstructions?: string,
+  ): {
     append: string;
   } {
-    return {
-      append: `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`,
-    };
+    let prompt = `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`;
+
+    if (customInstructions) {
+      prompt += `\n\nUser custom instructions:\n${customInstructions}`;
+    }
+
+    return { append: prompt };
   }
 
   private getPostHogMcpUrl(apiHost: string): string {
@@ -421,6 +435,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       adapter,
       additionalDirectories,
       permissionMode,
+      customInstructions,
     } = config;
 
     // Preview sessions don't need a real repo — use a temp directory
@@ -446,30 +461,12 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     // Preview sessions don't persist logs — no real task exists
     const isPreview = taskId === "__preview__";
 
-    // OTEL log pipeline or legacy S3 writer if FF false
-    const useOtelPipeline = isPreview
-      ? false
-      : await this.isFeatureFlagEnabled("twig-agent-logs-pipeline");
-
-    log.info("Agent log transport", {
-      transport: isPreview ? "none" : useOtelPipeline ? "otel" : "s3",
-      taskId,
-      taskRunId,
-    });
-
     const agent = new Agent({
       posthog: {
         apiUrl: credentials.apiHost,
         getApiKey: () => this.getToken(credentials.apiKey),
         projectId: credentials.projectId,
       },
-      otelTransport: useOtelPipeline
-        ? {
-            host: credentials.apiHost,
-            apiKey: this.getToken(credentials.apiKey),
-            logsPath: "/i/v1/agent-logs",
-          }
-        : undefined,
       skipLogPersistence: isPreview,
       localCachePath: join(app.getPath("home"), ".twig"),
       debug: !app.isPackaged,
@@ -526,7 +523,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
 
       if (isReconnect && adapter === "codex" && config.sessionId) {
         const loadResponse = await connection.loadSession({
-          sessionId: config.sessionId,
+          sessionId: config.sessionId!,
           cwd: repoPath,
           mcpServers,
         });
@@ -536,11 +533,14 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         if (!config.sessionId) {
           throw new Error("Cannot resume session without sessionId");
         }
-        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
+        const systemPrompt = this.buildSystemPrompt(
+          credentials,
+          customInstructions,
+        );
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
-            sessionId: config.sessionId,
+            sessionId: config.sessionId!,
             cwd: repoPath,
             mcpServers,
             _meta: {
@@ -548,7 +548,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 persistence: { taskId, runId: taskRunId, logUrl },
               }),
               taskRunId,
-              sessionId: config.sessionId,
+              sessionId: config.sessionId!,
               systemPrompt,
               ...(permissionMode && { permissionMode }),
               ...(additionalDirectories?.length && {
@@ -567,7 +567,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         configOptions = resumeMeta?.configOptions;
         agentSessionId = config.sessionId;
       } else {
-        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
+        const systemPrompt = this.buildSystemPrompt(
+          credentials,
+          customInstructions,
+        );
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
@@ -978,20 +981,6 @@ For git operations while detached:
     return mockNodeDir;
   }
 
-  private async isFeatureFlagEnabled(flagKey: string): Promise<boolean> {
-    try {
-      const client = getPostHogClient();
-      const userId = getCurrentUserId();
-      if (!client || !userId) {
-        return false;
-      }
-      return (await client.isFeatureEnabled(flagKey, userId)) ?? false;
-    } catch (error) {
-      log.warn(`Error checking feature flag "${flagKey}":`, error);
-      return false;
-    }
-  }
-
   private cleanupMockNodeEnvironment(mockNodeDir: string): void {
     try {
       rmSync(mockNodeDir, { recursive: true, force: true });
@@ -1011,6 +1000,7 @@ For git operations while detached:
       }
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
       this.sessions.delete(taskRunId);
+      this.processTracking.killByTaskId(session.taskId);
     }
   }
 
@@ -1294,6 +1284,8 @@ For git operations while detached:
           : undefined,
       permissionMode:
         "permissionMode" in params ? params.permissionMode : undefined,
+      customInstructions:
+        "customInstructions" in params ? params.customInstructions : undefined,
     };
   }
 

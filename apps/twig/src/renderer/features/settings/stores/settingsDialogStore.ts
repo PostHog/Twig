@@ -1,12 +1,12 @@
 import { create } from "zustand";
 
 export type SettingsCategory =
-  | "chat"
-  | "appearance"
+  | "general"
   | "account"
-  | "shortcuts"
   | "workspaces"
+  | "personalization"
   | "claude-code"
+  | "shortcuts"
   | "updates"
   | "advanced";
 
@@ -26,7 +26,7 @@ type SettingsDialogStore = SettingsDialogState & SettingsDialogActions;
 export const useSettingsDialogStore = create<SettingsDialogStore>()(
   (set, get) => ({
     isOpen: false,
-    activeCategory: "chat",
+    activeCategory: "general",
 
     open: (category) => {
       if (!get().isOpen) {
@@ -34,7 +34,7 @@ export const useSettingsDialogStore = create<SettingsDialogStore>()(
       }
       set({
         isOpen: true,
-        activeCategory: category ?? "chat",
+        activeCategory: category ?? "general",
       });
     },
     close: () => {

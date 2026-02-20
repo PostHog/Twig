@@ -1,10 +1,9 @@
 import { app } from "electron";
 import log from "electron-log/main";
 
-// Initialize electron-log:
-// - spyRendererConsole captures all renderer console output via webContents
-//   console-message events and writes them to the main log file
-log.initialize({ spyRendererConsole: true });
+// Initialize electron-log. Don't enable spyRendererConsole - it creates duplicate
+// log lines because renderer logs already reach main via the IPC transport.
+log.initialize();
 
 // Set levels - use debug in dev (check NODE_ENV since app.isPackaged may not be ready)
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;

@@ -84,7 +84,8 @@ export function useTabInjection(
       tabs.map((tab) => {
         let updatedData = tab.data;
         if (tab.data.type === "file" || tab.data.type === "diff") {
-          const absolutePath = `${repoPath}/${tab.data.relativePath}`;
+          const rp = tab.data.relativePath;
+          const absolutePath = rp.startsWith("/") ? rp : `${repoPath}/${rp}`;
           updatedData = {
             ...tab.data,
             absolutePath,

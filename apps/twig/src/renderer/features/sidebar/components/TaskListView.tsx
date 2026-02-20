@@ -10,11 +10,11 @@ import {
   FunnelSimple as FunnelSimpleIcon,
 } from "@phosphor-icons/react";
 import { Box, Flex, Popover, Text } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import { useRegisteredFoldersStore } from "@renderer/stores/registeredFoldersStore";
 import { useNavigationStore } from "@stores/navigationStore";
 import { useTaskDirectoryStore } from "@stores/taskDirectoryStore";
 import { useCallback, useEffect } from "react";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import type { TaskData, TaskGroup } from "../hooks/useSidebarData";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { DraggableFolder } from "./DraggableFolder";
@@ -35,6 +35,7 @@ interface TaskListViewProps {
     isPinned: boolean,
   ) => void;
   onTaskDelete: (taskId: string) => void;
+  onTaskTogglePin: (taskId: string) => void;
   onTaskEditSubmit: (taskId: string, newTitle: string) => void;
   onTaskEditCancel: () => void;
   hasMore: boolean;
@@ -65,6 +66,7 @@ function TaskRow({
   onDoubleClick,
   onContextMenu,
   onDelete,
+  onTogglePin,
   onEditSubmit,
   onEditCancel,
   timestamp,
@@ -77,6 +79,7 @@ function TaskRow({
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent, isPinned: boolean) => void;
   onDelete: () => void;
+  onTogglePin: () => void;
   onEditSubmit: (newTitle: string) => void;
   onEditCancel: () => void;
   timestamp: number;
@@ -96,11 +99,13 @@ function TaskRow({
       isUnread={task.isUnread}
       isPinned={task.isPinned}
       needsPermission={task.needsPermission}
+      taskRunStatus={task.taskRunStatus}
       timestamp={timestamp}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={(e) => onContextMenu(e, task.isPinned)}
       onDelete={onDelete}
+      onTogglePin={onTogglePin}
       onEditSubmit={onEditSubmit}
       onEditCancel={onEditCancel}
     />
@@ -229,6 +234,7 @@ export function TaskListView({
   onTaskDoubleClick,
   onTaskContextMenu,
   onTaskDelete,
+  onTaskTogglePin,
   onTaskEditSubmit,
   onTaskEditCancel,
   hasMore,
@@ -291,6 +297,7 @@ export function TaskListView({
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onTogglePin={() => onTaskTogglePin(task.id)}
               onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
               onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}
@@ -353,6 +360,7 @@ export function TaskListView({
                           onTaskContextMenu(task.id, e, isPinned)
                         }
                         onDelete={() => onTaskDelete(task.id)}
+                        onTogglePin={() => onTaskTogglePin(task.id)}
                         onEditSubmit={(newTitle) =>
                           onTaskEditSubmit(task.id, newTitle)
                         }
@@ -381,6 +389,7 @@ export function TaskListView({
                 onTaskContextMenu(task.id, e, isPinned)
               }
               onDelete={() => onTaskDelete(task.id)}
+              onTogglePin={() => onTaskTogglePin(task.id)}
               onEditSubmit={(newTitle) => onTaskEditSubmit(task.id, newTitle)}
               onEditCancel={onTaskEditCancel}
               timestamp={task[timestampKey]}

@@ -34,14 +34,12 @@ export function createForceDevModeDefine(): Record<string, string> | undefined {
 }
 
 const baseAliases: Alias[] = [
-  { find: "@", replacement: path.resolve(__dirname, "./src") },
   { find: "@main", replacement: path.resolve(__dirname, "./src/main") },
   { find: "@renderer", replacement: path.resolve(__dirname, "./src/renderer") },
   { find: "@shared", replacement: path.resolve(__dirname, "./src/shared") },
-  { find: "@api", replacement: path.resolve(__dirname, "./src/api") },
 ];
 
-const agentAliases: Alias[] = [
+const workspaceAliases: Alias[] = [
   {
     find: /^@posthog\/agent\/(.+)$/,
     replacement: path.resolve(__dirname, "../../packages/agent/src/$1.ts"),
@@ -49,6 +47,10 @@ const agentAliases: Alias[] = [
   {
     find: "@posthog/agent",
     replacement: path.resolve(__dirname, "../../packages/agent/src/index.ts"),
+  },
+  {
+    find: "@posthog/shared",
+    replacement: path.resolve(__dirname, "../../packages/shared/src/index.ts"),
   },
 ];
 
@@ -61,7 +63,7 @@ export const mainAliases: Alias[] = [
       "../../packages/electron-trpc/src/main/index.ts",
     ),
   },
-  ...agentAliases,
+  ...workspaceAliases,
 ];
 
 export const rendererAliases: Alias[] = [
@@ -93,5 +95,5 @@ export const rendererAliases: Alias[] = [
       "../../packages/electron-trpc/src/renderer/index.ts",
     ),
   },
-  ...agentAliases,
+  ...workspaceAliases,
 ];

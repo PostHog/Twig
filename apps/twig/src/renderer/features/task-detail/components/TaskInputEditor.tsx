@@ -1,4 +1,5 @@
 import "@features/message-editor/components/message-editor.css";
+import { AttachmentsBar } from "@features/message-editor/components/AttachmentsBar";
 import { EditorToolbar } from "@features/message-editor/components/EditorToolbar";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
 import { useTiptapEditor } from "@features/message-editor/tiptap/useTiptapEditor";
@@ -60,6 +61,9 @@ export const TaskInputEditor = forwardRef<
       getContent,
       setContent,
       insertChip,
+      attachments,
+      addAttachment,
+      removeAttachment,
     } = useTiptapEditor({
       sessionId,
       placeholder: "What do you want to work on? - @ to add context",
@@ -89,6 +93,8 @@ export const TaskInputEditor = forwardRef<
         getText,
         setContent,
         insertChip,
+        addAttachment,
+        removeAttachment,
       }),
       [
         focus,
@@ -99,6 +105,8 @@ export const TaskInputEditor = forwardRef<
         getText,
         setContent,
         insertChip,
+        addAttachment,
+        removeAttachment,
       ],
     );
 
@@ -145,6 +153,11 @@ export const TaskInputEditor = forwardRef<
             }
           }}
         >
+          <AttachmentsBar
+            attachments={attachments}
+            onRemove={removeAttachment}
+          />
+
           <Flex
             align="start"
             gap="2"
@@ -200,7 +213,7 @@ export const TaskInputEditor = forwardRef<
             <EditorToolbar
               disabled={isCreatingTask}
               adapter={adapter}
-              onInsertChip={insertChip}
+              onAddAttachment={addAttachment}
               attachTooltip="Attach files from anywhere"
               iconSize={16}
               hideSelectors

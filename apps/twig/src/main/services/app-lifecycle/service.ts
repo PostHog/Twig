@@ -1,6 +1,6 @@
+import { ANALYTICS_EVENTS } from "@shared/types/analytics.js";
 import { app } from "electron";
 import { injectable } from "inversify";
-import { ANALYTICS_EVENTS } from "../../../types/analytics.js";
 import { container } from "../../di/container.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { withTimeout } from "../../lib/async.js";

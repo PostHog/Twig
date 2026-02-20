@@ -1,4 +1,6 @@
 import { mergeAttributes, Node } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { MentionChipView } from "./MentionChipView";
 
 export type ChipType =
   | "file"
@@ -58,6 +60,12 @@ export const MentionChipNode = Node.create({
       }),
       `${prefix}${label}`,
     ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(MentionChipView, {
+      contentDOMElementTag: "span",
+    });
   },
 
   addCommands() {

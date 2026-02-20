@@ -11,6 +11,10 @@ export const readRepoFileInput = z.object({
   filePath: z.string(),
 });
 
+export const readAbsoluteFileInput = z.object({
+  filePath: z.string(),
+});
+
 export const writeRepoFileInput = z.object({
   repoPath: z.string(),
   filePath: z.string(),

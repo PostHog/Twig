@@ -21,6 +21,13 @@ export interface QueuedMessage {
   queuedAt: number;
 }
 
+export type TaskRunStatus =
+  | "started"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
 export interface AgentSession {
   taskRunId: string;
   taskId: string;
@@ -31,7 +38,6 @@ export interface AgentSession {
   status: "connecting" | "connected" | "disconnected" | "error";
   errorMessage?: string;
   isPromptPending: boolean;
-  promptStartedAt: number | null;
   logUrl?: string;
   processedLineCount?: number;
   framework?: "claude";
@@ -41,6 +47,16 @@ export interface AgentSession {
   configOptions?: SessionConfigOption[];
   pendingPermissions: Map<string, PermissionRequest>;
   messageQueue: QueuedMessage[];
+  /** Cloud task run status (only set for cloud sessions) */
+  cloudStatus?: TaskRunStatus;
+  /** Cloud task current stage */
+  cloudStage?: string | null;
+  /** Cloud task output (PR URL, commit SHA, etc.) */
+  cloudOutput?: Record<string, unknown> | null;
+  /** Cloud task error message */
+  cloudErrorMessage?: string | null;
+  /** Cloud task branch */
+  cloudBranch?: string | null;
 }
 
 // --- Config Option Helpers ---
@@ -227,6 +243,28 @@ export const sessionStoreSetters = {
     });
   },
 
+  updateCloudStatus: (
+    taskRunId: string,
+    fields: {
+      status?: TaskRunStatus;
+      stage?: string | null;
+      output?: Record<string, unknown> | null;
+      errorMessage?: string | null;
+      branch?: string | null;
+    },
+  ) => {
+    useSessionStore.setState((state) => {
+      const session = state.sessions[taskRunId];
+      if (!session) return;
+      if (fields.status !== undefined) session.cloudStatus = fields.status;
+      if (fields.stage !== undefined) session.cloudStage = fields.stage;
+      if (fields.output !== undefined) session.cloudOutput = fields.output;
+      if (fields.errorMessage !== undefined)
+        session.cloudErrorMessage = fields.errorMessage;
+      if (fields.branch !== undefined) session.cloudBranch = fields.branch;
+    });
+  },
+
   setPendingPermissions: (
     taskRunId: string,
     permissions: Map<string, PermissionRequest>,
@@ -247,6 +285,19 @@ export const sessionStoreSetters = {
       const session = state.sessions[taskRunId];
       if (session) {
         session.messageQueue.push({ id, content, queuedAt: Date.now() });
+      }
+    });
+  },
+
+  removeQueuedMessage: (taskId: string, messageId: string) => {
+    useSessionStore.setState((state) => {
+      const taskRunId = state.taskIdIndex[taskId];
+      if (!taskRunId) return;
+      const session = state.sessions[taskRunId];
+      if (session) {
+        session.messageQueue = session.messageQueue.filter(
+          (msg) => msg.id !== messageId,
+        );
       }
     });
   },

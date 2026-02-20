@@ -1,7 +1,7 @@
+import { omitKey } from "@renderer/utils/object";
 import type { WorkspaceTerminalInfo } from "@shared/types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { omitKey } from "@/renderer/utils/object";
 
 interface WorkspaceTerminalState {
   workspaceTerminals: Record<string, string[]>;

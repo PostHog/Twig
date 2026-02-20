@@ -35,7 +35,7 @@ const defaultTaskState: TaskExecutionState = {
   repoPath: null,
   repoExists: null,
   runMode: "local",
-  workspaceMode: "worktree",
+  workspaceMode: "local",
 };
 
 export const useTaskExecutionStore = create<TaskExecutionStore>()(

@@ -3,6 +3,7 @@ import { MAIN_TOKENS } from "../../di/tokens.js";
 import {
   listRepoFilesInput,
   listRepoFilesOutput,
+  readAbsoluteFileInput,
   readRepoFileInput,
   readRepoFileOutput,
   writeRepoFileInput,
@@ -26,6 +27,11 @@ export const fsRouter = router({
     .query(({ input }) =>
       getService().readRepoFile(input.repoPath, input.filePath),
     ),
+
+  readAbsoluteFile: publicProcedure
+    .input(readAbsoluteFileInput)
+    .output(readRepoFileOutput)
+    .query(({ input }) => getService().readAbsoluteFile(input.filePath)),
 
   writeRepoFile: publicProcedure
     .input(writeRepoFileInput)

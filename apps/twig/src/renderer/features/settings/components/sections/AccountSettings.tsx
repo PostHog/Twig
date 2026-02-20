@@ -4,9 +4,9 @@ import { useMeQuery } from "@hooks/useMeQuery";
 import { useProjectQuery } from "@hooks/useProjectQuery";
 import { SignOut } from "@phosphor-icons/react";
 import { Avatar, Badge, Button, Flex, Spinner, Text } from "@radix-ui/themes";
+import { trpcVanilla } from "@renderer/trpc";
 import type { CloudRegion } from "@shared/types/oauth";
 import { useMutation } from "@tanstack/react-query";
-import { trpcVanilla } from "@/renderer/trpc";
 
 const REGION_LABELS: Record<CloudRegion, string> = {
   us: "US Cloud",

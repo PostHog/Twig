@@ -1,3 +1,4 @@
+import type { DetectedApplication } from "@shared/types.js";
 import {
   dialog,
   Menu,
@@ -5,7 +6,6 @@ import {
   nativeImage,
 } from "electron";
 import { inject, injectable } from "inversify";
-import type { DetectedApplication } from "../../../shared/types.js";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { getMainWindow } from "../../trpc/context.js";
 import type { ExternalAppsService } from "../external-apps/service.js";

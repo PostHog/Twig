@@ -26,6 +26,7 @@ interface SettingsStore {
   sendMessagesWith: SendMessagesWith;
   allowBypassPermissions: boolean;
   preventSleepWhileRunning: boolean;
+  customInstructions: string;
 
   setCompletionSound: (sound: CompletionSound) => void;
   setCompletionVolume: (volume: number) => void;
@@ -43,6 +44,7 @@ interface SettingsStore {
   setSendMessagesWith: (mode: SendMessagesWith) => void;
   setAllowBypassPermissions: (enabled: boolean) => void;
   setPreventSleepWhileRunning: (enabled: boolean) => void;
+  setCustomInstructions: (instructions: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -50,8 +52,8 @@ export const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       defaultRunMode: "last_used",
       lastUsedRunMode: "local",
-      lastUsedLocalWorkspaceMode: "worktree",
-      lastUsedWorkspaceMode: "worktree",
+      lastUsedLocalWorkspaceMode: "local",
+      lastUsedWorkspaceMode: "local",
       lastUsedAdapter: "claude",
       lastUsedModel: null,
       desktopNotifications: true,
@@ -64,6 +66,7 @@ export const useSettingsStore = create<SettingsStore>()(
       sendMessagesWith: "enter",
       allowBypassPermissions: false,
       preventSleepWhileRunning: false,
+      customInstructions: "",
 
       setCompletionSound: (sound) => set({ completionSound: sound }),
       setCompletionVolume: (volume) => set({ completionVolume: volume }),
@@ -88,6 +91,8 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ allowBypassPermissions: enabled }),
       setPreventSleepWhileRunning: (enabled) =>
         set({ preventSleepWhileRunning: enabled }),
+      setCustomInstructions: (instructions) =>
+        set({ customInstructions: instructions }),
     }),
     {
       name: "settings-storage",
@@ -109,6 +114,7 @@ export const useSettingsStore = create<SettingsStore>()(
         sendMessagesWith: state.sendMessagesWith,
         allowBypassPermissions: state.allowBypassPermissions,
         preventSleepWhileRunning: state.preventSleepWhileRunning,
+        customInstructions: state.customInstructions,
       }),
       merge: (persisted, current) => ({
         ...current,

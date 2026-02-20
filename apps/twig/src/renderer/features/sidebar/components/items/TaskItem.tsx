@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import type { WorkspaceMode } from "@shared/types";
 import { selectIsFocusedOnWorktree, useFocusStore } from "@stores/focusStore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SidebarItem } from "../SidebarItem";
 
 interface TaskItemProps {
@@ -24,12 +24,19 @@ interface TaskItemProps {
   isUnread?: boolean;
   isPinned?: boolean;
   needsPermission?: boolean;
+  taskRunStatus?:
+    | "started"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "cancelled";
   timestamp?: number;
   isEditing?: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDelete?: () => void;
+  onTogglePin?: () => void;
   onEditSubmit?: (newTitle: string) => void;
   onEditCancel?: () => void;
 }
@@ -55,37 +62,115 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 interface TaskHoverToolbarProps {
-  onDelete: () => void;
+  isPinned: boolean;
+  onTogglePin?: () => void;
+  onDelete?: () => void;
 }
 
-function TaskHoverToolbar({ onDelete }: TaskHoverToolbarProps) {
+function TaskHoverToolbar({
+  isPinned,
+  onTogglePin,
+  onDelete,
+}: TaskHoverToolbarProps) {
   return (
     <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem) */}
-      <span
-        role="button"
-        tabIndex={0}
-        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+      {onTogglePin && (
+        // biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem)
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onTogglePin();
+            }
+          }}
+          title={isPinned ? "Unpin task" : "Pin task"}
+        >
+          <PushPin size={12} weight={isPinned ? "fill" : "regular"} />
+        </span>
+      )}
+      {onDelete && (
+        // biome-ignore lint/a11y/useSemanticElements: Cannot use button inside parent button (SidebarItem)
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-gray-10 transition-colors hover:bg-red-4 hover:text-red-11"
+          onClick={(e) => {
             e.stopPropagation();
             onDelete();
-          }
-        }}
-        title="Delete task"
-      >
-        <Trash size={12} />
-      </span>
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }
+          }}
+          title="Delete task"
+        >
+          <Trash size={12} />
+        </span>
+      )}
     </span>
   );
 }
 
 const ICON_SIZE = 12;
 const INDENT_SIZE = 8;
+
+function CloudStatusIcon({
+  taskRunStatus,
+}: {
+  taskRunStatus?: TaskItemProps["taskRunStatus"];
+}) {
+  if (taskRunStatus === "started" || taskRunStatus === "in_progress") {
+    return (
+      <Tooltip content="Cloud (running)" side="right">
+        <span className="relative flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} className="text-accent-11" />
+          <DotsCircleSpinner
+            size={8}
+            className="-right-0.5 -bottom-0.5 absolute text-accent-11"
+          />
+        </span>
+      </Tooltip>
+    );
+  }
+  if (taskRunStatus === "completed") {
+    return (
+      <Tooltip content="Cloud (completed)" side="right">
+        <span className="flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} weight="fill" className="text-green-11" />
+        </span>
+      </Tooltip>
+    );
+  }
+  if (taskRunStatus === "failed" || taskRunStatus === "cancelled") {
+    const label =
+      taskRunStatus === "cancelled" ? "Cloud (cancelled)" : "Cloud (failed)";
+    return (
+      <Tooltip content={label} side="right">
+        <span className="flex items-center justify-center">
+          <CloudIcon size={ICON_SIZE} weight="fill" className="text-red-11" />
+        </span>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip content="Cloud" side="right">
+      <span className="flex items-center justify-center">
+        <CloudIcon size={ICON_SIZE} />
+      </span>
+    </Tooltip>
+  );
+}
 
 export function TaskItem({
   depth = 0,
@@ -97,12 +182,14 @@ export function TaskItem({
   isUnread,
   isPinned = false,
   needsPermission = false,
+  taskRunStatus,
   timestamp,
   isEditing = false,
   onClick,
   onDoubleClick,
   onContextMenu,
   onDelete,
+  onTogglePin,
   onEditSubmit,
   onEditCancel,
 }: TaskItemProps) {
@@ -111,6 +198,7 @@ export function TaskItem({
   );
 
   const isWorktreeTask = workspaceMode === "worktree";
+  const isCloudTask = workspaceMode === "cloud";
 
   const icon = needsPermission ? (
     <BellRinging size={ICON_SIZE} className="text-blue-11" />
@@ -122,6 +210,8 @@ export function TaskItem({
     </span>
   ) : isPinned ? (
     <PushPin size={ICON_SIZE} className="text-accent-11" />
+  ) : isCloudTask ? (
+    <CloudStatusIcon taskRunStatus={taskRunStatus} />
   ) : isWorktreeTask ? (
     isFocused ? (
       <Tooltip content="Worktree (syncing)" side="right">
@@ -140,12 +230,6 @@ export function TaskItem({
         </span>
       </Tooltip>
     )
-  ) : workspaceMode === "cloud" ? (
-    <Tooltip content="Cloud" side="right">
-      <span className="flex items-center justify-center">
-        <CloudIcon size={ICON_SIZE} />
-      </span>
-    </Tooltip>
   ) : (
     <Tooltip content="Local" side="right">
       <span className="flex items-center justify-center">
@@ -154,24 +238,28 @@ export function TaskItem({
     </Tooltip>
   );
 
-  const endContent = useMemo(() => {
-    const timestampNode = timestamp ? (
-      <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
-        {formatRelativeTime(timestamp)}
-      </span>
+  const timestampNode = timestamp ? (
+    <span className="shrink-0 text-[10px] text-gray-11 group-hover:hidden">
+      {formatRelativeTime(timestamp)}
+    </span>
+  ) : null;
+
+  const toolbar =
+    onDelete || onTogglePin ? (
+      <TaskHoverToolbar
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+        onDelete={onDelete}
+      />
     ) : null;
 
-    const toolbar = onDelete ? <TaskHoverToolbar onDelete={onDelete} /> : null;
-
-    if (!timestampNode && !toolbar) return null;
-
-    return (
+  const endContent =
+    timestampNode || toolbar ? (
       <>
         {timestampNode}
         {toolbar}
       </>
-    );
-  }, [timestamp, onDelete]);
+    ) : null;
 
   if (isEditing) {
     return (

@@ -1,3 +1,5 @@
+import { isMac } from "@utils/platform";
+
 export const SHORTCUTS = {
   COMMAND_MENU: "mod+k",
   NEW_TASK: "mod+n,mod+t",
@@ -189,9 +191,6 @@ export function getShortcutsByCategory(): Record<
 }
 
 export function formatHotkey(keys: string): string {
-  const isMac =
-    typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
-
   // Get only the first hotkey if multiple are defined (e.g., "mod+1,mod+2,mod+3")
   // But handle edge case where comma is the actual key (e.g., "mod+,")
   let hotkey = keys;

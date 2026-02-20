@@ -3,6 +3,37 @@
 @tailwind utilities;
 
 @font-face {
+  font-family: "Berkeley Mono";
+  src: url("/assets/fonts/BerkeleyMono/BerkeleyMono-Regular.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Berkeley Mono";
+  src: url("/assets/fonts/BerkeleyMono/BerkeleyMono-Oblique.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Berkeley Mono";
+  src: url("/assets/fonts/BerkeleyMono/BerkeleyMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Berkeley Mono";
+  src: url("/assets/fonts/BerkeleyMono/BerkeleyMono-Bold-Oblique.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
   font-family: "JetBrains Mono";
   src: url("/assets/fonts/JetBrainsMono/JetBrainsMono-Light.woff2")
     format("woff2");
@@ -131,19 +162,25 @@
 .radix-themes {
   /* Font families */
   --default-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   --heading-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   --code-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   --strong-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   --em-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   --quote-font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
 
-  /* Font weights - mapped to JetBrains Mono weights */
+  /* Font weights — Berkeley Mono provides 400/700, JetBrains Mono fills 300/500/600 */
   --font-weight-light: 300;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -156,7 +193,8 @@
 
 body {
   font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -211,7 +249,8 @@ body {
 
 .plan-markdown code {
   font-family:
-    "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+    "Berkeley Mono", "JetBrains Mono", "Monaco", "Menlo", "Ubuntu Mono",
+    "Courier New", monospace;
   font-size: 11px;
   background: rgba(0, 0, 0, 0.2);
   padding: 0 4px;
@@ -546,7 +585,7 @@ body {
 }
 
 .sidebar-tree {
-  font-family: "JetBrains Mono", monospace;
+  font-family: "Berkeley Mono", "JetBrains Mono", monospace;
   font-size: 12px;
   line-height: 1.5;
   color: var(--gray-11);
@@ -946,10 +985,11 @@ body {
   border-radius: 4px 10px 6px 12px;
 }
 
-/* Buttons should have pointer cursor */
+/* Buttons and menu items should have pointer cursor */
 button,
 [type="button"],
-[role="button"] {
+[role="button"],
+[role="menuitem"] {
   cursor: pointer;
 }
 

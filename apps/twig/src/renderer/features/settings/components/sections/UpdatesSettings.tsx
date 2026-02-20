@@ -2,14 +2,15 @@ import { SettingRow } from "@features/settings/components/SettingRow";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import { Badge, Button, Flex, Spinner, Text } from "@radix-ui/themes";
 import { logger } from "@renderer/lib/logger";
+import { trpcReact } from "@renderer/trpc";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { trpcReact } from "@/renderer/trpc";
 
 const log = logger.scope("updates-settings");
 
 export function UpdatesSettings() {
   const { data: appVersion } = trpcReact.os.getAppVersion.useQuery();
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [updatesDisabled, setUpdatesDisabled] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<{
     message?: string;
     type?: "info" | "success" | "error";
@@ -31,6 +32,9 @@ export function UpdatesSettings() {
           type: "info",
         });
       } else {
+        if (result.errorCode === "disabled") {
+          setUpdatesDisabled(true);
+        }
         setUpdateStatus({
           message: result.errorMessage || "Failed to check for updates",
           type: "error",
@@ -107,14 +111,16 @@ export function UpdatesSettings() {
               </Text>
             </Flex>
           )}
-          <Button
-            variant="soft"
-            size="1"
-            onClick={handleCheckForUpdates}
-            disabled={checkingForUpdates}
-          >
-            {checkingForUpdates ? "Checking..." : "Check now"}
-          </Button>
+          {!updatesDisabled && (
+            <Button
+              variant="soft"
+              size="1"
+              onClick={handleCheckForUpdates}
+              disabled={checkingForUpdates}
+            >
+              {checkingForUpdates ? "Checking..." : "Check now"}
+            </Button>
+          )}
         </Flex>
       </SettingRow>
     </Flex>

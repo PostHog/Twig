@@ -245,11 +245,7 @@ function clearStatsigCache(): void {
     process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"),
     "statsig",
   );
-  try {
-    if (fs.existsSync(statsigPath)) {
-      fs.rmSync(statsigPath, { recursive: true, force: true });
-    }
-  } catch {
-    // Ignore errors - cache clearing is best-effort
-  }
+  fs.rm(statsigPath, { recursive: true, force: true }, () => {
+    // Best-effort, ignore errors
+  });
 }

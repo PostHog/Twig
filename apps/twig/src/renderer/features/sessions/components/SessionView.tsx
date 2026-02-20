@@ -37,7 +37,6 @@ interface SessionViewProps {
   taskId?: string;
   isRunning: boolean;
   isPromptPending?: boolean;
-  promptStartedAt?: number | null;
   onSendPrompt: (text: string) => void;
   onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
@@ -47,6 +46,7 @@ interface SessionViewProps {
   onRetry?: () => void;
   onDelete?: () => void;
   isInitializing?: boolean;
+  readOnlyMessage?: string;
 }
 
 const DEFAULT_ERROR_MESSAGE =
@@ -57,7 +57,6 @@ export function SessionView({
   taskId,
   isRunning,
   isPromptPending = false,
-  promptStartedAt,
   onSendPrompt,
   onBashCommand,
   onCancelPrompt,
@@ -67,6 +66,7 @@ export function SessionView({
   onRetry,
   onDelete,
   isInitializing = false,
+  readOnlyMessage,
 }: SessionViewProps) {
   const showRawLogs = useShowRawLogs();
   const { setShowRawLogs } = useSessionViewActions();
@@ -297,6 +297,9 @@ export function SessionView({
     dragCounterRef.current = 0;
     setIsDraggingFile(false);
 
+    // If dropped on the editor, Tiptap's handleDrop already handled it
+    if ((e.target as HTMLElement).closest(".ProseMirror")) return;
+
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
@@ -304,8 +307,7 @@ export function SessionView({
       const file = files[i];
       const filePath = (file as File & { path?: string }).path;
       if (filePath) {
-        editorRef.current?.insertChip({
-          type: "file",
+        editorRef.current?.addAttachment({
           id: filePath,
           label: file.name,
         });
@@ -362,7 +364,6 @@ export function SessionView({
                 <ConversationView
                   events={events}
                   isPromptPending={isPromptPending}
-                  promptStartedAt={promptStartedAt}
                   repoPath={repoPath}
                   taskId={taskId}
                 />
@@ -379,13 +380,12 @@ export function SessionView({
                   className="absolute inset-0 bg-gray-1"
                 >
                   <Warning size={32} weight="duotone" color="var(--red-9)" />
-                  <Text size="3" weight="medium" color="red">
-                    Session Error
-                  </Text>
                   <Text
-                    size="2"
+                    size="3"
+                    weight="medium"
                     align="center"
-                    className="max-w-md px-4 text-gray-11"
+                    color="red"
+                    className="max-w-md px-4"
                   >
                     {errorMessage}
                   </Text>
@@ -416,6 +416,22 @@ export function SessionView({
                       onSelect={handlePermissionSelect}
                       onCancel={handlePermissionCancel}
                     />
+                  </Box>
+                </Box>
+              ) : readOnlyMessage ? (
+                <Box className="border-gray-4 border-t">
+                  <Box className="mx-auto max-w-[750px] p-2">
+                    <Flex align="center" justify="center" py="3">
+                      <Text
+                        size="2"
+                        style={{
+                          color: "var(--gray-9)",
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        {readOnlyMessage}
+                      </Text>
+                    </Flex>
                   </Box>
                 </Box>
               ) : (

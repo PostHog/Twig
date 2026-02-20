@@ -5,7 +5,6 @@ import { formatDuration, GeneratingIndicator } from "./GeneratingIndicator";
 
 interface SessionFooterProps {
   isPromptPending: boolean;
-  promptStartedAt?: number | null;
   lastGenerationDuration: number | null;
   lastStopReason?: string;
   queuedCount?: number;
@@ -14,7 +13,6 @@ interface SessionFooterProps {
 
 export function SessionFooter({
   isPromptPending,
-  promptStartedAt,
   lastGenerationDuration,
   lastStopReason,
   queuedCount = 0,
@@ -41,7 +39,7 @@ export function SessionFooter({
     return (
       <Box className="pt-3 pb-1">
         <Flex align="center" gap="2">
-          <GeneratingIndicator startedAt={promptStartedAt} />
+          <GeneratingIndicator />
           {queuedCount > 0 && (
             <Text size="1" color="gray">
               ({queuedCount} queued)

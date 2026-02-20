@@ -40,6 +40,7 @@ const mockSessionStoreSetters = vi.hoisted(() => ({
   updateSession: vi.fn(),
   appendEvents: vi.fn(),
   enqueueMessage: vi.fn(),
+  removeQueuedMessage: vi.fn(),
   clearMessageQueue: vi.fn(),
   dequeueMessagesAsText: vi.fn(() => null),
   setPendingPermissions: vi.fn(),
@@ -80,6 +81,7 @@ vi.mock("@features/sessions/stores/modelsStore", () => ({
 const mockSessionConfigStore = vi.hoisted(() => ({
   getPersistedConfigOptions: vi.fn(() => undefined),
   setPersistedConfigOptions: vi.fn(),
+  removePersistedConfigOptions: vi.fn(),
   updatePersistedConfigOptionValue: vi.fn(),
 }));
 
@@ -88,9 +90,29 @@ vi.mock(
   () => mockSessionConfigStore,
 );
 
+const mockAdapterFns = vi.hoisted(() => ({
+  setAdapter: vi.fn(),
+  getAdapter: vi.fn(),
+  removeAdapter: vi.fn(),
+}));
+
+const mockSessionAdapterStore = vi.hoisted(() => ({
+  useSessionAdapterStore: {
+    getState: vi.fn(() => ({
+      adaptersByRunId: {},
+      ...mockAdapterFns,
+    })),
+  },
+}));
+
+vi.mock(
+  "@features/sessions/stores/sessionAdapterStore",
+  () => mockSessionAdapterStore,
+);
+
 const mockGetIsOnline = vi.hoisted(() => vi.fn(() => true));
 
-vi.mock("@/renderer/stores/connectivityStore", () => ({
+vi.mock("@renderer/stores/connectivityStore", () => ({
   getIsOnline: () => mockGetIsOnline(),
 }));
 
@@ -112,7 +134,7 @@ vi.mock("@renderer/lib/notifications", () => ({
 vi.mock("@renderer/utils/toast", () => ({
   toast: { error: vi.fn() },
 }));
-vi.mock("@/constants/oauth", () => ({
+vi.mock("@shared/constants/oauth", () => ({
   getCloudUrlFromRegion: () => "https://api.anthropic.com",
 }));
 vi.mock("@utils/session", () => ({
@@ -160,7 +182,6 @@ const createMockSession = (
   startedAt: Date.now(),
   status: "connected",
   isPromptPending: false,
-  promptStartedAt: null,
   pendingPermissions: new Map(),
   messageQueue: [],
   ...overrides,
@@ -731,7 +752,7 @@ describe("SessionService", () => {
   });
 
   describe("clearSessionError", () => {
-    it("cancels agent and removes session", async () => {
+    it("cancels agent and tears down session fully", async () => {
       const service = getSessionService();
       const mockSession = createMockSession({ status: "error" });
       mockSessionStoreSetters.getSessionByTaskId.mockReturnValue(mockSession);
@@ -744,6 +765,10 @@ describe("SessionService", () => {
       expect(mockSessionStoreSetters.removeSession).toHaveBeenCalledWith(
         "run-123",
       );
+      expect(mockAdapterFns.removeAdapter).toHaveBeenCalledWith("run-123");
+      expect(
+        mockSessionConfigStore.removePersistedConfigOptions,
+      ).toHaveBeenCalledWith("run-123");
     });
 
     it("handles missing session gracefully", async () => {

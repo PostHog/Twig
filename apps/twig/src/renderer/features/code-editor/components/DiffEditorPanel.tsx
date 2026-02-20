@@ -35,7 +35,8 @@ export function DiffEditorPanel({
         directoryPath: repoPath as string,
       }),
     enabled: !!repoPath,
-    staleTime: Infinity,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const fileInfo = changedFiles.find((f) => f.path === filePath);
@@ -45,6 +46,7 @@ export function DiffEditorPanel({
   const isDeleted = status === "deleted";
   const isNew = status === "untracked" || status === "added";
 
+  // Modified content: always read working tree
   const { data: modifiedContent, isLoading: loadingModified } = useQuery({
     queryKey: ["repo-file", repoPath, filePath],
     queryFn: () =>
@@ -53,7 +55,8 @@ export function DiffEditorPanel({
         filePath,
       }),
     enabled: !!repoPath && !isDeleted,
-    staleTime: Infinity,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
@@ -64,8 +67,20 @@ export function DiffEditorPanel({
         filePath: originalPath,
       }),
     enabled: !!repoPath && !isNew,
-    staleTime: Infinity,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
+
+  const handleRefresh = useCallback(() => {
+    if (!repoPath) return;
+    queryClient.invalidateQueries({
+      queryKey: ["repo-file", repoPath, filePath],
+    });
+    queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
+    queryClient.invalidateQueries({
+      queryKey: ["changed-files-head", repoPath],
+    });
+  }, [repoPath, filePath, queryClient]);
 
   const handleContentChange = useCallback(
     async (newContent: string) => {
@@ -130,6 +145,7 @@ export function DiffEditorPanel({
           filePath={absolutePath}
           relativePath={filePath}
           onContentChange={handleContentChange}
+          onRefresh={handleRefresh}
         />
       ) : (
         <CodeMirrorEditor

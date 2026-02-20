@@ -78,7 +78,7 @@ export function UpdatePrompt() {
 
   trpcReact.updates.onReady.useSubscription(undefined, {
     enabled: isEnabled,
-    onData: () => {
+    onData: (data) => {
       // Dismiss any check status toast
       sonnerToast.dismiss(CHECK_TOAST_ID);
 
@@ -107,8 +107,9 @@ export function UpdatePrompt() {
                       Update ready
                     </Text>
                     <Text size="2" color="gray">
-                      A new version of Twig has been downloaded and is ready to
-                      install.
+                      {data.version
+                        ? `Version ${data.version} has been downloaded and is ready to install.`
+                        : "A new version of Twig has been downloaded and is ready to install."}
                     </Text>
                   </Flex>
                 </Flex>

@@ -1,6 +1,5 @@
 import { Box, Checkbox, Flex, Text } from "@radix-ui/themes";
 import { compactHomePath } from "@utils/path";
-import { useRef } from "react";
 import { isOtherOption, isSubmitOption } from "./constants";
 import { InlineEditableText } from "./InlineEditableText";
 import type { SelectorOption } from "./types";
@@ -56,8 +55,6 @@ export function OptionRow({
   onClick,
   onMouseEnter,
 }: OptionRowProps) {
-  const inputRef = useRef<HTMLSpanElement>(null);
-
   if (isSubmitOption(option.id)) {
     return (
       <Flex
@@ -102,7 +99,6 @@ export function OptionRow({
           onNavigateDown={onNavigateDown}
           onEscape={onEscape}
           onSubmit={onInlineSubmit}
-          inputRef={inputRef}
         />
       );
     }

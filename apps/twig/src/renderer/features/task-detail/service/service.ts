@@ -5,12 +5,12 @@ import { useTaskExecutionStore } from "@features/task-detail/stores/taskExecutio
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import type { SagaResult } from "@posthog/shared";
 import { logger } from "@renderer/lib/logger";
-import { injectable } from "inversify";
 import {
   type TaskCreationInput,
   type TaskCreationOutput,
   TaskCreationSaga,
-} from "@/renderer/sagas/task/task-creation";
+} from "@renderer/sagas/task/task-creation";
+import { injectable } from "inversify";
 
 export type { TaskCreationInput, TaskCreationOutput };
 
@@ -160,7 +160,7 @@ export class TaskService {
 
     // Derive values from input or output
     const workspaceMode =
-      input?.workspaceMode ?? output.workspace?.mode ?? "worktree";
+      input?.workspaceMode ?? output.workspace?.mode ?? "local";
     const repoPath = input?.repoPath ?? output.workspace?.folderPath;
 
     // Save workspace mode for this task

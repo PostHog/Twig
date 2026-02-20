@@ -46,7 +46,13 @@ module.exports = {
         },
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "Consolas", "Monaco", "monospace"],
+        mono: [
+          "Berkeley Mono",
+          "JetBrains Mono",
+          "Consolas",
+          "Monaco",
+          "monospace",
+        ],
       },
     },
   },

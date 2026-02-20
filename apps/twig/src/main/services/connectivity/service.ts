@@ -1,6 +1,6 @@
+import { getBackoffDelay } from "@shared/utils/backoff.js";
 import { net } from "electron";
 import { injectable, postConstruct, preDestroy } from "inversify";
-import { getBackoffDelay } from "../../../shared/utils/backoff.js";
 import { logger } from "../../lib/logger.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import {

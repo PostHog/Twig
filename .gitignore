@@ -4,14 +4,15 @@ node_modules/
 # Build outputs
 dist/
 release/
+out/
 .vite/
 .turbo/
-out/
-*.log
+storybook-static
 
 # Environment
 .env
 .env.local
+.envrc
 
 # IDE
 .vscode/*
@@ -29,27 +30,26 @@ Thumbs.db
 *.tmp
 *.temp
 *.tgz
-.agent-trigger
+*.log
+*.car
 
+# AI agents
 AGENTS.md
+MEMORY.md
 .claude/
 .claude-config/
+.agent-trigger
 
-**.car
-
-.envrc
-
-# Session store used for example-client.ts
-.session-store.json
-
-# Playwright
+# Testing
 playwright-results/
 playwright-report/
 .playwright-cli
 test-results/
-
 *storybook.log
-storybook-static
+.session-store.json
 
 # Downloaded binaries
 apps/twig/resources/codex-acp/
+
+# Licensed fonts (downloaded from S3 during CI)
+apps/twig/assets/fonts/BerkeleyMono/

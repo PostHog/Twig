@@ -1,4 +1,4 @@
-import type { CloudRegion } from "../shared/types/oauth";
+import type { CloudRegion } from "../types/oauth";
 
 export const POSTHOG_US_CLIENT_ID = "HCWoE0aRFMYxIxFNTTwkOORn5LBjOt2GVDzwSw5W";
 export const POSTHOG_EU_CLIENT_ID = "AIvijgMS0dxKEmr5z6odvRd8Pkh5vts3nPTzgzU9";
@@ -9,25 +9,34 @@ export const OAUTH_SCOPES = [
   "user:read",
   "project:read",
   "task:write",
+  "signal_report:read",
+  "signal_report:write",
   "llm_gateway:read",
   "integration:read",
   "introspection",
+  // MCP server scopes
+  "action:read",
+  "action:write",
   "dashboard:read",
+  "dashboard:write",
   "error_tracking:read",
+  "error_tracking:write",
   "event_definition:read",
+  "event_definition:write",
   "experiment:read",
+  "experiment:write",
   "feature_flag:read",
+  "feature_flag:write",
   "insight:read",
+  "insight:write",
+  "logs:read",
   "organization:read",
   "property_definition:read",
   "query:read",
   "survey:read",
-  "warehouse_table:read",
-  "dashboard:write",
-  "experiment:write",
-  "feature_flag:write",
-  "insight:write",
   "survey:write",
+  "warehouse_table:read",
+  "warehouse_view:read",
 ];
 
 // Token refresh settings

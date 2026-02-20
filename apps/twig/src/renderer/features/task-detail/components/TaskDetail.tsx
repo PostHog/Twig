@@ -9,10 +9,10 @@ import { useBlurOnEscape } from "@hooks/useBlurOnEscape";
 import { useFileWatcher } from "@hooks/useFileWatcher";
 import { useSetHeaderContent } from "@hooks/useSetHeaderContent";
 import { Box, Code, Flex, Text, Tooltip } from "@radix-ui/themes";
+import { useWorkspaceStore } from "@renderer/features/workspace/stores/workspaceStore";
 import type { Task } from "@shared/types";
 import { useEffect, useMemo, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
-import { useWorkspaceStore } from "@/renderer/features/workspace/stores/workspaceStore";
 import { ExternalAppsOpener } from "./ExternalAppsOpener";
 
 interface TaskDetailProps {
@@ -28,7 +28,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
     return () => selectTask(null);
   }, [taskId, selectTask]);
 
-  useTaskData({ taskId, initialTask });
+  const { task } = useTaskData({ taskId, initialTask });
 
   const workspace = useWorkspaceStore((state) => state.workspaces[taskId]);
   const effectiveRepoPath = useCwd(taskId);
@@ -94,7 +94,7 @@ export function TaskDetail({ task: initialTask }: TaskDetailProps) {
 
   return (
     <Box height="100%">
-      <PanelLayout taskId={taskId} task={initialTask} />
+      <PanelLayout taskId={taskId} task={task} />
       <FilePicker
         open={filePickerOpen}
         onOpenChange={setFilePickerOpen}

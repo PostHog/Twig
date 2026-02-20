@@ -1,6 +1,6 @@
+import { electronStorage } from "@renderer/lib/electronStorage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { electronStorage } from "@/renderer/lib/electronStorage";
 
 type AdapterType = "claude" | "codex";
 

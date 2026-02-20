@@ -101,6 +101,7 @@
     "@codemirror/lang-yaml": "^6.1.2",
     "@codemirror/language": "^6.11.3",
     "@codemirror/merge": "^6.11.2",
+    "@codemirror/search": "^6.6.0",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.8",
     "@dnd-kit/react": "^0.1.21",
@@ -168,6 +169,7 @@
     "uuid": "^9.0.1",
     "vscode-icons-js": "^11.6.1",
     "zod": "^4.1.12",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "striptags": "^3.2.0"
   }
 }

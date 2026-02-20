@@ -1,6 +1,9 @@
 import { useAuthStore } from "@features/auth/stores/authStore";
 import type { MessageEditorHandle } from "@features/message-editor/components/MessageEditor";
-import type { EditorContent } from "@features/message-editor/utils/content";
+import {
+  contentToXml,
+  extractFilePaths,
+} from "@features/message-editor/utils/content";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { useConnectivity } from "@hooks/useConnectivity";
 import { get } from "@renderer/di/container";
@@ -34,45 +37,8 @@ interface UseTaskCreationReturn {
   handleSubmit: () => void;
 }
 
-function contentToXml(content: EditorContent): string {
-  return content.segments
-    .map((seg) => {
-      if (seg.type === "text") return seg.text;
-      const chip = seg.chip;
-      switch (chip.type) {
-        case "file":
-          return `<file path="${chip.id}" />`;
-        case "command":
-          return `/${chip.label}`;
-        case "error":
-          return `<error id="${chip.id}" />`;
-        case "experiment":
-          return `<experiment id="${chip.id}" />`;
-        case "insight":
-          return `<insight id="${chip.id}" />`;
-        case "feature_flag":
-          return `<feature_flag id="${chip.id}" />`;
-        default:
-          return `@${chip.label}`;
-      }
-    })
-    .join("");
-}
-
-function extractFileMentionsFromContent(content: EditorContent): string[] {
-  const filePaths: string[] = [];
-  for (const seg of content.segments) {
-    if (seg.type === "chip" && seg.chip.type === "file") {
-      if (!filePaths.includes(seg.chip.id)) {
-        filePaths.push(seg.chip.id);
-      }
-    }
-  }
-  return filePaths;
-}
-
 function prepareTaskInput(
-  content: EditorContent,
+  content: Parameters<typeof contentToXml>[0],
   options: {
     selectedDirectory: string;
     selectedRepository?: string | null;
@@ -87,7 +53,7 @@ function prepareTaskInput(
 ): TaskCreationInput {
   return {
     content: contentToXml(content).trim(),
-    filePaths: extractFileMentionsFromContent(content),
+    filePaths: extractFilePaths(content),
     repoPath: options.selectedDirectory,
     repository: options.selectedRepository,
     githubIntegrationId: options.githubIntegrationId,
