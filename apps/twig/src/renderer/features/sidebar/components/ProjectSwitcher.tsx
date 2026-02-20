@@ -27,7 +27,6 @@ import {
 } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import { getCloudUrlFromRegion } from "@shared/constants/oauth";
-import { useQuery } from "@tanstack/react-query";
 import { isMac } from "@utils/platform";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./ProjectSwitcher.css";
@@ -56,15 +55,13 @@ export function ProjectSwitcher() {
   const cloudRegion = useAuthStore((s) => s.cloudRegion);
   const selectProject = useAuthStore((s) => s.selectProject);
   const logout = useAuthStore((s) => s.logout);
-  const client = useAuthStore((s) => s.client);
-  const { groupedProjects, currentProject, currentProjectId, isLoading } =
-    useProjects();
-
-  const { data: currentUser } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: () => client?.getCurrentUser(),
-    enabled: !!client,
-  });
+  const {
+    groupedProjects,
+    currentProject,
+    currentProjectId,
+    currentUser,
+    isLoading,
+  } = useProjects();
 
   const handleProjectSelect = (projectId: number) => {
     if (projectId !== currentProjectId) {

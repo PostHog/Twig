@@ -581,38 +581,6 @@ export class PostHogAPIClient {
   }
 
   /**
-   * Get details for multiple projects by their IDs.
-   * Returns project info including organization details.
-   */
-  async getProjectDetails(projectIds: number[]): Promise<
-    Array<{
-      id: number;
-      name: string;
-      organization: { id: string; name: string };
-    }>
-  > {
-    const results = await Promise.all(
-      projectIds.map(async (projectId) => {
-        try {
-          const project = await this.getProject(projectId);
-          return {
-            id: project.id,
-            name: project.name ?? `Project ${project.id}`,
-            organization: {
-              id: project.organization?.toString() ?? "",
-              name: project.organization?.toString() ?? "Unknown Organization",
-            },
-          };
-        } catch (error) {
-          log.warn(`Failed to fetch project ${projectId}:`, error);
-          return null;
-        }
-      }),
-    );
-    return results.filter((r): r is NonNullable<typeof r> => r !== null);
-  }
-
-  /**
    * Get all organizations the user belongs to.
    */
   async getOrganizations(): Promise<
