@@ -13,8 +13,6 @@ describe("OAUTH_SCOPES guard", () => {
           "user:read",
           "project:read",
           "task:write",
-          "signal_report:read",
-          "signal_report:write",
           "llm_gateway:read",
           "integration:read",
           "introspection",
