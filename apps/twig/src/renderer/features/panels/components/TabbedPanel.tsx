@@ -10,6 +10,9 @@ import type { PanelContent } from "../store/panelStore";
 import { PanelDropZones } from "./PanelDropZones";
 import { PanelTab } from "./PanelTab";
 
+const activeTabStyle = { height: "100%" } as const;
+const hiddenTabStyle = { display: "none" } as const;
+
 interface TabBarButtonProps {
   ariaLabel: string;
   onClick: () => void;
@@ -244,14 +247,15 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         position="relative"
         onClick={() => onPanelFocus?.(panelId)}
       >
-        {content.tabs.length > 0 ? (
+        {content.tabs.length > 0 &&
+        content.tabs.some((t) => t.id === content.activeTabId) ? (
           content.tabs.map((tab) => (
             <div
               key={tab.id}
               style={
                 tab.id === content.activeTabId
-                  ? { height: "100%" }
-                  : { display: "none" }
+                  ? activeTabStyle
+                  : hiddenTabStyle
               }
             >
               {tab.component}
