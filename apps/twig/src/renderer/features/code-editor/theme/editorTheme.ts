@@ -91,6 +91,15 @@ function createEditorTheme(colors: typeof dark, isDark: boolean) {
         padding: "6px 8px",
         fontSize: "12px",
         gap: "4px",
+        "& input[name=replace]": {
+          display: "none",
+        },
+        "& button[name=replace]": {
+          display: "none",
+        },
+        "& button[name=replaceAll]": {
+          display: "none",
+        },
         "& input": {
           background: colors.highlightBackground,
           color: colors.ivory,
