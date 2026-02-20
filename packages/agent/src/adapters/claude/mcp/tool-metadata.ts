@@ -20,6 +20,10 @@ function isHttpMcpServer(
   return config.type === "http" && typeof (config as any).url === "string";
 }
 
+function isProxyUrl(url: string): boolean {
+  return /\/mcp_server_installations\/[^/]+\/proxy\/?$/.test(url);
+}
+
 async function fetchToolsFromHttpServer(
   _serverName: string,
   config: McpServerConfig & { type: "http"; url: string },
@@ -55,9 +59,17 @@ export async function fetchMcpToolMetadata(
   logger: Logger = new Logger({ debug: false, prefix: "[McpToolMetadata]" }),
 ): Promise<void> {
   const fetchPromises: Promise<void>[] = [];
-
   for (const [serverName, config] of Object.entries(mcpServers)) {
     if (!isHttpMcpServer(config)) {
+      continue;
+    }
+
+    // Since tools are discovered via Claude Code's own MCP connection, we can skip the
+    // prefetch for proxy calls to reduce network chatter.
+    if (isProxyUrl(config.url)) {
+      logger.info("Skipping metadata prefetch for proxy server", {
+        serverName,
+      });
       continue;
     }
 

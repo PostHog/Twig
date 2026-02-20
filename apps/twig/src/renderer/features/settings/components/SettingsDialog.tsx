@@ -11,6 +11,7 @@ import {
   GearSix,
   Keyboard,
   Palette,
+  Plugs,
   User,
   Wrench,
 } from "@phosphor-icons/react";
@@ -21,6 +22,7 @@ import { AccountSettings } from "./sections/AccountSettings";
 import { AdvancedSettings } from "./sections/AdvancedSettings";
 import { ClaudeCodeSettings } from "./sections/ClaudeCodeSettings";
 import { GeneralSettings } from "./sections/GeneralSettings";
+import { McpServersSettings } from "./sections/McpServersSettings";
 import { PersonalizationSettings } from "./sections/PersonalizationSettings";
 import { ShortcutsSettings } from "./sections/ShortcutsSettings";
 import { UpdatesSettings } from "./sections/UpdatesSettings";
@@ -43,6 +45,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     icon: <Palette size={16} />,
   },
   { id: "claude-code", label: "Claude Code", icon: <Code size={16} /> },
+  { id: "mcp-servers", label: "MCP Servers", icon: <Plugs size={16} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
   { id: "updates", label: "Updates", icon: <ArrowsClockwise size={16} /> },
   { id: "advanced", label: "Advanced", icon: <Wrench size={16} /> },
@@ -54,6 +57,7 @@ const CATEGORY_TITLES: Record<SettingsCategory, string> = {
   workspaces: "Workspaces",
   personalization: "Personalization",
   "claude-code": "Claude Code",
+  "mcp-servers": "MCP Servers",
   shortcuts: "Shortcuts",
   updates: "Updates",
   advanced: "Advanced",
@@ -65,6 +69,7 @@ const CATEGORY_COMPONENTS: Record<SettingsCategory, React.ComponentType> = {
   workspaces: WorkspacesSettings,
   personalization: PersonalizationSettings,
   "claude-code": ClaudeCodeSettings,
+  "mcp-servers": McpServersSettings,
   shortcuts: ShortcutsSettings,
   updates: UpdatesSettings,
   advanced: AdvancedSettings,
