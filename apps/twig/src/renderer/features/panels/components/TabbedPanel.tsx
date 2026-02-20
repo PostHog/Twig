@@ -253,9 +253,7 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
             <div
               key={tab.id}
               style={
-                tab.id === content.activeTabId
-                  ? activeTabStyle
-                  : hiddenTabStyle
+                tab.id === content.activeTabId ? activeTabStyle : hiddenTabStyle
               }
             >
               {tab.component}
