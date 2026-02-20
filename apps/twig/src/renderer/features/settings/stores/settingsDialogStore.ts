@@ -4,6 +4,7 @@ export type SettingsCategory =
   | "general"
   | "account"
   | "workspaces"
+  | "personalization"
   | "claude-code"
   | "shortcuts"
   | "updates"

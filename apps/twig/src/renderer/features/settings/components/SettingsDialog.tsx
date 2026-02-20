@@ -10,6 +10,7 @@ import {
   Folder,
   GearSix,
   Keyboard,
+  Palette,
   User,
   Wrench,
 } from "@phosphor-icons/react";
@@ -20,6 +21,7 @@ import { AccountSettings } from "./sections/AccountSettings";
 import { AdvancedSettings } from "./sections/AdvancedSettings";
 import { ClaudeCodeSettings } from "./sections/ClaudeCodeSettings";
 import { GeneralSettings } from "./sections/GeneralSettings";
+import { PersonalizationSettings } from "./sections/PersonalizationSettings";
 import { ShortcutsSettings } from "./sections/ShortcutsSettings";
 import { UpdatesSettings } from "./sections/UpdatesSettings";
 import { WorkspacesSettings } from "./sections/WorkspacesSettings";
@@ -35,6 +37,11 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "general", label: "General", icon: <GearSix size={16} /> },
   { id: "account", label: "Account", icon: <User size={16} /> },
   { id: "workspaces", label: "Workspaces", icon: <Folder size={16} /> },
+  {
+    id: "personalization",
+    label: "Personalization",
+    icon: <Palette size={16} />,
+  },
   { id: "claude-code", label: "Claude Code", icon: <Code size={16} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
   { id: "updates", label: "Updates", icon: <ArrowsClockwise size={16} /> },
@@ -45,6 +52,7 @@ const CATEGORY_TITLES: Record<SettingsCategory, string> = {
   general: "General",
   account: "Account",
   workspaces: "Workspaces",
+  personalization: "Personalization",
   "claude-code": "Claude Code",
   shortcuts: "Shortcuts",
   updates: "Updates",
@@ -55,6 +63,7 @@ const CATEGORY_COMPONENTS: Record<SettingsCategory, React.ComponentType> = {
   general: GeneralSettings,
   account: AccountSettings,
   workspaces: WorkspacesSettings,
+  personalization: PersonalizationSettings,
   "claude-code": ClaudeCodeSettings,
   shortcuts: ShortcutsSettings,
   updates: UpdatesSettings,

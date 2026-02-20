@@ -24,6 +24,7 @@ import {
   mergeConfigOptions,
   sessionStoreSetters,
 } from "@features/sessions/stores/sessionStore";
+import { useSettingsStore } from "@features/settings/stores/settingsStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import {
@@ -324,6 +325,7 @@ export class SessionService {
         "mode",
       )?.currentValue;
 
+      const { customInstructions } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.reconnect.mutate({
         taskId,
         taskRunId,
@@ -335,6 +337,7 @@ export class SessionService {
         sessionId,
         adapter: resolvedAdapter,
         permissionMode: persistedMode,
+        customInstructions: customInstructions || undefined,
       });
 
       if (result) {
@@ -496,6 +499,8 @@ export class SessionService {
       throw new Error("Failed to create task run. Please try again.");
     }
 
+    const { customInstructions: startCustomInstructions } =
+      useSettingsStore.getState();
     const result = await trpcVanilla.agent.start.mutate({
       taskId,
       taskRunId: taskRun.id,
@@ -505,6 +510,7 @@ export class SessionService {
       projectId: auth.projectId,
       permissionMode: executionMode,
       adapter,
+      customInstructions: startCustomInstructions || undefined,
     });
 
     const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
@@ -602,6 +608,8 @@ export class SessionService {
     sessionStoreSetters.setSession(session);
 
     try {
+      const { customInstructions: previewCustomInstructions } =
+        useSettingsStore.getState();
       const result = await trpcVanilla.agent.start.mutate({
         taskId: PREVIEW_TASK_ID,
         taskRunId,
@@ -610,6 +618,7 @@ export class SessionService {
         apiHost: auth.apiHost,
         projectId: auth.projectId,
         adapter: params.adapter,
+        customInstructions: previewCustomInstructions || undefined,
       });
 
       if (abort.signal.aborted) {

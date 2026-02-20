@@ -177,6 +177,8 @@ interface SessionConfig {
   additionalDirectories?: string[];
   /** Permission mode to use for the session */
   permissionMode?: string;
+  /** Custom instructions injected into the system prompt */
+  customInstructions?: string;
 }
 
 interface ManagedSession {
@@ -368,12 +370,19 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     return servers;
   }
 
-  private buildPostHogSystemPrompt(credentials: Credentials): {
+  private buildSystemPrompt(
+    credentials: Credentials,
+    customInstructions?: string,
+  ): {
     append: string;
   } {
-    return {
-      append: `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`,
-    };
+    let prompt = `PostHog context: use project ${credentials.projectId} on ${credentials.apiHost}. When using PostHog MCP tools, operate only on this project.`;
+
+    if (customInstructions) {
+      prompt += `\n\nUser custom instructions:\n${customInstructions}`;
+    }
+
+    return { append: prompt };
   }
 
   private getPostHogMcpUrl(apiHost: string): string {
@@ -426,6 +435,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       adapter,
       additionalDirectories,
       permissionMode,
+      customInstructions,
     } = config;
 
     // Preview sessions don't need a real repo — use a temp directory
@@ -522,7 +532,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         if (!config.sessionId) {
           throw new Error("Cannot resume session without sessionId");
         }
-        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
+        const systemPrompt = this.buildSystemPrompt(
+          credentials,
+          customInstructions,
+        );
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
           {
@@ -553,7 +566,10 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         configOptions = resumeMeta?.configOptions;
         agentSessionId = config.sessionId;
       } else {
-        const systemPrompt = this.buildPostHogSystemPrompt(credentials);
+        const systemPrompt = this.buildSystemPrompt(
+          credentials,
+          customInstructions,
+        );
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,
           mcpServers,
@@ -1267,6 +1283,8 @@ For git operations while detached:
           : undefined,
       permissionMode:
         "permissionMode" in params ? params.permissionMode : undefined,
+      customInstructions:
+        "customInstructions" in params ? params.customInstructions : undefined,
     };
   }
 
