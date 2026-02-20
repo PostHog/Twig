@@ -435,6 +435,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       adapter,
       additionalDirectories,
       permissionMode,
+      customInstructions,
     } = config;
 
     // Preview sessions don't need a real repo — use a temp directory
@@ -533,7 +534,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         }
         const systemPrompt = this.buildSystemPrompt(
           credentials,
-          config.customInstructions,
+          customInstructions,
         );
         const resumeResponse = await connection.extMethod(
           "_posthog/session/resume",
@@ -567,7 +568,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       } else {
         const systemPrompt = this.buildSystemPrompt(
           credentials,
-          config.customInstructions,
+          customInstructions,
         );
         const newSessionResponse = await connection.newSession({
           cwd: repoPath,

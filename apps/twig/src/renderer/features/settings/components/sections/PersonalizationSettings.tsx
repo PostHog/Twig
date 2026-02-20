@@ -24,11 +24,12 @@ export function PersonalizationSettings() {
 
   const saveInstructions = useCallback(
     (value: string) => {
-      const trimmed = value.slice(0, MAX_INSTRUCTIONS_LENGTH);
-      setCustomInstructions(trimmed);
+      const current = useSettingsStore.getState().customInstructions;
+      if (value === current) return;
+      setCustomInstructions(value);
       track(ANALYTICS_EVENTS.SETTING_CHANGED, {
         setting_name: "custom_instructions",
-        new_value: trimmed.length > 0,
+        new_value: value.length > 0,
       });
     },
     [setCustomInstructions],
@@ -36,7 +37,7 @@ export function PersonalizationSettings() {
 
   const handleInstructionsChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = e.target.value.slice(0, MAX_INSTRUCTIONS_LENGTH);
+      const value = e.target.value;
       setLocalInstructions(value);
 
       if (debounceRef.current) {
@@ -80,6 +81,7 @@ export function PersonalizationSettings() {
         value={localInstructions}
         onChange={handleInstructionsChange}
         onBlur={handleInstructionsBlur}
+        maxLength={MAX_INSTRUCTIONS_LENGTH}
         placeholder="e.g. Always write tests for new code. Prefer functional patterns."
         rows={6}
         size="1"
