@@ -34,13 +34,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         queryKey: ["changed-files-head", repoPath],
       });
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-mode", repoPath],
-      });
-      queryClient.invalidateQueries({
         queryKey: ["diff-stats", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats-mode", repoPath],
       });
     },
   });
@@ -53,13 +47,7 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
         queryKey: ["changed-files-head", repoPath],
       });
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-mode", repoPath],
-      });
-      queryClient.invalidateQueries({
         queryKey: ["diff-stats", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats-mode", repoPath],
       });
       if (!taskId) return;
       const relativePath = filePath.replace(`${repoPath}/`, "");
@@ -72,21 +60,11 @@ export function useFileWatcher(repoPath: string | null, taskId?: string) {
     onData: ({ repoPath: rp }) => {
       if (rp !== repoPath) return;
       queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
-      queryClient.invalidateQueries({ queryKey: ["file-at-ref", repoPath] });
       queryClient.invalidateQueries({
         queryKey: ["changed-files-head", repoPath],
       });
       queryClient.invalidateQueries({
-        queryKey: ["changed-files-mode", repoPath],
-      });
-      queryClient.invalidateQueries({
         queryKey: ["diff-stats", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["diff-stats-mode", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["merge-base", repoPath],
       });
       queryClient.invalidateQueries({
         queryKey: ["git-sync-status", repoPath],

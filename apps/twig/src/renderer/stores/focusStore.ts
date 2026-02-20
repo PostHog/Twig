@@ -29,9 +29,7 @@ interface FocusState {
 function invalidateQueries() {
   queryClient.invalidateQueries({ queryKey: ["current-branch"] });
   queryClient.invalidateQueries({ queryKey: ["diff-stats"] });
-  queryClient.invalidateQueries({ queryKey: ["diff-stats-mode"] });
   queryClient.invalidateQueries({ queryKey: ["changed-files-head"] });
-  queryClient.invalidateQueries({ queryKey: ["changed-files-mode"] });
   queryClient.invalidateQueries({ queryKey: ["git-sync-status"] });
 }
 

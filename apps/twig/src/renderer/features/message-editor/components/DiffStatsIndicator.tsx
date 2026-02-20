@@ -1,4 +1,3 @@
-import { useChangesModeStore } from "@features/task-detail/stores/changesModeStore";
 import { Circle } from "@phosphor-icons/react";
 import { Flex, Text } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc";
@@ -9,14 +8,11 @@ interface DiffStatsIndicatorProps {
 }
 
 export function DiffStatsIndicator({ repoPath }: DiffStatsIndicatorProps) {
-  const mode = useChangesModeStore((s) => s.mode);
-
   const { data: diffStats } = useQuery({
-    queryKey: ["diff-stats-mode", repoPath, mode],
+    queryKey: ["diff-stats", repoPath],
     queryFn: () =>
-      trpcVanilla.git.getDiffStatsByMode.query({
+      trpcVanilla.git.getDiffStats.query({
         directoryPath: repoPath as string,
-        mode: mode === "lastTurn" ? "uncommitted" : mode,
       }),
     enabled: !!repoPath,
     staleTime: 5000,

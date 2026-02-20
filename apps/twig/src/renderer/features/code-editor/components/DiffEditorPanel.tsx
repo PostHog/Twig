@@ -4,7 +4,6 @@ import { CodeMirrorEditor } from "@features/code-editor/components/CodeMirrorEdi
 import { getRelativePath } from "@features/code-editor/utils/pathUtils";
 import { usePanelLayoutStore } from "@features/panels/store/panelLayoutStore";
 import { useCwd } from "@features/sidebar/hooks/useCwd";
-import { useChangesModeStore } from "@features/task-detail/stores/changesModeStore";
 import { Box } from "@radix-ui/themes";
 import { trpcVanilla } from "@renderer/trpc/client";
 import type { Task } from "@shared/types";
@@ -28,21 +27,6 @@ export function DiffEditorPanel({
   const closeDiffTabsForFile = usePanelLayoutStore(
     (s) => s.closeDiffTabsForFile,
   );
-
-  // Comparison mode
-  const compMode = useChangesModeStore((s) => s.mode);
-  const isBranchMode = compMode === "branch";
-
-  // Fetch merge-base SHA when in branch mode
-  const { data: mergeBase } = useQuery({
-    queryKey: ["merge-base", repoPath],
-    queryFn: () =>
-      trpcVanilla.git.getMergeBase.query({
-        directoryPath: repoPath as string,
-      }),
-    enabled: !!repoPath && isBranchMode,
-    staleTime: 5_000,
-  });
 
   const { data: changedFiles = [], isLoading: loadingChangelist } = useQuery({
     queryKey: ["changed-files-head", repoPath],
@@ -75,24 +59,14 @@ export function DiffEditorPanel({
     refetchOnWindowFocus: true,
   });
 
-  // Original content: for branch mode use merge-base; otherwise HEAD
-  const originalRef = isBranchMode && mergeBase ? mergeBase : "HEAD";
   const { data: originalContent, isLoading: loadingOriginal } = useQuery({
-    queryKey: isBranchMode
-      ? ["file-at-ref", repoPath, originalPath, originalRef]
-      : ["file-at-head", repoPath, originalPath],
+    queryKey: ["file-at-head", repoPath, originalPath],
     queryFn: () =>
-      isBranchMode
-        ? trpcVanilla.git.getFileAtRef.query({
-            directoryPath: repoPath as string,
-            filePath: originalPath,
-            ref: originalRef,
-          })
-        : trpcVanilla.git.getFileAtHead.query({
-            directoryPath: repoPath as string,
-            filePath: originalPath,
-          }),
-    enabled: !!repoPath && !isNew && (!isBranchMode || !!mergeBase),
+      trpcVanilla.git.getFileAtHead.query({
+        directoryPath: repoPath as string,
+        filePath: originalPath,
+      }),
+    enabled: !!repoPath && !isNew,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
@@ -103,12 +77,8 @@ export function DiffEditorPanel({
       queryKey: ["repo-file", repoPath, filePath],
     });
     queryClient.invalidateQueries({ queryKey: ["file-at-head", repoPath] });
-    queryClient.invalidateQueries({ queryKey: ["file-at-ref", repoPath] });
     queryClient.invalidateQueries({
       queryKey: ["changed-files-head", repoPath],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["changed-files-mode", repoPath],
     });
   }, [repoPath, filePath, queryClient]);
 
@@ -128,12 +98,6 @@ export function DiffEditorPanel({
         });
         queryClient.invalidateQueries({
           queryKey: ["changed-files-head", repoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["changed-files-mode", repoPath],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["diff-stats-mode", repoPath],
         });
       } catch (_error) {}
     },
@@ -172,9 +136,6 @@ export function DiffEditorPanel({
   const showDiff = !isDeleted && !isNew;
   const content = isDeleted ? originalContent : modifiedContent;
 
-  // Don't allow content editing in branch mode
-  const allowContentChange = !isBranchMode;
-
   return (
     <Box height="100%" style={{ overflow: "hidden" }}>
       {showDiff ? (
@@ -183,7 +144,7 @@ export function DiffEditorPanel({
           modifiedContent={modifiedContent ?? ""}
           filePath={absolutePath}
           relativePath={filePath}
-          onContentChange={allowContentChange ? handleContentChange : undefined}
+          onContentChange={handleContentChange}
           onRefresh={handleRefresh}
         />
       ) : (
