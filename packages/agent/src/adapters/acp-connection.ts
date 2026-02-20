@@ -5,6 +5,7 @@ import type { ProcessSpawnedCallback } from "../types.js";
 import { Logger } from "../utils/logger.js";
 import {
   createBidirectionalStreams,
+  createNotificationIdInjectorStream,
   createTappedWritableStream,
   nodeReadableToWebReadable,
   nodeWritableToWebWritable,
@@ -158,7 +159,8 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
 
   const { logWriter } = config;
 
-  let agentWritable = streams.agent.writable;
+  let agentWritable: globalThis.WritableStream<Uint8Array> =
+    streams.agent.writable;
   let clientWritable = streams.client.writable;
 
   if (config.taskRunId && logWriter) {
@@ -189,6 +191,8 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
       hasLogWriter: !!logWriter,
     });
   }
+
+  agentWritable = createNotificationIdInjectorStream(agentWritable, { logger });
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
