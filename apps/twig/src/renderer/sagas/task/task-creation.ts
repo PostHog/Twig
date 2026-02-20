@@ -85,7 +85,7 @@ export class TaskCreationSaga extends Saga<
     // Step 3: Resolve workspaceMode - input takes precedence, then derive from task
     const workspaceMode =
       input.workspaceMode ??
-      (task.latest_run?.environment === "cloud" ? "cloud" : "worktree");
+      (task.latest_run?.environment === "cloud" ? "cloud" : "local");
 
     log.info("Task setup resolved", {
       taskId: task.id,

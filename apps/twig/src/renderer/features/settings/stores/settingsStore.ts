@@ -50,8 +50,8 @@ export const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       defaultRunMode: "last_used",
       lastUsedRunMode: "local",
-      lastUsedLocalWorkspaceMode: "worktree",
-      lastUsedWorkspaceMode: "worktree",
+      lastUsedLocalWorkspaceMode: "local",
+      lastUsedWorkspaceMode: "local",
       lastUsedAdapter: "claude",
       lastUsedModel: null,
       desktopNotifications: true,
