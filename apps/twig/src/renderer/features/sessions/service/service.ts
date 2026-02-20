@@ -25,6 +25,7 @@ import {
   sessionStoreSetters,
 } from "@features/sessions/stores/sessionStore";
 import { useSettingsStore } from "@features/settings/stores/settingsStore";
+import { useTaskViewedStore } from "@features/sidebar/stores/taskViewedStore";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import {
@@ -816,6 +817,8 @@ export class SessionService {
         notifyPromptComplete(session.taskTitle, stopReason);
       }
 
+      useTaskViewedStore.getState().markActivity(session.taskId);
+
       // Process queued messages after turn completes - send all as one prompt
       if (session.messageQueue.length > 0 && session.status === "connected") {
         setTimeout(() => {
@@ -903,6 +906,7 @@ export class SessionService {
     });
 
     sessionStoreSetters.setPendingPermissions(taskRunId, newPermissions);
+    useTaskViewedStore.getState().markActivity(session.taskId);
     notifyPermissionRequest(session.taskTitle);
   }
 
