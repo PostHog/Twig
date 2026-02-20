@@ -50,3 +50,6 @@ test-results/
 
 # Downloaded binaries
 apps/twig/resources/codex-acp/
+
+# Licensed fonts (downloaded from S3 during CI)
+apps/twig/assets/fonts/BerkeleyMono/

@@ -51,6 +51,18 @@ If you don't have Xcode installed, the build will automatically fall back to the
 
 The `generateAssets` hook will automatically attempt to compile the icon during packaging if Xcode is available.
 
+### BerkeleyMono Font (PostHog employees)
+
+Twig uses [Berkeley Mono](https://usgraphics.com/products/berkeley-mono) as its primary font, falling back to JetBrains Mono if the files aren't present. The font is licensed and not committed to the repo — it's downloaded from S3 during CI builds.
+
+To use it locally, go to the Twig app assets S3 bucket in the AWS console, download the `.woff2` files from the `fonts/` folder, and place them in:
+
+```
+apps/twig/assets/fonts/BerkeleyMono/
+```
+
+The directory is gitignored, so these files won't be committed.
+
 ### Environment Variables
 
 You can set these environment variables instead of entering credentials in the app:
