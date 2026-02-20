@@ -111,6 +111,7 @@ export interface TaskExecutionOptions {
   model?: string;
   codexBinaryPath?: string;
   processCallbacks?: ProcessSpawnedCallback;
+  cwds?: string[];
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";

@@ -73,7 +73,6 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.8",
     "@posthog/shared": "workspace:*",
-    "@twig/git": "workspace:*",
     "@types/bun": "latest",
     "@types/tar": "^6.1.13",
     "minimatch": "^10.0.3",
@@ -85,6 +84,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.14.0",
+    "@twig/git": "workspace:*",
     "@anthropic-ai/claude-agent-sdk": "0.2.42",
     "@anthropic-ai/sdk": "^0.71.0",
     "@hono/node-server": "^1.19.9",

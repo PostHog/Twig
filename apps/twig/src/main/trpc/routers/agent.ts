@@ -7,6 +7,9 @@ import {
   cancelPermissionInput,
   cancelPromptInput,
   cancelSessionInput,
+  checkpointDiffOutput,
+  checkpointInput,
+  checkpointRestoreOutput,
   getGatewayModelsInput,
   getGatewayModelsOutput,
   listSessionsInput,
@@ -175,5 +178,19 @@ export const agentRouter = router({
     .output(getGatewayModelsOutput)
     .query(({ input }) =>
       getService().getGatewayModels(input.apiHost, input.apiKey),
+    ),
+
+  checkpointDiff: publicProcedure
+    .input(checkpointInput)
+    .output(checkpointDiffOutput)
+    .query(({ input }) =>
+      getService().checkpointDiff(input.taskRunId, input.checkpointId),
+    ),
+
+  checkpointRestore: publicProcedure
+    .input(checkpointInput)
+    .output(checkpointRestoreOutput)
+    .mutation(({ input }) =>
+      getService().checkpointRestore(input.taskRunId, input.checkpointId),
     ),
 });

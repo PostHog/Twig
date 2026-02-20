@@ -1,6 +1,5 @@
 import type { Readable, Writable } from "node:stream";
 import { ReadableStream, WritableStream } from "node:stream/web";
-import { v7 as uuidv7 } from "uuid";
 import type { Logger } from "./logger.js";
 
 export class Pushable<T> implements AsyncIterable<T> {
@@ -220,92 +219,65 @@ export function nodeWritableToWebWritable(
   }) as globalThis.WritableStream<Uint8Array>;
 }
 
-type SessionUpdateMessage = {
+type JsonRpcMessage = {
+  jsonrpc?: string;
   method?: string;
   params?: {
-    _meta?: Record<string, unknown> | null;
+    _meta?: Record<string, unknown>;
     [key: string]: unknown;
   };
   [key: string]: unknown;
 };
 
-function injectNotificationId(msg: SessionUpdateMessage): SessionUpdateMessage {
-  if (msg.method !== "session/update" || !msg.params) {
-    return msg;
-  }
-
-  const existingMeta = msg.params._meta ?? {};
-  return {
-    ...msg,
-    params: {
-      ...msg.params,
-      _meta: {
-        ...existingMeta,
-        notificationId: uuidv7(),
-      },
-    },
-  };
+export interface SessionPromptDetectorOptions {
+  logger?: Logger;
+  onSessionPrompt?: (notificationId: string) => void;
 }
 
-export function createNotificationIdInjectorStream(
+export function createSessionPromptDetectorStream(
   underlying: globalThis.WritableStream<Uint8Array>,
-  options?: { logger?: Logger },
+  options?: SessionPromptDetectorOptions,
 ): globalThis.WritableStream<Uint8Array> {
-  const { logger } = options ?? {};
+  const { logger, onSessionPrompt } = options ?? {};
   const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
   let buffer = "";
 
   return new WritableStream({
     async write(chunk: Uint8Array) {
-      buffer += decoder.decode(chunk, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+      if (onSessionPrompt) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
-      const outputLines: string[] = [];
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          outputLines.push(line);
-          continue;
-        }
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
 
-        try {
-          const msg = JSON.parse(trimmed) as SessionUpdateMessage;
-          const transformed = injectNotificationId(msg);
-          outputLines.push(JSON.stringify(transformed));
-        } catch {
-          outputLines.push(line);
+          try {
+            const msg = JSON.parse(trimmed) as JsonRpcMessage;
+            if (msg.method === "session/prompt" && msg.params?._meta) {
+              const notificationId = (
+                msg.params._meta as Record<string, unknown>
+              ).notificationId;
+              if (typeof notificationId === "string") {
+                onSessionPrompt(notificationId);
+              }
+            }
+          } catch {
+            // Not valid JSON, ignore
+          }
         }
       }
 
-      if (outputLines.length > 0) {
-        const output = `${outputLines.join("\n")}\n`;
-        try {
-          const writer = underlying.getWriter();
-          await writer.write(encoder.encode(output));
-          writer.releaseLock();
-        } catch (err) {
-          logger?.error("Notification ID injector write error", err);
-        }
+      try {
+        const writer = underlying.getWriter();
+        await writer.write(chunk);
+        writer.releaseLock();
+      } catch (err) {
+        logger?.error("Session prompt detector write error", err);
       }
     },
     async close() {
-      if (buffer.trim()) {
-        try {
-          const msg = JSON.parse(buffer.trim()) as SessionUpdateMessage;
-          const transformed = injectNotificationId(msg);
-          const writer = underlying.getWriter();
-          await writer.write(
-            encoder.encode(`${JSON.stringify(transformed)}\n`),
-          );
-          writer.releaseLock();
-        } catch {
-          const writer = underlying.getWriter();
-          await writer.write(encoder.encode(buffer));
-          writer.releaseLock();
-        }
-      }
       try {
         const writer = underlying.getWriter();
         await writer.close();
@@ -315,7 +287,7 @@ export function createNotificationIdInjectorStream(
       }
     },
     async abort(reason: unknown) {
-      logger?.warn("Notification ID injector stream aborted", { reason });
+      logger?.warn("Session prompt detector stream aborted", { reason });
       try {
         const writer = underlying.getWriter();
         await writer.abort(reason);
