@@ -54,59 +54,28 @@ Scripts in `scripts/` for development and debugging:
 ```
 twig/
 ├── apps/
-│   ├── twig/       # Electron desktop app (React, Vite)
-│   ├── mobile/     # React Native mobile app (Expo)
-│   └── cli/        # CLI for stacked PRs
+│   ├── twig/            # Electron desktop app (React, Vite)
+│   ├── mobile/          # React Native mobile app (Expo)
+│   └── cli/             # CLI for stacked PRs
 ├── packages/
-│   ├── agent/      # TypeScript agent framework
-│   ├── core/       # Shared business logic
-│   ├── electron-trpc/  # tRPC for Electron IPC
-│   └── shared/     # Shared utilities (Saga pattern, etc.)
+│   ├── agent/           # TypeScript agent framework
+│   ├── core/            # Shared business logic
+│   ├── electron-trpc/   # tRPC for Electron IPC
+│   └── shared/          # Shared utilities (Saga pattern, etc.)
 ```
 
 ## Documentation
 
 | File | Description |
 |------|-------------|
-| [CLAUDE.md](./CLAUDE.md) | Code style, patterns, and testing guidelines |
-| [UPDATES.md](./UPDATES.md) | Release versioning and git tagging |
 | [apps/twig/README.md](./apps/twig/README.md) | Desktop app: building, signing, distribution, and workspace configuration |
 | [apps/twig/ARCHITECTURE.md](./apps/twig/ARCHITECTURE.md) | Desktop app: dependency injection, tRPC, state management, and events |
 | [apps/mobile/README.md](./apps/mobile/README.md) | Mobile app: Expo setup, EAS builds, and TestFlight deployment |
 | [apps/cli/README.md](./apps/cli/README.md) | CLI: stacked PR management with Jujutsu |
+| [CLAUDE.md](./CLAUDE.md) | Code style, patterns, and testing guidelines |
+| [docs/UPDATES.md](./docs/UPDATES.md) | Release versioning and git tagging |
+| [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Common issues and fixes |
 
 ## Troubleshooting
 
-### Electron failed to install correctly
-
-If you see this error when running `pnpm dev`:
-
-```
-Error: Electron failed to install correctly, please delete node_modules/electron and try installing again
-```
-
-The electron binary didn't download during install. Fix it by running the install script manually:
-
-```bash
-cd node_modules/electron && node install.js
-```
-
-Or nuke it and reinstall:
-
-```bash
-rm -rf node_modules/electron && pnpm install && cd node_modules/electron && node install.js
-```
-
-### Native module crash (libc++abi / Napi::Error)
-
-If the app crashes with something like:
-
-```
-libc++abi: terminating due to uncaught exception of type Napi::Error
-```
-
-Native modules (like node-pty) need to be rebuilt for your Electron version:
-
-```bash
-pnpm --filter twig exec electron-rebuild
-```
+See [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for common issues (black screen, Electron install failures, native module crashes, etc.).

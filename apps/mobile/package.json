@@ -10,7 +10,8 @@
     "prebuild": "expo prebuild",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "clean": "rm -rf .turbo .expo"
   },
   "dependencies": {
     "@expo/ui": "0.2.0-beta.9",
