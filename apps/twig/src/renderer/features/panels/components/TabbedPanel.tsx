@@ -10,6 +10,9 @@ import type { PanelContent } from "../store/panelStore";
 import { PanelDropZones } from "./PanelDropZones";
 import { PanelTab } from "./PanelTab";
 
+const activeTabStyle = { height: "100%" } as const;
+const hiddenTabStyle = { display: "none" } as const;
+
 interface TabBarButtonProps {
   ariaLabel: string;
   onClick: () => void;
@@ -79,8 +82,6 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
   rightContent,
   emptyState,
 }) => {
-  const activeTab = content.tabs.find((tab) => tab.id === content.activeTabId);
-
   const handleSplitClick = async () => {
     const result = await trpcVanilla.contextMenu.showSplitContextMenu.mutate();
     if (result.direction) {
@@ -246,8 +247,18 @@ export const TabbedPanel: React.FC<TabbedPanelProps> = ({
         position="relative"
         onClick={() => onPanelFocus?.(panelId)}
       >
-        {activeTab ? (
-          activeTab.component
+        {content.tabs.length > 0 &&
+        content.tabs.some((t) => t.id === content.activeTabId) ? (
+          content.tabs.map((tab) => (
+            <div
+              key={tab.id}
+              style={
+                tab.id === content.activeTabId ? activeTabStyle : hiddenTabStyle
+              }
+            >
+              {tab.component}
+            </div>
+          ))
         ) : emptyState ? (
           emptyState
         ) : (
