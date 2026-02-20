@@ -687,7 +687,7 @@ export const useAuthStore = create<AuthState>()(
               const key = Array.isArray(query.queryKey)
                 ? query.queryKey[0]
                 : query.queryKey;
-              return key !== "projects" && key !== "currentUser";
+              return key !== "currentUser";
             },
           });
 

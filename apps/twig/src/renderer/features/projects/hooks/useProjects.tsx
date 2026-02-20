@@ -51,10 +51,13 @@ export function useProjects() {
   const projects = useMemo(() => {
     if (!currentUser?.organization) return [];
 
-    const teams = (currentUser.organization.teams ?? []) as Array<{
-      id: number;
-      name?: string;
-    }>;
+    const rawTeams = Array.isArray(currentUser.organization.teams)
+      ? currentUser.organization.teams
+      : [];
+    const teams = rawTeams.filter(
+      (t): t is { id: number; name?: string } =>
+        t != null && typeof t === "object" && typeof t.id === "number",
+    );
     const orgName = currentUser.organization.name ?? "Unknown Organization";
     const orgId = currentUser.organization.id ?? "";
 
