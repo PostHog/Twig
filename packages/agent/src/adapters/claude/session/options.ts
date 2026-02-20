@@ -5,11 +5,13 @@ import * as path from "node:path";
 import type {
   McpServerConfig,
   Options,
+  SdkPluginConfig,
   SpawnedProcess,
   SpawnOptions,
 } from "@anthropic-ai/claude-agent-sdk";
 import { IS_ROOT } from "../../../utils/common.js";
 import type { Logger } from "../../../utils/logger.js";
+import { resolvePostHogSkillsPlugin } from "../../../utils/posthog-skills.js";
 import { createPostToolUseHook, type OnModeChange } from "../hooks.js";
 import type { TwigExecutionMode } from "../tools.js";
 
@@ -89,6 +91,20 @@ function buildEnvironment(): Record<string, string> {
     ELECTRON_RUN_AS_NODE: "1",
     CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: "true",
   };
+}
+
+function buildPlugins(
+  userPlugins: SdkPluginConfig[] | undefined,
+  logger: Logger,
+): SdkPluginConfig[] | undefined {
+  const plugins: SdkPluginConfig[] = [...(userPlugins || [])];
+
+  const posthogSkills = resolvePostHogSkillsPlugin(logger);
+  if (posthogSkills) {
+    plugins.push(posthogSkills);
+  }
+
+  return plugins.length > 0 ? plugins : undefined;
 }
 
 function buildHooks(
@@ -207,6 +223,7 @@ export function buildSessionOptions(params: BuildOptionsParams): Options {
       params.userProvidedOptions?.mcpServers,
       params.mcpServers,
     ),
+    plugins: buildPlugins(params.userProvidedOptions?.plugins, params.logger),
     env: buildEnvironment(),
     hooks: buildHooks(params.userProvidedOptions?.hooks, params.onModeChange),
     abortController: getAbortController(
