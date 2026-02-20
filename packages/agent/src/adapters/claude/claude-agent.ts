@@ -195,9 +195,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     ]);
 
     session.modelId = modelOptions.currentModelId;
-
-    // Fire-and-forget — trySetModel already swallows errors
-    this.trySetModel(q, modelOptions.currentModelId);
+    await this.trySetModel(q, modelOptions.currentModelId);
 
     this.sendAvailableCommandsUpdate(sessionId, slashCommands);
 

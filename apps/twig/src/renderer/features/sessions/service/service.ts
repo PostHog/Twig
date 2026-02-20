@@ -63,7 +63,7 @@ interface AuthCredentials {
   client: ReturnType<typeof useAuthStore.getState>["client"];
 }
 
-interface ConnectParams {
+export interface ConnectParams {
   task: Task;
   repoPath: string;
   initialPrompt?: ContentBlock[];
@@ -361,7 +361,7 @@ export class SessionService {
 
         // Restore persisted config options to server in parallel
         if (persistedConfigOptions) {
-          await Promise.allSettled(
+          await Promise.all(
             persistedConfigOptions.map((opt) =>
               trpcVanilla.agent.setConfigOption
                 .mutate({

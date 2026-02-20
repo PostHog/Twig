@@ -1,5 +1,8 @@
 import { buildPromptBlocks } from "@features/editor/utils/prompt-builder";
-import { getSessionService } from "@features/sessions/service/service";
+import {
+  type ConnectParams,
+  getSessionService,
+} from "@features/sessions/service/service";
 import { useWorkspaceStore } from "@features/workspace/stores/workspaceStore";
 import { Saga, type SagaLogger } from "@posthog/shared";
 import type { PostHogAPIClient } from "@renderer/api/posthogClient";
@@ -198,19 +201,19 @@ export class TaskCreationSaga extends Saga<
           // Fire-and-forget for both open and create paths.
           // The UI handles "connecting" state with a spinner (TaskLogsPanel),
           // so we don't need to block the saga on the full reconnect chain.
-          getSessionService().connectToTask({
+          const connectParams: ConnectParams = {
             task,
             repoPath: agentCwd ?? "",
-            ...(initialPrompt ? { initialPrompt } : {}),
-            ...(input.executionMode
-              ? { executionMode: input.executionMode }
-              : {}),
-            ...(input.adapter ? { adapter: input.adapter } : {}),
-            ...(input.model ? { model: input.model } : {}),
-            ...(input.reasoningLevel
-              ? { reasoningLevel: input.reasoningLevel }
-              : {}),
-          });
+          };
+          if (initialPrompt) connectParams.initialPrompt = initialPrompt;
+          if (input.executionMode)
+            connectParams.executionMode = input.executionMode;
+          if (input.adapter) connectParams.adapter = input.adapter;
+          if (input.model) connectParams.model = input.model;
+          if (input.reasoningLevel)
+            connectParams.reasoningLevel = input.reasoningLevel;
+
+          getSessionService().connectToTask(connectParams);
           return { taskId: task.id };
         },
         rollback: async ({ taskId }) => {
