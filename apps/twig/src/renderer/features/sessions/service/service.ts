@@ -525,6 +525,11 @@ export class SessionService {
       throw new Error("Failed to create task run. Please try again.");
     }
 
+    const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
+    session.adapter = adapter;
+    sessionStoreSetters.setSession(session);
+    this.subscribeToChannel(taskRun.id);
+
     const { customInstructions: startCustomInstructions } =
       useSettingsStore.getState();
     const result = await trpcVanilla.agent.start.mutate({
@@ -539,27 +544,23 @@ export class SessionService {
       customInstructions: startCustomInstructions || undefined,
     });
 
-    const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
-    session.channel = result.channel;
-    session.status = "connected";
-    session.adapter = adapter;
     const configOptions = result.configOptions as
       | SessionConfigOption[]
       | undefined;
-    session.configOptions = configOptions;
 
-    // Persist the config options
+    sessionStoreSetters.updateSession(taskRun.id, {
+      channel: result.channel,
+      status: "connected",
+      configOptions,
+    });
+
     if (configOptions) {
       setPersistedConfigOptions(taskRun.id, configOptions);
     }
 
-    // Persist the adapter
     if (adapter) {
       useSessionAdapterStore.getState().setAdapter(taskRun.id, adapter);
     }
-
-    sessionStoreSetters.setSession(session);
-    this.subscribeToChannel(taskRun.id);
 
     track(ANALYTICS_EVENTS.TASK_RUN_STARTED, {
       task_id: taskId,
@@ -632,6 +633,7 @@ export class SessionService {
     );
     session.adapter = params.adapter;
     sessionStoreSetters.setSession(session);
+    this.subscribeToChannel(taskRunId);
 
     try {
       const { customInstructions: previewCustomInstructions } =
@@ -669,8 +671,6 @@ export class SessionService {
         channel: result.channel,
         configOptions,
       });
-
-      this.subscribeToChannel(taskRunId);
 
       log.info("Preview session started", {
         taskRunId,

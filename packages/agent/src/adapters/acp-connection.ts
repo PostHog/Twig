@@ -1,11 +1,12 @@
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
 import { POSTHOG_NOTIFICATIONS } from "../acp-extensions.js";
+import { CheckpointManager } from "../checkpoint-manager.js";
 import type { SessionLogWriter } from "../session-log-writer.js";
 import type { ProcessSpawnedCallback } from "../types.js";
 import { Logger } from "../utils/logger.js";
 import {
   createBidirectionalStreams,
-  createNotificationIdInjectorStream,
+  createSessionPromptDetectorStream,
   createTappedWritableStream,
   nodeReadableToWebReadable,
   nodeWritableToWebWritable,
@@ -27,12 +28,15 @@ export type AcpConnectionConfig = {
   processCallbacks?: ProcessSpawnedCallback;
   codexOptions?: CodexProcessOptions;
   allowedModelIds?: Set<string>;
+  /** Working directories to snapshot on each user message */
+  cwds?: string[];
 };
 
 export type AcpConnection = {
   agentConnection?: AgentSideConnection;
   clientStreams: StreamPair;
   cleanup: () => Promise<void>;
+  checkpointManager: CheckpointManager | null;
 };
 
 export type InProcessAcpConnection = AcpConnection;
@@ -192,7 +196,17 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
     });
   }
 
-  agentWritable = createNotificationIdInjectorStream(agentWritable, { logger });
+  const cwds = config.cwds ?? [];
+  const checkpointManager =
+    cwds.length > 0 ? new CheckpointManager(cwds, logger) : null;
+
+  if (checkpointManager) {
+    clientWritable = createSessionPromptDetectorStream(clientWritable, {
+      logger,
+      onSessionPrompt: (notificationId) =>
+        checkpointManager.capture(notificationId),
+    });
+  }
 
   const agentStream = ndJsonStream(agentWritable, streams.agent.readable);
 
@@ -227,6 +241,7 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
         // Stream may already be closed
       }
     },
+    checkpointManager,
   };
 }
 
@@ -494,5 +509,6 @@ function createCodexConnection(config: AcpConnectionConfig): AcpConnection {
         // Stream may already be closed
       }
     },
+    checkpointManager: null,
   };
 }

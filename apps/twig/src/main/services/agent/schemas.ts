@@ -264,3 +264,26 @@ export const getGatewayModelsInput = z.object({
 });
 
 export const getGatewayModelsOutput = z.array(modelOptionSchema);
+
+export const checkpointInput = z.object({
+  taskRunId: z.string(),
+  checkpointId: z.string(),
+});
+
+export const checkpointDiffOutput = z
+  .object({
+    linesAdded: z.number(),
+    linesRemoved: z.number(),
+    filesChanged: z.array(z.string()),
+  })
+  .nullable();
+
+export const checkpointRestoreResultSchema = z.object({
+  cwd: z.string(),
+  success: z.boolean(),
+  error: z.string().optional(),
+});
+
+export const checkpointRestoreOutput = z
+  .array(checkpointRestoreResultSchema)
+  .nullable();

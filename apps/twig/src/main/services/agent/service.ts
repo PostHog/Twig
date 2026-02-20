@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs, { mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -495,6 +496,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
             this.processTracking.unregister(pid, "agent-exited");
           },
         },
+        cwds: [repoPath, ...(additionalDirectories ?? [])],
       });
       const { clientStreams } = acpConnection;
 
@@ -1021,14 +1023,34 @@ For git operations while detached:
     };
 
     const onAcpMessage = (message: unknown) => {
-      const acpMessage: AcpMessage = {
+      const msg = message as Record<string, unknown>;
+      const notificationId = randomUUID();
+
+      const injectMeta = (
+        obj: Record<string, unknown>,
+        key: "params" | "result",
+      ) => {
+        const target = obj[key] as Record<string, unknown>;
+        const existingMeta = (target._meta as Record<string, unknown>) ?? {};
+        return {
+          ...obj,
+          [key]: { ...target, _meta: { ...existingMeta, notificationId } },
+        };
+      };
+
+      const enrichedMessage =
+        msg.params !== undefined
+          ? injectMeta(msg, "params")
+          : msg.result !== undefined
+            ? injectMeta(msg, "result")
+            : msg;
+
+      emitToRenderer({
         type: "acp_message",
         ts: Date.now(),
-        message: message as AcpMessage["message"],
-      };
-      emitToRenderer(acpMessage);
+        message: enrichedMessage as unknown as AcpMessage["message"],
+      });
 
-      // Detect PR URLs in bash tool results and attach to task
       this.detectAndAttachPrUrl(taskRunId, message);
     };
 
@@ -1436,5 +1458,27 @@ For git operations while detached:
       }
       return getModelTier(a.modelId) - getModelTier(b.modelId);
     });
+  }
+
+  async checkpointDiff(
+    taskRunId: string,
+    checkpointId: string,
+  ): Promise<{
+    linesAdded: number;
+    linesRemoved: number;
+    filesChanged: string[];
+  } | null> {
+    const session = this.sessions.get(taskRunId);
+    if (!session) return null;
+    return session.agent.checkpointDiff(checkpointId);
+  }
+
+  async checkpointRestore(
+    taskRunId: string,
+    checkpointId: string,
+  ): Promise<Array<{ cwd: string; success: boolean; error?: string }> | null> {
+    const session = this.sessions.get(taskRunId);
+    if (!session) return null;
+    return session.agent.checkpointRestore(checkpointId);
   }
 }

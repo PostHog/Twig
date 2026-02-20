@@ -5,6 +5,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import { RequestError } from "@agentclientprotocol/sdk";
 import type {
+  SDKAssistantMessage,
   SDKPartialAssistantMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -47,6 +48,7 @@ type ChunkHandlerContext = {
   fileContentCache: { [key: string]: string };
   client: AgentSideConnection;
   logger: Logger;
+  sdkMessageId?: string;
 };
 
 export interface MessageHandlerContext {
@@ -250,11 +252,13 @@ function toAcpNotifications(
   fileContentCache: { [key: string]: string },
   client: AgentSideConnection,
   logger: Logger,
+  sdkMessageId?: string,
 ): SessionNotification[] {
   if (typeof content === "string") {
     return [
       {
         sessionId,
+        _meta: sdkMessageId ? { sdkMessageId } : undefined,
         update: {
           sessionUpdate: messageUpdateType(role),
           content: text(content),
@@ -269,13 +273,18 @@ function toAcpNotifications(
     fileContentCache,
     client,
     logger,
+    sdkMessageId,
   };
   const output: SessionNotification[] = [];
 
   for (const chunk of content) {
     const update = processContentChunk(chunk, role, ctx);
     if (update) {
-      output.push({ sessionId, update });
+      output.push({
+        sessionId,
+        _meta: sdkMessageId ? { sdkMessageId } : undefined,
+        update,
+      });
     }
   }
 
@@ -291,6 +300,7 @@ function streamEventToAcpNotifications(
   logger: Logger,
 ): SessionNotification[] {
   const event = message.event;
+  const sdkMessageId = message.uuid;
   switch (event.type) {
     case "content_block_start":
       return toAcpNotifications(
@@ -301,6 +311,7 @@ function streamEventToAcpNotifications(
         fileContentCache,
         client,
         logger,
+        sdkMessageId,
       );
     case "content_block_delta":
       return toAcpNotifications(
@@ -311,6 +322,7 @@ function streamEventToAcpNotifications(
         fileContentCache,
         client,
         logger,
+        sdkMessageId,
       );
     case "message_start":
     case "message_delta":
@@ -522,7 +534,7 @@ function filterMessageContent(
 }
 
 export async function handleUserAssistantMessage(
-  message: SDKUserMessage | { type: "assistant"; message: any },
+  message: SDKUserMessage | SDKAssistantMessage,
   context: MessageHandlerContext,
 ): Promise<{ shouldStop?: boolean; error?: Error }> {
   const { session, sessionId, client, toolUseCache, fileContentCache, logger } =
@@ -543,6 +555,7 @@ export async function handleUserAssistantMessage(
 
   const content = message.message.content;
   const contentToProcess = filterMessageContent(content);
+  const sdkMessageId = message.uuid;
 
   for (const notification of toAcpNotifications(
     contentToProcess as typeof content,
@@ -552,6 +565,7 @@ export async function handleUserAssistantMessage(
     fileContentCache,
     client,
     logger,
+    sdkMessageId,
   )) {
     await client.sessionUpdate(notification);
     session.notificationHistory.push(notification);
