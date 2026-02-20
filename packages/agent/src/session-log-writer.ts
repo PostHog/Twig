@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { SessionContext } from "./otel-log-writer.js";
 import type { PostHogAPIClient } from "./posthog-api.js";
 import type { StoredNotification } from "./types.js";
@@ -8,6 +10,8 @@ export interface SessionLogWriterOptions {
   posthogAPI?: PostHogAPIClient;
   /** Logger instance */
   logger?: Logger;
+  /** Local cache path for instant log loading (e.g., ~/.twig) */
+  localCachePath?: string;
 }
 
 interface ChunkBuffer {
@@ -34,9 +38,11 @@ export class SessionLogWriter {
   private sessions: Map<string, SessionState> = new Map();
   private messageCounts: Map<string, number> = new Map();
   private logger: Logger;
+  private localCachePath?: string;
 
   constructor(options: SessionLogWriterOptions = {}) {
     this.posthogAPI = options.posthogAPI;
+    this.localCachePath = options.localCachePath;
     this.logger =
       options.logger ??
       new Logger({ debug: false, prefix: "[SessionLogWriter]" });
@@ -71,7 +77,24 @@ export class SessionLogWriter {
       taskId: context.taskId,
     });
     this.sessions.set(sessionId, { context });
+
     this.lastFlushAttemptTime.set(sessionId, Date.now());
+
+    if (this.localCachePath) {
+      const sessionDir = path.join(
+        this.localCachePath,
+        "sessions",
+        context.runId,
+      );
+      try {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      } catch (error) {
+        this.logger.warn("Failed to create local cache directory", {
+          sessionDir,
+          error,
+        });
+      }
+    }
   }
 
   isRegistered(sessionId: string): boolean {
@@ -119,6 +142,8 @@ export class SessionLogWriter {
         timestamp,
         notification: message,
       };
+
+      this.writeToLocalCache(sessionId, entry);
 
       if (this.posthogAPI) {
         const pending = this.pendingEntries.get(sessionId) ?? [];
@@ -236,6 +261,8 @@ export class SessionLogWriter {
       },
     };
 
+    this.writeToLocalCache(sessionId, entry);
+
     if (this.posthogAPI) {
       const pending = this.pendingEntries.get(sessionId) ?? [];
       pending.push(entry);
@@ -268,5 +295,28 @@ export class SessionLogWriter {
 
     const timeout = setTimeout(() => this.flush(sessionId), delay);
     this.flushTimeouts.set(sessionId, timeout);
+  }
+
+  private writeToLocalCache(
+    sessionId: string,
+    entry: StoredNotification,
+  ): void {
+    if (!this.localCachePath) return;
+
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const logPath = path.join(
+      this.localCachePath,
+      "sessions",
+      session.context.runId,
+      "logs.ndjson",
+    );
+
+    try {
+      fs.appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
+    } catch (error) {
+      this.logger.warn("Failed to write to local cache", { logPath, error });
+    }
   }
 }

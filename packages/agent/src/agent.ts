@@ -36,6 +36,7 @@ export class Agent {
       this.sessionLogWriter = new SessionLogWriter({
         posthogAPI: this.posthogAPI,
         logger: this.logger.child("SessionLogWriter"),
+        localCachePath: config.localCachePath,
       });
     }
   }

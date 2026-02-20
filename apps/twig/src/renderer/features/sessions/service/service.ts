@@ -180,10 +180,30 @@ export class SessionService {
       }
 
       if (latestRun?.id && latestRun?.log_url) {
-        // Start workspace verify and log fetch in parallel
+        if (!getIsOnline()) {
+          log.info("Skipping connection attempt - offline", { taskId });
+          const { rawEntries } = await this.fetchSessionLogs(
+            latestRun.log_url,
+            latestRun.id,
+          );
+          const events = convertStoredEntriesToEvents(rawEntries);
+          const session = this.createBaseSession(
+            latestRun.id,
+            taskId,
+            taskTitle,
+          );
+          session.events = events;
+          session.logUrl = latestRun.log_url;
+          session.status = "disconnected";
+          session.errorMessage =
+            "No internet connection. Connect when you're back online.";
+          sessionStoreSetters.setSession(session);
+          return;
+        }
+
         const [workspaceResult, logResult] = await Promise.all([
           trpcVanilla.workspace.verify.query({ taskId }),
-          this.fetchSessionLogs(latestRun.log_url),
+          this.fetchSessionLogs(latestRun.log_url, latestRun.id),
         ]);
 
         if (!workspaceResult.exists) {
@@ -192,7 +212,6 @@ export class SessionService {
             missingPath: workspaceResult.missingPath,
           });
           const events = convertStoredEntriesToEvents(logResult.rawEntries);
-
           const session = this.createBaseSession(
             latestRun.id,
             taskId,
@@ -204,21 +223,6 @@ export class SessionService {
           session.errorMessage = workspaceResult.missingPath
             ? `Working directory no longer exists: ${workspaceResult.missingPath}`
             : "The working directory for this task no longer exists. Please start a new task.";
-
-          sessionStoreSetters.setSession(session);
-          return;
-        }
-
-        if (!getIsOnline()) {
-          log.info("Skipping connection attempt - offline", { taskId });
-          const session = this.createBaseSession(
-            latestRun.id,
-            taskId,
-            taskTitle,
-          );
-          session.status = "disconnected";
-          session.errorMessage =
-            "No internet connection. Connect when you're back online.";
           sessionStoreSetters.setSession(session);
           return;
         }
@@ -267,7 +271,10 @@ export class SessionService {
 
       if (latestRun?.log_url) {
         try {
-          const { rawEntries } = await this.fetchSessionLogs(latestRun.log_url);
+          const { rawEntries } = await this.fetchSessionLogs(
+            latestRun.log_url,
+            latestRun.id,
+          );
           session.events = convertStoredEntriesToEvents(rawEntries);
           session.logUrl = latestRun.log_url;
         } catch {
@@ -293,16 +300,14 @@ export class SessionService {
     },
   ): Promise<void> {
     const { rawEntries, sessionId, adapter } =
-      prefetchedLogs ?? (await this.fetchSessionLogs(logUrl));
+      prefetchedLogs ?? (await this.fetchSessionLogs(logUrl, taskRunId));
     const events = convertStoredEntriesToEvents(rawEntries);
 
-    // Resolve adapter from logs or persisted store
     const storedAdapter = useSessionAdapterStore
       .getState()
       .getAdapter(taskRunId);
     const resolvedAdapter = adapter ?? storedAdapter;
 
-    // Get persisted config options for this task run
     const persistedConfigOptions = getPersistedConfigOptions(taskRunId);
 
     const session = this.createBaseSession(taskRunId, taskId, taskTitle);
@@ -318,12 +323,33 @@ export class SessionService {
 
     sessionStoreSetters.setSession(session);
     this.subscribeToChannel(taskRunId);
+    sessionStoreSetters.updateSession(taskRunId, { status: "connected" });
 
     try {
       const persistedMode = getConfigOptionByCategory(
         persistedConfigOptions,
         "mode",
       )?.currentValue;
+
+      trpcVanilla.workspace.verify
+        .query({ taskId })
+        .then((workspaceResult) => {
+          if (!workspaceResult.exists) {
+            log.warn("Workspace no longer exists", {
+              taskId,
+              missingPath: workspaceResult.missingPath,
+            });
+            sessionStoreSetters.updateSession(taskRunId, {
+              status: "error",
+              errorMessage: workspaceResult.missingPath
+                ? `Working directory no longer exists: ${workspaceResult.missingPath}`
+                : "The working directory for this task no longer exists. Please start a new task.",
+            });
+          }
+        })
+        .catch((err) => {
+          log.warn("Failed to verify workspace", { taskId, err });
+        });
 
       const { customInstructions } = useSettingsStore.getState();
       const result = await trpcVanilla.agent.reconnect.mutate({
@@ -1496,45 +1522,83 @@ export class SessionService {
     return { apiKey, apiHost, projectId, client };
   }
 
-  private async fetchSessionLogs(logUrl: string): Promise<{
+  private parseLogContent(content: string): {
+    rawEntries: StoredLogEntry[];
+    sessionId?: string;
+    adapter?: Adapter;
+  } {
+    const rawEntries: StoredLogEntry[] = [];
+    let sessionId: string | undefined;
+    let adapter: Adapter | undefined;
+
+    for (const line of content.trim().split("\n")) {
+      try {
+        const stored = JSON.parse(line) as StoredLogEntry;
+        rawEntries.push(stored);
+
+        if (
+          stored.type === "notification" &&
+          stored.notification?.method?.endsWith("posthog/sdk_session")
+        ) {
+          const params = stored.notification.params as {
+            sessionId?: string;
+            sdkSessionId?: string;
+            adapter?: Adapter;
+          };
+          if (params?.sessionId) sessionId = params.sessionId;
+          else if (params?.sdkSessionId) sessionId = params.sdkSessionId;
+          if (params?.adapter) adapter = params.adapter;
+        }
+      } catch {
+        log.warn("Failed to parse log entry", { line });
+      }
+    }
+
+    return { rawEntries, sessionId, adapter };
+  }
+
+  private async fetchSessionLogs(
+    logUrl: string,
+    taskRunId?: string,
+  ): Promise<{
     rawEntries: StoredLogEntry[];
     sessionId?: string;
     adapter?: Adapter;
   }> {
+    if (!logUrl && !taskRunId) return { rawEntries: [] };
+
+    if (taskRunId) {
+      try {
+        const localContent = await trpcVanilla.logs.readLocalLogs.query({
+          taskRunId,
+        });
+        if (localContent?.trim()) {
+          return this.parseLogContent(localContent);
+        }
+      } catch {
+        log.warn("Failed to read local logs, falling back to S3", {
+          taskRunId,
+        });
+      }
+    }
+
     if (!logUrl) return { rawEntries: [] };
 
     try {
       const content = await trpcVanilla.logs.fetchS3Logs.query({ logUrl });
       if (!content?.trim()) return { rawEntries: [] };
 
-      const rawEntries: StoredLogEntry[] = [];
-      let sessionId: string | undefined;
-      let adapter: Adapter | undefined;
+      const result = this.parseLogContent(content);
 
-      for (const line of content.trim().split("\n")) {
-        try {
-          const stored = JSON.parse(line) as StoredLogEntry;
-          rawEntries.push(stored);
-
-          if (
-            stored.type === "notification" &&
-            stored.notification?.method?.endsWith("posthog/sdk_session")
-          ) {
-            const params = stored.notification.params as {
-              sessionId?: string;
-              sdkSessionId?: string;
-              adapter?: Adapter;
-            };
-            if (params?.sessionId) sessionId = params.sessionId;
-            else if (params?.sdkSessionId) sessionId = params.sdkSessionId;
-            if (params?.adapter) adapter = params.adapter;
-          }
-        } catch {
-          log.warn("Failed to parse log entry", { line });
-        }
+      if (taskRunId && result.rawEntries.length > 0) {
+        trpcVanilla.logs.writeLocalLogs
+          .mutate({ taskRunId, content })
+          .catch((err) => {
+            log.warn("Failed to cache S3 logs locally", { taskRunId, err });
+          });
       }
 
-      return { rawEntries, sessionId, adapter };
+      return result;
     } catch {
       return { rawEntries: [] };
     }

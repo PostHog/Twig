@@ -143,6 +143,8 @@ export interface AgentConfig {
   otelTransport?: OtelTransportConfig;
   /** Skip session log persistence (e.g. for preview sessions with no real task) */
   skipLogPersistence?: boolean;
+  /** Local cache path for instant log loading (e.g., ~/.twig) */
+  localCachePath?: string;
   debug?: boolean;
   onLog?: OnLogCallback;
 }
