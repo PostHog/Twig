@@ -34,11 +34,11 @@ export function InboxView() {
             </Text>
           </Flex>
 
-          <Flex align="center" gap="1" className="min-w-0 max-w-[55%]">
+          <Flex align="center" gap="1" className="min-w-0 flex-nowrap">
             <button
               type="button"
               onClick={() => setActiveTab("signals")}
-              className={`inline-flex h-7 min-w-0 max-w-[88px] items-center justify-center gap-1 whitespace-nowrap rounded border px-2 font-mono text-[11px] ${
+              className={`inline-flex h-7 min-w-0 max-w-[100px] items-center justify-center gap-1 whitespace-nowrap rounded border px-2 font-mono text-[11px] ${
                 activeTab === "signals"
                   ? "border-gray-7 bg-gray-3 text-gray-12"
                   : "border-transparent bg-transparent text-gray-11 hover:bg-gray-2"
@@ -50,7 +50,7 @@ export function InboxView() {
             <button
               type="button"
               onClick={() => setActiveTab("setup")}
-              className={`inline-flex h-7 min-w-0 max-w-[88px] items-center justify-center gap-1 whitespace-nowrap rounded border px-2 font-mono text-[11px] ${
+              className={`inline-flex h-7 min-w-0 max-w-[100px] items-center justify-center gap-1 whitespace-nowrap rounded border px-2 font-mono text-[11px] ${
                 activeTab === "setup"
                   ? "border-gray-7 bg-gray-3 text-gray-12"
                   : "border-transparent bg-transparent text-gray-11 hover:bg-gray-2"

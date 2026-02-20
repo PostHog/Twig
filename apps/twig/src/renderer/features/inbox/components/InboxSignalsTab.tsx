@@ -4,131 +4,40 @@ import {
   useInboxReportArtefacts,
   useInboxReports,
 } from "@features/inbox/hooks/useInboxReports";
+import { useInboxCloudTaskStore } from "@features/inbox/stores/inboxCloudTaskStore";
 import { useInboxSignalsSidebarStore } from "@features/inbox/stores/inboxSignalsSidebarStore";
 import { buildSignalTaskPrompt } from "@features/inbox/utils/buildSignalTaskPrompt";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
+import { useCreateTask } from "@features/tasks/hooks/useTasks";
+import { useFeatureFlag } from "@hooks/useFeatureFlag";
+import { useRepositoryIntegration } from "@hooks/useIntegrations";
 import {
   ArrowSquareOutIcon,
-  ArrowsClockwiseIcon,
-  CircleNotchIcon,
   ClockIcon,
+  Cloud as CloudIcon,
   SparkleIcon,
-  WarningIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { Badge, Box, Button, Flex, ScrollArea, Text } from "@radix-ui/themes";
+import {
+  AlertDialog,
+  Badge,
+  Box,
+  Button,
+  Flex,
+  ScrollArea,
+  Select,
+  Text,
+} from "@radix-ui/themes";
 import { getCloudUrlFromRegion } from "@shared/constants/oauth";
-import type {
-  SignalReport,
-  SignalReportArtefactsResponse,
-} from "@shared/types";
+import type { SignalReportArtefactsResponse } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { SignalsErrorState, SignalsLoadingState } from "./InboxEmptyStates";
+import { ReportCard } from "./ReportCard";
 
 interface InboxSignalsTabProps {
   onGoToSetup: () => void;
-}
-
-function SignalsLoadingState() {
-  return (
-    <Flex height="100%" style={{ minHeight: 0 }}>
-      <Box flexGrow="1" style={{ minWidth: 0 }}>
-        <Flex direction="column" height="100%">
-          <Flex
-            align="center"
-            justify="between"
-            px="3"
-            py="2"
-            style={{ borderBottom: "1px solid var(--gray-5)" }}
-          >
-            <Flex align="center" gap="2">
-              <CircleNotchIcon
-                size={12}
-                className="animate-spin text-gray-10"
-              />
-              <Text size="1" color="gray" className="font-mono text-[11px]">
-                Loading signals
-              </Text>
-            </Flex>
-          </Flex>
-          <Flex direction="column">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Flex
-                // biome-ignore lint/suspicious/noArrayIndexKey: static local loading placeholders
-                key={index}
-                direction="column"
-                gap="2"
-                px="3"
-                py="3"
-                className="border-gray-5 border-b"
-              >
-                <Box className="h-[12px] w-[44%] animate-pulse rounded bg-gray-4" />
-                <Box className="h-[11px] w-[82%] animate-pulse rounded bg-gray-3" />
-              </Flex>
-            ))}
-          </Flex>
-        </Flex>
-      </Box>
-    </Flex>
-  );
-}
-
-function SignalsErrorState({
-  onRetry,
-  onGoToSetup,
-  isRetrying,
-}: {
-  onRetry: () => void;
-  onGoToSetup: () => void;
-  isRetrying: boolean;
-}) {
-  return (
-    <Flex align="center" justify="center" height="100%" p="4">
-      <Flex
-        direction="column"
-        align="center"
-        gap="3"
-        px="4"
-        py="4"
-        className="w-full max-w-[460px] rounded border border-gray-6 bg-gray-2 text-center"
-      >
-        <WarningIcon size={20} className="text-amber-10" weight="bold" />
-        <Flex direction="column" gap="2" align="center">
-          <Text size="2" weight="medium" className="font-mono text-[12px]">
-            Could not load signals
-          </Text>
-          <Text size="1" color="gray" className="font-mono text-[11px]">
-            Check your connection or permissions, then retry. You can still use
-            Setup while this is unavailable.
-          </Text>
-        </Flex>
-        <Flex align="center" gap="2" wrap="wrap" justify="center">
-          <Button
-            size="1"
-            variant="soft"
-            onClick={onRetry}
-            className="font-mono text-[11px]"
-            disabled={isRetrying}
-          >
-            {isRetrying ? (
-              <CircleNotchIcon size={12} className="animate-spin" />
-            ) : (
-              <ArrowsClockwiseIcon size={12} />
-            )}
-            Retry
-          </Button>
-          <Button
-            size="1"
-            variant="ghost"
-            onClick={onGoToSetup}
-            className="font-mono text-[11px]"
-          >
-            Go to Setup
-          </Button>
-        </Flex>
-      </Flex>
-    </Flex>
-  );
 }
 
 function getArtefactsUnavailableMessage(
@@ -146,92 +55,6 @@ function getArtefactsUnavailableMessage(
     default:
       return "Evidence is currently unavailable for this signal.";
   }
-}
-
-function ReportCard({
-  report,
-  isSelected,
-  onClick,
-}: {
-  report: SignalReport;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  const updatedAtLabel = new Date(report.updated_at).toLocaleDateString(
-    undefined,
-    {
-      month: "short",
-      day: "numeric",
-    },
-  );
-
-  const isStrongSignal = report.total_weight >= 65 || report.signal_count >= 20;
-  const isMediumSignal = report.total_weight >= 30 || report.signal_count >= 6;
-  const strengthColor = isStrongSignal
-    ? "var(--green-9)"
-    : isMediumSignal
-      ? "var(--yellow-9)"
-      : "var(--gray-8)";
-  const strengthLabel = isStrongSignal
-    ? "strong"
-    : isMediumSignal
-      ? "medium"
-      : "light";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full border-gray-5 border-b px-3 py-2 text-left transition-colors hover:bg-gray-2"
-      style={{
-        backgroundColor: isSelected ? "var(--gray-3)" : "transparent",
-      }}
-    >
-      <Flex align="start" justify="between" gap="3">
-        <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
-          <Flex align="center" gap="2">
-            <span
-              title={`Signal strength: ${strengthLabel}`}
-              aria-hidden
-              style={{
-                width: "6px",
-                height: "6px",
-                borderRadius: "9999px",
-                backgroundColor: strengthColor,
-                display: "inline-block",
-                flexShrink: 0,
-              }}
-            />
-            <Text
-              size="1"
-              weight="medium"
-              className="block truncate font-mono text-[12px]"
-            >
-              {report.title ?? "Untitled signal"}
-            </Text>
-          </Flex>
-          <Text
-            size="1"
-            color="gray"
-            className="block truncate font-mono text-[11px]"
-          >
-            {report.summary ?? "No summary available yet."}
-          </Text>
-        </Flex>
-        <Flex direction="column" align="end" gap="1" className="shrink-0">
-          <Text size="1" color="gray" className="font-mono text-[11px]">
-            {updatedAtLabel}
-          </Text>
-          <Flex align="center" gap="1">
-            <SparkleIcon size={11} />
-            <Text size="1" color="gray" className="font-mono text-[10px]">
-              {report.signal_count}
-            </Text>
-          </Flex>
-        </Flex>
-      </Flex>
-    </button>
-  );
 }
 
 export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
@@ -292,23 +115,67 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
       ? `${getCloudUrlFromRegion(cloudRegion)}/project/${projectId}/replay`
       : null;
 
-  const { navigateToTaskInput } = useNavigationStore();
+  const { navigateToTaskInput, navigateToTask } = useNavigationStore();
   const draftActions = useDraftStore((s) => s.actions);
+  const { invalidateTasks } = useCreateTask();
+  const { githubIntegration, repositories } = useRepositoryIntegration();
+  const cloudModeEnabled = useFeatureFlag("twig-cloud-mode-toggle");
 
-  const handleCreateTask = () => {
-    if (!selectedReport) return;
+  const isRunningCloudTask = useInboxCloudTaskStore((s) => s.isRunning);
+  const showCloudConfirm = useInboxCloudTaskStore((s) => s.showConfirm);
+  const selectedRepo = useInboxCloudTaskStore((s) => s.selectedRepo);
+  const openCloudConfirm = useInboxCloudTaskStore((s) => s.openConfirm);
+  const closeCloudConfirm = useInboxCloudTaskStore((s) => s.closeConfirm);
+  const setSelectedRepo = useInboxCloudTaskStore((s) => s.setSelectedRepo);
+  const runCloudTask = useInboxCloudTaskStore((s) => s.runCloudTask);
 
-    const prompt = buildSignalTaskPrompt({
+  const buildPrompt = useCallback(() => {
+    if (!selectedReport) return null;
+    return buildSignalTaskPrompt({
       report: selectedReport,
       artefacts: visibleArtefacts,
       replayBaseUrl,
     });
+  }, [selectedReport, visibleArtefacts, replayBaseUrl]);
+
+  const handleCreateTask = () => {
+    const prompt = buildPrompt();
+    if (!prompt) return;
 
     draftActions.setPendingContent("task-input", {
       segments: [{ type: "text", text: prompt }],
     });
     navigateToTaskInput();
   };
+
+  const handleOpenCloudConfirm = useCallback(() => {
+    openCloudConfirm(repositories[0] ?? null);
+  }, [repositories, openCloudConfirm]);
+
+  const handleRunCloudTask = useCallback(async () => {
+    const prompt = buildPrompt();
+    if (!prompt) return;
+
+    const result = await runCloudTask({
+      prompt,
+      githubIntegrationId: githubIntegration?.id,
+      reportId: selectedReport?.id,
+    });
+
+    if (result.success && result.task) {
+      invalidateTasks(result.task);
+      navigateToTask(result.task);
+    } else if (!result.success) {
+      toast.error(result.error ?? "Failed to create cloud task");
+    }
+  }, [
+    buildPrompt,
+    runCloudTask,
+    invalidateTasks,
+    navigateToTask,
+    selectedReport?.id,
+    githubIntegration?.id,
+  ]);
 
   if (isLoading) {
     return <SignalsLoadingState />;
@@ -403,40 +270,52 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
         {selectedReport ? (
           <>
             <Flex
-              align="center"
-              justify="between"
+              direction="column"
+              gap="2"
               px="3"
               py="2"
               style={{ borderBottom: "1px solid var(--gray-5)" }}
             >
-              <Text
-                size="1"
-                weight="medium"
-                className="block truncate font-mono text-[12px]"
-              >
-                {selectedReport.title ?? "Untitled signal"}
-              </Text>
+              <Flex align="center" justify="between" gap="2">
+                <Text
+                  size="1"
+                  weight="medium"
+                  className="block truncate font-mono text-[12px]"
+                >
+                  {selectedReport.title ?? "Untitled signal"}
+                </Text>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    setSelectedReportId(null);
+                  }}
+                  className="shrink-0 rounded p-0.5 text-gray-11 hover:bg-gray-3 hover:text-gray-12"
+                >
+                  <XIcon size={14} />
+                </button>
+              </Flex>
               <Flex align="center" gap="1">
                 <Button
                   size="1"
-                  variant="solid"
+                  variant="soft"
                   onClick={handleCreateTask}
                   className="font-mono text-[11px]"
                 >
                   Create task
                 </Button>
-                <Button
-                  size="1"
-                  variant="ghost"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    setSelectedReportId(null);
-                  }}
-                  className="font-mono text-[11px]"
-                >
-                  <XIcon size={12} />
-                  Close
-                </Button>
+                {cloudModeEnabled && (
+                  <Button
+                    size="1"
+                    variant="solid"
+                    onClick={handleOpenCloudConfirm}
+                    disabled={isRunningCloudTask || repositories.length === 0}
+                    className="font-mono text-[11px]"
+                  >
+                    <CloudIcon size={12} />
+                    {isRunningCloudTask ? "Running..." : "Run cloud"}
+                  </Button>
+                )}
               </Flex>
             </Flex>
             <ScrollArea type="auto" style={{ height: "calc(100% - 41px)" }}>
@@ -544,6 +423,89 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
           </>
         ) : null}
       </ResizableSidebar>
+
+      <AlertDialog.Root
+        open={showCloudConfirm}
+        onOpenChange={(open) => {
+          if (!open) closeCloudConfirm();
+        }}
+      >
+        <AlertDialog.Content maxWidth="420px">
+          <AlertDialog.Title>
+            <Flex align="center" gap="2">
+              <CloudIcon size={18} />
+              <Text weight="bold" className="font-mono">
+                Run cloud task
+              </Text>
+            </Flex>
+          </AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            <Flex direction="column" gap="3">
+              <Text className="font-mono text-[12px]">
+                This will create and run a cloud task from this signal report.
+              </Text>
+              {repositories.length > 1 ? (
+                <Flex direction="column" gap="1">
+                  <Text
+                    size="1"
+                    weight="medium"
+                    className="font-mono text-[11px]"
+                  >
+                    Target repository
+                  </Text>
+                  <Select.Root
+                    value={selectedRepo ?? undefined}
+                    onValueChange={setSelectedRepo}
+                  >
+                    <Select.Trigger className="font-mono text-[12px]" />
+                    <Select.Content>
+                      {repositories.map((repo) => (
+                        <Select.Item
+                          key={repo}
+                          value={repo}
+                          className="font-mono text-[12px]"
+                        >
+                          {repo}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                </Flex>
+              ) : selectedRepo ? (
+                <Flex direction="column" gap="1">
+                  <Text
+                    size="1"
+                    weight="medium"
+                    className="font-mono text-[11px]"
+                  >
+                    Target repository
+                  </Text>
+                  <Text size="2" className="font-mono text-[12px]">
+                    {selectedRepo}
+                  </Text>
+                </Flex>
+              ) : null}
+            </Flex>
+          </AlertDialog.Description>
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray" className="font-mono">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                onClick={() => void handleRunCloudTask()}
+                className="font-mono"
+              >
+                <CloudIcon size={14} />
+                Run
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Flex>
   );
 }
