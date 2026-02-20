@@ -1,7 +1,7 @@
 import { app } from "electron";
 import log from "electron-log/main";
 
-// Initialize electron-log. Don't enable spyRendererConsole — it creates duplicate
+// Initialize electron-log. Don't enable spyRendererConsole - it creates duplicate
 // log lines because renderer logs already reach main via the IPC transport.
 log.initialize();
 
