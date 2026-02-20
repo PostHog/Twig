@@ -37,7 +37,6 @@ interface SessionViewProps {
   taskId?: string;
   isRunning: boolean;
   isPromptPending?: boolean;
-  promptStartedAt?: number | null;
   onSendPrompt: (text: string) => void;
   onBashCommand?: (command: string) => void;
   onCancelPrompt: () => void;
@@ -58,7 +57,6 @@ export function SessionView({
   taskId,
   isRunning,
   isPromptPending = false,
-  promptStartedAt,
   onSendPrompt,
   onBashCommand,
   onCancelPrompt,
@@ -366,7 +364,6 @@ export function SessionView({
                 <ConversationView
                   events={events}
                   isPromptPending={isPromptPending}
-                  promptStartedAt={promptStartedAt}
                   repoPath={repoPath}
                   taskId={taskId}
                 />

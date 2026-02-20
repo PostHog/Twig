@@ -111,7 +111,6 @@ export class Agent {
       taskId,
       deviceType: "local",
       logger: this.logger,
-      debug: this.debug,
       processCallbacks: options.processCallbacks,
       allowedModelIds,
       codexOptions:

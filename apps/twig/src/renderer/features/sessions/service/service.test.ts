@@ -182,7 +182,6 @@ const createMockSession = (
   startedAt: Date.now(),
   status: "connected",
   isPromptPending: false,
-  promptStartedAt: null,
   pendingPermissions: new Map(),
   messageQueue: [],
   ...overrides,

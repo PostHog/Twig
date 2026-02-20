@@ -38,7 +38,6 @@ export interface AgentSession {
   status: "connecting" | "connected" | "disconnected" | "error";
   errorMessage?: string;
   isPromptPending: boolean;
-  promptStartedAt: number | null;
   logUrl?: string;
   processedLineCount?: number;
   framework?: "claude";

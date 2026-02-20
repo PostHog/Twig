@@ -451,7 +451,6 @@ export const WithPendingPrompt: Story = {
       return events;
     })(),
     isPromptPending: true,
-    promptStartedAt: Date.now() - 5000,
     repoPath: "/Users/jonathan/dev/twig",
   },
 };

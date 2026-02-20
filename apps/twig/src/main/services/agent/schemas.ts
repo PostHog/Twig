@@ -45,8 +45,6 @@ export const startSessionInput = z.object({
   runMode: z.enum(["local", "cloud"]).optional(),
   adapter: z.enum(["claude", "codex"]).optional(),
   additionalDirectories: z.array(z.string()).optional(),
-  /** Dev-only: timestamp from renderer when user submitted the task */
-  submittedAt: z.number().optional(),
 });
 
 export type StartSessionInput = z.infer<typeof startSessionInput>;

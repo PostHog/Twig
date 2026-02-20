@@ -25,10 +25,8 @@ import { app } from "electron";
 import { inject, injectable, preDestroy } from "inversify";
 import { MAIN_TOKENS } from "../../di/tokens.js";
 import { logger } from "../../lib/logger.js";
-import { createMainTimingCollector } from "../../lib/timing.js";
 import { TypedEventEmitter } from "../../lib/typed-event-emitter.js";
 import type { FsService } from "../fs/service.js";
-import { getCurrentUserId, getPostHogClient } from "../posthog-analytics.js";
 import type { ProcessTrackingService } from "../process-tracking/service.js";
 import type { SleepService } from "../sleep/service.js";
 import {
@@ -179,8 +177,6 @@ interface SessionConfig {
   additionalDirectories?: string[];
   /** Permission mode to use for the session */
   permissionMode?: string;
-  /** Dev-only: timestamp from renderer when user submitted the task */
-  submittedAt?: number;
 }
 
 interface ManagedSession {
@@ -421,8 +417,6 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
     isReconnect: boolean,
     isRetry = false,
   ): Promise<ManagedSession | null> {
-    const tc = createMainTimingCollector(log);
-
     const {
       taskId,
       taskRunId,
@@ -432,12 +426,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       adapter,
       additionalDirectories,
       permissionMode,
-      submittedAt,
     } = config;
-
-    if (submittedAt) {
-      tc.record("ipcTransit", Date.now() - submittedAt);
-    }
 
     // Preview sessions don't need a real repo — use a temp directory
     const repoPath = taskId === "__preview__" ? tmpdir() : rawRepoPath;
@@ -449,37 +438,18 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
       }
 
       // Kill any lingering processes from previous runs of this task
-      tc.timeSync("killProcesses", () =>
-        this.processTracking.killByTaskId(taskId),
-      );
+      this.processTracking.killByTaskId(taskId);
 
       // Clean up any prior session for this taskRunId before creating a new one
-      await tc.time("cleanup", () => this.cleanupSession(taskRunId));
+      await this.cleanupSession(taskRunId);
     }
 
     const channel = `agent-event:${taskRunId}`;
-    const mockNodeDir = tc.timeSync("mockNode", () =>
-      this.setupMockNodeEnvironment(taskRunId),
-    );
-    tc.timeSync("setupEnv", () =>
-      this.setupEnvironment(credentials, mockNodeDir),
-    );
+    const mockNodeDir = this.setupMockNodeEnvironment(taskRunId);
+    this.setupEnvironment(credentials, mockNodeDir);
 
     // Preview sessions don't persist logs — no real task exists
     const isPreview = taskId === "__preview__";
-
-    // OTEL log pipeline or legacy S3 writer if FF false
-    const useOtelPipeline = isPreview
-      ? false
-      : await tc.time("featureFlag", () =>
-          this.isFeatureFlagEnabled("twig-agent-logs-pipeline"),
-        );
-
-    log.info("Agent log transport", {
-      transport: isPreview ? "none" : useOtelPipeline ? "otel" : "s3",
-      taskId,
-      taskRunId,
-    });
 
     const agent = new Agent({
       posthog: {
@@ -487,78 +457,65 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         getApiKey: () => this.getToken(credentials.apiKey),
         projectId: credentials.projectId,
       },
-      otelTransport: useOtelPipeline
-        ? {
-            host: credentials.apiHost,
-            apiKey: this.getToken(credentials.apiKey),
-            logsPath: "/i/v1/agent-logs",
-          }
-        : undefined,
       skipLogPersistence: isPreview,
       debug: !app.isPackaged,
       onLog: onAgentLog,
     });
 
     try {
-      const acpConnection = await tc.time("agentRun", () =>
-        agent.run(taskId, taskRunId, {
-          adapter,
-          codexBinaryPath:
-            adapter === "codex" ? getCodexBinaryPath() : undefined,
-          processCallbacks: {
-            onProcessSpawned: (info) => {
-              this.processTracking.register(
-                info.pid,
-                "agent",
-                `agent:${taskRunId}`,
-                {
-                  taskRunId,
-                  taskId,
-                  command: info.command,
-                },
+      const acpConnection = await agent.run(taskId, taskRunId, {
+        adapter,
+        codexBinaryPath: adapter === "codex" ? getCodexBinaryPath() : undefined,
+        processCallbacks: {
+          onProcessSpawned: (info) => {
+            this.processTracking.register(
+              info.pid,
+              "agent",
+              `agent:${taskRunId}`,
+              {
+                taskRunId,
                 taskId,
-              );
-            },
-            onProcessExited: (pid) => {
-              this.processTracking.unregister(pid, "agent-exited");
-            },
+                command: info.command,
+              },
+              taskId,
+            );
           },
-        }),
-      );
+          onProcessExited: (pid) => {
+            this.processTracking.unregister(pid, "agent-exited");
+          },
+        },
+      });
       const { clientStreams } = acpConnection;
 
-      const connection = tc.timeSync("clientConnection", () =>
-        this.createClientConnection(taskRunId, channel, clientStreams),
+      const connection = this.createClientConnection(
+        taskRunId,
+        channel,
+        clientStreams,
       );
 
-      await tc.time("initialize", () =>
-        connection.initialize({
-          protocolVersion: PROTOCOL_VERSION,
-          clientCapabilities: {
-            fs: {
-              readTextFile: true,
-              writeTextFile: true,
-            },
-            terminal: true,
+      await connection.initialize({
+        protocolVersion: PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
           },
-        }),
-      );
+          terminal: true,
+        },
+      });
 
-      const mcpServers = tc.timeSync("buildMcp", () =>
-        adapter === "codex" ? [] : this.buildMcpServers(credentials),
-      );
+      const mcpServers =
+        adapter === "codex" ? [] : this.buildMcpServers(credentials);
 
       let configOptions: SessionConfigOption[] | undefined;
       let agentSessionId: string;
 
       if (isReconnect && adapter === "codex" && config.sessionId) {
-        const loadResponse = await tc.time("loadSession", () =>
-          connection.loadSession({
-            sessionId: config.sessionId!,
-            cwd: repoPath,
-            mcpServers,
-          }),
-        );
+        const loadResponse = await connection.loadSession({
+          sessionId: config.sessionId!,
+          cwd: repoPath,
+          mcpServers,
+        });
         configOptions = loadResponse.configOptions ?? undefined;
         agentSessionId = config.sessionId;
       } else if (isReconnect && adapter !== "codex") {
@@ -566,8 +523,9 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
           throw new Error("Cannot resume session without sessionId");
         }
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
-        const resumeResponse = await tc.time("resumeSession", () =>
-          connection.extMethod("_posthog/session/resume", {
+        const resumeResponse = await connection.extMethod(
+          "_posthog/session/resume",
+          {
             sessionId: config.sessionId!,
             cwd: repoPath,
             mcpServers,
@@ -585,7 +543,7 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
                 },
               }),
             },
-          }),
+          },
         );
         const resumeMeta = resumeResponse?._meta as
           | {
@@ -596,30 +554,25 @@ export class AgentService extends TypedEventEmitter<AgentServiceEvents> {
         agentSessionId = config.sessionId;
       } else {
         const systemPrompt = this.buildPostHogSystemPrompt(credentials);
-        const newSessionResponse = await tc.time("newSession", () =>
-          connection.newSession({
-            cwd: repoPath,
-            mcpServers,
-            _meta: {
-              taskRunId,
-              systemPrompt,
-              ...(permissionMode && { permissionMode }),
-              ...(additionalDirectories?.length && {
-                claudeCode: {
-                  options: { additionalDirectories },
-                },
-              }),
-            },
-          }),
-        );
+        const newSessionResponse = await connection.newSession({
+          cwd: repoPath,
+          mcpServers,
+          _meta: {
+            taskRunId,
+            systemPrompt,
+            ...(permissionMode && { permissionMode }),
+            ...(additionalDirectories?.length && {
+              claudeCode: {
+                options: { additionalDirectories },
+              },
+            }),
+          },
+        });
         configOptions = newSessionResponse.configOptions ?? undefined;
         agentSessionId = newSessionResponse.sessionId;
       }
 
       config.sessionId = agentSessionId;
-
-      const sessionType = isReconnect ? "reconnect" : "create";
-      tc.summarize(`getOrCreateSession(${sessionType})`);
 
       const session: ManagedSession = {
         taskRunId,
@@ -1011,20 +964,6 @@ For git operations while detached:
     return mockNodeDir;
   }
 
-  private async isFeatureFlagEnabled(flagKey: string): Promise<boolean> {
-    try {
-      const client = getPostHogClient();
-      const userId = getCurrentUserId();
-      if (!client || !userId) {
-        return false;
-      }
-      return (await client.isFeatureEnabled(flagKey, userId)) ?? false;
-    } catch (error) {
-      log.warn(`Error checking feature flag "${flagKey}":`, error);
-      return false;
-    }
-  }
-
   private cleanupMockNodeEnvironment(mockNodeDir: string): void {
     try {
       rmSync(mockNodeDir, { recursive: true, force: true });
@@ -1328,7 +1267,6 @@ For git operations while detached:
           : undefined,
       permissionMode:
         "permissionMode" in params ? params.permissionMode : undefined,
-      submittedAt: "submittedAt" in params ? params.submittedAt : undefined,
     };
   }
 

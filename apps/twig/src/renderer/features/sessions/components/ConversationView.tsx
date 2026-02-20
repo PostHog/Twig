@@ -60,7 +60,6 @@ type VirtualizedItem = ConversationItem | QueuedItem;
 interface ConversationViewProps {
   events: AcpMessage[];
   isPromptPending: boolean;
-  promptStartedAt?: number | null;
   repoPath?: string | null;
   taskId?: string;
 }
@@ -71,7 +70,6 @@ const ESTIMATE_SIZE = 200;
 export function ConversationView({
   events,
   isPromptPending,
-  promptStartedAt,
   repoPath,
   taskId,
 }: ConversationViewProps) {
@@ -209,7 +207,6 @@ export function ConversationView({
           <div className="pb-16">
             <SessionFooter
               isPromptPending={isPromptPending}
-              promptStartedAt={promptStartedAt}
               lastGenerationDuration={
                 lastTurn?.isComplete ? lastTurn.durationMs : null
               }
