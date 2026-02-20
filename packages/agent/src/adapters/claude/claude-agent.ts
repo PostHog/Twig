@@ -81,7 +81,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   backgroundTerminals: { [key: string]: BackgroundTerminal } = {};
   clientCapabilities?: ClientCapabilities;
   private logWriter?: SessionLogWriter;
-  private processCallbacks?: ClaudeAcpAgentOptions;
+  private options?: ClaudeAcpAgentOptions;
   private lastSentConfigOptions?: SessionConfigOption[];
   private debug: boolean;
 
@@ -92,7 +92,7 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
   ) {
     super(client);
     this.logWriter = logWriter;
-    this.processCallbacks = options;
+    this.options = options;
     this.debug = options?.debug ?? false;
     this.toolUseCache = {};
     this.logger = new Logger({ debug: true, prefix: "[ClaudeAcpAgent]" });
@@ -169,8 +169,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
         sessionId,
         isResume: false,
         onModeChange: this.createOnModeChange(sessionId),
-        onProcessSpawned: this.processCallbacks?.onProcessSpawned,
-        onProcessExited: this.processCallbacks?.onProcessExited,
+        onProcessSpawned: this.options?.onProcessSpawned,
+        onProcessExited: this.options?.onProcessExited,
       }),
     );
 
