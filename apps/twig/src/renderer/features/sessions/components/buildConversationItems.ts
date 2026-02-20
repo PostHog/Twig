@@ -17,6 +17,7 @@ import type { UserShellExecute } from "./session-update/UserShellExecuteView";
 
 export interface TurnContext {
   toolCalls: Map<string, ToolCall>;
+  childItems: Map<string, ConversationItem[]>;
   turnCancelled: boolean;
   turnComplete: boolean;
 }
@@ -154,8 +155,10 @@ function handlePromptRequest(
   const toolCalls = new Map<string, ToolCall>();
   const gitAction = parseGitActionMessage(userContent);
 
+  const childItems = new Map<string, ConversationItem[]>();
   const context: TurnContext = {
     toolCalls,
+    childItems,
     turnCancelled: false,
     turnComplete: false,
   };
@@ -305,17 +308,93 @@ function extractUserContent(params: unknown): string {
   return visibleTextBlocks.map((b) => b.text).join("");
 }
 
+function getParentToolCallId(update: SessionUpdate): string | undefined {
+  const meta = (update as Record<string, unknown>)?._meta as
+    | { claudeCode?: { parentToolCallId?: string } }
+    | undefined;
+  return meta?.claudeCode?.parentToolCallId;
+}
+
+function pushChildItem(b: ItemBuilder, parentId: string, update: RenderItem) {
+  const turn = b.currentTurn;
+  if (!turn) return;
+  let children = turn.context.childItems.get(parentId);
+  if (!children) {
+    children = [];
+    turn.context.childItems.set(parentId, children);
+  }
+  turn.itemCount++;
+  children.push({
+    type: "session_update",
+    id: `${turn.id}-child-${b.nextId()}`,
+    update,
+    turnContext: turn.context,
+  });
+}
+
+function appendTextChunkToChildren(
+  b: ItemBuilder,
+  parentId: string,
+  update: SessionUpdate & {
+    sessionUpdate: "agent_message_chunk" | "agent_thought_chunk";
+  },
+) {
+  if (update.content.type !== "text") return;
+  const turn = b.currentTurn;
+  if (!turn) return;
+  let children = turn.context.childItems.get(parentId);
+  if (!children) {
+    children = [];
+    turn.context.childItems.set(parentId, children);
+  }
+
+  const lastChild = children[children.length - 1];
+  if (
+    lastChild?.type === "session_update" &&
+    lastChild.update.sessionUpdate === update.sessionUpdate &&
+    "content" in lastChild.update &&
+    lastChild.update.content.type === "text"
+  ) {
+    const prevText = (
+      lastChild.update.content as { type: "text"; text: string }
+    ).text;
+    children[children.length - 1] = {
+      ...lastChild,
+      update: {
+        ...lastChild.update,
+        content: {
+          type: "text",
+          text: prevText + update.content.text,
+        },
+      },
+    };
+  } else {
+    turn.itemCount++;
+    children.push({
+      type: "session_update",
+      id: `${turn.id}-child-${b.nextId()}`,
+      update: { ...update, content: { ...update.content } },
+      turnContext: turn.context,
+    });
+  }
+}
+
 function processSessionUpdate(b: ItemBuilder, update: SessionUpdate) {
   switch (update.sessionUpdate) {
     case "user_message_chunk":
       break;
 
     case "agent_message_chunk":
-    case "agent_thought_chunk":
-      if (update.content.type === "text") {
+    case "agent_thought_chunk": {
+      if (update.content.type !== "text") break;
+      const parentId = getParentToolCallId(update);
+      if (parentId) {
+        appendTextChunkToChildren(b, parentId, update);
+      } else {
         appendTextChunk(b, update);
       }
       break;
+    }
 
     case "tool_call": {
       const turn = b.currentTurn!;
@@ -325,7 +404,12 @@ function processSessionUpdate(b: ItemBuilder, update: SessionUpdate) {
       } else {
         const toolCall = { ...update };
         turn.toolCalls.set(update.toolCallId, toolCall);
-        pushItem(b, toolCall);
+        const parentId = getParentToolCallId(update);
+        if (parentId) {
+          pushChildItem(b, parentId, toolCall);
+        } else {
+          pushItem(b, toolCall);
+        }
       }
       break;
     }

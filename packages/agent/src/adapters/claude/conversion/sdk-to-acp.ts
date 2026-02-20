@@ -47,6 +47,7 @@ type ChunkHandlerContext = {
   fileContentCache: { [key: string]: string };
   client: AgentSideConnection;
   logger: Logger;
+  parentToolCallId?: string;
 };
 
 export interface MessageHandlerContext {
@@ -62,20 +63,34 @@ function messageUpdateType(role: Role) {
   return role === "assistant" ? "agent_message_chunk" : "user_message_chunk";
 }
 
-function toolMeta(toolName: string, toolResponse?: unknown): ToolUpdateMeta {
-  return toolResponse
-    ? { claudeCode: { toolName, toolResponse } }
-    : { claudeCode: { toolName } };
+function toolMeta(
+  toolName: string,
+  toolResponse?: unknown,
+  parentToolCallId?: string,
+): ToolUpdateMeta {
+  const meta: ToolUpdateMeta["claudeCode"] = { toolName };
+  if (toolResponse !== undefined) meta.toolResponse = toolResponse;
+  if (parentToolCallId) meta.parentToolCallId = parentToolCallId;
+  return { claudeCode: meta };
 }
 
 function handleTextChunk(
   chunk: { text: string },
   role: Role,
+  parentToolCallId?: string,
 ): SessionNotification["update"] {
-  return {
+  const update: SessionNotification["update"] = {
     sessionUpdate: messageUpdateType(role),
     content: text(chunk.text),
   };
+  if (parentToolCallId) {
+    (update as Record<string, unknown>)._meta = toolMeta(
+      "__text__",
+      undefined,
+      parentToolCallId,
+    );
+  }
+  return update;
 }
 
 function handleImageChunk(
@@ -94,13 +109,22 @@ function handleImageChunk(
   };
 }
 
-function handleThinkingChunk(chunk: {
-  thinking: string;
-}): SessionNotification["update"] {
-  return {
+function handleThinkingChunk(
+  chunk: { thinking: string },
+  parentToolCallId?: string,
+): SessionNotification["update"] {
+  const update: SessionNotification["update"] = {
     sessionUpdate: "agent_thought_chunk",
     content: text(chunk.thinking),
   };
+  if (parentToolCallId) {
+    (update as Record<string, unknown>)._meta = toolMeta(
+      "__thinking__",
+      undefined,
+      parentToolCallId,
+    );
+  }
+  return update;
 }
 
 function handleToolUseChunk(
@@ -127,7 +151,7 @@ function handleToolUseChunk(
         await ctx.client.sessionUpdate({
           sessionId: ctx.sessionId,
           update: {
-            _meta: toolMeta(toolUse.name, toolResponse),
+            _meta: toolMeta(toolUse.name, toolResponse, ctx.parentToolCallId),
             toolCallId: toolUseId,
             sessionUpdate: "tool_call_update",
           },
@@ -148,7 +172,7 @@ function handleToolUseChunk(
   }
 
   return {
-    _meta: toolMeta(chunk.name),
+    _meta: toolMeta(chunk.name, undefined, ctx.parentToolCallId),
     toolCallId: chunk.id,
     sessionUpdate: "tool_call",
     rawInput,
@@ -174,7 +198,7 @@ function handleToolResultChunk(
   }
 
   return {
-    _meta: toolMeta(toolUse.name),
+    _meta: toolMeta(toolUse.name, undefined, ctx.parentToolCallId),
     toolCallId: chunk.tool_use_id,
     sessionUpdate: "tool_call_update",
     status: chunk.is_error ? "failed" : "completed",
@@ -193,14 +217,14 @@ function processContentChunk(
   switch (chunk.type) {
     case "text":
     case "text_delta":
-      return handleTextChunk(chunk, role);
+      return handleTextChunk(chunk, role, ctx.parentToolCallId);
 
     case "image":
       return handleImageChunk(chunk, role);
 
     case "thinking":
     case "thinking_delta":
-      return handleThinkingChunk(chunk);
+      return handleThinkingChunk(chunk, ctx.parentToolCallId);
 
     case "tool_use":
     case "server_tool_use":
@@ -250,17 +274,21 @@ function toAcpNotifications(
   fileContentCache: { [key: string]: string },
   client: AgentSideConnection,
   logger: Logger,
+  parentToolCallId?: string,
 ): SessionNotification[] {
   if (typeof content === "string") {
-    return [
-      {
-        sessionId,
-        update: {
-          sessionUpdate: messageUpdateType(role),
-          content: text(content),
-        },
-      },
-    ];
+    const update: SessionNotification["update"] = {
+      sessionUpdate: messageUpdateType(role),
+      content: text(content),
+    };
+    if (parentToolCallId) {
+      (update as Record<string, unknown>)._meta = toolMeta(
+        "__text__",
+        undefined,
+        parentToolCallId,
+      );
+    }
+    return [{ sessionId, update }];
   }
 
   const ctx: ChunkHandlerContext = {
@@ -269,6 +297,7 @@ function toAcpNotifications(
     fileContentCache,
     client,
     logger,
+    parentToolCallId,
   };
   const output: SessionNotification[] = [];
 
@@ -289,6 +318,7 @@ function streamEventToAcpNotifications(
   fileContentCache: { [key: string]: string },
   client: AgentSideConnection,
   logger: Logger,
+  parentToolCallId?: string,
 ): SessionNotification[] {
   const event = message.event;
   switch (event.type) {
@@ -301,6 +331,7 @@ function streamEventToAcpNotifications(
         fileContentCache,
         client,
         logger,
+        parentToolCallId,
       );
     case "content_block_delta":
       return toAcpNotifications(
@@ -311,6 +342,7 @@ function streamEventToAcpNotifications(
         fileContentCache,
         client,
         logger,
+        parentToolCallId,
       );
     case "message_start":
     case "message_delta":
@@ -439,6 +471,7 @@ export async function handleStreamEvent(
   context: MessageHandlerContext,
 ): Promise<void> {
   const { sessionId, client, toolUseCache, fileContentCache, logger } = context;
+  const parentToolCallId = message.parent_tool_use_id ?? undefined;
 
   for (const notification of streamEventToAcpNotifications(
     message,
@@ -447,6 +480,7 @@ export async function handleStreamEvent(
     fileContentCache,
     client,
     logger,
+    parentToolCallId,
   )) {
     await client.sessionUpdate(notification);
     context.session.notificationHistory.push(notification);
@@ -543,6 +577,10 @@ export async function handleUserAssistantMessage(
 
   const content = message.message.content;
   const contentToProcess = filterMessageContent(content);
+  const parentToolCallId =
+    "parent_tool_use_id" in message
+      ? (message.parent_tool_use_id ?? undefined)
+      : undefined;
 
   for (const notification of toAcpNotifications(
     contentToProcess as typeof content,
@@ -552,6 +590,7 @@ export async function handleUserAssistantMessage(
     fileContentCache,
     client,
     logger,
+    parentToolCallId,
   )) {
     await client.sessionUpdate(notification);
     session.notificationHistory.push(notification);

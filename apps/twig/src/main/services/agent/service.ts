@@ -1190,30 +1190,8 @@ For git operations while detached:
           }
         }
 
-        // Forward extension notifications to the renderer as ACP messages
-        // The extNotification callback doesn't write to the stream, so we need
-        // to manually emit these to the renderer
-        if (
-          method === "_posthog/sdk_session" ||
-          method === "_posthog/status" ||
-          method === "_posthog/task_notification" ||
-          method === "_posthog/compact_boundary"
-        ) {
-          log.info("Forwarding extension notification to renderer", {
-            method,
-            taskRunId,
-          });
-          const acpMessage: AcpMessage = {
-            type: "acp_message",
-            ts: Date.now(),
-            message: {
-              jsonrpc: "2.0",
-              method,
-              params,
-            } as AcpMessage["message"],
-          };
-          emitToRenderer(acpMessage);
-        }
+        // Extension notifications already flow through the tapped stream
+        // (same pattern as sessionUpdate). No need to re-emit here.
       },
     };
 
