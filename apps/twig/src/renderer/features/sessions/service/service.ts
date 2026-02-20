@@ -24,7 +24,6 @@ import {
   mergeConfigOptions,
   sessionStoreSetters,
 } from "@features/sessions/stores/sessionStore";
-import { createTimingCollector } from "@posthog/shared";
 import { track } from "@renderer/lib/analytics";
 import { logger } from "@renderer/lib/logger";
 import {
@@ -72,8 +71,6 @@ export interface ConnectParams {
   adapter?: "claude" | "codex";
   model?: string;
   reasoningLevel?: string;
-  /** Dev-only: timestamp from renderer when user submitted the task */
-  submittedAt?: number;
 }
 
 // --- Singleton Service Instance ---
@@ -115,8 +112,6 @@ export class SessionService {
   private previewAbort: AbortController | null = null;
   /** Cleanup functions for cloud task watchers, keyed by `${taskId}:${runId}` */
   private cloudTaskCleanups = new Map<string, () => void>();
-  /** Dev-only: tracks which prompt cycles have already logged first-response timing */
-  private firstResponseLogged = new Set<string>();
 
   /**
    * Connect to a task session.
@@ -166,7 +161,6 @@ export class SessionService {
       adapter,
       model,
       reasoningLevel,
-      submittedAt,
     } = params;
     const { id: taskId, latest_run: latestRun } = task;
     const taskTitle = task.title || task.description || "Task";
@@ -259,7 +253,6 @@ export class SessionService {
           adapter,
           model,
           reasoningLevel,
-          submittedAt,
         );
       }
     } catch (error) {
@@ -432,7 +425,6 @@ export class SessionService {
     }
 
     this.unsubscribeFromChannel(taskRunId);
-    this.clearFirstResponseTracking(taskRunId);
     sessionStoreSetters.removeSession(taskRunId);
     useSessionAdapterStore.getState().removeAdapter(taskRunId);
     removePersistedConfigOptions(taskRunId);
@@ -493,37 +485,27 @@ export class SessionService {
     adapter?: "claude" | "codex",
     model?: string,
     reasoningLevel?: string,
-    submittedAt?: number,
   ): Promise<void> {
-    const tc = createTimingCollector(import.meta.env.DEV, (msg, data) =>
-      log.info(msg, data),
-    );
-
     const { client } = auth;
     if (!client) {
       throw new Error("Unable to reach server. Please check your connection.");
     }
 
-    const taskRun = await tc.time("createTaskRun", () =>
-      client.createTaskRun(taskId),
-    );
+    const taskRun = await client.createTaskRun(taskId);
     if (!taskRun?.id) {
       throw new Error("Failed to create task run. Please try again.");
     }
 
-    const result = await tc.time("agentStart", () =>
-      trpcVanilla.agent.start.mutate({
-        taskId,
-        taskRunId: taskRun.id,
-        repoPath,
-        apiKey: auth.apiKey,
-        apiHost: auth.apiHost,
-        projectId: auth.projectId,
-        permissionMode: executionMode,
-        adapter,
-        submittedAt,
-      }),
-    );
+    const result = await trpcVanilla.agent.start.mutate({
+      taskId,
+      taskRunId: taskRun.id,
+      repoPath,
+      apiKey: auth.apiKey,
+      apiHost: auth.apiHost,
+      projectId: auth.projectId,
+      permissionMode: executionMode,
+      adapter,
+    });
 
     const session = this.createBaseSession(taskRun.id, taskId, taskTitle);
     session.channel = result.channel;
@@ -577,24 +559,11 @@ export class SessionService {
       );
     }
     if (configPromises.length > 0) {
-      await tc.time("setConfigOptions", () => Promise.all(configPromises));
+      await Promise.all(configPromises);
     }
 
     if (initialPrompt?.length) {
-      if (submittedAt) {
-        sessionStoreSetters.updateSession(taskRun.id, {
-          promptStartedAt: submittedAt,
-        });
-      }
-      await tc.time("sendPrompt", () => this.sendPrompt(taskId, initialPrompt));
-    }
-
-    tc.summarize("createNewLocalSession");
-
-    if (submittedAt) {
-      log.info(
-        `[timing] end-to-end submit → session ready: ${Date.now() - submittedAt}ms`,
-      );
+      await this.sendPrompt(taskId, initialPrompt);
     }
   }
 
@@ -755,14 +724,6 @@ export class SessionService {
     this.subscriptions.delete(taskRunId);
   }
 
-  private clearFirstResponseTracking(taskRunId: string): void {
-    for (const key of this.firstResponseLogged) {
-      if (key.startsWith(`${taskRunId}:`)) {
-        this.firstResponseLogged.delete(key);
-      }
-    }
-  }
-
   /**
    * Reset all service state and clean up subscriptions.
    * Called on logout or app reset.
@@ -786,7 +747,6 @@ export class SessionService {
     this.cloudTaskCleanups.clear();
 
     this.connectingTasks.clear();
-    this.firstResponseLogged.clear();
     this.previewAbort?.abort();
     this.previewAbort = null;
   }
@@ -800,27 +760,9 @@ export class SessionService {
     const msg = acpMsg.message;
 
     if (isJsonRpcRequest(msg) && msg.method === "session/prompt") {
-      // Preserve existing promptStartedAt if already set (e.g., submittedAt for initial prompts)
       sessionStoreSetters.updateSession(taskRunId, {
         isPromptPending: true,
-        promptStartedAt: session.promptStartedAt ?? acpMsg.ts,
       });
-    }
-
-    // Dev-only: log time from prompt start to first response event
-    if (
-      import.meta.env.DEV &&
-      session.isPromptPending &&
-      session.promptStartedAt
-    ) {
-      if ("method" in msg && msg.method === "session/update") {
-        const key = `${taskRunId}:${session.promptStartedAt}`;
-        if (!this.firstResponseLogged.has(key)) {
-          this.firstResponseLogged.add(key);
-          const delta = Date.now() - session.promptStartedAt;
-          log.info(`[timing] prompt → first response event: ${delta}ms`);
-        }
-      }
     }
 
     if (
@@ -830,16 +772,8 @@ export class SessionService {
       msg.result !== null &&
       "stopReason" in msg.result
     ) {
-      // Clean up first-response tracking for this prompt cycle
-      if (session.promptStartedAt) {
-        this.firstResponseLogged.delete(
-          `${taskRunId}:${session.promptStartedAt}`,
-        );
-      }
-
       sessionStoreSetters.updateSession(taskRunId, {
         isPromptPending: false,
-        promptStartedAt: null,
       });
 
       const stopReason = (msg.result as { stopReason?: string }).stopReason;
@@ -1064,11 +998,8 @@ export class SessionService {
     session: AgentSession,
     blocks: ContentBlock[],
   ): Promise<{ stopReason: string }> {
-    // Preserve existing promptStartedAt if set (e.g., from submittedAt for initial prompts)
-    const currentSession = sessionStoreSetters.getSessions()[session.taskRunId];
     sessionStoreSetters.updateSession(session.taskRunId, {
       isPromptPending: true,
-      promptStartedAt: currentSession?.promptStartedAt ?? Date.now(),
     });
 
     try {
@@ -1079,7 +1010,6 @@ export class SessionService {
       // Clear pending state on success
       sessionStoreSetters.updateSession(session.taskRunId, {
         isPromptPending: false,
-        promptStartedAt: null,
       });
       return result;
     } catch (error) {
@@ -1100,12 +1030,10 @@ export class SessionService {
             errorDetails ||
             "Session connection lost. Please retry or start a new task.",
           isPromptPending: false,
-          promptStartedAt: null,
         });
       } else {
         sessionStoreSetters.updateSession(session.taskRunId, {
           isPromptPending: false,
-          promptStartedAt: null,
         });
       }
 
@@ -1617,7 +1545,6 @@ export class SessionService {
       startedAt: Date.now(),
       status: "connecting",
       isPromptPending: false,
-      promptStartedAt: null,
       pendingPermissions: new Map(),
       messageQueue: [],
     };

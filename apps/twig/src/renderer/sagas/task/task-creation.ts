@@ -147,8 +147,6 @@ export class TaskCreationSaga extends Saga<
   protected async execute(
     input: TaskCreationInput,
   ): Promise<TaskCreationOutput> {
-    const submittedAt = import.meta.env.DEV ? Date.now() : undefined;
-
     // Step 1: Get or create task
     // For new tasks, start folder registration in parallel with task creation
     // since folder_registration only needs repoPath (from input), not task.id
@@ -294,7 +292,6 @@ export class TaskCreationSaga extends Saga<
           const connectParams: ConnectParams = {
             task,
             repoPath: agentCwd ?? "",
-            submittedAt,
           };
           if (initialPrompt) connectParams.initialPrompt = initialPrompt;
           if (input.executionMode)
