@@ -387,8 +387,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       isResume: config.isResume,
       additionalDirectories: config.additionalDirectories,
       onModeChange: this.createOnModeChange(config.sessionId),
-      onProcessSpawned: this.processCallbacks?.onProcessSpawned,
-      onProcessExited: this.processCallbacks?.onProcessExited,
+      onProcessSpawned: this.options?.onProcessSpawned,
+      onProcessExited: this.options?.onProcessExited,
     });
 
     const q = query({ prompt: input, options });
