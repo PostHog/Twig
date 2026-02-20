@@ -19,12 +19,13 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@shared/types";
+import striptags from "striptags";
 
 const log = logger.scope("task-creation-saga");
 
 function truncateToTitle(content: string): string {
-  // Strip XML/HTML tags
-  const stripped = content.replace(/<[^>]*>/g, "").trim();
+  // Strip XML/HTML tags using a robust library to avoid incomplete sanitization
+  const stripped = striptags(content).trim();
   if (!stripped) return "Untitled";
   if (stripped.length <= 80) return stripped;
   // Truncate at word boundary
