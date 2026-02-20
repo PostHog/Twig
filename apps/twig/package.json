@@ -27,7 +27,8 @@
     "test:e2e:headed": "playwright test --config=tests/e2e/playwright.config.ts --headed",
     "postinstall": "cd ../.. && npx @electron/rebuild -f -m node_modules/node-pty || true && bash apps/twig/scripts/patch-electron-name.sh && node apps/twig/scripts/download-binaries.mjs",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "clean": "rm -rf .vite .turbo out node_modules/.vite"
   },
   "keywords": [
     "posthog",

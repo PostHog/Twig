@@ -277,6 +277,7 @@ export class PostHogAPIClient {
       `/api/projects/{project_id}/tasks/{id}/run/`,
       {
         path: { project_id: teamId.toString(), id: taskId },
+        body: {},
       },
     );
 

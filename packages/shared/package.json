@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

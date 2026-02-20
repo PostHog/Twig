@@ -65,7 +65,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm exec tsc --noEmit",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "clean": "rm -rf dist .turbo"
   },
   "engines": {
     "node": ">=20.0.0"

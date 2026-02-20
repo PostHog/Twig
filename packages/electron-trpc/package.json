@@ -25,7 +25,8 @@
     "dev": "pnpm build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run -c vitest.config.ts",
-    "test:ci": "vitest run -c vitest.config.ts --coverage"
+    "test:ci": "vitest run -c vitest.config.ts --coverage",
+    "clean": "rm -rf dist .turbo"
   },
   "devDependencies": {
     "@trpc/client": "^11.8.0",
