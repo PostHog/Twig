@@ -1,15 +1,15 @@
+import { createTimingCollector, type TimingCollector } from "@posthog/shared";
+import { app } from "electron";
 import type { ScopedLogger } from "./logger.js";
 
+export type { TimingCollector };
+
 /**
- * Creates a timing helper that logs execution duration.
- * @param log - Scoped logger to use for timing output
- * @returns A function that times async operations and logs the result
+ * Creates a timing collector for the main process.
+ * No-op in packaged (production) builds.
  */
-export function createTimer(log: ScopedLogger) {
-  return async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
-    const start = Date.now();
-    const result = await fn();
-    log.info(`[timing] ${label}: ${Date.now() - start}ms`);
-    return result;
-  };
+export function createMainTimingCollector(log: ScopedLogger): TimingCollector {
+  return createTimingCollector(!app.isPackaged, (msg, data) =>
+    log.info(msg, data),
+  );
 }

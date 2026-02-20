@@ -23,6 +23,8 @@ export type AcpConnectionConfig = {
   /** Deployment environment - "local" for desktop, "cloud" for cloud sandbox */
   deviceType?: "local" | "cloud";
   logger?: Logger;
+  /** Enable dev-only instrumentation (timing, verbose logging) */
+  debug?: boolean;
   processCallbacks?: ProcessSpawnedCallback;
   codexOptions?: CodexProcessOptions;
   allowedModelIds?: Set<string>;
@@ -194,7 +196,10 @@ function createClaudeConnection(config: AcpConnectionConfig): AcpConnection {
 
   let agent: ClaudeAcpAgent | null = null;
   const agentConnection = new AgentSideConnection((client) => {
-    agent = new ClaudeAcpAgent(client, logWriter, config.processCallbacks);
+    agent = new ClaudeAcpAgent(client, logWriter, {
+      ...config.processCallbacks,
+      debug: config.debug,
+    });
     logger.info(`Created ${agent.adapterName} agent`);
     return agent;
   }, agentStream);
