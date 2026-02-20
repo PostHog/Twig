@@ -43,7 +43,7 @@ Convert the task description into a concise task title.
 - Avoid using jargon or overly technical terms unless absolutely necessary.
 - The title should be easy to understand for anyone reading it.
 - Use sentence case (capitalize only first word and proper nouns)
--Remove: the, this, my, a, an
+- Remove: the, this, my, a, an
 - If possible, start with action verbs (Fix, Implement, Analyze, Debug, Update, Research, Review)
 - Keep exact: technical terms, numbers, filenames, HTTP codes, PR numbers
 - Never assume tech stack
@@ -57,12 +57,14 @@ Examples:
 - "Review pull request #123" → Review pull request #123
 - "debug 500 errors in production" → Debug production 500 errors
 - "why is the payment flow failing" → Analyze payment flow failure
-- "So how about that weather huh" → "Weather chat"
-- "dsfkj sdkfj help me code" → "Coding help request"
-- "👋😊" → "Friendly greeting"
-- "aaaaaaaaaa" → "Repeated letters"
-- "   " → "Empty message"
-- "What's the best restaurant in NYC?" → "NYC restaurant recommendations"`;
+- "So how about that weather huh" → Weather chat
+- "dsfkj sdkfj help me code" → Coding help request
+- "👋😊" → Friendly greeting
+- "aaaaaaaaaa" → Repeated letters
+- "   " → Empty message
+- "What's the best restaurant in NYC?" → NYC restaurant recommendations
+
+Never wrap the title in quotes.`;
 
 async function generateTaskTitle(
   taskId: string,
@@ -70,6 +72,8 @@ async function generateTaskTitle(
   posthogClient: PostHogAPIClient,
 ): Promise<void> {
   try {
+    if (!description.trim()) return;
+
     const authState = useAuthStore.getState();
     const apiKey = authState.oauthAccessToken;
     const cloudRegion = authState.cloudRegion;
@@ -83,7 +87,7 @@ async function generateTaskTitle(
       messages: [{ role: "user", content: description }],
     });
 
-    const title = result.content.trim();
+    const title = result.content.trim().replace(/^["']|["']$/g, "");
     if (!title) return;
 
     await posthogClient.updateTask(taskId, { title });
