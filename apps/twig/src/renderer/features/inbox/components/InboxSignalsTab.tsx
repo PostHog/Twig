@@ -4,10 +4,10 @@ import {
   useInboxReportArtefacts,
   useInboxReports,
 } from "@features/inbox/hooks/useInboxReports";
+import { useInboxCloudTaskStore } from "@features/inbox/stores/inboxCloudTaskStore";
 import { useInboxSignalsSidebarStore } from "@features/inbox/stores/inboxSignalsSidebarStore";
 import { buildSignalTaskPrompt } from "@features/inbox/utils/buildSignalTaskPrompt";
 import { useDraftStore } from "@features/message-editor/stores/draftStore";
-import type { TaskService } from "@features/task-detail/service/service";
 import { useCreateTask } from "@features/tasks/hooks/useTasks";
 import { useFeatureFlag } from "@hooks/useFeatureFlag";
 import { useRepositoryIntegration } from "@hooks/useIntegrations";
@@ -28,9 +28,6 @@ import {
   Select,
   Text,
 } from "@radix-ui/themes";
-import { get } from "@renderer/di/container";
-import { RENDERER_TOKENS } from "@renderer/di/tokens";
-import { logger } from "@renderer/lib/logger";
 import { getCloudUrlFromRegion } from "@shared/constants/oauth";
 import type { SignalReportArtefactsResponse } from "@shared/types";
 import { useNavigationStore } from "@stores/navigationStore";
@@ -38,8 +35,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SignalsErrorState, SignalsLoadingState } from "./InboxEmptyStates";
 import { ReportCard } from "./ReportCard";
-
-const log = logger.scope("inbox-signals-tab");
 
 interface InboxSignalsTabProps {
   onGoToSetup: () => void;
@@ -125,9 +120,14 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
   const { invalidateTasks } = useCreateTask();
   const { githubIntegration, repositories } = useRepositoryIntegration();
   const cloudModeEnabled = useFeatureFlag("twig-cloud-mode-toggle");
-  const [isRunningCloudTask, setIsRunningCloudTask] = useState(false);
-  const [showCloudConfirm, setShowCloudConfirm] = useState(false);
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+
+  const isRunningCloudTask = useInboxCloudTaskStore((s) => s.isRunning);
+  const showCloudConfirm = useInboxCloudTaskStore((s) => s.showConfirm);
+  const selectedRepo = useInboxCloudTaskStore((s) => s.selectedRepo);
+  const openCloudConfirm = useInboxCloudTaskStore((s) => s.openConfirm);
+  const closeCloudConfirm = useInboxCloudTaskStore((s) => s.closeConfirm);
+  const setSelectedRepo = useInboxCloudTaskStore((s) => s.setSelectedRepo);
+  const runCloudTask = useInboxCloudTaskStore((s) => s.runCloudTask);
 
   const buildPrompt = useCallback(() => {
     if (!selectedReport) return null;
@@ -149,55 +149,32 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
   };
 
   const handleOpenCloudConfirm = useCallback(() => {
-    setSelectedRepo(repositories[0] ?? null);
-    setShowCloudConfirm(true);
-  }, [repositories]);
+    openCloudConfirm(repositories[0] ?? null);
+  }, [repositories, openCloudConfirm]);
 
   const handleRunCloudTask = useCallback(async () => {
-    setShowCloudConfirm(false);
     const prompt = buildPrompt();
     if (!prompt) return;
 
-    setIsRunningCloudTask(true);
-    try {
-      const taskService = get<TaskService>(RENDERER_TOKENS.TaskService);
-      const result = await taskService.createTask({
-        content: prompt,
-        workspaceMode: "cloud",
-        githubIntegrationId: githubIntegration?.id,
-        repository: selectedRepo,
-      });
+    const result = await runCloudTask({
+      prompt,
+      githubIntegrationId: githubIntegration?.id,
+      reportId: selectedReport?.id,
+    });
 
-      if (result.success) {
-        const { task } = result.data;
-        invalidateTasks(task);
-        navigateToTask(task);
-        log.info("Cloud task created from signal report", {
-          taskId: task.id,
-          reportId: selectedReport?.id,
-          repository: selectedRepo,
-        });
-      } else {
-        toast.error(result.error ?? "Failed to create cloud task");
-        log.error("Cloud task creation failed", {
-          failedStep: result.failedStep,
-          error: result.error,
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to run cloud task: ${message}`);
-      log.error("Unexpected error during cloud task creation", { error });
-    } finally {
-      setIsRunningCloudTask(false);
+    if (result.success && result.task) {
+      invalidateTasks(result.task);
+      navigateToTask(result.task);
+    } else if (!result.success) {
+      toast.error(result.error ?? "Failed to create cloud task");
     }
   }, [
     buildPrompt,
+    runCloudTask,
     invalidateTasks,
     navigateToTask,
     selectedReport?.id,
     githubIntegration?.id,
-    selectedRepo,
   ]);
 
   if (isLoading) {
@@ -449,7 +426,9 @@ export function InboxSignalsTab({ onGoToSetup }: InboxSignalsTabProps) {
 
       <AlertDialog.Root
         open={showCloudConfirm}
-        onOpenChange={setShowCloudConfirm}
+        onOpenChange={(open) => {
+          if (!open) closeCloudConfirm();
+        }}
       >
         <AlertDialog.Content maxWidth="420px">
           <AlertDialog.Title>
