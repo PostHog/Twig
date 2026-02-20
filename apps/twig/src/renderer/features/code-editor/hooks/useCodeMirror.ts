@@ -72,7 +72,7 @@ const getBaseDiffConfig = (
 ): Partial<Parameters<typeof unifiedMergeView>[0]> => ({
   collapseUnchanged: options?.loadFullFiles
     ? undefined
-    : { margin: 20, minSize: 8 },
+    : { margin: 3, minSize: 4 },
   highlightChanges: options?.wordDiffs ?? true,
   gutter: true,
   mergeControls: createMergeControls(onReject),
