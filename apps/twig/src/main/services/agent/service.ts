@@ -1000,7 +1000,6 @@ For git operations while detached:
       }
       this.cleanupMockNodeEnvironment(session.mockNodeDir);
       this.sessions.delete(taskRunId);
-      this.processTracking.killByTaskId(session.taskId);
     }
   }
 
